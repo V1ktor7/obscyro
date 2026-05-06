@@ -1,0 +1,22 @@
+---
+title: /v1/disambiguate
+description: Pick the right SNOMED concept when the same surface text could mean several things, given clinical context.
+---
+
+<EndpointHeader method="POST" path="/v1/disambiguate" />
+
+When `MI` could be myocardial infarction, mitral insufficiency, mental illness, or military intelligence, the right answer depends on what surrounds it. Send the ambiguous text plus a chunk of clinical context, and Obscyro scores each candidate by trigram similarity against its FSN and text definition.
+
+<Parameters title="Request body">
+  <Param name="text" type="string" required>
+    The ambiguous phrase to resolve.
+  </Param>
+  <Param name="context" type="string" required>
+    Surrounding clinical context (sentence, paragraph, or document). Used to score candidates.
+  </Param>
+  <Param name="candidateCodes" type="string[]">
+    Optional pre-filtered candidate SCTIDs. When omitted, candidates are derived from <code>/v1/normalize</code>.
+  </Param>
+</Parameters>
+
+<ComingSoon message="Full reference with the candidate, signal, and reasoning fields, plus tuning guidance, is being written." />

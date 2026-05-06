@@ -1,0 +1,54 @@
+---
+title: Authentication
+description: All Obscyro API calls are authenticated with a Bearer API key. Mint one from the dashboard or via the create-key CLI.
+---
+
+## API keys
+
+Every authenticated request carries an `Authorization: Bearer obs_live_…` header. Keys are 192-bit, prefixed `obs_live_`, and shown to you exactly once at creation time. Obscyro stores only a SHA-256 hash, so a leaked database is not a leaked key.
+
+<EndpointHeader method="GET" path="/v1/concepts/{code}" />
+
+```bash
+curl https://api.obscyro.com/v1/concepts/22298006 \
+  -H "Authorization: Bearer obs_live_AbCDef12_GhIjKl34..."
+```
+
+## Minting a key
+
+In production, mint keys from the [Dashboard](/dashboard). For local development, use the CLI bundled with the backend:
+
+```bash
+npm run create-key -- --name "dev" --email "you@example.com" --plan starter
+```
+
+The output prints the raw key once. Save it to your secret manager immediately.
+
+## Public routes
+
+A small number of routes are intentionally unauthenticated so you can probe liveness and read OpenAPI without a key:
+
+<ErrorTable>
+  <ErrorRow status={200} code="/health">Liveness probe — returns ok if the API process is running.</ErrorRow>
+  <ErrorRow status={200} code="/v1/health">Readiness probe — verifies the database is reachable.</ErrorRow>
+  <ErrorRow status={200} code="/documentation">Interactive Swagger UI.</ErrorRow>
+</ErrorTable>
+
+## Failure modes
+
+Hitting any other endpoint without a valid key returns:
+
+```json
+{
+  "error": {
+    "code": "INVALID_API_KEY",
+    "message": "Missing or invalid API key. Send `Authorization: Bearer obs_live_...`."
+  }
+}
+```
+
+with HTTP status `401`. See [Errors](/docs/getting-started/errors) for the full envelope contract and [Rate limits](/docs/getting-started/rate-limits) for `429` responses.
+
+## Key rotation
+
+Revoke a key by setting its `revoked_at` in the dashboard. Active sessions tolerate a soft 60-second TTL while the in-memory cache expires; after that, requests return `401 INVALID_API_KEY`.

@@ -1,0 +1,129 @@
+---
+title: /v1/normalize
+description: Map free-text clinical phrases to ranked SNOMED concept candidates using exact, full-text, and trigram matching.
+---
+
+<EndpointHeader method="POST" path="/v1/normalize" />
+
+Normalize is the workhorse endpoint. Given a clinical phrase, it returns up to `limit` SNOMED concept candidates ranked by match quality. The matcher runs three strategies in a single batched query and deduplicates by concept:
+
+1. **Exact** — case-insensitive equality against active descriptions.
+2. **FTS** — PostgreSQL `to_tsvector` / `ts_rank` full-text search.
+3. **Trigram** — `pg_trgm` similarity for typos and abbreviations.
+
+## Request body
+
+<Parameters>
+  <Param name="text" type="string" required>The clinical phrase to match. After trimming, must be at least 2 characters; otherwise the request returns <code>400 INVALID_INPUT</code>.</Param>
+  <Param name="limit" type="integer" defaultValue="5">How many candidates to return, between <code>1</code> and <code>50</code>.</Param>
+</Parameters>
+
+## Response
+
+<ResponseExample status={200} description="Candidates ranked best-first">
+
+```json
+{
+  "matches": [
+    {
+      "code": "22298006",
+      "term": "Myocardial infarction",
+      "conceptName": "Myocardial infarction",
+      "confidence": 0.94,
+      "matchType": "fts"
+    },
+    {
+      "code": "57054005",
+      "term": "Acute myocardial infarction",
+      "conceptName": "Acute myocardial infarction",
+      "confidence": 0.88,
+      "matchType": "fts"
+    }
+  ]
+}
+```
+
+</ResponseExample>
+
+<Parameters title="Match shape">
+  <Param name="code" type="string">SCTID of the matched concept.</Param>
+  <Param name="term" type="string">The actual SNOMED description that matched (synonym or FSN).</Param>
+  <Param name="conceptName" type="string">The preferred display term for the concept (shortest active synonym, falling back to FSN).</Param>
+  <Param name="confidence" type="number">A score in <code>[0, 1]</code>. For <code>exact</code> it is 1.0; for <code>fts</code> it is the normalized <code>ts_rank</code>; for <code>trigram</code> it is the <code>similarity()</code> score.</Param>
+  <Param name="matchType" type='"exact" | "fts" | "trigram"'>Which strategy produced this candidate. Use this to decide your minimum acceptable confidence per use case.</Param>
+</Parameters>
+
+## Examples
+
+<CodeTabs>
+  <CodeTab label="cURL">
+
+```bash
+curl -X POST https://api.obscyro.com/v1/normalize \
+  -H "Authorization: Bearer $OBS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "type 2 diabetes",
+    "limit": 5
+  }'
+```
+
+  </CodeTab>
+  <CodeTab label="Node.js">
+
+```typescript
+type Match = {
+  code: string;
+  term: string;
+  conceptName: string;
+  confidence: number;
+  matchType: "exact" | "fts" | "trigram";
+};
+
+async function normalize(text: string, limit = 5): Promise<Match[]> {
+  const res = await fetch("https://api.obscyro.com/v1/normalize", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OBS_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ text, limit }),
+  });
+  if (!res.ok) throw new Error(`obscyro: ${res.status}`);
+  const { matches } = (await res.json()) as { matches: Match[] };
+  return matches;
+}
+```
+
+  </CodeTab>
+  <CodeTab label="Python">
+
+```python
+def normalize(text: str, limit: int = 5) -> list[dict]:
+    r = requests.post(
+        "https://api.obscyro.com/v1/normalize",
+        headers={"Authorization": f"Bearer {os.environ['OBS_KEY']}"},
+        json={"text": text, "limit": limit},
+        timeout=10,
+    )
+    r.raise_for_status()
+    return r.json()["matches"]
+```
+
+  </CodeTab>
+</CodeTabs>
+
+## Tips
+
+- For ingestion pipelines that handle thousands of phrases, use [`/v1/normalize-batch`](/docs/api/normalize-batch) — it counts as a single rate-limit hit.
+- If you need the right concept among multiple plausible matches, pass the candidates through [`/v1/disambiguate`](/docs/api/disambiguate) with surrounding clinical context.
+- Trigram matches with confidence below ~0.55 are usually noise. Pick a threshold that suits your false-positive tolerance.
+
+## Errors
+
+<ErrorTable>
+  <ErrorRow status={400} code="VALIDATION_ERROR">Body did not pass schema validation (missing `text`, bad `limit`).</ErrorRow>
+  <ErrorRow status={400} code="INVALID_INPUT">`text` was shorter than 2 characters after trimming.</ErrorRow>
+  <ErrorRow status={401} code="INVALID_API_KEY">Missing or invalid bearer token.</ErrorRow>
+  <ErrorRow status={429} code="RATE_LIMITED">Per-minute rate limit exceeded for this key.</ErrorRow>
+</ErrorTable>

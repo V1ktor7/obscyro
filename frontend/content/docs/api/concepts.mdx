@@ -1,0 +1,98 @@
+---
+title: /v1/concepts/{code}
+description: Look up SNOMED concept metadata and the preferred display term, or check existence with HEAD.
+---
+
+<EndpointHeader method="GET" path="/v1/concepts/{code}" />
+
+Returns metadata and the preferred display term for a single SNOMED concept. Resolution prefers the shortest active synonym; if none exists, the FSN is returned.
+
+## Path parameters
+
+<Parameters>
+  <Param name="code" type="string" required>
+    A numeric SCTID. Must match the regex <code>^\d+$</code>.
+  </Param>
+</Parameters>
+
+## Response
+
+<ResponseExample status={200} description="Concept found">
+
+```json
+{
+  "code": "22298006",
+  "active": true,
+  "effectiveTime": 20020131,
+  "definitionStatus": "defined",
+  "preferredTerm": "Myocardial infarction"
+}
+```
+
+</ResponseExample>
+
+<Parameters title="Response body">
+  <Param name="code" type="string">The SCTID you asked for, echoed back.</Param>
+  <Param name="active" type="boolean">Whether the concept is still in the active SNOMED edition. Inactive concepts are returned but flagged.</Param>
+  <Param name="effectiveTime" type="integer">SNOMED <code>effectiveTime</code> stamp, in <code>YYYYMMDD</code> form, of the most recent change.</Param>
+  <Param name="definitionStatus" type="string">One of <code>primitive</code> or <code>defined</code>.</Param>
+  <Param name="preferredTerm" type="string | null">Shortest active synonym, falling back to FSN. <code>null</code> if the concept has no active descriptions.</Param>
+</Parameters>
+
+## Examples
+
+<CodeTabs>
+  <CodeTab label="cURL">
+
+```bash
+curl https://api.obscyro.com/v1/concepts/22298006 \
+  -H "Authorization: Bearer $OBS_KEY"
+```
+
+  </CodeTab>
+  <CodeTab label="Node.js">
+
+```javascript
+const res = await fetch(`https://api.obscyro.com/v1/concepts/22298006`, {
+  headers: { Authorization: `Bearer ${process.env.OBS_KEY}` },
+});
+if (res.status === 404) throw new Error("concept not found");
+const concept = await res.json();
+```
+
+  </CodeTab>
+  <CodeTab label="Python">
+
+```python
+r = requests.get(
+    "https://api.obscyro.com/v1/concepts/22298006",
+    headers={"Authorization": f"Bearer {os.environ['OBS_KEY']}"},
+)
+if r.status_code == 404:
+    raise ValueError("concept not found")
+concept = r.json()
+```
+
+  </CodeTab>
+</CodeTabs>
+
+## Existence check (HEAD)
+
+<EndpointHeader method="HEAD" path="/v1/concepts/{code}" />
+
+For high-volume validation (e.g. every code in a CSV), use HEAD: it returns no body but distinguishes <Badge tone="success">200</Badge> (exists) from <Badge tone="danger">404</Badge> (does not). It is cheaper than GET because the preferred-term lookup is skipped.
+
+```bash
+curl -I https://api.obscyro.com/v1/concepts/22298006 \
+  -H "Authorization: Bearer $OBS_KEY"
+# HTTP/1.1 200 OK
+```
+
+## Errors
+
+<ErrorTable>
+  <ErrorRow status={400} code="VALIDATION_ERROR">`code` is not a numeric SCTID.</ErrorRow>
+  <ErrorRow status={401} code="INVALID_API_KEY">Missing or invalid bearer token.</ErrorRow>
+  <ErrorRow status={404} code="CONCEPT_NOT_FOUND">No concept with this SCTID exists in the SNOMED edition.</ErrorRow>
+  <ErrorRow status={429} code="RATE_LIMITED">Per-minute rate limit exceeded for this key.</ErrorRow>
+</ErrorTable>

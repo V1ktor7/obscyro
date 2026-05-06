@@ -1,0 +1,31 @@
+# deps
+**/node_modules/
+
+# next
+**/.next/
+**/out/
+
+# backend build artefacts
+**/dist/
+**/dist-scripts/
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+
+# caches / IDE
+.DS_Store
+.vscode/
+.idea/
+*.tsbuildinfo
+next-env.d.ts
+
+# large SNOMED data drops (kept locally, never committed)
+backend/scripts/import-snomed/data/
+backend/data/snomed/*
+!backend/data/snomed/.gitkeep

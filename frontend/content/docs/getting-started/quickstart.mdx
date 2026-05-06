@@ -1,0 +1,95 @@
+---
+title: Quickstart
+description: From zero to your first normalized concept in under a minute.
+---
+
+## 1. Get a key
+
+Mint an API key from the [Dashboard](/dashboard) or the CLI (`npm run create-key`). Export it:
+
+```bash
+export OBS_KEY="obs_live_AbCDef12_GhIjKl34..."
+```
+
+## 2. Normalize free text
+
+The most common first call is `POST /v1/normalize`. It takes a clinical phrase and returns ranked SNOMED candidates.
+
+<EndpointHeader method="POST" path="/v1/normalize" />
+
+<CodeTabs>
+  <CodeTab label="cURL">
+
+```bash
+curl -X POST https://api.obscyro.com/v1/normalize \
+  -H "Authorization: Bearer $OBS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"acute MI","limit":3}'
+```
+
+  </CodeTab>
+  <CodeTab label="Node.js">
+
+```javascript
+const res = await fetch("https://api.obscyro.com/v1/normalize", {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${process.env.OBS_KEY}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({ text: "acute MI", limit: 3 }),
+});
+
+const { matches } = await res.json();
+console.log(matches[0]); // -> { code: "22298006", confidence: 0.94, ... }
+```
+
+  </CodeTab>
+  <CodeTab label="Python">
+
+```python
+import os, requests
+
+r = requests.post(
+    "https://api.obscyro.com/v1/normalize",
+    headers={"Authorization": f"Bearer {os.environ['OBS_KEY']}"},
+    json={"text": "acute MI", "limit": 3},
+    timeout=10,
+)
+r.raise_for_status()
+print(r.json()["matches"][0])
+```
+
+  </CodeTab>
+</CodeTabs>
+
+## 3. Inspect the response
+
+```json
+{
+  "matches": [
+    {
+      "code": "22298006",
+      "term": "Myocardial infarction",
+      "conceptName": "Myocardial infarction",
+      "confidence": 0.94,
+      "matchType": "fts"
+    },
+    {
+      "code": "57054005",
+      "term": "Acute myocardial infarction",
+      "conceptName": "Acute myocardial infarction",
+      "confidence": 0.88,
+      "matchType": "fts"
+    }
+  ]
+}
+```
+
+Each match carries a `matchType` (`exact`, `fts`, or `trigram`) so you can choose how strict to be in your application.
+
+## Next steps
+
+- Look up a single concept by code: [`/v1/concepts/{code}`](/docs/api/concepts).
+- Translate SNOMED to ICD-10: [`/v1/translate`](/docs/api/translate).
+- Walk a hierarchy: [`/v1/concepts/{code}/descendants`](/docs/api/descendants).

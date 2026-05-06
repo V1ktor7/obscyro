@@ -1,0 +1,16 @@
+---
+title: /v1/normalize-batch
+description: Normalize up to 1,000 clinical phrases in a single request — counts as one rate-limit hit.
+---
+
+<EndpointHeader method="POST" path="/v1/normalize-batch" />
+
+Bulk variant of [`/v1/normalize`](/docs/api/normalize). Accepts up to 1,000 strings, runs them through the matcher with a concurrency of 20, and returns per-input matches plus aggregated `summaryStats`.
+
+<Parameters title="Request body">
+  <Param name="texts" type="string[]" required>
+    1 to 1,000 phrases. Strings shorter than 2 characters after trimming get an empty <code>matches</code> array (no error).
+  </Param>
+</Parameters>
+
+<ComingSoon message="Full reference with response schema, summary stats, and pipeline patterns is being written." />

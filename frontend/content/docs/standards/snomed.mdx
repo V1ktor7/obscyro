@@ -1,0 +1,22 @@
+---
+title: SNOMED CT
+description: How Obscyro models the SNOMED CT International Edition.
+---
+
+## Edition
+
+Obscyro currently serves the **SNOMED CT International Edition, February 2026 release**. Updates ship within two weeks of each official release.
+
+## Identifiers
+
+Concept identifiers (SCTIDs) are 64-bit integers; Obscyro returns them as strings to avoid JavaScript precision loss for very large IDs.
+
+## Description types
+
+- **FSN** — Fully Specified Name (`type_id 900000000000003001`).
+- **Synonym** — preferred or acceptable display term (`type_id 900000000000013009`).
+- **Text definition** — long-form natural-language description (`type_id 900000000000550004`).
+
+The preferred term resolution rule is *shortest active synonym, falling back to FSN*. We do not currently consume the SNOMED Language Reference Set; this is on the roadmap.
+
+<ComingSoon message="More on relationships, refsets, and the recursive is-a graph is being written." />

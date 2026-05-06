@@ -1,0 +1,52 @@
+---
+title: Errors
+description: Every error response is shaped the same way so you can write one handler in your client.
+---
+
+## The error envelope
+
+Failures return JSON with this shape and the matching HTTP status code:
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Request failed schema validation.",
+    "details": { "issues": [/* zod validation issues */] }
+  }
+}
+```
+
+`code` is always present and is your stable machine-readable identifier. `message` is human-readable and may change. `details` is optional and varies by error.
+
+## Catalogue
+
+<ErrorTable>
+  <ErrorRow status={400} code="VALIDATION_ERROR">Request body, query, or path failed Zod schema validation. `details.issues` lists each violation.</ErrorRow>
+  <ErrorRow status={400} code="INVALID_INPUT">Input passed schema validation but failed semantic checks (e.g. `text` shorter than 2 chars after trim on /v1/normalize).</ErrorRow>
+  <ErrorRow status={400} code="UNSUPPORTED_TARGET">Asked /v1/translate to map to a terminology that is not configured.</ErrorRow>
+  <ErrorRow status={401} code="INVALID_API_KEY">Missing, malformed, or revoked API key on a non-public route.</ErrorRow>
+  <ErrorRow status={404} code="NOT_FOUND">No route matched the request path/method.</ErrorRow>
+  <ErrorRow status={404} code="CONCEPT_NOT_FOUND">The requested SNOMED concept is not in the database (or has no active descriptions).</ErrorRow>
+  <ErrorRow status={404} code="NO_TRANSLATION">No active mapping exists from the source code to the requested target terminology.</ErrorRow>
+  <ErrorRow status={404} code="NO_CANDIDATES">/v1/disambiguate could not derive any candidate concepts from the input text.</ErrorRow>
+  <ErrorRow status={429} code="RATE_LIMITED">Per-minute rate limit for this API key has been exceeded. See `details.ttlSeconds`.</ErrorRow>
+  <ErrorRow status={500} code="INTERNAL_ERROR">Unhandled server error. Always retry-safe — open an issue if you see one.</ErrorRow>
+</ErrorTable>
+
+## Handling errors
+
+A robust client treats any 5xx as transient (retry with exponential backoff) and any 4xx as a contract you violated (do not retry without changing the request). The one exception is `429 RATE_LIMITED` — retry after `details.ttlSeconds`.
+
+```typescript
+async function callObscyro<T>(input: unknown): Promise<T> {
+  const res = await fetch(URL, { method: "POST", body: JSON.stringify(input), headers });
+  if (res.ok) return res.json();
+  const { error } = await res.json();
+  if (res.status === 429) {
+    await new Promise((r) => setTimeout(r, error.details.ttlSeconds * 1000));
+    return callObscyro<T>(input);
+  }
+  throw new Error(`${error.code}: ${error.message}`);
+}
+```

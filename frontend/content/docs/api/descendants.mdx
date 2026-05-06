@@ -1,0 +1,27 @@
+---
+title: /v1/concepts/{code}/descendants
+description: Walk every transitive child of a SNOMED concept via the is-a hierarchy.
+---
+
+<EndpointHeader method="GET" path="/v1/concepts/{code}/descendants" />
+
+Returns all descendant concepts of `{code}` reachable via active `is-a` (`116680003`) relationships, computed with a recursive CTE. Use this to build cohorts (e.g. "every kind of cardiovascular disease") without having to materialize the hierarchy yourself.
+
+## Quick reference
+
+<Parameters title="Path parameters">
+  <Param name="code" type="string" required>
+    SCTID of the root concept.
+  </Param>
+</Parameters>
+
+<Parameters title="Query parameters">
+  <Param name="limit" type="integer" defaultValue="100">
+    Maximum descendants to return, between 1 and 10,000. Response sets <code>truncated: true</code> when more exist.
+  </Param>
+  <Param name="includeNames" type="boolean" defaultValue="false">
+    When <code>true</code>, each result is hydrated with its <code>preferredTerm</code>.
+  </Param>
+</Parameters>
+
+<ComingSoon message="Full reference with response schema, examples in cURL/Node/Python, and edge cases is being written. The endpoint is live and stable today." />

@@ -1,0 +1,25 @@
+---
+title: /v1/translate
+description: Map SNOMED concepts to ICD-10, ICD-O, or CTV3 (and back) using the SNOMED extended-map and simple-map refsets.
+---
+
+<EndpointHeader method="POST" path="/v1/translate" />
+
+Cross-terminology translation. The ICD-10 path uses SNOMED's extended map (with conditional `mapRule` parsing into structured `IFA` / `RAW` clauses); ICD-O and CTV3 use simple maps. Reverse direction is supported via `reverse: true`.
+
+<Parameters title="Request body">
+  <Param name="code" type="string" required>
+    Source code (SNOMED SCTID by default; the target code if <code>reverse: true</code>).
+  </Param>
+  <Param name="from" type='"snomed"' defaultValue='"snomed"'>
+    Source terminology. Currently only SNOMED is supported.
+  </Param>
+  <Param name="to" type='"icd10" | "icdo" | "ctv3"' required>
+    Target terminology.
+  </Param>
+  <Param name="reverse" type="boolean" defaultValue="false">
+    When <code>true</code>, looks up by target code instead.
+  </Param>
+</Parameters>
+
+<ComingSoon message="Full reference with extended-map response schema, mapRule conditional shapes, and worked examples is being written." />

@@ -1,0 +1,44 @@
+---
+title: Rate limits
+description: Per-minute request budgets per API key, scaled by plan.
+---
+
+## Per-minute budgets
+
+Every API key has a per-minute request budget that depends on its plan. The current ceilings are:
+
+| Plan | Requests / minute |
+| ---- | ----------------- |
+| Free | 100 |
+| Starter | 1,000 |
+| Pro | 10,000 |
+| Enterprise | Effectively unlimited (contact us) |
+
+These are enforced in-memory per Obscyro node. When you exceed your budget, subsequent calls receive `429 RATE_LIMITED`:
+
+```json
+{
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "Rate limit exceeded. Retry in 42 seconds.",
+    "details": { "limit": 100, "ttlSeconds": 42 }
+  }
+}
+```
+
+## Headers
+
+When the rate-limit plugin returns a 429, the response carries the standard headers so generic client middleware works:
+
+- `X-RateLimit-Limit` — your max for the window.
+- `X-RateLimit-Remaining` — calls left in the current window.
+- `X-RateLimit-Reset` — seconds until the window resets.
+- `Retry-After` — same value as `X-RateLimit-Reset`, for HTTP convention.
+
+## Bursts and back-pressure
+
+Healthcare workloads tend to be bursty (a nightly ETL processes a million records, then nothing for hours). If your steady state is below your budget but you spike above it, the cleanest pattern is:
+
+1. Use [`/v1/normalize-batch`](/docs/api/normalize-batch) — one request, up to 1,000 strings, counts as a single rate-limit hit.
+2. Wrap individual calls in retry-with-jitter on `429`.
+3. Talk to us about Enterprise if you need sustained throughput beyond 10K rpm.

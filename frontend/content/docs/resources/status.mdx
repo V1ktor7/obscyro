@@ -1,0 +1,12 @@
+---
+title: Status
+description: Live uptime, latency, and incidents.
+---
+
+The live status page is at [status.obscyro.com](https://status.obscyro.com). For programmatic checks, the readiness probe lives at:
+
+<EndpointHeader method="GET" path="/v1/health" />
+
+A healthy response carries `status: "ok"` and a `database.latencyMs` round-trip. A `503` with `status: "degraded"` indicates the database is unreachable; the API process itself is still up.
+
+<ComingSoon message="Embedded status badges and historical uptime charts are being added." />

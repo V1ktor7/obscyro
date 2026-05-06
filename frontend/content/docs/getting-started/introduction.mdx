@@ -1,0 +1,35 @@
+---
+title: Introduction
+description: Obscyro is the semantic interoperability layer for healthcare data. One API to validate, normalize, translate, expand, and disambiguate clinical codes across SNOMED CT, ICD-10, RxNorm, LOINC, FHIR, and HL7.
+---
+
+## What Obscyro is
+
+Obscyro turns the messy reality of healthcare data — free-text notes, mismatched code systems, regional dialects, missing terminology updates — into a single coherent JSON output your application can rely on. Every endpoint is a thin, predictable wrapper around the canonical clinical knowledge graph.
+
+You can call it from any language that speaks HTTP. There is no SDK lock-in, no hidden state, no batch jobs. Send JSON, get JSON.
+
+## What you get out of the box
+
+- Concept lookup against the SNOMED CT International Edition (Feb 2026 release).
+- Free-text normalization (exact, full-text search, and trigram fuzzy match) into SNOMED candidates.
+- Hierarchy traversal: parents, children, ancestors, and descendants via recursive `is-a` relationships.
+- Cross-terminology mappings: SNOMED ↔ ICD-10 (via the SNOMED extended map), ICD-O, CTV3.
+- Synonym, FSN, and text-definition retrieval per concept.
+- Context-aware disambiguation when an abbreviation maps to multiple concepts (`MI` could be myocardial infarction, mitral insufficiency, mental illness, or military intelligence — Obscyro picks the right one given clinical context).
+
+## How it fits into your stack
+
+Most teams add Obscyro at one of three integration points:
+
+1. **Ingestion**: normalize incoming free-text or partner-coded data on the way into your database.
+2. **Display**: hydrate stored codes with preferred terms and translations at render time.
+3. **Analytics**: expand concept hierarchies (e.g. all descendants of `Cardiovascular disease`) before running cohort queries.
+
+## Reading this documentation
+
+- The **Core API** section is your reference manual — one page per endpoint, with request/response schemas and copy-paste examples in cURL, Node.js, and Python.
+- **Standards** explains how Obscyro models each terminology so you know what to expect in responses.
+- **Resources** lists SDKs, our changelog, and the live status page.
+
+When you are ready, jump to the [Quickstart](/docs/getting-started/quickstart) for a 30-second integration.

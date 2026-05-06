@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: obscyro-postgres
+    environment:
+      POSTGRES_USER: obscyro
+      POSTGRES_PASSWORD: obscyro_dev_password
+      POSTGRES_DB: obscyro
+    ports:
+      - "5435:5432"
+    volumes:
+      - obscyro_pgdata:/var/lib/postgresql/data
+
+volumes:
+  obscyro_pgdata:
