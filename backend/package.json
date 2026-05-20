@@ -14,7 +14,8 @@
     "db:down": "docker compose down",
     "migrate": "tsx scripts/migrate.ts",
     "create-key": "tsx scripts/create-api-key.ts",
-    "import:snomed": "tsx scripts/import-snomed/index.ts"
+    "import:snomed": "tsx scripts/import-snomed/index.ts",
+    "build:tc": "tsx scripts/build-transitive-closure.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.2",

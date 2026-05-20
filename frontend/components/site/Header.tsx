@@ -2,18 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Github, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 
-import ThemeToggle from "@/components/ThemeToggle";
+import LangToggle from "@/components/site/LangToggle";
+import { useT } from "@/lib/i18n/context";
 import { cn } from "@/lib/cn";
 
-const NAV_ITEMS = [
-  { label: "Docs", href: "/docs" },
-  { label: "Pricing", href: "/#pricing" },
-  { label: "Dashboard", href: "/dashboard" },
-] as const;
-
 export default function Header() {
+  const t = useT();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -23,6 +19,11 @@ export default function Header() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  const navItems = [
+    { label: t("nav.docs"), href: "/docs" },
+    { label: t("nav.pricing"), href: "/#pricing" },
+  ];
 
   return (
     <header
@@ -43,7 +44,7 @@ export default function Header() {
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -52,30 +53,27 @@ export default function Header() {
               {item.label}
             </Link>
           ))}
-          <a
-            href="https://github.com/"
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-fg-secondary transition-colors hover:bg-bg-tertiary hover:text-fg-primary"
+          <Link
+            href="/sign-in"
+            className="rounded-md px-3 py-1.5 text-sm text-fg-secondary transition-colors hover:bg-bg-tertiary hover:text-fg-primary"
           >
-            <Github className="h-4 w-4" aria-hidden />
-            GitHub
-          </a>
+            {t("nav.signin")}
+          </Link>
         </nav>
 
         <div className="flex items-center gap-2">
-          <ThemeToggle />
+          <LangToggle className="hidden md:inline-flex" />
           <Link
-            href="/dashboard"
+            href="/sign-up"
             className="hidden h-9 items-center rounded-md bg-accent px-4 text-sm font-medium text-accent-fg transition-opacity hover:opacity-90 md:inline-flex"
           >
-            Sign in
+            {t("nav.getKey")}
           </Link>
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
             className="inline-flex h-9 w-9 items-center justify-center rounded-md text-fg-primary hover:bg-bg-tertiary md:hidden"
-            aria-label="Toggle menu"
+            aria-label={t("nav.toggleMenu")}
             aria-expanded={open}
           >
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -86,7 +84,7 @@ export default function Header() {
       {open ? (
         <div className="border-t border-border-subtle bg-bg-primary md:hidden">
           <nav className="container flex flex-col gap-1 py-4">
-            {NAV_ITEMS.map((item) => (
+            {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
@@ -97,12 +95,22 @@ export default function Header() {
               </Link>
             ))}
             <Link
-              href="/dashboard"
+              href="/sign-in"
               onClick={() => setOpen(false)}
-              className="mt-2 inline-flex h-9 items-center justify-center rounded-md bg-accent px-4 text-sm font-medium text-accent-fg"
+              className="rounded-md px-3 py-2 text-sm text-fg-secondary transition-colors hover:bg-bg-tertiary hover:text-fg-primary"
             >
-              Sign in
+              {t("nav.signin")}
             </Link>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <LangToggle />
+              <Link
+                href="/sign-up"
+                onClick={() => setOpen(false)}
+                className="inline-flex h-9 flex-1 items-center justify-center rounded-md bg-accent px-4 text-sm font-medium text-accent-fg"
+              >
+                {t("nav.getKey")}
+              </Link>
+            </div>
           </nav>
         </div>
       ) : null}

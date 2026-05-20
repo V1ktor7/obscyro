@@ -16,20 +16,6 @@
   --code-fg: #ededed;
 }
 
-.dark {
-  --bg-primary: #0a0a0a;
-  --bg-secondary: #0f0f0f;
-  --bg-tertiary: #1a1a1a;
-  --text-primary: #ededed;
-  --text-secondary: #a1a1aa;
-  --border-subtle: #27272a;
-  --accent: #ffffff;
-  --accent-fg: #0a0a0a;
-  --card-bg: rgba(255, 255, 255, 0.03);
-  --code-bg: #050505;
-  --code-fg: #ededed;
-}
-
 * {
   border-color: var(--border-subtle);
 }
@@ -44,30 +30,39 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  transition: background-color 0.3s, color 0.3s;
 }
 
-/* selection */
 ::selection {
   background-color: var(--accent);
   color: var(--accent-fg);
 }
 
-/* shiki dual themes via rehype-pretty-code */
 code[data-theme*=" "],
 code[data-theme*=" "] span {
   color: var(--shiki-light);
   background-color: var(--shiki-light-bg);
 }
-.dark code[data-theme*=" "],
-.dark code[data-theme*=" "] span {
-  color: var(--shiki-dark);
-  background-color: var(--shiki-dark-bg);
-}
 
 pre[data-theme*=" "] {
   background-color: transparent !important;
   padding: 0;
+}
+
+/* Features: flat black code panel, keep Shiki token foregrounds */
+.static-code-solid-dark pre,
+.static-code-solid-dark pre.shiki {
+  background-color: var(--code-bg) !important;
+}
+
+/* Hero + Features: dark Shiki theme; prefer --shiki-dark, fall back for variable naming */
+.static-code-solid-dark code[data-theme*=" "] {
+  color: var(--shiki-dark, var(--shiki-light));
+  background-color: transparent !important;
+}
+
+.static-code-solid-dark code[data-theme*=" "] span {
+  color: var(--shiki-dark, var(--shiki-light));
+  background-color: transparent !important;
 }
 
 figure[data-rehype-pretty-code-figure] {
@@ -124,7 +119,6 @@ figure[data-rehype-pretty-code-figure]:has([data-rehype-pretty-code-title]) > pr
   border-top-right-radius: 0;
 }
 
-/* tiny scrollbar */
 .thin-scrollbar::-webkit-scrollbar {
   width: 6px;
   height: 6px;

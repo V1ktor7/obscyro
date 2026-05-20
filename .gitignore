@@ -1,31 +1,18 @@
-# deps
-**/node_modules/
-
-# next
-**/.next/
-**/out/
-
-# backend build artefacts
-**/dist/
-**/dist-scripts/
-
-# env / secrets
-.env
-.env.*
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
 !.env.example
 
-# logs
-*.log
-npm-debug.log*
-
-# caches / IDE
-.DS_Store
-.vscode/
-.idea/
-*.tsbuildinfo
-next-env.d.ts
-
-# large SNOMED data drops (kept locally, never committed)
-backend/scripts/import-snomed/data/
-backend/data/snomed/*
-!backend/data/snomed/.gitkeep
+# Google AI Studio design reference (kept local, not part of Obscyro)
+/package.json
+/package-lock.json
+/vite.config.ts
+/tsconfig.json
+/index.html
+/metadata.json
+/src/
+/.env.example

@@ -119,50 +119,22 @@ const hierarchyRoutes: FastifyPluginAsync = async (fastify) => {
     code: string,
     limit: number,
   ) => {
-    // For descendants we walk source_id -> destination_id (children of children).
-    // For ancestors we walk destination_id -> source_id (parents of parents).
+    // Reads pre-computed IS-A closure (snomed.transitive_closure). Run migrations
+    // or `npm run build:tc` after loading relationships.
     const sql =
       direction === "descendants"
-        ? `WITH RECURSIVE walk(id, depth) AS (
-             SELECT source_id, 1
-               FROM snomed.relationships
-              WHERE destination_id = $1
-                AND type_id = $2
-                AND active = true
-             UNION ALL
-             SELECT r.source_id, w.depth + 1
-               FROM snomed.relationships r
-               JOIN walk w ON r.destination_id = w.id
-              WHERE r.type_id = $2
-                AND r.active = true
-                AND w.depth < 50
-           )
-           SELECT id, MIN(depth) AS depth
-             FROM walk
-            GROUP BY id
-            ORDER BY depth ASC, id ASC
-            LIMIT $3`
-        : `WITH RECURSIVE walk(id, depth) AS (
-             SELECT destination_id, 1
-               FROM snomed.relationships
-              WHERE source_id = $1
-                AND type_id = $2
-                AND active = true
-             UNION ALL
-             SELECT r.destination_id, w.depth + 1
-               FROM snomed.relationships r
-               JOIN walk w ON r.source_id = w.id
-              WHERE r.type_id = $2
-                AND r.active = true
-                AND w.depth < 50
-           )
-           SELECT id, MIN(depth) AS depth
-             FROM walk
-            GROUP BY id
-            ORDER BY depth ASC, id ASC
-            LIMIT $3`;
+        ? `SELECT descendant_id::text AS id, depth::int AS depth
+             FROM snomed.transitive_closure
+            WHERE ancestor_id = $1::bigint
+            ORDER BY depth ASC, descendant_id ASC
+            LIMIT $2`
+        : `SELECT ancestor_id::text AS id, depth::int AS depth
+             FROM snomed.transitive_closure
+            WHERE descendant_id = $1::bigint
+            ORDER BY depth ASC, ancestor_id ASC
+            LIMIT $2`;
 
-    const { rows } = await req.db.query<IdDepthRow>(sql, [code, IS_A_TYPE_ID, limit + 1]);
+    const { rows } = await req.db.query<IdDepthRow>(sql, [code, limit + 1]);
     return rows;
   };
 
@@ -248,7 +220,7 @@ const hierarchyRoutes: FastifyPluginAsync = async (fastify) => {
     "/concepts/:code/ancestors",
     {
       schema: {
-        summary: "Transitive ancestors (recursive is-a, with depth)",
+        summary: "Transitive ancestors (precomputed IS-A closure, with depth)",
         tags: ["hierarchy"],
         params: codeParam,
         querystring: querySchema,
@@ -262,7 +234,7 @@ const hierarchyRoutes: FastifyPluginAsync = async (fastify) => {
     "/concepts/:code/descendants",
     {
       schema: {
-        summary: "Transitive descendants (recursive is-a, with depth)",
+        summary: "Transitive descendants (precomputed IS-A closure, with depth)",
         tags: ["hierarchy"],
         params: codeParam,
         querystring: querySchema,

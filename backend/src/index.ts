@@ -24,6 +24,7 @@ import disambiguateRoutes from "./routes/disambiguate.js";
 import healthRoutes from "./routes/health.js";
 import hierarchyRoutes from "./routes/hierarchy.js";
 import normalizeRoutes from "./routes/normalize.js";
+import onboardRoutes from "./routes/onboard.js";
 import synonymsRoutes from "./routes/synonyms.js";
 import translateRoutes from "./routes/translate.js";
 
@@ -74,6 +75,7 @@ await app.register(swagger, {
       { name: "hierarchy", description: "Parents, children, ancestors, descendants" },
       { name: "normalize", description: "Text → SNOMED matching" },
       { name: "translate", description: "Cross-terminology mappings" },
+      { name: "onboard", description: "Self-serve onboarding and account context" },
     ],
   },
   transform: jsonSchemaTransform,
@@ -91,6 +93,7 @@ await app.register(authEnforce);
 await app.register(usagePlugin);
 
 await app.register(healthRoutes);
+await app.register(onboardRoutes, { prefix: "/v1" });
 await app.register(conceptsRoutes, { prefix: "/v1" });
 await app.register(synonymsRoutes, { prefix: "/v1" });
 await app.register(hierarchyRoutes, { prefix: "/v1" });

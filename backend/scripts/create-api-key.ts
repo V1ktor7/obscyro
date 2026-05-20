@@ -75,7 +75,7 @@ function isPlan(value: string): value is Plan {
 function usage(): never {
   console.error(
     [
-      "Usage: npm run create-key -- --name=\"My Key\" --email=\"me@example.com\" [--plan=free] [--quota=1000]",
+      "Usage: npm run create-key -- --name=\"My Key\" --email=\"obscyro-team@obscyro.com\" [--plan=free] [--quota=1000]",
       "",
       "Plans: free | starter | pro | enterprise",
     ].join("\n"),

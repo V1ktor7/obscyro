@@ -53,7 +53,7 @@ export default async function DocPage({ params }: PageProps) {
 
   return (
     <div className="grid grid-cols-1 gap-8 px-6 py-12 xl:grid-cols-[minmax(0,1fr)_220px] xl:gap-12 xl:px-12">
-      <article className="prose prose-neutral mx-auto w-full max-w-3xl dark:prose-invert">
+      <article className="prose prose-neutral mx-auto w-full max-w-3xl">
         <header className="not-prose mb-8">
           <p className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-fg-secondary">
             {breadcrumb(slug)}

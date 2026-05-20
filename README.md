@@ -1,75 +1,20 @@
-# Obscyro
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+</div>
 
-> **Beta — active test phase.** Endpoints, schemas, and pricing may change without notice. Feedback welcome.
+# Run and deploy your AI Studio app
 
-Healthcare semantic interoperability API platform — Fastify + PostgreSQL backend with a Next.js documentation and marketing site.
+This contains everything you need to run your app locally.
 
-## Prerequisites
+View your app in AI Studio: https://ai.studio/apps/f03adba1-e42e-4687-8fc4-1986f478adcd
 
-- **Node.js** 20 or newer
-- **Docker Desktop** (or Docker Engine) for local PostgreSQL with pgvector
+## Run Locally
 
-## Repository layout
+**Prerequisites:**  Node.js
 
-- **`backend/`** — Fastify API (TypeScript, PostgreSQL via `pg`, no ORM)
-- **`frontend/`** — Next.js 14 App Router site (Tailwind, docs/marketing shell)
 
-## Backend setup
-
-Environment variables are documented in [`backend/.env.example`](backend/.env.example). Create a local `.env` from that file and align `DATABASE_URL` with the credentials in [`backend/docker-compose.yml`](backend/docker-compose.yml).
-
-```bash
-cd backend
-npm install
-copy .env.example .env
-```
-
-Edit `backend/.env` so `DATABASE_URL` matches `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, and host `localhost:5432`.
-
-Start PostgreSQL 16 (pgvector image) and the API:
-
-```bash
-npm run db:up
-npm run dev
-```
-
-Verify health:
-
-```bash
-curl http://localhost:3001/health
-```
-
-Swagger UI is available at `/documentation` when the server is running.
-
-Stop the database container:
-
-```bash
-npm run db:down
-```
-
-Build and run production server:
-
-```bash
-npm run build
-npm start
-```
-
-Run the SNOMED import stub:
-
-```bash
-npm run import:snomed
-```
-
-## Frontend setup
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Open the URL shown in the terminal (typically `http://localhost:3000`).
-
-## Windows note
-
-The examples use `copy .env.example .env` for Command Prompt or PowerShell. On macOS/Linux, use `cp .env.example .env`.
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`

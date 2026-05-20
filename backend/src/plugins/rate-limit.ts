@@ -17,6 +17,7 @@ const ANONYMOUS_LIMIT = 100;
 const PUBLIC_PATH_PATTERNS: RegExp[] = [
   /^\/health\/?$/,
   /^\/v1\/health\/?$/,
+  /^\/v1\/onboard\/?$/,
   /^\/documentation(\/.*)?$/,
 ];
 

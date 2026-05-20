@@ -5,6 +5,7 @@ import { Analytics } from "@vercel/analytics/react";
 import BetaBanner from "@/components/site/BetaBanner";
 import Header from "@/components/site/Header";
 import Footer from "@/components/site/Footer";
+import { LocaleProvider } from "@/lib/i18n/context";
 
 import "./globals.css";
 
@@ -19,8 +20,6 @@ const jetbrainsMono = JetBrains_Mono({
   variable: "--font-mono",
   display: "swap",
 });
-
-const themeInitScript = `(function(){try{var k='obscyro-theme';var s=localStorage.getItem(k);var d;if(s==='dark')d=true;else if(s==='light')d=false;else d=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',d);}catch(e){}})();`;
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -66,10 +65,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
-  ],
+  themeColor: "#ffffff",
+  colorScheme: "light",
 };
 
 export default function RootLayout({
@@ -78,18 +75,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-      </head>
+    <html lang="en" className="light">
       <body
         className={`${inter.variable} ${jetbrainsMono.variable} min-h-screen bg-bg-primary font-sans text-fg-primary antialiased`}
       >
-        <BetaBanner />
-        <Header />
-        <main className="min-h-[calc(100vh-4rem)]">{children}</main>
-        <Footer />
-        <Analytics />
+        <LocaleProvider>
+          <BetaBanner />
+          <Header />
+          <main className="min-h-[calc(100vh-4rem)]">{children}</main>
+          <Footer />
+          <Analytics />
+        </LocaleProvider>
       </body>
     </html>
   );

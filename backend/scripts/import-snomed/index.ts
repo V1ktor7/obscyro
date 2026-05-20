@@ -9,6 +9,8 @@ import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { from as copyFrom } from "pg-copy-streams";
 
+import { populateTransitiveClosure } from "../lib/populate-transitive-closure.js";
+
 interface FileSpec {
   file: string;
   table: string;
@@ -136,6 +138,12 @@ const HEAVY_INDEXES: { name: string; drop: string; create: string }[] = [
       "CREATE INDEX descriptions_term_trgm_idx ON snomed.descriptions USING GIN (term gin_trgm_ops)",
   },
   {
+    name: "descriptions_lower_term_idx",
+    drop: "DROP INDEX IF EXISTS snomed.descriptions_lower_term_idx",
+    create:
+      "CREATE INDEX descriptions_lower_term_idx ON snomed.descriptions (lower(term)) WHERE active = true",
+  },
+  {
     name: "descriptions_concept_id_idx",
     drop: "DROP INDEX IF EXISTS snomed.descriptions_concept_id_idx",
     create: "CREATE INDEX descriptions_concept_id_idx ON snomed.descriptions (concept_id)",
@@ -253,6 +261,12 @@ async function main(): Promise<void> {
 
     await client.query("COMMIT");
     committed = true;
+
+    const tcStart = Date.now();
+    console.log("[5/5] Building snomed.transitive_closure ...");
+    await populateTransitiveClosure(client);
+    console.log(`      done in ${fmtDuration(Date.now() - tcStart)}`);
+
     console.log(`\nDone in ${fmtDuration(Date.now() - totalStart)}`);
   } catch (err) {
     if (!committed) {

@@ -3,6 +3,15 @@ title: Introduction
 description: Obscyro is the semantic interoperability layer for healthcare data. One API to validate, normalize, translate, expand, and disambiguate clinical codes across SNOMED CT, ICD-10, RxNorm, LOINC, FHIR, and HL7.
 ---
 
+<h2 id="test-phase">Test phase (public)</h2>
+
+Obscyro is in **test phase only**: no uptime or accuracy SLA. Some endpoints are more likely to show bugs, slow responses, or schema changes—especially:
+
+- `POST /v1/normalize`, `POST /v1/normalize-batch`, `POST /v1/disambiguate`, `POST /v1/translate`
+- `GET /v1/concepts/{code}/ancestors`, `GET /v1/concepts/{code}/descendants`
+
+Do not use responses for clinical decisions without independent verification. The same notice appears in the site banner and in the signed-in console overview.
+
 ## What Obscyro is
 
 Obscyro turns the messy reality of healthcare data — free-text notes, mismatched code systems, regional dialects, missing terminology updates — into a single coherent JSON output your application can rely on. Every endpoint is a thin, predictable wrapper around the canonical clinical knowledge graph.

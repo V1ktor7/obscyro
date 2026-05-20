@@ -6,7 +6,7 @@ types.setTypeParser(types.builtins.INT8, (v) => v);
 
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 20,
+  max: 50,
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 10_000,
 });

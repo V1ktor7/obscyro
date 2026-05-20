@@ -6,6 +6,7 @@ import { AppError } from "../lib/errors.js";
 const PUBLIC_PATH_PATTERNS: RegExp[] = [
   /^\/health\/?$/,
   /^\/v1\/health\/?$/,
+  /^\/v1\/onboard\/?$/,
   /^\/documentation(\/.*)?$/,
 ];
 

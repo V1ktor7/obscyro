@@ -129,6 +129,22 @@ CREATE INDEX relationships_type_id_idx
     ON snomed.relationships (type_id);
 
 -- ----------------------------------------------------------------------------
+-- 3b. Transitive IS-A closure (populated after RF2 load via npm run build:tc)
+-- ----------------------------------------------------------------------------
+CREATE TABLE snomed.transitive_closure (
+    ancestor_id   BIGINT   NOT NULL,
+    descendant_id BIGINT   NOT NULL,
+    depth         SMALLINT NOT NULL,
+    PRIMARY KEY (ancestor_id, descendant_id)
+);
+
+CREATE INDEX transitive_closure_anc_depth_idx
+    ON snomed.transitive_closure (ancestor_id, depth, descendant_id);
+
+CREATE INDEX transitive_closure_desc_depth_idx
+    ON snomed.transitive_closure (descendant_id, depth, ancestor_id);
+
+-- ----------------------------------------------------------------------------
 -- 4. Extended Map (refset)
 --    der2_iisssccRefset_ExtendedMapSnapshot_INT_20260201.txt (~215k rows)
 -- ----------------------------------------------------------------------------
