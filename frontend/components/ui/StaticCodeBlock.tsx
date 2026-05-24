@@ -26,7 +26,7 @@ export default function StaticCodeBlock({
   return (
     <div
       className={cn(
-        "group relative overflow-hidden rounded-xl border border-border-subtle bg-code-bg shadow-code",
+        "group relative min-w-0 overflow-hidden rounded-xl border border-border-subtle bg-code-bg shadow-code",
         solidDarkCode && "static-code-solid-dark",
         className,
       )}
