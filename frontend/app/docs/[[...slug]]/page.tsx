@@ -7,6 +7,7 @@ import rehypePrettyCode from "rehype-pretty-code";
 import remarkGfm from "remark-gfm";
 
 import TableOfContents from "@/components/docs/TableOfContents";
+import TableOfContentsCompact from "@/components/docs/TableOfContentsCompact";
 import { mdxComponents } from "@/components/docs/MDXComponents";
 import { listDocFiles, loadDoc } from "@/lib/docs/load";
 import {
@@ -52,19 +53,22 @@ export default async function DocPage({ params }: PageProps) {
   const description = doc.frontmatter.description as string | undefined;
 
   return (
-    <div className="grid grid-cols-1 gap-8 px-6 py-12 xl:grid-cols-[minmax(0,1fr)_220px] xl:gap-12 xl:px-12">
+    <div className="grid grid-cols-1 gap-8 px-4 py-8 sm:px-6 sm:py-12 xl:grid-cols-[minmax(0,1fr)_220px] xl:gap-12 xl:px-12">
       <article className="prose prose-neutral mx-auto w-full max-w-3xl">
-        <header className="not-prose mb-8">
-          <p className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-fg-secondary">
+        <header className="not-prose mb-6 sm:mb-8">
+          <p className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-fg-secondary sm:text-[0.65rem] sm:tracking-[0.2em]">
             {breadcrumb(slug)}
           </p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tighter sm:text-4xl">
+          <h1 className="mt-3 text-balance text-2xl font-semibold tracking-tighter sm:text-3xl lg:text-4xl">
             {title}
           </h1>
           {description ? (
-            <p className="mt-3 text-lg text-fg-secondary">{description}</p>
+            <p className="mt-3 text-pretty text-base text-fg-secondary sm:text-lg">
+              {description}
+            </p>
           ) : null}
         </header>
+        <TableOfContentsCompact headings={doc.headings} />
         <MDXRemote
           source={doc.content}
           components={mdxComponents}
@@ -75,14 +79,14 @@ export default async function DocPage({ params }: PageProps) {
             },
           }}
         />
-        <hr className="my-12 border-border-subtle" />
+        <hr className="my-10 border-border-subtle sm:my-12" />
         <nav className="not-prose flex flex-col gap-3 sm:flex-row sm:justify-between">
           {prev ? (
             <Link
               href={`/docs/${prev.slug.join("/")}`}
               className="group flex flex-1 flex-col rounded-lg border border-border-subtle bg-bg-secondary p-4 transition-colors hover:border-fg-secondary/40 sm:max-w-[48%]"
             >
-              <span className="flex items-center gap-1 font-mono text-[0.65rem] uppercase tracking-[0.2em] text-fg-secondary">
+              <span className="flex items-center gap-1 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-fg-secondary sm:text-[0.65rem] sm:tracking-[0.2em]">
                 <ArrowLeft className="h-3 w-3" /> Previous
               </span>
               <span className="mt-1 text-sm font-medium text-fg-primary">{prev.title}</span>
@@ -95,7 +99,7 @@ export default async function DocPage({ params }: PageProps) {
               href={`/docs/${next.slug.join("/")}`}
               className="group flex flex-1 flex-col items-end rounded-lg border border-border-subtle bg-bg-secondary p-4 transition-colors hover:border-fg-secondary/40 sm:max-w-[48%]"
             >
-              <span className="flex items-center gap-1 font-mono text-[0.65rem] uppercase tracking-[0.2em] text-fg-secondary">
+              <span className="flex items-center gap-1 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-fg-secondary sm:text-[0.65rem] sm:tracking-[0.2em]">
                 Next <ArrowRight className="h-3 w-3" />
               </span>
               <span className="mt-1 text-sm font-medium text-fg-primary">{next.title}</span>

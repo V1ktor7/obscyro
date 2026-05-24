@@ -62,6 +62,8 @@ export const dict = {
     "features.disambiguate.desc": "Pick the right code with context.",
     "features.reason.title": "Reason",
     "features.reason.desc": "Detect logical contradictions in clinical data.",
+    "features.showExample": "Show example",
+    "features.hideExample": "Hide example",
 
     "pricing.eyebrow": "Pricing",
     "pricing.title": "Simple, predictable, healthcare-friendly.",
@@ -197,6 +199,9 @@ export const dict = {
       "Profile, team members, and webhook configuration will live here.",
     "app.guard.signinRequired":
       "Sign in to access the console.",
+    "app.menu": "Dashboard menu",
+    "app.openMenu": "Open dashboard menu",
+    "app.closeMenu": "Close menu",
 
     "app.overview.eyebrow": "Console",
     "app.overview.title": "Overview",
@@ -277,6 +282,8 @@ export const dict = {
     "features.disambiguate.desc": "Choisissez le bon code avec le contexte.",
     "features.reason.title": "Raisonner",
     "features.reason.desc": "Détectez les contradictions logiques dans les données cliniques.",
+    "features.showExample": "Voir l'exemple",
+    "features.hideExample": "Masquer l'exemple",
 
     "pricing.eyebrow": "Tarifs",
     "pricing.title": "Simple, prévisible, pensé pour la santé.",
@@ -413,6 +420,9 @@ export const dict = {
       "Profil, membres d'équipe et configuration des webhooks apparaîtront ici.",
     "app.guard.signinRequired":
       "Connectez-vous pour accéder à la console.",
+    "app.menu": "Menu du tableau de bord",
+    "app.openMenu": "Ouvrir le menu du tableau de bord",
+    "app.closeMenu": "Fermer le menu",
 
     "app.overview.eyebrow": "Console",
     "app.overview.title": "Vue d'ensemble",

@@ -35,7 +35,7 @@ export default function MobileNav() {
 
   return (
     <>
-      <div className="sticky top-16 z-30 flex items-center gap-2 border-b border-border-subtle bg-bg-primary/90 px-4 py-2 backdrop-blur lg:hidden">
+      <div className="sticky top-14 z-30 flex items-center gap-2 border-b border-border-subtle bg-bg-primary/90 px-4 py-2 backdrop-blur sm:top-16 lg:hidden">
         <button
           type="button"
           onClick={() => setOpen(true)}

@@ -162,3 +162,36 @@ figure[data-rehype-pretty-code-figure]:has([data-rehype-pretty-code-title]) > pr
     outline-offset: 2px;
   }
 }
+
+/* Inputs default to 16px on small screens to avoid iOS zoom on focus */
+@media (max-width: 640px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="password"],
+  input[type="search"],
+  input[type="url"],
+  input[type="number"],
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* Tighter docs prose on small screens (overflow tables get wrapped via MDX, this scales code/tables) */
+@media (max-width: 640px) {
+  .prose pre {
+    border-radius: 0.5rem;
+    padding: 0.75rem 0;
+    font-size: 0.75rem;
+  }
+  .prose figure[data-rehype-pretty-code-figure] > pre {
+    font-size: 0.75rem;
+  }
+  .prose figure[data-rehype-pretty-code-figure] code [data-line] {
+    padding: 0 0.75rem;
+  }
+  .prose table {
+    font-size: 0.8rem;
+  }
+}

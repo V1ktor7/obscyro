@@ -37,22 +37,24 @@ export default function SignInForm() {
   }
 
   return (
-    <section className="container flex min-h-[calc(100vh-12rem)] items-center py-16">
+    <section className="container flex min-h-[calc(100vh-12rem)] items-center py-10 sm:py-16">
       <div className="mx-auto w-full max-w-md">
-        <div className="mb-6 flex flex-col items-start gap-4">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border-subtle bg-bg-secondary px-3 py-1 font-mono text-[0.65rem] uppercase tracking-[0.2em] text-fg-secondary">
+        <div className="mb-6 flex flex-col items-start gap-3 sm:gap-4">
+          <div className="inline-flex items-center gap-2 rounded-full border border-border-subtle bg-bg-secondary px-3 py-1 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-fg-secondary sm:text-[0.65rem] sm:tracking-[0.2em]">
             <KeyRound className="h-3 w-3" aria-hidden />
             {t("nav.signin")}
           </div>
-          <h1 className="text-balance text-3xl font-semibold tracking-tighter sm:text-4xl">
+          <h1 className="text-balance text-2xl font-semibold tracking-tighter sm:text-3xl lg:text-4xl">
             {t("signin.title")}
           </h1>
-          <p className="text-pretty text-fg-secondary">{t("signin.subtitle")}</p>
+          <p className="text-pretty text-sm text-fg-secondary sm:text-base">
+            {t("signin.subtitle")}
+          </p>
         </div>
 
         <form
           onSubmit={onSubmit}
-          className="rounded-xl border border-border-subtle bg-bg-secondary p-6 sm:p-7"
+          className="rounded-xl bg-bg-secondary p-0 sm:border sm:border-border-subtle sm:p-6 lg:p-7"
         >
           <label
             htmlFor="apiKey"
@@ -69,7 +71,7 @@ export default function SignInForm() {
             placeholder={t("signin.placeholder")}
             value={key}
             onChange={(e) => setKey(e.target.value)}
-            className="w-full rounded-lg border border-border-subtle bg-bg-primary px-3 py-2 font-mono text-sm text-fg-primary placeholder:text-fg-secondary/70 focus:border-fg-primary focus:outline-none focus:ring-2 focus:ring-fg-primary/10"
+            className="w-full rounded-lg border border-border-subtle bg-bg-primary px-3 py-2.5 font-mono text-base text-fg-primary placeholder:text-fg-secondary/70 focus:border-fg-primary focus:outline-none focus:ring-2 focus:ring-fg-primary/10 sm:py-2 sm:text-sm"
           />
 
           {error ? (
@@ -81,8 +83,12 @@ export default function SignInForm() {
             </p>
           ) : null}
 
-          <div className="mt-6 flex justify-end">
-            <Button type="submit" disabled={submitting || key.trim().length === 0}>
+          <div className="mt-6 sm:flex sm:justify-end">
+            <Button
+              type="submit"
+              width="fullMobile"
+              disabled={submitting || key.trim().length === 0}
+            >
               {submitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />

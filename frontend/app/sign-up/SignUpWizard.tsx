@@ -107,26 +107,28 @@ export default function SignUpWizard() {
   }
 
   return (
-    <section className="container py-16 md:py-24">
+    <section className="container py-10 sm:py-16 md:py-24">
       <div className="mx-auto max-w-xl">
-        <div className="mb-8 flex flex-col items-start gap-5">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border-subtle bg-bg-secondary px-3 py-1 font-mono text-[0.65rem] uppercase tracking-[0.2em] text-fg-secondary">
+        <div className="mb-6 flex flex-col items-start gap-4 sm:mb-8 sm:gap-5">
+          <div className="inline-flex items-center gap-2 rounded-full border border-border-subtle bg-bg-secondary px-3 py-1 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-fg-secondary sm:text-[0.65rem] sm:tracking-[0.2em]">
             <KeyRound className="h-3 w-3" aria-hidden />
             {t("signup.stepLabel")} {step} {t("signup.of")} 3
           </div>
-          <h1 className="text-balance text-3xl font-semibold tracking-tighter sm:text-4xl">
+          <h1 className="text-balance text-2xl font-semibold tracking-tighter sm:text-3xl lg:text-4xl">
             {t("signup.title")}
           </h1>
-          <p className="text-pretty text-fg-secondary">{t("signup.subtitle")}</p>
+          <p className="text-pretty text-sm text-fg-secondary sm:text-base">
+            {t("signup.subtitle")}
+          </p>
         </div>
 
-        <div className="mb-8">
+        <div className="mb-6 sm:mb-8">
           <StepIndicator steps={steps} current={step} />
         </div>
 
         <form
           onSubmit={handleSubmit}
-          className="rounded-xl border border-border-subtle bg-bg-secondary p-6 sm:p-8"
+          className="rounded-xl bg-bg-secondary p-0 sm:border sm:border-border-subtle sm:p-6 lg:p-8"
         >
           {step === 1 ? (
             <div className="space-y-5">
@@ -242,12 +244,12 @@ export default function SignUpWizard() {
             </p>
           ) : null}
 
-          <div className="mt-7 flex items-center justify-between gap-3">
+          <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
             <button
               type="button"
               onClick={() => setStep((s) => (s > 1 ? ((s - 1) as Step) : s))}
               disabled={step === 1 || submitting}
-              className="inline-flex h-10 items-center gap-1 rounded-md px-3 text-sm text-fg-secondary transition-colors hover:bg-bg-tertiary hover:text-fg-primary disabled:pointer-events-none disabled:opacity-40"
+              className="inline-flex min-h-[44px] items-center justify-center gap-1 rounded-md px-3 text-sm text-fg-secondary transition-colors hover:bg-bg-tertiary hover:text-fg-primary disabled:pointer-events-none disabled:opacity-40"
             >
               <ArrowLeft className="h-4 w-4" />
               {t("signup.back")}
@@ -256,6 +258,7 @@ export default function SignUpWizard() {
             {step < 3 ? (
               <Button
                 type="submit"
+                width="fullMobile"
                 disabled={
                   (step === 1 && !canAdvanceStep1) ||
                   (step === 2 && !canAdvanceStep2)
@@ -265,7 +268,7 @@ export default function SignUpWizard() {
                 <ArrowRight className="h-4 w-4" />
               </Button>
             ) : (
-              <Button type="submit" disabled={!canSubmit}>
+              <Button type="submit" width="fullMobile" disabled={!canSubmit}>
                 {submitting ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -297,7 +300,7 @@ export default function SignUpWizard() {
 }
 
 const inputCls =
-  "w-full rounded-lg border border-border-subtle bg-bg-primary px-3 py-2 text-sm text-fg-primary placeholder:text-fg-secondary/70 focus:border-fg-primary focus:outline-none focus:ring-2 focus:ring-fg-primary/10";
+  "w-full rounded-lg border border-border-subtle bg-bg-primary px-3 py-2.5 text-base text-fg-primary placeholder:text-fg-secondary/70 focus:border-fg-primary focus:outline-none focus:ring-2 focus:ring-fg-primary/10 sm:py-2 sm:text-sm";
 
 function Field({
   label,

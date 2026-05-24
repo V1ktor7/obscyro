@@ -32,15 +32,17 @@ export default function AppOverview() {
   const t = useT();
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8 sm:space-y-10">
       <header>
-        <p className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-fg-secondary">
+        <p className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-fg-secondary sm:text-[0.65rem] sm:tracking-[0.2em]">
           {t("app.overview.eyebrow")}
         </p>
-        <h1 className="mt-2 text-balance text-3xl font-semibold tracking-tighter sm:text-4xl">
+        <h1 className="mt-2 text-balance text-2xl font-semibold tracking-tighter sm:text-3xl lg:text-4xl">
           {t("app.overview.title")}
         </h1>
-        <p className="mt-2 max-w-2xl text-pretty text-fg-secondary">{t("app.overview.subtitle")}</p>
+        <p className="mt-2 max-w-2xl text-pretty text-sm text-fg-secondary sm:text-base">
+          {t("app.overview.subtitle")}
+        </p>
       </header>
 
       <TestPhaseNotice variant="panel" />
@@ -72,11 +74,11 @@ export default function AppOverview() {
         ))}
       </section>
 
-      <section className="rounded-xl border border-border-subtle border-dashed bg-bg-secondary/50 p-6">
-        <p className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-fg-secondary">
+      <section className="rounded-xl border border-dashed border-border-subtle bg-bg-secondary/50 p-5 sm:p-6">
+        <p className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-fg-secondary sm:text-[0.65rem] sm:tracking-[0.2em]">
           {t("app.overview.quickStart.eyebrow")}
         </p>
-        <div className="mt-4 space-y-3 font-mono text-[0.75rem] leading-relaxed text-fg-primary">
+        <div className="mt-4 space-y-3 break-words font-mono text-[0.7rem] leading-relaxed text-fg-primary sm:text-[0.75rem]">
           <p>{t("app.overview.quickStart.line1")}</p>
           <p className="text-fg-secondary">{t("app.overview.quickStart.line2")}</p>
         </div>

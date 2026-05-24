@@ -15,14 +15,14 @@ export default function ComingSoonPanel({
   return (
     <div className="space-y-6">
       <header>
-        <p className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-fg-secondary">
+        <p className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-fg-secondary sm:text-[0.65rem] sm:tracking-[0.2em]">
           {t(eyebrowKey)}
         </p>
-        <h1 className="mt-2 text-balance text-3xl font-semibold tracking-tighter sm:text-4xl">
+        <h1 className="mt-2 text-balance text-2xl font-semibold tracking-tighter sm:text-3xl lg:text-4xl">
           {t("app.comingSoon.title")}
         </h1>
       </header>
-      <div className="flex items-start gap-3 rounded-xl border border-border-subtle bg-bg-secondary p-6">
+      <div className="flex items-start gap-3 rounded-xl border border-border-subtle bg-bg-secondary p-5 sm:p-6">
         <Clock className="mt-0.5 h-4 w-4 shrink-0 text-fg-secondary" aria-hidden />
         <p className="text-sm text-fg-secondary">{t(bodyKey)}</p>
       </div>

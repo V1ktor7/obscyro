@@ -42,10 +42,21 @@ function MdxLink({ href = "", ...rest }: ComponentPropsWithoutRef<"a">) {
   return <a href={href} target="_blank" rel="noreferrer" {...rest} />;
 }
 
+function MdxTable(props: ComponentPropsWithoutRef<"table">) {
+  // Wrap raw markdown tables so they scroll horizontally on small screens
+  // instead of overflowing the article and breaking the layout.
+  return (
+    <div className="not-prose my-6 overflow-x-auto rounded-lg border border-border-subtle">
+      <table className="w-full text-left text-sm" {...props} />
+    </div>
+  );
+}
+
 export const mdxComponents: MDXRemoteProps["components"] = {
   h2: makeHeading(2),
   h3: makeHeading(3),
   a: MdxLink,
+  table: MdxTable,
   EndpointHeader,
   Parameters,
   Param,

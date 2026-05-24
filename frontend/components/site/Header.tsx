@@ -33,10 +33,10 @@ export default function Header() {
           : "border-transparent bg-bg-primary/0",
       )}
     >
-      <div className="container flex h-16 items-center justify-between gap-4">
+      <div className="container flex h-14 items-center justify-between gap-4 sm:h-16">
         <Link
           href="/"
-          className="font-mono text-base font-semibold lowercase tracking-tight text-fg-primary"
+          className="font-mono text-base font-semibold lowercase tracking-tight text-fg-primary md:text-lg"
           aria-label="Obscyro home"
         >
           obscyro
@@ -70,7 +70,7 @@ export default function Header() {
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md text-fg-primary hover:bg-bg-tertiary md:hidden"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-md text-fg-primary hover:bg-bg-tertiary md:hidden"
             aria-label={t("nav.toggleMenu")}
             aria-expanded={open}
           >
@@ -87,7 +87,7 @@ export default function Header() {
                 key={item.href}
                 href={item.href}
                 onClick={() => setOpen(false)}
-                className="rounded-md px-3 py-2 text-sm text-fg-secondary transition-colors hover:bg-bg-tertiary hover:text-fg-primary"
+                className="rounded-md px-3 py-3 text-base text-fg-secondary transition-colors hover:bg-bg-tertiary hover:text-fg-primary"
               >
                 {item.label}
               </Link>
@@ -95,15 +95,15 @@ export default function Header() {
             <Link
               href="/sign-in"
               onClick={() => setOpen(false)}
-              className="rounded-md px-3 py-2 text-sm text-fg-secondary transition-colors hover:bg-bg-tertiary hover:text-fg-primary"
+              className="rounded-md px-3 py-3 text-base text-fg-secondary transition-colors hover:bg-bg-tertiary hover:text-fg-primary"
             >
               {t("nav.signin")}
             </Link>
-            <div className="mt-2 flex items-center gap-2">
+            <div className="mt-3 flex items-center gap-2">
               <Link
                 href="/sign-up"
                 onClick={() => setOpen(false)}
-                className="inline-flex h-9 flex-1 items-center justify-center rounded-md bg-accent px-4 text-sm font-medium text-accent-fg"
+                className="inline-flex h-11 flex-1 items-center justify-center rounded-md bg-accent px-4 text-sm font-medium text-accent-fg"
               >
                 {t("nav.getKey")}
               </Link>

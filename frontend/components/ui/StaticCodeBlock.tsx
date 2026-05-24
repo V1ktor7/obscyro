@@ -32,15 +32,17 @@ export default function StaticCodeBlock({
       )}
     >
       {filename ? (
-        <div className="flex items-center justify-between border-b border-white/[0.06] bg-black/40 px-4 py-2 font-mono text-[0.65rem] uppercase tracking-[0.2em] text-fg-secondary">
-          <span>{filename}</span>
+        <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] bg-black/40 px-3 py-2 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-fg-secondary sm:px-4 sm:text-[0.65rem] sm:tracking-[0.2em]">
+          <span className="truncate">{filename}</span>
           {language ? (
-            <span className="text-[0.6rem] text-fg-secondary/70">{language}</span>
+            <span className="shrink-0 text-[0.55rem] text-fg-secondary/70 sm:text-[0.6rem]">
+              {language}
+            </span>
           ) : null}
         </div>
       ) : null}
       <div
-        className="thin-scrollbar overflow-x-auto px-1 py-4 font-mono text-[0.825rem] leading-relaxed text-code-fg [&_pre]:bg-transparent [&_pre]:p-0 [&_pre]:px-4"
+        className="thin-scrollbar overflow-x-auto px-1 py-3 font-mono text-[0.75rem] leading-relaxed text-code-fg sm:py-4 sm:text-[0.825rem] [&_pre]:bg-transparent [&_pre]:p-0 [&_pre]:px-3 sm:[&_pre]:px-4"
         dangerouslySetInnerHTML={{ __html: html }}
       />
       {showCopy ? (

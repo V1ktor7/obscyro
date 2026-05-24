@@ -42,15 +42,15 @@ export default function KeysClient() {
     );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       <header>
-        <p className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-fg-secondary">
+        <p className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-fg-secondary sm:text-[0.65rem] sm:tracking-[0.2em]">
           {t("app.nav.keys")}
         </p>
-        <h1 className="mt-2 text-balance text-3xl font-semibold tracking-tighter sm:text-4xl">
+        <h1 className="mt-2 text-balance text-2xl font-semibold tracking-tighter sm:text-3xl lg:text-4xl">
           {t("app.keys.title")}
         </h1>
-        <p className="mt-2 max-w-xl text-pretty text-fg-secondary">
+        <p className="mt-2 max-w-xl text-pretty text-sm text-fg-secondary sm:text-base">
           {t("app.keys.subtitle")}
         </p>
       </header>
@@ -62,58 +62,60 @@ export default function KeysClient() {
         </div>
       ) : null}
 
-      <section className="rounded-xl border border-border-subtle bg-bg-secondary p-6">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <KeyRound className="h-4 w-4 text-fg-secondary" aria-hidden />
-            <h2 className="text-base font-semibold tracking-tight">
+      <section className="rounded-xl border border-border-subtle bg-bg-secondary p-5 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <KeyRound className="h-4 w-4 shrink-0 text-fg-secondary" aria-hidden />
+            <h2 className="truncate text-base font-semibold tracking-tight">
               {t("app.keys.your")}
             </h2>
           </div>
-          <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[0.6rem] uppercase tracking-[0.2em] text-emerald-700">
+          <span className="shrink-0 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[0.55rem] uppercase tracking-[0.18em] text-emerald-700 sm:text-[0.6rem] sm:tracking-[0.2em]">
             {me.apiKey.plan}
           </span>
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <code className="flex-1 truncate rounded-md border border-border-subtle bg-bg-primary px-3 py-2 font-mono text-sm text-fg-primary">
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <code className="block min-w-0 flex-1 truncate rounded-md border border-border-subtle bg-bg-primary px-3 py-2 font-mono text-sm text-fg-primary">
             {display}
           </code>
-          {fullKey ? (
+          <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+            {fullKey ? (
+              <button
+                type="button"
+                onClick={() => setRevealed((r) => !r)}
+                className="inline-flex h-10 min-h-[40px] flex-1 items-center justify-center gap-1 rounded-md border border-border-subtle bg-bg-primary px-3 text-xs text-fg-secondary transition-colors hover:text-fg-primary sm:flex-none"
+              >
+                {revealed ? (
+                  <>
+                    <EyeOff className="h-3.5 w-3.5" />
+                    {t("app.keys.hide")}
+                  </>
+                ) : (
+                  <>
+                    <Eye className="h-3.5 w-3.5" />
+                    {t("app.keys.reveal")}
+                  </>
+                )}
+              </button>
+            ) : null}
             <button
               type="button"
-              onClick={() => setRevealed((r) => !r)}
-              className="inline-flex h-9 items-center gap-1 rounded-md border border-border-subtle bg-bg-primary px-3 text-xs text-fg-secondary transition-colors hover:text-fg-primary"
+              onClick={copy}
+              className="inline-flex h-10 min-h-[40px] flex-1 items-center justify-center gap-1 rounded-md border border-border-subtle bg-bg-primary px-3 text-xs text-fg-secondary transition-colors hover:text-fg-primary sm:flex-none"
             >
-              {revealed ? (
+              {copied ? (
                 <>
-                  <EyeOff className="h-3.5 w-3.5" />
-                  {t("app.keys.hide")}
+                  <Check className="h-3.5 w-3.5" />
+                  {t("app.keys.copied")}
                 </>
               ) : (
                 <>
-                  <Eye className="h-3.5 w-3.5" />
-                  {t("app.keys.reveal")}
+                  <Copy className="h-3.5 w-3.5" />
+                  {t("app.keys.copy")}
                 </>
               )}
             </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={copy}
-            className="inline-flex h-9 items-center gap-1 rounded-md border border-border-subtle bg-bg-primary px-3 text-xs text-fg-secondary transition-colors hover:text-fg-primary"
-          >
-            {copied ? (
-              <>
-                <Check className="h-3.5 w-3.5" />
-                {t("app.keys.copied")}
-              </>
-            ) : (
-              <>
-                <Copy className="h-3.5 w-3.5" />
-                {t("app.keys.copy")}
-              </>
-            )}
-          </button>
+          </div>
         </div>
         {!fullKey ? (
           <p className="mt-3 text-xs text-fg-secondary">
@@ -122,13 +124,13 @@ export default function KeysClient() {
         ) : null}
       </section>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <section className="rounded-xl border border-border-subtle bg-bg-secondary p-6">
-          <h3 className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-fg-secondary">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <section className="rounded-xl border border-border-subtle bg-bg-secondary p-5 sm:p-6">
+          <h3 className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-fg-secondary sm:text-[0.65rem] sm:tracking-[0.2em]">
             {t("app.keys.usage")}
           </h3>
-          <div className="mt-4 flex items-baseline gap-2">
-            <span className="font-mono text-3xl font-semibold tracking-tight text-fg-primary">
+          <div className="mt-4 flex flex-wrap items-baseline gap-2">
+            <span className="font-mono text-2xl font-semibold tracking-tight text-fg-primary sm:text-3xl">
               {me.usageThisMonth.toLocaleString()}
             </span>
             <span className="text-sm text-fg-secondary">
@@ -147,11 +149,11 @@ export default function KeysClient() {
           </div>
         </section>
 
-        <section className="rounded-xl border border-border-subtle bg-bg-secondary p-6">
-          <h3 className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-fg-secondary">
+        <section className="rounded-xl border border-border-subtle bg-bg-secondary p-5 sm:p-6">
+          <h3 className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-fg-secondary sm:text-[0.65rem] sm:tracking-[0.2em]">
             {t("app.keys.plan")}
           </h3>
-          <p className="mt-4 text-3xl font-semibold capitalize tracking-tight text-fg-primary">
+          <p className="mt-4 text-2xl font-semibold capitalize tracking-tight text-fg-primary sm:text-3xl">
             {me.apiKey.plan}
           </p>
           <p className="mt-2 text-sm text-fg-secondary">{t("app.keys.upgrade")}</p>
