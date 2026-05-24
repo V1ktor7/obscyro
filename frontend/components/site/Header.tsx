@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 
-import LangToggle from "@/components/site/LangToggle";
 import { useT } from "@/lib/i18n/context";
 import { cn } from "@/lib/cn";
 
@@ -62,7 +61,6 @@ export default function Header() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <LangToggle className="hidden md:inline-flex" />
           <Link
             href="/sign-up"
             className="hidden h-9 items-center rounded-md bg-accent px-4 text-sm font-medium text-accent-fg transition-opacity hover:opacity-90 md:inline-flex"
@@ -101,8 +99,7 @@ export default function Header() {
             >
               {t("nav.signin")}
             </Link>
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <LangToggle />
+            <div className="mt-2 flex items-center gap-2">
               <Link
                 href="/sign-up"
                 onClick={() => setOpen(false)}

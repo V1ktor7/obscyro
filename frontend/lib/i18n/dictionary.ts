@@ -1,5 +1,5 @@
 export type Locale = "en" | "fr";
-export const LOCALES: Locale[] = ["en", "fr"];
+export const LOCALES: Locale[] = ["en"];
 export const DEFAULT_LOCALE: Locale = "en";
 
 export const dict = {

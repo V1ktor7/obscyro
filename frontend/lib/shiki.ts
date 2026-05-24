@@ -54,7 +54,7 @@ export async function highlightDarkPanel(
 }
 
 export const PRETTY_CODE_OPTIONS = {
-  theme: THEME_LIGHT,
+  theme: THEME_DARK_PANEL,
   defaultLang: "text",
   keepBackground: false,
 } as const;

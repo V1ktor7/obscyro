@@ -90,6 +90,12 @@ figure[data-rehype-pretty-code-figure] code {
   font-size: inherit;
 }
 
+figure[data-rehype-pretty-code-figure] code[data-theme*=" "],
+figure[data-rehype-pretty-code-figure] code[data-theme*=" "] span {
+  color: var(--shiki-dark, var(--shiki-light));
+  background-color: transparent !important;
+}
+
 figure[data-rehype-pretty-code-figure] code [data-line] {
   padding: 0 1.25rem;
   border-left: 2px solid transparent;
