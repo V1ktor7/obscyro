@@ -15,8 +15,8 @@ interface TierDef {
 }
 
 const TIERS: TierDef[] = [
-  { id: "free", features: 4 },
-  { id: "starter", features: 4, highlight: true },
+  { id: "free", features: 4, highlight: true },
+  { id: "starter", features: 4 },
   { id: "pro", features: 4 },
 ];
 
@@ -95,6 +95,22 @@ function TierCard({
   const t = useT();
   const wide = variant === "wide";
   const isAvailable = tier.id === "free";
+
+  if (!isAvailable) {
+    return (
+      <div
+        className={cn(
+          "flex items-center justify-center rounded-xl border border-border-subtle bg-bg-secondary p-5 sm:p-6 lg:p-7",
+          wide ? "min-h-[8rem] md:min-h-[10rem]" : "min-h-[7rem] sm:min-h-[8rem]",
+        )}
+      >
+        <h3 className="font-mono text-sm font-semibold uppercase tracking-[0.18em] text-fg-secondary">
+          {t(`pricing.${tier.id}.name` as DictKey)}
+        </h3>
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(
@@ -105,14 +121,9 @@ function TierCard({
         wide ? "flex-col gap-6 md:flex-row md:items-center" : "flex-col",
       )}
     >
-      {tier.highlight && isAvailable ? (
+      {tier.highlight ? (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-accent px-3 py-1 font-mono text-[0.55rem] uppercase tracking-[0.22em] text-accent-fg sm:text-[0.6rem] sm:tracking-[0.25em]">
           {t("pricing.popular")}
-        </div>
-      ) : null}
-      {!isAvailable ? (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-border-subtle bg-bg-primary px-3 py-1 font-mono text-[0.55rem] uppercase tracking-[0.22em] text-fg-secondary sm:text-[0.6rem] sm:tracking-[0.25em]">
-          {t("pricing.comingSoon")}
         </div>
       ) : null}
 
@@ -148,20 +159,9 @@ function TierCard({
       </ul>
 
       <div className={cn("mt-6 sm:mt-7", wide && "md:ml-6 md:mt-0 md:shrink-0")}>
-        {isAvailable ? (
-          <Button href="/sign-up" variant="primary" width={wide ? "auto" : "full"}>
-            {t(`pricing.${tier.id}.cta` as DictKey)}
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            disabled
-            variant="secondary"
-            width={wide ? "auto" : "full"}
-          >
-            {t(`pricing.${tier.id}.ctaDisabled` as DictKey)}
-          </Button>
-        )}
+        <Button href="/sign-up" variant="primary" width={wide ? "auto" : "full"}>
+          {t(`pricing.${tier.id}.cta` as DictKey)}
+        </Button>
       </div>
     </div>
   );

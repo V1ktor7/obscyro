@@ -75,7 +75,7 @@ export const dict = {
     "pricing.popular": "Most popular",
     "pricing.comingSoon": "Coming soon",
     "pricing.betaNote":
-      "During the public test phase, only the Free plan is available. Paid tiers are preview pricing.",
+      "During the public test phase, only the Free plan is available.",
     "pricing.free.name": "Free",
     "pricing.free.price": "$0",
     "pricing.free.period": "forever",
@@ -304,7 +304,7 @@ export const dict = {
     "pricing.popular": "Le plus populaire",
     "pricing.comingSoon": "Bientôt disponible",
     "pricing.betaNote":
-      "Pendant la phase de test publique, seul le plan Free est disponible. Les plans payants sont des tarifs indicatifs.",
+      "Pendant la phase de test publique, seul le plan Free est disponible.",
     "pricing.free.name": "Free",
     "pricing.free.price": "0 $",
     "pricing.free.period": "à vie",
