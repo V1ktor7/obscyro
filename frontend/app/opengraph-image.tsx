@@ -49,7 +49,7 @@ export default function Image() {
             finally fluent.
           </h1>
           <p style={{ fontSize: 28, color: "#a1a1aa", margin: 0, maxWidth: 900 }}>
-            One API for SNOMED, ICD-10, RxNorm, LOINC, FHIR, and HL7.
+            SNOMED-first API with ICD-10 mapping. Public beta.
           </p>
         </div>
 

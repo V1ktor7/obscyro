@@ -4,7 +4,6 @@ import { useState } from "react";
 import {
   ArrowLeftRight,
   BadgeCheck,
-  Brain,
   ChevronDown,
   Filter,
   Network,
@@ -18,7 +17,7 @@ import type { DictKey } from "@/lib/i18n/dictionary";
 import { cn } from "@/lib/cn";
 
 export interface FeatureSnippet {
-  id: "validate" | "normalize" | "translate" | "expand" | "disambiguate" | "reason";
+  id: "validate" | "normalize" | "translate" | "expand" | "disambiguate";
   language: "bash" | "json";
   rawValue: string;
   html: string;
@@ -30,7 +29,6 @@ const ICONS: Record<FeatureSnippet["id"], LucideIcon> = {
   translate: ArrowLeftRight,
   expand: Network,
   disambiguate: Filter,
-  reason: Brain,
 };
 
 export default function FeaturesShell({

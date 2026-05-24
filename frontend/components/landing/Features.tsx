@@ -4,9 +4,12 @@ import FeaturesShell, { type FeatureSnippet } from "./FeaturesShell";
 const SNIPPETS: Array<Omit<FeatureSnippet, "html">> = [
   {
     id: "validate",
-    language: "bash",
-    rawValue: `curl -I https://api.obscyro.com/v1/concepts/22298006
-HTTP/1.1 200 OK`,
+    language: "json",
+    rawValue: `{
+  "code": "22298006",
+  "active": true,
+  "preferredTerm": "Myocardial infarction"
+}`,
   },
   {
     id: "normalize",
@@ -36,15 +39,6 @@ HTTP/1.1 200 OK`,
     rawValue: `{
   "winner":{"code":"22298006","preferredTerm":"Myocardial infarction"},
   "contextSimilarity": 0.81
-}`,
-  },
-  {
-    id: "reason",
-    language: "json",
-    rawValue: `{
-  "contradictions": [
-    {"left":"pregnant","right":"hysterectomy"}
-  ]
 }`,
   },
 ];

@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: Obscyro is the semantic interoperability layer for healthcare data. One API to validate, normalize, translate, expand, and disambiguate clinical codes across SNOMED CT, ICD-10, RxNorm, LOINC, FHIR, and HL7.
+description: Obscyro is a SNOMED-first semantic API for healthcare data — validate, normalize, translate, expand, and disambiguate clinical codes. ICD-10 mapping is live via /v1/translate; RxNorm, LOINC, FHIR, and HL7 are on the roadmap.
 ---
 
 <h2 id="test-phase">Test phase (public)</h2>
@@ -14,7 +14,7 @@ Do not use responses for clinical decisions without independent verification. Th
 
 ## What Obscyro is
 
-Obscyro turns the messy reality of healthcare data — free-text notes, mismatched code systems, regional dialects, missing terminology updates — into a single coherent JSON output your application can rely on. Every endpoint is a thin, predictable wrapper around the canonical clinical knowledge graph.
+Obscyro turns the messy reality of healthcare data — free-text notes, mismatched code systems, regional dialects, missing terminology updates — into structured JSON your application can use. Every endpoint is a thin, predictable wrapper around the SNOMED CT knowledge graph loaded in our database.
 
 You can call it from any language that speaks HTTP. There is no SDK lock-in, no hidden state, no batch jobs. Send JSON, get JSON.
 
@@ -39,6 +39,6 @@ Most teams add Obscyro at one of three integration points:
 
 - The **Core API** section is your reference manual — one page per endpoint, with request/response schemas and copy-paste examples in cURL, Node.js, and Python.
 - **Standards** explains how Obscyro models each terminology so you know what to expect in responses.
-- **Resources** lists SDKs, our changelog, and the live status page.
+- **Resources** lists SDKs (coming soon), our changelog, and the `/v1/health` readiness probe. A public status page is planned.
 
 When you are ready, jump to the [Quickstart](/docs/getting-started/quickstart) for a 30-second integration.

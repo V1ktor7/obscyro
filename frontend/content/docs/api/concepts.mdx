@@ -1,6 +1,6 @@
 ---
 title: /v1/concepts/{code}
-description: Look up SNOMED concept metadata and the preferred display term, or check existence with HEAD.
+description: Look up SNOMED concept metadata and the preferred display term.
 ---
 
 <EndpointHeader method="GET" path="/v1/concepts/{code}" />
@@ -76,17 +76,9 @@ concept = r.json()
   </CodeTab>
 </CodeTabs>
 
-## Existence check (HEAD)
+## Validating a code
 
-<EndpointHeader method="HEAD" path="/v1/concepts/{code}" />
-
-For high-volume validation (e.g. every code in a CSV), use HEAD: it returns no body but distinguishes <Badge tone="success">200</Badge> (exists) from <Badge tone="danger">404</Badge> (does not). It is cheaper than GET because the preferred-term lookup is skipped.
-
-```bash
-curl -I https://api.obscyro.com/v1/concepts/22298006 \
-  -H "Authorization: Bearer $OBS_KEY"
-# HTTP/1.1 200 OK
-```
+Use **GET** to check whether a SCTID exists and retrieve its metadata. A `404 CONCEPT_NOT_FOUND` means the code is absent from the loaded SNOMED edition. A lightweight **HEAD** existence check (no response body) is planned for a future release.
 
 ## Errors
 

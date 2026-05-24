@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     template: "%s · Obscyro",
   },
   description:
-    "One API for SNOMED, ICD-10, RxNorm, LOINC, FHIR, and HL7. Stop translating. Start building.",
+    "SNOMED-first semantic API with ICD-10 mapping via /v1/translate. Public beta — RxNorm, LOINC, FHIR, and HL7 on the roadmap.",
   keywords: [
     "SNOMED",
     "ICD-10",
@@ -46,7 +46,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Obscyro — Health data, finally fluent",
     description:
-      "One API for SNOMED, ICD-10, RxNorm, LOINC, FHIR, and HL7. Stop translating. Start building.",
+      "SNOMED-first semantic API with ICD-10 mapping via /v1/translate. Public beta — more standards on the roadmap.",
     url: SITE_URL,
     siteName: "Obscyro",
     locale: "en_US",
@@ -56,7 +56,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Obscyro — Health data, finally fluent",
     description:
-      "One API for SNOMED, ICD-10, RxNorm, LOINC, FHIR, and HL7.",
+      "SNOMED-first semantic API with ICD-10 mapping. Public beta.",
   },
   robots: {
     index: true,

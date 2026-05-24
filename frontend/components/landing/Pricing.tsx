@@ -67,6 +67,10 @@ export default function Pricing() {
         </div>
 
         <p className="mt-8 text-center text-sm text-fg-secondary">
+          {t("pricing.betaNote")}
+        </p>
+
+        <p className="mt-4 text-center text-sm text-fg-secondary">
           {t("pricing.enterprise")}{" "}
           <a
             href="mailto:obscyro-team@obscyro.com"
@@ -90,6 +94,7 @@ function TierCard({
 }) {
   const t = useT();
   const wide = variant === "wide";
+  const isAvailable = tier.id === "free";
   return (
     <div
       className={cn(
@@ -100,9 +105,14 @@ function TierCard({
         wide ? "flex-col gap-6 md:flex-row md:items-center" : "flex-col",
       )}
     >
-      {tier.highlight ? (
+      {tier.highlight && isAvailable ? (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-accent px-3 py-1 font-mono text-[0.55rem] uppercase tracking-[0.22em] text-accent-fg sm:text-[0.6rem] sm:tracking-[0.25em]">
           {t("pricing.popular")}
+        </div>
+      ) : null}
+      {!isAvailable ? (
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-border-subtle bg-bg-primary px-3 py-1 font-mono text-[0.55rem] uppercase tracking-[0.22em] text-fg-secondary sm:text-[0.6rem] sm:tracking-[0.25em]">
+          {t("pricing.comingSoon")}
         </div>
       ) : null}
 
@@ -138,13 +148,20 @@ function TierCard({
       </ul>
 
       <div className={cn("mt-6 sm:mt-7", wide && "md:ml-6 md:mt-0 md:shrink-0")}>
-        <Button
-          href="/sign-up"
-          variant={tier.highlight ? "primary" : "secondary"}
-          width={wide ? "auto" : "full"}
-        >
-          {t(`pricing.${tier.id}.cta` as DictKey)}
-        </Button>
+        {isAvailable ? (
+          <Button href="/sign-up" variant="primary" width={wide ? "auto" : "full"}>
+            {t(`pricing.${tier.id}.cta` as DictKey)}
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            disabled
+            variant="secondary"
+            width={wide ? "auto" : "full"}
+          >
+            {t(`pricing.${tier.id}.ctaDisabled` as DictKey)}
+          </Button>
+        )}
       </div>
     </div>
   );

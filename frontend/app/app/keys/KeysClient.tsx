@@ -138,15 +138,16 @@ export default function KeysClient() {
             </span>
           </div>
           <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-bg-tertiary">
-            <div
-              className={cn(
-                "h-full rounded-full bg-fg-primary transition-all",
-                usagePercent > 80 && "bg-amber-500",
-                usagePercent > 95 && "bg-rose-500",
-              )}
-              style={{ width: `${usagePercent}%` }}
-            />
+          <div
+            className={cn(
+              "h-full rounded-full bg-fg-primary transition-all",
+              usagePercent > 80 && "bg-amber-500",
+              usagePercent > 95 && "bg-rose-500",
+            )}
+            style={{ width: `${usagePercent}%` }}
+          />
           </div>
+          <p className="mt-3 text-xs text-fg-secondary">{t("app.keys.usageQuotaNote")}</p>
         </section>
 
         <section className="rounded-xl border border-border-subtle bg-bg-secondary p-5 sm:p-6">

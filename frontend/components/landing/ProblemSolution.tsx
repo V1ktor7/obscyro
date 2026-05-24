@@ -43,7 +43,7 @@ export default function ProblemSolution() {
           <div className="mt-6 grid items-stretch gap-3 md:grid-cols-[1fr_auto_1.2fr_auto_1fr]">
             <PipelineNode
               label={t("problem.node.in")}
-              examples={["“pt with acute MI”", "ICD-10: I21.9", "LOINC 718-7"]}
+              examples={['"pt with acute MI"', "SNOMED 22298006", "ICD-10: I21.9"]}
             />
             <Arrow />
             <PipelineNode
@@ -51,13 +51,13 @@ export default function ProblemSolution() {
               label={t("problem.node.api")}
               examples={[
                 "normalize · translate · expand",
-                "validate · disambiguate · reason",
+                "validate · disambiguate",
               ]}
             />
             <Arrow />
             <PipelineNode
               label={t("problem.node.out")}
-              examples={["SNOMED 22298006", "FHIR Condition", "ICD-10 + RxNorm"]}
+              examples={["SNOMED 22298006", "ICD-10 I21.9", "preferredTerm + hierarchy"]}
             />
           </div>
         </div>

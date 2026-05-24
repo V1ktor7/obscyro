@@ -22,9 +22,9 @@ export default function HeroShell({
   const t = useT();
 
   const stats = [
-    { label: t("hero.stat.concepts"), value: "470K+" },
-    { label: t("hero.stat.mappings"), value: "1.2M" },
-    { label: t("hero.stat.latency"), value: "< 80ms" },
+    { label: t("hero.stat.edition"), value: t("hero.stat.editionValue") },
+    { label: t("hero.stat.translate"), value: t("hero.stat.translateValue") },
+    { label: t("hero.stat.phase"), value: t("hero.stat.phaseValue") },
   ];
 
   return (

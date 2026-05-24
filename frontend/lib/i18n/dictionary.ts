@@ -22,12 +22,15 @@ export const dict = {
       "· Test phase — feedback welcome at obscyro-team@obscyro.com",
     "hero.title": "Health data, finally fluent.",
     "hero.subtitle":
-      "One API for SNOMED, ICD-10, RxNorm, LOINC, FHIR, and HL7. Stop translating. Start building.",
+      "SNOMED-first semantic API with ICD-10 mapping via /v1/translate. RxNorm, LOINC, FHIR, and HL7 integration guides are on the roadmap.",
     "hero.cta.getKey": "Get API key",
     "hero.cta.docs": "Read the docs",
-    "hero.stat.concepts": "Concepts",
-    "hero.stat.mappings": "Mappings",
-    "hero.stat.latency": "p95 latency",
+    "hero.stat.edition": "Edition",
+    "hero.stat.editionValue": "SNOMED IE Feb 2026",
+    "hero.stat.translate": "Translate",
+    "hero.stat.translateValue": "ICD-10 · ICD-O · CTV3",
+    "hero.stat.phase": "Phase",
+    "hero.stat.phaseValue": "Public beta",
     "hero.responseLabel": "↓ response",
 
     "problem.eyebrow": "The interop tax",
@@ -47,7 +50,7 @@ export const dict = {
     "problem.node.out": "Normalized output",
 
     "features.eyebrow": "What you can do",
-    "features.title": "Six primitives. Endless integrations.",
+    "features.title": "Five primitives. Endless integrations.",
     "features.subtitle":
       "Compose them like Lego to fix the interoperability layer of your product, all in pure HTTP.",
     "features.validate.title": "Validate",
@@ -55,7 +58,7 @@ export const dict = {
     "features.normalize.title": "Normalize",
     "features.normalize.desc": "Turn raw clinical text into standard codes.",
     "features.translate.title": "Translate",
-    "features.translate.desc": "SNOMED ↔ ICD-10 ↔ RxNorm ↔ LOINC.",
+    "features.translate.desc": "SNOMED ↔ ICD-10, ICD-O, and CTV3 via /v1/translate.",
     "features.expand.title": "Expand",
     "features.expand.desc": "Navigate clinical hierarchies semantically.",
     "features.disambiguate.title": "Disambiguate",
@@ -70,6 +73,9 @@ export const dict = {
     "pricing.subtitle":
       "No per-record fees. No hidden integration costs. Pay for the calls you make.",
     "pricing.popular": "Most popular",
+    "pricing.comingSoon": "Coming soon",
+    "pricing.betaNote":
+      "During the public test phase, only the Free plan is available. Paid tiers are preview pricing.",
     "pricing.free.name": "Free",
     "pricing.free.price": "$0",
     "pricing.free.period": "forever",
@@ -91,12 +97,13 @@ export const dict = {
     "pricing.pro.name": "Pro",
     "pricing.pro.price": "$499",
     "pricing.pro.period": "/month",
-    "pricing.pro.desc": "Scale with confidence and SLAs.",
+    "pricing.pro.desc": "Scale with higher volume when paid plans launch.",
     "pricing.pro.f1": "1,000,000 calls / month",
     "pricing.pro.f2": "10,000 req/min rate limit",
-    "pricing.pro.f3": "99.9% uptime SLA",
-    "pricing.pro.f4": "Slack-channel support",
+    "pricing.pro.f3": "Priority support (when available)",
+    "pricing.pro.f4": "Slack-channel support (coming with paid plans)",
     "pricing.pro.cta": "Get Pro",
+    "pricing.pro.ctaDisabled": "Coming soon",
     "pricing.enterprise":
       "Need higher volume, dedicated tenancy, or BAA?",
     "pricing.enterpriseCta":
@@ -190,6 +197,8 @@ export const dict = {
     "app.keys.upgrade": "Upgrade soon.",
     "app.keys.usage": "Usage this month",
     "app.keys.usageLimit": "of 1,000 calls",
+    "app.keys.usageQuotaNote":
+      "Usage is tracked for visibility during the test phase. Monthly quota is not enforced yet.",
     "app.comingSoon.title": "Coming soon",
     "app.usage.body":
       "Per-endpoint usage breakdowns, daily charts, and quota alerts will live here.",
@@ -217,7 +226,7 @@ export const dict = {
     "app.overview.quickStart.line1":
       "Send header Authorization: Bearer <your-api-key> on every request.",
     "app.overview.quickStart.line2":
-      "Use your deployment base URL in production, or http://localhost:3000 (or your dev port) locally.",
+      "Use your deployment API base URL in production, or http://localhost:4000 for the API locally (frontend dev server runs on port 3000).",
 
     "docs.menu": "Documentation menu",
     "docs.openMenu": "Open documentation menu",
@@ -242,12 +251,15 @@ export const dict = {
       "· Phase de test — vos retours sont bienvenus à obscyro-team@obscyro.com",
     "hero.title": "Les données de santé, enfin parlantes.",
     "hero.subtitle":
-      "Une seule API pour SNOMED, ICD-10, RxNorm, LOINC, FHIR et HL7. Arrêtez de traduire. Construisez.",
+      "API sémantique SNOMED-first avec mapping ICD-10 via /v1/translate. RxNorm, LOINC, FHIR et HL7 arrivent sur la roadmap.",
     "hero.cta.getKey": "Obtenir une clé",
     "hero.cta.docs": "Lire la doc",
-    "hero.stat.concepts": "Concepts",
-    "hero.stat.mappings": "Correspondances",
-    "hero.stat.latency": "Latence p95",
+    "hero.stat.edition": "Édition",
+    "hero.stat.editionValue": "SNOMED IE fév. 2026",
+    "hero.stat.translate": "Traduire",
+    "hero.stat.translateValue": "ICD-10 · ICD-O · CTV3",
+    "hero.stat.phase": "Phase",
+    "hero.stat.phaseValue": "Beta publique",
     "hero.responseLabel": "↓ réponse",
 
     "problem.eyebrow": "La taxe d'interopérabilité",
@@ -267,7 +279,7 @@ export const dict = {
     "problem.node.out": "Sortie normalisée",
 
     "features.eyebrow": "Ce que vous pouvez faire",
-    "features.title": "Six primitives. Des intégrations infinies.",
+    "features.title": "Cinq primitives. Des intégrations infinies.",
     "features.subtitle":
       "Composez-les comme du Lego pour réparer la couche d'interopérabilité de votre produit, en pur HTTP.",
     "features.validate.title": "Valider",
@@ -275,7 +287,7 @@ export const dict = {
     "features.normalize.title": "Normaliser",
     "features.normalize.desc": "Transformez du texte clinique brut en codes standards.",
     "features.translate.title": "Traduire",
-    "features.translate.desc": "SNOMED ↔ ICD-10 ↔ RxNorm ↔ LOINC.",
+    "features.translate.desc": "SNOMED ↔ ICD-10, ICD-O et CTV3 via /v1/translate.",
     "features.expand.title": "Étendre",
     "features.expand.desc": "Naviguez les hiérarchies cliniques sémantiquement.",
     "features.disambiguate.title": "Désambiguïser",
@@ -290,6 +302,9 @@ export const dict = {
     "pricing.subtitle":
       "Pas de frais à l'enregistrement. Pas de coûts d'intégration cachés. Vous payez les appels que vous faites.",
     "pricing.popular": "Le plus populaire",
+    "pricing.comingSoon": "Bientôt disponible",
+    "pricing.betaNote":
+      "Pendant la phase de test publique, seul le plan Free est disponible. Les plans payants sont des tarifs indicatifs.",
     "pricing.free.name": "Free",
     "pricing.free.price": "0 $",
     "pricing.free.period": "à vie",
@@ -305,18 +320,20 @@ export const dict = {
     "pricing.starter.desc": "Pour vos premiers utilisateurs en production.",
     "pricing.starter.f1": "100 000 appels / mois",
     "pricing.starter.f2": "1 000 req/min de rate limit",
-    "pricing.starter.f3": "Support par email",
-    "pricing.starter.f4": "Tableau de bord d'usage",
+    "pricing.starter.f3": "Support par email (quand disponible)",
+    "pricing.starter.f4": "Analytics d'usage (avec les plans payants)",
     "pricing.starter.cta": "Choisir Starter",
+    "pricing.starter.ctaDisabled": "Bientôt disponible",
     "pricing.pro.name": "Pro",
     "pricing.pro.price": "499 $",
     "pricing.pro.period": "/mois",
-    "pricing.pro.desc": "Pour passer à l'échelle avec SLA.",
+    "pricing.pro.desc": "Pour plus de volume quand les plans payants seront disponibles.",
     "pricing.pro.f1": "1 000 000 appels / mois",
     "pricing.pro.f2": "10 000 req/min de rate limit",
-    "pricing.pro.f3": "SLA 99,9 % de disponibilité",
-    "pricing.pro.f4": "Support sur canal Slack",
+    "pricing.pro.f3": "Support prioritaire (quand disponible)",
+    "pricing.pro.f4": "Support Slack (avec les plans payants)",
     "pricing.pro.cta": "Choisir Pro",
+    "pricing.pro.ctaDisabled": "Bientôt disponible",
     "pricing.enterprise":
       "Besoin de plus de volume, d'une infra dédiée ou d'un BAA ?",
     "pricing.enterpriseCta":
@@ -338,7 +355,7 @@ export const dict = {
     "footer.disclaimer":
       "Obscyro n'est pas un dispositif médical. Validez toujours les décisions cliniques avec des professionnels de santé qualifiés.",
     "footer.tagline":
-      "La couche d'interopérabilité sémantique pour les données de santé. SNOMED, ICD-10, RxNorm, LOINC, FHIR et HL7 — une seule API.",
+      "API sémantique SNOMED-first pour les données de santé. Normalisation, lookup, hiérarchie et mapping SNOMED→ICD-10 — d'autres standards arrivent.",
 
     "signup.title": "Créez votre compte Obscyro",
     "signup.subtitle":
@@ -411,6 +428,8 @@ export const dict = {
     "app.keys.upgrade": "Mise à niveau bientôt.",
     "app.keys.usage": "Usage ce mois-ci",
     "app.keys.usageLimit": "sur 1 000 appels",
+    "app.keys.usageQuotaNote":
+      "L'usage est suivi à titre indicatif pendant la phase de test. Le quota mensuel n'est pas encore appliqué.",
     "app.comingSoon.title": "Bientôt disponible",
     "app.usage.body":
       "Les détails d'usage par endpoint, graphiques quotidiens et alertes de quota apparaîtront ici.",
@@ -438,7 +457,7 @@ export const dict = {
     "app.overview.quickStart.line1":
       "En-tête obligatoire : Authorization: Bearer <votre-clé-api> sur chaque requête.",
     "app.overview.quickStart.line2":
-      "Utilisez l'URL de base de votre déploiement en production, ou http://localhost:3000 (ou votre port de dev) en local.",
+      "Utilisez l'URL de base de l'API en production, ou http://localhost:4000 pour l'API en local (le frontend de dev tourne sur le port 3000).",
 
     "docs.menu": "Menu de documentation",
     "docs.openMenu": "Ouvrir le menu de documentation",
