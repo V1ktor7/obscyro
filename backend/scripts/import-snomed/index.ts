@@ -3,7 +3,7 @@ import "dotenv/config";
 import { createReadStream } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { pipeline } from "node:stream/promises";
+import readline from "node:readline";
 import { fileURLToPath } from "node:url";
 
 import { Client } from "pg";
@@ -187,6 +187,61 @@ function fmtBytes(n: number): string {
   return `${(n / 1024 ** 3).toFixed(2)}GB`;
 }
 
+function isTransientError(err: unknown): boolean {
+  const code = (err as { code?: string } | null)?.code;
+  return (
+    code === "ECONNRESET" ||
+    code === "ETIMEDOUT" ||
+    code === "EPIPE" ||
+    code === "ECONNREFUSED" ||
+    code === "EAI_AGAIN"
+  );
+}
+
+async function withFreshClient<T>(
+  databaseUrl: string,
+  label: string,
+  fn: (client: Client) => Promise<T>,
+  maxAttempts = 5,
+): Promise<T> {
+  let attempt = 0;
+  let lastErr: unknown = null;
+  while (attempt < maxAttempts) {
+    attempt++;
+    const client = new Client({
+      connectionString: databaseUrl,
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10_000,
+      statement_timeout: 0,
+      query_timeout: 0,
+      connectionTimeoutMillis: 30_000,
+    });
+    try {
+      await client.connect();
+      const result = await fn(client);
+      await client.end();
+      return result;
+    } catch (err) {
+      lastErr = err;
+      try {
+        await client.end();
+      } catch {
+        /* ignore */
+      }
+      if (!isTransientError(err) || attempt >= maxAttempts) {
+        throw err;
+      }
+      const backoffMs = Math.min(30_000, 2_000 * 2 ** (attempt - 1));
+      console.log(
+        `      [retry] ${label} hit ${(err as { code?: string } | null)?.code ?? "error"}; ` +
+          `attempt ${attempt}/${maxAttempts} failed, retrying in ${backoffMs}ms`,
+      );
+      await new Promise((r) => setTimeout(r, backoffMs));
+    }
+  }
+  throw lastErr;
+}
+
 async function main(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
@@ -205,81 +260,113 @@ async function main(): Promise<void> {
     }
   }
 
-  const client = new Client({ connectionString: databaseUrl });
-  await client.connect();
-
   const totalStart = Date.now();
-  let committed = false;
 
-  try {
-    await client.query("BEGIN");
-
-    console.log("[1/4] Applying schema.sql ...");
+  console.log("[1/4] Applying schema.sql + dropping heavy indexes ...");
+  await withFreshClient(databaseUrl, "schema", async (client) => {
     const schemaSql = await readFile(SCHEMA_PATH, "utf8");
     const schemaStart = Date.now();
     await client.query(schemaSql);
     console.log(`      schema applied in ${fmtDuration(Date.now() - schemaStart)}`);
-
-    console.log("[2/4] Dropping heavy indexes for faster bulk load ...");
     for (const idx of HEAVY_INDEXES) {
       await client.query(idx.drop);
     }
     console.log(`      dropped ${HEAVY_INDEXES.length} indexes`);
+  });
 
-    console.log("[3/4] Loading files via COPY ...");
-    for (const spec of FILES) {
-      const filePath = path.join(DATA_DIR, spec.file);
-      const size = (await stat(filePath)).size;
-      const cols = spec.columns.map((c) => `"${c}"`).join(", ");
-      const copySql =
-        `COPY ${spec.table} (${cols}) FROM STDIN WITH (` +
-        `FORMAT csv, DELIMITER E'\\t', HEADER true, QUOTE E'\\b', ESCAPE E'\\b', ENCODING 'UTF8')`;
+  console.log("[2/4] Loading files via chunked COPY (fresh connection per chunk) ...");
+  const CHUNK_ROWS = 100_000;
+  for (const spec of FILES) {
+    const filePath = path.join(DATA_DIR, spec.file);
+    const size = (await stat(filePath)).size;
+    const cols = spec.columns.map((c) => `"${c}"`).join(", ");
+    // HEADER false because we strip the header in JS and feed only data rows.
+    const copySql =
+      `COPY ${spec.table} (${cols}) FROM STDIN WITH (` +
+      `FORMAT csv, DELIMITER E'\\t', HEADER false, QUOTE E'\\b', ESCAPE E'\\b', ENCODING 'UTF8')`;
 
-      const fileStart = Date.now();
-      const ingest = client.query(copyFrom(copySql));
-      const source = createReadStream(filePath);
-      await pipeline(source, ingest);
-      const rows = ingest.rowCount ?? 0;
+    const fileStart = Date.now();
 
-      console.log(
-        `      ${spec.file.padEnd(56)} ` +
-          `-> ${spec.table.padEnd(24)} ` +
-          `${rows.toLocaleString().padStart(11)} rows  ` +
-          `(${fmtBytes(size)}, ${fmtDuration(Date.now() - fileStart)})`,
+    // Truncate once before streaming so retries within a chunk don't duplicate
+    // and a re-run from scratch starts clean.
+    await withFreshClient(databaseUrl, `TRUNCATE ${spec.table}`, async (client) => {
+      await client.query(`TRUNCATE TABLE ${spec.table}`);
+    });
+
+    let totalRows = 0;
+    let chunkIndex = 0;
+    let buffer: string[] = [];
+    let isFirstLine = true;
+
+    const flushChunk = async (): Promise<void> => {
+      if (buffer.length === 0) return;
+      chunkIndex++;
+      const payload = Buffer.from(buffer.join("\n") + "\n", "utf8");
+      const batchSize = buffer.length;
+      buffer = [];
+      const inserted = await withFreshClient(
+        databaseUrl,
+        `${spec.file} chunk ${chunkIndex}`,
+        async (client) => {
+          const ingest = client.query(copyFrom(copySql));
+          await new Promise<void>((resolve, reject) => {
+            ingest.on("error", reject);
+            ingest.on("finish", () => resolve());
+            ingest.write(payload);
+            ingest.end();
+          });
+          return ingest.rowCount ?? batchSize;
+        },
       );
-    }
+      totalRows += inserted;
+    };
 
-    console.log("[4/4] Recreating indexes and analyzing ...");
-    for (const idx of HEAVY_INDEXES) {
-      const idxStart = Date.now();
-      await client.query(idx.create);
-      console.log(`      ${idx.name.padEnd(36)} ${fmtDuration(Date.now() - idxStart)}`);
+    const rl = readline.createInterface({
+      input: createReadStream(filePath, { encoding: "utf8" }),
+      crlfDelay: Infinity,
+    });
+    for await (const line of rl) {
+      if (isFirstLine) {
+        isFirstLine = false;
+        continue;
+      }
+      buffer.push(line);
+      if (buffer.length >= CHUNK_ROWS) {
+        await flushChunk();
+      }
     }
+    await flushChunk();
+
+    console.log(
+      `      ${spec.file.padEnd(56)} ` +
+        `-> ${spec.table.padEnd(24)} ` +
+        `${totalRows.toLocaleString().padStart(11)} rows  ` +
+        `(${fmtBytes(size)}, ${fmtDuration(Date.now() - fileStart)}, ${chunkIndex} chunks)`,
+    );
+  }
+
+  console.log("[3/4] Recreating indexes and analyzing (one per connection) ...");
+  for (const idx of HEAVY_INDEXES) {
+    const idxStart = Date.now();
+    await withFreshClient(databaseUrl, `CREATE ${idx.name}`, async (client) => {
+      await client.query(idx.create);
+    });
+    console.log(`      ${idx.name.padEnd(36)} ${fmtDuration(Date.now() - idxStart)}`);
+  }
+  await withFreshClient(databaseUrl, "ANALYZE", async (client) => {
     const analyzeStart = Date.now();
     await client.query("ANALYZE");
     console.log(`      ANALYZE                              ${fmtDuration(Date.now() - analyzeStart)}`);
+  });
 
-    await client.query("COMMIT");
-    committed = true;
-
+  console.log("[4/4] Building snomed.transitive_closure ...");
+  await withFreshClient(databaseUrl, "transitive_closure", async (client) => {
     const tcStart = Date.now();
-    console.log("[5/5] Building snomed.transitive_closure ...");
     await populateTransitiveClosure(client);
     console.log(`      done in ${fmtDuration(Date.now() - tcStart)}`);
+  });
 
-    console.log(`\nDone in ${fmtDuration(Date.now() - totalStart)}`);
-  } catch (err) {
-    if (!committed) {
-      try {
-        await client.query("ROLLBACK");
-      } catch {
-        // ignore secondary error from rollback
-      }
-    }
-    throw err;
-  } finally {
-    await client.end();
-  }
+  console.log(`\nDone in ${fmtDuration(Date.now() - totalStart)}`);
 }
 
 main().catch((err) => {
