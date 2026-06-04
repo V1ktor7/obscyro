@@ -1,0 +1,81 @@
+negation:
+  - nie
+  - nie tout
+  - aucune
+  - aucun
+  - pas de
+  - pas d'antécédent
+  - ne rapporte aucun
+  - absence de
+  - sans
+  - ne présente pas
+family:
+  - son père
+  - sa mère
+  - sa mere
+  - mère est atteinte
+  - son frère
+  - sa sœur
+  - antécédent familial
+  - familial
+  - chez le père
+  - chez la mère
+hedge:
+  - écarter
+  - pour écarter
+  - éliminer
+  - afin d'éliminer
+  - à confirmer
+  - probable
+  - possible
+  - suspicion
+  - à écarter
+temporal_past:
+  - ancien
+  - antécédent
+  - il y a
+  - à 60 ans
+  - passé
+temporal_chronic:
+  - chronique
+  - connue pour
+  - connu pour
+  - traité
+  - traités
+reason_for_encounter:
+  - consulte pour
+  - motif
+history:
+  - antécédent
+  - antécédents
+clinical_phrases:
+  - douleur thoracique
+  - essoufflement
+  - tabagisme
+  - son père a fait un infarctus
+  - infarctus
+  - infarctus aigu
+  - écarter un infarctus aigu
+  - diabète de type 2
+  - hypertension
+  - allergie à la pénicilline
+  - allergie
+  - pénicilline
+  - électrocardiogramme
+  - ECG
+  - troponine
+  - potassium
+  - potassium 5,9
+  - potassium 5.9
+  - hyperkaliémie
+  - céphalées intenses
+  - céphalée intense
+  - fièvre
+  - trouble visuel
+  - cancer du sein
+  - fibrillation auriculaire
+  - migraine
+  - hémorragie sous-arachnoïdienne
+  - glycémie
+  - diabétique
+  - se présente à l'urgence

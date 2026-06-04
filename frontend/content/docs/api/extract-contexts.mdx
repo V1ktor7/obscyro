@@ -1,0 +1,152 @@
+---
+title: /v1/extract/contexts
+description: Determine the clinical context of concept spans - whether they are negated, historical, about a family member, or uncertain - with auditable rule triggers.
+---
+
+<EndpointHeader method="POST" path="/v1/extract/contexts" />
+
+A SNOMED code alone does not tell you whether the patient *has* the condition. "Nie toute fievre" (denies any fever) and "antecedent familial de cancer du sein" (family history of breast cancer) both mention a concept that is not an active patient problem. `extract/contexts` applies rule-based ConText analysis (EN + FR lexicons) to each span and returns five context axes, each with the exact trigger phrase that fired so the decision is auditable.
+
+Pass the spans (and optional codes) you got from [`/v1/extract/concepts`](/docs/api/extract-concepts).
+
+## Request body
+
+<Parameters>
+  <Param name="text" type="string" required>The full clinical text the spans came from. After trimming, must be at least 2 characters.</Param>
+  <Param name="language" type='"en" | "fr" | "auto"' defaultValue="auto">Language hint selecting the lexicon. <code>auto</code> infers it.</Param>
+  <Param name="concepts" type="object[]" required>At least one span to analyze. Each item is <code>{ span: string, code?: string | null }</code>.</Param>
+</Parameters>
+
+## Response
+
+<ResponseExample status={200} description="One entry per submitted span">
+
+```json
+{
+  "contexts": [
+    {
+      "code": "386661006",
+      "span": "fievre",
+      "context": {
+        "assertion": { "value": "negated", "confidence": 0.95, "trigger": "nie toute" },
+        "subject": { "value": "patient", "confidence": 0.9, "trigger": null },
+        "temporality": { "value": "current", "confidence": 0.8, "trigger": null },
+        "certainty": { "value": "confirmed", "confidence": 0.8, "trigger": null },
+        "role": { "value": "finding", "confidence": 0.8, "trigger": null }
+      },
+      "context_confidence": 0.9,
+      "readable_note": "Fever - negated (patient denies)"
+    }
+  ]
+}
+```
+
+</ResponseExample>
+
+<Parameters title="Context shape">
+  <Param name="code" type="string | null">The SCTID you passed for the span, echoed back (may be <code>null</code>).</Param>
+  <Param name="span" type="string">The span that was analyzed.</Param>
+  <Param name="context" type="object">Five axes, each <code>{ value, confidence, trigger }</code> or <code>null</code> when not applicable.</Param>
+  <Param name="context_confidence" type="number">Aggregate confidence across the axes.</Param>
+  <Param name="readable_note" type="string">A short human-readable summary of the resolved context.</Param>
+</Parameters>
+
+<Parameters title="Context axes">
+  <Param name="assertion" type='"affirmed" | "negated" | "uncertain"'>Whether the concept is present, denied, or unclear.</Param>
+  <Param name="subject" type='"patient" | "family" | "other"'>Who the concept is about.</Param>
+  <Param name="temporality" type='"current" | "past" | "chronic"'>When it applies.</Param>
+  <Param name="certainty" type='"confirmed" | "differential" | "suspected"'>How certain the clinician is.</Param>
+  <Param name="role" type='"finding" | "reason_for_encounter" | "history"'>The clinical role of the concept in the note.</Param>
+</Parameters>
+
+## Examples
+
+<CodeTabs>
+  <CodeTab label="cURL">
+
+```bash
+curl -X POST https://api.obscyro.com/v1/extract/contexts \
+  -H "Authorization: Bearer $OBS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Il nie toute fievre. Sa mere est atteinte d un cancer du sein.",
+    "language": "fr",
+    "concepts": [
+      { "span": "fievre", "code": "386661006" },
+      { "span": "cancer du sein", "code": "254837009" }
+    ]
+  }'
+```
+
+  </CodeTab>
+  <CodeTab label="Node.js">
+
+```typescript
+type Axis = { value: string; confidence: number; trigger: string | null } | null;
+type Context = {
+  code: string | null;
+  span: string;
+  context: {
+    assertion: Axis;
+    subject: Axis;
+    temporality: Axis;
+    certainty: Axis;
+    role: Axis;
+  };
+  context_confidence: number;
+  readable_note: string;
+};
+
+async function extractContexts(
+  text: string,
+  concepts: { span: string; code?: string | null }[],
+  language = "auto",
+): Promise<Context[]> {
+  const res = await fetch("https://api.obscyro.com/v1/extract/contexts", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OBS_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ text, language, concepts }),
+  });
+  if (!res.ok) throw new Error(`obscyro: ${res.status}`);
+  const { contexts } = (await res.json()) as { contexts: Context[] };
+  return contexts;
+}
+```
+
+  </CodeTab>
+  <CodeTab label="Python">
+
+```python
+def extract_contexts(text: str, concepts: list[dict], language: str = "auto") -> list[dict]:
+    r = requests.post(
+        "https://api.obscyro.com/v1/extract/contexts",
+        headers={"Authorization": f"Bearer {os.environ['OBS_KEY']}"},
+        json={"text": text, "language": language, "concepts": concepts},
+        timeout=30,
+    )
+    r.raise_for_status()
+    return r.json()["contexts"]
+```
+
+  </CodeTab>
+</CodeTabs>
+
+## Tips
+
+- Every fired axis includes a `trigger` phrase, so you can show clinicians *why* a concept was marked negated or historical.
+- A negated or family-subject `assertion` usually means the concept should not be added to the active problem list, even if `extract/concepts` resolved it confidently.
+- Run [`/v1/extract/concepts`](/docs/api/extract-concepts) first to get the spans, then pass them here in one call.
+
+## Errors
+
+<ErrorTable>
+  <ErrorRow status={400} code="VALIDATION_ERROR">Body did not pass schema validation (missing `text`, empty `concepts`).</ErrorRow>
+  <ErrorRow status={400} code="INVALID_INPUT">`text` was shorter than 2 characters after trimming.</ErrorRow>
+  <ErrorRow status={401} code="INVALID_API_KEY">Missing or invalid bearer token.</ErrorRow>
+  <ErrorRow status={429} code="RATE_LIMITED">Per-minute rate limit exceeded for this key.</ErrorRow>
+  <ErrorRow status={502} code="NLP_UPSTREAM_ERROR">The extraction service returned an error.</ErrorRow>
+  <ErrorRow status={503} code="NLP_UNAVAILABLE">The extraction service is not configured or unreachable.</ErrorRow>
+</ErrorTable>

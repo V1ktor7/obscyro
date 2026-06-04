@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+data/*.npz
+.env
+*.pid
+beaulieu_result.json
+beaulieu_extract_result.json

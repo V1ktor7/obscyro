@@ -30,6 +30,8 @@ export const DOC_NAV: DocSection[] = [
       { title: "/v1/concepts/{code}/synonyms", slug: ["api", "synonyms"] },
       { title: "/v1/normalize-batch", slug: ["api", "normalize-batch"] },
       { title: "/v1/disambiguate", slug: ["api", "disambiguate"] },
+      { title: "/v1/extract/concepts", slug: ["api", "extract-concepts"], badge: "new" },
+      { title: "/v1/extract/contexts", slug: ["api", "extract-contexts"], badge: "new" },
     ],
   },
   {

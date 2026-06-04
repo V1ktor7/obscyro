@@ -21,6 +21,7 @@ import usagePlugin from "./plugins/usage.js";
 import batchRoutes from "./routes/batch.js";
 import conceptsRoutes from "./routes/concepts.js";
 import disambiguateRoutes from "./routes/disambiguate.js";
+import extractRoutes from "./routes/extract.js";
 import healthRoutes from "./routes/health.js";
 import hierarchyRoutes from "./routes/hierarchy.js";
 import normalizeRoutes from "./routes/normalize.js";
@@ -75,6 +76,7 @@ await app.register(swagger, {
       { name: "hierarchy", description: "Parents, children, ancestors, descendants" },
       { name: "normalize", description: "Text → SNOMED matching" },
       { name: "translate", description: "Cross-terminology mappings" },
+      { name: "extract", description: "Clinical concept and context extraction" },
       { name: "onboard", description: "Self-serve onboarding and account context" },
     ],
   },
@@ -101,6 +103,7 @@ await app.register(normalizeRoutes, { prefix: "/v1" });
 await app.register(batchRoutes, { prefix: "/v1" });
 await app.register(translateRoutes, { prefix: "/v1" });
 await app.register(disambiguateRoutes, { prefix: "/v1" });
+await app.register(extractRoutes, { prefix: "/v1" });
 
 try {
   await app.listen({ port, host });

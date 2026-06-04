@@ -1,0 +1,130 @@
+---
+title: /v1/extract/concepts
+description: Extract clinical phrases from free text and resolve each one to ranked SNOMED concept candidates using embeddings and pgvector cosine search.
+---
+
+<EndpointHeader method="POST" path="/v1/extract/concepts" />
+
+Unlike [`/v1/normalize`](/docs/api/normalize), which matches a single phrase you already isolated, `extract/concepts` takes a whole clinical note. It detects candidate spans (NER), embeds each one with a multilingual sentence-transformer, and resolves it against SNOMED descriptions via pgvector cosine similarity. Each span gets a `status` derived from the top cosine score and the `margin` to the second candidate, so you can decide which results are safe to auto-accept versus which need review.
+
+## Request body
+
+<Parameters>
+  <Param name="text" type="string" required>The clinical text to analyze. After trimming, must be at least 2 characters; otherwise the request returns <code>400 INVALID_INPUT</code>.</Param>
+  <Param name="language" type='"en" | "fr" | "auto"' defaultValue="auto">Language hint for span detection. <code>auto</code> lets the service infer it.</Param>
+</Parameters>
+
+## Response
+
+<ResponseExample status={200} description="One entry per detected span">
+
+```json
+{
+  "concepts": [
+    {
+      "span": "fibrillation auriculaire",
+      "candidates": [
+        { "code": "49436004", "display": "Atrial fibrillation", "cosine": 0.91 },
+        { "code": "40593004", "display": "Fibrillation", "cosine": 0.78 }
+      ],
+      "code": "49436004",
+      "cosine": 0.91,
+      "margin": 0.13,
+      "concept_confidence": 0.91,
+      "status": "resolved"
+    }
+  ]
+}
+```
+
+</ResponseExample>
+
+<Parameters title="Concept shape">
+  <Param name="span" type="string">The exact text span detected in the note.</Param>
+  <Param name="candidates" type="object[]">Top SNOMED candidates, each with <code>code</code> (SCTID), <code>display</code>, and <code>cosine</code> similarity.</Param>
+  <Param name="code" type="string | null">The chosen SCTID, or <code>null</code> when the span is <code>unresolved</code>.</Param>
+  <Param name="cosine" type="number">Cosine similarity of the top candidate.</Param>
+  <Param name="margin" type="number">Gap between the top and second candidate cosine. A small margin means the match is ambiguous.</Param>
+  <Param name="concept_confidence" type="number">Convenience score equal to the top cosine.</Param>
+  <Param name="status" type='"resolved" | "flag" | "unresolved"'><code>resolved</code>: high cosine and margin; <code>flag</code>: matched but low confidence or margin, review recommended; <code>unresolved</code>: no candidate cleared the floor.</Param>
+</Parameters>
+
+## Examples
+
+<CodeTabs>
+  <CodeTab label="cURL">
+
+```bash
+curl -X POST https://api.obscyro.com/v1/extract/concepts \
+  -H "Authorization: Bearer $OBS_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Patient suivi pour une fibrillation auriculaire sous anticoagulant.",
+    "language": "fr"
+  }'
+```
+
+  </CodeTab>
+  <CodeTab label="Node.js">
+
+```typescript
+type Candidate = { code: string; display: string; cosine: number };
+type Concept = {
+  span: string;
+  candidates: Candidate[];
+  code: string | null;
+  cosine: number;
+  margin: number;
+  concept_confidence: number;
+  status: "resolved" | "flag" | "unresolved";
+};
+
+async function extractConcepts(text: string, language = "auto"): Promise<Concept[]> {
+  const res = await fetch("https://api.obscyro.com/v1/extract/concepts", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OBS_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ text, language }),
+  });
+  if (!res.ok) throw new Error(`obscyro: ${res.status}`);
+  const { concepts } = (await res.json()) as { concepts: Concept[] };
+  return concepts;
+}
+```
+
+  </CodeTab>
+  <CodeTab label="Python">
+
+```python
+def extract_concepts(text: str, language: str = "auto") -> list[dict]:
+    r = requests.post(
+        "https://api.obscyro.com/v1/extract/concepts",
+        headers={"Authorization": f"Bearer {os.environ['OBS_KEY']}"},
+        json={"text": text, "language": language},
+        timeout=30,
+    )
+    r.raise_for_status()
+    return r.json()["concepts"]
+```
+
+  </CodeTab>
+</CodeTabs>
+
+## Tips
+
+- Treat `resolved` spans as safe to map automatically; route `flag` and `unresolved` spans to human review.
+- Feed the returned spans and codes into [`/v1/extract/contexts`](/docs/api/extract-contexts) to learn whether each concept is negated, historical, or about a family member.
+- The service uses a multilingual embedding model, so French and English notes both work without a separate model.
+
+## Errors
+
+<ErrorTable>
+  <ErrorRow status={400} code="VALIDATION_ERROR">Body did not pass schema validation (missing `text`, bad `language`).</ErrorRow>
+  <ErrorRow status={400} code="INVALID_INPUT">`text` was shorter than 2 characters after trimming.</ErrorRow>
+  <ErrorRow status={401} code="INVALID_API_KEY">Missing or invalid bearer token.</ErrorRow>
+  <ErrorRow status={429} code="RATE_LIMITED">Per-minute rate limit exceeded for this key.</ErrorRow>
+  <ErrorRow status={502} code="NLP_UPSTREAM_ERROR">The extraction service returned an error.</ErrorRow>
+  <ErrorRow status={503} code="NLP_UNAVAILABLE">The extraction service is not configured or unreachable.</ErrorRow>
+</ErrorTable>

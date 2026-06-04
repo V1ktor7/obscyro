@@ -1,0 +1,15 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+pydantic>=2.10.0
+numpy>=1.26.0
+pyyaml>=6.0.2
+sentence-transformers>=3.3.0
+torch>=2.2.0
+spacy>=3.7.0
+pytest>=8.3.0
+httpx>=0.28.0
+psycopg[binary]>=3.2.0
+pgvector>=0.3.0
+
+# Optional (EN clinical NER): pip install scispacy && pip install \
+#   https://github.com/allenai/scispacy/releases/download/v0.5.4/en_core_sci_sm-0.5.4.tar.gz

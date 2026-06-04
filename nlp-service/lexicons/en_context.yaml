@@ -1,0 +1,48 @@
+negation:
+  - denies
+  - deny
+  - no
+  - not
+  - without
+  - absence of
+  - negative for
+family:
+  - father
+  - mother
+  - family history
+  - his father
+  - her father
+hedge:
+  - rule out
+  - to rule out
+  - probable
+  - possible
+  - suspected
+  - differential
+temporal_past:
+  - history of
+  - past
+  - previous
+  - ago
+temporal_chronic:
+  - chronic
+  - known for
+  - long-standing
+reason_for_encounter:
+  - presents with
+  - chief complaint
+  - reason for visit
+history:
+  - history
+  - past medical history
+clinical_phrases:
+  - chest pain
+  - dyspnea
+  - shortness of breath
+  - myocardial infarction
+  - type 2 diabetes
+  - hypertension
+  - penicillin allergy
+  - electrocardiogram
+  - hyperkalemia
+  - acute myocardial infarction
