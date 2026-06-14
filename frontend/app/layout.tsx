@@ -2,9 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
 
-import BetaBanner from "@/components/site/BetaBanner";
-import Header from "@/components/site/Header";
-import Footer from "@/components/site/Footer";
+import SiteChrome from "@/components/site/SiteChrome";
 import { LocaleProvider } from "@/lib/i18n/context";
 
 import "./globals.css";
@@ -80,10 +78,7 @@ export default function RootLayout({
         className={`${inter.variable} ${jetbrainsMono.variable} min-h-screen bg-bg-primary font-sans text-fg-primary antialiased`}
       >
         <LocaleProvider>
-          <BetaBanner />
-          <Header />
-          <main className="min-h-[calc(100vh-4rem)]">{children}</main>
-          <Footer />
+          <SiteChrome>{children}</SiteChrome>
           <Analytics />
         </LocaleProvider>
       </body>

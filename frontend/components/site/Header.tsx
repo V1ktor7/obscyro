@@ -62,10 +62,10 @@ export default function Header() {
 
         <div className="flex items-center gap-2">
           <Link
-            href="/sign-up"
+            href="/sign-in"
             className="hidden h-9 items-center rounded-md bg-accent px-4 text-sm font-medium text-accent-fg transition-opacity hover:opacity-90 md:inline-flex"
           >
-            {t("nav.getKey")}
+            {t("nav.signin")}
           </Link>
           <button
             type="button"
@@ -92,20 +92,13 @@ export default function Header() {
                 {item.label}
               </Link>
             ))}
-            <Link
-              href="/sign-in"
-              onClick={() => setOpen(false)}
-              className="rounded-md px-3 py-3 text-base text-fg-secondary transition-colors hover:bg-bg-tertiary hover:text-fg-primary"
-            >
-              {t("nav.signin")}
-            </Link>
             <div className="mt-3 flex items-center gap-2">
               <Link
-                href="/sign-up"
+                href="/sign-in"
                 onClick={() => setOpen(false)}
                 className="inline-flex h-11 flex-1 items-center justify-center rounded-md bg-accent px-4 text-sm font-medium text-accent-fg"
               >
-                {t("nav.getKey")}
+                {t("nav.signin")}
               </Link>
             </div>
           </nav>

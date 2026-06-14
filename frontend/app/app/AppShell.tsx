@@ -16,7 +16,14 @@ import {
 } from "lucide-react";
 
 import { useT } from "@/lib/i18n/context";
-import { clearStoredKey, fetchMe, getStoredKey, type MeResult } from "@/lib/auth";
+import {
+  clearSession,
+  clearStoredKey,
+  fetchMe,
+  getSession,
+  getStoredKey,
+  type MeResult,
+} from "@/lib/auth";
 import { cn } from "@/lib/cn";
 
 type AppContextValue = {
@@ -54,21 +61,27 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
 
   async function load() {
-    const stored = getStoredKey();
-    if (!stored) {
+    // Gate on the frontend-only session, not an API key. Backend auth comes later.
+    if (!getSession()) {
       setStatus("redirecting");
       router.replace("/sign-in");
       return;
     }
-    try {
-      const data = await fetchMe(stored);
-      setMe(data);
-      setStatus("ready");
-    } catch {
-      clearStoredKey();
-      setStatus("redirecting");
-      router.replace("/sign-in");
+    // Best-effort: hydrate `me` from a stored API key if one exists (so console
+    // pages that read it work once the backend is wired). Absence is fine.
+    const stored = getStoredKey();
+    if (stored) {
+      try {
+        const data = await fetchMe(stored);
+        setMe(data);
+      } catch {
+        clearStoredKey();
+        setMe(null);
+      }
+    } else {
+      setMe(null);
     }
+    setStatus("ready");
   }
 
   useEffect(() => {
@@ -106,6 +119,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   }
 
   function signOut() {
+    clearSession();
     clearStoredKey();
     router.replace("/");
   }

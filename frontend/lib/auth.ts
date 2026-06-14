@@ -1,7 +1,45 @@
 const STORAGE_KEY = "obs_api_key";
+const SESSION_KEY = "obs_session";
 
 export const API_BASE: string =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+
+// TODO(backend): Replace this frontend-only credential check with a real
+// server-side verification (e.g. POST /v1/login) once the backend is wired.
+// For now the platform is locked to a single hardcoded account.
+const ALLOWED_EMAIL = "victormorency7@gmail.com";
+const ALLOWED_CODE = "Normalize120$";
+
+export function verifyCredentials(email: string, code: string): boolean {
+  return email.trim().toLowerCase() === ALLOWED_EMAIL && code === ALLOWED_CODE;
+}
+
+export function getSession(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(SESSION_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setSession(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(SESSION_KEY, "1");
+  } catch {
+    /* localStorage unavailable */
+  }
+}
+
+export function clearSession(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(SESSION_KEY);
+  } catch {
+    /* localStorage unavailable */
+  }
+}
 
 export interface OnboardPayload {
   email: string;

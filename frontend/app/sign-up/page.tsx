@@ -1,12 +1,7 @@
-import type { Metadata } from "next";
-import SignUpWizard from "./SignUpWizard";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Sign up",
-  description:
-    "Create your Obscyro account, agree to the beta terms, and we'll mint a free-plan API key for you in a couple of clicks.",
-};
-
+// Self-serve sign-up is disabled: the platform is locked to a single account.
+// Anyone hitting /sign-up is sent to the sign-in gate.
 export default function SignUpPage() {
-  return <SignUpWizard />;
+  redirect("/sign-in");
 }

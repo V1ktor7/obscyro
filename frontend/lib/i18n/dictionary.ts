@@ -165,12 +165,16 @@ export const dict = {
 
     "signin.title": "Sign in to Obscyro",
     "signin.subtitle":
-      "Paste the API key you saved from your sign-up. We never stored it on our servers.",
+      "Access is restricted. Sign in with your account email and access code.",
     "signin.label": "Your API key",
     "signin.placeholder": "obs_live_…",
+    "signin.emailLabel": "Email",
+    "signin.emailPlaceholder": "you@example.com",
+    "signin.codeLabel": "Access code",
+    "signin.codePlaceholder": "Enter your access code",
     "signin.submit": "Continue",
     "signin.submitting": "Verifying…",
-    "signin.invalid": "Invalid or revoked key. Double-check the value.",
+    "signin.invalid": "Invalid email or access code. Double-check and try again.",
     "signin.noAccount": "No account?",
     "signin.signupHere": "Sign up free",
 
@@ -395,12 +399,16 @@ export const dict = {
 
     "signin.title": "Connexion à Obscyro",
     "signin.subtitle":
-      "Collez la clé API que vous avez sauvegardée à l'inscription. Nous ne l'avons jamais stockée.",
+      "L'accès est restreint. Connectez-vous avec l'email et le code d'accès de votre compte.",
     "signin.label": "Votre clé API",
     "signin.placeholder": "obs_live_…",
+    "signin.emailLabel": "Email",
+    "signin.emailPlaceholder": "vous@exemple.com",
+    "signin.codeLabel": "Code d'accès",
+    "signin.codePlaceholder": "Entrez votre code d'accès",
     "signin.submit": "Continuer",
     "signin.submitting": "Vérification…",
-    "signin.invalid": "Clé invalide ou révoquée. Vérifiez la valeur.",
+    "signin.invalid": "Email ou code d'accès invalide. Vérifiez et réessayez.",
     "signin.noAccount": "Pas de compte ?",
     "signin.signupHere": "Inscrivez-vous gratuitement",
 

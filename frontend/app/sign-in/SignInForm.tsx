@@ -1,39 +1,35 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { ArrowRight, KeyRound, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { useT } from "@/lib/i18n/context";
-import { ApiError, fetchMe, setStoredKey } from "@/lib/auth";
+import { setSession, verifyCredentials } from "@/lib/auth";
 
 export default function SignInForm() {
   const t = useT();
   const router = useRouter();
-  const [key, setKey] = useState("");
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    const trimmed = key.trim();
-    if (!trimmed) return;
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !code) return;
     setSubmitting(true);
     setError(null);
-    try {
-      await fetchMe(trimmed);
-      setStoredKey(trimmed);
-      router.replace("/app");
-    } catch (err) {
-      if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
-        setError(t("signin.invalid"));
-      } else {
-        setError((err as Error).message);
-      }
-      setSubmitting(false);
+    // Frontend-only gate. Replace with a real backend login when wired.
+    if (verifyCredentials(trimmedEmail, code)) {
+      setSession();
+      router.replace("/studio");
+      return;
     }
+    setError(t("signin.invalid"));
+    setSubmitting(false);
   }
 
   return (
@@ -57,20 +53,38 @@ export default function SignInForm() {
           className="rounded-xl bg-bg-secondary p-0 sm:border sm:border-border-subtle sm:p-6 lg:p-7"
         >
           <label
-            htmlFor="apiKey"
+            htmlFor="email"
             className="mb-1.5 block text-sm font-medium text-fg-primary"
           >
-            {t("signin.label")}
+            {t("signin.emailLabel")}
           </label>
           <input
-            id="apiKey"
-            type="text"
+            id="email"
+            type="email"
             spellCheck={false}
-            autoComplete="off"
+            autoComplete="email"
             required
-            placeholder={t("signin.placeholder")}
-            value={key}
-            onChange={(e) => setKey(e.target.value)}
+            placeholder={t("signin.emailPlaceholder")}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full rounded-lg border border-border-subtle bg-bg-primary px-3 py-2.5 text-base text-fg-primary placeholder:text-fg-secondary/70 focus:border-fg-primary focus:outline-none focus:ring-2 focus:ring-fg-primary/10 sm:py-2 sm:text-sm"
+          />
+
+          <label
+            htmlFor="code"
+            className="mb-1.5 mt-4 block text-sm font-medium text-fg-primary"
+          >
+            {t("signin.codeLabel")}
+          </label>
+          <input
+            id="code"
+            type="password"
+            spellCheck={false}
+            autoComplete="current-password"
+            required
+            placeholder={t("signin.codePlaceholder")}
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
             className="w-full rounded-lg border border-border-subtle bg-bg-primary px-3 py-2.5 font-mono text-base text-fg-primary placeholder:text-fg-secondary/70 focus:border-fg-primary focus:outline-none focus:ring-2 focus:ring-fg-primary/10 sm:py-2 sm:text-sm"
           />
 
@@ -87,7 +101,7 @@ export default function SignInForm() {
             <Button
               type="submit"
               width="fullMobile"
-              disabled={submitting || key.trim().length === 0}
+              disabled={submitting || email.trim().length === 0 || code.length === 0}
             >
               {submitting ? (
                 <>
@@ -103,16 +117,6 @@ export default function SignInForm() {
             </Button>
           </div>
         </form>
-
-        <p className="mt-6 text-center text-sm text-fg-secondary">
-          {t("signin.noAccount")}{" "}
-          <Link
-            href="/sign-up"
-            className="font-medium text-fg-primary underline decoration-border-subtle underline-offset-4 transition-colors hover:decoration-fg-primary"
-          >
-            {t("signin.signupHere")}
-          </Link>
-        </p>
       </div>
     </section>
   );
