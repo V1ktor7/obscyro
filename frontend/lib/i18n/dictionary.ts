@@ -24,6 +24,7 @@ export const dict = {
     "hero.subtitle":
       "SNOMED-first semantic API with ICD-10 mapping via /v1/translate. RxNorm, LOINC, FHIR, and HL7 integration guides are on the roadmap.",
     "hero.cta.getKey": "Get API key",
+    "hero.cta.studio": "Open Studio",
     "hero.cta.docs": "Read the docs",
     "hero.stat.edition": "Edition",
     "hero.stat.editionValue": "SNOMED IE Feb 2026",
@@ -257,6 +258,7 @@ export const dict = {
     "hero.subtitle":
       "API sémantique SNOMED-first avec mapping ICD-10 via /v1/translate. RxNorm, LOINC, FHIR et HL7 arrivent sur la roadmap.",
     "hero.cta.getKey": "Obtenir une clé",
+    "hero.cta.studio": "Ouvrir Studio",
     "hero.cta.docs": "Lire la doc",
     "hero.stat.edition": "Édition",
     "hero.stat.editionValue": "SNOMED IE fév. 2026",

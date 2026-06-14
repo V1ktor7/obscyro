@@ -50,8 +50,8 @@ export default function HeroShell({
               {t("hero.subtitle")}
             </p>
             <div className="mt-7 flex w-full min-w-0 flex-col gap-3 sm:mt-8 sm:flex-row">
-              <Button href="/sign-up" size="lg" width="fullMobile">
-                {t("hero.cta.getKey")}
+              <Button href="/studio" size="lg" width="fullMobile">
+                {t("hero.cta.studio")}
                 <ArrowRight className="h-4 w-4 shrink-0" />
               </Button>
               <Button href="/docs" size="lg" variant="secondary" width="fullMobile">
