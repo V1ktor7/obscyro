@@ -18,20 +18,28 @@ import pgPlugin from "./plugins/pg.js";
 import rateLimitPlugin from "./plugins/rate-limit.js";
 import requestLog from "./plugins/request-log.js";
 import usagePlugin from "./plugins/usage.js";
+import authRoutes from "./routes/auth.js";
 import batchRoutes from "./routes/batch.js";
 import conceptsRoutes from "./routes/concepts.js";
 import disambiguateRoutes from "./routes/disambiguate.js";
 import extractRoutes from "./routes/extract.js";
 import healthRoutes from "./routes/health.js";
 import hierarchyRoutes from "./routes/hierarchy.js";
+import ingestRoutes from "./routes/ingest.js";
 import normalizeRoutes from "./routes/normalize.js";
 import onboardRoutes from "./routes/onboard.js";
+import ontologyRoutes from "./routes/ontology.js";
 import synonymsRoutes from "./routes/synonyms.js";
 import translateRoutes from "./routes/translate.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? "0.0.0.0";
 const isDev = process.env.NODE_ENV !== "production";
+
+const corsOrigins = (process.env.CORS_ORIGINS ?? "http://localhost:3000,https://obscyro.vercel.app")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 const app = Fastify({
   logger: {
@@ -48,7 +56,10 @@ const app = Fastify({
 app.setValidatorCompiler(validatorCompiler);
 app.setSerializerCompiler(serializerCompiler);
 
-await app.register(cors);
+await app.register(cors, {
+  origin: corsOrigins,
+  credentials: true,
+});
 
 await app.register(swagger, {
   openapi: {
@@ -77,6 +88,9 @@ await app.register(swagger, {
       { name: "normalize", description: "Text → SNOMED matching" },
       { name: "translate", description: "Cross-terminology mappings" },
       { name: "extract", description: "Clinical concept and context extraction" },
+      { name: "auth", description: "Platform login and API key management" },
+      { name: "ingest", description: "REST and webhook data intake" },
+      { name: "ontology", description: "Object types and instances" },
       { name: "onboard", description: "Self-serve onboarding and account context" },
     ],
   },
@@ -95,7 +109,10 @@ await app.register(authEnforce);
 await app.register(usagePlugin);
 
 await app.register(healthRoutes);
+await app.register(authRoutes, { prefix: "/v1" });
 await app.register(onboardRoutes, { prefix: "/v1" });
+await app.register(ingestRoutes, { prefix: "/v1" });
+await app.register(ontologyRoutes, { prefix: "/v1" });
 await app.register(conceptsRoutes, { prefix: "/v1" });
 await app.register(synonymsRoutes, { prefix: "/v1" });
 await app.register(hierarchyRoutes, { prefix: "/v1" });

@@ -2,21 +2,22 @@
 
 /**
  * Obscyro Studio — low-code, node-based editor for the clinical semantic layer.
- *
- * This is a self-contained, in-browser MOCKUP. There is no backend wiring here:
- * the "Run" button replays HARD-CODED demo output. Search for `REAL API` below
- * to see exactly where a live obscyro engine would plug in (POST /v1/extract or
- * the nlp-service /extract endpoint).
- *
- * Constraints honored: all state in useState, no localStorage/sessionStorage,
- * Tailwind utility classes + inline SVG only, monochrome palette.
+ * Wired to live /v1 APIs when an API key is present (see platform-api.ts).
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { clearSession } from "@/lib/auth";
+import { ApiError, clearSession, clearStoredKey, getStoredKey } from "@/lib/auth";
 import { cn } from "@/lib/cn";
+import {
+  createIngestSource,
+  ingestPayload,
+  listIngestEvents,
+  runPipeline,
+  type PipelineResult,
+} from "@/lib/platform-api";
+import StudioOntologyPanel from "./StudioOntologyPanel";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -24,6 +25,8 @@ import { cn } from "@/lib/cn";
 
 type NodeType =
   | "input"
+  | "rest"
+  | "webhook"
   | "concept"
   | "context"
   | "decision"
@@ -35,6 +38,10 @@ type Destination = "research" | "problem_list";
 
 type NodeConfig = {
   sampleText?: string;
+  payloadJson?: string;
+  sourceId?: string;
+  webhookUrl?: string;
+  ingestEventId?: string;
   resolveMin?: number;
   marginMin?: number;
   triggers?: string[];
@@ -57,25 +64,11 @@ type Edge = { id: string; source: string; target: string };
 
 type InspectorMode = "lowcode" | "code";
 
-type DemoResult = {
-  span: string;
-  code: string;
-  display: string;
-  assertion: "affirmed" | "negated" | "uncertain";
-  subject: "patient" | "family" | "other";
-  certainty: "confirmed" | "differential" | "suspected";
-  decision: "accept" | "flag" | "escalate";
-};
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
+type DemoResult = PipelineResult;
 
 const NODE_W = 216;
 const NODE_H = 96;
 
-// HARD-CODED demo output — the chest-pain / father's-MI / rule-out cases.
-// REAL API: replace this constant with the response from POST /v1/extract.
 const DEMO_RESULTS: DemoResult[] = [
   {
     span: "chest pain",
@@ -115,7 +108,11 @@ const DEFAULT_TRIGGERS = ["no", "denies", "rule out", "father", "history of"];
 function defaultCode(type: NodeType): string {
   switch (type) {
     case "input":
-      return `function run() {\n  // Free-text clinical note enters the pipeline here.\n  return { text: input.text, language: "auto" };\n}`;
+      return `function run() {\n  return { text: input.text, language: "auto" };\n}`;
+    case "rest":
+      return `function run(input) {\n  // POST /v1/ingest or paste JSON payload\n  return input.payload;\n}`;
+    case "webhook":
+      return `function run(input) {\n  // Poll GET /v1/ingest/events?sourceId=...\n  return input.latestEvent;\n}`;
     case "concept":
       return `function run(input) {\n  // NER spans -> embed -> pgvector cosine + margin.\n  return extractConcepts(input.text, {\n    resolveMin: 0.72,\n    marginMin: 0.15,\n  });\n}`;
     case "context":
@@ -144,6 +141,22 @@ function nodeDefaults(type: NodeType): {
           sampleText:
             "62yo with chest pain. Father had an MI. Rule out pulmonary embolism.",
         },
+      };
+    case "rest":
+      return {
+        title: "REST intake",
+        config: {
+          payloadJson: JSON.stringify(
+            { text: "62yo with chest pain. Father had an MI." },
+            null,
+            2,
+          ),
+        },
+      };
+    case "webhook":
+      return {
+        title: "Webhook intake",
+        config: { sourceId: "", webhookUrl: "" },
       };
     case "concept":
       return {
@@ -271,6 +284,19 @@ function NodeIcon({ type }: { type: NodeType }) {
       return (
         <svg {...common}>
           <path d="M4 7h16M4 12h10M4 17h7" />
+        </svg>
+      );
+    case "rest":
+      return (
+        <svg {...common}>
+          <path d="M4 6h16v12H4z" />
+          <path d="M8 10h8M8 14h5" />
+        </svg>
+      );
+    case "webhook":
+      return (
+        <svg {...common}>
+          <path d="M12 2v6M12 16v6M4.93 4.93l4.24 4.24M14.83 14.83l4.24 4.24M2 12h6M16 12h6" />
         </svg>
       );
     case "concept":
@@ -403,6 +429,8 @@ function ArchitectureStack() {
 
 const PALETTE: { type: NodeType; label: string }[] = [
   { type: "input", label: "Input" },
+  { type: "rest", label: "REST intake" },
+  { type: "webhook", label: "Webhook intake" },
   { type: "concept", label: "Concept" },
   { type: "context", label: "Context" },
   { type: "decision", label: "Decision" },
@@ -461,6 +489,8 @@ export default function StudioEditor() {
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [token, setToken] = useState<{ x: number; y: number } | null>(null);
   const [results, setResults] = useState<DemoResult[] | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const isLive = Boolean(getStoredKey() && process.env.NEXT_PUBLIC_API_URL);
 
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<
@@ -624,10 +654,39 @@ export default function StudioEditor() {
     });
   }
 
+  async function resolveInputText(): Promise<string> {
+    const start = nodes.find((n) => !edges.some((e) => e.target === n.id)) ?? nodes[0];
+    if (!start) return "";
+
+    if (start.type === "input") {
+      return start.config.sampleText ?? "";
+    }
+    if (start.type === "rest") {
+      try {
+        const parsed = JSON.parse(start.config.payloadJson ?? "{}") as Record<string, unknown>;
+        if (typeof parsed.text === "string") return parsed.text;
+        if (typeof parsed.clinical_text === "string") return parsed.clinical_text;
+        return JSON.stringify(parsed);
+      } catch {
+        return start.config.payloadJson ?? "";
+      }
+    }
+    if (start.type === "webhook" && start.config.sourceId) {
+      const { events } = await listIngestEvents(start.config.sourceId);
+      const latest = events[0];
+      if (!latest) return "";
+      const p = latest.payload as Record<string, unknown>;
+      if (typeof p.text === "string") return p.text;
+      return JSON.stringify(p);
+    }
+    return start.config.sampleText ?? "";
+  }
+
   async function run() {
     if (running) return;
     setRunning(true);
     setResults(null);
+    setRunError(null);
     setSelectedId(null);
     setToken(null);
 
@@ -645,10 +704,41 @@ export default function StudioEditor() {
     }
     setToken(null);
     setActiveNodeId(null);
-    // REAL API: this is where the response from POST /v1/extract (or the
-    // nlp-service /extract endpoint) would populate `results`. For the mockup
-    // we replay hard-coded demo data.
-    setResults(DEMO_RESULTS);
+
+    const decisionNode = nodes.find((n) => n.type === "decision");
+    const terminologyNode = nodes.find((n) => n.type === "terminology");
+    const destination = decisionNode?.config.destination ?? "problem_list";
+    const acceptThreshold = decisionNode?.config.acceptThreshold ?? 0.85;
+    const targetSystem = terminologyNode?.config.targetSystem ?? "icd10";
+
+    try {
+      if (!getStoredKey()) {
+        setResults(DEMO_RESULTS);
+        setRunError("No API key — showing demo data. Sign in and create a key.");
+        setRunning(false);
+        return;
+      }
+      const text = await resolveInputText();
+      if (!text.trim()) {
+        setRunError("No input text. Configure the input / REST / webhook node.");
+        setRunning(false);
+        return;
+      }
+      const live = await runPipeline({ text, destination, acceptThreshold, targetSystem });
+      setResults(
+        live.map((r) => ({
+          ...r,
+          code: r.code ?? "",
+        })),
+      );
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setRunError(`${err.code}: ${err.message}`);
+      } else {
+        setRunError((err as Error).message);
+      }
+      setResults(DEMO_RESULTS);
+    }
     setRunning(false);
   }
 
@@ -663,6 +753,7 @@ export default function StudioEditor() {
 
   function signOut() {
     clearSession();
+    clearStoredKey();
     router.replace("/");
   }
 
@@ -682,9 +773,19 @@ export default function StudioEditor() {
         </div>
         <div className="flex items-center gap-3">
           <span className="hidden items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[10px] text-gray-500 sm:inline-flex">
-            <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
-            Demo data — not connected to a live engine
+            <span
+              className={cn(
+                "h-1.5 w-1.5 rounded-full",
+                isLive ? "bg-emerald-500" : "bg-gray-400",
+              )}
+            />
+            {isLive ? "Live — connected to API" : "Demo — sign in for live API"}
           </span>
+          {runError ? (
+            <span className="hidden max-w-xs truncate text-[10px] text-rose-600 sm:inline">
+              {runError}
+            </span>
+          ) : null}
           <button
             type="button"
             onClick={reset}
@@ -884,6 +985,8 @@ export default function StudioEditor() {
           />
         ) : null}
       </div>
+
+      <StudioOntologyPanel results={results} />
     </div>
   );
 }
@@ -1026,6 +1129,8 @@ function LowCodeForm({
   results: DemoResult[] | null;
 }) {
   const [newTrigger, setNewTrigger] = useState("");
+  const [ingestBusy, setIngestBusy] = useState(false);
+  const [ingestMsg, setIngestMsg] = useState<string | null>(null);
 
   switch (node.type) {
     case "input":
@@ -1038,6 +1143,95 @@ function LowCodeForm({
             className="w-full resize-none rounded-md border border-gray-200 bg-gray-50 p-2.5 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
           />
         </Field>
+      );
+
+    case "rest":
+      return (
+        <>
+          <Field label="JSON payload (include text or clinical_text)">
+            <textarea
+              value={node.config.payloadJson ?? ""}
+              onChange={(e) => onConfig({ payloadJson: e.target.value })}
+              rows={8}
+              className="w-full resize-none rounded-md border border-gray-200 bg-gray-50 p-2.5 font-mono text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+            />
+          </Field>
+          <button
+            type="button"
+            disabled={ingestBusy}
+            onClick={async () => {
+              setIngestBusy(true);
+              setIngestMsg(null);
+              try {
+                const payload = JSON.parse(node.config.payloadJson ?? "{}");
+                const res = await createIngestSource("REST source", "rest");
+                const { eventId } = await ingestPayload(payload, res.source.id);
+                onConfig({ sourceId: res.source.id, ingestEventId: eventId });
+                setIngestMsg(`Ingested event ${eventId}`);
+              } catch (err) {
+                setIngestMsg((err as Error).message);
+              } finally {
+                setIngestBusy(false);
+              }
+            }}
+            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-xs hover:bg-gray-50"
+          >
+            POST to /v1/ingest
+          </button>
+          {ingestMsg ? <p className="mt-2 text-[10px] text-gray-500">{ingestMsg}</p> : null}
+        </>
+      );
+
+    case "webhook":
+      return (
+        <>
+          <Field label="Webhook URL">
+            <input
+              readOnly
+              value={node.config.webhookUrl ?? "Create a webhook source below"}
+              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 font-mono text-[10px] text-gray-700"
+            />
+          </Field>
+          <button
+            type="button"
+            disabled={ingestBusy}
+            onClick={async () => {
+              setIngestBusy(true);
+              try {
+                const res = await createIngestSource("Webhook source", "webhook");
+                onConfig({
+                  sourceId: res.source.id,
+                  webhookUrl: res.source.webhookUrl ?? "",
+                });
+                setIngestMsg("Webhook URL ready — POST payloads to this URL.");
+              } catch (err) {
+                setIngestMsg((err as Error).message);
+              } finally {
+                setIngestBusy(false);
+              }
+            }}
+            className="w-full rounded-md bg-gray-900 px-3 py-2 text-xs text-white hover:bg-gray-700"
+          >
+            Create webhook source
+          </button>
+          <button
+            type="button"
+            className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-xs"
+            onClick={async () => {
+              if (!node.config.sourceId) return;
+              const { events } = await listIngestEvents(node.config.sourceId);
+              if (events[0]) {
+                onConfig({ ingestEventId: events[0].id });
+                setIngestMsg(`Latest event: ${events[0].id}`);
+              } else {
+                setIngestMsg("No events yet.");
+              }
+            }}
+          >
+            Poll latest event
+          </button>
+          {ingestMsg ? <p className="mt-2 text-[10px] text-gray-500">{ingestMsg}</p> : null}
+        </>
       );
 
     case "concept":
@@ -1197,6 +1391,11 @@ function LowCodeForm({
                   <div className="mb-1.5 text-[11px] text-gray-500">
                     {r.display} · &ldquo;{r.span}&rdquo;
                   </div>
+                  {r.translation ? (
+                    <div className="mb-1.5 font-mono text-[10px] text-gray-600">
+                      → {r.translation}
+                    </div>
+                  ) : null}
                   <div className="flex flex-wrap gap-1">
                     <Chip label="assert" value={r.assertion} />
                     <Chip label="subj" value={r.subject} />

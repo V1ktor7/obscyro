@@ -1,33 +1,78 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
-import { useState } from "react";
-import { Check, Copy, Eye, EyeOff, KeyRound, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, Copy, KeyRound, Loader2, Plus, Trash2 } from "lucide-react";
 
 import { useAppContext } from "../AppShell";
 import { useT } from "@/lib/i18n/context";
-import { getStoredKey } from "@/lib/auth";
-import { cn } from "@/lib/cn";
+import { setStoredKey } from "@/lib/auth";
+import {
+  createKey,
+  listKeys,
+  revokeKey,
+  type ApiKeySummary,
+} from "@/lib/platform-api";
+import { Button } from "@/components/ui/Button";
 
 export default function KeysClient() {
   const t = useT();
   const { me } = useAppContext();
-  const params = useSearchParams();
-  const isWelcome = params.get("welcome") === "1";
-
-  const [revealed, setRevealed] = useState(false);
+  const [keys, setKeys] = useState<ApiKeySummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [keyName, setKeyName] = useState("");
+  const [newRawKey, setNewRawKey] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!me) return null;
+  async function load() {
+    setLoading(true);
+    try {
+      const res = await listKeys();
+      setKeys(res.keys);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  const fullKey = isWelcome ? getStoredKey() : null;
-  const display = revealed && fullKey ? fullKey : `${me.apiKey.prefix}${"•".repeat(24)}`;
+  useEffect(() => {
+    void load();
+  }, []);
+
+  async function onCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!keyName.trim()) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const { key } = await createKey(keyName.trim());
+      setNewRawKey(key.rawKey);
+      setStoredKey(key.rawKey);
+      setKeyName("");
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function onRevoke(id: string) {
+    if (!confirm(t("app.keys.revokeConfirm"))) return;
+    try {
+      await revokeKey(id);
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
 
   async function copy() {
-    const value = fullKey ?? me?.apiKey.prefix ?? "";
-    if (!value) return;
+    if (!newRawKey) return;
     try {
-      await navigator.clipboard.writeText(value);
+      await navigator.clipboard.writeText(newRawKey);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
     } catch {
@@ -35,11 +80,7 @@ export default function KeysClient() {
     }
   }
 
-  const usagePercent =
-    Math.min(
-      100,
-      Math.round((me.usageThisMonth / Math.max(1, me.apiKey.monthlyQuota)) * 100),
-    );
+  if (!me) return null;
 
   return (
     <div className="space-y-6 sm:space-y-8">
@@ -55,111 +96,94 @@ export default function KeysClient() {
         </p>
       </header>
 
-      {isWelcome ? (
-        <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
-          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden />
-          <p className="text-sm text-fg-primary">{t("app.keys.welcomeBanner")}</p>
+      {newRawKey ? (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+          <p className="mb-2 text-sm font-medium">{t("signin.keyCreatedOnce")}</p>
+          <code className="block break-all rounded-md border border-border-subtle bg-bg-primary px-3 py-2 font-mono text-xs">
+            {newRawKey}
+          </code>
+          <button
+            type="button"
+            onClick={copy}
+            className="mt-3 inline-flex items-center gap-1 rounded-md border border-border-subtle px-3 py-1.5 text-xs"
+          >
+            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+            {t("signin.copyKey")}
+          </button>
         </div>
       ) : null}
 
       <section className="rounded-xl border border-border-subtle bg-bg-secondary p-5 sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <KeyRound className="h-4 w-4 shrink-0 text-fg-secondary" aria-hidden />
-            <h2 className="truncate text-base font-semibold tracking-tight">
-              {t("app.keys.your")}
-            </h2>
+        <h2 className="flex items-center gap-2 text-base font-semibold">
+          <KeyRound className="h-4 w-4" />
+          {t("app.keys.manage")}
+        </h2>
+
+        {loading ? (
+          <div className="mt-4 flex justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-fg-secondary" />
           </div>
-          <span className="shrink-0 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[0.55rem] uppercase tracking-[0.18em] text-emerald-700 sm:text-[0.6rem] sm:tracking-[0.2em]">
-            {me.apiKey.plan}
-          </span>
-        </div>
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-          <code className="block min-w-0 flex-1 truncate rounded-md border border-border-subtle bg-bg-primary px-3 py-2 font-mono text-sm text-fg-primary">
-            {display}
-          </code>
-          <div className="flex flex-wrap gap-2 sm:flex-nowrap">
-            {fullKey ? (
-              <button
-                type="button"
-                onClick={() => setRevealed((r) => !r)}
-                className="inline-flex h-10 min-h-[40px] flex-1 items-center justify-center gap-1 rounded-md border border-border-subtle bg-bg-primary px-3 text-xs text-fg-secondary transition-colors hover:text-fg-primary sm:flex-none"
+        ) : (
+          <ul className="mt-4 space-y-2">
+            {keys.map((k) => (
+              <li
+                key={k.id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-border-subtle bg-bg-primary px-3 py-2.5"
               >
-                {revealed ? (
-                  <>
-                    <EyeOff className="h-3.5 w-3.5" />
-                    {t("app.keys.hide")}
-                  </>
-                ) : (
-                  <>
-                    <Eye className="h-3.5 w-3.5" />
-                    {t("app.keys.reveal")}
-                  </>
-                )}
-              </button>
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-sm">{k.name}</p>
+                  <code className="font-mono text-xs text-fg-secondary">{k.prefix}…</code>
+                  {k.lastUsedAt ? (
+                    <p className="text-[10px] text-fg-secondary">
+                      {t("app.keys.lastUsed")}: {new Date(k.lastUsedAt).toLocaleString()}
+                    </p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onRevoke(k.id)}
+                  className="shrink-0 rounded-md p-2 text-fg-secondary hover:bg-bg-tertiary hover:text-rose-600"
+                  aria-label={t("app.keys.revoke")}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </li>
+            ))}
+            {keys.length === 0 ? (
+              <p className="text-sm text-fg-secondary">{t("app.keys.empty")}</p>
             ) : null}
-            <button
-              type="button"
-              onClick={copy}
-              className="inline-flex h-10 min-h-[40px] flex-1 items-center justify-center gap-1 rounded-md border border-border-subtle bg-bg-primary px-3 text-xs text-fg-secondary transition-colors hover:text-fg-primary sm:flex-none"
-            >
-              {copied ? (
-                <>
-                  <Check className="h-3.5 w-3.5" />
-                  {t("app.keys.copied")}
-                </>
-              ) : (
-                <>
-                  <Copy className="h-3.5 w-3.5" />
-                  {t("app.keys.copy")}
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-        {!fullKey ? (
-          <p className="mt-3 text-xs text-fg-secondary">
-            {t("app.keys.regenerateSoon")}
-          </p>
-        ) : null}
+          </ul>
+        )}
+
+        <form onSubmit={onCreate} className="mt-6 flex flex-col gap-2 sm:flex-row">
+          <input
+            value={keyName}
+            onChange={(e) => setKeyName(e.target.value)}
+            placeholder={t("signin.newKeyPlaceholder")}
+            className="min-w-0 flex-1 rounded-lg border border-border-subtle bg-bg-primary px-3 py-2 text-sm"
+          />
+          <Button type="submit" disabled={submitting || !keyName.trim()}>
+            {submitting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <Plus className="h-4 w-4" />
+                {t("app.keys.create")}
+              </>
+            )}
+          </Button>
+        </form>
+        {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
       </section>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <section className="rounded-xl border border-border-subtle bg-bg-secondary p-5 sm:p-6">
-          <h3 className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-fg-secondary sm:text-[0.65rem] sm:tracking-[0.2em]">
-            {t("app.keys.usage")}
-          </h3>
-          <div className="mt-4 flex flex-wrap items-baseline gap-2">
-            <span className="font-mono text-2xl font-semibold tracking-tight text-fg-primary sm:text-3xl">
-              {me.usageThisMonth.toLocaleString()}
-            </span>
-            <span className="text-sm text-fg-secondary">
-              / {me.apiKey.monthlyQuota.toLocaleString()} {t("app.keys.usageLimit")}
-            </span>
-          </div>
-          <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-bg-tertiary">
-          <div
-            className={cn(
-              "h-full rounded-full bg-fg-primary transition-all",
-              usagePercent > 80 && "bg-amber-500",
-              usagePercent > 95 && "bg-rose-500",
-            )}
-            style={{ width: `${usagePercent}%` }}
-          />
-          </div>
-          <p className="mt-3 text-xs text-fg-secondary">{t("app.keys.usageQuotaNote")}</p>
-        </section>
-
-        <section className="rounded-xl border border-border-subtle bg-bg-secondary p-5 sm:p-6">
-          <h3 className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-fg-secondary sm:text-[0.65rem] sm:tracking-[0.2em]">
-            {t("app.keys.plan")}
-          </h3>
-          <p className="mt-4 text-2xl font-semibold capitalize tracking-tight text-fg-primary sm:text-3xl">
-            {me.apiKey.plan}
-          </p>
-          <p className="mt-2 text-sm text-fg-secondary">{t("app.keys.upgrade")}</p>
-        </section>
-      </div>
+      <section className="rounded-xl border border-border-subtle bg-bg-secondary p-5 sm:p-6">
+        <h3 className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-fg-secondary">
+          {t("app.keys.usage")}
+        </h3>
+        <p className="mt-2 font-mono text-2xl font-semibold">
+          {me.usageThisMonth.toLocaleString()} / {me.apiKey.monthlyQuota.toLocaleString()}
+        </p>
+      </section>
     </div>
   );
 }

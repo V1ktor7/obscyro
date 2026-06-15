@@ -3,6 +3,7 @@ import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
 
 import { AppError } from "../lib/errors.js";
+import { isPublicPath } from "../lib/public-paths.js";
 import type { Plan } from "../services/auth.js";
 
 export const PLAN_LIMITS: Record<Plan, number> = {
@@ -14,19 +15,8 @@ export const PLAN_LIMITS: Record<Plan, number> = {
 
 const ANONYMOUS_LIMIT = 100;
 
-const PUBLIC_PATH_PATTERNS: RegExp[] = [
-  /^\/health\/?$/,
-  /^\/v1\/health\/?$/,
-  /^\/v1\/onboard\/?$/,
-  /^\/documentation(\/.*)?$/,
-];
-
 function routePath(req: FastifyRequest): string {
   return req.routeOptions?.url ?? req.url;
-}
-
-function isPublic(path: string): boolean {
-  return PUBLIC_PATH_PATTERNS.some((re) => re.test(path));
 }
 
 const rateLimitPlugin: FastifyPluginAsync = fp(
@@ -35,14 +25,9 @@ const rateLimitPlugin: FastifyPluginAsync = fp(
       global: true,
       timeWindow: "1 minute",
       hook: "preHandler",
-      // Allow public paths and unauthenticated traffic; the latter falls
-      // through to auth-enforce which returns 401.
-      allowList: (req) => isPublic(routePath(req)) || !req.apiKey,
+      allowList: (req) => isPublicPath(routePath(req)) || !req.apiKey,
       keyGenerator: (req) => req.apiKey?.id ?? req.ip,
       max: (req) => (req.apiKey ? PLAN_LIMITS[req.apiKey.plan] : ANONYMOUS_LIMIT),
-      // @fastify/rate-limit throws this object verbatim, so we throw an
-      // AppError that our error-handler renders into the standard envelope
-      // with status 429.
       errorResponseBuilder: (_req, ctx) =>
         new AppError(
           "RATE_LIMITED",

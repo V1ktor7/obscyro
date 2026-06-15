@@ -2,7 +2,6 @@ import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 
-import { Conflict } from "../lib/errors.js";
 import { generateApiKey } from "../services/auth.js";
 
 const useCaseValues = ["developer", "research", "clinical", "other"] as const;
@@ -120,20 +119,6 @@ const onboardRoutes: FastifyPluginAsync = async (fastify) => {
       const user = userInsert.rows[0];
       if (!user) {
         throw new Error("Failed to upsert user");
-      }
-
-      const existingActive = await client.query<{ id: string }>(
-        `SELECT id
-           FROM app.api_keys
-          WHERE user_id = $1 AND revoked_at IS NULL
-          LIMIT 1`,
-        [user.id],
-      );
-      if (existingActive.rows.length > 0) {
-        throw Conflict(
-          "EMAIL_ALREADY_HAS_KEY",
-          "An account with this email already has an active API key. Sign in by pasting that key.",
-        );
       }
 
       const { rawKey, hash, prefix } = generateApiKey();
