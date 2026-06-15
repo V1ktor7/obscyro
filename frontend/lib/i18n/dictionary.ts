@@ -50,6 +50,27 @@ export const dict = {
     "problem.node.api": "Obscyro API",
     "problem.node.out": "Normalized output",
 
+    "arch.eyebrow": "Architecture",
+    "arch.title": "One layered pipeline, every record.",
+    "arch.subtitle":
+      "Each request flows through the same four layers — from raw text to a fully coded, context-aware result you can trust.",
+    "arch.layer1.label": "Intake",
+    "arch.layer1.title": "Ingest & normalize",
+    "arch.layer1.body":
+      "Accept clinical text or structured payloads over REST and webhooks, then normalize encoding, language, and casing.",
+    "arch.layer2.label": "Semantics",
+    "arch.layer2.title": "Concept & context extraction",
+    "arch.layer2.body":
+      "NER spans are embedded and matched against SNOMED with pgvector cosine + margin, then enriched with assertion, subject, and certainty.",
+    "arch.layer3.label": "Decision",
+    "arch.layer3.title": "Route by confidence",
+    "arch.layer3.body":
+      "Per-destination rules accept, flag, or escalate each concept using resolution status and context confidence.",
+    "arch.layer4.label": "Output",
+    "arch.layer4.title": "Translate & emit",
+    "arch.layer4.body":
+      "Cross-map SNOMED to ICD-10, ICD-O, or CTV3 and emit an enriched, coded result ready for your system.",
+
     "features.eyebrow": "What you can do",
     "features.title": "Five primitives. Endless integrations.",
     "features.subtitle":
@@ -300,6 +321,27 @@ export const dict = {
     "problem.node.in": "Entrée clinique brute",
     "problem.node.api": "API Obscyro",
     "problem.node.out": "Sortie normalisée",
+
+    "arch.eyebrow": "Architecture",
+    "arch.title": "Un pipeline en couches, pour chaque dossier.",
+    "arch.subtitle":
+      "Chaque requête traverse les mêmes quatre couches — du texte brut à un résultat entièrement codé et conscient du contexte.",
+    "arch.layer1.label": "Réception",
+    "arch.layer1.title": "Ingestion & normalisation",
+    "arch.layer1.body":
+      "Acceptez du texte clinique ou des charges structurées via REST et webhooks, puis normalisez l'encodage, la langue et la casse.",
+    "arch.layer2.label": "Sémantique",
+    "arch.layer2.title": "Extraction de concepts & contexte",
+    "arch.layer2.body":
+      "Les spans NER sont vectorisés et comparés à SNOMED via cosinus pgvector + marge, puis enrichis d'assertion, de sujet et de certitude.",
+    "arch.layer3.label": "Décision",
+    "arch.layer3.title": "Routage par confiance",
+    "arch.layer3.body":
+      "Des règles par destination acceptent, signalent ou escaladent chaque concept selon le statut de résolution et la confiance du contexte.",
+    "arch.layer4.label": "Sortie",
+    "arch.layer4.title": "Traduction & émission",
+    "arch.layer4.body":
+      "Cartographiez SNOMED vers ICD-10, ICD-O ou CTV3 et émettez un résultat codé et enrichi, prêt pour votre système.",
 
     "features.eyebrow": "Ce que vous pouvez faire",
     "features.title": "Cinq primitives. Des intégrations infinies.",

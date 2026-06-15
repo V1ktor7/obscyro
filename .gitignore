@@ -16,3 +16,5 @@ coverage/
 /metadata.json
 /src/
 /.env.example
+
+.vercel

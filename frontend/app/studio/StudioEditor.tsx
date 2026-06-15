@@ -3,18 +3,28 @@
 /**
  * Obscyro Studio — low-code, node-based editor for the clinical semantic layer.
  * Wired to live /v1 APIs when an API key is present (see platform-api.ts).
+ *
+ * Nodes are connectable (drag output -> input). The graph executes with
+ * branching and merging: a node can fan out to several nodes, several nodes
+ * can merge into one, and any single node can be run/tested in isolation.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Check, Copy, Play } from "lucide-react";
 
 import { ApiError, clearSession, clearStoredKey, getStoredKey } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import {
   createIngestSource,
+  decide,
+  extractConcepts,
+  extractContexts,
   ingestPayload,
   listIngestEvents,
-  runPipeline,
+  translateCode,
+  type ConceptOut,
+  type ContextOut,
   type PipelineResult,
 } from "@/lib/platform-api";
 import StudioOntologyPanel from "./StudioOntologyPanel";
@@ -42,6 +52,8 @@ type NodeConfig = {
   sourceId?: string;
   webhookUrl?: string;
   ingestEventId?: string;
+  lastEventPayload?: unknown;
+  lastEventText?: string;
   resolveMin?: number;
   marginMin?: number;
   triggers?: string[];
@@ -66,8 +78,37 @@ type InspectorMode = "lowcode" | "code";
 
 type DemoResult = PipelineResult;
 
+/** The data bag that flows between nodes along edges. */
+type NodeOutput = {
+  text?: string;
+  concepts?: ConceptOut[];
+  contexts?: ContextOut[];
+  results?: PipelineResult[];
+  payload?: unknown;
+};
+
 const NODE_W = 216;
 const NODE_H = 96;
+
+const ACCENT_HEX = "#4f46e5"; // indigo — active edges / travelling token
+const EDGE_HEX = "#cbd5e1"; // slate-300 — idle edges
+
+// Subtle, role-based accents. Bodies stay white; only the icon, a thin left
+// bar, and the port border pick up color, so the canvas stays minimalist.
+const NODE_ACCENTS: Record<
+  NodeType,
+  { text: string; bar: string; border: string; hex: string }
+> = {
+  input: { text: "text-sky-600", bar: "bg-sky-400", border: "border-sky-400", hex: "#0284c7" },
+  rest: { text: "text-sky-600", bar: "bg-sky-400", border: "border-sky-400", hex: "#0284c7" },
+  webhook: { text: "text-sky-600", bar: "bg-sky-400", border: "border-sky-400", hex: "#0284c7" },
+  concept: { text: "text-violet-600", bar: "bg-violet-400", border: "border-violet-400", hex: "#7c3aed" },
+  context: { text: "text-violet-600", bar: "bg-violet-400", border: "border-violet-400", hex: "#7c3aed" },
+  decision: { text: "text-amber-600", bar: "bg-amber-400", border: "border-amber-400", hex: "#d97706" },
+  terminology: { text: "text-teal-600", bar: "bg-teal-400", border: "border-teal-400", hex: "#0d9488" },
+  output: { text: "text-emerald-600", bar: "bg-emerald-400", border: "border-emerald-400", hex: "#059669" },
+  custom: { text: "text-slate-500", bar: "bg-slate-400", border: "border-slate-400", hex: "#64748b" },
+};
 
 const DEMO_RESULTS: DemoResult[] = [
   {
@@ -211,19 +252,21 @@ function buildDefaultNodes(): FlowNode[] {
       type,
       title: d.title,
       x: 40 + i * 264,
-      y: 140,
+      y: 160,
       config: d.config,
       code: defaultCode(type),
     };
   });
 }
 
-const DEFAULT_EDGES: Edge[] = [
-  { id: "e1", source: "n-1", target: "n-2" },
-  { id: "e2", source: "n-2", target: "n-3" },
-  { id: "e3", source: "n-3", target: "n-4" },
-  { id: "e4", source: "n-4", target: "n-5" },
-];
+function buildDefaultEdges(): Edge[] {
+  return [
+    { id: "e1", source: "n-1", target: "n-2" },
+    { id: "e2", source: "n-2", target: "n-3" },
+    { id: "e3", source: "n-3", target: "n-4" },
+    { id: "e4", source: "n-4", target: "n-5" },
+  ];
+}
 
 // ---------------------------------------------------------------------------
 // Geometry helpers
@@ -240,6 +283,14 @@ function geom(s: FlowNode, t: FlowNode): Geom {
   const a = { x: s.x + NODE_W, y: s.y + NODE_H / 2 };
   const b = { x: t.x, y: t.y + NODE_H / 2 };
   const dx = Math.max(50, (b.x - a.x) / 2);
+  return { a, b, c1: { x: a.x + dx, y: a.y }, c2: { x: b.x - dx, y: b.y } };
+}
+
+function pointGeom(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+): Geom {
+  const dx = Math.max(40, Math.abs(b.x - a.x) / 2);
   return { a, b, c1: { x: a.x + dx, y: a.y }, c2: { x: b.x - dx, y: b.y } };
 }
 
@@ -265,7 +316,219 @@ function bezierPoint(g: Geom, t: number): { x: number; y: number } {
 const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
 // ---------------------------------------------------------------------------
-// Inline SVG icons (monochrome)
+// Graph helpers (topology, cycles, merge)
+// ---------------------------------------------------------------------------
+
+function topoOrder(ns: FlowNode[], es: Edge[]): string[] {
+  const ids = ns.map((n) => n.id);
+  const idset = new Set(ids);
+  const indeg = new Map<string, number>(ids.map((i) => [i, 0]));
+  const adj = new Map<string, string[]>(ids.map((i) => [i, []]));
+  for (const e of es) {
+    if (!idset.has(e.source) || !idset.has(e.target)) continue;
+    adj.get(e.source)!.push(e.target);
+    indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1);
+  }
+  const queue = ids.filter((i) => (indeg.get(i) ?? 0) === 0);
+  const order: string[] = [];
+  while (queue.length) {
+    const n = queue.shift()!;
+    order.push(n);
+    for (const m of adj.get(n) ?? []) {
+      indeg.set(m, (indeg.get(m) ?? 0) - 1);
+      if ((indeg.get(m) ?? 0) === 0) queue.push(m);
+    }
+  }
+  // Append any nodes left out by a cycle so they still run (in node order).
+  for (const i of ids) if (!order.includes(i)) order.push(i);
+  return order;
+}
+
+/** Would adding source -> target create a cycle? (target already reaches source) */
+function wouldCycle(es: Edge[], source: string, target: string): boolean {
+  const adj = new Map<string, string[]>();
+  for (const e of es) {
+    if (!adj.has(e.source)) adj.set(e.source, []);
+    adj.get(e.source)!.push(e.target);
+  }
+  const stack = [target];
+  const seen = new Set<string>();
+  while (stack.length) {
+    const n = stack.pop()!;
+    if (n === source) return true;
+    if (seen.has(n)) continue;
+    seen.add(n);
+    for (const m of adj.get(n) ?? []) stack.push(m);
+  }
+  return false;
+}
+
+function mergeOutputs(outputs: NodeOutput[]): NodeOutput {
+  const merged: NodeOutput = {};
+  for (const o of outputs) {
+    if (o.text && !merged.text) merged.text = o.text;
+    if (o.concepts?.length)
+      merged.concepts = [...(merged.concepts ?? []), ...o.concepts];
+    if (o.contexts?.length)
+      merged.contexts = [...(merged.contexts ?? []), ...o.contexts];
+    if (o.results?.length)
+      merged.results = [...(merged.results ?? []), ...o.results];
+    if (o.payload != null && merged.payload == null) merged.payload = o.payload;
+  }
+  return merged;
+}
+
+function resultsFromConcepts(concepts: ConceptOut[]): PipelineResult[] {
+  return concepts.map((c) => ({
+    span: c.span,
+    code: c.code,
+    display: c.candidates[0]?.display ?? c.span,
+    assertion: "affirmed",
+    subject: "patient",
+    certainty: "confirmed",
+    decision: "flag" as const,
+  }));
+}
+
+/** Per-node transform. Throws on missing upstream data; caller catches. */
+async function executeNode(
+  node: FlowNode,
+  input: NodeOutput,
+): Promise<NodeOutput> {
+  switch (node.type) {
+    case "input":
+      return { text: node.config.sampleText ?? "" };
+
+    case "rest": {
+      try {
+        const parsed = JSON.parse(node.config.payloadJson ?? "{}") as Record<
+          string,
+          unknown
+        >;
+        const text =
+          typeof parsed.text === "string"
+            ? parsed.text
+            : typeof parsed.clinical_text === "string"
+              ? parsed.clinical_text
+              : JSON.stringify(parsed);
+        return { text, payload: parsed };
+      } catch {
+        return {
+          text: node.config.payloadJson ?? "",
+          payload: node.config.payloadJson,
+        };
+      }
+    }
+
+    case "webhook": {
+      if (node.config.lastEventText) {
+        return {
+          text: node.config.lastEventText,
+          payload: node.config.lastEventPayload,
+        };
+      }
+      if (node.config.sourceId) {
+        const { events } = await listIngestEvents(node.config.sourceId);
+        const latest = events[0];
+        if (latest) {
+          const p = latest.payload as Record<string, unknown>;
+          const text =
+            typeof p.text === "string" ? p.text : JSON.stringify(p);
+          return { text, payload: p };
+        }
+      }
+      throw new Error("No webhook events received yet.");
+    }
+
+    case "concept": {
+      const text = input.text ?? "";
+      if (!text.trim()) throw new Error("No input text reached this node.");
+      const { concepts } = await extractConcepts(text, "auto");
+      return { text, concepts };
+    }
+
+    case "context": {
+      const text = input.text ?? "";
+      const concepts = input.concepts ?? [];
+      if (!concepts.length) throw new Error("No concepts reached this node.");
+      const { contexts } = await extractContexts(
+        text,
+        concepts.map((c) => ({ span: c.span, code: c.code })),
+        "auto",
+      );
+      return { text, concepts, contexts };
+    }
+
+    case "decision": {
+      const concepts = input.concepts ?? [];
+      const contexts = input.contexts ?? [];
+      if (!concepts.length) throw new Error("No concepts reached this node.");
+      const destination = node.config.destination ?? "problem_list";
+      const threshold = node.config.acceptThreshold ?? 0.85;
+      const ctxBySpan = new Map(contexts.map((c) => [c.span, c]));
+      const results: PipelineResult[] = concepts.map((concept) => {
+        const ctx = ctxBySpan.get(concept.span);
+        const assertion = ctx?.context.assertion?.value ?? "affirmed";
+        const subject = ctx?.context.subject?.value ?? "patient";
+        const certainty = ctx?.context.certainty?.value ?? "confirmed";
+        const contextConfidence = ctx?.context_confidence ?? 0;
+        const display = concept.candidates[0]?.display ?? concept.span;
+        const decision = decide(
+          concept.status,
+          destination,
+          contextConfidence,
+          assertion,
+          certainty,
+          threshold,
+        );
+        return {
+          span: concept.span,
+          code: concept.code,
+          display,
+          assertion,
+          subject,
+          certainty,
+          decision,
+          readable_note: ctx?.readable_note,
+        };
+      });
+      return { concepts, contexts, results };
+    }
+
+    case "terminology": {
+      const target = node.config.targetSystem ?? "icd10";
+      const base =
+        input.results ?? resultsFromConcepts(input.concepts ?? []);
+      if (!base.length) throw new Error("No coded results reached this node.");
+      const out: PipelineResult[] = [];
+      for (const r of base) {
+        let translation: string | null = null;
+        if (r.code) {
+          try {
+            const mapped = await translateCode(r.code, target);
+            translation =
+              (mapped.translations[0] as { target?: string } | undefined)
+                ?.target ?? null;
+          } catch {
+            translation = null;
+          }
+        }
+        out.push({ ...r, translation });
+      }
+      return { ...input, results: out };
+    }
+
+    case "output":
+      return { ...input };
+
+    case "custom":
+    default:
+      return { ...input };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Inline SVG icons (monochrome glyphs; color comes from the parent class)
 // ---------------------------------------------------------------------------
 
 function NodeIcon({ type }: { type: NodeType }) {
@@ -355,11 +618,11 @@ function Chip({ label, value }: { label: string; value: string }) {
 }
 
 function DecisionBadge({ decision }: { decision: DemoResult["decision"] }) {
-  // Monochrome severity: outline = accept, gray = flag, black = escalate.
+  // Restrained severity color: accept = emerald, flag = amber, escalate = rose.
   const styles: Record<DemoResult["decision"], string> = {
-    accept: "border border-gray-900 bg-white text-gray-900",
-    flag: "bg-gray-200 text-gray-800",
-    escalate: "bg-gray-900 text-white",
+    accept: "border border-emerald-300 bg-emerald-50 text-emerald-700",
+    flag: "border border-amber-300 bg-amber-50 text-amber-700",
+    escalate: "border border-rose-300 bg-rose-50 text-rose-700",
   };
   return (
     <span
@@ -370,56 +633,6 @@ function DecisionBadge({ decision }: { decision: DemoResult["decision"] }) {
     >
       {decision}
     </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Region A — static architecture stack
-// ---------------------------------------------------------------------------
-
-function LayerBlock({
-  label,
-  className,
-}: {
-  label: string;
-  className?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        "flex flex-1 items-center justify-center rounded-md border border-gray-200 bg-gray-50 px-3 py-1.5 text-center text-[11px] font-medium text-gray-600",
-        className,
-      )}
-    >
-      {label}
-    </div>
-  );
-}
-
-function ArchitectureStack() {
-  return (
-    <div className="border-b border-gray-200 bg-white px-4 py-3">
-      <div className="mb-2 flex items-center gap-2">
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400">
-          Architecture
-        </span>
-        <span className="text-[10px] text-gray-400">reference · read-only</span>
-      </div>
-      <div className="mx-auto flex max-w-3xl flex-col gap-1.5">
-        <div className="flex gap-1.5">
-          <LayerBlock label="Prebuilt extractors" className="bg-gray-100" />
-          <LayerBlock label="Custom rules" className="bg-gray-100" />
-        </div>
-        <LayerBlock label="Ontology Layer — SNOMED · ICD · context model" />
-        <div className="flex gap-1.5">
-          <LayerBlock label="Concept Services" />
-          <LayerBlock label="Context Services" />
-          <LayerBlock label="Decision Services" />
-        </div>
-        <LayerBlock label="Security & Governance — auditable, runs in your environment" />
-        <LayerBlock label="Data Intake — FHIR · HL7 · free text" className="bg-gray-100" />
-      </div>
-    </div>
   );
 }
 
@@ -458,7 +671,7 @@ function Palette({ onAdd }: { onAdd: (type: NodeType) => void }) {
             }}
             className="flex cursor-grab items-center gap-2 rounded-md border border-gray-200 bg-white px-2.5 py-2 text-left text-xs text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50 active:cursor-grabbing"
           >
-            <span className="text-gray-500">
+            <span className={NODE_ACCENTS[item.type].text}>
               <NodeIcon type={item.type} />
             </span>
             {item.label}
@@ -466,7 +679,8 @@ function Palette({ onAdd }: { onAdd: (type: NodeType) => void }) {
         ))}
       </div>
       <p className="mt-3 text-[10px] leading-relaxed text-gray-400">
-        Click or drag a node onto the canvas.
+        Click or drag a node onto the canvas. Drag from a node&apos;s right dot
+        to another node&apos;s left dot to connect them.
       </p>
     </aside>
   );
@@ -480,8 +694,9 @@ export default function StudioEditor() {
   const router = useRouter();
 
   const [nodes, setNodes] = useState<FlowNode[]>(() => buildDefaultNodes());
-  const [edges] = useState<Edge[]>(DEFAULT_EDGES);
+  const [edges, setEdges] = useState<Edge[]>(() => buildDefaultEdges());
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [inspectorMode, setInspectorMode] = useState<InspectorMode>("lowcode");
 
@@ -490,9 +705,21 @@ export default function StudioEditor() {
   const [token, setToken] = useState<{ x: number; y: number } | null>(null);
   const [results, setResults] = useState<DemoResult[] | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
+  const [nodeOutputs, setNodeOutputs] = useState<Map<string, NodeOutput>>(
+    new Map(),
+  );
+  const [nodeErrors, setNodeErrors] = useState<Map<string, string>>(new Map());
+  const [pendingEdge, setPendingEdge] = useState<{
+    source: string;
+    cursor: { x: number; y: number };
+  } | null>(null);
+
   const isLive = Boolean(getStoredKey() && process.env.NEXT_PUBLIC_API_URL);
 
   const canvasRef = useRef<HTMLDivElement | null>(null);
+  const panRef = useRef(pan);
+  panRef.current = pan;
+  const connectingRef = useRef<{ source: string } | null>(null);
   const dragRef = useRef<
     | {
         kind: "node" | "pan";
@@ -514,10 +741,19 @@ export default function StudioEditor() {
 
   const selectedNode = selectedId ? nodeById.get(selectedId) ?? null : null;
 
-  // -- Drag / pan -----------------------------------------------------------
+  // -- Drag / pan / connect -------------------------------------------------
 
   useEffect(() => {
     function onMove(e: PointerEvent) {
+      if (connectingRef.current) {
+        const rect = canvasRef.current?.getBoundingClientRect();
+        if (rect) {
+          const x = e.clientX - rect.left - panRef.current.x;
+          const y = e.clientY - rect.top - panRef.current.y;
+          setPendingEdge((pe) => (pe ? { ...pe, cursor: { x, y } } : pe));
+        }
+        return;
+      }
       const d = dragRef.current;
       if (!d) return;
       const dx = e.clientX - d.startX;
@@ -535,6 +771,10 @@ export default function StudioEditor() {
     }
     function onUp() {
       dragRef.current = null;
+      if (connectingRef.current) {
+        connectingRef.current = null;
+        setPendingEdge(null);
+      }
     }
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -548,6 +788,7 @@ export default function StudioEditor() {
     e.stopPropagation();
     movedRef.current = false;
     setSelectedId(node.id);
+    setSelectedEdgeId(null);
     dragRef.current = {
       kind: "node",
       id: node.id,
@@ -561,6 +802,7 @@ export default function StudioEditor() {
   function startPan(e: React.PointerEvent) {
     movedRef.current = false;
     setSelectedId(null);
+    setSelectedEdgeId(null);
     dragRef.current = {
       kind: "pan",
       startX: e.clientX,
@@ -568,6 +810,38 @@ export default function StudioEditor() {
       origX: pan.x,
       origY: pan.y,
     };
+  }
+
+  function startConnect(e: React.PointerEvent, node: FlowNode) {
+    e.stopPropagation();
+    connectingRef.current = { source: node.id };
+    setPendingEdge({
+      source: node.id,
+      cursor: { x: node.x + NODE_W, y: node.y + NODE_H / 2 },
+    });
+  }
+
+  function endConnect(e: React.PointerEvent, node: FlowNode) {
+    const c = connectingRef.current;
+    if (!c) return;
+    e.stopPropagation();
+    const source = c.source;
+    const target = node.id;
+    if (source !== target) {
+      setEdges((prev) => {
+        if (prev.some((ed) => ed.source === source && ed.target === target))
+          return prev;
+        if (wouldCycle(prev, source, target)) return prev;
+        return [...prev, { id: nextId("e"), source, target }];
+      });
+    }
+    connectingRef.current = null;
+    setPendingEdge(null);
+  }
+
+  function deleteEdge(id: string) {
+    setEdges((prev) => prev.filter((e) => e.id !== id));
+    setSelectedEdgeId((cur) => (cur === id ? null : cur));
   }
 
   // -- Add node (click + drop) ----------------------------------------------
@@ -590,6 +864,7 @@ export default function StudioEditor() {
       };
       setNodes((prev) => [...prev, node]);
       setSelectedId(node.id);
+      setSelectedEdgeId(null);
     },
     [pan.x, pan.y],
   );
@@ -620,23 +895,7 @@ export default function StudioEditor() {
     setNodes((prev) => prev.map((n) => (n.id === id ? { ...n, code } : n)));
   }
 
-  // -- Run simulation -------------------------------------------------------
-
-  const orderedIds = useMemo(() => {
-    const incoming = new Set(edges.map((e) => e.target));
-    const start = nodes.find((n) => !incoming.has(n.id)) ?? nodes[0];
-    if (!start) return [] as string[];
-    const order: string[] = [];
-    const visited = new Set<string>();
-    let current: string | undefined = start.id;
-    while (current && !visited.has(current)) {
-      order.push(current);
-      visited.add(current);
-      const next = edges.find((e) => e.source === current);
-      current = next?.target;
-    }
-    return order;
-  }, [edges, nodes]);
+  // -- Execution ------------------------------------------------------------
 
   function animateToken(g: Geom, ms: number): Promise<void> {
     return new Promise((resolve) => {
@@ -654,101 +913,160 @@ export default function StudioEditor() {
     });
   }
 
-  async function resolveInputText(): Promise<string> {
-    const start = nodes.find((n) => !edges.some((e) => e.target === n.id)) ?? nodes[0];
-    if (!start) return "";
-
-    if (start.type === "input") {
-      return start.config.sampleText ?? "";
+  function deriveResults(
+    order: string[],
+    outputs: Map<string, NodeOutput>,
+  ): DemoResult[] | null {
+    const outputNodes = nodes.filter((n) => n.type === "output");
+    const collected: PipelineResult[] = [];
+    for (const o of outputNodes) {
+      const out = outputs.get(o.id);
+      if (out?.results?.length) collected.push(...out.results);
     }
-    if (start.type === "rest") {
-      try {
-        const parsed = JSON.parse(start.config.payloadJson ?? "{}") as Record<string, unknown>;
-        if (typeof parsed.text === "string") return parsed.text;
-        if (typeof parsed.clinical_text === "string") return parsed.clinical_text;
-        return JSON.stringify(parsed);
-      } catch {
-        return start.config.payloadJson ?? "";
+    if (collected.length) {
+      return collected.map((r) => ({ ...r, code: r.code ?? "" }));
+    }
+    // Fallback: last node in topo order that produced results.
+    for (const id of [...order].reverse()) {
+      const out = outputs.get(id);
+      if (out?.results?.length) {
+        return out.results.map((r) => ({ ...r, code: r.code ?? "" }));
       }
     }
-    if (start.type === "webhook" && start.config.sourceId) {
-      const { events } = await listIngestEvents(start.config.sourceId);
-      const latest = events[0];
-      if (!latest) return "";
-      const p = latest.payload as Record<string, unknown>;
-      if (typeof p.text === "string") return p.text;
-      return JSON.stringify(p);
-    }
-    return start.config.sampleText ?? "";
+    return null;
   }
 
-  async function run() {
+  async function runGraph() {
     if (running) return;
+    setSelectedEdgeId(null);
+    if (!getStoredKey()) {
+      setResults(DEMO_RESULTS);
+      setRunError("No API key — showing demo data. Sign in and create a key.");
+      return;
+    }
     setRunning(true);
-    setResults(null);
     setRunError(null);
+    setResults(null);
     setSelectedId(null);
     setToken(null);
 
-    const order = orderedIds;
-    for (let i = 0; i < order.length; i++) {
-      setActiveNodeId(order[i]);
-      await sleep(420);
-      if (i < order.length - 1) {
-        const s = nodeById.get(order[i]);
-        const t = nodeById.get(order[i + 1]);
-        if (s && t) {
-          await animateToken(geom(s, t), 620);
-        }
-      }
-    }
-    setToken(null);
-    setActiveNodeId(null);
+    const order = topoOrder(nodes, edges);
+    const outputs = new Map<string, NodeOutput>();
+    const errors = new Map<string, string>();
 
-    const decisionNode = nodes.find((n) => n.type === "decision");
-    const terminologyNode = nodes.find((n) => n.type === "terminology");
-    const destination = decisionNode?.config.destination ?? "problem_list";
-    const acceptThreshold = decisionNode?.config.acceptThreshold ?? 0.85;
-    const targetSystem = terminologyNode?.config.targetSystem ?? "icd10";
-
-    try {
-      if (!getStoredKey()) {
-        setResults(DEMO_RESULTS);
-        setRunError("No API key — showing demo data. Sign in and create a key.");
-        setRunning(false);
-        return;
-      }
-      const text = await resolveInputText();
-      if (!text.trim()) {
-        setRunError("No input text. Configure the input / REST / webhook node.");
-        setRunning(false);
-        return;
-      }
-      const live = await runPipeline({ text, destination, acceptThreshold, targetSystem });
-      setResults(
-        live.map((r) => ({
-          ...r,
-          code: r.code ?? "",
-        })),
+    for (const id of order) {
+      const node = nodeById.get(id);
+      if (!node) continue;
+      setActiveNodeId(id);
+      const incoming = edges.filter((e) => e.target === id);
+      const merged = mergeOutputs(
+        incoming.map((e) => outputs.get(e.source) ?? {}),
       );
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setRunError(`${err.code}: ${err.message}`);
-      } else {
-        setRunError((err as Error).message);
+      try {
+        outputs.set(id, await executeNode(node, merged));
+      } catch (err) {
+        errors.set(
+          id,
+          err instanceof ApiError
+            ? `${err.code}: ${err.message}`
+            : (err as Error).message,
+        );
+        outputs.set(id, {});
       }
-      setResults(DEMO_RESULTS);
+      await sleep(160);
+      for (const e of edges.filter((e) => e.source === id)) {
+        const s = nodeById.get(e.source);
+        const t = nodeById.get(e.target);
+        if (s && t) await animateToken(geom(s, t), 420);
+      }
     }
+
+    setActiveNodeId(null);
+    setToken(null);
+    setNodeOutputs(outputs);
+    setNodeErrors(errors);
+    setResults(deriveResults(order, outputs));
+    if (errors.size) setRunError(errors.values().next().value ?? null);
+    setRunning(false);
+  }
+
+  async function runNode(id: string) {
+    if (running) return;
+    setSelectedEdgeId(null);
+    if (!getStoredKey()) {
+      setRunError("No API key. Sign in and create a key.");
+      return;
+    }
+    setRunning(true);
+    setRunError(null);
+
+    // Minimal upstream closure that feeds this node.
+    const needed = new Set<string>();
+    const visit = (n: string) => {
+      if (needed.has(n)) return;
+      needed.add(n);
+      for (const e of edges.filter((e) => e.target === n)) visit(e.source);
+    };
+    visit(id);
+
+    const order = topoOrder(
+      nodes.filter((n) => needed.has(n.id)),
+      edges.filter((e) => needed.has(e.source) && needed.has(e.target)),
+    );
+
+    const outputs = new Map(nodeOutputs);
+    const errors = new Map(nodeErrors);
+
+    for (const nid of order) {
+      const node = nodeById.get(nid);
+      if (!node) continue;
+      setActiveNodeId(nid);
+      const incoming = edges.filter(
+        (e) => e.target === nid && needed.has(e.source),
+      );
+      const merged = mergeOutputs(
+        incoming.map((e) => outputs.get(e.source) ?? {}),
+      );
+      try {
+        outputs.set(nid, await executeNode(node, merged));
+        errors.delete(nid);
+      } catch (err) {
+        errors.set(
+          nid,
+          err instanceof ApiError
+            ? `${err.code}: ${err.message}`
+            : (err as Error).message,
+        );
+        outputs.set(nid, {});
+      }
+      await sleep(140);
+    }
+
+    setActiveNodeId(null);
+    setNodeOutputs(outputs);
+    setNodeErrors(errors);
+
+    const out = outputs.get(id);
+    if (out?.results?.length) {
+      setResults(out.results.map((r) => ({ ...r, code: r.code ?? "" })));
+    }
+    const err = errors.get(id);
+    setRunError(err ?? null);
     setRunning(false);
   }
 
   function reset() {
     setNodes(buildDefaultNodes());
+    setEdges(buildDefaultEdges());
     setPan({ x: 0, y: 0 });
     setSelectedId(null);
+    setSelectedEdgeId(null);
     setResults(null);
     setToken(null);
     setActiveNodeId(null);
+    setNodeOutputs(new Map());
+    setNodeErrors(new Map());
+    setRunError(null);
   }
 
   function signOut() {
@@ -795,13 +1113,13 @@ export default function StudioEditor() {
           </button>
           <button
             type="button"
-            onClick={run}
+            onClick={runGraph}
             disabled={running}
             className={cn(
               "inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs font-medium transition-colors",
               running
-                ? "bg-gray-300 text-gray-500"
-                : "bg-gray-900 text-white hover:bg-gray-700",
+                ? "bg-indigo-300 text-white"
+                : "bg-indigo-600 text-white hover:bg-indigo-500",
             )}
           >
             <svg
@@ -824,9 +1142,6 @@ export default function StudioEditor() {
           </button>
         </div>
       </header>
-
-      {/* Region A — architecture stack */}
-      <ArchitectureStack />
 
       {/* Region B — palette · canvas · inspector */}
       <div className="flex min-h-0 flex-1">
@@ -866,22 +1181,90 @@ export default function StudioEditor() {
                   running &&
                   activeNodeId !== null &&
                   (activeNodeId === e.source || activeNodeId === e.target);
+                const selected = e.id === selectedEdgeId;
+                const mid = bezierPoint(g, 0.5);
                 return (
-                  <path
-                    key={e.id}
-                    d={pathD(g)}
-                    fill="none"
-                    stroke={active ? "#111827" : "#9ca3af"}
-                    strokeWidth={active ? 2 : 1.5}
-                  />
+                  <g key={e.id}>
+                    <path
+                      d={pathD(g)}
+                      fill="none"
+                      stroke={
+                        active ? ACCENT_HEX : selected ? "#475569" : EDGE_HEX
+                      }
+                      strokeWidth={active || selected ? 2.5 : 1.5}
+                    />
+                    {/* Wide invisible hit area for selecting / deleting. */}
+                    <path
+                      d={pathD(g)}
+                      fill="none"
+                      stroke="transparent"
+                      strokeWidth={14}
+                      style={{ pointerEvents: "stroke", cursor: "pointer" }}
+                      onPointerDown={(ev) => {
+                        ev.stopPropagation();
+                        setSelectedEdgeId(e.id);
+                        setSelectedId(null);
+                      }}
+                    />
+                    {selected ? (
+                      <g
+                        style={{ pointerEvents: "all", cursor: "pointer" }}
+                        onPointerDown={(ev) => {
+                          ev.stopPropagation();
+                          deleteEdge(e.id);
+                        }}
+                      >
+                        <circle
+                          cx={mid.x}
+                          cy={mid.y}
+                          r={9}
+                          fill="#fff"
+                          stroke="#475569"
+                          strokeWidth={1.5}
+                        />
+                        <path
+                          d={`M ${mid.x - 3.5},${mid.y - 3.5} L ${mid.x + 3.5},${mid.y + 3.5} M ${mid.x + 3.5},${mid.y - 3.5} L ${mid.x - 3.5},${mid.y + 3.5}`}
+                          stroke="#475569"
+                          strokeWidth={1.5}
+                          strokeLinecap="round"
+                        />
+                      </g>
+                    ) : null}
+                  </g>
                 );
               })}
+
+              {/* Pending (in-progress) connection ghost */}
+              {pendingEdge
+                ? (() => {
+                    const s = nodeById.get(pendingEdge.source);
+                    if (!s) return null;
+                    const g = pointGeom(
+                      { x: s.x + NODE_W, y: s.y + NODE_H / 2 },
+                      pendingEdge.cursor,
+                    );
+                    return (
+                      <path
+                        d={pathD(g)}
+                        fill="none"
+                        stroke={ACCENT_HEX}
+                        strokeWidth={2}
+                        strokeDasharray="5 4"
+                      />
+                    );
+                  })()
+                : null}
 
               {/* Travelling token */}
               {token ? (
                 <g>
-                  <circle cx={token.x} cy={token.y} r={9} fill="rgba(17,24,39,0.15)" />
-                  <circle cx={token.x} cy={token.y} r={5} fill="#111827" />
+                  <circle
+                    cx={token.x}
+                    cy={token.y}
+                    r={9}
+                    fill="rgba(79,70,229,0.18)"
+                  />
+                  <circle cx={token.x} cy={token.y} r={5} fill={ACCENT_HEX} />
                 </g>
               ) : null}
             </svg>
@@ -890,18 +1273,24 @@ export default function StudioEditor() {
             {nodes.map((node) => {
               const isSelected = node.id === selectedId;
               const isActive = node.id === activeNodeId;
+              const hasError = nodeErrors.has(node.id);
+              const accent = NODE_ACCENTS[node.type];
               const showResults =
                 node.type === "output" && results && results.length > 0;
+              const webhookPayload =
+                node.type === "webhook" && node.config.lastEventPayload != null;
               return (
                 <div
                   key={node.id}
                   className={cn(
-                    "absolute select-none rounded-lg border bg-white shadow-sm transition-shadow",
+                    "absolute select-none overflow-hidden rounded-lg border bg-white shadow-sm transition-shadow",
                     isActive
-                      ? "border-gray-900 ring-2 ring-gray-900/20"
-                      : isSelected
-                        ? "border-gray-700"
-                        : "border-gray-300 hover:border-gray-400",
+                      ? "border-indigo-500 ring-2 ring-indigo-500/20"
+                      : hasError
+                        ? "border-rose-400 ring-2 ring-rose-400/20"
+                        : isSelected
+                          ? "border-gray-700"
+                          : "border-gray-300 hover:border-gray-400",
                   )}
                   style={{
                     left: node.x,
@@ -912,29 +1301,49 @@ export default function StudioEditor() {
                   onPointerDown={(e) => startNodeDrag(e, node)}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (!movedRef.current) setSelectedId(node.id);
+                    if (!movedRef.current) {
+                      setSelectedId(node.id);
+                      setSelectedEdgeId(null);
+                    }
                   }}
                 >
-                  {/* Input port */}
+                  {/* Accent bar */}
                   <span
-                    className="absolute -left-1.5 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full border border-gray-400 bg-white"
-                    aria-hidden
-                  />
-                  {/* Output port */}
-                  <span
-                    className="absolute -right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full border border-gray-400 bg-white"
+                    className={cn(
+                      "absolute left-0 top-0 h-full w-1",
+                      accent.bar,
+                    )}
                     aria-hidden
                   />
 
-                  <div className="flex items-center gap-2 border-b border-gray-100 px-3 py-2">
-                    <span className="text-gray-500">
+                  {/* Input port (drop target) */}
+                  <span
+                    onPointerUp={(e) => endConnect(e, node)}
+                    title="Input"
+                    className={cn(
+                      "absolute -left-2 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 bg-white transition-transform hover:scale-125",
+                      accent.border,
+                    )}
+                  />
+                  {/* Output port (drag to connect) */}
+                  <span
+                    onPointerDown={(e) => startConnect(e, node)}
+                    title="Drag to connect"
+                    className={cn(
+                      "absolute -right-2 top-1/2 h-4 w-4 -translate-y-1/2 cursor-crosshair rounded-full border-2 bg-white transition-transform hover:scale-125",
+                      accent.border,
+                    )}
+                  />
+
+                  <div className="flex items-center gap-2 border-b border-gray-100 px-3 py-2 pl-4">
+                    <span className={accent.text}>
                       <NodeIcon type={node.type} />
                     </span>
                     <span className="truncate text-xs font-medium text-gray-800">
                       {node.title}
                     </span>
                   </div>
-                  <div className="px-3 py-2 text-[11px] text-gray-500">
+                  <div className="px-3 py-2 pl-4 text-[11px] text-gray-500">
                     {showResults ? (
                       <div className="flex flex-col gap-2">
                         {results!.map((r, i) => (
@@ -959,6 +1368,19 @@ export default function StudioEditor() {
                           </div>
                         ))}
                       </div>
+                    ) : webhookPayload ? (
+                      <div>
+                        <span className="mb-1 block font-mono text-[9px] uppercase tracking-wide text-sky-600">
+                          Received
+                        </span>
+                        <pre className="max-h-24 overflow-auto rounded border border-gray-200 bg-gray-50 p-1.5 font-mono text-[9px] leading-snug text-gray-700">
+                          {JSON.stringify(node.config.lastEventPayload, null, 2)}
+                        </pre>
+                      </div>
+                    ) : hasError ? (
+                      <span className="text-[10px] text-rose-600">
+                        {nodeErrors.get(node.id)}
+                      </span>
                     ) : (
                       <span className="font-mono text-[10px] uppercase tracking-wide text-gray-400">
                         {node.type}
@@ -977,10 +1399,14 @@ export default function StudioEditor() {
             key={selectedNode.id}
             node={selectedNode}
             mode={inspectorMode}
+            running={running}
+            output={nodeOutputs.get(selectedNode.id) ?? null}
+            error={nodeErrors.get(selectedNode.id) ?? null}
             onModeChange={setInspectorMode}
             onClose={() => setSelectedId(null)}
             onConfig={(partial) => updateConfig(selectedNode.id, partial)}
             onCode={(code) => updateCode(selectedNode.id, code)}
+            onRunNode={() => runNode(selectedNode.id)}
             results={results}
           />
         ) : null}
@@ -998,25 +1424,34 @@ export default function StudioEditor() {
 function Inspector({
   node,
   mode,
+  running,
+  output,
+  error,
   onModeChange,
   onClose,
   onConfig,
   onCode,
+  onRunNode,
   results,
 }: {
   node: FlowNode;
   mode: InspectorMode;
+  running: boolean;
+  output: NodeOutput | null;
+  error: string | null;
   onModeChange: (m: InspectorMode) => void;
   onClose: () => void;
   onConfig: (partial: NodeConfig) => void;
   onCode: (code: string) => void;
+  onRunNode: () => void;
   results: DemoResult[] | null;
 }) {
+  const accent = NODE_ACCENTS[node.type];
   return (
     <aside className="flex w-80 shrink-0 flex-col border-l border-gray-200 bg-white">
       <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
         <div className="flex items-center gap-2">
-          <span className="text-gray-500">
+          <span className={accent.text}>
             <NodeIcon type={node.type} />
           </span>
           <span className="text-sm font-medium text-gray-800">{node.title}</span>
@@ -1031,6 +1466,27 @@ function Inspector({
             <path d="M18 6 6 18M6 6l12 12" />
           </svg>
         </button>
+      </div>
+
+      {/* Run-this-node (per-node test) */}
+      <div className="border-b border-gray-200 px-4 py-2">
+        <button
+          type="button"
+          onClick={onRunNode}
+          disabled={running}
+          className={cn(
+            "inline-flex w-full items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+            running
+              ? "bg-gray-200 text-gray-400"
+              : "bg-indigo-600 text-white hover:bg-indigo-500",
+          )}
+        >
+          <Play className="h-3 w-3" />
+          {running ? "Running…" : "Run this node"}
+        </button>
+        <p className="mt-1.5 text-[10px] leading-relaxed text-gray-400">
+          Runs this node and everything it depends on upstream.
+        </p>
       </div>
 
       {/* Low-code / Code toggle — the core duality */}
@@ -1069,8 +1525,37 @@ function Inspector({
             />
           </div>
         )}
+
+        {/* Node output preview (per-node test result) */}
+        {error ? (
+          <div className="mt-4 rounded-md border border-rose-300 bg-rose-50 p-2.5 text-[11px] text-rose-700">
+            {error}
+          </div>
+        ) : output ? (
+          <NodeOutputPreview output={output} />
+        ) : null}
       </div>
     </aside>
+  );
+}
+
+function NodeOutputPreview({ output }: { output: NodeOutput }) {
+  const lines: string[] = [];
+  if (output.text) lines.push(`text: ${output.text.slice(0, 120)}`);
+  if (output.concepts?.length) lines.push(`concepts: ${output.concepts.length}`);
+  if (output.contexts?.length) lines.push(`contexts: ${output.contexts.length}`);
+  if (output.results?.length) lines.push(`results: ${output.results.length}`);
+  if (output.payload != null) lines.push("payload: present");
+  if (!lines.length) return null;
+  return (
+    <div className="mt-4">
+      <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.18em] text-gray-400">
+        Node output
+      </span>
+      <pre className="max-h-40 overflow-auto rounded-md border border-gray-200 bg-gray-50 p-2.5 font-mono text-[10px] leading-relaxed text-gray-700">
+        {lines.join("\n")}
+      </pre>
+    </div>
   );
 }
 
@@ -1113,7 +1598,7 @@ function Slider({
         step={step}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="w-full accent-gray-900"
+        className="w-full accent-indigo-600"
       />
     </Field>
   );
@@ -1131,6 +1616,51 @@ function LowCodeForm({
   const [newTrigger, setNewTrigger] = useState("");
   const [ingestBusy, setIngestBusy] = useState(false);
   const [ingestMsg, setIngestMsg] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // Auto-poll webhook events while this webhook node is selected.
+  const sourceId = node.config.sourceId;
+  const knownEventId = node.config.ingestEventId;
+  useEffect(() => {
+    if (node.type !== "webhook" || !sourceId) return;
+    let cancelled = false;
+    async function poll() {
+      try {
+        const { events } = await listIngestEvents(sourceId);
+        const latest = events[0];
+        if (!cancelled && latest && latest.id !== knownEventId) {
+          const p = latest.payload as Record<string, unknown>;
+          const text =
+            typeof p.text === "string" ? p.text : JSON.stringify(p);
+          onConfig({
+            ingestEventId: latest.id,
+            lastEventPayload: latest.payload,
+            lastEventText: text,
+          });
+        }
+      } catch {
+        /* ignore transient poll errors */
+      }
+    }
+    void poll();
+    const handle = setInterval(poll, 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(handle);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [node.type, sourceId, knownEventId]);
+
+  async function copyWebhook() {
+    if (!node.config.webhookUrl) return;
+    try {
+      await navigator.clipboard.writeText(node.config.webhookUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      /* ignore */
+    }
+  }
 
   switch (node.type) {
     case "input":
@@ -1186,50 +1716,68 @@ function LowCodeForm({
       return (
         <>
           <Field label="Webhook URL">
-            <input
-              readOnly
-              value={node.config.webhookUrl ?? "Create a webhook source below"}
-              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 font-mono text-[10px] text-gray-700"
-            />
+            <div className="flex gap-1.5">
+              <input
+                readOnly
+                value={node.config.webhookUrl ?? "Create a webhook source below"}
+                className="min-w-0 flex-1 rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 font-mono text-[10px] text-gray-700"
+              />
+              <button
+                type="button"
+                onClick={copyWebhook}
+                disabled={!node.config.webhookUrl}
+                aria-label="Copy webhook URL"
+                className="inline-flex items-center justify-center rounded-md border border-gray-300 px-2 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+              >
+                {copied ? (
+                  <Check className="h-3.5 w-3.5 text-emerald-600" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+              </button>
+            </div>
           </Field>
-          <button
-            type="button"
-            disabled={ingestBusy}
-            onClick={async () => {
-              setIngestBusy(true);
-              try {
-                const res = await createIngestSource("Webhook source", "webhook");
-                onConfig({
-                  sourceId: res.source.id,
-                  webhookUrl: res.source.webhookUrl ?? "",
-                });
-                setIngestMsg("Webhook URL ready — POST payloads to this URL.");
-              } catch (err) {
-                setIngestMsg((err as Error).message);
-              } finally {
-                setIngestBusy(false);
-              }
-            }}
-            className="w-full rounded-md bg-gray-900 px-3 py-2 text-xs text-white hover:bg-gray-700"
-          >
-            Create webhook source
-          </button>
-          <button
-            type="button"
-            className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-xs"
-            onClick={async () => {
-              if (!node.config.sourceId) return;
-              const { events } = await listIngestEvents(node.config.sourceId);
-              if (events[0]) {
-                onConfig({ ingestEventId: events[0].id });
-                setIngestMsg(`Latest event: ${events[0].id}`);
-              } else {
-                setIngestMsg("No events yet.");
-              }
-            }}
-          >
-            Poll latest event
-          </button>
+          {!node.config.webhookUrl ? (
+            <button
+              type="button"
+              disabled={ingestBusy}
+              onClick={async () => {
+                setIngestBusy(true);
+                setIngestMsg(null);
+                try {
+                  const res = await createIngestSource("Webhook source", "webhook");
+                  onConfig({
+                    sourceId: res.source.id,
+                    webhookUrl: res.source.webhookUrl ?? "",
+                  });
+                  setIngestMsg("Webhook ready — POST payloads to this URL.");
+                } catch (err) {
+                  setIngestMsg((err as Error).message);
+                } finally {
+                  setIngestBusy(false);
+                }
+              }}
+              className="w-full rounded-md bg-gray-900 px-3 py-2 text-xs text-white hover:bg-gray-700"
+            >
+              Create webhook source
+            </button>
+          ) : (
+            <p className="text-[10px] leading-relaxed text-gray-500">
+              Listening for events… POST JSON (with a{" "}
+              <code className="font-mono">text</code> field) to the URL above
+              and it appears here automatically.
+            </p>
+          )}
+          {node.config.lastEventPayload != null ? (
+            <div className="mt-3">
+              <span className="mb-1 block font-mono text-[9px] uppercase tracking-wide text-sky-600">
+                Latest received payload
+              </span>
+              <pre className="max-h-40 overflow-auto rounded-md border border-gray-200 bg-gray-50 p-2 font-mono text-[10px] leading-snug text-gray-700">
+                {JSON.stringify(node.config.lastEventPayload, null, 2)}
+              </pre>
+            </div>
+          ) : null}
           {ingestMsg ? <p className="mt-2 text-[10px] text-gray-500">{ingestMsg}</p> : null}
         </>
       );
