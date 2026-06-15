@@ -14,7 +14,7 @@ Pass the spans (and optional codes) you got from [`/v1/extract/concepts`](/docs/
 <Parameters>
   <Param name="text" type="string" required>The full clinical text the spans came from. After trimming, must be at least 2 characters.</Param>
   <Param name="language" type='"en" | "fr" | "auto"' defaultValue="auto">Language hint selecting the lexicon. <code>auto</code> infers it.</Param>
-  <Param name="concepts" type="object[]" required>At least one span to analyze. Each item is <code>{ span: string, code?: string | null }</code>.</Param>
+  <Param name="concepts" type="object[]" required>At least one span to analyze. Each item is `{ span: string, code?: string | null }`.</Param>
 </Parameters>
 
 ## Response
@@ -46,7 +46,7 @@ Pass the spans (and optional codes) you got from [`/v1/extract/concepts`](/docs/
 <Parameters title="Context shape">
   <Param name="code" type="string | null">The SCTID you passed for the span, echoed back (may be <code>null</code>).</Param>
   <Param name="span" type="string">The span that was analyzed.</Param>
-  <Param name="context" type="object">Five axes, each <code>{ value, confidence, trigger }</code> or <code>null</code> when not applicable.</Param>
+  <Param name="context" type="object">Five axes, each `{ value, confidence, trigger }` or <code>null</code> when not applicable.</Param>
   <Param name="context_confidence" type="number">Aggregate confidence across the axes.</Param>
   <Param name="readable_note" type="string">A short human-readable summary of the resolved context.</Param>
 </Parameters>
