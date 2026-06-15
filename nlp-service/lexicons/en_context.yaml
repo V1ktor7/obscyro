@@ -1,7 +1,7 @@
 negation:
   - denies
   - deny
-  - no
+  - "no"
   - not
   - without
   - absence of

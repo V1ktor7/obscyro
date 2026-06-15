@@ -51,7 +51,10 @@ def _window(text: str, span: str) -> str:
 def _find_trigger(window: str, triggers: list[str]) -> tuple[str | None, int]:
     lower = window.lower()
     best: tuple[str | None, int] = (None, -1)
-    for t in sorted(triggers, key=len, reverse=True):
+    # Coerce to strings: YAML may parse bare tokens like `no`/`yes`/`on` as
+    # booleans, which would otherwise break sorting/matching below.
+    safe = [str(t) for t in (triggers or []) if t is not None]
+    for t in sorted(safe, key=len, reverse=True):
         tl = t.lower()
         pos = lower.find(tl)
         if pos >= 0 and (best[1] < 0 or pos < best[1]):
