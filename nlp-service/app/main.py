@@ -28,22 +28,8 @@ app = FastAPI(
 
 @app.get("/health")
 def health() -> dict:
-    from app.config import SNOMED_SOURCE
-    from app.pg_index import pg_embedding_count, pg_health_ok
-
-    body: dict = {"status": "ok", "snomed_source": SNOMED_SOURCE}
-    try:
-        count = pg_embedding_count()
-        body["snomed_embedding_rows"] = count
-        if count == 0:
-            body["status"] = "degraded"
-            body["warning"] = "snomed.description_embeddings is empty; run populate_embeddings.py"
-        elif not pg_health_ok():
-            body["status"] = "degraded"
-    except Exception as exc:
-        body["status"] = "degraded"
-        body["warning"] = str(exc)
-    return body
+    """Liveness probe — must not block on DB or model load."""
+    return {"status": "ok"}
 
 
 def _extract_concepts_body(text: str, language: str) -> list[ConceptOut]:

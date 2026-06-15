@@ -13,4 +13,4 @@ RUN python -c "import app.main; print('nlp import ok')"
 
 ENV DATABASE_URL=""
 EXPOSE 5000
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-5000} --log-level info"]
+CMD ["sh", "-c", "echo starting on port $PORT && uvicorn app.main:app --host 0.0.0.0 --port $PORT --log-level info"]
