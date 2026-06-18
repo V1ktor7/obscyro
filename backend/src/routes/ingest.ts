@@ -19,6 +19,22 @@ function webhookToken(): string {
   return crypto.randomBytes(24).toString("base64url");
 }
 
+// The wildcard content-type parser delivers non-JSON bodies as a Buffer. Decode
+// to text, then keep parsed JSON as-is or wrap raw text under `{ raw }` so any
+// content type (xml, csv, plain text, binary) is preserved rather than dropped.
+function normalizeWebhookPayload(body: unknown): unknown {
+  if (Buffer.isBuffer(body)) {
+    const text = body.toString("utf8");
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { raw: text };
+    }
+  }
+  if (typeof body === "object" && body !== null) return body;
+  return { raw: String(body ?? "") };
+}
+
 const ingestRoutes: FastifyPluginAsync = async (fastify) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
 
@@ -268,10 +284,8 @@ const ingestRoutes: FastifyPluginAsync = async (fastify) => {
       const source = sourceRes.rows[0];
       if (!source) throw NotFound("WEBHOOK_NOT_FOUND", "Unknown webhook token.");
 
-      const payload =
-        typeof req.body === "object" && req.body !== null
-          ? req.body
-          : { raw: String(req.body ?? "") };
+      const contentType = req.headers["content-type"] ?? "application/json";
+      const payload = normalizeWebhookPayload(req.body);
 
       const inserted = await req.db.query<{ id: string; received_at: Date }>(
         `INSERT INTO app.ingest_events (source_id, user_id, payload, content_type)
@@ -281,7 +295,7 @@ const ingestRoutes: FastifyPluginAsync = async (fastify) => {
           source.id,
           source.user_id,
           JSON.stringify(payload),
-          req.headers["content-type"] ?? "application/json",
+          contentType,
         ],
       );
       const row = inserted.rows[0]!;

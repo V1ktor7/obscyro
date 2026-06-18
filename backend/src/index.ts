@@ -29,6 +29,7 @@ import ingestRoutes from "./routes/ingest.js";
 import normalizeRoutes from "./routes/normalize.js";
 import onboardRoutes from "./routes/onboard.js";
 import ontologyRoutes from "./routes/ontology.js";
+import sourceRoutes from "./routes/source.js";
 import synonymsRoutes from "./routes/synonyms.js";
 import translateRoutes from "./routes/translate.js";
 
@@ -55,6 +56,13 @@ const app = Fastify({
 
 app.setValidatorCompiler(validatorCompiler);
 app.setSerializerCompiler(serializerCompiler);
+
+// Capture any non-JSON inbound body (e.g. webhook pushes of text/xml/binary) as
+// a raw buffer so the webhook receiver can preserve it faithfully instead of
+// dropping it. JSON keeps Fastify's default parser.
+app.addContentTypeParser("*", { parseAs: "buffer" }, (_req, payload, done) => {
+  done(null, payload);
+});
 
 await app.register(cors, {
   origin: corsOrigins,
@@ -90,6 +98,7 @@ await app.register(swagger, {
       { name: "extract", description: "Clinical concept and context extraction" },
       { name: "auth", description: "Platform login and API key management" },
       { name: "ingest", description: "REST and webhook data intake" },
+      { name: "source", description: "Configurable HTTP request (server-side egress)" },
       { name: "ontology", description: "Object types and instances" },
       { name: "onboard", description: "Self-serve onboarding and account context" },
     ],
@@ -112,6 +121,7 @@ await app.register(healthRoutes);
 await app.register(authRoutes, { prefix: "/v1" });
 await app.register(onboardRoutes, { prefix: "/v1" });
 await app.register(ingestRoutes, { prefix: "/v1" });
+await app.register(sourceRoutes, { prefix: "/v1" });
 await app.register(ontologyRoutes, { prefix: "/v1" });
 await app.register(conceptsRoutes, { prefix: "/v1" });
 await app.register(synonymsRoutes, { prefix: "/v1" });
