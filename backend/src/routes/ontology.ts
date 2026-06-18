@@ -3,8 +3,9 @@ import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 
 import type { DbClient } from "../lib/db.js";
-import { AppError, Conflict, NotFound } from "../lib/errors.js";
+import { AppError, BadRequest, Conflict, NotFound } from "../lib/errors.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
+import { resolveEnvironment } from "../services/ontology.js";
 
 const propertyDef = z.object({
   key: z.string().min(1),
@@ -19,6 +20,42 @@ const errorEnvelope = z.object({
     details: z.unknown().optional(),
   }),
 });
+
+const WHERE_KEY_RE = /^[a-zA-Z0-9_]+$/;
+const MAX_WHERE_PAIRS = 12;
+
+/** Parse `where=key:value,key2:value2` into validated, parameterizable pairs. */
+function parseWhere(raw: string | undefined): Array<[string, string]> {
+  if (!raw) return [];
+  const pairs: Array<[string, string]> = [];
+  for (const clause of raw.split(",")) {
+    const trimmed = clause.trim();
+    if (!trimmed) continue;
+    const idx = trimmed.indexOf(":");
+    if (idx <= 0) {
+      throw BadRequest("INVALID_WHERE", `Invalid where clause "${trimmed}". Use key:value.`);
+    }
+    const key = trimmed.slice(0, idx).trim();
+    const value = trimmed.slice(idx + 1).trim();
+    if (!WHERE_KEY_RE.test(key)) {
+      throw BadRequest("INVALID_WHERE", `Invalid where key "${key}".`);
+    }
+    pairs.push([key, value]);
+    if (pairs.length > MAX_WHERE_PAIRS) {
+      throw BadRequest("INVALID_WHERE", `Too many where clauses (max ${MAX_WHERE_PAIRS}).`);
+    }
+  }
+  return pairs;
+}
+
+function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+}
 
 const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
@@ -237,6 +274,496 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         throw NotFound("OBJECT_NOT_FOUND", "Object not found.");
       }
       return { ok: true as const };
+    },
+  );
+
+  // --- Environment-scoped, multi-domain ontology (migration 010) ------------
+
+  const environmentOut = z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    slug: z.string(),
+    createdAt: z.string(),
+  });
+
+  app.get(
+    "/ontology/environments",
+    {
+      schema: {
+        summary: "List ontology environments owned by the caller",
+        tags: ["ontology"],
+        response: { 200: z.object({ environments: z.array(environmentOut) }) },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const { rows } = await req.db.query<{
+        id: string;
+        name: string;
+        slug: string;
+        created_at: Date;
+      }>(
+        `SELECT id, name, slug, created_at
+           FROM app.ontology_environments
+          WHERE owner_user_id = $1
+          ORDER BY created_at ASC`,
+        [userId],
+      );
+      return {
+        environments: rows.map((r) => ({
+          id: r.id,
+          name: r.name,
+          slug: r.slug,
+          createdAt: r.created_at.toISOString(),
+        })),
+      };
+    },
+  );
+
+  app.post(
+    "/ontology/environments",
+    {
+      schema: {
+        summary: "Create an ontology environment",
+        tags: ["ontology"],
+        body: z.object({
+          name: z.string().trim().min(1).max(120),
+          slug: z.string().trim().min(1).max(64).optional(),
+        }),
+        response: { 201: environmentOut, 409: errorEnvelope },
+      },
+    },
+    async (req, reply) => {
+      const userId = await requireUserId(req);
+      const slug = slugify(req.body.slug ?? req.body.name);
+      if (!slug) {
+        throw BadRequest("INVALID_SLUG", "Could not derive a slug from the name.");
+      }
+      try {
+        const { rows } = await req.db.query<{
+          id: string;
+          name: string;
+          slug: string;
+          created_at: Date;
+        }>(
+          `INSERT INTO app.ontology_environments (owner_user_id, name, slug)
+           VALUES ($1, $2, $3)
+           RETURNING id, name, slug, created_at`,
+          [userId, req.body.name, slug],
+        );
+        const r = rows[0]!;
+        return reply.code(201).send({
+          id: r.id,
+          name: r.name,
+          slug: r.slug,
+          createdAt: r.created_at.toISOString(),
+        });
+      } catch (err: unknown) {
+        if ((err as { code?: string }).code === "23505") {
+          throw Conflict("ENV_EXISTS", `Environment "${slug}" already exists.`);
+        }
+        throw err;
+      }
+    },
+  );
+
+  const objectTypeOut = z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    description: z.string().nullable(),
+    propertySchema: z.array(propertyDef),
+    createdAt: z.string(),
+  });
+
+  const linkTypeOut = z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    fromType: z.string(),
+    toType: z.string(),
+    cardinality: z.string(),
+  });
+
+  app.get(
+    "/ontology/:env/types",
+    {
+      schema: {
+        summary: "List object types and link types for an environment",
+        tags: ["ontology"],
+        params: z.object({ env: z.string().min(1) }),
+        response: {
+          200: z.object({
+            types: z.array(objectTypeOut),
+            linkTypes: z.array(linkTypeOut),
+          }),
+          404: errorEnvelope,
+        },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const types = await req.db.query<{
+        id: string;
+        name: string;
+        description: string | null;
+        property_schema: unknown;
+        created_at: Date;
+      }>(
+        `SELECT id, name, description, property_schema, created_at
+           FROM app.ontology_object_types
+          WHERE environment_id = $1
+          ORDER BY name ASC`,
+        [env.id],
+      );
+      const links = await req.db.query<{
+        id: string;
+        name: string;
+        from_type: string;
+        to_type: string;
+        cardinality: string;
+      }>(
+        `SELECT lt.id, lt.name, ft.name AS from_type, tt.name AS to_type, lt.cardinality
+           FROM app.ontology_link_types lt
+           JOIN app.ontology_object_types ft ON ft.id = lt.from_type_id
+           JOIN app.ontology_object_types tt ON tt.id = lt.to_type_id
+          WHERE lt.environment_id = $1
+          ORDER BY lt.name ASC`,
+        [env.id],
+      );
+      return {
+        types: types.rows.map((r) => ({
+          id: r.id,
+          name: r.name,
+          description: r.description,
+          propertySchema: r.property_schema as z.infer<typeof propertyDef>[],
+          createdAt: r.created_at.toISOString(),
+        })),
+        linkTypes: links.rows.map((r) => ({
+          id: r.id,
+          name: r.name,
+          fromType: r.from_type,
+          toType: r.to_type,
+          cardinality: r.cardinality,
+        })),
+      };
+    },
+  );
+
+  app.get(
+    "/ontology/:env/types/:name",
+    {
+      schema: {
+        summary: "Get a single object type by name",
+        tags: ["ontology"],
+        params: z.object({ env: z.string().min(1), name: z.string().min(1) }),
+        response: { 200: objectTypeOut, 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const { rows } = await req.db.query<{
+        id: string;
+        name: string;
+        description: string | null;
+        property_schema: unknown;
+        created_at: Date;
+      }>(
+        `SELECT id, name, description, property_schema, created_at
+           FROM app.ontology_object_types
+          WHERE environment_id = $1 AND name = $2`,
+        [env.id, req.params.name],
+      );
+      const r = rows[0];
+      if (!r) throw NotFound("TYPE_NOT_FOUND", `Object type "${req.params.name}" not found.`);
+      return {
+        id: r.id,
+        name: r.name,
+        description: r.description,
+        propertySchema: r.property_schema as z.infer<typeof propertyDef>[],
+        createdAt: r.created_at.toISOString(),
+      };
+    },
+  );
+
+  const instanceOut = z.object({
+    id: z.string().uuid(),
+    typeId: z.string().uuid(),
+    typeName: z.string(),
+    properties: z.record(z.unknown()),
+    provenance: z.record(z.unknown()),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  });
+
+  app.get(
+    "/ontology/:env/objects",
+    {
+      schema: {
+        summary: "Query object instances with a context-envelope filter",
+        description:
+          "Lists instances in the environment. `where` accepts comma-separated key:value pairs matched against instance properties (e.g. `assertion:affirmed,subject:patient`) — the structured query a plain code store cannot do.",
+        tags: ["ontology"],
+        params: z.object({ env: z.string().min(1) }),
+        querystring: z.object({
+          type: z.string().min(1).optional(),
+          where: z.string().optional(),
+          limit: z.coerce.number().int().min(1).max(200).default(50),
+        }),
+        response: {
+          200: z.object({ objects: z.array(instanceOut) }),
+          400: errorEnvelope,
+          404: errorEnvelope,
+        },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const wherePairs = parseWhere(req.query.where);
+
+      const params: unknown[] = [env.id];
+      let sql = `SELECT oi.id, oi.object_type_id, t.name AS type_name,
+                        oi.properties, oi.provenance, oi.created_at, oi.updated_at
+                   FROM app.ontology_object_instances oi
+                   JOIN app.ontology_object_types t ON t.id = oi.object_type_id
+                  WHERE t.environment_id = $1`;
+      if (req.query.type) {
+        params.push(req.query.type);
+        sql += ` AND t.name = $${params.length}`;
+      }
+      for (const [key, value] of wherePairs) {
+        params.push(key);
+        const keyParam = params.length;
+        params.push(value);
+        const valueParam = params.length;
+        sql += ` AND oi.properties ->> $${keyParam} = $${valueParam}`;
+      }
+      params.push(req.query.limit);
+      sql += ` ORDER BY oi.created_at DESC LIMIT $${params.length}`;
+
+      const { rows } = await req.db.query<{
+        id: string;
+        object_type_id: string;
+        type_name: string;
+        properties: Record<string, unknown>;
+        provenance: Record<string, unknown>;
+        created_at: Date;
+        updated_at: Date;
+      }>(sql, params);
+
+      return {
+        objects: rows.map((r) => ({
+          id: r.id,
+          typeId: r.object_type_id,
+          typeName: r.type_name,
+          properties: r.properties,
+          provenance: r.provenance,
+          createdAt: r.created_at.toISOString(),
+          updatedAt: r.updated_at.toISOString(),
+        })),
+      };
+    },
+  );
+
+  app.get(
+    "/ontology/:env/objects/:id",
+    {
+      schema: {
+        summary: "Get an object instance with its linked instances",
+        tags: ["ontology"],
+        params: z.object({ env: z.string().min(1), id: z.string().uuid() }),
+        response: {
+          200: z.object({
+            object: instanceOut,
+            links: z.array(
+              z.object({
+                id: z.string().uuid(),
+                linkType: z.string(),
+                direction: z.enum(["out", "in"]),
+                otherId: z.string().uuid(),
+                otherType: z.string(),
+                otherProperties: z.record(z.unknown()),
+              }),
+            ),
+          }),
+          404: errorEnvelope,
+        },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const objRes = await req.db.query<{
+        id: string;
+        object_type_id: string;
+        type_name: string;
+        properties: Record<string, unknown>;
+        provenance: Record<string, unknown>;
+        created_at: Date;
+        updated_at: Date;
+      }>(
+        `SELECT oi.id, oi.object_type_id, t.name AS type_name,
+                oi.properties, oi.provenance, oi.created_at, oi.updated_at
+           FROM app.ontology_object_instances oi
+           JOIN app.ontology_object_types t ON t.id = oi.object_type_id
+          WHERE oi.id = $1 AND t.environment_id = $2`,
+        [req.params.id, env.id],
+      );
+      const obj = objRes.rows[0];
+      if (!obj) throw NotFound("OBJECT_NOT_FOUND", "Object not found.");
+
+      const linkRes = await req.db.query<{
+        id: string;
+        link_name: string;
+        direction: "out" | "in";
+        other_id: string;
+        other_type: string;
+        other_props: Record<string, unknown>;
+      }>(
+        `SELECT li.id,
+                lt.name AS link_name,
+                CASE WHEN li.from_instance_id = $1 THEN 'out' ELSE 'in' END AS direction,
+                other.id AS other_id,
+                ot.name AS other_type,
+                other.properties AS other_props
+           FROM app.ontology_link_instances li
+           JOIN app.ontology_link_types lt
+             ON lt.id = li.link_type_id AND lt.environment_id = $2
+           JOIN app.ontology_object_instances other
+             ON other.id = CASE WHEN li.from_instance_id = $1
+                                THEN li.to_instance_id ELSE li.from_instance_id END
+           JOIN app.ontology_object_types ot ON ot.id = other.object_type_id
+          WHERE li.from_instance_id = $1 OR li.to_instance_id = $1
+          ORDER BY li.created_at DESC`,
+        [req.params.id, env.id],
+      );
+
+      return {
+        object: {
+          id: obj.id,
+          typeId: obj.object_type_id,
+          typeName: obj.type_name,
+          properties: obj.properties,
+          provenance: obj.provenance,
+          createdAt: obj.created_at.toISOString(),
+          updatedAt: obj.updated_at.toISOString(),
+        },
+        links: linkRes.rows.map((r) => ({
+          id: r.id,
+          linkType: r.link_name,
+          direction: r.direction,
+          otherId: r.other_id,
+          otherType: r.other_type,
+          otherProperties: r.other_props,
+        })),
+      };
+    },
+  );
+
+  app.post(
+    "/ontology/:env/objects",
+    {
+      schema: {
+        summary: "Create an object instance in an environment",
+        tags: ["ontology"],
+        params: z.object({ env: z.string().min(1) }),
+        body: z.object({
+          type: z.string().trim().min(1),
+          properties: z.record(z.unknown()).default({}),
+          provenance: z.record(z.unknown()).optional(),
+        }),
+        response: { 201: z.object({ id: z.string().uuid() }), 404: errorEnvelope },
+      },
+    },
+    async (req, reply) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const typeRes = await req.db.query<{ id: string }>(
+        `SELECT id FROM app.ontology_object_types WHERE environment_id = $1 AND name = $2`,
+        [env.id, req.body.type],
+      );
+      const typeId = typeRes.rows[0]?.id;
+      if (!typeId) throw NotFound("TYPE_NOT_FOUND", `Object type "${req.body.type}" not found.`);
+
+      const inserted = await req.db.query<{ id: string }>(
+        `INSERT INTO app.ontology_object_instances (object_type_id, properties, provenance)
+         VALUES ($1, $2::jsonb, $3::jsonb)
+         RETURNING id`,
+        [
+          typeId,
+          JSON.stringify(req.body.properties),
+          JSON.stringify(req.body.provenance ?? { source: "api" }),
+        ],
+      );
+      return reply.code(201).send({ id: inserted.rows[0]!.id });
+    },
+  );
+
+  app.post(
+    "/ontology/:env/links",
+    {
+      schema: {
+        summary: "Create a link between two object instances",
+        tags: ["ontology"],
+        params: z.object({ env: z.string().min(1) }),
+        body: z.object({
+          linkType: z.string().trim().min(1),
+          fromId: z.string().uuid(),
+          toId: z.string().uuid(),
+          provenance: z.record(z.unknown()).optional(),
+        }),
+        response: {
+          201: z.object({ id: z.string().uuid() }),
+          404: errorEnvelope,
+          409: errorEnvelope,
+        },
+      },
+    },
+    async (req, reply) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+
+      const linkRes = await req.db.query<{ id: string }>(
+        `SELECT id FROM app.ontology_link_types WHERE environment_id = $1 AND name = $2`,
+        [env.id, req.body.linkType],
+      );
+      const linkTypeId = linkRes.rows[0]?.id;
+      if (!linkTypeId) {
+        throw NotFound("LINK_TYPE_NOT_FOUND", `Link type "${req.body.linkType}" not found.`);
+      }
+
+      // Both endpoints must be instances within this environment.
+      const endpoints = await req.db.query<{ id: string }>(
+        `SELECT oi.id
+           FROM app.ontology_object_instances oi
+           JOIN app.ontology_object_types t ON t.id = oi.object_type_id
+          WHERE t.environment_id = $1 AND oi.id = ANY($2::uuid[])`,
+        [env.id, [req.body.fromId, req.body.toId]],
+      );
+      if (endpoints.rowCount !== new Set([req.body.fromId, req.body.toId]).size) {
+        throw NotFound("INSTANCE_NOT_FOUND", "from/to instance not found in this environment.");
+      }
+
+      try {
+        const inserted = await req.db.query<{ id: string }>(
+          `INSERT INTO app.ontology_link_instances (link_type_id, from_instance_id, to_instance_id, provenance)
+           VALUES ($1, $2, $3, $4::jsonb)
+           RETURNING id`,
+          [
+            linkTypeId,
+            req.body.fromId,
+            req.body.toId,
+            JSON.stringify(req.body.provenance ?? { source: "api" }),
+          ],
+        );
+        return reply.code(201).send({ id: inserted.rows[0]!.id });
+      } catch (err: unknown) {
+        if ((err as { code?: string }).code === "23505") {
+          throw Conflict("LINK_EXISTS", "This link already exists.");
+        }
+        throw err;
+      }
     },
   );
 };

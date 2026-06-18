@@ -18,16 +18,39 @@ import { cn } from "@/lib/cn";
 import {
   createIngestSource,
   decide,
+  extractAndPersist,
   extractConcepts,
   extractContexts,
+  getHealth,
   ingestPayload,
+  listEnvironments,
   listIngestEvents,
+  runSourceFetch,
   translateCode,
   type ConceptOut,
   type ContextOut,
+  type EnvironmentSummary,
+  type HealthStatus,
   type PipelineResult,
 } from "@/lib/platform-api";
-import StudioOntologyPanel from "./StudioOntologyPanel";
+import {
+  ACCENT_HEX,
+  EDGE_HEX,
+  NODE_H,
+  NODE_W,
+  bezierPoint,
+  geom,
+  pathD,
+  pointGeom,
+  type Geom,
+} from "./studio-graph";
+import {
+  defaultSourceRequest,
+  harvestText,
+  type SourceRequest,
+} from "./source-schema";
+import SourceNodeForm from "./SourceNodeForm";
+import StudioOntologyMode from "./StudioOntologyMode";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -36,6 +59,7 @@ import StudioOntologyPanel from "./StudioOntologyPanel";
 type NodeType =
   | "input"
   | "rest"
+  | "source"
   | "webhook"
   | "concept"
   | "context"
@@ -60,6 +84,7 @@ type NodeConfig = {
   destination?: Destination;
   acceptThreshold?: number;
   targetSystem?: "icd10" | "icdo" | "ctv3";
+  sourceRequest?: SourceRequest;
 };
 
 type FlowNode = {
@@ -87,12 +112,6 @@ type NodeOutput = {
   payload?: unknown;
 };
 
-const NODE_W = 216;
-const NODE_H = 96;
-
-const ACCENT_HEX = "#4f46e5"; // indigo — active edges / travelling token
-const EDGE_HEX = "#cbd5e1"; // slate-300 — idle edges
-
 // Subtle, role-based accents. Bodies stay white; only the icon, a thin left
 // bar, and the port border pick up color, so the canvas stays minimalist.
 const NODE_ACCENTS: Record<
@@ -101,6 +120,7 @@ const NODE_ACCENTS: Record<
 > = {
   input: { text: "text-sky-600", bar: "bg-sky-400", border: "border-sky-400", hex: "#0284c7" },
   rest: { text: "text-sky-600", bar: "bg-sky-400", border: "border-sky-400", hex: "#0284c7" },
+  source: { text: "text-sky-600", bar: "bg-sky-400", border: "border-sky-400", hex: "#0284c7" },
   webhook: { text: "text-sky-600", bar: "bg-sky-400", border: "border-sky-400", hex: "#0284c7" },
   concept: { text: "text-violet-600", bar: "bg-violet-400", border: "border-violet-400", hex: "#7c3aed" },
   context: { text: "text-violet-600", bar: "bg-violet-400", border: "border-violet-400", hex: "#7c3aed" },
@@ -152,6 +172,8 @@ function defaultCode(type: NodeType): string {
       return `function run() {\n  return { text: input.text, language: "auto" };\n}`;
     case "rest":
       return `function run(input) {\n  // POST /v1/ingest or paste JSON payload\n  return input.payload;\n}`;
+    case "source":
+      return `function run() {\n  // Server-side HTTP request (POST /v1/source/fetch).\n  // Configure method, URL, auth, query, body, pagination in the panel.\n  const res = fetchSource(this.config.sourceRequest);\n  return { text: harvest(res.body), payload: res.body };\n}`;
     case "webhook":
       return `function run(input) {\n  // Poll GET /v1/ingest/events?sourceId=...\n  return input.latestEvent;\n}`;
     case "concept":
@@ -193,6 +215,11 @@ function nodeDefaults(type: NodeType): {
             2,
           ),
         },
+      };
+    case "source":
+      return {
+        title: "Source (HTTP request)",
+        config: { sourceRequest: defaultSourceRequest() },
       };
     case "webhook":
       return {
@@ -271,47 +298,6 @@ function buildDefaultEdges(): Edge[] {
 // ---------------------------------------------------------------------------
 // Geometry helpers
 // ---------------------------------------------------------------------------
-
-type Geom = {
-  a: { x: number; y: number };
-  b: { x: number; y: number };
-  c1: { x: number; y: number };
-  c2: { x: number; y: number };
-};
-
-function geom(s: FlowNode, t: FlowNode): Geom {
-  const a = { x: s.x + NODE_W, y: s.y + NODE_H / 2 };
-  const b = { x: t.x, y: t.y + NODE_H / 2 };
-  const dx = Math.max(50, (b.x - a.x) / 2);
-  return { a, b, c1: { x: a.x + dx, y: a.y }, c2: { x: b.x - dx, y: b.y } };
-}
-
-function pointGeom(
-  a: { x: number; y: number },
-  b: { x: number; y: number },
-): Geom {
-  const dx = Math.max(40, Math.abs(b.x - a.x) / 2);
-  return { a, b, c1: { x: a.x + dx, y: a.y }, c2: { x: b.x - dx, y: b.y } };
-}
-
-function pathD(g: Geom): string {
-  return `M ${g.a.x},${g.a.y} C ${g.c1.x},${g.c1.y} ${g.c2.x},${g.c2.y} ${g.b.x},${g.b.y}`;
-}
-
-function bezierPoint(g: Geom, t: number): { x: number; y: number } {
-  const u = 1 - t;
-  const x =
-    u * u * u * g.a.x +
-    3 * u * u * t * g.c1.x +
-    3 * u * t * t * g.c2.x +
-    t * t * t * g.b.x;
-  const y =
-    u * u * u * g.a.y +
-    3 * u * u * t * g.c1.y +
-    3 * u * t * t * g.c2.y +
-    t * t * t * g.b.y;
-  return { x, y };
-}
 
 const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
@@ -418,6 +404,15 @@ async function executeNode(
           payload: node.config.payloadJson,
         };
       }
+    }
+
+    case "source": {
+      const request = node.config.sourceRequest ?? defaultSourceRequest();
+      if (!request.url.trim()) {
+        throw new Error("Configure a URL on the Source node first.");
+      }
+      const res = await runSourceFetch(request);
+      return { text: res.text || harvestText(res.body, request.response.format), payload: res.body };
     }
 
     case "webhook": {
@@ -556,6 +551,13 @@ function NodeIcon({ type }: { type: NodeType }) {
           <path d="M8 10h8M8 14h5" />
         </svg>
       );
+    case "source":
+      return (
+        <svg {...common}>
+          <path d="M12 13v8M8 17l4 4 4-4" />
+          <path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25" />
+        </svg>
+      );
     case "webhook":
       return (
         <svg {...common}>
@@ -642,7 +644,7 @@ function DecisionBadge({ decision }: { decision: DemoResult["decision"] }) {
 
 const PALETTE: { type: NodeType; label: string }[] = [
   { type: "input", label: "Input" },
-  { type: "rest", label: "REST intake" },
+  { type: "source", label: "Source" },
   { type: "webhook", label: "Webhook intake" },
   { type: "concept", label: "Concept" },
   { type: "context", label: "Context" },
@@ -714,7 +716,46 @@ export default function StudioEditor() {
     cursor: { x: number; y: number };
   } | null>(null);
 
-  const isLive = Boolean(getStoredKey() && process.env.NEXT_PUBLIC_API_URL);
+  const [mode, setMode] = useState<"pipeline" | "ontology">("pipeline");
+  const [health, setHealth] = useState<HealthStatus | "checking">("checking");
+  const [environments, setEnvironments] = useState<EnvironmentSummary[]>([]);
+  const [selectedEnv, setSelectedEnv] = useState<string | null>(null);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [savingToOntology, setSavingToOntology] = useState(false);
+
+  // Real readiness probe (never hardcoded): poll /v1/health.
+  useEffect(() => {
+    let cancelled = false;
+    async function probe() {
+      const status = await getHealth();
+      if (!cancelled) setHealth(status);
+    }
+    void probe();
+    const handle = setInterval(probe, 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(handle);
+    };
+  }, []);
+
+  // Load owner-scoped environments when a key is present.
+  const refreshEnvironments = useCallback(async () => {
+    if (!getStoredKey()) {
+      setEnvironments([]);
+      return;
+    }
+    try {
+      const { environments: envs } = await listEnvironments();
+      setEnvironments(envs);
+      setSelectedEnv((cur) => cur ?? envs[0]?.slug ?? null);
+    } catch {
+      setEnvironments([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshEnvironments();
+  }, [refreshEnvironments]);
 
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const panRef = useRef(pan);
@@ -1055,6 +1096,50 @@ export default function StudioEditor() {
     setRunning(false);
   }
 
+  /** Re-run the full pipeline server-side and persist findings into the env. */
+  async function saveOutputToOntology() {
+    if (savingToOntology) return;
+    setSaveMsg(null);
+    if (!getStoredKey()) {
+      setSaveMsg("Sign in and create a key to save to an ontology.");
+      return;
+    }
+    if (!selectedEnv) {
+      setSaveMsg("Select an environment in the top bar first.");
+      return;
+    }
+    // Prefer text that actually flowed through the graph; fall back to the
+    // input/REST node config so the button works before a run.
+    const flowed = Array.from(nodeOutputs.values()).find((o) => o.text)?.text;
+    const fromInput =
+      nodes.find((n) => n.type === "input")?.config.sampleText ??
+      nodes.find((n) => n.type === "rest")?.config.payloadJson;
+    const text = (flowed ?? fromInput ?? "").trim();
+    if (text.length < 2) {
+      setSaveMsg("No input text to extract. Add an Input node with text.");
+      return;
+    }
+    setSavingToOntology(true);
+    try {
+      const res = await extractAndPersist({
+        text,
+        destination: "problem_list",
+        persist: { environment: selectedEnv },
+      });
+      const n = res.persisted?.objectIds.length ?? 0;
+      const links = res.persisted?.linkIds.length ?? 0;
+      setSaveMsg(
+        `Saved ${n} finding${n === 1 ? "" : "s"}${links ? ` + ${links} link${links === 1 ? "" : "s"}` : ""} to ${selectedEnv}.`,
+      );
+    } catch (err) {
+      setSaveMsg(
+        err instanceof ApiError ? `${err.code}: ${err.message}` : (err as Error).message,
+      );
+    } finally {
+      setSavingToOntology(false);
+    }
+  }
+
   function reset() {
     setNodes(buildDefaultNodes());
     setEdges(buildDefaultEdges());
@@ -1089,50 +1174,89 @@ export default function StudioEditor() {
             studio
           </span>
         </div>
+
+        {/* Mode toggle + environment switcher */}
         <div className="flex items-center gap-3">
-          <span className="hidden items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[10px] text-gray-500 sm:inline-flex">
-            <span
-              className={cn(
-                "h-1.5 w-1.5 rounded-full",
-                isLive ? "bg-emerald-500" : "bg-gray-400",
+          <div className="flex rounded-md border border-gray-200 p-0.5">
+            {(["pipeline", "ontology"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMode(m)}
+                className={cn(
+                  "rounded px-3 py-1 text-xs font-medium capitalize transition-colors",
+                  mode === m
+                    ? "bg-gray-900 text-white"
+                    : "text-gray-500 hover:text-gray-900",
+                )}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+          <label className="flex items-center gap-1.5">
+            <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-gray-400">
+              env
+            </span>
+            <select
+              value={selectedEnv ?? ""}
+              onChange={(e) => setSelectedEnv(e.target.value || null)}
+              disabled={environments.length === 0}
+              className="max-w-[160px] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:border-gray-400 focus:outline-none disabled:text-gray-400"
+            >
+              {environments.length === 0 ? (
+                <option value="">no environments</option>
+              ) : (
+                environments.map((env) => (
+                  <option key={env.id} value={env.slug}>
+                    {env.name}
+                  </option>
+                ))
               )}
-            />
-            {isLive ? "Live — connected to API" : "Demo — sign in for live API"}
-          </span>
+            </select>
+          </label>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <HealthPill health={health} />
           {runError ? (
             <span className="hidden max-w-xs truncate text-[10px] text-rose-600 sm:inline">
               {runError}
             </span>
           ) : null}
-          <button
-            type="button"
-            onClick={reset}
-            className="rounded-md border border-gray-200 px-3 py-1.5 text-xs text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-900"
-          >
-            Reset
-          </button>
-          <button
-            type="button"
-            onClick={runGraph}
-            disabled={running}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs font-medium transition-colors",
-              running
-                ? "bg-indigo-300 text-white"
-                : "bg-indigo-600 text-white hover:bg-indigo-500",
-            )}
-          >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              aria-hidden
-            >
-              <path d="M8 5v14l11-7z" />
-            </svg>
-            {running ? "Running…" : "Run"}
-          </button>
+          {mode === "pipeline" ? (
+            <>
+              <button
+                type="button"
+                onClick={reset}
+                className="rounded-md border border-gray-200 px-3 py-1.5 text-xs text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-900"
+              >
+                Reset
+              </button>
+              <button
+                type="button"
+                onClick={runGraph}
+                disabled={running}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs font-medium transition-colors",
+                  running
+                    ? "bg-indigo-300 text-white"
+                    : "bg-indigo-600 text-white hover:bg-indigo-500",
+                )}
+              >
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  aria-hidden
+                >
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+                {running ? "Running…" : "Run"}
+              </button>
+            </>
+          ) : null}
           <button
             type="button"
             onClick={signOut}
@@ -1143,9 +1267,17 @@ export default function StudioEditor() {
         </div>
       </header>
 
-      {/* Region B — palette · canvas · inspector */}
+      {/* Region B — palette · canvas · inspector (pipeline) or ontology mode */}
       <div className="flex min-h-0 flex-1">
-        <Palette onAdd={(type) => addNode(type)} />
+        {mode === "ontology" ? (
+          <StudioOntologyMode
+            env={selectedEnv}
+            hasKey={Boolean(getStoredKey())}
+            onEnvironmentsChanged={refreshEnvironments}
+          />
+        ) : (
+          <>
+            <Palette onAdd={(type) => addNode(type)} />
 
         {/* Canvas */}
         <div
@@ -1394,26 +1526,49 @@ export default function StudioEditor() {
         </div>
 
         {/* Inspector */}
-        {selectedNode ? (
-          <Inspector
-            key={selectedNode.id}
-            node={selectedNode}
-            mode={inspectorMode}
-            running={running}
-            output={nodeOutputs.get(selectedNode.id) ?? null}
-            error={nodeErrors.get(selectedNode.id) ?? null}
-            onModeChange={setInspectorMode}
-            onClose={() => setSelectedId(null)}
-            onConfig={(partial) => updateConfig(selectedNode.id, partial)}
-            onCode={(code) => updateCode(selectedNode.id, code)}
-            onRunNode={() => runNode(selectedNode.id)}
-            results={results}
-          />
-        ) : null}
+            {selectedNode ? (
+              <Inspector
+                key={selectedNode.id}
+                node={selectedNode}
+                mode={inspectorMode}
+                running={running}
+                output={nodeOutputs.get(selectedNode.id) ?? null}
+                error={nodeErrors.get(selectedNode.id) ?? null}
+                onModeChange={setInspectorMode}
+                onClose={() => setSelectedId(null)}
+                onConfig={(partial) => updateConfig(selectedNode.id, partial)}
+                onCode={(code) => updateCode(selectedNode.id, code)}
+                onRunNode={() => runNode(selectedNode.id)}
+                results={results}
+                ontologyEnv={selectedEnv}
+                onSaveToOntology={saveOutputToOntology}
+                savingToOntology={savingToOntology}
+                saveMessage={saveMsg}
+              />
+            ) : null}
+          </>
+        )}
       </div>
-
-      <StudioOntologyPanel results={results} />
     </div>
+  );
+}
+
+function HealthPill({ health }: { health: HealthStatus | "checking" }) {
+  const map: Record<
+    HealthStatus | "checking",
+    { dot: string; label: string }
+  > = {
+    checking: { dot: "bg-gray-300", label: "Checking API…" },
+    ok: { dot: "bg-emerald-500", label: "Live — connected to API" },
+    degraded: { dot: "bg-amber-500", label: "Degraded — database issue" },
+    offline: { dot: "bg-gray-400", label: "Offline — API unreachable" },
+  };
+  const { dot, label } = map[health];
+  return (
+    <span className="hidden items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[10px] text-gray-500 sm:inline-flex">
+      <span className={cn("h-1.5 w-1.5 rounded-full", dot)} />
+      {label}
+    </span>
   );
 }
 
@@ -1433,6 +1588,10 @@ function Inspector({
   onCode,
   onRunNode,
   results,
+  ontologyEnv,
+  onSaveToOntology,
+  savingToOntology,
+  saveMessage,
 }: {
   node: FlowNode;
   mode: InspectorMode;
@@ -1445,6 +1604,10 @@ function Inspector({
   onCode: (code: string) => void;
   onRunNode: () => void;
   results: DemoResult[] | null;
+  ontologyEnv: string | null;
+  onSaveToOntology: () => void;
+  savingToOntology: boolean;
+  saveMessage: string | null;
 }) {
   const accent = NODE_ACCENTS[node.type];
   return (
@@ -1510,7 +1673,15 @@ function Inspector({
 
       <div className="flex-1 overflow-y-auto p-4">
         {mode === "lowcode" ? (
-          <LowCodeForm node={node} onConfig={onConfig} results={results} />
+          <LowCodeForm
+            node={node}
+            onConfig={onConfig}
+            results={results}
+            ontologyEnv={ontologyEnv}
+            onSaveToOntology={onSaveToOntology}
+            savingToOntology={savingToOntology}
+            saveMessage={saveMessage}
+          />
         ) : (
           <div className="flex h-full flex-col">
             <p className="mb-2 text-[11px] text-gray-400">
@@ -1608,10 +1779,18 @@ function LowCodeForm({
   node,
   onConfig,
   results,
+  ontologyEnv,
+  onSaveToOntology,
+  savingToOntology,
+  saveMessage,
 }: {
   node: FlowNode;
   onConfig: (partial: NodeConfig) => void;
   results: DemoResult[] | null;
+  ontologyEnv: string | null;
+  onSaveToOntology: () => void;
+  savingToOntology: boolean;
+  saveMessage: string | null;
 }) {
   const [newTrigger, setNewTrigger] = useState("");
   const [ingestBusy, setIngestBusy] = useState(false);
@@ -1673,6 +1852,14 @@ function LowCodeForm({
             className="w-full resize-none rounded-md border border-gray-200 bg-gray-50 p-2.5 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
           />
         </Field>
+      );
+
+    case "source":
+      return (
+        <SourceNodeForm
+          request={node.config.sourceRequest ?? defaultSourceRequest()}
+          onChange={(sourceRequest) => onConfig({ sourceRequest })}
+        />
       );
 
     case "rest":
@@ -1923,6 +2110,36 @@ function LowCodeForm({
           <span className="mb-2 block text-xs font-medium text-gray-700">
             Enriched result
           </span>
+
+          {/* Save the full pipeline output into the selected ontology env. */}
+          <div className="mb-3 rounded-md border border-emerald-200 bg-emerald-50/50 p-2.5">
+            <button
+              type="button"
+              onClick={onSaveToOntology}
+              disabled={savingToOntology || !ontologyEnv}
+              className={cn(
+                "w-full rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                savingToOntology || !ontologyEnv
+                  ? "bg-emerald-200 text-white"
+                  : "bg-emerald-600 text-white hover:bg-emerald-500",
+              )}
+            >
+              {savingToOntology
+                ? "Saving…"
+                : ontologyEnv
+                  ? `Save pipeline output to "${ontologyEnv}"`
+                  : "Select an environment first"}
+            </button>
+            <p className="mt-1.5 text-[10px] leading-relaxed text-gray-500">
+              Runs the full extract pipeline server-side and persists accepted
+              findings (with provenance + Patient links) into the chosen
+              ontology environment.
+            </p>
+            {saveMessage ? (
+              <p className="mt-1.5 text-[10px] text-gray-600">{saveMessage}</p>
+            ) : null}
+          </div>
+
           {results && results.length > 0 ? (
             <div className="flex flex-col gap-2">
               {results.map((r, i) => (

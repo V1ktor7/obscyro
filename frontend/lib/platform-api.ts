@@ -1,4 +1,6 @@
+import type { SourceRequest } from "../app/studio/source-schema";
 import {
+  API_BASE,
   apiFetch,
   getStoredKey,
   setSession,
@@ -289,6 +291,28 @@ export async function ingestPayload(
   });
 }
 
+// --- Source (configurable HTTP request, server-side egress) ---
+
+export type { SourceRequest } from "../app/studio/source-schema";
+
+export interface SourceFetchResult {
+  status: number;
+  statusText: string;
+  ok: boolean;
+  headers?: Record<string, string>;
+  body: unknown;
+  /** Deterministic string-leaf harvest of the body, for downstream NLP. */
+  text: string;
+  pages: number;
+  contentType?: string;
+}
+
+export async function runSourceFetch(
+  request: SourceRequest,
+): Promise<SourceFetchResult> {
+  return apiFetch("/v1/source/fetch", { method: "POST", body: request });
+}
+
 // --- Ontology ---
 
 export interface ObjectTypeDef {
@@ -332,6 +356,176 @@ export async function createObject(body: {
   sourceEventId?: string | null;
 }): Promise<{ id: string }> {
   return apiFetch("/v1/ontology/objects", { method: "POST", body });
+}
+
+// --- Health (real probe, never hardcoded) ---
+
+export type HealthStatus = "ok" | "degraded" | "offline";
+
+/** Probes the public readiness endpoint. Never throws: offline on any error. */
+export async function getHealth(): Promise<HealthStatus> {
+  try {
+    const res = await fetch(`${API_BASE}/v1/health`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const data = (await res.json().catch(() => null)) as { status?: string } | null;
+      return data?.status === "degraded" ? "degraded" : "ok";
+    }
+    if (res.status === 503) return "degraded";
+    return "offline";
+  } catch {
+    return "offline";
+  }
+}
+
+// --- Environment-scoped ontology (migration 010) ---
+
+export interface EnvironmentSummary {
+  id: string;
+  name: string;
+  slug: string;
+  createdAt: string;
+}
+
+export interface EnvObjectType {
+  id: string;
+  name: string;
+  description: string | null;
+  propertySchema: { key: string; type: string; label?: string }[];
+  createdAt: string;
+}
+
+export interface EnvLinkType {
+  id: string;
+  name: string;
+  fromType: string;
+  toType: string;
+  cardinality: string;
+}
+
+export interface EnvInstance {
+  id: string;
+  typeId: string;
+  typeName: string;
+  properties: Record<string, unknown>;
+  provenance: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EnvLinkEdge {
+  id: string;
+  linkType: string;
+  direction: "out" | "in";
+  otherId: string;
+  otherType: string;
+  otherProperties: Record<string, unknown>;
+}
+
+export async function listEnvironments(): Promise<{ environments: EnvironmentSummary[] }> {
+  return apiFetch("/v1/ontology/environments");
+}
+
+export async function createEnvironment(body: {
+  name: string;
+  slug?: string;
+}): Promise<EnvironmentSummary> {
+  return apiFetch("/v1/ontology/environments", { method: "POST", body });
+}
+
+export async function listEnvTypes(
+  env: string,
+): Promise<{ types: EnvObjectType[]; linkTypes: EnvLinkType[] }> {
+  return apiFetch(`/v1/ontology/${encodeURIComponent(env)}/types`);
+}
+
+export async function getEnvType(env: string, name: string): Promise<EnvObjectType> {
+  return apiFetch(`/v1/ontology/${encodeURIComponent(env)}/types/${encodeURIComponent(name)}`);
+}
+
+export async function listEnvObjects(
+  env: string,
+  opts?: { type?: string; where?: string; limit?: number },
+): Promise<{ objects: EnvInstance[] }> {
+  const qs = new URLSearchParams();
+  if (opts?.type) qs.set("type", opts.type);
+  if (opts?.where) qs.set("where", opts.where);
+  if (opts?.limit) qs.set("limit", String(opts.limit));
+  const q = qs.toString();
+  return apiFetch(`/v1/ontology/${encodeURIComponent(env)}/objects${q ? `?${q}` : ""}`);
+}
+
+export async function getEnvObject(
+  env: string,
+  id: string,
+): Promise<{ object: EnvInstance; links: EnvLinkEdge[] }> {
+  return apiFetch(`/v1/ontology/${encodeURIComponent(env)}/objects/${id}`);
+}
+
+export async function createEnvObject(
+  env: string,
+  body: { type: string; properties: Record<string, unknown>; provenance?: Record<string, unknown> },
+): Promise<{ id: string }> {
+  return apiFetch(`/v1/ontology/${encodeURIComponent(env)}/objects`, { method: "POST", body });
+}
+
+export async function createEnvLink(
+  env: string,
+  body: {
+    linkType: string;
+    fromId: string;
+    toId: string;
+    provenance?: Record<string, unknown>;
+  },
+): Promise<{ id: string }> {
+  return apiFetch(`/v1/ontology/${encodeURIComponent(env)}/links`, { method: "POST", body });
+}
+
+// --- Combined extract (+ optional persist into an environment) ---
+
+export interface CombinedExtractResult {
+  span: string;
+  candidates: ConceptCandidate[];
+  code: string | null;
+  cosine: number;
+  margin: number;
+  concept_confidence: number;
+  status: "resolved" | "flag" | "unresolved";
+  context: ContextOut["context"];
+  context_confidence: number;
+  readable_note: string;
+  decision: "accept" | "flag" | "escalate";
+}
+
+export interface ExtractPersistResult {
+  destination: "research" | "problem_list";
+  results: CombinedExtractResult[];
+  persisted?: {
+    environment: { id: string; slug: string; name: string };
+    objectType: string;
+    objectIds: string[];
+    linkIds: string[];
+    pipelineRunId: string;
+  };
+}
+
+export async function extractAndPersist(opts: {
+  text: string;
+  language?: string;
+  destination?: "research" | "problem_list";
+  persist?: { environment: string; objectType?: string };
+}): Promise<ExtractPersistResult> {
+  return apiFetch("/v1/extract", {
+    method: "POST",
+    body: {
+      text: opts.text,
+      language: opts.language ?? "auto",
+      destination: opts.destination ?? "research",
+      ...(opts.persist ? { persist: opts.persist } : {}),
+    },
+  });
 }
 
 export type { MeResult };
