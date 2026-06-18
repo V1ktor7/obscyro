@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Copy, Play } from "lucide-react";
+import { Play } from "lucide-react";
 
 import { ApiError, clearSession, clearStoredKey, getStoredKey } from "@/lib/auth";
 import { cn } from "@/lib/cn";
@@ -51,6 +51,8 @@ import {
 } from "./source-schema";
 import SourceNodeForm from "./SourceNodeForm";
 import StudioOntologyMode from "./StudioOntologyMode";
+import WebhookNodeForm from "./WebhookNodeForm";
+import type { SanitizedWebhookConfig, WebhookMethod } from "./webhook-schema";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -75,6 +77,8 @@ type NodeConfig = {
   payloadJson?: string;
   sourceId?: string;
   webhookUrl?: string;
+  webhookMethod?: WebhookMethod;
+  webhookConfig?: SanitizedWebhookConfig;
   ingestEventId?: string;
   lastEventPayload?: unknown;
   lastEventText?: string;
@@ -1795,7 +1799,6 @@ function LowCodeForm({
   const [newTrigger, setNewTrigger] = useState("");
   const [ingestBusy, setIngestBusy] = useState(false);
   const [ingestMsg, setIngestMsg] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   // Auto-poll webhook events while this webhook node is selected.
   const sourceId = node.config.sourceId;
@@ -1829,17 +1832,6 @@ function LowCodeForm({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [node.type, sourceId, knownEventId]);
-
-  async function copyWebhook() {
-    if (!node.config.webhookUrl) return;
-    try {
-      await navigator.clipboard.writeText(node.config.webhookUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
-    } catch {
-      /* ignore */
-    }
-  }
 
   switch (node.type) {
     case "input":
@@ -1901,72 +1893,16 @@ function LowCodeForm({
 
     case "webhook":
       return (
-        <>
-          <Field label="Webhook URL">
-            <div className="flex gap-1.5">
-              <input
-                readOnly
-                value={node.config.webhookUrl ?? "Create a webhook source below"}
-                className="min-w-0 flex-1 rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 font-mono text-[10px] text-gray-700"
-              />
-              <button
-                type="button"
-                onClick={copyWebhook}
-                disabled={!node.config.webhookUrl}
-                aria-label="Copy webhook URL"
-                className="inline-flex items-center justify-center rounded-md border border-gray-300 px-2 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-              >
-                {copied ? (
-                  <Check className="h-3.5 w-3.5 text-emerald-600" />
-                ) : (
-                  <Copy className="h-3.5 w-3.5" />
-                )}
-              </button>
-            </div>
-          </Field>
-          {!node.config.webhookUrl ? (
-            <button
-              type="button"
-              disabled={ingestBusy}
-              onClick={async () => {
-                setIngestBusy(true);
-                setIngestMsg(null);
-                try {
-                  const res = await createIngestSource("Webhook source", "webhook");
-                  onConfig({
-                    sourceId: res.source.id,
-                    webhookUrl: res.source.webhookUrl ?? "",
-                  });
-                  setIngestMsg("Webhook ready — POST payloads to this URL.");
-                } catch (err) {
-                  setIngestMsg((err as Error).message);
-                } finally {
-                  setIngestBusy(false);
-                }
-              }}
-              className="w-full rounded-md bg-gray-900 px-3 py-2 text-xs text-white hover:bg-gray-700"
-            >
-              Create webhook source
-            </button>
-          ) : (
-            <p className="text-[10px] leading-relaxed text-gray-500">
-              Listening for events… POST JSON (with a{" "}
-              <code className="font-mono">text</code> field) to the URL above
-              and it appears here automatically.
-            </p>
-          )}
-          {node.config.lastEventPayload != null ? (
-            <div className="mt-3">
-              <span className="mb-1 block font-mono text-[9px] uppercase tracking-wide text-sky-600">
-                Latest received payload
-              </span>
-              <pre className="max-h-40 overflow-auto rounded-md border border-gray-200 bg-gray-50 p-2 font-mono text-[10px] leading-snug text-gray-700">
-                {JSON.stringify(node.config.lastEventPayload, null, 2)}
-              </pre>
-            </div>
-          ) : null}
-          {ingestMsg ? <p className="mt-2 text-[10px] text-gray-500">{ingestMsg}</p> : null}
-        </>
+        <WebhookNodeForm
+          config={{
+            sourceId: node.config.sourceId,
+            webhookUrl: node.config.webhookUrl,
+            webhookMethod: node.config.webhookMethod,
+            webhookConfig: node.config.webhookConfig,
+            lastEventPayload: node.config.lastEventPayload,
+          }}
+          onConfig={onConfig}
+        />
       );
 
     case "concept":

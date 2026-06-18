@@ -98,11 +98,37 @@ Studio has two intake nodes. They cover both directions of data movement.
 
 ### Webhook node (push)
 
-Creates a public ingest source and gives you a copy-paste URL
-(`POST /v1/webhooks/:token`). Any external system can push to it; the node
+An n8n-style webhook receiver. Creates a public ingest source and gives you a
+copy-paste **Production URL** (`/v1/webhooks/:token`). The endpoint is registered
+for every HTTP method, so opening the URL in a browser (a `GET`) returns a clear
+`405` ("This webhook expects POST…") instead of a confusing `404`. The node
 auto-polls `GET /v1/ingest/events` and surfaces the latest payload. A wildcard
 content-type parser preserves non-JSON bodies (xml, csv, plain text, binary)
 faithfully instead of dropping them.
+
+Configuration mirrors n8n's Webhook node and is persisted per-source
+(`webhook_method` + `webhook_config` JSONB, migration `011`):
+
+- **HTTP Method** — `GET | POST | PUT | PATCH | DELETE | HEAD | ANY`. A mismatch
+  returns `405` with a helpful message.
+- **Authentication** — `none | basic | header | jwt`. Basic and header secrets
+  are stored as SHA-256 hashes and compared in constant time; the JWT (HS256)
+  shared secret is stored server-side to verify signatures. None of these are
+  ever returned to the client (responses only expose a `hasSecret` flag).
+- **Respond** — mode is always *Immediately* (store-and-poll). You can set the
+  response **code**, **content type**, **body** (supports `{{eventId}}` /
+  `{{receivedAt}}`), custom **headers**, or *no body*.
+- **Options** — **Allowed origins (CORS)** (enforced in-handler; webhook routes
+  reflect any origin at the CORS layer so preflight succeeds, while the dashboard
+  API keeps its strict allowlist), **IP allowlist** (uses the real client IP via
+  `trustProxy`), **Ignore bots** (silently `200`, not stored), **Raw body**
+  (store verbatim under `raw`), and **Binary property** (store bytes as base64).
+- **Send test request** — `POST /v1/ingest/sources/:id/test` stores a sample
+  event so you can validate the node without external tooling.
+
+Owner-scoped config lives behind `POST /v1/ingest/sources` (create, with optional
+`method`/`config`) and `PATCH /v1/ingest/sources/:id` (update). RS256 JWT and
+"Respond to Webhook"/"When last node finishes" modes are out of scope for v1.
 
 ### Source node (pull)
 

@@ -1,4 +1,9 @@
 import type { SourceRequest } from "../app/studio/source-schema";
+import type {
+  SanitizedWebhookConfig,
+  WebhookConfig,
+  WebhookMethod,
+} from "../app/studio/webhook-schema";
 import {
   API_BASE,
   apiFetch,
@@ -245,25 +250,46 @@ export async function runPipeline(opts: {
 
 // --- Ingest ---
 
+export interface IngestSource {
+  id: string;
+  name: string;
+  type: string;
+  method: WebhookMethod;
+  webhookUrl: string | null;
+  webhookToken: string | null;
+  config: SanitizedWebhookConfig;
+  createdAt: string;
+}
+
 export async function createIngestSource(
   name: string,
   type: "rest" | "webhook",
-): Promise<{
-  source: {
-    id: string;
-    name: string;
-    type: string;
-    webhookUrl: string | null;
-    webhookToken: string | null;
-    createdAt: string;
-  };
-}> {
-  return apiFetch("/v1/ingest/sources", { method: "POST", body: { name, type } });
+  opts?: { method?: WebhookMethod; config?: WebhookConfig },
+): Promise<{ source: IngestSource }> {
+  return apiFetch("/v1/ingest/sources", {
+    method: "POST",
+    body: { name, type, method: opts?.method, config: opts?.config },
+  });
 }
 
-export async function listIngestSources(): Promise<{
-  sources: { id: string; name: string; type: string; webhookUrl: string | null; createdAt: string }[];
-}> {
+export async function updateIngestSource(
+  id: string,
+  patch: { name?: string; method?: WebhookMethod; config?: WebhookConfig },
+): Promise<{ source: IngestSource }> {
+  return apiFetch(`/v1/ingest/sources/${id}`, { method: "PATCH", body: patch });
+}
+
+export async function testWebhook(
+  id: string,
+  payload?: unknown,
+): Promise<{ eventId: string; receivedAt: string }> {
+  return apiFetch(`/v1/ingest/sources/${id}/test`, {
+    method: "POST",
+    body: { payload },
+  });
+}
+
+export async function listIngestSources(): Promise<{ sources: IngestSource[] }> {
   return apiFetch("/v1/ingest/sources");
 }
 

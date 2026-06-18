@@ -1,9 +1,9 @@
 import "dotenv/config";
 
-import cors from "@fastify/cors";
+import cors, { type FastifyCorsOptions } from "@fastify/cors";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
-import Fastify from "fastify";
+import Fastify, { type FastifyRequest } from "fastify";
 import {
   jsonSchemaTransform,
   serializerCompiler,
@@ -43,6 +43,9 @@ const corsOrigins = (process.env.CORS_ORIGINS ?? "http://localhost:3000,https://
   .filter(Boolean);
 
 const app = Fastify({
+  // Trust the Railway/Vercel edge proxy so req.ip reflects the real client,
+  // which the webhook IP allowlist relies on.
+  trustProxy: true,
   logger: {
     level: isDev ? "debug" : "info",
     transport: isDev
@@ -64,9 +67,20 @@ app.addContentTypeParser("*", { parseAs: "buffer" }, (_req, payload, done) => {
   done(null, payload);
 });
 
-await app.register(cors, {
-  origin: corsOrigins,
-  credentials: true,
+// Path-aware CORS. The dashboard API keeps the strict origin allowlist (with
+// credentials), while public webhook routes reflect any origin so browser-based
+// senders can reach them and preflight succeeds. Per-webhook origin policy is
+// still enforced inside the webhook handler (returns 403 on disallowed origin).
+await app.register(cors, () => (req: FastifyRequest, callback: (err: Error | null, options: FastifyCorsOptions) => void) => {
+  if (req.url.startsWith("/v1/webhooks/")) {
+    callback(null, {
+      origin: true,
+      credentials: false,
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+    });
+    return;
+  }
+  callback(null, { origin: corsOrigins, credentials: true });
 });
 
 await app.register(swagger, {
