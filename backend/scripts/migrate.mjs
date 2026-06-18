@@ -81,7 +81,12 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+// Force an explicit exit so the `&&` start command always proceeds to the
+// server, even if a lingering pg/socket handle would otherwise keep the event
+// loop alive after client.end().
+main()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
