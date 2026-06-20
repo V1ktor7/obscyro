@@ -40,10 +40,14 @@ import {
   NODE_W,
   bezierPoint,
   geom,
+  outputPortY,
   pathD,
   pointGeom,
+  routerNodeHeight,
   type Geom,
 } from "./studio-graph";
+import { detectFormat, FORMAT_BRANCHES, type FormatBranch } from "./format-detect";
+import FormatDetectNodeForm from "./FormatDetectNodeForm";
 import {
   defaultSourceRequest,
   harvestText,
@@ -63,6 +67,7 @@ type NodeType =
   | "rest"
   | "source"
   | "webhook"
+  | "formatDetect"
   | "concept"
   | "context"
   | "decision"
@@ -82,6 +87,9 @@ type NodeConfig = {
   ingestEventId?: string;
   lastEventPayload?: unknown;
   lastEventText?: string;
+  lastEventContentType?: string;
+  trustContentType?: boolean;
+  lastDetectedFormat?: FormatBranch;
   resolveMin?: number;
   marginMin?: number;
   triggers?: string[];
@@ -101,20 +109,24 @@ type FlowNode = {
   code: string;
 };
 
-type Edge = { id: string; source: string; target: string };
+type Edge = { id: string; source: string; target: string; sourcePort?: string };
 
-type InspectorMode = "lowcode" | "code";
-
-type DemoResult = PipelineResult;
-
-/** The data bag that flows between nodes along edges. */
+/** Data bag flowing between nodes along edges. */
 type NodeOutput = {
   text?: string;
   concepts?: ConceptOut[];
   contexts?: ContextOut[];
   results?: PipelineResult[];
   payload?: unknown;
+  contentType?: string;
+  headers?: Record<string, string>;
+  activeBranch?: FormatBranch;
+  detectedFormat?: FormatBranch;
 };
+
+type InspectorMode = "lowcode" | "code";
+
+type DemoResult = PipelineResult;
 
 // Subtle, role-based accents. Bodies stay white; only the icon, a thin left
 // bar, and the port border pick up color, so the canvas stays minimalist.
@@ -126,6 +138,7 @@ const NODE_ACCENTS: Record<
   rest: { text: "text-sky-600", bar: "bg-sky-400", border: "border-sky-400", hex: "#0284c7" },
   source: { text: "text-sky-600", bar: "bg-sky-400", border: "border-sky-400", hex: "#0284c7" },
   webhook: { text: "text-sky-600", bar: "bg-sky-400", border: "border-sky-400", hex: "#0284c7" },
+  formatDetect: { text: "text-amber-600", bar: "bg-amber-400", border: "border-amber-400", hex: "#d97706" },
   concept: { text: "text-violet-600", bar: "bg-violet-400", border: "border-violet-400", hex: "#7c3aed" },
   context: { text: "text-violet-600", bar: "bg-violet-400", border: "border-violet-400", hex: "#7c3aed" },
   decision: { text: "text-amber-600", bar: "bg-amber-400", border: "border-amber-400", hex: "#d97706" },
@@ -180,6 +193,8 @@ function defaultCode(type: NodeType): string {
       return `function run() {\n  // Server-side HTTP request (POST /v1/source/fetch).\n  // Configure method, URL, auth, query, body, pagination in the panel.\n  const res = fetchSource(this.config.sourceRequest);\n  return { text: harvest(res.body), payload: res.body };\n}`;
     case "webhook":
       return `function run(input) {\n  // Poll GET /v1/ingest/events?sourceId=...\n  return input.latestEvent;\n}`;
+    case "formatDetect":
+      return `function run(input) {\n  // Route unchanged payload to fhir | hl7 | json | text | unknown.\n  return detectFormat(input.payload ?? input.text, input.meta);\n}`;
     case "concept":
       return `function run(input) {\n  // NER spans -> embed -> pgvector cosine + margin.\n  return extractConcepts(input.text, {\n    resolveMin: 0.72,\n    marginMin: 0.15,\n  });\n}`;
     case "context":
@@ -229,6 +244,11 @@ function nodeDefaults(type: NodeType): {
       return {
         title: "Webhook intake",
         config: { sourceId: "", webhookUrl: "" },
+      };
+    case "formatDetect":
+      return {
+        title: "Format detection",
+        config: { trustContentType: true },
       };
     case "concept":
       return {
@@ -364,8 +384,45 @@ function mergeOutputs(outputs: NodeOutput[]): NodeOutput {
     if (o.results?.length)
       merged.results = [...(merged.results ?? []), ...o.results];
     if (o.payload != null && merged.payload == null) merged.payload = o.payload;
+    if (o.contentType && !merged.contentType) merged.contentType = o.contentType;
+    if (o.headers && !merged.headers) merged.headers = { ...o.headers };
   }
   return merged;
+}
+
+function nodeCardHeight(node: FlowNode): number {
+  if (node.type === "formatDetect") {
+    return routerNodeHeight(FORMAT_BRANCHES.length);
+  }
+  return NODE_H;
+}
+
+function edgeGeom(e: Edge, s: FlowNode, t: FlowNode): Geom {
+  const sh = nodeCardHeight(s);
+  const th = nodeCardHeight(t);
+  let sourceY = s.y + sh / 2;
+  if (s.type === "formatDetect" && e.sourcePort) {
+    const idx = FORMAT_BRANCHES.indexOf(e.sourcePort as FormatBranch);
+    if (idx >= 0) {
+      sourceY = outputPortY(s.y, idx, FORMAT_BRANCHES.length, sh);
+    }
+  }
+  return geom(s, t, { sourceY, sourceHeight: sh, targetHeight: th });
+}
+
+function filterIncomingEdges(
+  incoming: Edge[],
+  outputs: Map<string, NodeOutput>,
+  nodes: Map<string, FlowNode>,
+): Edge[] {
+  return incoming.filter((e) => {
+    const src = nodes.get(e.source);
+    const out = outputs.get(e.source);
+    if (src?.type === "formatDetect" && out?.activeBranch) {
+      return (e.sourcePort ?? "unknown") === out.activeBranch;
+    }
+    return true;
+  });
 }
 
 function resultsFromConcepts(concepts: ConceptOut[]): PipelineResult[] {
@@ -401,7 +458,7 @@ async function executeNode(
             : typeof parsed.clinical_text === "string"
               ? parsed.clinical_text
               : JSON.stringify(parsed);
-        return { text, payload: parsed };
+        return { text, payload: parsed, contentType: "application/json" };
       } catch {
         return {
           text: node.config.payloadJson ?? "",
@@ -416,7 +473,12 @@ async function executeNode(
         throw new Error("Configure a URL on the Source node first.");
       }
       const res = await runSourceFetch(request);
-      return { text: res.text || harvestText(res.body, request.response.format), payload: res.body };
+      return {
+        text: res.text || harvestText(res.body, request.response.format),
+        payload: res.body,
+        contentType: res.contentType,
+        headers: res.headers,
+      };
     }
 
     case "webhook": {
@@ -424,6 +486,7 @@ async function executeNode(
         return {
           text: node.config.lastEventText,
           payload: node.config.lastEventPayload,
+          contentType: node.config.lastEventContentType,
         };
       }
       if (node.config.sourceId) {
@@ -433,10 +496,25 @@ async function executeNode(
           const p = latest.payload as Record<string, unknown>;
           const text =
             typeof p.text === "string" ? p.text : JSON.stringify(p);
-          return { text, payload: p };
+          return {
+            text,
+            payload: p,
+            contentType: latest.contentType,
+          };
         }
       }
       throw new Error("No webhook events received yet.");
+    }
+
+    case "formatDetect": {
+      const trust = node.config.trustContentType ?? true;
+      const raw = input.payload ?? input.text;
+      const branch = detectFormat(
+        raw,
+        { contentType: input.contentType, headers: input.headers },
+        { trustContentType: trust },
+      );
+      return { ...input, activeBranch: branch, detectedFormat: branch };
     }
 
     case "concept": {
@@ -568,6 +646,12 @@ function NodeIcon({ type }: { type: NodeType }) {
           <path d="M12 2v6M12 16v6M4.93 4.93l4.24 4.24M14.83 14.83l4.24 4.24M2 12h6M16 12h6" />
         </svg>
       );
+    case "formatDetect":
+      return (
+        <svg {...common}>
+          <path d="M12 3 21 12 12 21 3 12z" />
+        </svg>
+      );
     case "concept":
       return (
         <svg {...common}>
@@ -650,6 +734,7 @@ const PALETTE: { type: NodeType; label: string }[] = [
   { type: "input", label: "Input" },
   { type: "source", label: "Source" },
   { type: "webhook", label: "Webhook intake" },
+  { type: "formatDetect", label: "Format detection" },
   { type: "concept", label: "Concept" },
   { type: "context", label: "Context" },
   { type: "decision", label: "Decision" },
@@ -717,6 +802,7 @@ export default function StudioEditor() {
   const [nodeErrors, setNodeErrors] = useState<Map<string, string>>(new Map());
   const [pendingEdge, setPendingEdge] = useState<{
     source: string;
+    sourcePort?: string;
     cursor: { x: number; y: number };
   } | null>(null);
 
@@ -764,7 +850,9 @@ export default function StudioEditor() {
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const panRef = useRef(pan);
   panRef.current = pan;
-  const connectingRef = useRef<{ source: string } | null>(null);
+  const connectingRef = useRef<{ source: string; sourcePort?: string } | null>(
+    null,
+  );
   const dragRef = useRef<
     | {
         kind: "node" | "pan";
@@ -857,12 +945,25 @@ export default function StudioEditor() {
     };
   }
 
-  function startConnect(e: React.PointerEvent, node: FlowNode) {
+  function startConnect(
+    e: React.PointerEvent,
+    node: FlowNode,
+    sourcePort?: string,
+  ) {
     e.stopPropagation();
-    connectingRef.current = { source: node.id };
+    const h = nodeCardHeight(node);
+    let sourceY = node.y + h / 2;
+    if (node.type === "formatDetect" && sourcePort) {
+      const idx = FORMAT_BRANCHES.indexOf(sourcePort as FormatBranch);
+      if (idx >= 0) {
+        sourceY = outputPortY(node.y, idx, FORMAT_BRANCHES.length, h);
+      }
+    }
+    connectingRef.current = { source: node.id, sourcePort };
     setPendingEdge({
       source: node.id,
-      cursor: { x: node.x + NODE_W, y: node.y + NODE_H / 2 },
+      sourcePort,
+      cursor: { x: node.x + NODE_W, y: sourceY },
     });
   }
 
@@ -872,12 +973,29 @@ export default function StudioEditor() {
     e.stopPropagation();
     const source = c.source;
     const target = node.id;
+    const sourcePort = c.sourcePort;
     if (source !== target) {
       setEdges((prev) => {
-        if (prev.some((ed) => ed.source === source && ed.target === target))
+        if (
+          prev.some(
+            (ed) =>
+              ed.source === source &&
+              ed.target === target &&
+              (ed.sourcePort ?? undefined) === (sourcePort ?? undefined),
+          )
+        ) {
           return prev;
+        }
         if (wouldCycle(prev, source, target)) return prev;
-        return [...prev, { id: nextId("e"), source, target }];
+        return [
+          ...prev,
+          {
+            id: nextId("e"),
+            source,
+            target,
+            ...(sourcePort ? { sourcePort } : {}),
+          },
+        ];
       });
     }
     connectingRef.current = null;
@@ -998,17 +1116,23 @@ export default function StudioEditor() {
     const order = topoOrder(nodes, edges);
     const outputs = new Map<string, NodeOutput>();
     const errors = new Map<string, string>();
+    const formatDetectUpdates = new Map<string, FormatBranch>();
 
     for (const id of order) {
       const node = nodeById.get(id);
       if (!node) continue;
       setActiveNodeId(id);
       const incoming = edges.filter((e) => e.target === id);
+      const filtered = filterIncomingEdges(incoming, outputs, nodeById);
       const merged = mergeOutputs(
-        incoming.map((e) => outputs.get(e.source) ?? {}),
+        filtered.map((e) => outputs.get(e.source) ?? {}),
       );
       try {
-        outputs.set(id, await executeNode(node, merged));
+        const out = await executeNode(node, merged);
+        outputs.set(id, out);
+        if (node.type === "formatDetect" && out.detectedFormat) {
+          formatDetectUpdates.set(id, out.detectedFormat);
+        }
       } catch (err) {
         errors.set(
           id,
@@ -1019,11 +1143,29 @@ export default function StudioEditor() {
         outputs.set(id, {});
       }
       await sleep(160);
+      const srcOut = outputs.get(id);
       for (const e of edges.filter((e) => e.source === id)) {
         const s = nodeById.get(e.source);
         const t = nodeById.get(e.target);
-        if (s && t) await animateToken(geom(s, t), 420);
+        if (!s || !t) continue;
+        if (s.type === "formatDetect" && srcOut?.activeBranch) {
+          if ((e.sourcePort ?? "unknown") !== srcOut.activeBranch) continue;
+        }
+        await animateToken(edgeGeom(e, s, t), 420);
       }
+    }
+
+    if (formatDetectUpdates.size) {
+      setNodes((prev) =>
+        prev.map((n) => {
+          const fmt = formatDetectUpdates.get(n.id);
+          if (!fmt) return n;
+          return {
+            ...n,
+            config: { ...n.config, lastDetectedFormat: fmt },
+          };
+        }),
+      );
     }
 
     setActiveNodeId(null);
@@ -1061,6 +1203,7 @@ export default function StudioEditor() {
 
     const outputs = new Map(nodeOutputs);
     const errors = new Map(nodeErrors);
+    const formatDetectUpdates = new Map<string, FormatBranch>();
 
     for (const nid of order) {
       const node = nodeById.get(nid);
@@ -1069,12 +1212,17 @@ export default function StudioEditor() {
       const incoming = edges.filter(
         (e) => e.target === nid && needed.has(e.source),
       );
+      const filtered = filterIncomingEdges(incoming, outputs, nodeById);
       const merged = mergeOutputs(
-        incoming.map((e) => outputs.get(e.source) ?? {}),
+        filtered.map((e) => outputs.get(e.source) ?? {}),
       );
       try {
-        outputs.set(nid, await executeNode(node, merged));
+        const out = await executeNode(node, merged);
+        outputs.set(nid, out);
         errors.delete(nid);
+        if (node.type === "formatDetect" && out.detectedFormat) {
+          formatDetectUpdates.set(nid, out.detectedFormat);
+        }
       } catch (err) {
         errors.set(
           nid,
@@ -1085,6 +1233,19 @@ export default function StudioEditor() {
         outputs.set(nid, {});
       }
       await sleep(140);
+    }
+
+    if (formatDetectUpdates.size) {
+      setNodes((prev) =>
+        prev.map((n) => {
+          const fmt = formatDetectUpdates.get(n.id);
+          if (!fmt) return n;
+          return {
+            ...n,
+            config: { ...n.config, lastDetectedFormat: fmt },
+          };
+        }),
+      );
     }
 
     setActiveNodeId(null);
@@ -1312,7 +1473,7 @@ export default function StudioEditor() {
                 const s = nodeById.get(e.source);
                 const t = nodeById.get(e.target);
                 if (!s || !t) return null;
-                const g = geom(s, t);
+                const g = edgeGeom(e, s, t);
                 const active =
                   running &&
                   activeNodeId !== null &&
@@ -1375,8 +1536,23 @@ export default function StudioEditor() {
                 ? (() => {
                     const s = nodeById.get(pendingEdge.source);
                     if (!s) return null;
+                    const h = nodeCardHeight(s);
+                    let sourceY = s.y + h / 2;
+                    if (s.type === "formatDetect" && pendingEdge.sourcePort) {
+                      const idx = FORMAT_BRANCHES.indexOf(
+                        pendingEdge.sourcePort as FormatBranch,
+                      );
+                      if (idx >= 0) {
+                        sourceY = outputPortY(
+                          s.y,
+                          idx,
+                          FORMAT_BRANCHES.length,
+                          h,
+                        );
+                      }
+                    }
                     const g = pointGeom(
-                      { x: s.x + NODE_W, y: s.y + NODE_H / 2 },
+                      { x: s.x + NODE_W, y: sourceY },
                       pendingEdge.cursor,
                     );
                     return (
@@ -1415,6 +1591,9 @@ export default function StudioEditor() {
                 node.type === "output" && results && results.length > 0;
               const webhookPayload =
                 node.type === "webhook" && node.config.lastEventPayload != null;
+              const formatDetected = node.config.lastDetectedFormat;
+              const cardH = nodeCardHeight(node);
+              const isRouter = node.type === "formatDetect";
               return (
                 <div
                   key={node.id}
@@ -1432,7 +1611,7 @@ export default function StudioEditor() {
                     left: node.x,
                     top: node.y,
                     width: NODE_W,
-                    minHeight: NODE_H,
+                    minHeight: cardH,
                   }}
                   onPointerDown={(e) => startNodeDrag(e, node)}
                   onClick={(e) => {
@@ -1461,15 +1640,39 @@ export default function StudioEditor() {
                       accent.border,
                     )}
                   />
-                  {/* Output port (drag to connect) */}
-                  <span
-                    onPointerDown={(e) => startConnect(e, node)}
-                    title="Drag to connect"
-                    className={cn(
-                      "absolute -right-2 top-1/2 h-4 w-4 -translate-y-1/2 cursor-crosshair rounded-full border-2 bg-white transition-transform hover:scale-125",
-                      accent.border,
-                    )}
-                  />
+                  {isRouter ? (
+                    FORMAT_BRANCHES.map((branch, idx) => {
+                      const portY = outputPortY(
+                        node.y,
+                        idx,
+                        FORMAT_BRANCHES.length,
+                        cardH,
+                      );
+                      const relY =
+                        ((portY - node.y) / cardH) * 100;
+                      return (
+                        <span
+                          key={branch}
+                          onPointerDown={(e) => startConnect(e, node, branch)}
+                          title={`Output: ${branch}`}
+                          className={cn(
+                            "absolute -right-2 h-3.5 w-3.5 -translate-y-1/2 cursor-crosshair rounded-full border-2 bg-white transition-transform hover:scale-125",
+                            accent.border,
+                          )}
+                          style={{ top: `${relY}%` }}
+                        />
+                      );
+                    })
+                  ) : (
+                    <span
+                      onPointerDown={(e) => startConnect(e, node)}
+                      title="Drag to connect"
+                      className={cn(
+                        "absolute -right-2 top-1/2 h-4 w-4 -translate-y-1/2 cursor-crosshair rounded-full border-2 bg-white transition-transform hover:scale-125",
+                        accent.border,
+                      )}
+                    />
+                  )}
 
                   <div className="flex items-center gap-2 border-b border-gray-100 px-3 py-2 pl-4">
                     <span className={accent.text}>
@@ -1513,6 +1716,27 @@ export default function StudioEditor() {
                           {JSON.stringify(node.config.lastEventPayload, null, 2)}
                         </pre>
                       </div>
+                    ) : formatDetected ? (
+                      <div>
+                        <span className="mb-1 block font-mono text-[9px] uppercase tracking-wide text-amber-600">
+                          Detected
+                        </span>
+                        <span className="inline-flex items-center rounded border border-amber-300 bg-amber-50 px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wide text-amber-800">
+                          {formatDetected}
+                        </span>
+                      </div>
+                    ) : isRouter ? (
+                      <ul className="space-y-0.5">
+                        {FORMAT_BRANCHES.map((branch) => (
+                          <li
+                            key={branch}
+                            className="flex items-center justify-between font-mono text-[9px] uppercase tracking-wide text-gray-400"
+                          >
+                            <span>{branch}</span>
+                            <span className="text-gray-300">→</span>
+                          </li>
+                        ))}
+                      </ul>
                     ) : hasError ? (
                       <span className="text-[10px] text-rose-600">
                         {nodeErrors.get(node.id)}
@@ -1721,6 +1945,8 @@ function NodeOutputPreview({ output }: { output: NodeOutput }) {
   if (output.contexts?.length) lines.push(`contexts: ${output.contexts.length}`);
   if (output.results?.length) lines.push(`results: ${output.results.length}`);
   if (output.payload != null) lines.push("payload: present");
+  if (output.detectedFormat) lines.push(`detectedFormat: ${output.detectedFormat}`);
+  if (output.activeBranch) lines.push(`activeBranch: ${output.activeBranch}`);
   if (!lines.length) return null;
   return (
     <div className="mt-4">
@@ -1818,6 +2044,7 @@ function LowCodeForm({
             ingestEventId: latest.id,
             lastEventPayload: latest.payload,
             lastEventText: text,
+            lastEventContentType: latest.contentType,
           });
         }
       } catch {
@@ -1902,6 +2129,15 @@ function LowCodeForm({
             lastEventPayload: node.config.lastEventPayload,
           }}
           onConfig={onConfig}
+        />
+      );
+
+    case "formatDetect":
+      return (
+        <FormatDetectNodeForm
+          trustContentType={node.config.trustContentType ?? true}
+          lastDetectedFormat={node.config.lastDetectedFormat}
+          onChange={onConfig}
         />
       );
 

@@ -19,10 +19,37 @@ export type Geom = {
   c2: Point;
 };
 
-/** Edge geometry between two node boxes (left->right ports). */
-export function geom(s: Point, t: Point): Geom {
-  const a = { x: s.x + NODE_W, y: s.y + NODE_H / 2 };
-  const b = { x: t.x, y: t.y + NODE_H / 2 };
+/** Y coordinate for the center of an output port on a multi-branch router node. */
+export function outputPortY(
+  nodeY: number,
+  portIndex: number,
+  portCount: number,
+  nodeHeight: number = NODE_H,
+): number {
+  const slot = nodeHeight / (portCount + 1);
+  return nodeY + slot * (portIndex + 1);
+}
+
+/** Taller card height when a node exposes multiple output ports. */
+export function routerNodeHeight(portCount: number): number {
+  return Math.max(NODE_H, 28 * portCount + 36);
+}
+
+/** Edge geometry between two node boxes (left input → right output ports). */
+export function geom(
+  s: Point,
+  t: Point,
+  opts?: {
+    sourceY?: number;
+    targetY?: number;
+    sourceHeight?: number;
+    targetHeight?: number;
+  },
+): Geom {
+  const sh = opts?.sourceHeight ?? NODE_H;
+  const th = opts?.targetHeight ?? NODE_H;
+  const a = { x: s.x + NODE_W, y: opts?.sourceY ?? s.y + sh / 2 };
+  const b = { x: t.x, y: opts?.targetY ?? t.y + th / 2 };
   const dx = Math.max(50, (b.x - a.x) / 2);
   return { a, b, c1: { x: a.x + dx, y: a.y }, c2: { x: b.x - dx, y: b.y } };
 }
