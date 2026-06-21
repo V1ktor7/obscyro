@@ -1,26 +1,20 @@
-import { randomUUID } from "node:crypto";
-
 import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 
 import type { DbClient } from "../lib/db.js";
 import { AppError, BadRequest, NotFound } from "../lib/errors.js";
+import { persistExtractResults } from "../services/persist-extract.js";
 import {
   CLINICAL_FINDING_SCHEMA,
   PATIENT_SCHEMA,
   getOrCreateLinkType,
   getOrCreateObjectType,
-  insertLinkInstance,
-  insertObjectInstance,
   resolveEnvironment,
 } from "../services/ontology.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
 
 const UPSTREAM_TIMEOUT_MS = 20_000;
-
-/** Decisions that are confident enough to auto-persist as findings. */
-const PERSISTABLE_DECISIONS = new Set(["accept", "flag"]);
 
 const languageSchema = z.enum(["en", "fr", "auto"]).default("auto");
 
@@ -122,6 +116,11 @@ const extractBody = z.object({
     .object({
       environment: z.string().trim().min(1),
       objectType: z.string().trim().min(1).default("ClinicalFinding"),
+      patient: z
+        .object({
+          identifier: z.string().optional(),
+        })
+        .optional(),
     })
     .optional(),
 });
@@ -136,6 +135,15 @@ const persistedSchema = z.object({
   objectIds: z.array(z.string().uuid()),
   linkIds: z.array(z.string().uuid()),
   pipelineRunId: z.string().uuid(),
+  patient: z
+    .object({
+      id: z.string().uuid(),
+      identifier: z.string(),
+      created: z.boolean(),
+    })
+    .nullable(),
+  linked: z.boolean(),
+  reason: z.enum(["no_patient_identifier"]).optional(),
 });
 
 const extractResponse = combinedResponse.extend({
@@ -149,44 +157,6 @@ const errorEnvelope = z.object({
     details: z.unknown().optional(),
   }),
 });
-
-type CombinedResult = z.infer<typeof combinedResultSchema>;
-
-/** Pick a single, human-readable trigger across all ConText axes. */
-function summarizeTriggers(context: z.infer<typeof contextAxesSchema>): string | null {
-  const axes = [
-    context.assertion,
-    context.certainty,
-    context.subject,
-    context.temporality,
-    context.role,
-  ];
-  const triggers: string[] = [];
-  for (const axis of axes) {
-    const t = axis?.trigger;
-    if (t && !triggers.includes(t)) triggers.push(t);
-  }
-  return triggers.length > 0 ? triggers.join("; ") : null;
-}
-
-/** Map a combined NLP result to the ClinicalFinding context-envelope properties. */
-function toFindingProperties(result: CombinedResult): Record<string, unknown> {
-  const chosen =
-    result.candidates.find((c) => c.code === result.code) ?? result.candidates[0];
-  return {
-    span: result.span,
-    snomed_code: result.code,
-    display: chosen?.display ?? null,
-    assertion: result.context.assertion?.value ?? null,
-    subject: result.context.subject?.value ?? null,
-    temporality: result.context.temporality?.value ?? null,
-    certainty: result.context.certainty?.value ?? null,
-    trigger: summarizeTriggers(result.context),
-    confidence: result.context_confidence,
-    decision: result.decision,
-    readable_note: result.readable_note,
-  };
-}
 
 async function requireUserId(req: {
   apiKey?: { id: string } | null;
@@ -330,7 +300,7 @@ const extractRoutes: FastifyPluginAsync = async (fastify) => {
       schema: {
         summary: "Run the full extraction pipeline (concepts + context + decision)",
         description:
-          "Proxies the NLP combined pipeline (NER -> SNOMED resolution -> ConText -> decision) in one call. With `persist`, writes each accepted/flagged result as a ClinicalFinding instance into the owner-scoped ontology environment, linking patient-subject findings to a Patient via `has_finding`, with full provenance.",
+          "Proxies the NLP combined pipeline (NER -> SNOMED resolution -> ConText -> decision) in one call. With `persist`, writes each accepted/flagged result as a ClinicalFinding instance into the owner-scoped ontology environment. When `persist.patient.identifier` is provided, resolves or creates a Patient by that identifier only and links via `has_finding`; without an identifier, findings are stored as unlinked with `provenance.unlinked=true`.",
         tags: ["extract", "ontology"],
         body: extractBody,
         response: {
@@ -388,57 +358,21 @@ const extractRoutes: FastifyPluginAsync = async (fastify) => {
         "many_to_many",
       );
 
-      const pipelineRunId = randomUUID();
-      const nowIso = new Date().toISOString();
-      const objectIds: string[] = [];
-      const linkIds: string[] = [];
-      let patientInstanceId: string | null = null;
-
-      for (const result of combined.results) {
-        if (!PERSISTABLE_DECISIONS.has(result.decision)) continue;
-
-        const objectId = await insertObjectInstance(
-          req.db,
-          findingTypeId,
-          toFindingProperties(result),
-          {
-            source: "extract",
-            created_at: nowIso,
-            pipeline_run_id: pipelineRunId,
-            confidence: result.concept_confidence,
-          },
-        );
-        objectIds.push(objectId);
-
-        if (result.context.subject?.value === "patient") {
-          if (!patientInstanceId) {
-            patientInstanceId = await insertObjectInstance(
-              req.db,
-              patientTypeId,
-              { label: "Extracted patient", external_id: null },
-              { source: "extract", created_at: nowIso, pipeline_run_id: pipelineRunId },
-            );
-          }
-          const linkId = await insertLinkInstance(
-            req.db,
-            linkTypeId,
-            patientInstanceId,
-            objectId,
-            { source: "extract", pipeline_run_id: pipelineRunId },
-          );
-          if (linkId) linkIds.push(linkId);
-        }
-      }
+      const persisted = await persistExtractResults({
+        environmentId: env.id,
+        environmentSlug: env.slug,
+        environmentName: env.name,
+        objectTypeName: persist.objectType,
+        findingTypeId,
+        patientTypeId,
+        linkTypeId,
+        patientIdentifier: persist.patient?.identifier,
+        results: combined.results,
+      });
 
       return reply.send({
         ...combined,
-        persisted: {
-          environment: { id: env.id, slug: env.slug, name: env.name },
-          objectType: persist.objectType,
-          objectIds,
-          linkIds,
-          pipelineRunId,
-        },
+        persisted,
       });
     },
   );

@@ -39,6 +39,7 @@ export const CLINICAL_FINDING_SCHEMA: PropertyDef[] = [
 ];
 
 export const PATIENT_SCHEMA: PropertyDef[] = [
+  { key: "identifier", type: "string", label: "Identifier" },
   { key: "label", type: "string", label: "Label" },
   { key: "external_id", type: "string", label: "External ID" },
 ];
