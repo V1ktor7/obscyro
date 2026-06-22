@@ -1,14 +1,18 @@
-import { randomUUID } from "node:crypto";
-
 import type { DbClient } from "../lib/db.js";
-import { withTransaction } from "../lib/transaction.js";
+import { pool } from "../db/pool.js";
 import {
+  createPipelineRun,
+  finishPipelineRun,
+  insertFailedPipelineRun,
+  insertFindingInstance,
   insertLinkInstance,
   insertObjectInstance,
 } from "./ontology.js";
 
 /** Decisions confident enough to auto-persist as findings. */
 export const PERSISTABLE_DECISIONS = new Set(["accept", "flag"]);
+
+export const SNOMED_CODE_SYSTEM = "http://snomed.info/sct";
 
 export interface ExtractContextAxis {
   value: string;
@@ -48,6 +52,7 @@ export interface PersistExtractInput {
   patientTypeId: string;
   linkTypeId: string;
   patientIdentifier?: string | null;
+  inputHash: string;
   results: PersistableExtractResult[];
 }
 
@@ -62,37 +67,62 @@ export interface PersistExtractOutput {
   reason?: "no_patient_identifier";
 }
 
-function summarizeTriggers(context: PersistableExtractResult["context"]): string | null {
-  const axes = [
-    context.assertion,
-    context.certainty,
-    context.subject,
-    context.temporality,
-    context.role,
-  ];
-  const triggers: string[] = [];
-  for (const axis of axes) {
-    const t = axis?.trigger;
-    if (t && !triggers.includes(t)) triggers.push(t);
-  }
-  return triggers.length > 0 ? triggers.join("; ") : null;
+function contextAxis(
+  axis: ExtractContextAxis | null,
+): { value: string; trigger: string | null; confidence: number } | null {
+  if (!axis) return null;
+  return {
+    value: axis.value,
+    trigger: axis.trigger ?? null,
+    confidence: axis.confidence,
+  };
 }
 
-export function toFindingProperties(result: PersistableExtractResult): Record<string, unknown> {
+export function toFindingContext(
+  context: PersistableExtractResult["context"],
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const assertion = contextAxis(context.assertion);
+  const subject = contextAxis(context.subject);
+  const temporality = contextAxis(context.temporality);
+  const certainty = contextAxis(context.certainty);
+  const role = contextAxis(context.role);
+  if (assertion) out.assertion = assertion;
+  if (subject) out.subject = subject;
+  if (temporality) out.temporality = temporality;
+  if (certainty) out.certainty = certainty;
+  if (role) out.role = role;
+  return out;
+}
+
+export function toFindingProperties(
+  result: PersistableExtractResult,
+  linked: boolean,
+): Record<string, unknown> {
+  const properties: Record<string, unknown> = {
+    span: result.span,
+    readable_note: result.readable_note,
+    decision: result.decision,
+  };
+  if (!linked) {
+    properties.pending_patient_identity = true;
+  }
+  return properties;
+}
+
+export function toFindingColumns(result: PersistableExtractResult): {
+  codeSystem: string | null;
+  code: string | null;
+  display: string | null;
+  context: Record<string, unknown>;
+} {
   const chosen =
     result.candidates.find((c) => c.code === result.code) ?? result.candidates[0];
   return {
-    span: result.span,
-    snomed_code: result.code,
+    codeSystem: result.code ? SNOMED_CODE_SYSTEM : null,
+    code: result.code,
     display: chosen?.display ?? null,
-    assertion: result.context.assertion?.value ?? null,
-    subject: result.context.subject?.value ?? null,
-    temporality: result.context.temporality?.value ?? null,
-    certainty: result.context.certainty?.value ?? null,
-    trigger: summarizeTriggers(result.context),
-    confidence: result.context_confidence,
-    decision: result.decision,
-    readable_note: result.readable_note,
+    context: toFindingContext(result.context),
   };
 }
 
@@ -149,7 +179,7 @@ export async function findExistingFinding(
           AND li.link_type_id = $3
           AND li.from_instance_id = $4
         WHERE oi.object_type_id = $1
-          AND oi.properties->>'snomed_code' = $2
+          AND oi.code = $2
         LIMIT 1`,
       [findingTypeId, snomedCode, linkTypeId, patientInstanceId],
     );
@@ -160,7 +190,7 @@ export async function findExistingFinding(
     `SELECT oi.id
        FROM app.ontology_object_instances oi
       WHERE oi.object_type_id = $1
-        AND oi.properties->>'snomed_code' = $2
+        AND oi.code = $2
         AND COALESCE(oi.provenance->>'unlinked', 'false') = 'true'
         AND NOT EXISTS (
           SELECT 1
@@ -177,8 +207,8 @@ export async function findExistingFinding(
 async function persistExtractResultsInTransaction(
   db: DbClient,
   input: PersistExtractInput,
+  pipelineRunId: string,
 ): Promise<PersistExtractOutput> {
-  const pipelineRunId = randomUUID();
   const nowIso = new Date().toISOString();
   const objectIds: string[] = [];
   const linkIds: string[] = [];
@@ -209,15 +239,7 @@ async function persistExtractResultsInTransaction(
       continue;
     }
 
-    const baseProperties = toFindingProperties(result);
-    const findingProperties =
-      linked
-        ? baseProperties
-        : {
-            ...baseProperties,
-            pending_patient_identity: true,
-          };
-
+    const columns = toFindingColumns(result);
     const findingProvenance: Record<string, unknown> = {
       source: "extract",
       created_at: nowIso,
@@ -228,11 +250,12 @@ async function persistExtractResultsInTransaction(
       findingProvenance.unlinked = true;
     }
 
-    const objectId = await insertObjectInstance(
+    const objectId = await insertFindingInstance(
       db,
       input.findingTypeId,
-      findingProperties,
+      toFindingProperties(result, linked),
       findingProvenance,
+      columns,
     );
     objectIds.push(objectId);
 
@@ -247,6 +270,11 @@ async function persistExtractResultsInTransaction(
       if (linkId) linkIds.push(linkId);
     }
   }
+
+  await finishPipelineRun(db, pipelineRunId, "succeeded", {
+    object_count: objectIds.length,
+    link_count: linkIds.length,
+  });
 
   return {
     environment: {
@@ -268,5 +296,26 @@ async function persistExtractResultsInTransaction(
 export async function persistExtractResults(
   input: PersistExtractInput,
 ): Promise<PersistExtractOutput> {
-  return withTransaction((db) => persistExtractResultsInTransaction(db, input));
+  const client = await pool.connect();
+  const db: DbClient = {
+    query: (sql, params) => client.query(sql, params),
+  };
+
+  try {
+    await client.query("BEGIN");
+    const pipelineRunId = await createPipelineRun(
+      db,
+      input.environmentId,
+      input.inputHash,
+    );
+    const result = await persistExtractResultsInTransaction(db, input, pipelineRunId);
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    await insertFailedPipelineRun(pool, input.environmentId, input.inputHash);
+    throw err;
+  } finally {
+    client.release();
+  }
 }

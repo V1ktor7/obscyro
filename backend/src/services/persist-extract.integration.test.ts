@@ -1,6 +1,7 @@
 import "dotenv/config";
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { after, before, describe, it } from "node:test";
 
 import { pool } from "../db/pool.js";
@@ -14,6 +15,7 @@ import {
 import {
   persistExtractResults,
   type PersistableExtractResult,
+  type PersistExtractInput,
 } from "./persist-extract.js";
 
 const TEST_ENV_SLUG = "test-lab";
@@ -22,6 +24,10 @@ const TEST_USER_EMAIL = "victormorency7@gmail.com";
 const db: DbClient = {
   query: (sql, params) => pool.query(sql, params),
 };
+
+function hashInput(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
+}
 
 function acceptFinding(
   snomedCode: string,
@@ -50,6 +56,24 @@ interface TestEnvContext {
   findingTypeId: string;
   patientTypeId: string;
   linkTypeId: string;
+}
+
+function basePersistInput(
+  ctx: TestEnvContext,
+  overrides: Partial<PersistExtractInput>,
+): PersistExtractInput {
+  return {
+    environmentId: ctx.environmentId,
+    environmentSlug: TEST_ENV_SLUG,
+    environmentName: "Test Lab",
+    objectTypeName: "ClinicalFinding",
+    findingTypeId: ctx.findingTypeId,
+    patientTypeId: ctx.patientTypeId,
+    linkTypeId: ctx.linkTypeId,
+    inputHash: hashInput("default-test-input"),
+    results: [],
+    ...overrides,
+  };
 }
 
 async function getUserId(): Promise<string> {
@@ -121,7 +145,7 @@ async function countFindingsWithCode(snomedCode: string): Promise<number> {
        JOIN app.ontology_environments e ON e.id = ot.environment_id
       WHERE e.slug = $1
         AND ot.name = 'ClinicalFinding'
-        AND oi.properties->>'snomed_code' = $2`,
+        AND oi.code = $2`,
     [TEST_ENV_SLUG, snomedCode],
   );
   return Number(rows[0]!.count);
@@ -138,7 +162,7 @@ async function cleanupTestArtifacts(snomedCodes: string[], patientIds: string[])
           AND oi.object_type_id = ot.id
           AND ot.environment_id = e.id
           AND e.slug = $1
-          AND oi.properties->>'snomed_code' = ANY($2::text[])`,
+          AND oi.code = ANY($2::text[])`,
       [TEST_ENV_SLUG, snomedCodes],
     );
     await db.query(
@@ -147,7 +171,7 @@ async function cleanupTestArtifacts(snomedCodes: string[], patientIds: string[])
         WHERE oi.object_type_id = ot.id
           AND ot.environment_id = e.id
           AND e.slug = $1
-          AND oi.properties->>'snomed_code' = ANY($2::text[])`,
+          AND oi.code = ANY($2::text[])`,
       [TEST_ENV_SLUG, snomedCodes],
     );
   }
@@ -170,6 +194,7 @@ describe("persistExtractResults integration (test-lab)", () => {
   let ctx: TestEnvContext;
   const linkedCode = "999001001";
   const unlinkedCode = "999001002";
+  const enrichmentCode = "999001003";
   let linkedPatientId: string | null = null;
 
   before(async () => {
@@ -177,27 +202,23 @@ describe("persistExtractResults integration (test-lab)", () => {
       throw new Error("DATABASE_URL is required for integration tests");
     }
     ctx = await ensureTestLabEnvironment();
-    await cleanupTestArtifacts([linkedCode, unlinkedCode], []);
+    await cleanupTestArtifacts([linkedCode, unlinkedCode, enrichmentCode], []);
   });
 
   after(async () => {
     const patientIds = linkedPatientId ? [linkedPatientId] : [];
-    await cleanupTestArtifacts([linkedCode, unlinkedCode], patientIds);
+    await cleanupTestArtifacts([linkedCode, unlinkedCode, enrichmentCode], patientIds);
     await pool.end();
   });
 
   it("a. persist identifier P-001 creates patient and links finding", async () => {
-    const result = await persistExtractResults({
-      environmentId: ctx.environmentId,
-      environmentSlug: TEST_ENV_SLUG,
-      environmentName: "Test Lab",
-      objectTypeName: "ClinicalFinding",
-      findingTypeId: ctx.findingTypeId,
-      patientTypeId: ctx.patientTypeId,
-      linkTypeId: ctx.linkTypeId,
-      patientIdentifier: "P-001",
-      results: [acceptFinding(linkedCode)],
-    });
+    const result = await persistExtractResults(
+      basePersistInput(ctx, {
+        inputHash: hashInput("test-a"),
+        patientIdentifier: "P-001",
+        results: [acceptFinding(linkedCode)],
+      }),
+    );
 
     assert.equal(result.patient?.identifier, "P-001");
     assert.equal(result.patient?.created, true);
@@ -212,17 +233,13 @@ describe("persistExtractResults integration (test-lab)", () => {
   });
 
   it("b. persist P-001 again reuses patient without duplicate row", async () => {
-    const result = await persistExtractResults({
-      environmentId: ctx.environmentId,
-      environmentSlug: TEST_ENV_SLUG,
-      environmentName: "Test Lab",
-      objectTypeName: "ClinicalFinding",
-      findingTypeId: ctx.findingTypeId,
-      patientTypeId: ctx.patientTypeId,
-      linkTypeId: ctx.linkTypeId,
-      patientIdentifier: "P-001",
-      results: [acceptFinding(linkedCode)],
-    });
+    const result = await persistExtractResults(
+      basePersistInput(ctx, {
+        inputHash: hashInput("test-b"),
+        patientIdentifier: "P-001",
+        results: [acceptFinding(linkedCode)],
+      }),
+    );
 
     assert.equal(result.patient?.identifier, "P-001");
     assert.equal(result.patient?.created, false);
@@ -232,17 +249,13 @@ describe("persistExtractResults integration (test-lab)", () => {
   });
 
   it("c. persist without identifier stores unlinked finding", async () => {
-    const result = await persistExtractResults({
-      environmentId: ctx.environmentId,
-      environmentSlug: TEST_ENV_SLUG,
-      environmentName: "Test Lab",
-      objectTypeName: "ClinicalFinding",
-      findingTypeId: ctx.findingTypeId,
-      patientTypeId: ctx.patientTypeId,
-      linkTypeId: ctx.linkTypeId,
-      patientIdentifier: undefined,
-      results: [acceptFinding(unlinkedCode)],
-    });
+    const result = await persistExtractResults(
+      basePersistInput(ctx, {
+        inputHash: hashInput("test-c"),
+        patientIdentifier: undefined,
+        results: [acceptFinding(unlinkedCode)],
+      }),
+    );
 
     assert.equal(result.patient, null);
     assert.equal(result.linked, false);
@@ -265,22 +278,57 @@ describe("persistExtractResults integration (test-lab)", () => {
   });
 
   it("d. retry identical unlinked request is idempotent", async () => {
-    const input = {
-      environmentId: ctx.environmentId,
-      environmentSlug: TEST_ENV_SLUG,
-      environmentName: "Test Lab",
-      objectTypeName: "ClinicalFinding",
-      findingTypeId: ctx.findingTypeId,
-      patientTypeId: ctx.patientTypeId,
-      linkTypeId: ctx.linkTypeId,
-      patientIdentifier: undefined as string | undefined,
+    const input = basePersistInput(ctx, {
+      inputHash: hashInput("test-d"),
+      patientIdentifier: undefined,
       results: [acceptFinding(unlinkedCode)],
-    };
+    });
 
     const first = await persistExtractResults(input);
     const second = await persistExtractResults(input);
 
     assert.equal(first.objectIds[0], second.objectIds[0]);
     assert.equal(await countFindingsWithCode(unlinkedCode), 1);
+  });
+
+  it("e. finding has context column and succeeded pipeline_run", async () => {
+    const result = await persistExtractResults(
+      basePersistInput(ctx, {
+        inputHash: hashInput("test-e-enrichment"),
+        patientIdentifier: "P-E",
+        results: [acceptFinding(enrichmentCode, "dyspnea")],
+      }),
+    );
+
+    const { rows } = await db.query<{
+      context: {
+        assertion?: { value: string; trigger: string | null; confidence: number };
+      } | null;
+      code: string | null;
+      code_system: string | null;
+      display: string | null;
+      pipeline_run_id: string;
+      run_status: string;
+    }>(
+      `SELECT oi.context,
+              oi.code,
+              oi.code_system,
+              oi.display,
+              oi.provenance->>'pipeline_run_id' AS pipeline_run_id,
+              pr.status AS run_status
+         FROM app.ontology_object_instances oi
+         JOIN app.ontology_pipeline_run pr
+           ON pr.id = (oi.provenance->>'pipeline_run_id')::uuid
+        WHERE oi.id = $1`,
+      [result.objectIds[0]],
+    );
+
+    assert.ok(rows[0]?.context);
+    assert.equal(rows[0]?.context?.assertion?.value, "affirmed");
+    assert.equal(rows[0]?.code, enrichmentCode);
+    assert.equal(rows[0]?.code_system, "http://snomed.info/sct");
+    assert.equal(rows[0]?.display, "Chest pain");
+    assert.equal(rows[0]?.pipeline_run_id, result.pipelineRunId);
+    assert.equal(rows[0]?.run_status, "succeeded");
   });
 });

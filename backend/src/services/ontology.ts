@@ -140,6 +140,83 @@ export async function insertObjectInstance(
   return rows[0]!.id;
 }
 
+export interface FindingInstanceColumns {
+  codeSystem?: string | null;
+  code?: string | null;
+  display?: string | null;
+  context?: Record<string, unknown> | null;
+}
+
+export async function insertFindingInstance(
+  db: DbClient,
+  objectTypeId: string,
+  properties: Record<string, unknown>,
+  provenance: Record<string, unknown>,
+  columns: FindingInstanceColumns,
+): Promise<string> {
+  const { rows } = await db.query<{ id: string }>(
+    `INSERT INTO app.ontology_object_instances (
+       object_type_id, properties, provenance, code_system, code, display, context
+     )
+     VALUES ($1, $2::jsonb, $3::jsonb, $4, $5, $6, $7::jsonb)
+     RETURNING id`,
+    [
+      objectTypeId,
+      JSON.stringify(properties),
+      JSON.stringify(provenance),
+      columns.codeSystem ?? null,
+      columns.code ?? null,
+      columns.display ?? null,
+      columns.context ? JSON.stringify(columns.context) : null,
+    ],
+  );
+  return rows[0]!.id;
+}
+
+export async function createPipelineRun(
+  db: DbClient,
+  environmentId: string,
+  inputHash: string,
+  source = "rest",
+): Promise<string> {
+  const { rows } = await db.query<{ id: string }>(
+    `INSERT INTO app.ontology_pipeline_run (environment_id, source, input_hash, status)
+     VALUES ($1, $2, $3, 'running')
+     RETURNING id`,
+    [environmentId, source, inputHash],
+  );
+  return rows[0]!.id;
+}
+
+export async function finishPipelineRun(
+  db: DbClient,
+  runId: string,
+  status: "succeeded" | "failed",
+  stats?: Record<string, unknown>,
+): Promise<void> {
+  await db.query(
+    `UPDATE app.ontology_pipeline_run
+        SET status = $2,
+            finished_at = NOW(),
+            stats = COALESCE($3::jsonb, stats)
+      WHERE id = $1`,
+    [runId, status, stats ? JSON.stringify(stats) : null],
+  );
+}
+
+export async function insertFailedPipelineRun(
+  db: DbClient,
+  environmentId: string,
+  inputHash: string,
+  source = "rest",
+): Promise<void> {
+  await db.query(
+    `INSERT INTO app.ontology_pipeline_run (environment_id, source, input_hash, status, finished_at)
+     VALUES ($1, $2, $3, 'failed', NOW())`,
+    [environmentId, source, inputHash],
+  );
+}
+
 export async function insertLinkInstance(
   db: DbClient,
   linkTypeId: string,

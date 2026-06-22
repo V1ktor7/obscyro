@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 
 import type { DbClient } from "../lib/db.js";
@@ -367,6 +368,7 @@ const extractRoutes: FastifyPluginAsync = async (fastify) => {
         patientTypeId,
         linkTypeId,
         patientIdentifier: persist.patient?.identifier,
+        inputHash: createHash("sha256").update(text).digest("hex"),
         results: combined.results,
       });
 
