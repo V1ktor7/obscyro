@@ -7,6 +7,11 @@
 export const NODE_W = 216;
 export const NODE_H = 96;
 
+export const INPUT_PORT_ID = "in";
+export const DEFAULT_INPUT_MAX_CONNECTIONS = 1;
+export const ZOOM_MIN = 0.25;
+export const ZOOM_MAX = 2;
+
 export const ACCENT_HEX = "#4f46e5"; // indigo — active edges / travelling token
 export const EDGE_HEX = "#cbd5e1"; // slate-300 — idle edges
 

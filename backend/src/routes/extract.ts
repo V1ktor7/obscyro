@@ -378,6 +378,85 @@ const extractRoutes: FastifyPluginAsync = async (fastify) => {
       });
     },
   );
+
+  const persistGraphBody = z.object({
+    inputHash: z.string().trim().min(1),
+    results: z.array(combinedResultSchema).min(1),
+    persist: z.object({
+      environment: z.string().trim().min(1),
+      objectType: z.string().trim().min(1).default("ClinicalFinding"),
+      patient: z
+        .object({
+          identifier: z.string().optional(),
+        })
+        .optional(),
+    }),
+  });
+
+  const persistGraphResponse = z.object({
+    persisted: persistedSchema,
+  });
+
+  app.post(
+    "/extract/persist",
+    {
+      schema: {
+        summary: "Persist pre-computed extraction results into an ontology environment",
+        description:
+          "Writes graph/decision results directly via the hardened persist path (no NLP re-run). Requires `inputHash` (sha256 of upstream content) — raw clinical text is never stored.",
+        tags: ["extract", "ontology"],
+        body: persistGraphBody,
+        response: {
+          200: persistGraphResponse,
+          400: errorEnvelope,
+          404: errorEnvelope,
+        },
+      },
+    },
+    async (req, reply) => {
+      const userId = await requireUserId(req);
+      const { persist, results, inputHash } = req.body;
+      const env = await resolveEnvironment(req.db, userId, persist.environment);
+
+      const findingTypeId = await getOrCreateObjectType(
+        req.db,
+        env.id,
+        persist.objectType,
+        "Clinical finding extracted from text with its context envelope",
+        CLINICAL_FINDING_SCHEMA,
+      );
+      const patientTypeId = await getOrCreateObjectType(
+        req.db,
+        env.id,
+        "Patient",
+        "Subject of clinical findings",
+        PATIENT_SCHEMA,
+      );
+      const linkTypeId = await getOrCreateLinkType(
+        req.db,
+        env.id,
+        "has_finding",
+        patientTypeId,
+        findingTypeId,
+        "many_to_many",
+      );
+
+      const persisted = await persistExtractResults({
+        environmentId: env.id,
+        environmentSlug: env.slug,
+        environmentName: env.name,
+        objectTypeName: persist.objectType,
+        findingTypeId,
+        patientTypeId,
+        linkTypeId,
+        patientIdentifier: persist.patient?.identifier,
+        inputHash,
+        results,
+      });
+
+      return reply.send({ persisted });
+    },
+  );
 };
 
 export default extractRoutes;

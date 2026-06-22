@@ -18,14 +18,17 @@ import { cn } from "@/lib/cn";
 import {
   createIngestSource,
   decide,
-  extractAndPersist,
   extractConcepts,
   extractContexts,
   getHealth,
   ingestPayload,
   listEnvironments,
+  listEnvTypes,
   listIngestEvents,
+  persistGraphResults,
+  pipelineResultsToCombined,
   runSourceFetch,
+  sha256Hex,
   translateCode,
   type ConceptOut,
   type ContextOut,
@@ -34,8 +37,43 @@ import {
   type PipelineResult,
 } from "@/lib/platform-api";
 import {
+  formatSaveOntologyGlance,
+  glanceFromPersisted,
+  resolvePatientIdentifierFromSource,
+  type PersistGlance,
+} from "./save-ontology-node";
+import CanvasControls from "./CanvasControls";
+import {
+  canvasToScreen,
+  fitToContent,
+  hitTestInputPort,
+  inputPortCenter,
+  pointerInContainer,
+  screenToCanvas,
+  zoomAtPoint,
+  type CanvasTransform,
+} from "./studio-canvas";
+import { detectFormat, FORMAT_BRANCHES, type FormatBranch } from "./format-detect";
+import FormatDetectNodeForm from "./FormatDetectNodeForm";
+import {
+  clearStudioGraph,
+  loadStudioGraph,
+  saveStudioGraph,
+  type PersistedNode,
+} from "./studio-persist";
+import {
+  detectWorkflows,
+  removeNodes,
+  rectsIntersect,
+  topoOrder,
+  validateConnection,
+  workflowBounds,
+  type ConnectRejectReason,
+} from "./studio-graph-ops";
+import {
   ACCENT_HEX,
   EDGE_HEX,
+  INPUT_PORT_ID,
   NODE_H,
   NODE_W,
   bezierPoint,
@@ -46,8 +84,9 @@ import {
   routerNodeHeight,
   type Geom,
 } from "./studio-graph";
-import { detectFormat, FORMAT_BRANCHES, type FormatBranch } from "./format-detect";
-import FormatDetectNodeForm from "./FormatDetectNodeForm";
+import WorkflowRunChip, {
+  type WorkflowRunState,
+} from "./WorkflowRunChip";
 import {
   defaultSourceRequest,
   harvestText,
@@ -71,6 +110,7 @@ type NodeType =
   | "concept"
   | "context"
   | "decision"
+  | "saveOntology"
   | "terminology"
   | "output"
   | "custom";
@@ -95,6 +135,9 @@ type NodeConfig = {
   triggers?: string[];
   destination?: Destination;
   acceptThreshold?: number;
+  ontologyEnv?: string;
+  objectType?: string;
+  patientIdentifierSource?: string;
   targetSystem?: "icd10" | "icdo" | "ctv3";
   sourceRequest?: SourceRequest;
 };
@@ -109,7 +152,13 @@ type FlowNode = {
   code: string;
 };
 
-type Edge = { id: string; source: string; target: string; sourcePort?: string };
+type Edge = {
+  id: string;
+  source: string;
+  target: string;
+  sourcePort?: string;
+  targetPort?: string;
+};
 
 /** Data bag flowing between nodes along edges. */
 type NodeOutput = {
@@ -122,6 +171,7 @@ type NodeOutput = {
   headers?: Record<string, string>;
   activeBranch?: FormatBranch;
   detectedFormat?: FormatBranch;
+  persistGlance?: PersistGlance;
 };
 
 type InspectorMode = "lowcode" | "code";
@@ -142,6 +192,7 @@ const NODE_ACCENTS: Record<
   concept: { text: "text-violet-600", bar: "bg-violet-400", border: "border-violet-400", hex: "#7c3aed" },
   context: { text: "text-violet-600", bar: "bg-violet-400", border: "border-violet-400", hex: "#7c3aed" },
   decision: { text: "text-amber-600", bar: "bg-amber-400", border: "border-amber-400", hex: "#d97706" },
+  saveOntology: { text: "text-slate-600", bar: "bg-slate-500", border: "border-slate-500", hex: "#475569" },
   terminology: { text: "text-teal-600", bar: "bg-teal-400", border: "border-teal-400", hex: "#0d9488" },
   output: { text: "text-emerald-600", bar: "bg-emerald-400", border: "border-emerald-400", hex: "#059669" },
   custom: { text: "text-slate-500", bar: "bg-slate-400", border: "border-slate-400", hex: "#64748b" },
@@ -201,6 +252,8 @@ function defaultCode(type: NodeType): string {
       return `function run(input) {\n  // Rule-based ConText: assertion, subject, temporality, certainty.\n  return applyContextRules(input, {\n    triggers: ["denies", "rule out", "father"],\n  });\n}`;
     case "decision":
       return `function run(input) {\n  // Route per destination using status + context confidence.\n  if (input.status === "unresolved") return "escalate";\n  if (input.contextConfidence < 0.85) return "flag";\n  return "accept";\n}`;
+    case "saveOntology":
+      return `function run(input) {\n  // Persist decision results into the ontology environment.\n  return persistGraphResults(input.results, {\n    environment: config.ontologyEnv,\n    objectType: config.objectType,\n    patientIdentifier: config.patientIdentifierSource,\n  });\n}`;
     case "terminology":
       return `function run(input) {\n  // Cross-map SNOMED -> ICD-10 / ICD-O / CTV3.\n  return translate(input.code, { to: "icd10" });\n}`;
     case "output":
@@ -265,6 +318,14 @@ function nodeDefaults(type: NodeType): {
         title: "Decision (per destination)",
         config: { destination: "problem_list", acceptThreshold: 0.85 },
       };
+    case "saveOntology":
+      return {
+        title: "Save to ontology",
+        config: {
+          objectType: "ClinicalFinding",
+          patientIdentifierSource: "",
+        },
+      };
     case "terminology":
       return {
         title: "Terminology lookup",
@@ -294,6 +355,7 @@ function buildDefaultNodes(): FlowNode[] {
     "concept",
     "context",
     "decision",
+    "saveOntology",
     "output",
   ];
   return types.map((type, i) => {
@@ -312,11 +374,35 @@ function buildDefaultNodes(): FlowNode[] {
 
 function buildDefaultEdges(): Edge[] {
   return [
-    { id: "e1", source: "n-1", target: "n-2" },
-    { id: "e2", source: "n-2", target: "n-3" },
-    { id: "e3", source: "n-3", target: "n-4" },
-    { id: "e4", source: "n-4", target: "n-5" },
+    { id: "e1", source: "n-1", target: "n-2", targetPort: INPUT_PORT_ID },
+    { id: "e2", source: "n-2", target: "n-3", targetPort: INPUT_PORT_ID },
+    { id: "e3", source: "n-3", target: "n-4", targetPort: INPUT_PORT_ID },
+    { id: "e4", source: "n-4", target: "n-5", targetPort: INPUT_PORT_ID },
+    { id: "e5", source: "n-5", target: "n-6", targetPort: INPUT_PORT_ID },
   ];
+}
+
+function initGraphState(): {
+  nodes: FlowNode[];
+  edges: Edge[];
+  pan: { x: number; y: number };
+  zoom: number;
+} {
+  const saved = loadStudioGraph();
+  if (saved) {
+    return {
+      nodes: saved.nodes as FlowNode[],
+      edges: saved.edges,
+      pan: saved.pan,
+      zoom: saved.zoom,
+    };
+  }
+  return {
+    nodes: buildDefaultNodes(),
+    edges: buildDefaultEdges(),
+    pan: { x: 0, y: 0 },
+    zoom: 1,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -326,52 +412,8 @@ function buildDefaultEdges(): Edge[] {
 const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
 // ---------------------------------------------------------------------------
-// Graph helpers (topology, cycles, merge)
+// Graph helpers (merge, edge geom)
 // ---------------------------------------------------------------------------
-
-function topoOrder(ns: FlowNode[], es: Edge[]): string[] {
-  const ids = ns.map((n) => n.id);
-  const idset = new Set(ids);
-  const indeg = new Map<string, number>(ids.map((i) => [i, 0]));
-  const adj = new Map<string, string[]>(ids.map((i) => [i, []]));
-  for (const e of es) {
-    if (!idset.has(e.source) || !idset.has(e.target)) continue;
-    adj.get(e.source)!.push(e.target);
-    indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1);
-  }
-  const queue = ids.filter((i) => (indeg.get(i) ?? 0) === 0);
-  const order: string[] = [];
-  while (queue.length) {
-    const n = queue.shift()!;
-    order.push(n);
-    for (const m of adj.get(n) ?? []) {
-      indeg.set(m, (indeg.get(m) ?? 0) - 1);
-      if ((indeg.get(m) ?? 0) === 0) queue.push(m);
-    }
-  }
-  // Append any nodes left out by a cycle so they still run (in node order).
-  for (const i of ids) if (!order.includes(i)) order.push(i);
-  return order;
-}
-
-/** Would adding source -> target create a cycle? (target already reaches source) */
-function wouldCycle(es: Edge[], source: string, target: string): boolean {
-  const adj = new Map<string, string[]>();
-  for (const e of es) {
-    if (!adj.has(e.source)) adj.set(e.source, []);
-    adj.get(e.source)!.push(e.target);
-  }
-  const stack = [target];
-  const seen = new Set<string>();
-  while (stack.length) {
-    const n = stack.pop()!;
-    if (n === source) return true;
-    if (seen.has(n)) continue;
-    seen.add(n);
-    for (const m of adj.get(n) ?? []) stack.push(m);
-  }
-  return false;
-}
 
 function mergeOutputs(outputs: NodeOutput[]): NodeOutput {
   const merged: NodeOutput = {};
@@ -572,6 +614,41 @@ async function executeNode(
       return { concepts, contexts, results };
     }
 
+    case "saveOntology": {
+      const results = input.results ?? [];
+      if (!results.length) {
+        throw new Error("No decision results reached this node. Connect Decision upstream.");
+      }
+      const env = node.config.ontologyEnv?.trim();
+      if (!env) {
+        throw new Error("Select an ontology environment first.");
+      }
+      const concepts = input.concepts ?? [];
+      const contexts = input.contexts ?? [];
+      const combined = pipelineResultsToCombined(results, contexts, concepts);
+      const patientId = resolvePatientIdentifierFromSource(
+        node.config.patientIdentifierSource,
+        input.payload,
+      );
+      const inputHash = await sha256Hex(
+        JSON.stringify({ results: combined, env, patientId }),
+      );
+      const { persisted } = await persistGraphResults({
+        inputHash,
+        results: combined,
+        persist: {
+          environment: env,
+          objectType: node.config.objectType ?? "ClinicalFinding",
+          ...(patientId ? { patient: { identifier: patientId } } : {}),
+        },
+      });
+      return {
+        ...input,
+        results,
+        persistGlance: glanceFromPersisted(persisted),
+      };
+    }
+
     case "terminology": {
       const target = node.config.targetSystem ?? "icd10";
       const base =
@@ -671,6 +748,14 @@ function NodeIcon({ type }: { type: NodeType }) {
           <path d="M12 3 21 12 12 21 3 12z" />
         </svg>
       );
+    case "saveOntology":
+      return (
+        <svg {...common}>
+          <ellipse cx="12" cy="5" rx="8" ry="3" />
+          <path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5" />
+          <path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" />
+        </svg>
+      );
     case "terminology":
       return (
         <svg {...common}>
@@ -738,6 +823,7 @@ const PALETTE: { type: NodeType; label: string }[] = [
   { type: "concept", label: "Concept" },
   { type: "context", label: "Context" },
   { type: "decision", label: "Decision" },
+  { type: "saveOntology", label: "Save to ontology" },
   { type: "terminology", label: "Terminology lookup" },
   { type: "output", label: "Output" },
   { type: "custom", label: "Custom code node" },
@@ -783,12 +869,14 @@ function Palette({ onAdd }: { onAdd: (type: NodeType) => void }) {
 
 export default function StudioEditor() {
   const router = useRouter();
+  const initial = useMemo(() => initGraphState(), []);
 
-  const [nodes, setNodes] = useState<FlowNode[]>(() => buildDefaultNodes());
-  const [edges, setEdges] = useState<Edge[]>(() => buildDefaultEdges());
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [nodes, setNodes] = useState<FlowNode[]>(() => initial.nodes);
+  const [edges, setEdges] = useState<Edge[]>(() => initial.edges);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [pan, setPan] = useState(initial.pan);
+  const [zoom, setZoom] = useState(initial.zoom);
   const [inspectorMode, setInspectorMode] = useState<InspectorMode>("lowcode");
 
   const [running, setRunning] = useState(false);
@@ -800,18 +888,36 @@ export default function StudioEditor() {
     new Map(),
   );
   const [nodeErrors, setNodeErrors] = useState<Map<string, string>>(new Map());
+  const [workflowStates, setWorkflowStates] = useState<
+    Record<string, WorkflowRunState>
+  >({});
   const [pendingEdge, setPendingEdge] = useState<{
     source: string;
     sourcePort?: string;
     cursor: { x: number; y: number };
+    previewValid: boolean;
   } | null>(null);
+  const [connectHover, setConnectHover] = useState<{
+    nodeId: string;
+    valid: boolean;
+  } | null>(null);
+  const [connectReject, setConnectReject] = useState<{
+    nodeId: string;
+    reason: ConnectRejectReason;
+  } | null>(null);
+  const [marquee, setMarquee] = useState<{
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+  } | null>(null);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
 
   const [mode, setMode] = useState<"pipeline" | "ontology">("pipeline");
   const [health, setHealth] = useState<HealthStatus | "checking">("checking");
   const [environments, setEnvironments] = useState<EnvironmentSummary[]>([]);
   const [selectedEnv, setSelectedEnv] = useState<string | null>(null);
-  const [saveMsg, setSaveMsg] = useState<string | null>(null);
-  const [savingToOntology, setSavingToOntology] = useState(false);
+  const [envObjectTypes, setEnvObjectTypes] = useState<string[]>(["ClinicalFinding"]);
 
   // Real readiness probe (never hardcoded): poll /v1/health.
   useEffect(() => {
@@ -847,24 +953,93 @@ export default function StudioEditor() {
     void refreshEnvironments();
   }, [refreshEnvironments]);
 
+  useEffect(() => {
+    if (!selectedEnv || !getStoredKey()) {
+      setEnvObjectTypes(["ClinicalFinding"]);
+      return;
+    }
+    let cancelled = false;
+    void listEnvTypes(selectedEnv)
+      .then(({ types }) => {
+        if (!cancelled) {
+          const names = types.map((t) => t.name);
+          setEnvObjectTypes(names.length > 0 ? names : ["ClinicalFinding"]);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setEnvObjectTypes(["ClinicalFinding"]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedEnv]);
+
+  useEffect(() => {
+    if (!selectedEnv) return;
+    setNodes((prev) =>
+      prev.map((n) =>
+        n.type === "saveOntology" && !n.config.ontologyEnv
+          ? { ...n, config: { ...n.config, ontologyEnv: selectedEnv } }
+          : n,
+      ),
+    );
+  }, [selectedEnv]);
+
+  const handleEnvChange = useCallback(
+    (slug: string) => {
+      setSelectedEnv(slug || null);
+      const selected = Array.from(selectedIds)[0];
+      if (selected) {
+        setNodes((prev) =>
+          prev.map((n) =>
+            n.id === selected && n.type === "saveOntology"
+              ? { ...n, config: { ...n.config, ontologyEnv: slug || undefined } }
+              : n,
+          ),
+        );
+      }
+    },
+    [selectedIds],
+  );
+
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const panRef = useRef(pan);
   panRef.current = pan;
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+  const spaceHeldRef = useRef(false);
   const connectingRef = useRef<{ source: string; sourcePort?: string } | null>(
     null,
   );
   const dragRef = useRef<
     | {
-        kind: "node" | "pan";
+        kind: "node" | "pan" | "marquee";
         id?: string;
         startX: number;
         startY: number;
         origX: number;
         origY: number;
+        marqueeStart?: { x: number; y: number };
       }
     | null
   >(null);
   const movedRef = useRef(false);
+  const rejectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const getTransform = useCallback(
+    (): CanvasTransform => ({ pan: panRef.current, zoom: zoomRef.current }),
+    [],
+  );
+
+  const pointerToCanvas = useCallback(
+    (clientX: number, clientY: number): { x: number; y: number } | null => {
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return null;
+      const screen = pointerInContainer(clientX, clientY, rect);
+      return screenToCanvas(screen.x, screen.y, getTransform());
+    },
+    [getTransform],
+  );
 
   const nodeById = useMemo(() => {
     const m = new Map<string, FlowNode>();
@@ -872,56 +1047,258 @@ export default function StudioEditor() {
     return m;
   }, [nodes]);
 
+  const selectedId = useMemo(() => {
+    if (selectedIds.size !== 1) return null;
+    return Array.from(selectedIds)[0];
+  }, [selectedIds]);
+
   const selectedNode = selectedId ? nodeById.get(selectedId) ?? null : null;
+
+  const workflows = useMemo(
+    () => detectWorkflows(nodes, edges),
+    [nodes, edges],
+  );
+
+  const nodeHeightById = useCallback(
+    (id: string) => {
+      const n = nodeById.get(id);
+      return n ? nodeCardHeight(n) : NODE_H;
+    },
+    [nodeById],
+  );
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+    setSelectedEdgeId(null);
+  }
+
+  function selectNode(id: string, additive: boolean) {
+    setSelectedEdgeId(null);
+    if (additive) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+    } else {
+      setSelectedIds(new Set([id]));
+    }
+  }
+
+  function flashConnectReject(nodeId: string, reason: ConnectRejectReason) {
+    if (rejectTimerRef.current) clearTimeout(rejectTimerRef.current);
+    setConnectReject({ nodeId, reason });
+    rejectTimerRef.current = setTimeout(() => {
+      setConnectReject(null);
+      rejectTimerRef.current = null;
+    }, 400);
+  }
+
+  // Autosave graph topology
+  useEffect(() => {
+    const t = setTimeout(() => {
+      saveStudioGraph({
+        nodes: nodes as PersistedNode[],
+        edges,
+        pan,
+        zoom,
+      });
+    }, 500);
+    return () => clearTimeout(t);
+  }, [nodes, edges, pan, zoom]);
+
+  function deleteEdge(id: string) {
+    setEdges((prev) => prev.filter((e) => e.id !== id));
+    setSelectedEdgeId((cur) => (cur === id ? null : cur));
+  }
+
+  const deleteSelection = useCallback(() => {
+    if (selectedEdgeId) {
+      setEdges((prev) => prev.filter((e) => e.id !== selectedEdgeId));
+      setSelectedEdgeId(null);
+      return;
+    }
+    if (selectedIds.size > 0) {
+      const ids = Array.from(selectedIds);
+      setNodes((prev) => removeNodes(ids, prev, edges).nodes);
+      setEdges((prev) => removeNodes(ids, nodes, prev).edges);
+      setSelectedIds(new Set());
+      setSelectedEdgeId(null);
+    }
+  }, [edges, nodes, selectedEdgeId, selectedIds]);
+
+  const findConnectHover = useCallback(
+    (
+      screenX: number,
+      screenY: number,
+    ): { nodeId: string; valid: boolean } | null => {
+      const c = connectingRef.current;
+      if (!c) return null;
+      const t = getTransform();
+      for (const node of nodes) {
+        if (node.id === c.source) continue;
+        const h = nodeCardHeight(node);
+        const port = inputPortCenter(node.x, node.y, h);
+        const portScreen = canvasToScreen(port.x, port.y, t);
+        if (hitTestInputPort(screenX, screenY, portScreen.x, portScreen.y)) {
+          const reason = validateConnection(
+            edges,
+            c.source,
+            node.id,
+            c.sourcePort,
+            INPUT_PORT_ID,
+          );
+          return { nodeId: node.id, valid: reason === null };
+        }
+      }
+      return null;
+    },
+    [edges, getTransform, nodes],
+  );
+
+  // Space key for pan-over-nodes + delete selection
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (
+        e.code === "Space" &&
+        !(e.target instanceof HTMLInputElement) &&
+        !(e.target instanceof HTMLTextAreaElement) &&
+        !(e.target instanceof HTMLSelectElement)
+      ) {
+        spaceHeldRef.current = true;
+        e.preventDefault();
+      }
+      if (
+        (e.key === "Delete" || e.key === "Backspace") &&
+        !(e.target instanceof HTMLInputElement) &&
+        !(e.target instanceof HTMLTextAreaElement)
+      ) {
+        e.preventDefault();
+        deleteSelection();
+      }
+    }
+    function onKeyUp(e: KeyboardEvent) {
+      if (e.code === "Space") spaceHeldRef.current = false;
+    }
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, [deleteSelection]);
 
   // -- Drag / pan / connect -------------------------------------------------
 
   useEffect(() => {
     function onMove(e: PointerEvent) {
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const screen = pointerInContainer(e.clientX, e.clientY, rect);
+
       if (connectingRef.current) {
-        const rect = canvasRef.current?.getBoundingClientRect();
-        if (rect) {
-          const x = e.clientX - rect.left - panRef.current.x;
-          const y = e.clientY - rect.top - panRef.current.y;
-          setPendingEdge((pe) => (pe ? { ...pe, cursor: { x, y } } : pe));
-        }
+        const canvas = screenToCanvas(screen.x, screen.y, getTransform());
+        const hover = findConnectHover(screen.x, screen.y);
+        setConnectHover(hover);
+        setPendingEdge((pe) =>
+          pe
+            ? {
+                ...pe,
+                cursor: canvas,
+                previewValid: hover?.valid ?? false,
+              }
+            : pe,
+        );
         return;
       }
+
       const d = dragRef.current;
       if (!d) return;
       const dx = e.clientX - d.startX;
       const dy = e.clientY - d.startY;
       if (Math.abs(dx) > 2 || Math.abs(dy) > 2) movedRef.current = true;
+
       if (d.kind === "pan") {
         setPan({ x: d.origX + dx, y: d.origY + dy });
+      } else if (d.kind === "marquee" && d.marqueeStart) {
+        const cur = pointerToCanvas(e.clientX, e.clientY);
+        if (cur) {
+          setMarquee({
+            x1: d.marqueeStart.x,
+            y1: d.marqueeStart.y,
+            x2: cur.x,
+            y2: cur.y,
+          });
+        }
       } else if (d.kind === "node" && d.id) {
+        const z = zoomRef.current;
         setNodes((prev) =>
           prev.map((n) =>
-            n.id === d.id ? { ...n, x: d.origX + dx, y: d.origY + dy } : n,
+            n.id === d.id
+              ? { ...n, x: d.origX + dx / z, y: d.origY + dy / z }
+              : n,
           ),
         );
       }
     }
-    function onUp() {
+
+    function onUp(e: PointerEvent) {
+      const d = dragRef.current;
+      if (d?.kind === "marquee" && d.marqueeStart) {
+        const cur = pointerToCanvas(e.clientX, e.clientY);
+        if (cur) {
+          const x = Math.min(d.marqueeStart.x, cur.x);
+          const y = Math.min(d.marqueeStart.y, cur.y);
+          const w = Math.abs(cur.x - d.marqueeStart.x);
+          const h = Math.abs(cur.y - d.marqueeStart.y);
+          if (w > 4 || h > 4) {
+            const hits = new Set<string>();
+            for (const node of nodes) {
+              const nh = nodeCardHeight(node);
+              if (
+                rectsIntersect(
+                  { x, y, w, h },
+                  { x: node.x, y: node.y, w: NODE_W, h: nh },
+                )
+              ) {
+                hits.add(node.id);
+              }
+            }
+            if (hits.size) {
+              setSelectedIds(hits);
+              setSelectedEdgeId(null);
+            }
+          }
+        }
+        setMarquee(null);
+      }
+
       dragRef.current = null;
       if (connectingRef.current) {
         connectingRef.current = null;
         setPendingEdge(null);
+        setConnectHover(null);
       }
     }
+
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
-  }, []);
+  }, [edges, findConnectHover, getTransform, nodes, pointerToCanvas]);
 
   function startNodeDrag(e: React.PointerEvent, node: FlowNode) {
     e.stopPropagation();
+    if (spaceHeldRef.current) {
+      startPan(e);
+      return;
+    }
     movedRef.current = false;
-    setSelectedId(node.id);
-    setSelectedEdgeId(null);
+    if (!e.shiftKey) selectNode(node.id, false);
+    else selectNode(node.id, true);
     dragRef.current = {
       kind: "node",
       id: node.id,
@@ -933,9 +1310,26 @@ export default function StudioEditor() {
   }
 
   function startPan(e: React.PointerEvent) {
+    if (e.button !== 0) return;
     movedRef.current = false;
-    setSelectedId(null);
-    setSelectedEdgeId(null);
+    const canvas = pointerToCanvas(e.clientX, e.clientY);
+    if (!canvas) return;
+
+    if (e.shiftKey) {
+      clearSelection();
+      dragRef.current = {
+        kind: "marquee",
+        startX: e.clientX,
+        startY: e.clientY,
+        origX: 0,
+        origY: 0,
+        marqueeStart: canvas,
+      };
+      setMarquee({ x1: canvas.x, y1: canvas.y, x2: canvas.x, y2: canvas.y });
+      return;
+    }
+
+    if (!e.shiftKey) clearSelection();
     dragRef.current = {
       kind: "pan",
       startX: e.clientX,
@@ -943,6 +1337,17 @@ export default function StudioEditor() {
       origX: pan.x,
       origY: pan.y,
     };
+  }
+
+  function handleWheel(e: React.WheelEvent) {
+    e.preventDefault();
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const screen = pointerInContainer(e.clientX, e.clientY, rect);
+    const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+    const next = zoomAtPoint(getTransform(), screen.x, screen.y, factor);
+    setZoom(next.zoom);
+    setPan(next.pan);
   }
 
   function startConnect(
@@ -964,7 +1369,9 @@ export default function StudioEditor() {
       source: node.id,
       sourcePort,
       cursor: { x: node.x + NODE_W, y: sourceY },
+      previewValid: false,
     });
+    setConnectHover(null);
   }
 
   function endConnect(e: React.PointerEvent, node: FlowNode) {
@@ -974,37 +1381,30 @@ export default function StudioEditor() {
     const source = c.source;
     const target = node.id;
     const sourcePort = c.sourcePort;
-    if (source !== target) {
-      setEdges((prev) => {
-        if (
-          prev.some(
-            (ed) =>
-              ed.source === source &&
-              ed.target === target &&
-              (ed.sourcePort ?? undefined) === (sourcePort ?? undefined),
-          )
-        ) {
-          return prev;
-        }
-        if (wouldCycle(prev, source, target)) return prev;
-        return [
-          ...prev,
-          {
-            id: nextId("e"),
-            source,
-            target,
-            ...(sourcePort ? { sourcePort } : {}),
-          },
-        ];
-      });
+    const reason = validateConnection(
+      edges,
+      source,
+      target,
+      sourcePort,
+      INPUT_PORT_ID,
+    );
+    if (reason) {
+      flashConnectReject(target, reason);
+    } else {
+      setEdges((prev) => [
+        ...prev,
+        {
+          id: nextId("e"),
+          source,
+          target,
+          targetPort: INPUT_PORT_ID,
+          ...(sourcePort ? { sourcePort } : {}),
+        },
+      ]);
     }
     connectingRef.current = null;
     setPendingEdge(null);
-  }
-
-  function deleteEdge(id: string) {
-    setEdges((prev) => prev.filter((e) => e.id !== id));
-    setSelectedEdgeId((cur) => (cur === id ? null : cur));
+    setConnectHover(null);
   }
 
   // -- Add node (click + drop) ----------------------------------------------
@@ -1013,34 +1413,38 @@ export default function StudioEditor() {
     (type: NodeType, at?: { x: number; y: number }) => {
       const d = nodeDefaults(type);
       const pos = at ?? {
-        x: -pan.x + 360 + Math.random() * 40,
-        y: -pan.y + 300 + Math.random() * 40,
+        x: (-pan.x + 360 + Math.random() * 40) / zoom,
+        y: (-pan.y + 300 + Math.random() * 40) / zoom,
       };
+      const config =
+        type === "saveOntology" && selectedEnv
+          ? { ...d.config, ontologyEnv: selectedEnv }
+          : d.config;
       const node: FlowNode = {
         id: nextId(type),
         type,
         title: d.title,
         x: pos.x,
         y: pos.y,
-        config: d.config,
+        config,
         code: defaultCode(type),
       };
       setNodes((prev) => [...prev, node]);
-      setSelectedId(node.id);
+      setSelectedIds(new Set([node.id]));
       setSelectedEdgeId(null);
     },
-    [pan.x, pan.y],
+    [pan.x, pan.y, zoom, selectedEnv],
   );
 
   function onCanvasDrop(e: React.DragEvent) {
     e.preventDefault();
     const type = e.dataTransfer.getData("application/x-node-type") as NodeType;
     if (!type) return;
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
+    const canvas = pointerToCanvas(e.clientX, e.clientY);
+    if (!canvas) return;
     addNode(type, {
-      x: e.clientX - rect.left - pan.x - NODE_W / 2,
-      y: e.clientY - rect.top - pan.y - NODE_H / 2,
+      x: canvas.x - NODE_W / 2,
+      y: canvas.y - NODE_H / 2,
     });
   }
 
@@ -1099,30 +1503,32 @@ export default function StudioEditor() {
     return null;
   }
 
-  async function runGraph() {
-    if (running) return;
-    setSelectedEdgeId(null);
-    if (!getStoredKey()) {
-      setResults(DEMO_RESULTS);
-      setRunError("No API key — showing demo data. Sign in and create a key.");
-      return;
-    }
-    setRunning(true);
-    setRunError(null);
-    setResults(null);
-    setSelectedId(null);
-    setToken(null);
-
-    const order = topoOrder(nodes, edges);
-    const outputs = new Map<string, NodeOutput>();
-    const errors = new Map<string, string>();
+  async function executeGraphSubset(opts: {
+    subsetNodeIds: Set<string>;
+    subsetEdges: Edge[];
+    initialOutputs?: Map<string, NodeOutput>;
+    initialErrors?: Map<string, string>;
+    animateEdges?: boolean;
+    onWorkflowDone?: (hadErrors: boolean) => void;
+  }): Promise<{
+    outputs: Map<string, NodeOutput>;
+    errors: Map<string, string>;
+    order: string[];
+  }> {
+    const subsetNodes = nodes.filter((n) => opts.subsetNodeIds.has(n.id));
+    const order = topoOrder(
+      subsetNodes.map((n) => n.id),
+      opts.subsetEdges,
+    );
+    const outputs = new Map(opts.initialOutputs ?? []);
+    const errors = new Map(opts.initialErrors ?? []);
     const formatDetectUpdates = new Map<string, FormatBranch>();
 
     for (const id of order) {
       const node = nodeById.get(id);
-      if (!node) continue;
+      if (!node || !opts.subsetNodeIds.has(id)) continue;
       setActiveNodeId(id);
-      const incoming = edges.filter((e) => e.target === id);
+      const incoming = opts.subsetEdges.filter((e) => e.target === id);
       const filtered = filterIncomingEdges(incoming, outputs, nodeById);
       const merged = mergeOutputs(
         filtered.map((e) => outputs.get(e.source) ?? {}),
@@ -1130,6 +1536,7 @@ export default function StudioEditor() {
       try {
         const out = await executeNode(node, merged);
         outputs.set(id, out);
+        errors.delete(id);
         if (node.type === "formatDetect" && out.detectedFormat) {
           formatDetectUpdates.set(id, out.detectedFormat);
         }
@@ -1142,16 +1549,18 @@ export default function StudioEditor() {
         );
         outputs.set(id, {});
       }
-      await sleep(160);
-      const srcOut = outputs.get(id);
-      for (const e of edges.filter((e) => e.source === id)) {
-        const s = nodeById.get(e.source);
-        const t = nodeById.get(e.target);
-        if (!s || !t) continue;
-        if (s.type === "formatDetect" && srcOut?.activeBranch) {
-          if ((e.sourcePort ?? "unknown") !== srcOut.activeBranch) continue;
+      await sleep(opts.animateEdges ? 160 : 140);
+      if (opts.animateEdges) {
+        const srcOut = outputs.get(id);
+        for (const e of opts.subsetEdges.filter((e) => e.source === id)) {
+          const s = nodeById.get(e.source);
+          const t = nodeById.get(e.target);
+          if (!s || !t) continue;
+          if (s.type === "formatDetect" && srcOut?.activeBranch) {
+            if ((e.sourcePort ?? "unknown") !== srcOut.activeBranch) continue;
+          }
+          await animateToken(edgeGeom(e, s, t), 420);
         }
-        await animateToken(edgeGeom(e, s, t), 420);
       }
     }
 
@@ -1168,12 +1577,85 @@ export default function StudioEditor() {
       );
     }
 
+    opts.onWorkflowDone?.(order.some((nid) => errors.has(nid)));
+    return { outputs, errors, order };
+  }
+
+  async function runGraph() {
+    if (running) return;
+    setSelectedEdgeId(null);
+    if (!getStoredKey()) {
+      setResults(DEMO_RESULTS);
+      setRunError("No API key — showing demo data. Sign in and create a key.");
+      return;
+    }
+    setRunning(true);
+    setRunError(null);
+    setResults(null);
+    clearSelection();
+    setToken(null);
+
+    const allIds = new Set(nodes.map((n) => n.id));
+    const wfRunning: Record<string, WorkflowRunState> = {};
+    for (const wf of workflows) wfRunning[wf.id] = "running";
+    setWorkflowStates((prev) => ({ ...prev, ...wfRunning }));
+
+    const { outputs, errors, order } = await executeGraphSubset({
+      subsetNodeIds: allIds,
+      subsetEdges: edges,
+      animateEdges: true,
+    });
+
+    const wfFinal: Record<string, WorkflowRunState> = {};
+    for (const wf of workflows) {
+      const hadErr = wf.nodeIds.some((nid) => errors.has(nid));
+      wfFinal[wf.id] = hadErr ? "error" : "done";
+    }
+    setWorkflowStates((prev) => ({ ...prev, ...wfFinal }));
+
     setActiveNodeId(null);
     setToken(null);
     setNodeOutputs(outputs);
     setNodeErrors(errors);
     setResults(deriveResults(order, outputs));
     if (errors.size) setRunError(errors.values().next().value ?? null);
+    setRunning(false);
+  }
+
+  async function runWorkflow(workflowId: string) {
+    if (running) return;
+    const wf = workflows.find((w) => w.id === workflowId);
+    if (!wf) return;
+    if (!getStoredKey()) {
+      setRunError("No API key. Sign in and create a key.");
+      return;
+    }
+    setRunning(true);
+    setRunError(null);
+    setWorkflowStates((prev) => ({ ...prev, [workflowId]: "running" }));
+
+    const subsetIds = new Set(wf.nodeIds);
+    const subsetEdges = edges.filter((e) => wf.edgeIds.includes(e.id));
+
+    const { outputs, errors } = await executeGraphSubset({
+      subsetNodeIds: subsetIds,
+      subsetEdges,
+      initialOutputs: nodeOutputs,
+      initialErrors: nodeErrors,
+      animateEdges: false,
+      onWorkflowDone: (hadErrors) => {
+        setWorkflowStates((prev) => ({
+          ...prev,
+          [workflowId]: hadErrors ? "error" : "done",
+        }));
+      },
+    });
+
+    setActiveNodeId(null);
+    setNodeOutputs(outputs);
+    setNodeErrors(errors);
+    const hadErr = wf.nodeIds.some((nid) => errors.has(nid));
+    if (hadErr) setRunError(errors.get(wf.nodeIds.find((nid) => errors.has(nid))!) ?? null);
     setRunning(false);
   }
 
@@ -1187,7 +1669,6 @@ export default function StudioEditor() {
     setRunning(true);
     setRunError(null);
 
-    // Minimal upstream closure that feeds this node.
     const needed = new Set<string>();
     const visit = (n: string) => {
       if (needed.has(n)) return;
@@ -1196,57 +1677,17 @@ export default function StudioEditor() {
     };
     visit(id);
 
-    const order = topoOrder(
-      nodes.filter((n) => needed.has(n.id)),
-      edges.filter((e) => needed.has(e.source) && needed.has(e.target)),
+    const subsetEdges = edges.filter(
+      (e) => needed.has(e.source) && needed.has(e.target),
     );
 
-    const outputs = new Map(nodeOutputs);
-    const errors = new Map(nodeErrors);
-    const formatDetectUpdates = new Map<string, FormatBranch>();
-
-    for (const nid of order) {
-      const node = nodeById.get(nid);
-      if (!node) continue;
-      setActiveNodeId(nid);
-      const incoming = edges.filter(
-        (e) => e.target === nid && needed.has(e.source),
-      );
-      const filtered = filterIncomingEdges(incoming, outputs, nodeById);
-      const merged = mergeOutputs(
-        filtered.map((e) => outputs.get(e.source) ?? {}),
-      );
-      try {
-        const out = await executeNode(node, merged);
-        outputs.set(nid, out);
-        errors.delete(nid);
-        if (node.type === "formatDetect" && out.detectedFormat) {
-          formatDetectUpdates.set(nid, out.detectedFormat);
-        }
-      } catch (err) {
-        errors.set(
-          nid,
-          err instanceof ApiError
-            ? `${err.code}: ${err.message}`
-            : (err as Error).message,
-        );
-        outputs.set(nid, {});
-      }
-      await sleep(140);
-    }
-
-    if (formatDetectUpdates.size) {
-      setNodes((prev) =>
-        prev.map((n) => {
-          const fmt = formatDetectUpdates.get(n.id);
-          if (!fmt) return n;
-          return {
-            ...n,
-            config: { ...n.config, lastDetectedFormat: fmt },
-          };
-        }),
-      );
-    }
+    const { outputs, errors } = await executeGraphSubset({
+      subsetNodeIds: needed,
+      subsetEdges,
+      initialOutputs: nodeOutputs,
+      initialErrors: nodeErrors,
+      animateEdges: false,
+    });
 
     setActiveNodeId(null);
     setNodeOutputs(outputs);
@@ -1261,61 +1702,19 @@ export default function StudioEditor() {
     setRunning(false);
   }
 
-  /** Re-run the full pipeline server-side and persist findings into the env. */
-  async function saveOutputToOntology() {
-    if (savingToOntology) return;
-    setSaveMsg(null);
-    if (!getStoredKey()) {
-      setSaveMsg("Sign in and create a key to save to an ontology.");
-      return;
-    }
-    if (!selectedEnv) {
-      setSaveMsg("Select an environment in the top bar first.");
-      return;
-    }
-    // Prefer text that actually flowed through the graph; fall back to the
-    // input/REST node config so the button works before a run.
-    const flowed = Array.from(nodeOutputs.values()).find((o) => o.text)?.text;
-    const fromInput =
-      nodes.find((n) => n.type === "input")?.config.sampleText ??
-      nodes.find((n) => n.type === "rest")?.config.payloadJson;
-    const text = (flowed ?? fromInput ?? "").trim();
-    if (text.length < 2) {
-      setSaveMsg("No input text to extract. Add an Input node with text.");
-      return;
-    }
-    setSavingToOntology(true);
-    try {
-      const res = await extractAndPersist({
-        text,
-        destination: "problem_list",
-        persist: { environment: selectedEnv },
-      });
-      const n = res.persisted?.objectIds.length ?? 0;
-      const links = res.persisted?.linkIds.length ?? 0;
-      setSaveMsg(
-        `Saved ${n} finding${n === 1 ? "" : "s"}${links ? ` + ${links} link${links === 1 ? "" : "s"}` : ""} to ${selectedEnv}.`,
-      );
-    } catch (err) {
-      setSaveMsg(
-        err instanceof ApiError ? `${err.code}: ${err.message}` : (err as Error).message,
-      );
-    } finally {
-      setSavingToOntology(false);
-    }
-  }
-
   function reset() {
+    clearStudioGraph();
     setNodes(buildDefaultNodes());
     setEdges(buildDefaultEdges());
     setPan({ x: 0, y: 0 });
-    setSelectedId(null);
-    setSelectedEdgeId(null);
+    setZoom(1);
+    clearSelection();
     setResults(null);
     setToken(null);
     setActiveNodeId(null);
     setNodeOutputs(new Map());
     setNodeErrors(new Map());
+    setWorkflowStates({});
     setRunError(null);
   }
 
@@ -1365,7 +1764,7 @@ export default function StudioEditor() {
             </span>
             <select
               value={selectedEnv ?? ""}
-              onChange={(e) => setSelectedEnv(e.target.value || null)}
+              onChange={(e) => handleEnvChange(e.target.value)}
               disabled={environments.length === 0}
               className="max-w-[160px] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:border-gray-400 focus:outline-none disabled:text-gray-400"
             >
@@ -1451,16 +1850,75 @@ export default function StudioEditor() {
           style={{
             backgroundImage:
               "radial-gradient(circle, rgba(0,0,0,0.06) 1px, transparent 1px)",
-            backgroundSize: "22px 22px",
+            backgroundSize: `${22 * zoom}px ${22 * zoom}px`,
             backgroundPosition: `${pan.x}px ${pan.y}px`,
           }}
           onDragOver={(e) => e.preventDefault()}
           onDrop={onCanvasDrop}
+          onWheel={handleWheel}
         >
-          {/* World layer (translated by pan). Pointerdown on empty space pans. */}
+          <CanvasControls
+            zoom={zoom}
+            onZoomIn={() => {
+              const rect = canvasRef.current?.getBoundingClientRect();
+              if (!rect) return;
+              const next = zoomAtPoint(
+                getTransform(),
+                rect.width / 2,
+                rect.height / 2,
+                1.15,
+              );
+              setZoom(next.zoom);
+              setPan(next.pan);
+            }}
+            onZoomOut={() => {
+              const rect = canvasRef.current?.getBoundingClientRect();
+              if (!rect) return;
+              const next = zoomAtPoint(
+                getTransform(),
+                rect.width / 2,
+                rect.height / 2,
+                1 / 1.15,
+              );
+              setZoom(next.zoom);
+              setPan(next.pan);
+            }}
+            onResetZoom={() => {
+              const rect = canvasRef.current?.getBoundingClientRect();
+              if (!rect) return;
+              const next = zoomAtPoint(
+                getTransform(),
+                rect.width / 2,
+                rect.height / 2,
+                1 / zoom,
+              );
+              setZoom(next.zoom);
+              setPan(next.pan);
+            }}
+            onFit={() => {
+              const rect = canvasRef.current?.getBoundingClientRect();
+              if (!rect) return;
+              const fitted = fitToContent(
+                nodes.map((n) => ({
+                  id: n.id,
+                  x: n.x,
+                  y: n.y,
+                  height: nodeCardHeight(n),
+                })),
+                rect.width,
+                rect.height,
+              );
+              setZoom(fitted.zoom);
+              setPan(fitted.pan);
+            }}
+          />
+          {/* World layer (translated + scaled). Pointerdown on empty space pans. */}
           <div
             className="absolute left-0 top-0 h-[3000px] w-[5000px] cursor-grab active:cursor-grabbing"
-            style={{ transform: `translate(${pan.x}px, ${pan.y}px)` }}
+            style={{
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              transformOrigin: "0 0",
+            }}
             onPointerDown={startPan}
           >
             {/* Edges */}
@@ -1500,7 +1958,7 @@ export default function StudioEditor() {
                       onPointerDown={(ev) => {
                         ev.stopPropagation();
                         setSelectedEdgeId(e.id);
-                        setSelectedId(null);
+                        clearSelection();
                       }}
                     />
                     {selected ? (
@@ -1559,7 +2017,9 @@ export default function StudioEditor() {
                       <path
                         d={pathD(g)}
                         fill="none"
-                        stroke={ACCENT_HEX}
+                        stroke={
+                          pendingEdge.previewValid ? ACCENT_HEX : "#f43f5e"
+                        }
                         strokeWidth={2}
                         strokeDasharray="5 4"
                       />
@@ -1581,14 +2041,45 @@ export default function StudioEditor() {
               ) : null}
             </svg>
 
+            {/* Workflow run chips */}
+            {workflows.map((wf, idx) => {
+              const bounds = workflowBounds(wf.nodeIds, nodes, nodeHeightById);
+              if (!bounds) return null;
+              return (
+                <WorkflowRunChip
+                  key={wf.id}
+                  index={idx}
+                  x={bounds.minX}
+                  y={bounds.minY - 30}
+                  state={workflowStates[wf.id] ?? "idle"}
+                  running={running}
+                  onRun={() => runWorkflow(wf.id)}
+                />
+              );
+            })}
+
+            {/* Marquee selection */}
+            {marquee ? (
+              <div
+                className="pointer-events-none absolute border border-indigo-400 bg-indigo-500/10"
+                style={{
+                  left: Math.min(marquee.x1, marquee.x2),
+                  top: Math.min(marquee.y1, marquee.y2),
+                  width: Math.abs(marquee.x2 - marquee.x1),
+                  height: Math.abs(marquee.y2 - marquee.y1),
+                }}
+              />
+            ) : null}
+
             {/* Nodes */}
             {nodes.map((node) => {
-              const isSelected = node.id === selectedId;
+              const isSelected = selectedIds.has(node.id);
               const isActive = node.id === activeNodeId;
               const hasError = nodeErrors.has(node.id);
               const accent = NODE_ACCENTS[node.type];
               const showResults =
                 node.type === "output" && results && results.length > 0;
+              const saveGlance = nodeOutputs.get(node.id)?.persistGlance;
               const webhookPayload =
                 node.type === "webhook" && node.config.lastEventPayload != null;
               const formatDetected = node.config.lastDetectedFormat;
@@ -1613,15 +2104,44 @@ export default function StudioEditor() {
                     width: NODE_W,
                     minHeight: cardH,
                   }}
-                  onPointerDown={(e) => startNodeDrag(e, node)}
+                  onPointerDown={(e) => {
+                    if (spaceHeldRef.current) {
+                      startPan(e);
+                      return;
+                    }
+                    startNodeDrag(e, node);
+                  }}
                   onClick={(e) => {
                     e.stopPropagation();
                     if (!movedRef.current) {
-                      setSelectedId(node.id);
-                      setSelectedEdgeId(null);
+                      selectNode(node.id, e.shiftKey);
                     }
                   }}
+                  onMouseEnter={() => setHoveredNodeId(node.id)}
+                  onMouseLeave={() =>
+                    setHoveredNodeId((cur) => (cur === node.id ? null : cur))
+                  }
                 >
+                  {(isSelected || hoveredNodeId === node.id) && (
+                    <button
+                      type="button"
+                      title="Delete node"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const result = removeNodes([node.id], nodes, edges);
+                        setNodes(result.nodes);
+                        setEdges(result.edges);
+                        setSelectedIds((prev) => {
+                          const next = new Set(prev);
+                          next.delete(node.id);
+                          return next;
+                        });
+                      }}
+                      className="absolute right-1 top-1 z-10 flex h-5 w-5 items-center justify-center rounded bg-white text-[10px] text-gray-500 shadow-sm ring-1 ring-gray-200 hover:bg-rose-50 hover:text-rose-600"
+                    >
+                      ×
+                    </button>
+                  )}
                   {/* Accent bar */}
                   <span
                     className={cn(
@@ -1637,7 +2157,13 @@ export default function StudioEditor() {
                     title="Input"
                     className={cn(
                       "absolute -left-2 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 bg-white transition-transform hover:scale-125",
-                      accent.border,
+                      connectReject?.nodeId === node.id
+                        ? "animate-pulse border-rose-400 ring-2 ring-rose-300"
+                        : connectHover?.nodeId === node.id
+                          ? connectHover.valid
+                            ? "border-indigo-500 ring-2 ring-indigo-300"
+                            : "border-rose-400 ring-2 ring-rose-300"
+                          : accent.border,
                     )}
                   />
                   {isRouter ? (
@@ -1725,6 +2251,17 @@ export default function StudioEditor() {
                           {formatDetected}
                         </span>
                       </div>
+                    ) : node.type === "saveOntology" && saveGlance ? (
+                      <span
+                        className={cn(
+                          "text-[10px] leading-snug",
+                          saveGlance.kind === "error"
+                            ? "text-rose-600"
+                            : "text-slate-600",
+                        )}
+                      >
+                        {formatSaveOntologyGlance(saveGlance)}
+                      </span>
                     ) : isRouter ? (
                       <ul className="space-y-0.5">
                         {FORMAT_BRANCHES.map((branch) => (
@@ -1763,16 +2300,33 @@ export default function StudioEditor() {
                 output={nodeOutputs.get(selectedNode.id) ?? null}
                 error={nodeErrors.get(selectedNode.id) ?? null}
                 onModeChange={setInspectorMode}
-                onClose={() => setSelectedId(null)}
+                onClose={() => clearSelection()}
                 onConfig={(partial) => updateConfig(selectedNode.id, partial)}
                 onCode={(code) => updateCode(selectedNode.id, code)}
                 onRunNode={() => runNode(selectedNode.id)}
                 results={results}
-                ontologyEnv={selectedEnv}
-                onSaveToOntology={saveOutputToOntology}
-                savingToOntology={savingToOntology}
-                saveMessage={saveMsg}
+                environments={environments}
+                selectedEnv={selectedEnv}
+                envObjectTypes={envObjectTypes}
+                onEnvChange={handleEnvChange}
               />
+            ) : selectedIds.size > 1 ? (
+              <aside className="flex w-80 shrink-0 flex-col border-l border-gray-200 bg-white p-4">
+                <p className="text-sm font-medium text-gray-800">
+                  {selectedIds.size} nodes selected
+                </p>
+                <p className="mt-2 text-[11px] text-gray-500">
+                  Press Delete or Backspace to remove them. Shift-click or
+                  shift-drag to adjust selection.
+                </p>
+                <button
+                  type="button"
+                  onClick={deleteSelection}
+                  className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 hover:bg-rose-100"
+                >
+                  Delete selected
+                </button>
+              </aside>
             ) : null}
           </>
         )}
@@ -1816,10 +2370,10 @@ function Inspector({
   onCode,
   onRunNode,
   results,
-  ontologyEnv,
-  onSaveToOntology,
-  savingToOntology,
-  saveMessage,
+  environments,
+  selectedEnv,
+  envObjectTypes,
+  onEnvChange,
 }: {
   node: FlowNode;
   mode: InspectorMode;
@@ -1832,10 +2386,10 @@ function Inspector({
   onCode: (code: string) => void;
   onRunNode: () => void;
   results: DemoResult[] | null;
-  ontologyEnv: string | null;
-  onSaveToOntology: () => void;
-  savingToOntology: boolean;
-  saveMessage: string | null;
+  environments: EnvironmentSummary[];
+  selectedEnv: string | null;
+  envObjectTypes: string[];
+  onEnvChange: (slug: string) => void;
 }) {
   const accent = NODE_ACCENTS[node.type];
   return (
@@ -1905,10 +2459,10 @@ function Inspector({
             node={node}
             onConfig={onConfig}
             results={results}
-            ontologyEnv={ontologyEnv}
-            onSaveToOntology={onSaveToOntology}
-            savingToOntology={savingToOntology}
-            saveMessage={saveMessage}
+            environments={environments}
+            selectedEnv={selectedEnv}
+            envObjectTypes={envObjectTypes}
+            onEnvChange={onEnvChange}
           />
         ) : (
           <div className="flex h-full flex-col">
@@ -2009,18 +2563,18 @@ function LowCodeForm({
   node,
   onConfig,
   results,
-  ontologyEnv,
-  onSaveToOntology,
-  savingToOntology,
-  saveMessage,
+  environments,
+  selectedEnv,
+  envObjectTypes,
+  onEnvChange,
 }: {
   node: FlowNode;
   onConfig: (partial: NodeConfig) => void;
   results: DemoResult[] | null;
-  ontologyEnv: string | null;
-  onSaveToOntology: () => void;
-  savingToOntology: boolean;
-  saveMessage: string | null;
+  environments: EnvironmentSummary[];
+  selectedEnv: string | null;
+  envObjectTypes: string[];
+  onEnvChange: (slug: string) => void;
 }) {
   const [newTrigger, setNewTrigger] = useState("");
   const [ingestBusy, setIngestBusy] = useState(false);
@@ -2276,41 +2830,85 @@ function LowCodeForm({
         </Field>
       );
 
+    case "saveOntology": {
+      const envSlug = node.config.ontologyEnv ?? selectedEnv ?? "";
+      const envName =
+        environments.find((e) => e.slug === envSlug)?.name ?? envSlug;
+      return (
+        <>
+          <Field label="Environment">
+            <select
+              value={envSlug}
+              onChange={(e) => {
+                onEnvChange(e.target.value);
+                onConfig({ ontologyEnv: e.target.value || undefined });
+              }}
+              disabled={environments.length === 0}
+              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10 disabled:text-gray-400"
+            >
+              {environments.length === 0 ? (
+                <option value="">No environments — sign in first</option>
+              ) : (
+                environments.map((env) => (
+                  <option key={env.id} value={env.slug}>
+                    {env.name}
+                  </option>
+                ))
+              )}
+            </select>
+          </Field>
+          <Field label="Object type">
+            <select
+              value={node.config.objectType ?? "ClinicalFinding"}
+              onChange={(e) => onConfig({ objectType: e.target.value })}
+              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+            >
+              {(envObjectTypes.includes("ClinicalFinding")
+                ? envObjectTypes
+                : ["ClinicalFinding", ...envObjectTypes]
+              ).map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Patient identifier source">
+            <input
+              type="text"
+              value={node.config.patientIdentifierSource ?? ""}
+              onChange={(e) =>
+                onConfig({ patientIdentifierSource: e.target.value })
+              }
+              placeholder="e.g. P-001 or payload.patientId"
+              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+            />
+          </Field>
+          <p className="text-[11px] leading-relaxed text-gray-400">
+            Matched on this identifier only — never on name. No identifier →
+            saved unlinked.
+          </p>
+          {envSlug ? (
+            <p className="text-[10px] text-gray-400">
+              Writes real data to{" "}
+              <span className="font-medium text-gray-600">{envName}</span>
+            </p>
+          ) : null}
+        </>
+      );
+    }
+
     case "output":
       return (
         <div>
           <span className="mb-2 block text-xs font-medium text-gray-700">
             Enriched result
           </span>
-
-          {/* Save the full pipeline output into the selected ontology env. */}
-          <div className="mb-3 rounded-md border border-emerald-200 bg-emerald-50/50 p-2.5">
-            <button
-              type="button"
-              onClick={onSaveToOntology}
-              disabled={savingToOntology || !ontologyEnv}
-              className={cn(
-                "w-full rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                savingToOntology || !ontologyEnv
-                  ? "bg-emerald-200 text-white"
-                  : "bg-emerald-600 text-white hover:bg-emerald-500",
-              )}
-            >
-              {savingToOntology
-                ? "Saving…"
-                : ontologyEnv
-                  ? `Save pipeline output to "${ontologyEnv}"`
-                  : "Select an environment first"}
-            </button>
-            <p className="mt-1.5 text-[10px] leading-relaxed text-gray-500">
-              Runs the full extract pipeline server-side and persists accepted
-              findings (with provenance + Patient links) into the chosen
-              ontology environment.
-            </p>
-            {saveMessage ? (
-              <p className="mt-1.5 text-[10px] text-gray-600">{saveMessage}</p>
-            ) : null}
-          </div>
+          <p className="mb-3 text-[10px] leading-relaxed text-gray-500">
+            To persist findings, add a{" "}
+            <span className="font-medium text-gray-700">Save to ontology</span>{" "}
+            node between Decision and Output, then run the pipeline.
+          </p>
 
           {results && results.length > 0 ? (
             <div className="flex flex-col gap-2">

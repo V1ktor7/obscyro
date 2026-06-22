@@ -525,23 +525,32 @@ export interface CombinedExtractResult {
   decision: "accept" | "flag" | "escalate";
 }
 
+export interface PersistedSummary {
+  environment: { id: string; slug: string; name: string };
+  objectType: string;
+  objectIds: string[];
+  linkIds: string[];
+  pipelineRunId: string;
+  patient: { id: string; identifier: string; created: boolean } | null;
+  linked: boolean;
+  reason?: "no_patient_identifier";
+}
+
 export interface ExtractPersistResult {
   destination: "research" | "problem_list";
   results: CombinedExtractResult[];
-  persisted?: {
-    environment: { id: string; slug: string; name: string };
-    objectType: string;
-    objectIds: string[];
-    linkIds: string[];
-    pipelineRunId: string;
-  };
+  persisted?: PersistedSummary;
 }
 
 export async function extractAndPersist(opts: {
   text: string;
   language?: string;
   destination?: "research" | "problem_list";
-  persist?: { environment: string; objectType?: string };
+  persist?: {
+    environment: string;
+    objectType?: string;
+    patient?: { identifier?: string };
+  };
 }): Promise<ExtractPersistResult> {
   return apiFetch("/v1/extract", {
     method: "POST",
@@ -550,6 +559,74 @@ export async function extractAndPersist(opts: {
       language: opts.language ?? "auto",
       destination: opts.destination ?? "research",
       ...(opts.persist ? { persist: opts.persist } : {}),
+    },
+  });
+}
+
+/** SHA-256 hex digest (browser-safe). */
+export async function sha256Hex(text: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/** Map graph pipeline results + upstream concept/context rows to combined extract shape. */
+export function pipelineResultsToCombined(
+  results: PipelineResult[],
+  contexts: ContextOut[],
+  concepts: ConceptOut[],
+): CombinedExtractResult[] {
+  const ctxBySpan = new Map(contexts.map((c) => [c.span, c]));
+  const conceptBySpan = new Map(concepts.map((c) => [c.span, c]));
+  return results.map((r) => {
+    const ctx = ctxBySpan.get(r.span);
+    const concept = conceptBySpan.get(r.span);
+    const candidates = concept?.candidates ?? [
+      { code: r.code ?? "", display: r.display, cosine: 0 },
+    ];
+    return {
+      span: r.span,
+      candidates,
+      code: r.code,
+      cosine: concept?.cosine ?? 0,
+      margin: concept?.margin ?? 0,
+      concept_confidence: concept?.concept_confidence ?? 0,
+      status: concept?.status ?? "resolved",
+      context: ctx?.context ?? {
+        assertion: { value: r.assertion, confidence: 0.9, trigger: null },
+        subject: { value: r.subject, confidence: 0.9, trigger: null },
+        temporality: null,
+        certainty: { value: r.certainty, confidence: 0.9, trigger: null },
+        role: null,
+      },
+      context_confidence: ctx?.context_confidence ?? 0,
+      readable_note: r.readable_note ?? ctx?.readable_note ?? r.display,
+      decision: r.decision,
+    };
+  });
+}
+
+/** Persist graph/decision results without re-running NLP. */
+export async function persistGraphResults(opts: {
+  inputHash: string;
+  results: CombinedExtractResult[];
+  persist: {
+    environment: string;
+    objectType?: string;
+    patient?: { identifier?: string };
+  };
+}): Promise<{ persisted: PersistedSummary }> {
+  return apiFetch("/v1/extract/persist", {
+    method: "POST",
+    body: {
+      inputHash: opts.inputHash,
+      results: opts.results,
+      persist: {
+        objectType: opts.persist.objectType ?? "ClinicalFinding",
+        environment: opts.persist.environment,
+        ...(opts.persist.patient ? { patient: opts.persist.patient } : {}),
+      },
     },
   });
 }
