@@ -3,6 +3,7 @@ import type { PersistedSummary } from "@/lib/platform-api";
 export type PersistGlance =
   | { kind: "saved-linked"; identifier: string }
   | { kind: "saved-unlinked"; reason: "no_patient_identifier" }
+  | { kind: "saved-instances"; count: number }
   | { kind: "error"; message: string };
 
 export function resolvePatientIdentifierFromSource(
@@ -41,6 +42,8 @@ export function formatSaveOntologyGlance(glance: PersistGlance): string {
       return `Saved · linked to ${glance.identifier}`;
     case "saved-unlinked":
       return "Saved · unlinked (no identifier)";
+    case "saved-instances":
+      return `Saved · ${glance.count} instance${glance.count === 1 ? "" : "s"}`;
     case "error":
       return glance.message;
   }

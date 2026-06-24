@@ -15,6 +15,7 @@ import { Play } from "lucide-react";
 import { ApiError, getStoredKey } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import {
+  createEnvObject,
   createIngestSource,
   decide,
   extractConcepts,
@@ -106,6 +107,9 @@ type NodeType =
   | "source"
   | "webhook"
   | "formatDetect"
+  | "transform"
+  | "mapping"
+  | "validation"
   | "concept"
   | "context"
   | "decision"
@@ -153,6 +157,11 @@ type NodeConfig = {
   ontologyLimit?: number;
   targetSystem?: "icd10" | "icdo" | "ctv3";
   sourceRequest?: SourceRequest;
+  recordsPath?: string;
+  transformTrim?: boolean;
+  transformDropEmpty?: boolean;
+  fieldMap?: { property: string; source: string }[];
+  strictValidation?: boolean;
 };
 
 type FlowNode = {
@@ -185,6 +194,9 @@ type NodeOutput = {
   activeBranch?: FormatBranch;
   detectedFormat?: FormatBranch;
   persistGlance?: PersistGlance;
+  records?: Record<string, unknown>[];
+  instances?: { type: string; properties: Record<string, unknown> }[];
+  validationReport?: { valid: number; invalid: number; errors: string[] };
 };
 
 type InspectorMode = "lowcode" | "code";
@@ -202,6 +214,9 @@ const NODE_ACCENTS: Record<
   source: { text: "text-sky-600", bar: "bg-sky-400", border: "border-sky-400", hex: "#0284c7" },
   webhook: { text: "text-sky-600", bar: "bg-sky-400", border: "border-sky-400", hex: "#0284c7" },
   formatDetect: { text: "text-amber-600", bar: "bg-amber-400", border: "border-amber-400", hex: "#d97706" },
+  transform: { text: "text-cyan-600", bar: "bg-cyan-400", border: "border-cyan-400", hex: "#0891b2" },
+  mapping: { text: "text-indigo-600", bar: "bg-indigo-400", border: "border-indigo-400", hex: "#4f46e5" },
+  validation: { text: "text-amber-600", bar: "bg-amber-400", border: "border-amber-400", hex: "#d97706" },
   concept: { text: "text-violet-600", bar: "bg-violet-400", border: "border-violet-400", hex: "#7c3aed" },
   context: { text: "text-violet-600", bar: "bg-violet-400", border: "border-violet-400", hex: "#7c3aed" },
   decision: { text: "text-amber-600", bar: "bg-amber-400", border: "border-amber-400", hex: "#d97706" },
@@ -260,6 +275,12 @@ function defaultCode(type: NodeType): string {
       return `function run(input) {\n  // Poll GET /v1/ingest/events?sourceId=...\n  return input.latestEvent;\n}`;
     case "formatDetect":
       return `function run(input) {\n  // Route unchanged payload to fhir | hl7 | json | text | unknown.\n  return detectFormat(input.payload ?? input.text, input.meta);\n}`;
+    case "transform":
+      return `function run(input) {\n  // Cleaning / normalization (dbt / Spark / OpenRefine stage).\n  const rows = toRecords(input.payload, config.recordsPath);\n  return { records: rows.map(clean) };\n}`;
+    case "mapping":
+      return `function run(input) {\n  // Map source fields to an ontology object-type's properties.\n  return {\n    instances: input.records.map((r) => ({\n      type: config.objectType,\n      properties: applyFieldMap(r, config.fieldMap),\n    })),\n  };\n}`;
+    case "validation":
+      return `function run(input) {\n  // Validate instances against the Manager-defined schema (SHACL-like).\n  return validateAgainstSchema(input.instances, {\n    strict: config.strictValidation,\n  });\n}`;
     case "concept":
       return `function run(input) {\n  // NER spans -> embed -> pgvector cosine + margin.\n  return extractConcepts(input.text, {\n    resolveMin: 0.72,\n    marginMin: 0.15,\n  });\n}`;
     case "context":
@@ -319,6 +340,21 @@ function nodeDefaults(type: NodeType): {
         title: "Format detection",
         config: { trustContentType: true },
       };
+    case "transform":
+      return {
+        title: "Transform (clean / normalize)",
+        config: { recordsPath: "", transformTrim: true, transformDropEmpty: true },
+      };
+    case "mapping":
+      return {
+        title: "Mapping to ontology",
+        config: { objectType: "", fieldMap: [{ property: "", source: "" }] },
+      };
+    case "validation":
+      return {
+        title: "Validation (schema checks)",
+        config: { strictValidation: false },
+      };
     case "concept":
       return {
         title: "Concept extraction (cosine + margin)",
@@ -374,7 +410,7 @@ function defaultNodeTypes(variant: StudioVariant): NodeType[] {
   if (variant === "workspace") {
     return ["ontologySource", "custom", "output"];
   }
-  return ["input", "concept", "context", "decision", "saveOntology", "output"];
+  return ["source", "transform", "mapping", "validation", "saveOntology", "output"];
 }
 
 function buildDefaultNodes(variant: StudioVariant): FlowNode[] {
@@ -504,6 +540,62 @@ function resultsFromConcepts(concepts: ConceptOut[]): PipelineResult[] {
   }));
 }
 
+/** Read a dotted path (e.g. "patient.id") out of a record. */
+function readPath(rec: Record<string, unknown>, path: string): unknown {
+  if (!path.includes(".")) return rec[path];
+  let cur: unknown = rec;
+  for (const seg of path.split(".")) {
+    if (cur && typeof cur === "object") {
+      cur = (cur as Record<string, unknown>)[seg];
+    } else {
+      return undefined;
+    }
+  }
+  return cur;
+}
+
+/** Coerce an ingestion payload into a flat array of records. */
+function toRecords(input: NodeOutput, recordsPath?: string): Record<string, unknown>[] {
+  if (input.records?.length) return input.records;
+  let raw: unknown = input.payload;
+  if (raw == null && input.text) {
+    try {
+      raw = JSON.parse(input.text);
+    } catch {
+      return [];
+    }
+  }
+  if (recordsPath?.trim() && raw && typeof raw === "object" && !Array.isArray(raw)) {
+    raw = readPath(raw as Record<string, unknown>, recordsPath.trim());
+  }
+  if (Array.isArray(raw)) {
+    return raw.filter(
+      (r): r is Record<string, unknown> => r != null && typeof r === "object",
+    );
+  }
+  if (raw && typeof raw === "object") {
+    return [raw as Record<string, unknown>];
+  }
+  return [];
+}
+
+/** Lightweight type check used by the validation node. */
+function matchesPropertyType(value: unknown, type: string): boolean {
+  switch (type) {
+    case "number":
+      return typeof value === "number" || (typeof value === "string" && !Number.isNaN(Number(value)));
+    case "boolean":
+      return typeof value === "boolean" || value === "true" || value === "false";
+    case "array":
+      return Array.isArray(value);
+    case "object":
+      return typeof value === "object" && value !== null && !Array.isArray(value);
+    case "string":
+    default:
+      return true;
+  }
+}
+
 /** Per-node transform. Throws on missing upstream data; caller catches. */
 async function executeNode(
   node: FlowNode,
@@ -584,6 +676,107 @@ async function executeNode(
       return { ...input, activeBranch: branch, detectedFormat: branch };
     }
 
+    case "transform": {
+      const records = toRecords(input, node.config.recordsPath);
+      if (!records.length) {
+        throw new Error(
+          "No records found. Connect an ingestion node (or set a records path).",
+        );
+      }
+      const trim = node.config.transformTrim ?? true;
+      const dropEmpty = node.config.transformDropEmpty ?? true;
+      const cleaned = records.map((rec) => {
+        const out: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(rec)) {
+          let value = v;
+          if (trim && typeof value === "string") value = value.trim();
+          if (dropEmpty && (value === "" || value === null || value === undefined)) {
+            continue;
+          }
+          out[k] = value;
+        }
+        return out;
+      });
+      return { ...input, records: cleaned };
+    }
+
+    case "mapping": {
+      const records = input.records ?? toRecords(input, node.config.recordsPath);
+      if (!records.length) {
+        throw new Error("No records to map. Connect a Transform (or ingestion) node.");
+      }
+      const objectType = node.config.objectType?.trim();
+      if (!objectType) {
+        throw new Error("Pick a target object type on the Mapping node.");
+      }
+      const fieldMap = (node.config.fieldMap ?? []).filter(
+        (m) => m.property.trim() && m.source.trim(),
+      );
+      const instances = records.map((rec) => {
+        const properties: Record<string, unknown> = {};
+        if (fieldMap.length) {
+          for (const m of fieldMap) {
+            properties[m.property.trim()] = readPath(rec, m.source.trim());
+          }
+        } else {
+          // No explicit mapping: pass the record through as-is.
+          Object.assign(properties, rec);
+        }
+        return { type: objectType, properties };
+      });
+      return { ...input, instances };
+    }
+
+    case "validation": {
+      const instances = input.instances ?? [];
+      if (!instances.length) {
+        throw new Error("No mapped instances reached this node. Connect Mapping upstream.");
+      }
+      const env = node.config.ontologyEnv?.trim();
+      const schemaByType = new Map<string, { key: string; type: string }[]>();
+      if (env) {
+        try {
+          const { types } = await listEnvTypes(env);
+          for (const t of types) {
+            schemaByType.set(
+              t.name,
+              (t.propertySchema as { key: string; type: string }[]) ?? [],
+            );
+          }
+        } catch {
+          /* schema unavailable — fall back to presence checks only */
+        }
+      }
+      const errors: string[] = [];
+      const valid: typeof instances = [];
+      instances.forEach((inst, i) => {
+        const schema = schemaByType.get(inst.type);
+        const problems: string[] = [];
+        if (schema) {
+          for (const prop of schema) {
+            const value = inst.properties[prop.key];
+            if (value === undefined || value === null || value === "") continue;
+            if (!matchesPropertyType(value, prop.type)) {
+              problems.push(`${prop.key} expected ${prop.type}`);
+            }
+          }
+        }
+        if (Object.keys(inst.properties).length === 0) {
+          problems.push("no properties");
+        }
+        if (problems.length) {
+          errors.push(`row ${i + 1}: ${problems.join(", ")}`);
+        } else {
+          valid.push(inst);
+        }
+      });
+      const report = { valid: valid.length, invalid: errors.length, errors };
+      if (node.config.strictValidation && errors.length) {
+        throw new Error(`Validation failed (${errors.length}): ${errors.slice(0, 3).join("; ")}`);
+      }
+      return { ...input, instances: valid, validationReport: report };
+    }
+
     case "concept": {
       const text = input.text ?? "";
       if (!text.trim()) throw new Error("No input text reached this node.");
@@ -640,6 +833,28 @@ async function executeNode(
     }
 
     case "saveOntology": {
+      // Generic ETL path: persist mapped instances (Parser pipeline).
+      if (input.instances?.length) {
+        const env = node.config.ontologyEnv?.trim();
+        if (!env) {
+          throw new Error("Select an ontology environment first.");
+        }
+        let saved = 0;
+        for (const inst of input.instances) {
+          await createEnvObject(env, {
+            type: inst.type,
+            properties: inst.properties,
+            provenance: { source: "parser" },
+          });
+          saved += 1;
+        }
+        return {
+          ...input,
+          persistGlance: { kind: "saved-instances", count: saved },
+        };
+      }
+
+      // Clinical path: persist decision results (workspace NLP pipeline).
       const results = input.results ?? [];
       if (!results.length) {
         throw new Error("No decision results reached this node. Connect Decision upstream.");
@@ -781,6 +996,26 @@ function NodeIcon({ type }: { type: NodeType }) {
           <path d="M12 3 21 12 12 21 3 12z" />
         </svg>
       );
+    case "transform":
+      return (
+        <svg {...common}>
+          <path d="M3 7h13l-3-3M21 17H8l3 3" />
+        </svg>
+      );
+    case "mapping":
+      return (
+        <svg {...common}>
+          <path d="M4 6h6M4 12h6M4 18h6M20 6h-6M20 12h-6M20 18h-6" />
+          <path d="M10 6l4 6-4 6" />
+        </svg>
+      );
+    case "validation":
+      return (
+        <svg {...common}>
+          <path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" />
+          <path d="m9 11 2 2 4-4" />
+        </svg>
+      );
     case "concept":
       return (
         <svg {...common}>
@@ -868,16 +1103,19 @@ function DecisionBadge({ decision }: { decision: DemoResult["decision"] }) {
 // ---------------------------------------------------------------------------
 
 const PALETTE: { type: NodeType; label: string; variants: StudioVariant[] }[] = [
-  { type: "input", label: "Input", variants: ["parser"] },
-  { type: "source", label: "Source", variants: ["parser"] },
-  { type: "webhook", label: "Webhook intake", variants: ["parser"] },
-  { type: "formatDetect", label: "Format detection", variants: ["parser"] },
-  { type: "concept", label: "Concept", variants: ["parser"] },
-  { type: "context", label: "Context", variants: ["parser"] },
-  { type: "decision", label: "Decision", variants: ["parser", "workspace"] },
-  { type: "saveOntology", label: "Save to ontology", variants: ["parser"] },
+  { type: "input", label: "Input", variants: ["parser", "workspace"] },
+  { type: "source", label: "Source", variants: ["parser", "workspace"] },
+  { type: "webhook", label: "Webhook intake", variants: ["parser", "workspace"] },
+  { type: "transform", label: "Transform", variants: ["parser"] },
+  { type: "mapping", label: "Mapping to ontology", variants: ["parser"] },
+  { type: "validation", label: "Validation", variants: ["parser"] },
+  { type: "saveOntology", label: "Save to ontology", variants: ["parser", "workspace"] },
   { type: "ontologySource", label: "Ontology source", variants: ["workspace"] },
-  { type: "terminology", label: "Terminology lookup", variants: ["parser", "workspace"] },
+  { type: "formatDetect", label: "Format detection", variants: ["workspace"] },
+  { type: "concept", label: "Concept", variants: ["workspace"] },
+  { type: "context", label: "Context", variants: ["workspace"] },
+  { type: "decision", label: "Decision", variants: ["workspace"] },
+  { type: "terminology", label: "Terminology lookup", variants: ["workspace"] },
   { type: "output", label: "Output", variants: ["parser", "workspace"] },
   { type: "custom", label: "Custom code node", variants: ["parser", "workspace"] },
 ];
@@ -1009,9 +1247,10 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
 
   useEffect(() => {
     if (!selectedEnv) return;
+    const envAware: NodeType[] = ["saveOntology", "validation", "mapping"];
     setNodes((prev) =>
       prev.map((n) =>
-        n.type === "saveOntology" && !n.config.ontologyEnv
+        envAware.includes(n.type) && !n.config.ontologyEnv
           ? { ...n, config: { ...n.config, ontologyEnv: selectedEnv } }
           : n,
       ),
@@ -2643,6 +2882,132 @@ function LowCodeForm({
           lastDetectedFormat={node.config.lastDetectedFormat}
           onChange={onConfig}
         />
+      );
+
+    case "transform":
+      return (
+        <>
+          <Field label="Records path (optional)">
+            <input
+              type="text"
+              value={node.config.recordsPath ?? ""}
+              onChange={(e) => onConfig({ recordsPath: e.target.value })}
+              placeholder="e.g. data.items — leave blank for top-level array"
+              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 font-mono text-[11px] text-gray-800 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+            />
+          </Field>
+          <label className="mb-2 flex items-center gap-2 text-xs text-gray-700">
+            <input
+              type="checkbox"
+              checked={node.config.transformTrim ?? true}
+              onChange={(e) => onConfig({ transformTrim: e.target.checked })}
+            />
+            Trim whitespace on string fields
+          </label>
+          <label className="mb-2 flex items-center gap-2 text-xs text-gray-700">
+            <input
+              type="checkbox"
+              checked={node.config.transformDropEmpty ?? true}
+              onChange={(e) => onConfig({ transformDropEmpty: e.target.checked })}
+            />
+            Drop empty / null fields
+          </label>
+          <p className="text-[11px] leading-relaxed text-gray-400">
+            Normalizes ingested data into clean records (the dbt / Spark /
+            OpenRefine stage) for mapping.
+          </p>
+        </>
+      );
+
+    case "mapping": {
+      const fieldMap = node.config.fieldMap ?? [];
+      const setFieldMap = (rows: { property: string; source: string }[]) =>
+        onConfig({ fieldMap: rows });
+      return (
+        <>
+          <Field label="Target object type">
+            <select
+              value={node.config.objectType ?? ""}
+              onChange={(e) => onConfig({ objectType: e.target.value || undefined })}
+              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+            >
+              <option value="">Select a type…</option>
+              {envObjectTypes.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Field mapping (property ← source field)">
+            <div className="flex flex-col gap-1.5">
+              {fieldMap.map((row, i) => (
+                <div key={i} className="flex items-center gap-1">
+                  <input
+                    value={row.property}
+                    onChange={(e) => {
+                      const next = [...fieldMap];
+                      next[i] = { ...row, property: e.target.value };
+                      setFieldMap(next);
+                    }}
+                    placeholder="property"
+                    className="min-w-0 flex-1 rounded border border-gray-200 bg-gray-50 px-1.5 py-1 text-[11px] text-gray-800 focus:border-gray-400 focus:outline-none"
+                  />
+                  <span className="text-gray-400">←</span>
+                  <input
+                    value={row.source}
+                    onChange={(e) => {
+                      const next = [...fieldMap];
+                      next[i] = { ...row, source: e.target.value };
+                      setFieldMap(next);
+                    }}
+                    placeholder="source field"
+                    className="min-w-0 flex-1 rounded border border-gray-200 bg-gray-50 px-1.5 py-1 font-mono text-[11px] text-gray-800 focus:border-gray-400 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setFieldMap(fieldMap.filter((_, j) => j !== i))}
+                    className="rounded px-1 text-gray-400 hover:text-rose-600"
+                    aria-label="Remove mapping"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setFieldMap([...fieldMap, { property: "", source: "" }])}
+                className="self-start rounded border border-gray-200 px-2 py-1 text-[11px] text-gray-600 hover:border-gray-400"
+              >
+                + Mapping
+              </button>
+            </div>
+          </Field>
+          <p className="text-[11px] leading-relaxed text-gray-400">
+            Maps cleaned record fields onto the chosen object-type properties.
+            Leave the mapping empty to pass each record through unchanged.
+          </p>
+        </>
+      );
+    }
+
+    case "validation":
+      return (
+        <>
+          <label className="mb-2 flex items-center gap-2 text-xs text-gray-700">
+            <input
+              type="checkbox"
+              checked={node.config.strictValidation ?? false}
+              onChange={(e) => onConfig({ strictValidation: e.target.checked })}
+            />
+            Strict — fail the run if any instance is invalid
+          </label>
+          <p className="text-[11px] leading-relaxed text-gray-400">
+            Checks each mapped instance against the property schema defined for
+            its object type in the Ontology Manager. Invalid rows are dropped
+            (or, in strict mode, stop the run).
+          </p>
+        </>
       );
 
     case "concept":
