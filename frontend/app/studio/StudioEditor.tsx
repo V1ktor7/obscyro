@@ -10,19 +10,17 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Play } from "lucide-react";
 
-import { ApiError, clearSession, clearStoredKey, getStoredKey } from "@/lib/auth";
+import { ApiError, getStoredKey } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import {
   createIngestSource,
   decide,
   extractConcepts,
   extractContexts,
-  getHealth,
   ingestPayload,
-  listEnvironments,
+  listEnvObjects,
   listEnvTypes,
   listIngestEvents,
   persistGraphResults,
@@ -34,9 +32,9 @@ import {
   type ContextOut,
   type EnvironmentSummary,
   type EnvironmentType,
-  type HealthStatus,
   type PipelineResult,
 } from "@/lib/platform-api";
+import { useStudio } from "./StudioShell";
 import {
   formatSaveOntologyGlance,
   glanceFromPersisted,
@@ -61,6 +59,7 @@ import {
   loadStudioGraph,
   saveStudioGraph,
   type PersistedNode,
+  type StudioVariant,
 } from "./studio-persist";
 import {
   detectWorkflows,
@@ -94,7 +93,6 @@ import {
   type SourceRequest,
 } from "./source-schema";
 import SourceNodeForm from "./SourceNodeForm";
-import StudioOntologyMode from "./StudioOntologyMode";
 import WebhookNodeForm from "./WebhookNodeForm";
 import type { SanitizedWebhookConfig, WebhookMethod } from "./webhook-schema";
 
@@ -112,6 +110,7 @@ type NodeType =
   | "context"
   | "decision"
   | "saveOntology"
+  | "ontologySource"
   | "terminology"
   | "output"
   | "custom";
@@ -150,6 +149,8 @@ type NodeConfig = {
   ontologyEnv?: string;
   objectType?: string;
   patientIdentifierSource?: string;
+  ontologyWhere?: string;
+  ontologyLimit?: number;
   targetSystem?: "icd10" | "icdo" | "ctv3";
   sourceRequest?: SourceRequest;
 };
@@ -205,6 +206,7 @@ const NODE_ACCENTS: Record<
   context: { text: "text-violet-600", bar: "bg-violet-400", border: "border-violet-400", hex: "#7c3aed" },
   decision: { text: "text-amber-600", bar: "bg-amber-400", border: "border-amber-400", hex: "#d97706" },
   saveOntology: { text: "text-slate-600", bar: "bg-slate-500", border: "border-slate-500", hex: "#475569" },
+  ontologySource: { text: "text-slate-600", bar: "bg-slate-500", border: "border-slate-500", hex: "#475569" },
   terminology: { text: "text-teal-600", bar: "bg-teal-400", border: "border-teal-400", hex: "#0d9488" },
   output: { text: "text-emerald-600", bar: "bg-emerald-400", border: "border-emerald-400", hex: "#059669" },
   custom: { text: "text-slate-500", bar: "bg-slate-400", border: "border-slate-400", hex: "#64748b" },
@@ -266,6 +268,8 @@ function defaultCode(type: NodeType): string {
       return `function run(input) {\n  // Route per destination using status + context confidence.\n  if (input.status === "unresolved") return "escalate";\n  if (input.contextConfidence < 0.85) return "flag";\n  return "accept";\n}`;
     case "saveOntology":
       return `function run(input) {\n  // Persist decision results into the ontology environment.\n  return persistGraphResults(input.results, {\n    environment: config.ontologyEnv,\n    objectType: config.objectType,\n    patientIdentifier: config.patientIdentifierSource,\n  });\n}`;
+    case "ontologySource":
+      return `function run() {\n  // Fetch instances from the ontology to feed the workflow.\n  return listEnvObjects(config.ontologyEnv, {\n    type: config.objectType,\n    where: config.ontologyWhere,\n    limit: config.ontologyLimit ?? 50,\n  });\n}`;
     case "terminology":
       return `function run(input) {\n  // Cross-map SNOMED -> ICD-10 / ICD-O / CTV3.\n  return translate(input.code, { to: "icd10" });\n}`;
     case "output":
@@ -338,6 +342,11 @@ function nodeDefaults(type: NodeType): {
           patientIdentifierSource: "",
         },
       };
+    case "ontologySource":
+      return {
+        title: "Ontology source",
+        config: { ontologyLimit: 50 },
+      };
     case "terminology":
       return {
         title: "Terminology lookup",
@@ -361,15 +370,15 @@ function nextId(prefix: string): string {
 // Default flow
 // ---------------------------------------------------------------------------
 
-function buildDefaultNodes(): FlowNode[] {
-  const types: NodeType[] = [
-    "input",
-    "concept",
-    "context",
-    "decision",
-    "saveOntology",
-    "output",
-  ];
+function defaultNodeTypes(variant: StudioVariant): NodeType[] {
+  if (variant === "workspace") {
+    return ["ontologySource", "custom", "output"];
+  }
+  return ["input", "concept", "context", "decision", "saveOntology", "output"];
+}
+
+function buildDefaultNodes(variant: StudioVariant): FlowNode[] {
+  const types = defaultNodeTypes(variant);
   return types.map((type, i) => {
     const d = nodeDefaults(type);
     return {
@@ -384,23 +393,27 @@ function buildDefaultNodes(): FlowNode[] {
   });
 }
 
-function buildDefaultEdges(): Edge[] {
-  return [
-    { id: "e1", source: "n-1", target: "n-2", targetPort: INPUT_PORT_ID },
-    { id: "e2", source: "n-2", target: "n-3", targetPort: INPUT_PORT_ID },
-    { id: "e3", source: "n-3", target: "n-4", targetPort: INPUT_PORT_ID },
-    { id: "e4", source: "n-4", target: "n-5", targetPort: INPUT_PORT_ID },
-    { id: "e5", source: "n-5", target: "n-6", targetPort: INPUT_PORT_ID },
-  ];
+function buildDefaultEdges(variant: StudioVariant): Edge[] {
+  const count = defaultNodeTypes(variant).length;
+  const edges: Edge[] = [];
+  for (let i = 1; i < count; i += 1) {
+    edges.push({
+      id: `e${i}`,
+      source: `n-${i}`,
+      target: `n-${i + 1}`,
+      targetPort: INPUT_PORT_ID,
+    });
+  }
+  return edges;
 }
 
-function initGraphState(): {
+function initGraphState(variant: StudioVariant): {
   nodes: FlowNode[];
   edges: Edge[];
   pan: { x: number; y: number };
   zoom: number;
 } {
-  const saved = loadStudioGraph();
+  const saved = loadStudioGraph(variant);
   if (saved) {
     return {
       nodes: saved.nodes as FlowNode[],
@@ -410,8 +423,8 @@ function initGraphState(): {
     };
   }
   return {
-    nodes: buildDefaultNodes(),
-    edges: buildDefaultEdges(),
+    nodes: buildDefaultNodes(variant),
+    edges: buildDefaultEdges(variant),
     pan: { x: 0, y: 0 },
     zoom: 1,
   };
@@ -661,6 +674,33 @@ async function executeNode(
       };
     }
 
+    case "ontologySource": {
+      const env = node.config.ontologyEnv?.trim();
+      if (!env) {
+        throw new Error("Select an ontology environment first.");
+      }
+      const { objects } = await listEnvObjects(env, {
+        type: node.config.objectType || undefined,
+        where: node.config.ontologyWhere?.trim() || undefined,
+        limit: node.config.ontologyLimit ?? 50,
+      });
+      const results: PipelineResult[] = objects.map((o) => {
+        const p = o.properties;
+        const str = (k: string) =>
+          typeof p[k] === "string" ? (p[k] as string) : undefined;
+        return {
+          span: str("span") ?? str("label") ?? o.typeName,
+          code: str("snomed_code") ?? str("code") ?? "",
+          display: str("display") ?? str("label") ?? o.typeName,
+          assertion: str("assertion") ?? "affirmed",
+          subject: str("subject") ?? "patient",
+          certainty: str("certainty") ?? "confirmed",
+          decision: "flag" as const,
+        };
+      });
+      return { ...input, payload: objects, results };
+    }
+
     case "terminology": {
       const target = node.config.targetSystem ?? "icd10";
       const base =
@@ -827,28 +867,36 @@ function DecisionBadge({ decision }: { decision: DemoResult["decision"] }) {
 // Left palette
 // ---------------------------------------------------------------------------
 
-const PALETTE: { type: NodeType; label: string }[] = [
-  { type: "input", label: "Input" },
-  { type: "source", label: "Source" },
-  { type: "webhook", label: "Webhook intake" },
-  { type: "formatDetect", label: "Format detection" },
-  { type: "concept", label: "Concept" },
-  { type: "context", label: "Context" },
-  { type: "decision", label: "Decision" },
-  { type: "saveOntology", label: "Save to ontology" },
-  { type: "terminology", label: "Terminology lookup" },
-  { type: "output", label: "Output" },
-  { type: "custom", label: "Custom code node" },
+const PALETTE: { type: NodeType; label: string; variants: StudioVariant[] }[] = [
+  { type: "input", label: "Input", variants: ["parser"] },
+  { type: "source", label: "Source", variants: ["parser"] },
+  { type: "webhook", label: "Webhook intake", variants: ["parser"] },
+  { type: "formatDetect", label: "Format detection", variants: ["parser"] },
+  { type: "concept", label: "Concept", variants: ["parser"] },
+  { type: "context", label: "Context", variants: ["parser"] },
+  { type: "decision", label: "Decision", variants: ["parser", "workspace"] },
+  { type: "saveOntology", label: "Save to ontology", variants: ["parser"] },
+  { type: "ontologySource", label: "Ontology source", variants: ["workspace"] },
+  { type: "terminology", label: "Terminology lookup", variants: ["parser", "workspace"] },
+  { type: "output", label: "Output", variants: ["parser", "workspace"] },
+  { type: "custom", label: "Custom code node", variants: ["parser", "workspace"] },
 ];
 
-function Palette({ onAdd }: { onAdd: (type: NodeType) => void }) {
+function Palette({
+  onAdd,
+  variant,
+}: {
+  onAdd: (type: NodeType) => void;
+  variant: StudioVariant;
+}) {
+  const items = PALETTE.filter((item) => item.variants.includes(variant));
   return (
     <aside className="w-48 shrink-0 border-r border-gray-200 bg-white p-3">
       <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400">
         Nodes
       </div>
       <div className="flex flex-col gap-1.5">
-        {PALETTE.map((item) => (
+        {items.map((item) => (
           <button
             key={item.type}
             type="button"
@@ -879,9 +927,9 @@ function Palette({ onAdd }: { onAdd: (type: NodeType) => void }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-export default function StudioEditor() {
-  const router = useRouter();
-  const initial = useMemo(() => initGraphState(), []);
+export default function StudioEditor({ variant }: { variant: StudioVariant }) {
+  const { environments, selectedEnv, setSelectedEnv, ontologyVersion } = useStudio();
+  const initial = useMemo(() => initGraphState(variant), [variant]);
 
   const [nodes, setNodes] = useState<FlowNode[]>(() => initial.nodes);
   const [edges, setEdges] = useState<Edge[]>(() => initial.edges);
@@ -925,10 +973,6 @@ export default function StudioEditor() {
   } | null>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
 
-  const [mode, setMode] = useState<"pipeline" | "ontology">("pipeline");
-  const [health, setHealth] = useState<HealthStatus | "checking">("checking");
-  const [environments, setEnvironments] = useState<EnvironmentSummary[]>([]);
-  const [selectedEnv, setSelectedEnv] = useState<string | null>(null);
   const [envObjectTypes, setEnvObjectTypes] = useState<string[]>(["ClinicalFinding"]);
 
   const showMultipleOrgs = useMemo(
@@ -941,40 +985,7 @@ export default function StudioEditor() {
     [environments],
   );
 
-  // Real readiness probe (never hardcoded): poll /v1/health.
-  useEffect(() => {
-    let cancelled = false;
-    async function probe() {
-      const status = await getHealth();
-      if (!cancelled) setHealth(status);
-    }
-    void probe();
-    const handle = setInterval(probe, 15000);
-    return () => {
-      cancelled = true;
-      clearInterval(handle);
-    };
-  }, []);
-
-  // Load owner-scoped environments when a key is present.
-  const refreshEnvironments = useCallback(async () => {
-    if (!getStoredKey()) {
-      setEnvironments([]);
-      return;
-    }
-    try {
-      const { environments: envs } = await listEnvironments();
-      setEnvironments(envs);
-      setSelectedEnv((cur) => cur ?? envs[0]?.slug ?? null);
-    } catch {
-      setEnvironments([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refreshEnvironments();
-  }, [refreshEnvironments]);
-
+  // Object types for the selected env (re-fetch when ontology data changes).
   useEffect(() => {
     if (!selectedEnv || !getStoredKey()) {
       setEnvObjectTypes(["ClinicalFinding"]);
@@ -994,7 +1005,7 @@ export default function StudioEditor() {
     return () => {
       cancelled = true;
     };
-  }, [selectedEnv]);
+  }, [selectedEnv, ontologyVersion]);
 
   useEffect(() => {
     if (!selectedEnv) return;
@@ -1021,7 +1032,7 @@ export default function StudioEditor() {
         );
       }
     },
-    [selectedIds],
+    [selectedIds, setSelectedEnv],
   );
 
   const canvasRef = useRef<HTMLDivElement | null>(null);
@@ -1120,7 +1131,7 @@ export default function StudioEditor() {
   // Autosave graph topology
   useEffect(() => {
     const t = setTimeout(() => {
-      saveStudioGraph({
+      saveStudioGraph(variant, {
         nodes: nodes as PersistedNode[],
         edges,
         pan,
@@ -1128,7 +1139,7 @@ export default function StudioEditor() {
       });
     }, 500);
     return () => clearTimeout(t);
-  }, [nodes, edges, pan, zoom]);
+  }, [nodes, edges, pan, zoom, variant]);
 
   function deleteEdge(id: string) {
     setEdges((prev) => prev.filter((e) => e.id !== id));
@@ -1725,9 +1736,9 @@ export default function StudioEditor() {
   }
 
   function reset() {
-    clearStudioGraph();
-    setNodes(buildDefaultNodes());
-    setEdges(buildDefaultEdges());
+    clearStudioGraph(variant);
+    setNodes(buildDefaultNodes(variant));
+    setEdges(buildDefaultEdges(variant));
     setPan({ x: 0, y: 0 });
     setZoom(1);
     clearSelection();
@@ -1740,130 +1751,56 @@ export default function StudioEditor() {
     setRunError(null);
   }
 
-  function signOut() {
-    clearSession();
-    clearStoredKey();
-    router.replace("/");
-  }
-
   // -----------------------------------------------------------------------
 
   return (
-    <div className="flex h-screen flex-col bg-white text-gray-900">
-      {/* Top bar */}
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-gray-200 px-4">
-        <div className="flex items-baseline gap-2">
-          <span className="font-mono text-sm font-semibold lowercase tracking-tight">
-            obscyro
-          </span>
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400">
-            studio
-          </span>
-        </div>
-
-        {/* Mode toggle + environment switcher */}
+    <div className="flex min-h-0 flex-1 flex-col bg-white text-gray-900">
+      {/* Editor toolbar — Reset / Run for the current graph */}
+      <div className="flex h-10 shrink-0 items-center justify-between border-b border-gray-200 px-4">
+        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400">
+          {variant === "parser" ? "Ontology Parser" : "Studio Obscyro"}
+        </span>
         <div className="flex items-center gap-3">
-          <div className="flex rounded-md border border-gray-200 p-0.5">
-            {(["pipeline", "ontology"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setMode(m)}
-                className={cn(
-                  "rounded px-3 py-1 text-xs font-medium capitalize transition-colors",
-                  mode === m
-                    ? "bg-gray-900 text-white"
-                    : "text-gray-500 hover:text-gray-900",
-                )}
-              >
-                {m}
-              </button>
-            ))}
-          </div>
-          <label className="flex items-center gap-1.5">
-            <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-gray-400">
-              env
-            </span>
-            <select
-              value={selectedEnv ?? ""}
-              onChange={(e) => handleEnvChange(e.target.value)}
-              disabled={environments.length === 0}
-              className="max-w-[220px] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:border-gray-400 focus:outline-none disabled:text-gray-400"
-            >
-              {environments.length === 0 ? (
-                <option value="">no environments</option>
-              ) : (
-                environments.map((env) => (
-                  <option key={env.id} value={env.slug}>
-                    {formatEnvLabel(env, showMultipleOrgs)}
-                  </option>
-                ))
-              )}
-            </select>
-          </label>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <HealthPill health={health} />
           {runError ? (
             <span className="hidden max-w-xs truncate text-[10px] text-rose-600 sm:inline">
               {runError}
             </span>
           ) : null}
-          {mode === "pipeline" ? (
-            <>
-              <button
-                type="button"
-                onClick={reset}
-                className="rounded-md border border-gray-200 px-3 py-1.5 text-xs text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-900"
-              >
-                Reset
-              </button>
-              <button
-                type="button"
-                onClick={runGraph}
-                disabled={running}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs font-medium transition-colors",
-                  running
-                    ? "bg-indigo-300 text-white"
-                    : "bg-indigo-600 text-white hover:bg-indigo-500",
-                )}
-              >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  aria-hidden
-                >
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-                {running ? "Running…" : "Run"}
-              </button>
-            </>
-          ) : null}
           <button
             type="button"
-            onClick={signOut}
-            className="rounded-md px-2.5 py-1.5 text-xs text-gray-500 transition-colors hover:text-gray-900"
+            onClick={reset}
+            className="rounded-md border border-gray-200 px-3 py-1.5 text-xs text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-900"
           >
-            Sign out
+            Reset
+          </button>
+          <button
+            type="button"
+            onClick={runGraph}
+            disabled={running}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs font-medium transition-colors",
+              running
+                ? "bg-indigo-300 text-white"
+                : "bg-indigo-600 text-white hover:bg-indigo-500",
+            )}
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              aria-hidden
+            >
+              <path d="M8 5v14l11-7z" />
+            </svg>
+            {running ? "Running…" : "Run"}
           </button>
         </div>
-      </header>
+      </div>
 
-      {/* Region B — palette · canvas · inspector (pipeline) or ontology mode */}
+      {/* Region B — palette · canvas · inspector */}
       <div className="flex min-h-0 flex-1">
-        {mode === "ontology" ? (
-          <StudioOntologyMode
-            env={selectedEnv}
-            hasKey={Boolean(getStoredKey())}
-            onEnvironmentsChanged={refreshEnvironments}
-          />
-        ) : (
-          <>
-            <Palette onAdd={(type) => addNode(type)} />
+        <Palette onAdd={(type) => addNode(type)} variant={variant} />
 
         {/* Canvas */}
         <div
@@ -2352,29 +2289,8 @@ export default function StudioEditor() {
                 </button>
               </aside>
             ) : null}
-          </>
-        )}
       </div>
     </div>
-  );
-}
-
-function HealthPill({ health }: { health: HealthStatus | "checking" }) {
-  const map: Record<
-    HealthStatus | "checking",
-    { dot: string; label: string }
-  > = {
-    checking: { dot: "bg-gray-300", label: "Checking API…" },
-    ok: { dot: "bg-emerald-500", label: "Live — connected to API" },
-    degraded: { dot: "bg-amber-500", label: "Degraded — database issue" },
-    offline: { dot: "bg-gray-400", label: "Offline — API unreachable" },
-  };
-  const { dot, label } = map[health];
-  return (
-    <span className="hidden items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[10px] text-gray-500 sm:inline-flex">
-      <span className={cn("h-1.5 w-1.5 rounded-full", dot)} />
-      {label}
-    </span>
   );
 }
 
@@ -2936,6 +2852,73 @@ function LowCodeForm({
               <span className="font-medium text-gray-600">{envName}</span>
             </p>
           ) : null}
+        </>
+      );
+    }
+
+    case "ontologySource": {
+      const envSlug = node.config.ontologyEnv ?? selectedEnv ?? "";
+      return (
+        <>
+          <Field label="Environment">
+            <select
+              value={envSlug}
+              onChange={(e) => {
+                onEnvChange(e.target.value);
+                onConfig({ ontologyEnv: e.target.value || undefined });
+              }}
+              disabled={environments.length === 0}
+              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10 disabled:text-gray-400"
+            >
+              {environments.length === 0 ? (
+                <option value="">No environments — sign in first</option>
+              ) : (
+                environments.map((env) => (
+                  <option key={env.id} value={env.slug}>
+                    {formatEnvLabel(env, showMultipleOrgs)}
+                  </option>
+                ))
+              )}
+            </select>
+          </Field>
+          <Field label="Object type">
+            <select
+              value={node.config.objectType ?? ""}
+              onChange={(e) => onConfig({ objectType: e.target.value || undefined })}
+              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+            >
+              <option value="">All types</option>
+              {envObjectTypes.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Where filter">
+            <input
+              type="text"
+              value={node.config.ontologyWhere ?? ""}
+              onChange={(e) => onConfig({ ontologyWhere: e.target.value })}
+              placeholder="assertion:affirmed,subject:patient"
+              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 font-mono text-[11px] text-gray-800 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+            />
+          </Field>
+          <Field label="Limit">
+            <input
+              type="number"
+              min={1}
+              max={200}
+              value={node.config.ontologyLimit ?? 50}
+              onChange={(e) =>
+                onConfig({ ontologyLimit: Number(e.target.value) || 50 })
+              }
+              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+            />
+          </Field>
+          <p className="text-[11px] leading-relaxed text-gray-400">
+            Reads instances from the ontology to feed downstream workflow nodes.
+          </p>
         </>
       );
     }

@@ -7,6 +7,8 @@ import { AppError, BadRequest, Conflict, NotFound } from "../lib/errors.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
 import { ensureUserOrganization, resolveOrganizationsForUser } from "../services/organization.js";
 import {
+  getOrCreateLinkType,
+  getOrCreateObjectType,
   resolveEnvironment,
   seedEntityEnvironmentSchema,
   type EnvironmentType,
@@ -826,6 +828,306 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         }
         throw err;
       }
+    },
+  );
+
+  // --- Manager CRUD: object types, link types, instances --------------------
+
+  app.post(
+    "/ontology/:env/types",
+    {
+      schema: {
+        summary: "Create an object type in an environment",
+        tags: ["ontology"],
+        params: z.object({ env: z.string().min(1) }),
+        body: z.object({
+          name: z.string().trim().min(1).max(120),
+          description: z.string().trim().max(500).optional(),
+          propertySchema: z.array(propertyDef).default([]),
+        }),
+        response: { 201: objectTypeOut, 404: errorEnvelope, 409: errorEnvelope },
+      },
+    },
+    async (req, reply) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+
+      const existing = await req.db.query(
+        `SELECT 1 FROM app.ontology_object_types WHERE environment_id = $1 AND name = $2`,
+        [env.id, req.body.name],
+      );
+      if (existing.rowCount && existing.rowCount > 0) {
+        throw Conflict("TYPE_EXISTS", `Object type "${req.body.name}" already exists.`);
+      }
+
+      const typeId = await getOrCreateObjectType(
+        req.db,
+        env.id,
+        req.body.name,
+        req.body.description ?? null,
+        req.body.propertySchema,
+      );
+      const { rows } = await req.db.query<{
+        id: string;
+        name: string;
+        description: string | null;
+        property_schema: unknown;
+        created_at: Date;
+      }>(
+        `SELECT id, name, description, property_schema, created_at
+           FROM app.ontology_object_types WHERE id = $1`,
+        [typeId],
+      );
+      const r = rows[0]!;
+      return reply.code(201).send({
+        id: r.id,
+        name: r.name,
+        description: r.description,
+        propertySchema: r.property_schema as z.infer<typeof propertyDef>[],
+        createdAt: r.created_at.toISOString(),
+      });
+    },
+  );
+
+  app.patch(
+    "/ontology/:env/types/:name",
+    {
+      schema: {
+        summary: "Update an object type's description and property schema",
+        tags: ["ontology"],
+        params: z.object({ env: z.string().min(1), name: z.string().min(1) }),
+        body: z.object({
+          description: z.string().trim().max(500).nullable().optional(),
+          propertySchema: z.array(propertyDef).optional(),
+        }),
+        response: { 200: objectTypeOut, 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const { rows } = await req.db.query<{
+        id: string;
+        name: string;
+        description: string | null;
+        property_schema: unknown;
+        created_at: Date;
+      }>(
+        `UPDATE app.ontology_object_types
+            SET description = COALESCE($3, description),
+                property_schema = COALESCE($4::jsonb, property_schema)
+          WHERE environment_id = $1 AND name = $2
+          RETURNING id, name, description, property_schema, created_at`,
+        [
+          env.id,
+          req.params.name,
+          req.body.description ?? null,
+          req.body.propertySchema ? JSON.stringify(req.body.propertySchema) : null,
+        ],
+      );
+      const r = rows[0];
+      if (!r) throw NotFound("TYPE_NOT_FOUND", `Object type "${req.params.name}" not found.`);
+      return {
+        id: r.id,
+        name: r.name,
+        description: r.description,
+        propertySchema: r.property_schema as z.infer<typeof propertyDef>[],
+        createdAt: r.created_at.toISOString(),
+      };
+    },
+  );
+
+  app.delete(
+    "/ontology/:env/types/:name",
+    {
+      schema: {
+        summary: "Delete an object type (cascades its instances)",
+        tags: ["ontology"],
+        params: z.object({ env: z.string().min(1), name: z.string().min(1) }),
+        response: { 200: z.object({ ok: z.literal(true) }), 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const result = await req.db.query(
+        `DELETE FROM app.ontology_object_types WHERE environment_id = $1 AND name = $2`,
+        [env.id, req.params.name],
+      );
+      if (result.rowCount === 0) {
+        throw NotFound("TYPE_NOT_FOUND", `Object type "${req.params.name}" not found.`);
+      }
+      return { ok: true as const };
+    },
+  );
+
+  app.post(
+    "/ontology/:env/link-types",
+    {
+      schema: {
+        summary: "Create a link type (relationship) between two object types",
+        tags: ["ontology"],
+        params: z.object({ env: z.string().min(1) }),
+        body: z.object({
+          name: z.string().trim().min(1).max(120),
+          fromType: z.string().trim().min(1),
+          toType: z.string().trim().min(1),
+          cardinality: z
+            .enum(["one_to_one", "one_to_many", "many_to_one", "many_to_many"])
+            .default("many_to_many"),
+        }),
+        response: { 201: linkTypeOut, 404: errorEnvelope, 409: errorEnvelope },
+      },
+    },
+    async (req, reply) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+
+      const typeRows = await req.db.query<{ id: string; name: string }>(
+        `SELECT id, name FROM app.ontology_object_types
+          WHERE environment_id = $1 AND name = ANY($2::text[])`,
+        [env.id, [req.body.fromType, req.body.toType]],
+      );
+      const byName = new Map(typeRows.rows.map((t) => [t.name, t.id]));
+      const fromId = byName.get(req.body.fromType);
+      const toId = byName.get(req.body.toType);
+      if (!fromId || !toId) {
+        throw NotFound("TYPE_NOT_FOUND", "from/to object type not found in this environment.");
+      }
+
+      const existing = await req.db.query(
+        `SELECT 1 FROM app.ontology_link_types WHERE environment_id = $1 AND name = $2`,
+        [env.id, req.body.name],
+      );
+      if (existing.rowCount && existing.rowCount > 0) {
+        throw Conflict("LINK_TYPE_EXISTS", `Link type "${req.body.name}" already exists.`);
+      }
+
+      const linkTypeId = await getOrCreateLinkType(
+        req.db,
+        env.id,
+        req.body.name,
+        fromId,
+        toId,
+        req.body.cardinality,
+      );
+      return reply.code(201).send({
+        id: linkTypeId,
+        name: req.body.name,
+        fromType: req.body.fromType,
+        toType: req.body.toType,
+        cardinality: req.body.cardinality,
+      });
+    },
+  );
+
+  app.delete(
+    "/ontology/:env/link-types/:name",
+    {
+      schema: {
+        summary: "Delete a link type (cascades its link instances)",
+        tags: ["ontology"],
+        params: z.object({ env: z.string().min(1), name: z.string().min(1) }),
+        response: { 200: z.object({ ok: z.literal(true) }), 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const result = await req.db.query(
+        `DELETE FROM app.ontology_link_types WHERE environment_id = $1 AND name = $2`,
+        [env.id, req.params.name],
+      );
+      if (result.rowCount === 0) {
+        throw NotFound("LINK_TYPE_NOT_FOUND", `Link type "${req.params.name}" not found.`);
+      }
+      return { ok: true as const };
+    },
+  );
+
+  app.patch(
+    "/ontology/:env/objects/:id",
+    {
+      schema: {
+        summary: "Update an object instance's properties",
+        tags: ["ontology"],
+        params: z.object({ env: z.string().min(1), id: z.string().uuid() }),
+        body: z.object({ properties: z.record(z.unknown()) }),
+        response: { 200: z.object({ ok: z.literal(true) }), 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const result = await req.db.query(
+        `UPDATE app.ontology_object_instances oi
+            SET properties = $1::jsonb, updated_at = NOW()
+           FROM app.ontology_object_types t
+          WHERE oi.object_type_id = t.id
+            AND t.environment_id = $2
+            AND oi.id = $3`,
+        [JSON.stringify(req.body.properties), env.id, req.params.id],
+      );
+      if (result.rowCount === 0) {
+        throw NotFound("OBJECT_NOT_FOUND", "Object not found in this environment.");
+      }
+      return { ok: true as const };
+    },
+  );
+
+  app.delete(
+    "/ontology/:env/objects/:id",
+    {
+      schema: {
+        summary: "Delete an object instance",
+        tags: ["ontology"],
+        params: z.object({ env: z.string().min(1), id: z.string().uuid() }),
+        response: { 200: z.object({ ok: z.literal(true) }), 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const result = await req.db.query(
+        `DELETE FROM app.ontology_object_instances oi
+          USING app.ontology_object_types t
+          WHERE oi.object_type_id = t.id
+            AND t.environment_id = $1
+            AND oi.id = $2`,
+        [env.id, req.params.id],
+      );
+      if (result.rowCount === 0) {
+        throw NotFound("OBJECT_NOT_FOUND", "Object not found in this environment.");
+      }
+      return { ok: true as const };
+    },
+  );
+
+  app.delete(
+    "/ontology/:env/links/:id",
+    {
+      schema: {
+        summary: "Delete a link instance between two objects",
+        tags: ["ontology"],
+        params: z.object({ env: z.string().min(1), id: z.string().uuid() }),
+        response: { 200: z.object({ ok: z.literal(true) }), 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const result = await req.db.query(
+        `DELETE FROM app.ontology_link_instances li
+          USING app.ontology_link_types lt
+          WHERE li.link_type_id = lt.id
+            AND lt.environment_id = $1
+            AND li.id = $2`,
+        [env.id, req.params.id],
+      );
+      if (result.rowCount === 0) {
+        throw NotFound("LINK_NOT_FOUND", "Link not found in this environment.");
+      }
+      return { ok: true as const };
     },
   );
 };

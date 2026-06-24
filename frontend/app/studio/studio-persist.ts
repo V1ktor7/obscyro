@@ -4,7 +4,16 @@
 
 import type { GraphEdge } from "./studio-graph-ops";
 
-const STORAGE_KEY = "obs_studio_graph_v1";
+export type StudioVariant = "parser" | "workspace";
+
+const STORAGE_KEYS: Record<StudioVariant, string> = {
+  parser: "obs_studio_parser_v1",
+  workspace: "obs_studio_workspace_v1",
+};
+
+function storageKey(variant: StudioVariant): string {
+  return STORAGE_KEYS[variant];
+}
 
 export type PersistedNode = {
   id: string;
@@ -38,10 +47,10 @@ function isValidGraph(data: unknown): data is PersistedGraph {
   );
 }
 
-export function loadStudioGraph(): PersistedGraph | null {
+export function loadStudioGraph(variant: StudioVariant): PersistedGraph | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey(variant));
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
     if (!isValidGraph(parsed)) return null;
@@ -51,12 +60,15 @@ export function loadStudioGraph(): PersistedGraph | null {
   }
 }
 
-export function saveStudioGraph(graph: {
-  nodes: PersistedNode[];
-  edges: GraphEdge[];
-  pan: { x: number; y: number };
-  zoom: number;
-}): void {
+export function saveStudioGraph(
+  variant: StudioVariant,
+  graph: {
+    nodes: PersistedNode[];
+    edges: GraphEdge[];
+    pan: { x: number; y: number };
+    zoom: number;
+  },
+): void {
   if (typeof window === "undefined") return;
   try {
     const payload: PersistedGraph = {
@@ -64,16 +76,16 @@ export function saveStudioGraph(graph: {
       ...graph,
       savedAt: new Date().toISOString(),
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    localStorage.setItem(storageKey(variant), JSON.stringify(payload));
   } catch {
     /* quota / private mode */
   }
 }
 
-export function clearStudioGraph(): void {
+export function clearStudioGraph(variant: StudioVariant): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(storageKey(variant));
   } catch {
     /* ignore */
   }

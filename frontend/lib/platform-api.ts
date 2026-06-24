@@ -428,6 +428,20 @@ export interface OrganizationSummary {
   createdAt: string;
 }
 
+export type PropertyType = "string" | "number" | "boolean" | "object" | "array";
+
+export interface PropertyDefinition {
+  key: string;
+  type: PropertyType;
+  label?: string;
+}
+
+export type LinkCardinality =
+  | "one_to_one"
+  | "one_to_many"
+  | "many_to_one"
+  | "many_to_many";
+
 export interface EnvObjectType {
   id: string;
   name: string;
@@ -525,6 +539,70 @@ export async function createEnvLink(
   },
 ): Promise<{ id: string }> {
   return apiFetch(`/v1/ontology/${encodeURIComponent(env)}/links`, { method: "POST", body });
+}
+
+// --- Ontology Manager CRUD ---
+
+export async function createEnvType(
+  env: string,
+  body: { name: string; description?: string; propertySchema?: PropertyDefinition[] },
+): Promise<EnvObjectType> {
+  return apiFetch(`/v1/ontology/${encodeURIComponent(env)}/types`, { method: "POST", body });
+}
+
+export async function updateEnvType(
+  env: string,
+  name: string,
+  body: { description?: string | null; propertySchema?: PropertyDefinition[] },
+): Promise<EnvObjectType> {
+  return apiFetch(`/v1/ontology/${encodeURIComponent(env)}/types/${encodeURIComponent(name)}`, {
+    method: "PATCH",
+    body,
+  });
+}
+
+export async function deleteEnvType(env: string, name: string): Promise<{ ok: true }> {
+  return apiFetch(`/v1/ontology/${encodeURIComponent(env)}/types/${encodeURIComponent(name)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function createEnvLinkType(
+  env: string,
+  body: {
+    name: string;
+    fromType: string;
+    toType: string;
+    cardinality?: LinkCardinality;
+  },
+): Promise<EnvLinkType> {
+  return apiFetch(`/v1/ontology/${encodeURIComponent(env)}/link-types`, { method: "POST", body });
+}
+
+export async function deleteEnvLinkType(env: string, name: string): Promise<{ ok: true }> {
+  return apiFetch(
+    `/v1/ontology/${encodeURIComponent(env)}/link-types/${encodeURIComponent(name)}`,
+    { method: "DELETE" },
+  );
+}
+
+export async function updateEnvObject(
+  env: string,
+  id: string,
+  body: { properties: Record<string, unknown> },
+): Promise<{ ok: true }> {
+  return apiFetch(`/v1/ontology/${encodeURIComponent(env)}/objects/${id}`, {
+    method: "PATCH",
+    body,
+  });
+}
+
+export async function deleteEnvObject(env: string, id: string): Promise<{ ok: true }> {
+  return apiFetch(`/v1/ontology/${encodeURIComponent(env)}/objects/${id}`, { method: "DELETE" });
+}
+
+export async function deleteEnvLink(env: string, id: string): Promise<{ ok: true }> {
+  return apiFetch(`/v1/ontology/${encodeURIComponent(env)}/links/${id}`, { method: "DELETE" });
 }
 
 // --- Combined extract (+ optional persist into an environment) ---
