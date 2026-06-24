@@ -33,6 +33,7 @@ import {
   type ConceptOut,
   type ContextOut,
   type EnvironmentSummary,
+  type EnvironmentType,
   type HealthStatus,
   type PipelineResult,
 } from "@/lib/platform-api";
@@ -116,6 +117,17 @@ type NodeType =
   | "custom";
 
 type Destination = "research" | "problem_list";
+
+function envTypeBadge(type: EnvironmentType): string {
+  if (type === "reference") return "ref";
+  if (type === "operations") return "ops";
+  return "entity";
+}
+
+function formatEnvLabel(env: EnvironmentSummary, showOrg: boolean): string {
+  const prefix = showOrg ? `${env.organizationName} · ` : "";
+  return `${prefix}${env.name} (${envTypeBadge(env.type)})`;
+}
 
 type NodeConfig = {
   sampleText?: string;
@@ -918,6 +930,16 @@ export default function StudioEditor() {
   const [environments, setEnvironments] = useState<EnvironmentSummary[]>([]);
   const [selectedEnv, setSelectedEnv] = useState<string | null>(null);
   const [envObjectTypes, setEnvObjectTypes] = useState<string[]>(["ClinicalFinding"]);
+
+  const showMultipleOrgs = useMemo(
+    () => new Set(environments.map((e) => e.organizationId)).size > 1,
+    [environments],
+  );
+
+  const entityEnvironments = useMemo(
+    () => environments.filter((e) => e.type === "entity"),
+    [environments],
+  );
 
   // Real readiness probe (never hardcoded): poll /v1/health.
   useEffect(() => {
@@ -1766,14 +1788,14 @@ export default function StudioEditor() {
               value={selectedEnv ?? ""}
               onChange={(e) => handleEnvChange(e.target.value)}
               disabled={environments.length === 0}
-              className="max-w-[160px] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:border-gray-400 focus:outline-none disabled:text-gray-400"
+              className="max-w-[220px] rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:border-gray-400 focus:outline-none disabled:text-gray-400"
             >
               {environments.length === 0 ? (
                 <option value="">no environments</option>
               ) : (
                 environments.map((env) => (
                   <option key={env.id} value={env.slug}>
-                    {env.name}
+                    {formatEnvLabel(env, showMultipleOrgs)}
                   </option>
                 ))
               )}
@@ -2306,6 +2328,8 @@ export default function StudioEditor() {
                 onRunNode={() => runNode(selectedNode.id)}
                 results={results}
                 environments={environments}
+                entityEnvironments={entityEnvironments}
+                showMultipleOrgs={showMultipleOrgs}
                 selectedEnv={selectedEnv}
                 envObjectTypes={envObjectTypes}
                 onEnvChange={handleEnvChange}
@@ -2371,6 +2395,8 @@ function Inspector({
   onRunNode,
   results,
   environments,
+  entityEnvironments,
+  showMultipleOrgs,
   selectedEnv,
   envObjectTypes,
   onEnvChange,
@@ -2387,6 +2413,8 @@ function Inspector({
   onRunNode: () => void;
   results: DemoResult[] | null;
   environments: EnvironmentSummary[];
+  entityEnvironments: EnvironmentSummary[];
+  showMultipleOrgs: boolean;
   selectedEnv: string | null;
   envObjectTypes: string[];
   onEnvChange: (slug: string) => void;
@@ -2460,6 +2488,8 @@ function Inspector({
             onConfig={onConfig}
             results={results}
             environments={environments}
+            entityEnvironments={entityEnvironments}
+            showMultipleOrgs={showMultipleOrgs}
             selectedEnv={selectedEnv}
             envObjectTypes={envObjectTypes}
             onEnvChange={onEnvChange}
@@ -2564,6 +2594,8 @@ function LowCodeForm({
   onConfig,
   results,
   environments,
+  entityEnvironments,
+  showMultipleOrgs,
   selectedEnv,
   envObjectTypes,
   onEnvChange,
@@ -2572,6 +2604,8 @@ function LowCodeForm({
   onConfig: (partial: NodeConfig) => void;
   results: DemoResult[] | null;
   environments: EnvironmentSummary[];
+  entityEnvironments: EnvironmentSummary[];
+  showMultipleOrgs: boolean;
   selectedEnv: string | null;
   envObjectTypes: string[];
   onEnvChange: (slug: string) => void;
@@ -2833,7 +2867,9 @@ function LowCodeForm({
     case "saveOntology": {
       const envSlug = node.config.ontologyEnv ?? selectedEnv ?? "";
       const envName =
-        environments.find((e) => e.slug === envSlug)?.name ?? envSlug;
+        entityEnvironments.find((e) => e.slug === envSlug)?.name ?? envSlug;
+      const saveEnvs =
+        entityEnvironments.length > 0 ? entityEnvironments : environments;
       return (
         <>
           <Field label="Environment">
@@ -2843,20 +2879,26 @@ function LowCodeForm({
                 onEnvChange(e.target.value);
                 onConfig({ ontologyEnv: e.target.value || undefined });
               }}
-              disabled={environments.length === 0}
+              disabled={saveEnvs.length === 0}
               className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10 disabled:text-gray-400"
             >
-              {environments.length === 0 ? (
-                <option value="">No environments — sign in first</option>
+              {saveEnvs.length === 0 ? (
+                <option value="">No entity environments — create one first</option>
               ) : (
-                environments.map((env) => (
+                saveEnvs.map((env) => (
                   <option key={env.id} value={env.slug}>
-                    {env.name}
+                    {formatEnvLabel(env, showMultipleOrgs)}
                   </option>
                 ))
               )}
             </select>
           </Field>
+          {entityEnvironments.length === 0 && environments.length > 0 ? (
+            <p className="text-[11px] text-amber-700">
+              Only entity environments accept clinical findings. Create an entity
+              environment in Ontology mode.
+            </p>
+          ) : null}
           <Field label="Object type">
             <select
               value={node.config.objectType ?? "ClinicalFinding"}

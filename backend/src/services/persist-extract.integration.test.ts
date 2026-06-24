@@ -88,12 +88,25 @@ async function getUserId(): Promise<string> {
 async function ensureTestLabEnvironment(): Promise<TestEnvContext> {
   const userId = await getUserId();
 
+  const { rows: orgRows } = await db.query<{ id: string }>(
+    `SELECT o.id
+       FROM app.organizations o
+       JOIN app.organization_members om ON om.organization_id = o.id
+      WHERE om.user_id = $1
+      ORDER BY CASE WHEN o.slug = 'chum' THEN 0 ELSE 1 END
+      LIMIT 1`,
+    [userId],
+  );
+  assert.ok(orgRows[0], "user must belong to an organization (run migrations)");
+  const organizationId = orgRows[0].id;
+
   const { rows: envRows } = await db.query<{ id: string }>(
-    `INSERT INTO app.ontology_environments (owner_user_id, name, slug)
-     VALUES ($1, 'Test Lab', $2)
-     ON CONFLICT (owner_user_id, slug) DO UPDATE SET name = EXCLUDED.name
+    `INSERT INTO app.ontology_environments
+       (owner_user_id, organization_id, name, slug, environment_type)
+     VALUES ($1, $2, 'Test Lab', $3, 'entity')
+     ON CONFLICT (organization_id, slug) DO UPDATE SET name = EXCLUDED.name
      RETURNING id`,
-    [userId, TEST_ENV_SLUG],
+    [userId, organizationId, TEST_ENV_SLUG],
   );
   const environmentId = envRows[0]!.id;
 

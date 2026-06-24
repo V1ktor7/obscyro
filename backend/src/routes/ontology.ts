@@ -5,7 +5,12 @@ import { z } from "zod";
 import type { DbClient } from "../lib/db.js";
 import { AppError, BadRequest, Conflict, NotFound } from "../lib/errors.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
-import { resolveEnvironment } from "../services/ontology.js";
+import { ensureUserOrganization, resolveOrganizationsForUser } from "../services/organization.js";
+import {
+  resolveEnvironment,
+  seedEntityEnvironmentSchema,
+  type EnvironmentType,
+} from "../services/ontology.js";
 
 const propertyDef = z.object({
   key: z.string().min(1),
@@ -279,18 +284,55 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
 
   // --- Environment-scoped, multi-domain ontology (migration 010) ------------
 
+  const environmentTypeSchema = z.enum(["reference", "entity", "operations"]);
+
   const environmentOut = z.object({
     id: z.string().uuid(),
     name: z.string(),
     slug: z.string(),
+    type: environmentTypeSchema,
+    organizationId: z.string().uuid(),
+    organizationName: z.string(),
     createdAt: z.string(),
   });
+
+  const organizationOut = z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    slug: z.string(),
+    role: z.enum(["owner", "member"]),
+    createdAt: z.string(),
+  });
+
+  app.get(
+    "/ontology/organizations",
+    {
+      schema: {
+        summary: "List organizations the caller belongs to",
+        tags: ["ontology"],
+        response: { 200: z.object({ organizations: z.array(organizationOut) }) },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const orgs = await resolveOrganizationsForUser(req.db, userId);
+      return {
+        organizations: orgs.map((o) => ({
+          id: o.id,
+          name: o.name,
+          slug: o.slug,
+          role: o.role,
+          createdAt: o.createdAt.toISOString(),
+        })),
+      };
+    },
+  );
 
   app.get(
     "/ontology/environments",
     {
       schema: {
-        summary: "List ontology environments owned by the caller",
+        summary: "List ontology environments for the caller's organizations",
         tags: ["ontology"],
         response: { 200: z.object({ environments: z.array(environmentOut) }) },
       },
@@ -301,12 +343,18 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         id: string;
         name: string;
         slug: string;
+        environment_type: EnvironmentType;
+        organization_id: string;
+        organization_name: string;
         created_at: Date;
       }>(
-        `SELECT id, name, slug, created_at
-           FROM app.ontology_environments
-          WHERE owner_user_id = $1
-          ORDER BY created_at ASC`,
+        `SELECT e.id, e.name, e.slug, e.environment_type, e.organization_id,
+                o.name AS organization_name, e.created_at
+           FROM app.ontology_environments e
+           JOIN app.organization_members om ON om.organization_id = e.organization_id
+           JOIN app.organizations o ON o.id = e.organization_id
+          WHERE om.user_id = $1
+          ORDER BY o.name ASC, e.name ASC`,
         [userId],
       );
       return {
@@ -314,6 +362,9 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
           id: r.id,
           name: r.name,
           slug: r.slug,
+          type: r.environment_type,
+          organizationId: r.organization_id,
+          organizationName: r.organization_name,
           createdAt: r.created_at.toISOString(),
         })),
       };
@@ -329,12 +380,14 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         body: z.object({
           name: z.string().trim().min(1).max(120),
           slug: z.string().trim().min(1).max(64).optional(),
+          type: environmentTypeSchema,
         }),
         response: { 201: environmentOut, 409: errorEnvelope },
       },
     },
     async (req, reply) => {
       const userId = await requireUserId(req);
+      const org = await ensureUserOrganization(req.db, userId);
       const slug = slugify(req.body.slug ?? req.body.name);
       if (!slug) {
         throw BadRequest("INVALID_SLUG", "Could not derive a slug from the name.");
@@ -344,18 +397,27 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
           id: string;
           name: string;
           slug: string;
+          environment_type: EnvironmentType;
+          organization_id: string;
           created_at: Date;
         }>(
-          `INSERT INTO app.ontology_environments (owner_user_id, name, slug)
-           VALUES ($1, $2, $3)
-           RETURNING id, name, slug, created_at`,
-          [userId, req.body.name, slug],
+          `INSERT INTO app.ontology_environments
+             (owner_user_id, organization_id, name, slug, environment_type)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING id, name, slug, environment_type, organization_id, created_at`,
+          [userId, org.id, req.body.name, slug, req.body.type],
         );
         const r = rows[0]!;
+        if (req.body.type === "entity") {
+          await seedEntityEnvironmentSchema(req.db, r.id);
+        }
         return reply.code(201).send({
           id: r.id,
           name: r.name,
           slug: r.slug,
+          type: r.environment_type,
+          organizationId: r.organization_id,
+          organizationName: org.name,
           createdAt: r.created_at.toISOString(),
         });
       } catch (err: unknown) {

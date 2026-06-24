@@ -5,11 +5,15 @@ import { NotFound } from "../lib/errors.js";
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+export type EnvironmentType = "reference" | "entity" | "operations";
+
 export interface EnvironmentRow {
   id: string;
   name: string;
   slug: string;
   ownerUserId: string;
+  organizationId: string;
+  environmentType: EnvironmentType;
   createdAt: Date;
 }
 
@@ -45,8 +49,8 @@ export const PATIENT_SCHEMA: PropertyDef[] = [
 ];
 
 /**
- * Resolve an environment by slug or UUID, always scoped to the owner. Returns
- * null when the environment does not exist or is not owned by `userId`.
+ * Resolve an environment by slug or UUID, scoped to org membership. Returns
+ * null when the environment does not exist or the user is not a member of its org.
  */
 export async function findEnvironment(
   db: DbClient,
@@ -59,11 +63,15 @@ export async function findEnvironment(
     name: string;
     slug: string;
     owner_user_id: string;
+    organization_id: string;
+    environment_type: EnvironmentType;
     created_at: Date;
   }>(
-    `SELECT id, name, slug, owner_user_id, created_at
-       FROM app.ontology_environments
-      WHERE owner_user_id = $1 AND ${byUuid ? "id = $2" : "slug = $2"}`,
+    `SELECT e.id, e.name, e.slug, e.owner_user_id, e.organization_id,
+            e.environment_type, e.created_at
+       FROM app.ontology_environments e
+       JOIN app.organization_members om ON om.organization_id = e.organization_id
+      WHERE om.user_id = $1 AND ${byUuid ? "e.id = $2" : "e.slug = $2"}`,
     [userId, envParam],
   );
   const row = rows[0];
@@ -73,11 +81,42 @@ export async function findEnvironment(
     name: row.name,
     slug: row.slug,
     ownerUserId: row.owner_user_id,
+    organizationId: row.organization_id,
+    environmentType: row.environment_type,
     createdAt: row.created_at,
   };
 }
 
-/** Like {@link findEnvironment} but throws a 404 when not found/owned. */
+/** Seed Patient, ClinicalFinding, and has_finding for entity environments. */
+export async function seedEntityEnvironmentSchema(
+  db: DbClient,
+  environmentId: string,
+): Promise<void> {
+  const findingTypeId = await getOrCreateObjectType(
+    db,
+    environmentId,
+    "ClinicalFinding",
+    "Clinical finding extracted from text with its context envelope",
+    CLINICAL_FINDING_SCHEMA,
+  );
+  const patientTypeId = await getOrCreateObjectType(
+    db,
+    environmentId,
+    "Patient",
+    "Subject of clinical findings",
+    PATIENT_SCHEMA,
+  );
+  await getOrCreateLinkType(
+    db,
+    environmentId,
+    "has_finding",
+    patientTypeId,
+    findingTypeId,
+    "many_to_many",
+  );
+}
+
+/** Like {@link findEnvironment} but throws a 404 when not found/accessible. */
 export async function resolveEnvironment(
   db: DbClient,
   userId: string,

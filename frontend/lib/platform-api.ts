@@ -408,10 +408,23 @@ export async function getHealth(): Promise<HealthStatus> {
 
 // --- Environment-scoped ontology (migration 010) ---
 
+export type EnvironmentType = "reference" | "entity" | "operations";
+
 export interface EnvironmentSummary {
   id: string;
   name: string;
   slug: string;
+  type: EnvironmentType;
+  organizationId: string;
+  organizationName: string;
+  createdAt: string;
+}
+
+export interface OrganizationSummary {
+  id: string;
+  name: string;
+  slug: string;
+  role: "owner" | "member";
   createdAt: string;
 }
 
@@ -450,6 +463,10 @@ export interface EnvLinkEdge {
   otherProperties: Record<string, unknown>;
 }
 
+export async function listOrganizations(): Promise<{ organizations: OrganizationSummary[] }> {
+  return apiFetch("/v1/ontology/organizations");
+}
+
 export async function listEnvironments(): Promise<{ environments: EnvironmentSummary[] }> {
   return apiFetch("/v1/ontology/environments");
 }
@@ -457,6 +474,7 @@ export async function listEnvironments(): Promise<{ environments: EnvironmentSum
 export async function createEnvironment(body: {
   name: string;
   slug?: string;
+  type: EnvironmentType;
 }): Promise<EnvironmentSummary> {
   return apiFetch("/v1/ontology/environments", { method: "POST", body });
 }

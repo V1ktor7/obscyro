@@ -22,6 +22,7 @@ import {
   type EnvLinkEdge,
   type EnvLinkType,
   type EnvObjectType,
+  type EnvironmentType,
 } from "@/lib/platform-api";
 import { EDGE_HEX, NODE_W, pathD, pointGeom } from "./studio-graph";
 
@@ -67,7 +68,14 @@ export default function StudioOntologyMode({
   const [error, setError] = useState<string | null>(null);
 
   const [newEnvName, setNewEnvName] = useState("");
+  const [newEnvType, setNewEnvType] = useState<EnvironmentType>("entity");
   const [creatingEnv, setCreatingEnv] = useState(false);
+
+  const ENV_TYPE_HELP: Record<EnvironmentType, string> = {
+    reference: "Shared catalogs (substances, codes) — starts empty.",
+    entity: "Clinical sites — seeds Patient, ClinicalFinding, has_finding.",
+    operations: "Supply chain / logistics — starts empty.",
+  };
 
   const loadTypes = useCallback(async () => {
     if (!env) {
@@ -133,7 +141,7 @@ export default function StudioOntologyMode({
     setCreatingEnv(true);
     setError(null);
     try {
-      await createEnvironment({ name: newEnvName.trim() });
+      await createEnvironment({ name: newEnvName.trim(), type: newEnvType });
       setNewEnvName("");
       onEnvironmentsChanged();
     } catch (err) {
@@ -231,23 +239,35 @@ export default function StudioOntologyMode({
           <div className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400">
             New environment
           </div>
-          <div className="flex gap-1.5">
+          <div className="mb-1.5 flex flex-col gap-1.5">
             <input
               value={newEnvName}
               onChange={(e) => setNewEnvName(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") void onCreateEnvironment();
               }}
-              placeholder="e.g. Research"
-              className="min-w-0 flex-1 rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs text-gray-800 focus:border-gray-400 focus:outline-none"
+              placeholder="e.g. Site A Clinical"
+              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs text-gray-800 focus:border-gray-400 focus:outline-none"
             />
+            <select
+              value={newEnvType}
+              onChange={(e) => setNewEnvType(e.target.value as EnvironmentType)}
+              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs text-gray-800 focus:border-gray-400 focus:outline-none"
+            >
+              <option value="reference">Reference</option>
+              <option value="entity">Entity</option>
+              <option value="operations">Operations</option>
+            </select>
+            <p className="text-[10px] leading-relaxed text-gray-400">
+              {ENV_TYPE_HELP[newEnvType]}
+            </p>
             <button
               type="button"
               onClick={onCreateEnvironment}
               disabled={creatingEnv || !newEnvName.trim()}
-              className="rounded-md bg-gray-900 px-2.5 py-1.5 text-xs text-white hover:bg-gray-700 disabled:bg-gray-300"
+              className="w-full rounded-md bg-gray-900 px-2.5 py-1.5 text-xs text-white hover:bg-gray-700 disabled:bg-gray-300"
             >
-              Add
+              Add environment
             </button>
           </div>
         </div>
