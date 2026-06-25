@@ -25,6 +25,8 @@ import { cn } from "@/lib/cn";
 import {
   getHealth,
   listEnvironments,
+  listEnvTypes,
+  type EnvObjectType,
   type EnvironmentSummary,
   type EnvironmentType,
   type HealthStatus,
@@ -37,6 +39,8 @@ type StudioContextValue = {
   selectedEnv: string | null;
   setSelectedEnv: (slug: string | null) => void;
   refreshEnvironments: () => Promise<void>;
+  envTypes: EnvObjectType[];
+  refreshTypes: () => Promise<void>;
   /** Bumped whenever ontology data (types/instances/links) is mutated. */
   ontologyVersion: number;
   bumpOntology: () => void;
@@ -89,9 +93,25 @@ export default function StudioShell({ children }: { children: ReactNode }) {
   const [health, setHealth] = useState<HealthStatus | "checking">("checking");
   const [environments, setEnvironments] = useState<EnvironmentSummary[]>([]);
   const [selectedEnv, setSelectedEnv] = useState<string | null>(null);
+  const [envTypes, setEnvTypes] = useState<EnvObjectType[]>([]);
   const [ontologyVersion, setOntologyVersion] = useState(0);
 
-  const bumpOntology = useCallback(() => setOntologyVersion((v) => v + 1), []);
+  const refreshTypes = useCallback(async () => {
+    if (!getStoredKey() || !selectedEnv) {
+      setEnvTypes([]);
+      return;
+    }
+    try {
+      const { types } = await listEnvTypes(selectedEnv);
+      setEnvTypes(types);
+    } catch {
+      setEnvTypes([]);
+    }
+  }, [selectedEnv]);
+
+  const bumpOntology = useCallback(() => {
+    setOntologyVersion((v) => v + 1);
+  }, []);
 
   useEffect(() => {
     if (!getSession()) {
@@ -136,6 +156,10 @@ export default function StudioShell({ children }: { children: ReactNode }) {
     if (ready) void refreshEnvironments();
   }, [ready, refreshEnvironments]);
 
+  useEffect(() => {
+    void refreshTypes();
+  }, [refreshTypes, ontologyVersion]);
+
   const signOut = useCallback(() => {
     clearSession();
     clearStoredKey();
@@ -155,6 +179,8 @@ export default function StudioShell({ children }: { children: ReactNode }) {
       selectedEnv,
       setSelectedEnv,
       refreshEnvironments,
+      envTypes,
+      refreshTypes,
       ontologyVersion,
       bumpOntology,
       signOut,
@@ -165,6 +191,8 @@ export default function StudioShell({ children }: { children: ReactNode }) {
       environments,
       selectedEnv,
       refreshEnvironments,
+      envTypes,
+      refreshTypes,
       ontologyVersion,
       bumpOntology,
       signOut,

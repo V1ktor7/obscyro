@@ -31,11 +31,20 @@ import {
   translateCode,
   type ConceptOut,
   type ContextOut,
+  type EnvObjectType,
   type EnvironmentSummary,
   type EnvironmentType,
   type PipelineResult,
 } from "@/lib/platform-api";
 import { useStudio } from "./StudioShell";
+import NodeDataPanel from "./NodeDataPanel";
+import SchemaMappingPanel from "./SchemaMappingPanel";
+import {
+  getUpstreamInput,
+  mergeNodeOutputs,
+  readPath,
+  type NodeDataBag,
+} from "./studio-data";
 import {
   formatSaveOntologyGlance,
   glanceFromPersisted,
@@ -477,20 +486,7 @@ const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 // ---------------------------------------------------------------------------
 
 function mergeOutputs(outputs: NodeOutput[]): NodeOutput {
-  const merged: NodeOutput = {};
-  for (const o of outputs) {
-    if (o.text && !merged.text) merged.text = o.text;
-    if (o.concepts?.length)
-      merged.concepts = [...(merged.concepts ?? []), ...o.concepts];
-    if (o.contexts?.length)
-      merged.contexts = [...(merged.contexts ?? []), ...o.contexts];
-    if (o.results?.length)
-      merged.results = [...(merged.results ?? []), ...o.results];
-    if (o.payload != null && merged.payload == null) merged.payload = o.payload;
-    if (o.contentType && !merged.contentType) merged.contentType = o.contentType;
-    if (o.headers && !merged.headers) merged.headers = { ...o.headers };
-  }
-  return merged;
+  return mergeNodeOutputs(outputs) as NodeOutput;
 }
 
 function nodeCardHeight(node: FlowNode): number {
@@ -538,20 +534,6 @@ function resultsFromConcepts(concepts: ConceptOut[]): PipelineResult[] {
     certainty: "confirmed",
     decision: "flag" as const,
   }));
-}
-
-/** Read a dotted path (e.g. "patient.id") out of a record. */
-function readPath(rec: Record<string, unknown>, path: string): unknown {
-  if (!path.includes(".")) return rec[path];
-  let cur: unknown = rec;
-  for (const seg of path.split(".")) {
-    if (cur && typeof cur === "object") {
-      cur = (cur as Record<string, unknown>)[seg];
-    } else {
-      return undefined;
-    }
-  }
-  return cur;
 }
 
 /** Coerce an ingestion payload into a flat array of records. */
@@ -1166,7 +1148,8 @@ function Palette({
 // ---------------------------------------------------------------------------
 
 export default function StudioEditor({ variant }: { variant: StudioVariant }) {
-  const { environments, selectedEnv, setSelectedEnv, ontologyVersion } = useStudio();
+  const { environments, selectedEnv, setSelectedEnv, envTypes } =
+    useStudio();
   const initial = useMemo(() => initGraphState(variant), [variant]);
 
   const [nodes, setNodes] = useState<FlowNode[]>(() => initial.nodes);
@@ -1213,6 +1196,11 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
 
   const [envObjectTypes, setEnvObjectTypes] = useState<string[]>(["ClinicalFinding"]);
 
+  useEffect(() => {
+    const names = envTypes.map((t) => t.name);
+    setEnvObjectTypes(names.length > 0 ? names : ["ClinicalFinding"]);
+  }, [envTypes]);
+
   const showMultipleOrgs = useMemo(
     () => new Set(environments.map((e) => e.organizationId)).size > 1,
     [environments],
@@ -1222,28 +1210,6 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
     () => environments.filter((e) => e.type === "entity"),
     [environments],
   );
-
-  // Object types for the selected env (re-fetch when ontology data changes).
-  useEffect(() => {
-    if (!selectedEnv || !getStoredKey()) {
-      setEnvObjectTypes(["ClinicalFinding"]);
-      return;
-    }
-    let cancelled = false;
-    void listEnvTypes(selectedEnv)
-      .then(({ types }) => {
-        if (!cancelled) {
-          const names = types.map((t) => t.name);
-          setEnvObjectTypes(names.length > 0 ? names : ["ClinicalFinding"]);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setEnvObjectTypes(["ClinicalFinding"]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedEnv, ontologyVersion]);
 
   useEffect(() => {
     if (!selectedEnv) return;
@@ -2278,6 +2244,7 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
               const showResults =
                 node.type === "output" && results && results.length > 0;
               const saveGlance = nodeOutputs.get(node.id)?.persistGlance;
+              const nodeOut = nodeOutputs.get(node.id);
               const webhookPayload =
                 node.type === "webhook" && node.config.lastEventPayload != null;
               const formatDetected = node.config.lastDetectedFormat;
@@ -2476,6 +2443,21 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
                       <span className="text-[10px] text-rose-600">
                         {nodeErrors.get(node.id)}
                       </span>
+                    ) : node.type === "transform" && nodeOut?.records?.length ? (
+                      <span className="font-mono text-[10px] text-cyan-700">
+                        {nodeOut.records.length} record{nodeOut.records.length === 1 ? "" : "s"}
+                      </span>
+                    ) : node.type === "mapping" && nodeOut?.instances?.length ? (
+                      <span className="font-mono text-[10px] text-indigo-700">
+                        {nodeOut.instances.length} → {node.config.objectType || "type"}
+                      </span>
+                    ) : node.type === "validation" && nodeOut?.validationReport ? (
+                      <span className="font-mono text-[10px] text-amber-700">
+                        {nodeOut.validationReport.valid} valid
+                        {nodeOut.validationReport.invalid > 0
+                          ? ` · ${nodeOut.validationReport.invalid} invalid`
+                          : ""}
+                      </span>
                     ) : (
                       <span className="font-mono text-[10px] uppercase tracking-wide text-gray-400">
                         {node.type}
@@ -2497,6 +2479,10 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
                 running={running}
                 output={nodeOutputs.get(selectedNode.id) ?? null}
                 error={nodeErrors.get(selectedNode.id) ?? null}
+                edges={edges}
+                nodeOutputs={nodeOutputs}
+                allNodes={nodes}
+                envTypes={envTypes}
                 onModeChange={setInspectorMode}
                 onClose={() => clearSelection()}
                 onConfig={(partial) => updateConfig(selectedNode.id, partial)}
@@ -2537,12 +2523,18 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
 // Inspector
 // ---------------------------------------------------------------------------
 
+type InspectorIoTab = "input" | "parameters" | "output";
+
 function Inspector({
   node,
   mode,
   running,
   output,
   error,
+  edges,
+  nodeOutputs,
+  allNodes,
+  envTypes,
   onModeChange,
   onClose,
   onConfig,
@@ -2561,6 +2553,10 @@ function Inspector({
   running: boolean;
   output: NodeOutput | null;
   error: string | null;
+  edges: Edge[];
+  nodeOutputs: Map<string, NodeOutput>;
+  allNodes: FlowNode[];
+  envTypes: EnvObjectType[];
   onModeChange: (m: InspectorMode) => void;
   onClose: () => void;
   onConfig: (partial: NodeConfig) => void;
@@ -2574,9 +2570,28 @@ function Inspector({
   envObjectTypes: string[];
   onEnvChange: (slug: string) => void;
 }) {
+  const [ioTab, setIoTab] = useState<InspectorIoTab>("parameters");
   const accent = NODE_ACCENTS[node.type];
+  const wide = node.type === "mapping";
+
+  const nodeById = useMemo(() => {
+    const m = new Map<string, { id: string; type: string }>();
+    for (const n of allNodes) m.set(n.id, { id: n.id, type: n.type });
+    return m;
+  }, [allNodes]);
+
+  const upstreamInput = useMemo(
+    () => getUpstreamInput(node.id, edges, nodeOutputs, nodeById),
+    [node.id, edges, nodeOutputs, nodeById],
+  );
+
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-l border-gray-200 bg-white">
+    <aside
+      className={cn(
+        "flex shrink-0 flex-col border-l border-gray-200 bg-white",
+        wide ? "w-[26rem]" : "w-80",
+      )}
+    >
       <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
         <div className="flex items-center gap-2">
           <span className={accent.text}>
@@ -2596,7 +2611,6 @@ function Inspector({
         </button>
       </div>
 
-      {/* Run-this-node (per-node test) */}
       <div className="border-b border-gray-200 px-4 py-2">
         <button
           type="button"
@@ -2617,85 +2631,97 @@ function Inspector({
         </p>
       </div>
 
-      {/* Low-code / Code toggle — the core duality */}
-      <div className="flex gap-1 border-b border-gray-200 px-4 py-2">
-        {(["lowcode", "code"] as InspectorMode[]).map((m) => (
+      <div className="flex border-b border-gray-200">
+        {(["input", "parameters", "output"] as InspectorIoTab[]).map((tab) => (
           <button
-            key={m}
+            key={tab}
             type="button"
-            onClick={() => onModeChange(m)}
+            onClick={() => setIoTab(tab)}
             className={cn(
-              "flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-              mode === m
-                ? "bg-gray-900 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200",
+              "flex-1 py-2 text-center font-mono text-[10px] uppercase tracking-[0.12em] transition-colors",
+              ioTab === tab
+                ? "border-b-2 border-gray-900 text-gray-900"
+                : "text-gray-400 hover:text-gray-600",
             )}
           >
-            {m === "lowcode" ? "Low-code" : "Code"}
+            {tab}
           </button>
         ))}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
-        {mode === "lowcode" ? (
-          <LowCodeForm
-            node={node}
-            onConfig={onConfig}
-            results={results}
-            environments={environments}
-            entityEnvironments={entityEnvironments}
-            showMultipleOrgs={showMultipleOrgs}
-            selectedEnv={selectedEnv}
-            envObjectTypes={envObjectTypes}
-            onEnvChange={onEnvChange}
+        {ioTab === "input" ? (
+          <NodeDataPanel
+            data={upstreamInput}
+            draggableFields={node.type === "mapping"}
+            emptyHint="Run upstream nodes to see input data."
           />
-        ) : (
-          <div className="flex h-full flex-col">
-            <p className="mb-2 text-[11px] text-gray-400">
-              Editable pseudo-JS. In a real deployment this compiles to the same
-              behavior as the form.
-            </p>
-            <textarea
-              value={node.code}
-              onChange={(e) => onCode(e.target.value)}
-              spellCheck={false}
-              className="h-72 w-full flex-1 resize-none rounded-md border border-gray-200 bg-gray-50 p-3 font-mono text-[12px] leading-relaxed text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
-            />
-          </div>
-        )}
+        ) : null}
 
-        {/* Node output preview (per-node test result) */}
-        {error ? (
-          <div className="mt-4 rounded-md border border-rose-300 bg-rose-50 p-2.5 text-[11px] text-rose-700">
-            {error}
-          </div>
-        ) : output ? (
-          <NodeOutputPreview output={output} />
+        {ioTab === "parameters" ? (
+          <>
+            <div className="mb-3 flex gap-1">
+              {(["lowcode", "code"] as InspectorMode[]).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => onModeChange(m)}
+                  className={cn(
+                    "flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                    mode === m
+                      ? "bg-gray-900 text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200",
+                  )}
+                >
+                  {m === "lowcode" ? "Low-code" : "Code"}
+                </button>
+              ))}
+            </div>
+            {mode === "lowcode" ? (
+              <LowCodeForm
+                node={node}
+                onConfig={onConfig}
+                results={results}
+                environments={environments}
+                entityEnvironments={entityEnvironments}
+                showMultipleOrgs={showMultipleOrgs}
+                selectedEnv={selectedEnv}
+                envObjectTypes={envObjectTypes}
+                envTypes={envTypes}
+                upstreamInput={upstreamInput}
+                onEnvChange={onEnvChange}
+              />
+            ) : (
+              <div className="flex flex-col">
+                <p className="mb-2 text-[11px] text-gray-400">
+                  Editable pseudo-JS. In a real deployment this compiles to the same
+                  behavior as the form.
+                </p>
+                <textarea
+                  value={node.code}
+                  onChange={(e) => onCode(e.target.value)}
+                  spellCheck={false}
+                  className="h-72 w-full resize-none rounded-md border border-gray-200 bg-gray-50 p-3 font-mono text-[12px] leading-relaxed text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+                />
+              </div>
+            )}
+          </>
+        ) : null}
+
+        {ioTab === "output" ? (
+          error ? (
+            <div className="rounded-md border border-rose-300 bg-rose-50 p-2.5 text-[11px] text-rose-700">
+              {error}
+            </div>
+          ) : (
+            <NodeDataPanel
+              data={output}
+              emptyHint="Run this node to see output data."
+            />
+          )
         ) : null}
       </div>
     </aside>
-  );
-}
-
-function NodeOutputPreview({ output }: { output: NodeOutput }) {
-  const lines: string[] = [];
-  if (output.text) lines.push(`text: ${output.text.slice(0, 120)}`);
-  if (output.concepts?.length) lines.push(`concepts: ${output.concepts.length}`);
-  if (output.contexts?.length) lines.push(`contexts: ${output.contexts.length}`);
-  if (output.results?.length) lines.push(`results: ${output.results.length}`);
-  if (output.payload != null) lines.push("payload: present");
-  if (output.detectedFormat) lines.push(`detectedFormat: ${output.detectedFormat}`);
-  if (output.activeBranch) lines.push(`activeBranch: ${output.activeBranch}`);
-  if (!lines.length) return null;
-  return (
-    <div className="mt-4">
-      <span className="mb-1.5 block font-mono text-[9px] uppercase tracking-[0.18em] text-gray-400">
-        Node output
-      </span>
-      <pre className="max-h-40 overflow-auto rounded-md border border-gray-200 bg-gray-50 p-2.5 font-mono text-[10px] leading-relaxed text-gray-700">
-        {lines.join("\n")}
-      </pre>
-    </div>
   );
 }
 
@@ -2753,6 +2779,8 @@ function LowCodeForm({
   showMultipleOrgs,
   selectedEnv,
   envObjectTypes,
+  envTypes,
+  upstreamInput,
   onEnvChange,
 }: {
   node: FlowNode;
@@ -2763,6 +2791,8 @@ function LowCodeForm({
   showMultipleOrgs: boolean;
   selectedEnv: string | null;
   envObjectTypes: string[];
+  envTypes: EnvObjectType[];
+  upstreamInput: NodeDataBag;
   onEnvChange: (slug: string) => void;
 }) {
   const [newTrigger, setNewTrigger] = useState("");
@@ -2919,77 +2949,17 @@ function LowCodeForm({
         </>
       );
 
-    case "mapping": {
-      const fieldMap = node.config.fieldMap ?? [];
-      const setFieldMap = (rows: { property: string; source: string }[]) =>
-        onConfig({ fieldMap: rows });
+    case "mapping":
       return (
-        <>
-          <Field label="Target object type">
-            <select
-              value={node.config.objectType ?? ""}
-              onChange={(e) => onConfig({ objectType: e.target.value || undefined })}
-              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
-            >
-              <option value="">Select a type…</option>
-              {envObjectTypes.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Field mapping (property ← source field)">
-            <div className="flex flex-col gap-1.5">
-              {fieldMap.map((row, i) => (
-                <div key={i} className="flex items-center gap-1">
-                  <input
-                    value={row.property}
-                    onChange={(e) => {
-                      const next = [...fieldMap];
-                      next[i] = { ...row, property: e.target.value };
-                      setFieldMap(next);
-                    }}
-                    placeholder="property"
-                    className="min-w-0 flex-1 rounded border border-gray-200 bg-gray-50 px-1.5 py-1 text-[11px] text-gray-800 focus:border-gray-400 focus:outline-none"
-                  />
-                  <span className="text-gray-400">←</span>
-                  <input
-                    value={row.source}
-                    onChange={(e) => {
-                      const next = [...fieldMap];
-                      next[i] = { ...row, source: e.target.value };
-                      setFieldMap(next);
-                    }}
-                    placeholder="source field"
-                    className="min-w-0 flex-1 rounded border border-gray-200 bg-gray-50 px-1.5 py-1 font-mono text-[11px] text-gray-800 focus:border-gray-400 focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setFieldMap(fieldMap.filter((_, j) => j !== i))}
-                    className="rounded px-1 text-gray-400 hover:text-rose-600"
-                    aria-label="Remove mapping"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() => setFieldMap([...fieldMap, { property: "", source: "" }])}
-                className="self-start rounded border border-gray-200 px-2 py-1 text-[11px] text-gray-600 hover:border-gray-400"
-              >
-                + Mapping
-              </button>
-            </div>
-          </Field>
-          <p className="text-[11px] leading-relaxed text-gray-400">
-            Maps cleaned record fields onto the chosen object-type properties.
-            Leave the mapping empty to pass each record through unchanged.
-          </p>
-        </>
+        <SchemaMappingPanel
+          objectType={node.config.objectType ?? ""}
+          fieldMap={node.config.fieldMap ?? []}
+          envTypes={envTypes}
+          upstreamInput={upstreamInput}
+          onObjectTypeChange={(name) => onConfig({ objectType: name || undefined })}
+          onFieldMapChange={(rows) => onConfig({ fieldMap: rows })}
+        />
       );
-    }
 
     case "validation":
       return (
