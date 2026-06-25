@@ -12,7 +12,7 @@
  * and the Studio "Ontology source" node immediately see new types/instances.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@/lib/cn";
 import {
@@ -39,7 +39,14 @@ import {
   type PropertyDefinition,
   type PropertyType,
 } from "@/lib/platform-api";
-import { EDGE_HEX, NODE_W, pathD, pointGeom } from "../studio-graph";
+import {
+  clearSchemaLayout,
+  loadSchemaLayout,
+  mergeLayoutPositions,
+  saveSchemaLayout,
+  type SchemaLayout,
+} from "../manager-layout-persist";
+import SchemaGraphCanvas from "./SchemaGraphCanvas";
 import { useStudio } from "../StudioShell";
 
 type View = "schema" | "instances";
@@ -51,12 +58,6 @@ const CARDINALITIES: LinkCardinality[] = [
   "many_to_one",
   "many_to_many",
 ];
-
-const SCHEMA_COLS = 2;
-const SCHEMA_BOX_H = 84;
-const COL_GAP = 320;
-const ROW_GAP = 150;
-const ORIGIN = { x: 48, y: 48 };
 
 function instanceLabel(inst: EnvInstance): string {
   const p = inst.properties;
@@ -97,13 +98,75 @@ export default function ManagerView() {
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedLayout, setSavedLayout] = useState<SchemaLayout>({});
+  const [placementMode, setPlacementMode] = useState(false);
+  const [pendingTypePos, setPendingTypePos] = useState<{ x: number; y: number } | null>(
+    null,
+  );
+  const [linkPrefill, setLinkPrefill] = useState<{
+    fromType: string;
+    toType: string;
+  } | null>(null);
+  const saveLayoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const env = selectedEnv;
 
   // Editor panels
   const [panel, setPanel] = useState<"none" | "newType" | "newLinkType" | "newInstance">(
     "none",
   );
 
-  const env = selectedEnv;
+  useEffect(() => {
+    if (!env) {
+      setSavedLayout({});
+      return;
+    }
+    setSavedLayout(loadSchemaLayout(env));
+  }, [env]);
+
+  const debouncedSaveLayout = useCallback(
+    (layout: SchemaLayout) => {
+      if (!env) return;
+      if (saveLayoutTimerRef.current) clearTimeout(saveLayoutTimerRef.current);
+      saveLayoutTimerRef.current = setTimeout(() => {
+        saveSchemaLayout(env, layout);
+      }, 500);
+    },
+    [env],
+  );
+
+  const handlePositionChange = useCallback(
+    (typeName: string, pos: { x: number; y: number }) => {
+      setSavedLayout((prev) => {
+        const next = { ...prev, [typeName]: pos };
+        debouncedSaveLayout(next);
+        return next;
+      });
+    },
+    [debouncedSaveLayout],
+  );
+
+  function resetLayout() {
+    if (!env) return;
+    clearSchemaLayout(env);
+    setSavedLayout({});
+  }
+
+  function openCreateTypeAt(pos: { x: number; y: number }) {
+    setPendingTypePos(pos);
+    setPlacementMode(false);
+    setDetail(null);
+    setPanel("newType");
+  }
+
+  function handleCanvasConnect(fromType: string, toType: string) {
+    if (fromType === toType) {
+      setError("Cannot link a type to itself.");
+      return;
+    }
+    setLinkPrefill({ fromType, toType });
+    setPanel("newLinkType");
+  }
 
   const loadTypes = useCallback(async () => {
     if (!env) {
@@ -171,15 +234,10 @@ export default function ManagerView() {
     [types, selectedType],
   );
 
-  const positions = useMemo(() => {
-    const m = new Map<string, { x: number; y: number }>();
-    types.forEach((t, i) => {
-      const col = i % SCHEMA_COLS;
-      const row = Math.floor(i / SCHEMA_COLS);
-      m.set(t.name, { x: ORIGIN.x + col * COL_GAP, y: ORIGIN.y + row * ROW_GAP });
-    });
-    return m;
-  }, [types]);
+  const positions = useMemo(
+    () => mergeLayoutPositions(types.map((t) => t.name), savedLayout),
+    [types, savedLayout],
+  );
 
   if (!hasKey) {
     return (
@@ -347,7 +405,34 @@ export default function ManagerView() {
                 + Instance
               </button>
             </div>
-          ) : null}
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="hidden text-[10px] text-gray-400 lg:inline">
+                Drag boxes · drag ports to link · double-click to add type
+              </span>
+              <button
+                type="button"
+                disabled={!env}
+                onClick={() => setPlacementMode((v) => !v)}
+                className={cn(
+                  "rounded-md border px-3 py-1.5 text-xs transition-colors",
+                  placementMode
+                    ? "border-indigo-400 bg-indigo-50 text-indigo-700"
+                    : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50",
+                )}
+              >
+                + Type
+              </button>
+              <button
+                type="button"
+                disabled={!env || types.length === 0}
+                onClick={resetLayout}
+                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 disabled:text-gray-300"
+              >
+                Reset layout
+              </button>
+            </div>
+          )}
         </div>
 
         {error ? (
@@ -357,80 +442,22 @@ export default function ManagerView() {
         ) : null}
 
         {view === "schema" ? (
-          <div
-            className="relative min-h-0 flex-1 overflow-auto"
-            style={{
-              backgroundImage:
-                "radial-gradient(circle, rgba(0,0,0,0.06) 1px, transparent 1px)",
-              backgroundSize: "22px 22px",
+          <SchemaGraphCanvas
+            types={types}
+            linkTypes={linkTypes}
+            positions={positions}
+            selectedType={selectedType}
+            placementMode={placementMode}
+            onSelectType={(name) => {
+              setSelectedType(name);
+              setDetail(null);
+              setPanel("none");
             }}
-          >
-            {types.length === 0 ? (
-              <p className="p-6 text-sm text-gray-400">
-                No schema yet. Create an object type to begin modeling.
-              </p>
-            ) : (
-              <div className="relative" style={{ width: 5000, height: 3000 }}>
-                <svg
-                  className="pointer-events-none absolute left-0 top-0"
-                  width={5000}
-                  height={3000}
-                >
-                  {linkTypes.map((lt) => {
-                    const from = positions.get(lt.fromType);
-                    const to = positions.get(lt.toType);
-                    if (!from || !to) return null;
-                    const a = { x: from.x + NODE_W, y: from.y + SCHEMA_BOX_H / 2 };
-                    const b = { x: to.x, y: to.y + SCHEMA_BOX_H / 2 };
-                    const g = pointGeom(a, b);
-                    return (
-                      <g key={lt.id}>
-                        <path d={pathD(g)} fill="none" stroke={EDGE_HEX} strokeWidth={1.5} />
-                        <text
-                          x={(a.x + b.x) / 2}
-                          y={(a.y + b.y) / 2 - 6}
-                          textAnchor="middle"
-                          className="fill-gray-400"
-                          fontSize={10}
-                        >
-                          {lt.name}
-                        </text>
-                      </g>
-                    );
-                  })}
-                </svg>
-                {types.map((t) => {
-                  const pos = positions.get(t.name)!;
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedType(t.name);
-                        setDetail(null);
-                        setPanel("none");
-                      }}
-                      className={cn(
-                        "absolute overflow-hidden rounded-lg border bg-white text-left shadow-sm transition-colors",
-                        selectedType === t.name
-                          ? "border-indigo-400"
-                          : "border-gray-300 hover:border-gray-400",
-                      )}
-                      style={{ left: pos.x, top: pos.y, width: NODE_W, minHeight: SCHEMA_BOX_H }}
-                    >
-                      <div className="border-b border-gray-100 px-3 py-2 text-xs font-medium text-gray-800">
-                        {t.name}
-                      </div>
-                      <div className="px-3 py-1.5 text-[10px] text-gray-500">
-                        {t.propertySchema.length} propert
-                        {t.propertySchema.length === 1 ? "y" : "ies"}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+            onPositionChange={handlePositionChange}
+            onConnect={handleCanvasConnect}
+            onCanvasDoubleClick={openCreateTypeAt}
+            onCanvasClickPlace={openCreateTypeAt}
+          />
         ) : (
           <div className="min-h-0 flex-1 overflow-auto p-4">
             {loading ? (
@@ -483,10 +510,19 @@ export default function ManagerView() {
       {panel === "newType" ? (
         <TypeEditorPanel
           mode="create"
-          onClose={() => setPanel("none")}
+          onClose={() => {
+            setPanel("none");
+            setPendingTypePos(null);
+          }}
           onSubmit={async (name, description, schema) => {
             if (!env) return;
             await createEnvType(env, { name, description, propertySchema: schema });
+            if (pendingTypePos) {
+              const next = { ...savedLayout, [name]: pendingTypePos };
+              setSavedLayout(next);
+              saveSchemaLayout(env, next);
+              setPendingTypePos(null);
+            }
             await loadTypes();
             setSelectedType(name);
             notifyChanged();
@@ -497,13 +533,19 @@ export default function ManagerView() {
       ) : panel === "newLinkType" ? (
         <LinkTypeEditorPanel
           types={types}
-          onClose={() => setPanel("none")}
+          initialFrom={linkPrefill?.fromType}
+          initialTo={linkPrefill?.toType}
+          onClose={() => {
+            setPanel("none");
+            setLinkPrefill(null);
+          }}
           onSubmit={async (name, fromType, toType, cardinality) => {
             if (!env) return;
             await createEnvLinkType(env, { name, fromType, toType, cardinality });
             await loadTypes();
             notifyChanged();
             setPanel("none");
+            setLinkPrefill(null);
           }}
           onError={setError}
         />
@@ -806,11 +848,15 @@ function TypeEditorPanel({
 
 function LinkTypeEditorPanel({
   types,
+  initialFrom,
+  initialTo,
   onClose,
   onSubmit,
   onError,
 }: {
   types: EnvObjectType[];
+  initialFrom?: string;
+  initialTo?: string;
   onClose: () => void;
   onSubmit: (
     name: string,
@@ -821,10 +867,15 @@ function LinkTypeEditorPanel({
   onError: (msg: string) => void;
 }) {
   const [name, setName] = useState("");
-  const [fromType, setFromType] = useState(types[0]?.name ?? "");
-  const [toType, setToType] = useState(types[0]?.name ?? "");
+  const [fromType, setFromType] = useState(initialFrom ?? types[0]?.name ?? "");
+  const [toType, setToType] = useState(initialTo ?? types[0]?.name ?? "");
   const [cardinality, setCardinality] = useState<LinkCardinality>("many_to_many");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (initialFrom) setFromType(initialFrom);
+    if (initialTo) setToType(initialTo);
+  }, [initialFrom, initialTo]);
 
   async function save() {
     if (busy) return;

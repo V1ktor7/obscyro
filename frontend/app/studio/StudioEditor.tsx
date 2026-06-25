@@ -1161,6 +1161,9 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
   const [inspectorMode, setInspectorMode] = useState<InspectorMode>("lowcode");
 
   const [running, setRunning] = useState(false);
+  const [continuousRun, setContinuousRun] = useState(false);
+  const [continuousIntervalMs, setContinuousIntervalMs] = useState(10_000);
+  const [nextRunInSec, setNextRunInSec] = useState<number | null>(null);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [token, setToken] = useState<{ x: number; y: number } | null>(null);
   const [results, setResults] = useState<DemoResult[] | null>(null);
@@ -1262,6 +1265,13 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
     | null
   >(null);
   const movedRef = useRef(false);
+  const continuousRunRef = useRef(false);
+  continuousRunRef.current = continuousRun;
+  const scheduleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const runGraphRef = useRef<(() => Promise<void>) | null>(null);
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
   const rejectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const getTransform = useCallback(
@@ -1819,12 +1829,45 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
     return { outputs, errors, order };
   }
 
+  function clearContinuousSchedule() {
+    if (scheduleTimerRef.current) {
+      clearTimeout(scheduleTimerRef.current);
+      scheduleTimerRef.current = null;
+    }
+    if (countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+    }
+    setNextRunInSec(null);
+  }
+
+  function scheduleContinuousRun() {
+    clearContinuousSchedule();
+    if (!continuousRunRef.current) return;
+    const sec = Math.ceil(continuousIntervalMs / 1000);
+    setNextRunInSec(sec);
+    let remaining = sec;
+    countdownTimerRef.current = setInterval(() => {
+      remaining -= 1;
+      if (remaining <= 0) {
+        setNextRunInSec(null);
+      } else {
+        setNextRunInSec(remaining);
+      }
+    }, 1000);
+    scheduleTimerRef.current = setTimeout(() => {
+      clearContinuousSchedule();
+      void runGraphRef.current?.();
+    }, continuousIntervalMs);
+  }
+
   async function runGraph() {
     if (running) return;
     setSelectedEdgeId(null);
     if (!getStoredKey()) {
       setResults(DEMO_RESULTS);
       setRunError("No API key — showing demo data. Sign in and create a key.");
+      if (continuousRunRef.current) setContinuousRun(false);
       return;
     }
     setRunning(true);
@@ -1832,6 +1875,7 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
     setResults(null);
     clearSelection();
     setToken(null);
+    clearContinuousSchedule();
 
     const allIds = new Set(nodes.map((n) => n.id));
     const wfRunning: Record<string, WorkflowRunState> = {};
@@ -1858,7 +1902,85 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
     setResults(deriveResults(order, outputs));
     if (errors.size) setRunError(errors.values().next().value ?? null);
     setRunning(false);
+
+    if (continuousRunRef.current) {
+      scheduleContinuousRun();
+    }
   }
+
+  runGraphRef.current = runGraph;
+
+  // Start continuous run when toggled on; clean up when off.
+  useEffect(() => {
+    if (!continuousRun) {
+      clearContinuousSchedule();
+      return;
+    }
+    if (!getStoredKey()) {
+      setContinuousRun(false);
+      return;
+    }
+    void runGraphRef.current?.();
+    return () => clearContinuousSchedule();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [continuousRun]);
+
+  // Graph-level webhook poll while continuous run is active.
+  useEffect(() => {
+    if (!continuousRun || !getStoredKey()) return;
+
+    let cancelled = false;
+    async function poll() {
+      const webhookNodes = nodesRef.current.filter(
+        (n) => n.type === "webhook" && n.config.sourceId,
+      );
+      if (!webhookNodes.length) return;
+
+      let hadNew = false;
+      for (const node of webhookNodes) {
+        const sourceId = node.config.sourceId!;
+        const knownEventId = node.config.ingestEventId;
+        try {
+          const { events } = await listIngestEvents(sourceId);
+          const latest = events[0];
+          if (latest && latest.id !== knownEventId) {
+            hadNew = true;
+            const p = latest.payload as Record<string, unknown>;
+            const text =
+              typeof p.text === "string" ? p.text : JSON.stringify(p);
+            setNodes((prev) =>
+              prev.map((n) =>
+                n.id === node.id
+                  ? {
+                      ...n,
+                      config: {
+                        ...n.config,
+                        ingestEventId: latest.id,
+                        lastEventPayload: latest.payload,
+                        lastEventText: text,
+                        lastEventContentType: latest.contentType,
+                      },
+                    }
+                  : n,
+              ),
+            );
+          }
+        } catch {
+          /* ignore transient poll errors */
+        }
+      }
+      if (!cancelled && hadNew) {
+        clearContinuousSchedule();
+        void runGraphRef.current?.();
+      }
+    }
+    void poll();
+    const handle = setInterval(poll, 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(handle);
+    };
+  }, [continuousRun]);
 
   async function runWorkflow(workflowId: string) {
     if (running) return;
@@ -1941,6 +2063,8 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
   }
 
   function reset() {
+    clearContinuousSchedule();
+    setContinuousRun(false);
     clearStudioGraph(variant);
     setNodes(buildDefaultNodes(variant));
     setEdges(buildDefaultEdges(variant));
@@ -1977,6 +2101,54 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
             className="rounded-md border border-gray-200 px-3 py-1.5 text-xs text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-900"
           >
             Reset
+          </button>
+          {continuousRun ? (
+            <span className="hidden text-[10px] text-indigo-600 sm:inline">
+              {running
+                ? "Continuous · running…"
+                : nextRunInSec != null
+                  ? `Continuous · next in ${nextRunInSec}s`
+                  : "Continuous · waiting…"}
+            </span>
+          ) : null}
+          <select
+            value={continuousIntervalMs}
+            onChange={(e) => setContinuousIntervalMs(Number(e.target.value))}
+            disabled={continuousRun}
+            title="Continuous run interval"
+            className="hidden rounded-md border border-gray-200 bg-white px-2 py-1.5 text-[10px] text-gray-600 sm:block disabled:text-gray-300"
+          >
+            <option value={5000}>5s</option>
+            <option value={10000}>10s</option>
+            <option value={30000}>30s</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => setContinuousRun((v) => !v)}
+            disabled={!getStoredKey()}
+            title={continuousRun ? "Stop continuous run" : "Run workflow on a loop"}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors disabled:text-gray-300",
+              continuousRun
+                ? "border-indigo-600 bg-indigo-50 text-indigo-700"
+                : "border-gray-200 text-gray-600 hover:border-gray-400 hover:text-gray-900",
+            )}
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              aria-hidden
+            >
+              <path d="M17 1l4 4-4 4" />
+              <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+              <path d="M7 23l-4-4 4-4" />
+              <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+            </svg>
+            Continuous
           </button>
           <button
             type="button"
