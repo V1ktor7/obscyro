@@ -54,6 +54,8 @@ export interface PersistExtractInput {
   patientIdentifier?: string | null;
   inputHash: string;
   results: PersistableExtractResult[];
+  /** When true, run L1–L3 quality scan on each newly inserted finding (non-blocking). */
+  qualityScanOnWrite?: boolean;
 }
 
 export interface PersistExtractOutput {
@@ -208,9 +210,10 @@ async function persistExtractResultsInTransaction(
   db: DbClient,
   input: PersistExtractInput,
   pipelineRunId: string,
-): Promise<PersistExtractOutput> {
+): Promise<PersistExtractOutput & { newInstanceIds: string[] }> {
   const nowIso = new Date().toISOString();
   const objectIds: string[] = [];
+  const newInstanceIds: string[] = [];
   const linkIds: string[] = [];
 
   const patient = await resolvePatient(
@@ -258,6 +261,7 @@ async function persistExtractResultsInTransaction(
       columns,
     );
     objectIds.push(objectId);
+    newInstanceIds.push(objectId);
 
     if (patient) {
       const linkId = await insertLinkInstance(
@@ -288,6 +292,7 @@ async function persistExtractResultsInTransaction(
     pipelineRunId,
     patient,
     linked,
+    newInstanceIds,
     ...(reason ? { reason } : {}),
   };
 }
@@ -308,8 +313,24 @@ export async function persistExtractResults(
       input.environmentId,
       input.inputHash,
     );
-    const result = await persistExtractResultsInTransaction(db, input, pipelineRunId);
+    const { newInstanceIds, ...result } = await persistExtractResultsInTransaction(
+      db,
+      input,
+      pipelineRunId,
+    );
     await client.query("COMMIT");
+
+    if (input.qualityScanOnWrite && newInstanceIds.length > 0) {
+      const { scanInstanceOnWrite } = await import("./data-quality.js");
+      for (const instanceId of newInstanceIds) {
+        try {
+          await scanInstanceOnWrite(pool, input.environmentId, instanceId);
+        } catch {
+          /* quality scan must not block persist */
+        }
+      }
+    }
+
     return result;
   } catch (err) {
     await client.query("ROLLBACK");

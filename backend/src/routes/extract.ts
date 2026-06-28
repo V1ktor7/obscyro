@@ -122,6 +122,7 @@ const extractBody = z.object({
           identifier: z.string().optional(),
         })
         .optional(),
+      qualityScanOnWrite: z.boolean().optional(),
     })
     .optional(),
 });
@@ -370,6 +371,7 @@ const extractRoutes: FastifyPluginAsync = async (fastify) => {
         patientIdentifier: persist.patient?.identifier,
         inputHash: createHash("sha256").update(text).digest("hex"),
         results: combined.results,
+        qualityScanOnWrite: persist.qualityScanOnWrite,
       });
 
       return reply.send({
@@ -390,6 +392,7 @@ const extractRoutes: FastifyPluginAsync = async (fastify) => {
           identifier: z.string().optional(),
         })
         .optional(),
+      qualityScanOnWrite: z.boolean().optional(),
     }),
   });
 
@@ -452,6 +455,7 @@ const extractRoutes: FastifyPluginAsync = async (fastify) => {
         patientIdentifier: persist.patient?.identifier,
         inputHash,
         results,
+        qualityScanOnWrite: persist.qualityScanOnWrite,
       });
 
       return reply.send({ persisted });

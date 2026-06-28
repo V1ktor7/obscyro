@@ -2,6 +2,26 @@ import type { DbClient } from "../lib/db.js";
 
 import { NotFound } from "../lib/errors.js";
 
+export interface EnvInstanceRow {
+  id: string;
+  typeId: string;
+  typeName: string;
+  properties: Record<string, unknown>;
+  provenance: Record<string, unknown>;
+  propertySchema: PropertyDef[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface EnvLinkRow {
+  id: string;
+  linkTypeName: string;
+  fromInstanceId: string;
+  toInstanceId: string;
+  fromTypeName: string;
+  toTypeName: string;
+}
+
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -271,4 +291,104 @@ export async function insertLinkInstance(
     [linkTypeId, fromInstanceId, toInstanceId, JSON.stringify(provenance)],
   );
   return rows[0]?.id ?? null;
+}
+
+/** List object instances in an environment with optional type/where filters. */
+export async function listInstancesForEnv(
+  db: DbClient,
+  environmentId: string,
+  opts?: { type?: string; wherePairs?: Array<[string, string]>; limit?: number },
+): Promise<EnvInstanceRow[]> {
+  const params: unknown[] = [environmentId];
+  let sql = `SELECT oi.id, oi.object_type_id, t.name AS type_name,
+                    oi.properties, oi.provenance, t.property_schema,
+                    oi.created_at, oi.updated_at
+               FROM app.ontology_object_instances oi
+               JOIN app.ontology_object_types t ON t.id = oi.object_type_id
+              WHERE t.environment_id = $1`;
+  if (opts?.type) {
+    params.push(opts.type);
+    sql += ` AND t.name = $${params.length}`;
+  }
+  for (const [key, value] of opts?.wherePairs ?? []) {
+    params.push(key);
+    const keyParam = params.length;
+    params.push(value);
+    const valueParam = params.length;
+    sql += ` AND oi.properties ->> $${keyParam} = $${valueParam}`;
+  }
+  params.push(opts?.limit ?? 5000);
+  sql += ` ORDER BY oi.created_at DESC LIMIT $${params.length}`;
+
+  const { rows } = await db.query<{
+    id: string;
+    object_type_id: string;
+    type_name: string;
+    properties: Record<string, unknown>;
+    provenance: Record<string, unknown>;
+    property_schema: PropertyDef[];
+    created_at: Date;
+    updated_at: Date;
+  }>(sql, params);
+
+  return rows.map((r) => ({
+    id: r.id,
+    typeId: r.object_type_id,
+    typeName: r.type_name,
+    properties: r.properties,
+    provenance: r.provenance,
+    propertySchema: r.property_schema ?? [],
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
+}
+
+/** List link instances within an environment. */
+export async function listLinksForEnv(
+  db: DbClient,
+  environmentId: string,
+): Promise<EnvLinkRow[]> {
+  const { rows } = await db.query<{
+    id: string;
+    link_type_name: string;
+    from_instance_id: string;
+    to_instance_id: string;
+    from_type_name: string;
+    to_type_name: string;
+  }>(
+    `SELECT li.id, lt.name AS link_type_name,
+            li.from_instance_id, li.to_instance_id,
+            ft.name AS from_type_name, tt.name AS to_type_name
+       FROM app.ontology_link_instances li
+       JOIN app.ontology_link_types lt ON lt.id = li.link_type_id
+       JOIN app.ontology_object_instances fi ON fi.id = li.from_instance_id
+       JOIN app.ontology_object_types ft ON ft.id = fi.object_type_id
+       JOIN app.ontology_object_instances ti ON ti.id = li.to_instance_id
+       JOIN app.ontology_object_types tt ON tt.id = ti.object_type_id
+      WHERE lt.environment_id = $1`,
+    [environmentId],
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    linkTypeName: r.link_type_name,
+    fromInstanceId: r.from_instance_id,
+    toInstanceId: r.to_instance_id,
+    fromTypeName: r.from_type_name,
+    toTypeName: r.to_type_name,
+  }));
+}
+
+/** Count instances in an environment (for simulation read-only guard tests). */
+export async function countInstancesForEnv(
+  db: DbClient,
+  environmentId: string,
+): Promise<number> {
+  const { rows } = await db.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count
+       FROM app.ontology_object_instances oi
+       JOIN app.ontology_object_types t ON t.id = oi.object_type_id
+      WHERE t.environment_id = $1`,
+    [environmentId],
+  );
+  return Number(rows[0]?.count ?? 0);
 }
