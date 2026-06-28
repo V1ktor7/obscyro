@@ -1,7 +1,7 @@
 "use client";
 
-import LiveView from "./LiveView";
+import LiveTwinView from "./LiveTwinView";
 
 export default function LivePage() {
-  return <LiveView />;
+  return <LiveTwinView />;
 }

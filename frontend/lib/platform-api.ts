@@ -727,4 +727,323 @@ export async function persistGraphResults(opts: {
   });
 }
 
+// --- Digital twin (live + clone simulation) ---
+
+export type TwinAlertSeverity = "info" | "warn" | "critical";
+
+export interface TwinUnitMetrics {
+  unitId: string;
+  instanceCountByType: Record<string, number>;
+  occupancyPct: number | null;
+  numericMeans: Record<string, number>;
+  freshnessSeconds: number | null;
+  linkedInstanceCount: number;
+}
+
+export interface TwinUnitNode {
+  id: string;
+  name: string;
+  kind: string;
+  code: string;
+  parentId: string | null;
+  metrics: TwinUnitMetrics;
+  worstAlertSeverity: TwinAlertSeverity | null;
+  openAlertCount: number;
+}
+
+export interface TwinTreeEdge {
+  fromId: string;
+  toId: string;
+}
+
+export interface TwinTreeSnapshot {
+  computedAt: string;
+  nodes: TwinUnitNode[];
+  edges: TwinTreeEdge[];
+  roots: string[];
+}
+
+export interface TwinAlert {
+  id: string;
+  environmentId?: string;
+  unitInstanceId: string;
+  ruleId: string | null;
+  severity: TwinAlertSeverity;
+  metric: string;
+  value: number;
+  message: string;
+  recommendation: string;
+  status: "open" | "ack";
+  createdAt?: string;
+  ackedAt?: string | null;
+}
+
+export interface TwinUnitDetail {
+  metrics: TwinUnitMetrics;
+  alerts: TwinAlert[];
+  recommendations: string[];
+}
+
+export interface OutbreakParams {
+  beta?: number;
+  r0?: number;
+  incubationDays?: number;
+  infectiousDays?: number;
+  indexNodeIds?: string[];
+  isolationCapacity?: number;
+  runs?: number;
+  horizonDays?: number;
+  containThreshold?: number;
+}
+
+export interface DailyTrajectory {
+  day: number;
+  S: number;
+  E: number;
+  I: number;
+  R: number;
+  isolationDemand: number;
+}
+
+export interface OutbreakSummary {
+  peakInfected: number;
+  peakIsolationDemand: number;
+  attackRate: number;
+  daysToContain: number | null;
+  hcwInfections: number;
+}
+
+export interface AlertTimelineEvent {
+  day: number;
+  unitInstanceId: string;
+  ruleId: string | null;
+  metric: string;
+  value: number;
+  severity: TwinAlertSeverity;
+  message: string;
+}
+
+export interface CloneResult {
+  scenarioId: string;
+  instanceCount: number;
+  linkCount: number;
+}
+
+export interface ScenarioSummary {
+  id: string;
+  name: string;
+  rootUnitInstanceId: string | null;
+  createdAt: string;
+}
+
+export interface ScenarioRunSummary {
+  id: string;
+  status: string;
+  seed: string;
+  runs: number;
+  createdAt: string;
+  finishedAt: string | null;
+}
+
+export interface ScenarioDetail {
+  id: string;
+  environmentId: string;
+  name: string;
+  params: Record<string, unknown>;
+  rootUnitInstanceId: string | null;
+  instanceCount: number;
+  linkCount: number;
+  createdAt: string;
+  runs: ScenarioRunSummary[];
+}
+
+export interface RunResult {
+  runId: string;
+  summary: OutbreakSummary;
+  trajectories: {
+    p5: DailyTrajectory[];
+    p50: DailyTrajectory[];
+    p95: DailyTrajectory[];
+  };
+  alertTimeline: AlertTimelineEvent[];
+}
+
+export interface RunDetail {
+  id: string;
+  status: string;
+  seed: string;
+  params: Record<string, unknown>;
+  runs: number;
+  summary: OutbreakSummary | null;
+  trajectories: RunResult["trajectories"] | null;
+  alertTimeline: AlertTimelineEvent[] | null;
+  createdAt: string;
+  finishedAt: string | null;
+}
+
+function encEnv(env: string): string {
+  return encodeURIComponent(env);
+}
+
+export async function fetchTwinTree(env: string): Promise<TwinTreeSnapshot> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/tree`);
+}
+
+export async function fetchTwinUnit(
+  env: string,
+  unitId: string,
+): Promise<TwinUnitDetail> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/units/${unitId}`);
+}
+
+export async function ackTwinAlert(
+  env: string,
+  alertId: string,
+): Promise<{ ok: true }> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/alerts/${alertId}`, {
+    method: "PATCH",
+    body: { status: "ack" },
+  });
+}
+
+export async function seedTwinDemo(
+  env: string,
+): Promise<{ unitCount: number; instanceCount: number }> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/seed-demo`, {
+    method: "POST",
+    body: {},
+  });
+}
+
+export async function cloneTwinUnit(
+  env: string,
+  unitId: string,
+  name: string,
+): Promise<CloneResult> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/units/${unitId}/clone`, {
+    method: "POST",
+    body: { name },
+  });
+}
+
+export async function listScenarios(
+  env: string,
+): Promise<{ scenarios: ScenarioSummary[] }> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/scenarios`);
+}
+
+export async function getScenario(
+  env: string,
+  scenarioId: string,
+): Promise<ScenarioDetail> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/scenarios/${scenarioId}`);
+}
+
+export async function injectScenario(
+  env: string,
+  scenarioId: string,
+  body: {
+    instances?: Array<{
+      objectTypeName: string;
+      properties: Record<string, unknown>;
+      sourceInstanceId?: string | null;
+    }>;
+    paramOverrides?: Record<string, unknown>;
+  },
+): Promise<{ instanceIds: string[] }> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/scenarios/${scenarioId}/inject`, {
+    method: "POST",
+    body,
+  });
+}
+
+export async function runScenario(
+  env: string,
+  scenarioId: string,
+  body?: { params?: OutbreakParams; runs?: number; seed?: number },
+): Promise<RunResult> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/scenarios/${scenarioId}/run`, {
+    method: "POST",
+    body: body ?? {},
+  });
+}
+
+export async function getScenarioRun(
+  env: string,
+  scenarioId: string,
+  runId: string,
+): Promise<RunDetail> {
+  return apiFetch(
+    `/v1/ontology/${encEnv(env)}/scenarios/${scenarioId}/runs/${runId}`,
+  );
+}
+
+/** Parse SSE buffer into JSON payloads from `data:` lines. */
+export function parseSseJsonEvents<T>(buffer: string): {
+  events: T[];
+  remainder: string;
+} {
+  const events: T[] = [];
+  const parts = buffer.split("\n\n");
+  const remainder = parts.pop() ?? "";
+
+  for (const part of parts) {
+    for (const line of part.split("\n")) {
+      if (!line.startsWith("data:")) continue;
+      const payload = line.slice(5).trim();
+      if (!payload) continue;
+      try {
+        events.push(JSON.parse(payload) as T);
+      } catch {
+        /* ignore malformed */
+      }
+    }
+  }
+
+  return { events, remainder };
+}
+
+export function subscribeTwinStream(
+  env: string,
+  onData: (snapshot: TwinTreeSnapshot) => void,
+  onError: () => void,
+): () => void {
+  const controller = new AbortController();
+  const token = getStoredKey();
+  const url = `${API_BASE}/v1/ontology/${encEnv(env)}/twin/stream`;
+
+  void (async () => {
+    try {
+      const res = await fetch(url, {
+        headers: {
+          Accept: "text/event-stream",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        signal: controller.signal,
+      });
+      if (!res.ok || !res.body) {
+        onError();
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const { events, remainder } = parseSseJsonEvents<TwinTreeSnapshot>(buffer);
+        buffer = remainder;
+        for (const evt of events) onData(evt);
+      }
+    } catch (err) {
+      if ((err as Error).name !== "AbortError") onError();
+    }
+  })();
+
+  return () => controller.abort();
+}
+
 export type { MeResult };

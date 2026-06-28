@@ -1,37 +1,33 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { cn } from "@/lib/cn";
-import { listEnvObjects, type EnvInstance } from "@/lib/platform-api";
+import {
+  cloneTwinUnit,
+  fetchTwinTree,
+  getScenario,
+  getScenarioRun,
+  injectScenario,
+  listScenarios,
+  runScenario,
+  type OutbreakParams,
+  type RunResult,
+  type ScenarioSummary,
+  type TwinTreeSnapshot,
+} from "@/lib/platform-api";
 
 import { useStudio } from "../StudioShell";
 import {
-  createScenario,
-  getScenarioRun,
-  listScenarioRuns,
-  runScenario,
-  type OutbreakParams,
-  type OutbreakSummary,
-  type RunResult,
-  type SimulationRun,
-} from "../sim-api";
-import { loadScenarios, saveScenario, type StoredScenario } from "../sim-scenario-store";
+  loadTwinLayout,
+  mergeTwinPositions,
+} from "../twin-layout-persist";
+import TwinCanvas from "../live/TwinCanvas";
+import { type ScenarioRunSummary } from "../sim-api";
+import AlertTimelinePanel from "./AlertTimelinePanel";
 import TrajectoryChart from "./TrajectoryChart";
-
-function instanceLabel(inst: EnvInstance): string {
-  const p = inst.properties;
-  return (
-    (p.span as string) ||
-    (p.display as string) ||
-    (p.label as string) ||
-    (p.identifier as string) ||
-    (p.snomed_code as string) ||
-    inst.id.slice(0, 8)
-  );
-}
 
 const DEFAULT_PARAMS: OutbreakParams = {
   r0: 2.5,
@@ -39,104 +35,167 @@ const DEFAULT_PARAMS: OutbreakParams = {
   infectiousDays: 5,
   isolationCapacity: 10,
   runs: 10,
+  horizonDays: 60,
 };
+
+type Step = 1 | 2 | 3;
 
 export default function SimulationView() {
   const { hasKey, selectedEnv } = useStudio();
   const env = selectedEnv;
 
-  const [scenarios, setScenarios] = useState<StoredScenario[]>([]);
-  const [selectedScenarioId, setSelectedScenarioId] = useState<string | null>(null);
-  const [runs, setRuns] = useState<SimulationRun[]>([]);
-  const [newName, setNewName] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [showNewForm, setShowNewForm] = useState(false);
+  const [step, setStep] = useState<Step>(1);
+  const [tree, setTree] = useState<TwinTreeSnapshot | null>(null);
+  const [positions, setPositions] = useState<Map<string, { x: number; y: number }>>(
+    () => new Map(),
+  );
+  const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
+  const [cloneName, setCloneName] = useState("");
+  const [cloning, setCloning] = useState(false);
+
+  const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
+  const [scenarioId, setScenarioId] = useState<string | null>(null);
+  const [scenarioDetail, setScenarioDetail] = useState<{
+    instanceCount: number;
+    linkCount: number;
+    rootUnitInstanceId: string | null;
+    runs: ScenarioRunSummary[];
+  } | null>(null);
+
+  const [indexLabel, setIndexLabel] = useState("Index case");
+  const [indexIdentifier, setIndexIdentifier] = useState("IDX-001");
+  const [indexNodeId, setIndexNodeId] = useState<string | null>(null);
+  const [injecting, setInjecting] = useState(false);
 
   const [params, setParams] = useState<OutbreakParams>({ ...DEFAULT_PARAMS });
-  const [seed, setSeed] = useState<string>("");
-  const [indexNodeIds, setIndexNodeIds] = useState<string[]>([]);
-  const [instances, setInstances] = useState<EnvInstance[]>([]);
-
+  const [seed, setSeed] = useState("");
   const [result, setResult] = useState<RunResult | null>(null);
   const [running, setRunning] = useState(false);
-  const [loadingRun, setLoadingRun] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const loadTree = useCallback(async () => {
+    if (!env) return;
+    try {
+      const snap = await fetchTwinTree(env);
+      setTree(snap);
+      const ids = snap.nodes.map((n) => n.id);
+      setPositions(
+        mergeTwinPositions(ids, snap.edges, snap.roots, loadTwinLayout(env)),
+      );
+    } catch {
+      setTree(null);
+    }
+  }, [env]);
+
+  const loadScenariosList = useCallback(async () => {
+    if (!env) return;
+    try {
+      const { scenarios: list } = await listScenarios(env);
+      setScenarios(list);
+    } catch {
+      setScenarios([]);
+    }
+  }, [env]);
 
   useEffect(() => {
     if (!env) {
+      setTree(null);
       setScenarios([]);
       return;
     }
-    setScenarios(loadScenarios(env));
-  }, [env]);
+    void loadTree();
+    void loadScenariosList();
+  }, [env, loadTree, loadScenariosList]);
 
-  useEffect(() => {
-    if (!env) {
-      setInstances([]);
-      return;
+  const unitNames = useMemo(() => {
+    const m = new Map<string, string>();
+    if (tree) {
+      for (const n of tree.nodes) m.set(n.id, n.name);
     }
-    void listEnvObjects(env, { limit: 500 })
-      .then(({ objects }) => setInstances(objects))
-      .catch(() => setInstances([]));
-  }, [env]);
+    return m;
+  }, [tree]);
 
-  const loadRuns = useCallback(async (scenarioId: string) => {
-    if (!env) return;
-    try {
-      const { runs: r } = await listScenarioRuns(env, scenarioId);
-      setRuns(r);
-    } catch {
-      setRuns([]);
-    }
-  }, [env]);
-
-  useEffect(() => {
-    if (selectedScenarioId && env) {
-      void loadRuns(selectedScenarioId);
-    } else {
-      setRuns([]);
-    }
-  }, [selectedScenarioId, env, loadRuns]);
-
-  async function handleCreateScenario(e: React.FormEvent) {
-    e.preventDefault();
-    if (!env || !newName.trim()) return;
-    setCreating(true);
+  async function handleClone() {
+    if (!env || !selectedUnitId || !cloneName.trim()) return;
+    setCloning(true);
     setError(null);
     try {
-      const created = await createScenario(env, { name: newName.trim(), params });
-      const stored: StoredScenario = {
-        id: created.id,
-        name: created.name,
-        createdAt: created.createdAt,
-        params,
-      };
-      saveScenario(env, stored);
-      setScenarios(loadScenarios(env));
-      setSelectedScenarioId(created.id);
-      setNewName("");
-      setShowNewForm(false);
+      const { scenarioId: id } = await cloneTwinUnit(
+        env,
+        selectedUnitId,
+        cloneName.trim(),
+      );
+      setScenarioId(id);
+      const detail = await getScenario(env, id);
+      setScenarioDetail({
+        instanceCount: detail.instanceCount,
+        linkCount: detail.linkCount,
+        rootUnitInstanceId: detail.rootUnitInstanceId,
+        runs: detail.runs,
+      });
+      await loadScenariosList();
+      setStep(2);
     } catch (err) {
       setError((err as Error).message);
     } finally {
-      setCreating(false);
+      setCloning(false);
+    }
+  }
+
+  async function handleInject() {
+    if (!env || !scenarioId) return;
+    setInjecting(true);
+    setError(null);
+    try {
+      const { instanceIds } = await injectScenario(env, scenarioId, {
+        instances: [
+          {
+            objectTypeName: "Patient",
+            properties: {
+              identifier: indexIdentifier.trim() || "IDX-001",
+              label: indexLabel.trim() || "Index case",
+            },
+          },
+        ],
+        paramOverrides: {
+          r0: params.r0,
+          beta: params.beta,
+          incubationDays: params.incubationDays,
+          infectiousDays: params.infectiousDays,
+          isolationCapacity: params.isolationCapacity,
+          runs: params.runs,
+          horizonDays: params.horizonDays,
+        },
+      });
+      setIndexNodeId(instanceIds[0] ?? null);
+      setStep(3);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setInjecting(false);
     }
   }
 
   async function handleRun() {
-    if (!env || !selectedScenarioId) return;
+    if (!env || !scenarioId) return;
     setRunning(true);
     setError(null);
     try {
       const runParams: OutbreakParams = {
         ...params,
-        indexNodeIds: indexNodeIds.length ? indexNodeIds : undefined,
+        indexNodeIds: indexNodeId ? [indexNodeId] : undefined,
       };
       const body: { params: OutbreakParams; seed?: number } = { params: runParams };
       if (seed.trim()) body.seed = Number(seed);
-      const res = await runScenario(env, selectedScenarioId, body);
+      const res = await runScenario(env, scenarioId, body);
       setResult(res);
-      void loadRuns(selectedScenarioId);
+      const detail = await getScenario(env, scenarioId);
+      setScenarioDetail({
+        instanceCount: detail.instanceCount,
+        linkCount: detail.linkCount,
+        rootUnitInstanceId: detail.rootUnitInstanceId,
+        runs: detail.runs,
+      });
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -144,37 +203,48 @@ export default function SimulationView() {
     }
   }
 
-  async function handleSelectRun(runId: string) {
-    if (!env || !selectedScenarioId) return;
-    setLoadingRun(true);
-    setError(null);
+  async function handleSelectScenario(id: string) {
+    if (!env) return;
+    setScenarioId(id);
+    setResult(null);
+    setIndexNodeId(null);
+    setStep(2);
     try {
-      const detail = await getScenarioRun(env, selectedScenarioId, runId);
+      const detail = await getScenario(env, id);
+      setScenarioDetail({
+        instanceCount: detail.instanceCount,
+        linkCount: detail.linkCount,
+        rootUnitInstanceId: detail.rootUnitInstanceId,
+        runs: detail.runs,
+      });
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function handleSelectRun(runId: string) {
+    if (!env || !scenarioId) return;
+    try {
+      const detail = await getScenarioRun(env, scenarioId, runId);
       if (detail.summary && detail.trajectories) {
         setResult({
           runId: detail.id,
           summary: detail.summary,
           trajectories: detail.trajectories,
+          alertTimeline: detail.alertTimeline ?? [],
         });
+        setStep(3);
       }
     } catch (err) {
       setError((err as Error).message);
-    } finally {
-      setLoadingRun(false);
     }
-  }
-
-  function toggleIndex(id: string) {
-    setIndexNodeIds((cur) =>
-      cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id],
-    );
   }
 
   if (!hasKey) {
     return (
       <div className="flex flex-1 items-center justify-center bg-white">
         <p className="max-w-sm text-center text-sm text-gray-500">
-          Sign in and create an API key to run outbreak simulations.
+          Sign in and create an API key to run twin-clone simulations.
         </p>
       </div>
     );
@@ -190,180 +260,215 @@ export default function SimulationView() {
 
   return (
     <div className="flex min-h-0 flex-1">
-      <aside className="flex w-60 shrink-0 flex-col overflow-y-auto border-r border-gray-200 bg-white">
-        <div className="border-b border-gray-100 p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400">
-              Scenarios
-            </span>
+      <aside className="flex w-56 shrink-0 flex-col overflow-y-auto border-r border-gray-200 bg-white p-3">
+        <span className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400">
+          Past clones
+        </span>
+        {scenarios.length === 0 ? (
+          <p className="text-[11px] text-gray-400">No scenarios yet.</p>
+        ) : (
+          scenarios.map((s) => (
             <button
+              key={s.id}
               type="button"
-              onClick={() => setShowNewForm((v) => !v)}
-              className="rounded border border-gray-200 px-1.5 py-0.5 text-[11px] text-gray-600 hover:border-gray-400"
+              onClick={() => void handleSelectScenario(s.id)}
+              className={cn(
+                "mb-1 rounded border px-2 py-1.5 text-left text-[11px]",
+                scenarioId === s.id
+                  ? "border-indigo-300 bg-indigo-50 text-indigo-700"
+                  : "border-gray-200 text-gray-600 hover:bg-gray-50",
+              )}
             >
-              + New
+              {s.name}
             </button>
-          </div>
-          {showNewForm ? (
-            <form onSubmit={handleCreateScenario} className="mb-2 flex flex-col gap-1.5">
-              <input
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="Scenario name"
-                className="rounded border border-gray-200 px-2 py-1 text-xs focus:border-gray-400 focus:outline-none"
-              />
-              <Button type="submit" size="sm" disabled={creating || !newName.trim()}>
-                {creating ? "Creating…" : "Create"}
-              </Button>
-            </form>
-          ) : null}
-          {scenarios.length === 0 ? (
-            <p className="text-[11px] text-gray-400">No scenarios yet.</p>
-          ) : (
-            <div className="flex flex-col gap-1">
-              {scenarios.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedScenarioId(s.id);
-                    setResult(null);
-                  }}
-                  className={cn(
-                    "rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors",
-                    selectedScenarioId === s.id
-                      ? "border-indigo-300 bg-indigo-50 text-indigo-700"
-                      : "border-gray-200 text-gray-700 hover:border-gray-400 hover:bg-gray-50",
-                  )}
-                >
-                  {s.name}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {selectedScenarioId && runs.length > 0 ? (
-          <div className="p-3">
-            <span className="mb-2 block font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400">
-              Run history
+          ))
+        )}
+        {scenarioDetail && scenarioDetail.runs.length > 0 ? (
+          <div className="mt-4 border-t border-gray-100 pt-3">
+            <span className="mb-1 block font-mono text-[9px] uppercase text-gray-400">
+              Runs
             </span>
-            <div className="flex flex-col gap-1">
-              {runs.map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  disabled={loadingRun}
-                  onClick={() => void handleSelectRun(r.id)}
-                  className="rounded border border-gray-200 px-2 py-1 text-left text-[11px] text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  <span className={cn(r.status === "completed" ? "text-emerald-600" : "text-gray-400")}>
-                    {r.status}
-                  </span>
-                  {" · "}
-                  seed {r.seed.slice(0, 8)}
-                </button>
-              ))}
-            </div>
+            {scenarioDetail.runs.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => void handleSelectRun(r.id)}
+                className="mb-1 block w-full text-left text-[10px] text-gray-500 hover:text-indigo-600"
+              >
+                {r.status} · {r.createdAt.slice(0, 10)}
+              </button>
+            ))}
           </div>
         ) : null}
       </aside>
 
       <main className="min-h-0 flex-1 overflow-y-auto p-4">
-        {!selectedScenarioId ? (
-          <p className="text-sm text-gray-400">Select or create a scenario to configure and run.</p>
-        ) : (
-          <div className="mx-auto max-w-3xl space-y-6">
-            {error ? (
-              <p className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-                {error}
+        <StepIndicator current={step} />
+
+        {error ? (
+          <p className="mb-3 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+            {error}
+          </p>
+        ) : null}
+
+        {step === 1 ? (
+          <section className="space-y-4">
+            <div>
+              <h2 className="mb-1 text-sm font-medium text-gray-800">1. Clone a unit</h2>
+              <p className="text-[11px] text-gray-500">
+                Pick an OrgUnit from the live twin. Cloning creates an isolated scenario copy —
+                the live twin is never modified.
               </p>
-            ) : null}
+            </div>
+            <div className="h-64 overflow-hidden rounded border border-gray-200">
+              <TwinCanvas
+                snapshot={tree}
+                selectedUnitId={selectedUnitId}
+                displayMetric="occupancyPct"
+                kindFilter={null}
+                positions={positions}
+                readOnly
+                onSelectUnit={setSelectedUnitId}
+                onPositionChange={() => {}}
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <input
+                value={cloneName}
+                onChange={(e) => setCloneName(e.target.value)}
+                placeholder="Scenario name"
+                className="rounded border border-gray-200 px-2 py-1 text-xs focus:border-gray-400 focus:outline-none"
+              />
+              <Button
+                onClick={() => void handleClone()}
+                disabled={cloning || !selectedUnitId || !cloneName.trim()}
+              >
+                {cloning ? "Cloning…" : "Clone twin"}
+              </Button>
+            </div>
+          </section>
+        ) : null}
 
-            <section>
-              <h2 className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400">
-                Parameters
-              </h2>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                <ParamField label="R₀" value={params.r0} onChange={(v) => setParams((p) => ({ ...p, r0: v }))} />
-                <ParamField
-                  label="Beta (optional)"
-                  value={params.beta}
-                  onChange={(v) => setParams((p) => ({ ...p, beta: v }))}
-                  hint="Leave blank to derive from R₀"
-                />
-                <ParamField
-                  label="Incubation days"
-                  value={params.incubationDays}
-                  onChange={(v) => setParams((p) => ({ ...p, incubationDays: v }))}
-                  int
-                />
-                <ParamField
-                  label="Infectious days"
-                  value={params.infectiousDays}
-                  onChange={(v) => setParams((p) => ({ ...p, infectiousDays: v }))}
-                  int
-                />
-                <ParamField
-                  label="Isolation capacity"
-                  value={params.isolationCapacity}
-                  onChange={(v) => setParams((p) => ({ ...p, isolationCapacity: v }))}
-                  int
-                />
-                <ParamField label="Monte Carlo runs" value={params.runs} onChange={(v) => setParams((p) => ({ ...p, runs: v }))} int />
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="mb-1 block text-[10px] uppercase tracking-wide text-gray-400">
-                    Seed (optional)
-                  </label>
-                  <input
-                    type="number"
-                    value={seed}
-                    onChange={(e) => setSeed(e.target.value)}
-                    placeholder="Random"
-                    className="w-full rounded border border-gray-200 px-2 py-1 text-xs focus:border-gray-400 focus:outline-none"
-                  />
-                </div>
-              </div>
-            </section>
-
-            <section>
-              <h2 className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400">
-                Index cases
-              </h2>
-              <p className="mb-2 text-[11px] text-gray-400">
-                Select instances to seed as initially infected. Defaults to first node if none selected.
-              </p>
-              <div className="max-h-40 overflow-y-auto rounded border border-gray-200 p-2">
-                {instances.length === 0 ? (
-                  <p className="text-[11px] text-gray-400">No instances in this environment.</p>
-                ) : (
-                  instances.map((inst) => (
-                    <label
-                      key={inst.id}
-                      className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-xs hover:bg-gray-50"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={indexNodeIds.includes(inst.id)}
-                        onChange={() => toggleIndex(inst.id)}
-                        className="rounded border-gray-300"
-                      />
-                      <span className="text-gray-700">{instanceLabel(inst)}</span>
-                      <span className="text-gray-400">{inst.typeName}</span>
-                    </label>
-                  ))
-                )}
-              </div>
-            </section>
-
-            <Button onClick={() => void handleRun()} disabled={running}>
-              {running ? "Running…" : "Run simulation"}
-            </Button>
-
-            {result ? <ResultsPanel summary={result.summary} trajectories={result.trajectories} /> : null}
+        {step >= 2 && scenarioDetail ? (
+          <div className="mb-4 rounded border border-indigo-100 bg-indigo-50/50 px-3 py-2 text-[11px] text-indigo-800">
+            Isolated copy · {scenarioDetail.instanceCount} instances ·{" "}
+            {scenarioDetail.linkCount} links
+            {scenarioDetail.rootUnitInstanceId
+              ? ` · root ${unitNames.get(scenarioDetail.rootUnitInstanceId) ?? "unit"}`
+              : null}
           </div>
-        )}
+        ) : null}
+
+        {step === 2 ? (
+          <section className="space-y-4">
+            <div>
+              <h2 className="mb-1 text-sm font-medium text-gray-800">2. Inject index case</h2>
+              <p className="text-[11px] text-gray-500">
+                Add a patient to the scenario copy and set simulation parameters.
+              </p>
+            </div>
+            <div className="grid max-w-lg grid-cols-2 gap-3">
+              <ParamField label="Index label" value={indexLabel} onChange={(v) => setIndexLabel(String(v ?? ""))} text />
+              <ParamField
+                label="Identifier"
+                value={indexIdentifier}
+                onChange={(v) => setIndexIdentifier(String(v ?? ""))}
+                text
+              />
+              <ParamField label="R₀" value={params.r0} onChange={(v) => setParams(setNumParam("r0", v))} />
+              <ParamField
+                label="Beta (optional)"
+                value={params.beta}
+                onChange={(v) => setParams(setNumParam("beta", v))}
+                hint="Blank = derive from R₀"
+              />
+              <ParamField
+                label="Incubation days"
+                value={params.incubationDays}
+                onChange={(v) => setParams(setNumParam("incubationDays", v))}
+                int
+              />
+              <ParamField
+                label="Infectious days"
+                value={params.infectiousDays}
+                onChange={(v) => setParams(setNumParam("infectiousDays", v))}
+                int
+              />
+              <ParamField
+                label="Isolation capacity"
+                value={params.isolationCapacity}
+                onChange={(v) => setParams(setNumParam("isolationCapacity", v))}
+                int
+              />
+              <ParamField
+                label="Monte Carlo runs"
+                value={params.runs}
+                onChange={(v) => setParams(setNumParam("runs", v))}
+                int
+              />
+              <ParamField label="Seed (optional)" value={seed} onChange={(v) => setSeed(String(v ?? ""))} text />
+            </div>
+            <div className="flex gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setStep(1)}>
+                Back
+              </Button>
+              <Button onClick={() => void handleInject()} disabled={injecting}>
+                {injecting ? "Injecting…" : "Introduce index case"}
+              </Button>
+            </div>
+          </section>
+        ) : null}
+
+        {step === 3 ? (
+          <section className="space-y-4">
+            <div>
+              <h2 className="mb-1 text-sm font-medium text-gray-800">3. Run simulation</h2>
+              <p className="text-[11px] text-gray-500">
+                SEIR outbreak on the scenario copy only. Index node:{" "}
+                {indexNodeId ? indexNodeId.slice(0, 8) + "…" : "—"}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setStep(2)}>
+                Back
+              </Button>
+              <Button onClick={() => void handleRun()} disabled={running || !indexNodeId}>
+                {running ? "Running…" : "Run simulation"}
+              </Button>
+            </div>
+            {result ? (
+              <ResultsPanel result={result} unitNames={unitNames} />
+            ) : null}
+          </section>
+        ) : null}
       </main>
+    </div>
+  );
+}
+
+function StepIndicator({ current }: { current: Step }) {
+  const steps = [
+    { n: 1 as const, label: "Clone" },
+    { n: 2 as const, label: "Inject" },
+    { n: 3 as const, label: "Run" },
+  ];
+  return (
+    <div className="mb-4 flex gap-2">
+      {steps.map((s) => (
+        <span
+          key={s.n}
+          className={cn(
+            "rounded-full border px-2.5 py-0.5 font-mono text-[10px]",
+            current === s.n
+              ? "border-indigo-400 bg-indigo-50 text-indigo-700"
+              : current > s.n
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-gray-200 text-gray-400",
+          )}
+        >
+          {s.n}. {s.label}
+        </span>
+      ))}
     </div>
   );
 }
@@ -373,12 +478,14 @@ function ParamField({
   value,
   onChange,
   int,
+  text,
   hint,
 }: {
   label: string;
-  value: number | undefined;
-  onChange: (v: number | undefined) => void;
+  value: string | number | undefined;
+  onChange: (v: string | number | undefined) => void;
   int?: boolean;
+  text?: boolean;
   hint?: string;
 }) {
   return (
@@ -387,12 +494,16 @@ function ParamField({
         {label}
       </label>
       <input
-        type="number"
+        type={text ? "text" : "number"}
         step={int ? 1 : 0.1}
         value={value ?? ""}
         onChange={(e) => {
           const raw = e.target.value;
-          onChange(raw === "" ? undefined : int ? parseInt(raw, 10) : parseFloat(raw));
+          if (text) onChange(raw);
+          else
+            onChange(
+              raw === "" ? undefined : int ? parseInt(raw, 10) : parseFloat(raw),
+            );
         }}
         className="w-full rounded border border-gray-200 px-2 py-1 text-xs focus:border-gray-400 focus:outline-none"
       />
@@ -401,35 +512,51 @@ function ParamField({
   );
 }
 
+function setNumParam(
+  key: keyof OutbreakParams,
+  v: string | number | undefined,
+): (p: OutbreakParams) => OutbreakParams {
+  return (p) => ({
+    ...p,
+    [key]: typeof v === "number" ? v : undefined,
+  });
+}
+
 function ResultsPanel({
-  summary,
-  trajectories,
+  result,
+  unitNames,
 }: {
-  summary: OutbreakSummary;
-  trajectories: RunResult["trajectories"];
+  result: RunResult;
+  unitNames: Map<string, string>;
 }) {
+  const { summary, trajectories, alertTimeline } = result;
   return (
     <section className="space-y-4 border-t border-gray-100 pt-4">
-      <h2 className="font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400">
-        Results
-      </h2>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetricCard label="Peak infected" value={String(Math.round(summary.peakInfected))} />
-        <MetricCard label="Peak isolation" value={String(Math.round(summary.peakIsolationDemand))} />
+        <MetricCard
+          label="Peak isolation"
+          value={String(Math.round(summary.peakIsolationDemand))}
+        />
         <MetricCard label="Attack rate" value={`${(summary.attackRate * 100).toFixed(1)}%`} />
         <MetricCard
           label="Days to contain"
-          value={summary.daysToContain != null ? String(Math.round(summary.daysToContain)) : "—"}
+          value={
+            summary.daysToContain != null ? String(Math.round(summary.daysToContain)) : "—"
+          }
         />
-        <MetricCard label="HCW infections" value={String(Math.round(summary.hcwInfections))} />
       </div>
       <Card className="p-4">
-        <p className="mb-2 text-xs font-medium text-gray-700">Infected trajectory (p50, p5–p95 band)</p>
-        <TrajectoryChart
-          p5={trajectories.p5}
-          p50={trajectories.p50}
-          p95={trajectories.p95}
-        />
+        <p className="mb-2 text-xs font-medium text-gray-700">
+          Infected trajectory (p50, p5–p95 band)
+        </p>
+        <TrajectoryChart p5={trajectories.p5} p50={trajectories.p50} p95={trajectories.p95} />
+      </Card>
+      <Card className="p-4">
+        <p className="mb-2 text-xs font-medium text-gray-700">
+          Alerts that would fire on the live twin
+        </p>
+        <AlertTimelinePanel events={alertTimeline} unitNames={unitNames} />
       </Card>
     </section>
   );

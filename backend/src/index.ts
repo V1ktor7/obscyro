@@ -31,8 +31,9 @@ import liveRoutes from "./routes/live.js";
 import normalizeRoutes from "./routes/normalize.js";
 import onboardRoutes from "./routes/onboard.js";
 import ontologyRoutes from "./routes/ontology.js";
-import simulationRoutes from "./routes/simulation.js";
 import sourceRoutes from "./routes/source.js";
+import twinRoutes from "./routes/twin.js";
+import twinSimRoutes from "./routes/twin-sim.js";
 import synonymsRoutes from "./routes/synonyms.js";
 import translateRoutes from "./routes/translate.js";
 
@@ -118,7 +119,8 @@ await app.register(swagger, {
       { name: "source", description: "Configurable HTTP request (server-side egress)" },
       { name: "ontology", description: "Object types and instances" },
       { name: "onboard", description: "Self-serve onboarding and account context" },
-      { name: "simulation", description: "Scenario-based outbreak simulation (read-only)" },
+      { name: "twin", description: "Live digital twin OrgUnit tree, rollups, and alerts" },
+      { name: "twin-simulation", description: "Twin-clone scenario simulation (isolated copies)" },
       { name: "live-analysis", description: "Live metrics and instance scoring" },
       { name: "data-quality", description: "Layered data-quality flags and scans" },
     ],
@@ -151,7 +153,8 @@ await app.register(batchRoutes, { prefix: "/v1" });
 await app.register(translateRoutes, { prefix: "/v1" });
 await app.register(disambiguateRoutes, { prefix: "/v1" });
 await app.register(extractRoutes, { prefix: "/v1" });
-await app.register(simulationRoutes, { prefix: "/v1" });
+await app.register(twinRoutes, { prefix: "/v1" });
+await app.register(twinSimRoutes, { prefix: "/v1" });
 await app.register(liveRoutes, { prefix: "/v1" });
 await app.register(dataQualityRoutes, { prefix: "/v1" });
 
