@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/cn";
 import {
   createEnvironment,
@@ -46,6 +47,7 @@ import {
   saveSchemaLayout,
   type SchemaLayout,
 } from "../manager-layout-persist";
+import { listQualityFlags } from "../quality-api";
 import SchemaGraphCanvas from "./SchemaGraphCanvas";
 import { useStudio } from "../StudioShell";
 
@@ -92,6 +94,7 @@ export default function ManagerView() {
   const [linkTypes, setLinkTypes] = useState<EnvLinkType[]>([]);
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [objects, setObjects] = useState<EnvInstance[]>([]);
+  const [flagCounts, setFlagCounts] = useState<Map<string, number>>(new Map());
   const [whereInput, setWhereInput] = useState("");
   const [detail, setDetail] = useState<{ object: EnvInstance; links: EnvLinkEdge[] } | null>(
     null,
@@ -203,6 +206,14 @@ export default function ManagerView() {
         limit: 100,
       });
       setObjects(o);
+      const { flags } = await listQualityFlags(env, { status: "open" }).catch(() => ({
+        flags: [],
+      }));
+      const counts = new Map<string, number>();
+      for (const f of flags) {
+        counts.set(f.instanceId, (counts.get(f.instanceId) ?? 0) + 1);
+      }
+      setFlagCounts(counts);
     } catch (err) {
       setError((err as Error).message);
       setObjects([]);
@@ -488,7 +499,12 @@ export default function ManagerView() {
                       )}
                     >
                       <td className="px-2 py-1.5 font-medium text-gray-800">
-                        {instanceLabel(o)}
+                        <span className="inline-flex items-center gap-1.5">
+                          {instanceLabel(o)}
+                          {(flagCounts.get(o.id) ?? 0) > 0 ? (
+                            <Badge tone="warning">{flagCounts.get(o.id)}</Badge>
+                          ) : null}
+                        </span>
                       </td>
                       <td className="px-2 py-1.5 text-gray-500">{o.typeName}</td>
                       <td className="px-2 py-1.5 text-gray-400">
