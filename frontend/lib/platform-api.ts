@@ -978,6 +978,132 @@ export async function getScenarioRun(
   );
 }
 
+// ---------------------------------------------------------------------------
+// Hybrid ML simulation (model DAG via the simulation-service)
+// ---------------------------------------------------------------------------
+
+export interface MlQuantileBands {
+  p10: DailyTrajectory[];
+  p50: DailyTrajectory[];
+  p90: DailyTrajectory[];
+}
+
+export interface MlModelInfo {
+  type: string;
+  id?: string | null;
+  version?: string | null;
+  fallback: boolean;
+  fallback_reason?: string | null;
+}
+
+export interface MlBaselineError {
+  rmse: number;
+  mae: number;
+  peakAbsError: number;
+}
+
+export interface MlFeatureImportance {
+  feature: string;
+  importance: number;
+}
+
+export interface MlGraphTraceEntry {
+  node: string;
+  type: string;
+  status: string;
+  detail?: string | null;
+}
+
+export interface MlIntervention {
+  kind: "none" | "close_unit" | "add_isolation_beds";
+  unitId?: string | null;
+  beds?: number | null;
+}
+
+export interface MlSimResult {
+  runId: string;
+  seed: string;
+  engine: "ml";
+  usedFallback: boolean;
+  model: MlModelInfo;
+  horizonDays: number;
+  summary: OutbreakSummary;
+  quantiles: MlQuantileBands;
+  baseline: MlQuantileBands;
+  mlBaselineError: MlBaselineError;
+  featureImportances: MlFeatureImportance[];
+  predictedWritten: number;
+  graphTrace: MlGraphTraceEntry[];
+}
+
+export interface SimulationModel {
+  id: string;
+  environmentId: string | null;
+  modelType: string;
+  name: string;
+  version: string;
+  datasetVersion: string | null;
+  status: string;
+  metrics: Record<string, unknown>;
+  artifactUri: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export async function runMlSimulation(
+  env: string,
+  scenarioId: string,
+  body?: {
+    params?: OutbreakParams;
+    seed?: number;
+    graphSpec?: {
+      nodes: Array<{ id: string; type: string; inputs?: string[]; params?: Record<string, unknown> }>;
+      output?: string;
+    };
+    intervention?: MlIntervention;
+    model?: { id?: string | null; version?: string | null };
+  },
+): Promise<MlSimResult> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/scenarios/${scenarioId}/simulate`, {
+    method: "POST",
+    body: body ?? {},
+  });
+}
+
+export async function listSimulationModels(
+  env: string,
+): Promise<{ models: SimulationModel[] }> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/simulation-models`);
+}
+
+export async function trainSimulationModel(
+  env: string,
+  name: string,
+  body?: {
+    modelType?: string;
+    version?: string;
+    seed?: number;
+    datasetKind?: "synthetic" | "history";
+    samples?: number;
+    epochs?: number;
+  },
+): Promise<{
+  modelId: string;
+  modelType: string;
+  name: string;
+  version: string;
+  status: string;
+  seed: number;
+  datasetKind: string;
+  artifactUri: string | null;
+  metrics: Record<string, unknown>;
+}> {
+  return apiFetch(
+    `/v1/ontology/${encEnv(env)}/simulation-models/${encodeURIComponent(name)}/train`,
+    { method: "POST", body: body ?? {} },
+  );
+}
+
 /** Parse SSE buffer into JSON payloads from `data:` lines. */
 export function parseSseJsonEvents<T>(buffer: string): {
   events: T[];

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -12,7 +12,10 @@ import {
   getScenarioRun,
   injectScenario,
   listScenarios,
+  runMlSimulation,
   runScenario,
+  type MlIntervention,
+  type MlSimResult,
   type OutbreakParams,
   type RunResult,
   type ScenarioSummary,
@@ -72,6 +75,12 @@ export default function SimulationView() {
   const [result, setResult] = useState<RunResult | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [runMode, setRunMode] = useState<"mechanistic" | "ml">("mechanistic");
+  const [mlResult, setMlResult] = useState<MlSimResult | null>(null);
+  const [interventionKind, setInterventionKind] =
+    useState<MlIntervention["kind"]>("none");
+  const [interventionBeds, setInterventionBeds] = useState("10");
 
   const loadTree = useCallback(async () => {
     if (!env) return;
@@ -203,10 +212,50 @@ export default function SimulationView() {
     }
   }
 
+  async function handleRunMl() {
+    if (!env || !scenarioId) return;
+    setRunning(true);
+    setError(null);
+    try {
+      const runParams: OutbreakParams = {
+        ...params,
+        indexNodeIds: indexNodeId ? [indexNodeId] : undefined,
+      };
+      const intervention: MlIntervention | undefined =
+        interventionKind === "none"
+          ? undefined
+          : interventionKind === "close_unit"
+            ? { kind: "close_unit", unitId: scenarioDetail?.rootUnitInstanceId ?? null }
+            : { kind: "add_isolation_beds", beds: Number(interventionBeds) || 0 };
+      const body: {
+        params: OutbreakParams;
+        seed?: number;
+        intervention?: MlIntervention;
+      } = { params: runParams };
+      if (seed.trim()) body.seed = Number(seed);
+      if (intervention) body.intervention = intervention;
+      const res = await runMlSimulation(env, scenarioId, body);
+      setMlResult(res);
+      setResult(null);
+      const detail = await getScenario(env, scenarioId);
+      setScenarioDetail({
+        instanceCount: detail.instanceCount,
+        linkCount: detail.linkCount,
+        rootUnitInstanceId: detail.rootUnitInstanceId,
+        runs: detail.runs,
+      });
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setRunning(false);
+    }
+  }
+
   async function handleSelectScenario(id: string) {
     if (!env) return;
     setScenarioId(id);
     setResult(null);
+    setMlResult(null);
     setIndexNodeId(null);
     setStep(2);
     try {
@@ -424,21 +473,70 @@ export default function SimulationView() {
             <div>
               <h2 className="mb-1 text-sm font-medium text-gray-800">3. Run simulation</h2>
               <p className="text-[11px] text-gray-500">
-                SEIR outbreak on the scenario copy only. Index node:{" "}
+                Runs on the scenario copy only. Index node:{" "}
                 {indexNodeId ? indexNodeId.slice(0, 8) + "…" : "—"}
               </p>
             </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex rounded border border-gray-200 p-0.5">
+                <ModeTab
+                  active={runMode === "mechanistic"}
+                  label="Mechanistic"
+                  onClick={() => setRunMode("mechanistic")}
+                />
+                <ModeTab
+                  active={runMode === "ml"}
+                  label="ML forecast"
+                  onClick={() => setRunMode("ml")}
+                />
+              </div>
+              {runMode === "ml" ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={interventionKind}
+                    onChange={(e) =>
+                      setInterventionKind(e.target.value as MlIntervention["kind"])
+                    }
+                    className="rounded border border-gray-200 px-2 py-1 text-[11px] focus:border-gray-400 focus:outline-none"
+                  >
+                    <option value="none">No intervention</option>
+                    <option value="close_unit">Close / cohort root unit</option>
+                    <option value="add_isolation_beds">Add isolation beds</option>
+                  </select>
+                  {interventionKind === "add_isolation_beds" ? (
+                    <input
+                      type="number"
+                      step={1}
+                      value={interventionBeds}
+                      onChange={(e) => setInterventionBeds(e.target.value)}
+                      className="w-20 rounded border border-gray-200 px-2 py-1 text-[11px] focus:border-gray-400 focus:outline-none"
+                      aria-label="Isolation beds to add"
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
             <div className="flex gap-2">
               <Button variant="secondary" size="sm" onClick={() => setStep(2)}>
                 Back
               </Button>
-              <Button onClick={() => void handleRun()} disabled={running || !indexNodeId}>
-                {running ? "Running…" : "Run simulation"}
-              </Button>
+              {runMode === "mechanistic" ? (
+                <Button onClick={() => void handleRun()} disabled={running || !indexNodeId}>
+                  {running ? "Running…" : "Run simulation"}
+                </Button>
+              ) : (
+                <Button onClick={() => void handleRunMl()} disabled={running || !indexNodeId}>
+                  {running ? "Running…" : "Run ML forecast"}
+                </Button>
+              )}
             </div>
-            {result ? (
+
+            {runMode === "mechanistic" && result ? (
               <ResultsPanel result={result} unitNames={unitNames} />
             ) : null}
+            {runMode === "ml" && mlResult ? <MlResultsPanel result={mlResult} /> : null}
           </section>
         ) : null}
       </main>
@@ -568,5 +666,148 @@ function MetricCard({ label, value }: { label: string; value: string }) {
       <p className="text-[10px] uppercase tracking-wide text-gray-400">{label}</p>
       <p className="mt-1 text-lg font-semibold text-gray-900">{value}</p>
     </Card>
+  );
+}
+
+function ModeTab({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded px-2.5 py-1 text-[11px] font-medium transition-colors",
+        active ? "bg-indigo-600 text-white" : "text-gray-500 hover:text-gray-700",
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+function MlResultsPanel({ result }: { result: MlSimResult }) {
+  const { summary, quantiles, model, mlBaselineError, featureImportances } = result;
+  return (
+    <section className="space-y-4 border-t border-gray-100 pt-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone={model.fallback ? "amber" : "emerald"}>
+          {model.fallback ? "Mechanistic fallback" : "ML model"}
+        </Badge>
+        <Badge tone="slate">{model.type}</Badge>
+        {model.version ? <Badge tone="slate">v{model.version}</Badge> : null}
+        <Badge tone="slate">seed {result.seed}</Badge>
+        {result.usedFallback ? (
+          <Badge tone="amber">service offline → in-process baseline</Badge>
+        ) : null}
+      </div>
+      {model.fallback && model.fallback_reason ? (
+        <p className="text-[11px] text-amber-700">{model.fallback_reason}</p>
+      ) : null}
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <MetricCard label="Peak infected" value={String(Math.round(summary.peakInfected))} />
+        <MetricCard
+          label="Peak isolation"
+          value={String(Math.round(summary.peakIsolationDemand))}
+        />
+        <MetricCard label="Attack rate" value={`${(summary.attackRate * 100).toFixed(1)}%`} />
+        <MetricCard
+          label="Days to contain"
+          value={summary.daysToContain != null ? String(Math.round(summary.daysToContain)) : "—"}
+        />
+      </div>
+
+      <Card className="p-4">
+        <p className="mb-2 text-xs font-medium text-gray-700">
+          ML forecast — infected (p50, p10–p90 band)
+        </p>
+        <TrajectoryChart p5={quantiles.p10} p50={quantiles.p50} p95={quantiles.p90} />
+      </Card>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Card className="p-4">
+          <p className="mb-2 text-xs font-medium text-gray-700">ML vs mechanistic baseline</p>
+          <dl className="space-y-1 text-[11px] text-gray-600">
+            <ErrRow label="RMSE (infected)" value={mlBaselineError.rmse} />
+            <ErrRow label="MAE (infected)" value={mlBaselineError.mae} />
+            <ErrRow label="Peak abs error" value={mlBaselineError.peakAbsError} />
+          </dl>
+          <p className="mt-2 text-[10px] text-gray-400">
+            Lower = ML output closer to the mechanistic SEIR baseline (0 at cold-start).
+          </p>
+        </Card>
+        <Card className="p-4">
+          <p className="mb-2 text-xs font-medium text-gray-700">Feature importances</p>
+          {featureImportances.length === 0 ? (
+            <p className="text-[11px] text-gray-400">No importances reported.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {featureImportances.map((fi) => (
+                <li key={fi.feature} className="flex items-center gap-2">
+                  <span className="w-28 shrink-0 truncate text-[11px] text-gray-600">
+                    {fi.feature}
+                  </span>
+                  <span className="h-2 flex-1 overflow-hidden rounded bg-gray-100">
+                    <span
+                      className="block h-full rounded bg-indigo-500"
+                      style={{ width: `${Math.round(fi.importance * 100)}%` }}
+                    />
+                  </span>
+                  <span className="w-10 shrink-0 text-right font-mono text-[10px] text-gray-500">
+                    {(fi.importance * 100).toFixed(0)}%
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
+
+      <p className="text-[10px] text-gray-400">
+        {result.predictedWritten} predicted unit propert
+        {result.predictedWritten === 1 ? "y" : "ies"} written to the scenario branch with
+        provenance · DAG: {result.graphTrace.map((t) => t.node).join(" → ")}
+      </p>
+    </section>
+  );
+}
+
+function ErrRow({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="flex justify-between">
+      <dt>{label}</dt>
+      <dd className="font-mono text-gray-800">{value.toFixed(2)}</dd>
+    </div>
+  );
+}
+
+function Badge({
+  children,
+  tone,
+}: {
+  children: ReactNode;
+  tone: "emerald" | "amber" | "slate";
+}) {
+  const tones: Record<string, string> = {
+    emerald: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    amber: "border-amber-200 bg-amber-50 text-amber-700",
+    slate: "border-gray-200 bg-gray-50 text-gray-600",
+  };
+  return (
+    <span
+      className={cn(
+        "rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide",
+        tones[tone],
+      )}
+    >
+      {children}
+    </span>
   );
 }
