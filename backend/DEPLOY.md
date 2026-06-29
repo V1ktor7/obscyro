@@ -17,6 +17,27 @@
 | `PUBLIC_API_URL` | `https://your-api.up.railway.app` (used in webhook URLs) |
 | `CORS_ORIGINS` | `https://obscyro.vercel.app,https://obscyro.com` |
 
+### Optional feature tunables (safe defaults; override only to tune)
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `TWIN_SSE_INTERVAL_MS` | `5000` | Live twin SSE recompute cadence |
+| `METRICS_SSE_INTERVAL_MS` | `5000` | Live metrics SSE recompute cadence |
+| `SSE_HEARTBEAT_MS` | `15000` | SSE keep-alive heartbeat cadence |
+| `SSE_RETRY_MS` | `3000` | Client reconnect backoff hint (`retry:`) |
+| `LIST_DEFAULT_LIMIT` | `100` | Default page size for list endpoints |
+| `LIST_MAX_LIMIT` | `500` | Hard ceiling for list page size |
+| `ROLLUP_INSTANCE_CAP` | `50000` | Max rows loaded for rollups/clones/scans |
+| `SIM_MAX_RUNS` | `200` | Monte-Carlo simulation run ceiling |
+| `DQ_ANOMALY_ENABLED` | `true` | Enable L6 statistical anomaly layer |
+| `DQ_IQR_K` | `3.0` | Tukey IQR fence multiplier (L6) |
+| `DQ_ZSCORE_THRESHOLD` | `5.0` | Robust z-score threshold (L6) |
+| `DQ_ANOMALY_MIN_SAMPLE` | `12` | Min same-type samples before L6 runs |
+
+> Migrations: run `npm run migrate` after deploy to apply `019_production_hardening.sql`
+> (twin alert de-duplication index, incremental-scan cursor table, score-spec default
+> column, and hot-query indexes).
+
 ## Frontend (Vercel)
 
 Set `NEXT_PUBLIC_API_URL` to the backend public URL (same as `PUBLIC_API_URL`).

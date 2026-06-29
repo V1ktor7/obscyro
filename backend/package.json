@@ -17,6 +17,7 @@
     "import:snomed": "tsx scripts/import-snomed/index.ts",
     "build:tc": "tsx scripts/build-transitive-closure.ts",
     "test": "tsx --test src/**/*.integration.test.ts",
+    "test:unit": "tsx --test src/**/*.unit.test.ts",
     "test:integration": "tsx --test src/services/persist-extract.integration.test.ts"
   },
   "dependencies": {
