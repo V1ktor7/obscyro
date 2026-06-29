@@ -5,6 +5,7 @@
 1. **Postgres** — provision a Railway Postgres plugin; copy `DATABASE_URL`.
 2. **Backend** (this folder) — deploy with `backend/Dockerfile` + `railway.json`.
 3. **NLP service** (`nlp-service/`) — deploy separately; set `NLP_SERVICE_URL` on the backend.
+4. **Simulation service** (`simulation-service/`) — deploy separately; set `SIM_SERVICE_URL` on the backend. Optional: when unset, the ML `/simulate` route falls back to the in-process mechanistic SEIR baseline.
 
 ## Backend environment variables
 
@@ -14,6 +15,7 @@
 | `PORT` | `4000` |
 | `HOST` | `0.0.0.0` |
 | `NLP_SERVICE_URL` | `https://your-nlp.up.railway.app` |
+| `SIM_SERVICE_URL` | `https://your-sim.up.railway.app` (optional; falls back to in-process mechanistic SEIR when unset) |
 | `PUBLIC_API_URL` | `https://your-api.up.railway.app` (used in webhook URLs) |
 | `CORS_ORIGINS` | `https://obscyro.vercel.app,https://obscyro.com` |
 
@@ -29,6 +31,9 @@
 | `LIST_MAX_LIMIT` | `500` | Hard ceiling for list page size |
 | `ROLLUP_INSTANCE_CAP` | `50000` | Max rows loaded for rollups/clones/scans |
 | `SIM_MAX_RUNS` | `200` | Monte-Carlo simulation run ceiling |
+| `SIM_SERVICE_URL` | _(unset)_ | Hybrid ML simulation-service base URL; falls back to mechanistic SEIR when unset |
+| `SIM_SERVICE_TIMEOUT_MS` | `60000` | Upstream timeout for simulation-service calls |
+| `SIM_DEFAULT_GRAPH` | _(unset)_ | Optional default model-DAG JSON for ML `/simulate` |
 | `DQ_ANOMALY_ENABLED` | `true` | Enable L6 statistical anomaly layer |
 | `DQ_IQR_K` | `3.0` | Tukey IQR fence multiplier (L6) |
 | `DQ_ZSCORE_THRESHOLD` | `5.0` | Robust z-score threshold (L6) |

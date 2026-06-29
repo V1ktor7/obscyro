@@ -306,6 +306,14 @@ export async function getSimulationRun(
   summary: Record<string, unknown> | null;
   trajectories: Record<string, unknown> | null;
   alertTimeline: unknown[] | null;
+  engine: string;
+  modelId: string | null;
+  modelVersion: string | null;
+  graphSpec: Record<string, unknown> | null;
+  quantiles: Record<string, unknown> | null;
+  baseline: Record<string, unknown> | null;
+  mlBaselineError: Record<string, unknown> | null;
+  featureImportances: unknown[] | null;
   createdAt: Date;
   finishedAt: Date | null;
 }> {
@@ -318,11 +326,21 @@ export async function getSimulationRun(
     summary: Record<string, unknown> | null;
     trajectories: Record<string, unknown> | null;
     alert_timeline: unknown[] | null;
+    engine: string;
+    model_id: string | null;
+    model_version: string | null;
+    graph_spec: Record<string, unknown> | null;
+    quantiles: Record<string, unknown> | null;
+    baseline: Record<string, unknown> | null;
+    ml_baseline_error: Record<string, unknown> | null;
+    feature_importances: unknown[] | null;
     created_at: Date;
     finished_at: Date | null;
   }>(
     `SELECT id, status, seed::text, params, runs, summary, trajectories,
-            alert_timeline, created_at, finished_at
+            alert_timeline, engine, model_id, model_version, graph_spec,
+            quantiles, baseline, ml_baseline_error, feature_importances,
+            created_at, finished_at
        FROM app.simulation_run
       WHERE id = $1 AND scenario_id = $2`,
     [runId, scenarioId],
@@ -338,6 +356,14 @@ export async function getSimulationRun(
     summary: r.summary,
     trajectories: r.trajectories,
     alertTimeline: r.alert_timeline,
+    engine: r.engine,
+    modelId: r.model_id,
+    modelVersion: r.model_version,
+    graphSpec: r.graph_spec,
+    quantiles: r.quantiles,
+    baseline: r.baseline,
+    mlBaselineError: r.ml_baseline_error,
+    featureImportances: r.feature_importances,
     createdAt: r.created_at,
     finishedAt: r.finished_at,
   };

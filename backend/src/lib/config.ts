@@ -47,6 +47,13 @@ export const config = {
   /** Simulation Monte-Carlo run ceiling. */
   simMaxRuns: intEnv("SIM_MAX_RUNS", 200, 1, 1_000),
 
+  /** Base URL of the hybrid ML simulation-service. Empty => ML sim disabled. */
+  simServiceUrl: (process.env.SIM_SERVICE_URL ?? "").trim().replace(/\/$/, ""),
+  /** Upstream timeout for simulation-service calls (ms). */
+  simServiceTimeoutMs: intEnv("SIM_SERVICE_TIMEOUT_MS", 60_000, 1_000, 600_000),
+  /** Optional JSON graph spec (model DAG) used when a request omits one. */
+  simDefaultGraph: (process.env.SIM_DEFAULT_GRAPH ?? "").trim(),
+
   /** Data-quality L6 ML/statistical anomaly layer. */
   dqAnomalyEnabled: boolEnv("DQ_ANOMALY_ENABLED", true),
   /** Tukey IQR fence multiplier for L6 anomaly detection. */
