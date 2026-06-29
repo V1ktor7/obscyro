@@ -1003,47 +1003,78 @@ export function parseSseJsonEvents<T>(buffer: string): {
   return { events, remainder };
 }
 
+/**
+ * Subscribe to the live twin SSE stream with automatic reconnection and
+ * exponential backoff. `onError` is only invoked after `maxRetries` consecutive
+ * failures, at which point the caller should fall back to polling. A successful
+ * connection resets the backoff counter.
+ */
 export function subscribeTwinStream(
   env: string,
   onData: (snapshot: TwinTreeSnapshot) => void,
   onError: () => void,
+  opts?: { maxRetries?: number },
 ): () => void {
   const controller = new AbortController();
   const token = getStoredKey();
   const url = `${API_BASE}/v1/ontology/${encEnv(env)}/twin/stream`;
+  const maxRetries = opts?.maxRetries ?? 5;
+  let stopped = false;
+
+  const sleep = (ms: number): Promise<void> =>
+    new Promise((resolve) => {
+      const id = setTimeout(resolve, ms);
+      controller.signal.addEventListener("abort", () => {
+        clearTimeout(id);
+        resolve();
+      });
+    });
 
   void (async () => {
-    try {
-      const res = await fetch(url, {
-        headers: {
-          Accept: "text/event-stream",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        signal: controller.signal,
-      });
-      if (!res.ok || !res.body) {
+    let attempt = 0;
+    while (!stopped) {
+      try {
+        const res = await fetch(url, {
+          headers: {
+            Accept: "text/event-stream",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          signal: controller.signal,
+        });
+        if (!res.ok || !res.body) throw new Error(`stream status ${res.status}`);
+
+        attempt = 0; // healthy connection — reset backoff
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const { events, remainder } = parseSseJsonEvents<TwinTreeSnapshot>(buffer);
+          buffer = remainder;
+          for (const evt of events) onData(evt);
+        }
+        // Stream closed cleanly by the server; loop to reconnect.
+      } catch (err) {
+        if (stopped || (err as Error).name === "AbortError") return;
+      }
+
+      attempt += 1;
+      if (attempt > maxRetries) {
         onError();
         return;
       }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const { events, remainder } = parseSseJsonEvents<TwinTreeSnapshot>(buffer);
-        buffer = remainder;
-        for (const evt of events) onData(evt);
-      }
-    } catch (err) {
-      if ((err as Error).name !== "AbortError") onError();
+      // Exponential backoff capped at 30s.
+      await sleep(Math.min(30_000, 1_000 * 2 ** (attempt - 1)));
     }
   })();
 
-  return () => controller.abort();
+  return () => {
+    stopped = true;
+    controller.abort();
+  };
 }
 
 export type { MeResult };

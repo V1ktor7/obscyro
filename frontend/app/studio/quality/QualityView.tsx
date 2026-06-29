@@ -27,6 +27,7 @@ export default function QualityView() {
   const env = selectedEnv;
 
   const [whereInput, setWhereInput] = useState("");
+  const [severityFilter, setSeverityFilter] = useState<"all" | QualityFlag["severity"]>("all");
   const [summary, setSummary] = useState<ScanSummary | null>(null);
   const [flags, setFlags] = useState<QualityFlag[]>([]);
   const [scanning, setScanning] = useState(false);
@@ -40,14 +41,17 @@ export default function QualityView() {
     if (!env) return;
     setLoadingFlags(true);
     try {
-      const { flags: f } = await listQualityFlags(env, { status: "open" });
+      const { flags: f } = await listQualityFlags(env, {
+        status: "open",
+        severity: severityFilter === "all" ? undefined : severityFilter,
+      });
       setFlags(f);
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setLoadingFlags(false);
     }
-  }, [env]);
+  }, [env, severityFilter]);
 
   useEffect(() => {
     if (env && hasKey) void loadFlags();
@@ -115,6 +119,21 @@ export default function QualityView() {
               placeholder="key=value, key2=value2"
               className="flex-1 rounded-md border border-gray-200 px-2 py-1 text-xs focus:border-gray-400 focus:outline-none"
             />
+          </label>
+          <label className="flex items-center gap-2">
+            <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.18em] text-gray-400">
+              severity
+            </span>
+            <select
+              value={severityFilter}
+              onChange={(e) => setSeverityFilter(e.target.value as typeof severityFilter)}
+              className="rounded-md border border-gray-200 px-2 py-1 text-xs focus:border-gray-400 focus:outline-none"
+            >
+              <option value="all">All</option>
+              <option value="error">Error</option>
+              <option value="warn">Warn</option>
+              <option value="info">Info</option>
+            </select>
           </label>
           <Button onClick={() => void handleScan()} disabled={scanning}>
             {scanning ? "Scanning…" : "Run scan"}
