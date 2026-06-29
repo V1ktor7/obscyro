@@ -1,3 +1,5 @@
+import { config } from "../lib/config.js";
+import { BadRequest } from "../lib/errors.js";
 import type { ScenarioInstanceRow, ScenarioLinkRow } from "./twin-clone.js";
 import type { TwinAlertOp, TwinAlertRuleRow, TwinAlertSeverity } from "./twin.js";
 import { LOCATED_IN_LINK_NAMES } from "./twin.js";
@@ -69,6 +71,50 @@ export interface AlertTimelineEvent {
 
 export interface SimulationRunResult extends OutbreakResult {
   alertTimeline: AlertTimelineEvent[];
+}
+
+/**
+ * Validate outbreak parameter ranges before a run. Throws a 400 AppError on any
+ * out-of-range or contradictory value so runs are reproducible and trustworthy
+ * rather than silently clamping to surprising defaults.
+ */
+export function validateOutbreakParams(params: OutbreakParams): void {
+  const check = (cond: boolean, msg: string): void => {
+    if (!cond) throw BadRequest("SIM_INVALID_PARAMS", msg);
+  };
+  if (params.beta != null) check(params.beta > 0 && params.beta <= 1, "beta must be in (0, 1].");
+  if (params.r0 != null) check(params.r0 > 0 && params.r0 <= 20, "r0 must be in (0, 20].");
+  if (params.incubationDays != null) {
+    check(Number.isInteger(params.incubationDays) && params.incubationDays >= 1 && params.incubationDays <= 60,
+      "incubationDays must be an integer in [1, 60].");
+  }
+  if (params.infectiousDays != null) {
+    check(Number.isInteger(params.infectiousDays) && params.infectiousDays >= 1 && params.infectiousDays <= 120,
+      "infectiousDays must be an integer in [1, 120].");
+  }
+  if (params.isolationCapacity != null) {
+    check(Number.isInteger(params.isolationCapacity) && params.isolationCapacity >= 0,
+      "isolationCapacity must be a non-negative integer.");
+  }
+  if (params.horizonDays != null) {
+    check(Number.isInteger(params.horizonDays) && params.horizonDays >= 1 && params.horizonDays <= 365,
+      "horizonDays must be an integer in [1, 365].");
+  }
+  if (params.containThreshold != null) {
+    check(Number.isInteger(params.containThreshold) && params.containThreshold >= 0,
+      "containThreshold must be a non-negative integer.");
+  }
+  if (params.runs != null) {
+    check(Number.isInteger(params.runs) && params.runs >= 1 && params.runs <= config.simMaxRuns,
+      `runs must be an integer in [1, ${config.simMaxRuns}].`);
+  }
+}
+
+/** Number of contact (non-location) edges in the graph. */
+export function countContactEdges(graph: ContactGraph): number {
+  let total = 0;
+  for (const neighbors of graph.adjacency.values()) total += neighbors.length;
+  return total / 2;
 }
 
 /** Build contact graph from cloned scenario copies only. */
@@ -421,7 +467,7 @@ export function runOutbreakSimulation(
   seed: number,
   rules: TwinAlertRuleRow[] = [],
 ): SimulationRunResult {
-  const runs = Math.max(1, Math.min(params.runs ?? 10, 200));
+  const runs = Math.max(1, Math.min(params.runs ?? 10, config.simMaxRuns));
   const allDaily: DailyTrajectory[][] = [];
   const summaries: OutbreakSummary[] = [];
 

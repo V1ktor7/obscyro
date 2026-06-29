@@ -8,9 +8,12 @@ import { resolveUserIdForApiKey } from "../services/login.js";
 import { resolveEnvironment } from "../services/ontology.js";
 import {
   buildContactGraphFromCopy,
+  countContactEdges,
   runOutbreakSimulation,
+  validateOutbreakParams,
   type OutbreakParams,
 } from "../services/simulation.js";
+import { config } from "../lib/config.js";
 import { listAlertRules } from "../services/twin.js";
 import {
   cloneSubtree,
@@ -40,19 +43,20 @@ const dailyTrajectory = z.object({
 });
 
 const outbreakParamsSchema = z.object({
-  beta: z.number().optional(),
-  r0: z.number().optional(),
-  incubationDays: z.number().int().positive().optional(),
-  infectiousDays: z.number().int().positive().optional(),
-  indexNodeIds: z.array(z.string().uuid()).optional(),
+  beta: z.number().gt(0).max(1).optional(),
+  r0: z.number().gt(0).max(20).optional(),
+  incubationDays: z.number().int().min(1).max(60).optional(),
+  infectiousDays: z.number().int().min(1).max(120).optional(),
+  indexNodeIds: z.array(z.string().uuid()).max(1000).optional(),
   isolationCapacity: z.number().int().nonnegative().optional(),
-  runs: z.number().int().min(1).max(200).optional(),
+  runs: z.number().int().min(1).max(config.simMaxRuns).optional(),
   horizonDays: z.number().int().min(1).max(365).optional(),
   containThreshold: z.number().int().nonnegative().optional(),
 });
 
 const runResultSchema = z.object({
   runId: z.string().uuid(),
+  seed: z.string(),
   summary: z.object({
     peakInfected: z.number(),
     peakIsolationDemand: z.number(),
@@ -121,6 +125,10 @@ const twinSimRoutes: FastifyPluginAsync = async (fastify) => {
         summary: "List twin-clone scenarios for an environment",
         tags: ["twin-simulation"],
         params: z.object({ env: z.string().min(1) }),
+        querystring: z.object({
+          limit: z.coerce.number().int().min(1).max(config.listMaxLimit).optional(),
+          offset: z.coerce.number().int().min(0).optional(),
+        }),
         response: {
           200: z.object({
             scenarios: z.array(
@@ -138,7 +146,10 @@ const twinSimRoutes: FastifyPluginAsync = async (fastify) => {
     async (req) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
-      const scenarios = await listScenarios(req.db, env.id);
+      const scenarios = await listScenarios(req.db, env.id, {
+        limit: req.query.limit,
+        offset: req.query.offset,
+      });
       return {
         scenarios: scenarios.map((s) => ({
           id: s.id,
@@ -222,10 +233,10 @@ const twinSimRoutes: FastifyPluginAsync = async (fastify) => {
         params: z.object({ env: z.string().min(1), id: z.string().uuid() }),
         body: z.object({
           params: outbreakParamsSchema.optional(),
-          runs: z.number().int().min(1).max(200).optional(),
+          runs: z.number().int().min(1).max(config.simMaxRuns).optional(),
           seed: z.number().int().optional(),
         }),
-        response: { 200: runResultSchema, 404: errorEnvelope },
+        response: { 200: runResultSchema, 400: errorEnvelope, 404: errorEnvelope },
       },
     },
     async (req) => {
@@ -243,6 +254,18 @@ const twinSimRoutes: FastifyPluginAsync = async (fastify) => {
         ...(req.body.params ?? {}),
         runs: req.body.runs ?? (req.body.params?.runs ?? (scenario.params as OutbreakParams).runs),
       };
+      validateOutbreakParams(mergedParams);
+
+      const graph = buildContactGraphFromCopy(copy.instances, copy.links);
+      // A scenario with people but no contacts can only ever produce a flat
+      // curve; surface that explicitly rather than returning misleading zeros.
+      if (graph.nodes.size > 1 && countContactEdges(graph) === 0) {
+        throw BadRequest(
+          "SCENARIO_NO_CONTACTS",
+          "Scenario copy has no contact links between instances. Add contacts before running.",
+        );
+      }
+
       const seed = BigInt(req.body.seed ?? Date.now());
 
       const { rows: runRows } = await req.db.query<{ id: string }>(
@@ -259,7 +282,6 @@ const twinSimRoutes: FastifyPluginAsync = async (fastify) => {
       const runId = runRows[0]!.id;
 
       try {
-        const graph = buildContactGraphFromCopy(copy.instances, copy.links);
         const rules = await listAlertRules(req.db, env.id);
         const result = runOutbreakSimulation(
           graph,
@@ -284,8 +306,22 @@ const twinSimRoutes: FastifyPluginAsync = async (fastify) => {
           ],
         );
 
+        req.log.info(
+          {
+            scenarioId: scenario.id,
+            runId,
+            seed: seed.toString(),
+            runs: mergedParams.runs ?? 10,
+            nodes: graph.nodes.size,
+            contactEdges: countContactEdges(graph),
+            peakInfected: result.summary.peakInfected,
+          },
+          "simulation run completed",
+        );
+
         return {
           runId,
+          seed: seed.toString(),
           summary: result.summary,
           trajectories: result.trajectories,
           alertTimeline: result.alertTimeline,

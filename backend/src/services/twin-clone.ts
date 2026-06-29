@@ -1,3 +1,4 @@
+import { clampLimit, clampOffset } from "../lib/config.js";
 import type { DbClient } from "../lib/db.js";
 import { NotFound } from "../lib/errors.js";
 import { withTransaction } from "../lib/transaction.js";
@@ -69,7 +70,10 @@ export async function getScenarioForEnv(
 export async function listScenarios(
   db: DbClient,
   environmentId: string,
+  page?: { limit?: number; offset?: number },
 ): Promise<ScenarioRow[]> {
+  const limit = clampLimit(page?.limit);
+  const offset = clampOffset(page?.offset);
   const { rows } = await db.query<{
     id: string;
     environment_id: string;
@@ -85,8 +89,8 @@ export async function listScenarios(
        FROM app.scenario
       WHERE environment_id = $1
       ORDER BY created_at DESC
-      LIMIT 100`,
-    [environmentId],
+      LIMIT $2 OFFSET $3`,
+    [environmentId, limit, offset],
   );
   return rows.map((r) => ({
     id: r.id,
@@ -342,6 +346,7 @@ export async function getSimulationRun(
 export async function listScenarioRuns(
   db: DbClient,
   scenarioId: string,
+  page?: { limit?: number; offset?: number },
 ): Promise<
   Array<{
     id: string;
@@ -352,6 +357,8 @@ export async function listScenarioRuns(
     finishedAt: Date | null;
   }>
 > {
+  const limit = clampLimit(page?.limit ?? 50);
+  const offset = clampOffset(page?.offset);
   const { rows } = await db.query<{
     id: string;
     status: string;
@@ -364,8 +371,8 @@ export async function listScenarioRuns(
        FROM app.simulation_run
       WHERE scenario_id = $1
       ORDER BY created_at DESC
-      LIMIT 50`,
-    [scenarioId],
+      LIMIT $2 OFFSET $3`,
+    [scenarioId, limit, offset],
   );
   return rows.map((r) => ({
     id: r.id,
