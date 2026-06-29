@@ -1,0 +1,12 @@
+# Heavy ML stack — optional. Install to move UDE training and the GNN/TFT/
+# surrogate/causal nodes from mechanistic fallback to trained models.
+#
+# Install CPU torch first:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   pip install -r requirements-ml.txt
+#
+torchdiffeq==0.2.4
+torch-geometric==2.5.3
+pytorch-forecasting==1.0.0
+econml==0.15.1
+numpy>=1.26,<2.0
