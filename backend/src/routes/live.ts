@@ -2,15 +2,19 @@ import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 
+import { config } from "../lib/config.js";
 import type { DbClient } from "../lib/db.js";
 import { AppError, NotFound } from "../lib/errors.js";
+import { startSseStream } from "../lib/sse.js";
 import { parseWhere } from "../lib/where-filter.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
 import {
   computeMetrics,
-  DEFAULT_SCORE_SPEC,
+  deleteScoreSpec,
+  listScoreSpecs,
+  resolveScoreSpec,
   scoreInstance,
-  type ScoreSpec,
+  upsertScoreSpec,
 } from "../services/live-analysis.js";
 import { resolveEnvironment } from "../services/ontology.js";
 
@@ -90,32 +94,10 @@ const liveRoutes: FastifyPluginAsync = async (fastify) => {
       const env = await resolveEnvironment(req.db, userId, req.params.env);
       const wherePairs = parseWhere(req.query.where);
 
-      reply.hijack();
-      reply.raw.writeHead(200, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      });
-
-      const send = async () => {
-        const metrics = await computeMetrics(req.db, env.id, wherePairs);
-        reply.raw.write(`data: ${JSON.stringify(metrics)}\n\n`);
-      };
-
-      await send();
-      const interval = setInterval(() => {
-        void send().catch(() => {
-          /* client may have disconnected */
-        });
-      }, 5000);
-
-      const heartbeat = setInterval(() => {
-        reply.raw.write(": ping\n\n");
-      }, 15000);
-
-      req.raw.on("close", () => {
-        clearInterval(interval);
-        clearInterval(heartbeat);
+      startSseStream(req, reply, {
+        name: "metrics",
+        intervalMs: config.metricsSseIntervalMs,
+        produce: () => computeMetrics(req.db, env.id, wherePairs),
       });
     },
   );
@@ -144,18 +126,89 @@ const liveRoutes: FastifyPluginAsync = async (fastify) => {
     async (req) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
-
-      let spec: ScoreSpec = DEFAULT_SCORE_SPEC;
-      if (req.query.definition) {
-        const { rows } = await req.db.query<{ spec: ScoreSpec }>(
-          `SELECT spec FROM app.metric_definition
-            WHERE environment_id = $1 AND name = $2 AND kind = 'score'`,
-          [env.id, req.query.definition],
-        );
-        if (rows[0]?.spec) spec = rows[0].spec;
-      }
-
+      const spec = await resolveScoreSpec(req.db, env.id, req.query.definition);
       return scoreInstance(req.db, env.id, req.params.id, spec);
+    },
+  );
+
+  app.get(
+    "/ontology/:env/score-specs",
+    {
+      schema: {
+        summary: "List persisted per-environment score specs",
+        tags: ["live-analysis"],
+        params: z.object({ env: z.string().min(1) }),
+        response: {
+          200: z.object({
+            specs: z.array(
+              z.object({
+                id: z.string().uuid(),
+                name: z.string(),
+                spec: scoreSpecSchema,
+                isDefault: z.boolean(),
+                createdAt: z.string(),
+              }),
+            ),
+          }),
+          404: errorEnvelope,
+        },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const specs = await listScoreSpecs(req.db, env.id);
+      return { specs };
+    },
+  );
+
+  app.put(
+    "/ontology/:env/score-specs/:name",
+    {
+      schema: {
+        summary: "Create or update a per-environment score spec",
+        tags: ["live-analysis"],
+        params: z.object({ env: z.string().min(1), name: z.string().min(1).max(64) }),
+        body: z.object({ spec: scoreSpecSchema, isDefault: z.boolean().optional() }),
+        response: {
+          200: z.object({
+            id: z.string().uuid(),
+            name: z.string(),
+            spec: scoreSpecSchema,
+            isDefault: z.boolean(),
+            createdAt: z.string(),
+          }),
+          400: errorEnvelope,
+          404: errorEnvelope,
+        },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      return upsertScoreSpec(req.db, env.id, userId, env.organizationId, {
+        name: req.params.name,
+        spec: req.body.spec,
+        isDefault: req.body.isDefault,
+      });
+    },
+  );
+
+  app.delete(
+    "/ontology/:env/score-specs/:name",
+    {
+      schema: {
+        summary: "Delete a per-environment score spec",
+        tags: ["live-analysis"],
+        params: z.object({ env: z.string().min(1), name: z.string().min(1).max(64) }),
+        response: { 200: z.object({ ok: z.literal(true) }), 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      await deleteScoreSpec(req.db, env.id, req.params.name);
+      return { ok: true as const };
     },
   );
 };

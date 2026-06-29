@@ -1,6 +1,6 @@
 import type { DbClient } from "../lib/db.js";
-import { NotFound } from "../lib/errors.js";
-import { listInstancesForEnv, type EnvInstanceRow } from "./ontology.js";
+import { BadRequest, NotFound } from "../lib/errors.js";
+import { withTransaction } from "../lib/transaction.js";
 
 export interface MetricsSnapshot {
   computedAt: string;
@@ -40,62 +40,101 @@ export interface InstanceScore {
   breakdown: Record<string, number>;
 }
 
+/**
+ * Build a parameterized `properties ->> key = value` filter fragment matching
+ * {@link listInstancesForEnv} semantics. Returns the SQL suffix plus the params
+ * to append, starting after `$1` (the environment id).
+ */
+function buildWhereFragment(
+  wherePairs: Array<[string, string]> | undefined,
+  startIndex: number,
+): { sql: string; params: unknown[] } {
+  if (!wherePairs?.length) return { sql: "", params: [] };
+  const params: unknown[] = [];
+  let sql = "";
+  let idx = startIndex;
+  for (const [key, value] of wherePairs) {
+    params.push(key);
+    const keyParam = idx++;
+    params.push(value);
+    const valueParam = idx++;
+    sql += ` AND oi.properties ->> $${keyParam} = $${valueParam}`;
+  }
+  return { sql, params };
+}
+
+/**
+ * Live operational metrics computed entirely in SQL so it scales past the old
+ * 10k in-memory cap. Output shape is identical to the previous implementation:
+ * per-type counts/freshness plus status occupancy buckets.
+ */
 export async function computeMetrics(
   db: DbClient,
   environmentId: string,
   wherePairs?: Array<[string, string]>,
 ): Promise<MetricsSnapshot> {
-  const instances = await listInstancesForEnv(db, environmentId, {
-    wherePairs,
-    limit: 10_000,
-  });
+  const where = buildWhereFragment(wherePairs, 2);
+
+  const { rows: typeRows } = await db.query<{
+    type_name: string;
+    count: string;
+    newest: Date | null;
+  }>(
+    `SELECT t.name AS type_name,
+            COUNT(*)::text AS count,
+            MAX(oi.updated_at) AS newest
+       FROM app.ontology_object_instances oi
+       JOIN app.ontology_object_types t ON t.id = oi.object_type_id
+      WHERE t.environment_id = $1${where.sql}
+      GROUP BY t.name
+      ORDER BY COUNT(*) DESC`,
+    [environmentId, ...where.params],
+  );
+
   const now = Date.now();
-  const byTypeMap = new Map<
-    string,
-    { count: number; newest: Date | null }
-  >();
+  let totalInstances = 0;
+  const byType = typeRows.map((r) => {
+    const count = Number(r.count);
+    totalInstances += count;
+    const newest = r.newest ? new Date(r.newest) : null;
+    return {
+      typeName: r.type_name,
+      count,
+      newestUpdatedAt: newest?.toISOString() ?? null,
+      freshnessSeconds: newest ? Math.round((now - newest.getTime()) / 1000) : null,
+    };
+  });
 
-  for (const inst of instances) {
-    const cur = byTypeMap.get(inst.typeName) ?? { count: 0, newest: null };
-    cur.count++;
-    if (!cur.newest || inst.updatedAt > cur.newest) cur.newest = inst.updatedAt;
-    byTypeMap.set(inst.typeName, cur);
-  }
+  const { rows: occRows } = await db.query<{
+    type_name: string;
+    value: string;
+    count: string;
+  }>(
+    `SELECT t.name AS type_name,
+            COALESCE(oi.properties ->> 'status', oi.properties ->> 'occupancy_status') AS value,
+            COUNT(*)::text AS count
+       FROM app.ontology_object_instances oi
+       JOIN app.ontology_object_types t ON t.id = oi.object_type_id
+      WHERE t.environment_id = $1${where.sql}
+        AND COALESCE(oi.properties ->> 'status', oi.properties ->> 'occupancy_status') IS NOT NULL
+      GROUP BY t.name, value
+      ORDER BY t.name, value`,
+    [environmentId, ...where.params],
+  );
 
-  const byType = [...byTypeMap.entries()].map(([typeName, v]) => ({
-    typeName,
-    count: v.count,
-    newestUpdatedAt: v.newest?.toISOString() ?? null,
-    freshnessSeconds: v.newest
-      ? Math.round((now - v.newest.getTime()) / 1000)
-      : null,
+  const occupancy = occRows.map((r) => ({
+    typeName: r.type_name,
+    property: "status",
+    value: r.value,
+    count: Number(r.count),
   }));
-
-  const occupancy = computeOccupancy(instances);
 
   return {
     computedAt: new Date().toISOString(),
-    totalInstances: instances.length,
+    totalInstances,
     byType,
     occupancy,
   };
-}
-
-function computeOccupancy(
-  instances: EnvInstanceRow[],
-): MetricsSnapshot["occupancy"] {
-  const counts = new Map<string, number>();
-  for (const inst of instances) {
-    const status = inst.properties.status ?? inst.properties.occupancy_status;
-    if (status == null) continue;
-    const value = String(status);
-    const key = `${inst.typeName}\0${value}`;
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  return [...counts.entries()].map(([key, count]) => {
-    const [typeName, value] = key.split("\0");
-    return { typeName: typeName!, property: "status", value: value!, count };
-  });
 }
 
 function scoreFromBands(value: number, bands: ScoreBand[]): number {
@@ -143,6 +182,151 @@ export async function scoreInstance(
     total,
     breakdown,
   };
+}
+
+export interface ScoreSpecRecord {
+  id: string;
+  name: string;
+  spec: ScoreSpec;
+  isDefault: boolean;
+  createdAt: string;
+}
+
+function isScoreSpec(value: unknown): value is ScoreSpec {
+  if (!value || typeof value !== "object") return false;
+  const rules = (value as { rules?: unknown }).rules;
+  if (!Array.isArray(rules)) return false;
+  return rules.every(
+    (r) =>
+      r &&
+      typeof r === "object" &&
+      typeof (r as { key?: unknown }).key === "string" &&
+      Array.isArray((r as { bands?: unknown }).bands),
+  );
+}
+
+/** List the persisted score specs for an environment. */
+export async function listScoreSpecs(
+  db: DbClient,
+  environmentId: string,
+): Promise<ScoreSpecRecord[]> {
+  const { rows } = await db.query<{
+    id: string;
+    name: string;
+    spec: ScoreSpec;
+    is_default: boolean;
+    created_at: Date;
+  }>(
+    `SELECT id, name, spec, is_default, created_at
+       FROM app.metric_definition
+      WHERE environment_id = $1 AND kind = 'score'
+      ORDER BY is_default DESC, name ASC`,
+    [environmentId],
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    spec: r.spec,
+    isDefault: r.is_default,
+    createdAt: r.created_at.toISOString(),
+  }));
+}
+
+/**
+ * Create or update a named per-environment score spec. When `isDefault` is set,
+ * it atomically becomes the single default for the environment.
+ */
+export async function upsertScoreSpec(
+  db: DbClient,
+  environmentId: string,
+  userId: string,
+  organizationId: string,
+  input: { name: string; spec: ScoreSpec; isDefault?: boolean },
+): Promise<ScoreSpecRecord> {
+  if (!isScoreSpec(input.spec)) {
+    throw BadRequest("INVALID_SCORE_SPEC", "Score spec must have a rules[] array of { key, bands }.");
+  }
+  return withTransaction(async (tx) => {
+    if (input.isDefault) {
+      await tx.query(
+        `UPDATE app.metric_definition SET is_default = FALSE
+          WHERE environment_id = $1 AND kind = 'score' AND name <> $2`,
+        [environmentId, input.name],
+      );
+    }
+    const { rows } = await tx.query<{
+      id: string;
+      name: string;
+      spec: ScoreSpec;
+      is_default: boolean;
+      created_at: Date;
+    }>(
+      `INSERT INTO app.metric_definition
+         (environment_id, name, kind, spec, is_default, owner_user_id, organization_id)
+       VALUES ($1, $2, 'score', $3::jsonb, $4, $5, $6)
+       ON CONFLICT (environment_id, name)
+       DO UPDATE SET spec = EXCLUDED.spec, is_default = EXCLUDED.is_default
+       RETURNING id, name, spec, is_default, created_at`,
+      [
+        environmentId,
+        input.name,
+        JSON.stringify(input.spec),
+        input.isDefault ?? false,
+        userId,
+        organizationId,
+      ],
+    );
+    const r = rows[0]!;
+    return {
+      id: r.id,
+      name: r.name,
+      spec: r.spec,
+      isDefault: r.is_default,
+      createdAt: r.created_at.toISOString(),
+    };
+  });
+}
+
+export async function deleteScoreSpec(
+  db: DbClient,
+  environmentId: string,
+  name: string,
+): Promise<void> {
+  const { rowCount } = await db.query(
+    `DELETE FROM app.metric_definition
+      WHERE environment_id = $1 AND kind = 'score' AND name = $2`,
+    [environmentId, name],
+  );
+  if (!rowCount) throw NotFound("SCORE_SPEC_NOT_FOUND", "Score spec not found.");
+}
+
+/**
+ * Resolve the score spec to apply: an explicitly named spec, else the
+ * environment default, else the built-in NEWS2 demo spec.
+ */
+export async function resolveScoreSpec(
+  db: DbClient,
+  environmentId: string,
+  definition?: string,
+): Promise<ScoreSpec> {
+  if (definition) {
+    const { rows } = await db.query<{ spec: ScoreSpec }>(
+      `SELECT spec FROM app.metric_definition
+        WHERE environment_id = $1 AND name = $2 AND kind = 'score'`,
+      [environmentId, definition],
+    );
+    if (!rows[0]) {
+      throw NotFound("SCORE_SPEC_NOT_FOUND", `Score spec "${definition}" not found.`);
+    }
+    return rows[0].spec;
+  }
+  const { rows } = await db.query<{ spec: ScoreSpec }>(
+    `SELECT spec FROM app.metric_definition
+      WHERE environment_id = $1 AND kind = 'score' AND is_default
+      LIMIT 1`,
+    [environmentId],
+  );
+  return rows[0]?.spec ?? DEFAULT_SCORE_SPEC;
 }
 
 /** Default NEWS2-style spec for respiratory rate + SpO2 demo scoring. */
