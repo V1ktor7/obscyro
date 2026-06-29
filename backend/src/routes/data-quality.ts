@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 
+import { config } from "../lib/config.js";
 import type { DbClient } from "../lib/db.js";
 import { AppError, NotFound } from "../lib/errors.js";
 import { parseWhere } from "../lib/where-filter.js";
@@ -43,7 +44,11 @@ const dataQualityRoutes: FastifyPluginAsync = async (fastify) => {
         summary: "Run layered data-quality scan and upsert open flags",
         tags: ["data-quality"],
         params: z.object({ env: z.string().min(1) }),
-        querystring: z.object({ where: z.string().optional() }),
+        querystring: z.object({
+          where: z.string().optional(),
+          incremental: z.coerce.boolean().optional(),
+          maxLayer: z.coerce.number().int().min(1).max(6).optional(),
+        }),
         response: {
           200: z.object({
             summary: z.object({
@@ -52,6 +57,8 @@ const dataQualityRoutes: FastifyPluginAsync = async (fastify) => {
               flagCount: z.number(),
             }),
             flagCount: z.number(),
+            scannedCount: z.number(),
+            incremental: z.boolean(),
           }),
           404: errorEnvelope,
         },
@@ -61,8 +68,26 @@ const dataQualityRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
       const wherePairs = parseWhere(req.query.where);
-      const { summary } = await scanEnvironment(req.db, env.id, { wherePairs });
-      return { summary, flagCount: summary.flagCount };
+      const result = await scanEnvironment(req.db, env.id, {
+        wherePairs,
+        incremental: req.query.incremental,
+        maxLayer: req.query.maxLayer,
+      });
+      req.log.info(
+        {
+          environmentId: env.id,
+          incremental: result.incremental,
+          scannedCount: result.scannedCount,
+          flagCount: result.summary.flagCount,
+        },
+        "data-quality scan completed",
+      );
+      return {
+        summary: result.summary,
+        flagCount: result.summary.flagCount,
+        scannedCount: result.scannedCount,
+        incremental: result.incremental,
+      };
     },
   );
 
@@ -76,6 +101,9 @@ const dataQualityRoutes: FastifyPluginAsync = async (fastify) => {
         querystring: z.object({
           status: z.enum(["open", "reviewed", "dismissed"]).optional(),
           layer: z.coerce.number().int().min(1).max(6).optional(),
+          severity: z.enum(["info", "warn", "error"]).optional(),
+          limit: z.coerce.number().int().min(1).max(config.listMaxLimit).optional(),
+          offset: z.coerce.number().int().min(0).optional(),
         }),
         response: {
           200: z.object({ flags: z.array(flagSchema) }),
@@ -89,6 +117,9 @@ const dataQualityRoutes: FastifyPluginAsync = async (fastify) => {
       const flags = await listFlags(req.db, env.id, {
         status: req.query.status,
         layer: req.query.layer,
+        severity: req.query.severity,
+        limit: req.query.limit,
+        offset: req.query.offset,
       });
       return { flags };
     },

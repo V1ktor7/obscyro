@@ -14,6 +14,7 @@ import {
   CLINICAL_FINDING_SCHEMA,
   getOrCreateObjectType,
   insertFindingInstance,
+  insertObjectInstance,
 } from "./ontology.js";
 
 const TEST_ENV_SLUG = "test-lab";
@@ -149,5 +150,56 @@ describe("data-quality integration (test-lab)", () => {
       [instanceId],
     );
     assert.deepEqual(propRows[0]?.properties, properties);
+  });
+
+  it("L6 anomaly hook flags a numeric outlier against its population", async () => {
+    const readingTypeId = await getOrCreateObjectType(
+      db,
+      ctx.environmentId,
+      "DqReading",
+      "DQ anomaly test readings",
+      [{ key: "value", type: "number", label: "Value" }],
+    );
+    const normalIds: string[] = [];
+    for (let i = 0; i < 20; i++) {
+      normalIds.push(
+        await insertObjectInstance(db, readingTypeId, { value: 70 + (i % 4) }, { source: "dq-test" }),
+      );
+    }
+    const outlierId = await insertObjectInstance(
+      db,
+      readingTypeId,
+      { value: 9999 },
+      { source: "dq-test" },
+    );
+
+    try {
+      await scanEnvironment(db, ctx.environmentId, { maxLayer: 6 });
+      const flags = await listFlags(db, ctx.environmentId, { status: "open", layer: 6 });
+      const outlierFlag = flags.find((f) => f.instanceId === outlierId && f.code === "ML_ANOMALY");
+      assert.ok(outlierFlag, "outlier should produce an ML_ANOMALY (L6) flag");
+      const normalFlag = flags.find((f) => normalIds.includes(f.instanceId));
+      assert.ok(!normalFlag, "in-distribution readings should not be flagged");
+    } finally {
+      await db.query(
+        `DELETE FROM app.data_quality_flag WHERE instance_id = ANY($1::uuid[])`,
+        [[...normalIds, outlierId]],
+      );
+      await db.query(
+        `DELETE FROM app.ontology_object_instances WHERE id = ANY($1::uuid[])`,
+        [[...normalIds, outlierId]],
+      );
+    }
+  });
+
+  it("does not re-open a dismissed flag on re-scan (durable lifecycle)", async () => {
+    // The SNOMED flag was dismissed in the previous test.
+    await scanEnvironment(db, ctx.environmentId);
+    const flags = await listFlags(db, ctx.environmentId);
+    const snomed = flags.filter(
+      (f) => f.instanceId === instanceId && f.code === "SNOMED_NOT_FOUND",
+    );
+    assert.equal(snomed.length, 1, "should not create a duplicate open flag");
+    assert.equal(snomed[0]!.status, "dismissed");
   });
 });
