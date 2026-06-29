@@ -15,6 +15,7 @@ import {
   createAlertRule,
   evaluateAlerts,
   getUnitTree,
+  listOpenAlerts,
   rollupUnit,
   seedTwinSchema,
 } from "./twin.js";
@@ -177,6 +178,16 @@ describe("twin integration (test-twin)", () => {
     );
     assert.ok(alerts.length >= 1);
     assert.equal(alerts[0]!.status, "open");
+    assert.equal(alerts[0]!.isNew, true);
+
+    // Idempotency: re-evaluating must refresh the same open alert, not spam a
+    // new row every SSE/poll tick.
+    const before = await listOpenAlerts(db, ctx.environmentId, ward);
+    const reEval = await evaluateAlerts(db, ctx.environmentId, metricsMap, unitKinds, [rule]);
+    assert.equal(reEval[0]!.id, alerts[0]!.id);
+    assert.equal(reEval[0]!.isNew, false);
+    const after = await listOpenAlerts(db, ctx.environmentId, ward);
+    assert.equal(after.length, before.length);
 
     await ackAlert(db, ctx.environmentId, alerts[0]!.id);
     const { rows: ackRows } = await db.query<{ status: string; acked_at: Date | null }>(

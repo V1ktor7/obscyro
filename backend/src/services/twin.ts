@@ -1,3 +1,4 @@
+import { clampLimit, clampOffset, config } from "../lib/config.js";
 import type { DbClient } from "../lib/db.js";
 import { NotFound } from "../lib/errors.js";
 import {
@@ -79,6 +80,8 @@ export interface TwinAlertRow {
   status: TwinAlertStatus;
   createdAt: Date;
   ackedAt: Date | null;
+  /** True only when this evaluation newly opened the alert (vs. refreshed it). */
+  isNew?: boolean;
 }
 
 export interface TwinSchemaIds {
@@ -155,29 +158,32 @@ export async function getUnitTree(
 ): Promise<{ nodes: TwinUnitNode[]; edges: TwinTreeEdge[]; roots: string[] }> {
   const instances = await listInstancesForEnv(db, environmentId, {
     type: ORG_UNIT_TYPE,
-    limit: 10_000,
+    limit: config.rollupInstanceCap,
   });
   const links = await listLinksForEnv(db, environmentId);
   const unitIds = new Set(instances.map((i) => i.id));
 
   const edges: TwinTreeEdge[] = [];
+  const parentByChild = new Map<string, string>();
   for (const link of links) {
     if (link.linkTypeName !== CONTAINS_LINK) continue;
     if (!unitIds.has(link.fromInstanceId) || !unitIds.has(link.toInstanceId)) continue;
     edges.push({ fromId: link.fromInstanceId, toId: link.toInstanceId });
+    // First contains-parent wins; the tree is a forest, multiple parents are
+    // ignored deterministically by insertion order.
+    if (!parentByChild.has(link.toInstanceId)) {
+      parentByChild.set(link.toInstanceId, link.fromInstanceId);
+    }
   }
 
   const childIds = new Set(edges.map((e) => e.toId));
-  const nodes: TwinUnitNode[] = instances.map((i) => {
-    const parentEdge = edges.find((e) => e.toId === i.id);
-    return {
-      id: i.id,
-      name: String(i.properties.name ?? i.properties.code ?? i.id.slice(0, 8)),
-      kind: String(i.properties.kind ?? "org"),
-      code: String(i.properties.code ?? ""),
-      parentId: parentEdge?.fromId ?? null,
-    };
-  });
+  const nodes: TwinUnitNode[] = instances.map((i) => ({
+    id: i.id,
+    name: String(i.properties.name ?? i.properties.code ?? i.id.slice(0, 8)),
+    kind: String(i.properties.kind ?? "org"),
+    code: String(i.properties.code ?? ""),
+    parentId: parentByChild.get(i.id) ?? null,
+  }));
 
   const roots = nodes.filter((n) => !childIds.has(n.id)).map((n) => n.id);
   return { nodes, edges, roots };
@@ -258,16 +264,20 @@ export async function rollupAllUnits(
   const unitIds = new Set(nodes.map((n) => n.id));
   const descendants = buildDescendantMap(unitIds, edges);
 
-  const allInstances = await listInstancesForEnv(db, environmentId, { limit: 10_000 });
+  const allInstances = await listInstancesForEnv(db, environmentId, {
+    limit: config.rollupInstanceCap,
+  });
   const links = await listLinksForEnv(db, environmentId);
   const now = Date.now();
+
+  const instanceById = new Map(allInstances.map((i) => [i.id, i]));
 
   const locatedInByUnit = new Map<string, typeof allInstances>();
   for (const link of links) {
     if (!LOCATED_IN_LINK_NAMES.includes(link.linkTypeName as (typeof LOCATED_IN_LINK_NAMES)[number])) continue;
     const unitId = link.toInstanceId;
     if (!unitIds.has(unitId)) continue;
-    const inst = allInstances.find((i) => i.id === link.fromInstanceId);
+    const inst = instanceById.get(link.fromInstanceId);
     if (!inst) continue;
     const list = locatedInByUnit.get(unitId) ?? [];
     list.push(inst);
@@ -323,10 +333,14 @@ export async function rollupAllUnits(
     metricsByUnit.set(unitId, m);
   }
 
+  const parentByChild = new Map<string, string>();
+  for (const e of edges) {
+    if (!parentByChild.has(e.toId)) parentByChild.set(e.toId, e.fromId);
+  }
   for (const unitId of unitIds) {
-    const parentEdge = edges.find((e) => e.toId === unitId);
-    if (!parentEdge) continue;
-    const parent = metricsByUnit.get(parentEdge.fromId);
+    const parentId = parentByChild.get(unitId);
+    if (!parentId) continue;
+    const parent = metricsByUnit.get(parentId);
     const child = metricsByUnit.get(unitId);
     if (parent && child) mergeChildMetrics(parent, child);
   }
@@ -439,14 +453,25 @@ export async function evaluateAlerts(
       const message = fillTemplate(rule.messageTemplate, val, rule.threshold);
       const recommendation = fillTemplate(rule.recommendationTemplate, val, rule.threshold);
 
+      // Idempotent: at most one OPEN alert per (env, unit, rule). The 5s SSE/poll
+      // loop refreshes the existing row instead of inserting a duplicate every
+      // tick. `inserted` (xmax = 0) tells callers which alerts are genuinely new
+      // so the UI can toast only those.
       const { rows } = await db.query<{
         id: string;
         created_at: Date;
+        inserted: boolean;
       }>(
         `INSERT INTO app.twin_alert
            (environment_id, unit_instance_id, rule_id, severity, metric, value, message, recommendation, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'open')
-         RETURNING id, created_at`,
+         ON CONFLICT (environment_id, unit_instance_id, rule_id) WHERE status = 'open'
+         DO UPDATE SET severity = EXCLUDED.severity,
+                       metric = EXCLUDED.metric,
+                       value = EXCLUDED.value,
+                       message = EXCLUDED.message,
+                       recommendation = EXCLUDED.recommendation
+         RETURNING id, created_at, (xmax = 0) AS inserted`,
         [
           environmentId,
           unitId,
@@ -471,6 +496,7 @@ export async function evaluateAlerts(
         status: "open",
         createdAt: rows[0]!.created_at,
         ackedAt: null,
+        isNew: rows[0]!.inserted,
       });
     }
   }
@@ -481,6 +507,7 @@ export async function listOpenAlerts(
   db: DbClient,
   environmentId: string,
   unitId?: string,
+  page?: { limit?: number; offset?: number },
 ): Promise<TwinAlertRow[]> {
   const params: unknown[] = [environmentId];
   let sql = `SELECT id, environment_id, unit_instance_id, rule_id, severity, metric,
@@ -491,7 +518,12 @@ export async function listOpenAlerts(
     params.push(unitId);
     sql += ` AND unit_instance_id = $${params.length}`;
   }
-  sql += ` ORDER BY created_at DESC LIMIT 500`;
+  const limit = clampLimit(page?.limit);
+  const offset = clampOffset(page?.offset);
+  params.push(limit);
+  sql += ` ORDER BY created_at DESC LIMIT $${params.length}`;
+  params.push(offset);
+  sql += ` OFFSET $${params.length}`;
 
   const { rows } = await db.query<{
     id: string;
@@ -644,7 +676,9 @@ export async function getTwinTreeSnapshot(db: DbClient, environmentId: string) {
   const metricsByUnit = await rollupAllUnits(db, environmentId);
   const unitKinds = new Map(tree.nodes.map((n) => [n.id, n.kind]));
   await evaluateAlerts(db, environmentId, metricsByUnit, unitKinds);
-  const openAlerts = await listOpenAlerts(db, environmentId);
+  const openAlerts = await listOpenAlerts(db, environmentId, undefined, {
+    limit: config.listMaxLimit,
+  });
 
   const units = tree.nodes.map((node) => {
     const metrics = metricsByUnit.get(node.id);

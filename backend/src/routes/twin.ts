@@ -2,8 +2,10 @@ import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 
+import { config } from "../lib/config.js";
 import type { DbClient } from "../lib/db.js";
 import { AppError, NotFound } from "../lib/errors.js";
+import { startSseStream } from "../lib/sse.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
 import { resolveEnvironment } from "../services/ontology.js";
 import {
@@ -71,8 +73,42 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
       const metrics = await rollupUnit(req.db, env.id, req.params.id);
-      const alerts = await listOpenAlerts(req.db, env.id, req.params.id);
+      const alerts = await listOpenAlerts(req.db, env.id, req.params.id, {
+        limit: config.listMaxLimit,
+      });
       return { metrics, alerts, recommendations: alerts.map((a) => a.recommendation).filter(Boolean) };
+    },
+  );
+
+  app.get(
+    "/ontology/:env/twin/alerts",
+    {
+      schema: {
+        summary: "List open twin alerts (paginated)",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1) }),
+        querystring: z.object({
+          unitId: z.string().uuid().optional(),
+          limit: z.coerce.number().int().min(1).max(config.listMaxLimit).optional(),
+          offset: z.coerce.number().int().min(0).optional(),
+        }),
+        response: { 200: z.object({ alerts: z.array(z.record(z.unknown())) }), 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const alerts = await listOpenAlerts(req.db, env.id, req.query.unitId, {
+        limit: req.query.limit,
+        offset: req.query.offset,
+      });
+      return {
+        alerts: alerts.map((a) => ({
+          ...a,
+          createdAt: a.createdAt.toISOString(),
+          ackedAt: a.ackedAt?.toISOString() ?? null,
+        })),
+      };
     },
   );
 
@@ -89,29 +125,10 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
 
-      reply.hijack();
-      reply.raw.writeHead(200, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      });
-
-      const send = async () => {
-        const snapshot = await getTwinTreeSnapshot(req.db, env.id);
-        reply.raw.write(`data: ${JSON.stringify(snapshot)}\n\n`);
-      };
-
-      await send();
-      const interval = setInterval(() => {
-        void send().catch(() => {});
-      }, 5000);
-      const heartbeat = setInterval(() => {
-        reply.raw.write(": ping\n\n");
-      }, 15000);
-
-      req.raw.on("close", () => {
-        clearInterval(interval);
-        clearInterval(heartbeat);
+      startSseStream(req, reply, {
+        name: "twin",
+        intervalMs: config.twinSseIntervalMs,
+        produce: () => getTwinTreeSnapshot(req.db, env.id),
       });
     },
   );
@@ -212,7 +229,7 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
     "/ontology/:env/twin/seed-demo",
     {
       schema: {
-        summary: "Seed CHUM twin skeleton (demo OrgUnits + instances)",
+        summary: "Opt-in DEMO ONLY: seed CHUM twin skeleton (demo OrgUnits + instances). The live twin otherwise builds from real ontology data.",
         tags: ["twin"],
         params: z.object({ env: z.string().min(1) }),
         response: {
