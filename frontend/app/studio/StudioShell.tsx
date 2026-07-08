@@ -61,8 +61,9 @@ const TABS: { href: string; label: string; sub: string }[] = [
   { href: "/studio/parser", label: "Ontology Parser", sub: "ingest" },
   { href: "/studio/manager", label: "Ontology Manager", sub: "model" },
   { href: "/studio/workspace", label: "Studio Obscyro", sub: "build" },
-  { href: "/studio/live", label: "Live Twin", sub: "twin" },
-  { href: "/studio/simulation", label: "Simulation", sub: "sim" },
+  { href: "/studio/command", label: "Live Twin", sub: "twin" },
+  { href: "/studio/crisis", label: "Simulation", sub: "sim" },
+  { href: "/studio/flux", label: "Data Flux", sub: "flux" },
   { href: "/studio/quality", label: "Data Quality", sub: "dq" },
 ];
 

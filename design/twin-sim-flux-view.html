@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Obscyro — Crisis Simulation &amp; Data Flux (Design Prototype)</title>
+<style>
+  :root{
+    --bg:#0e1318; --bg2:#151b22; --panel:#1a222b; --panel2:#202a35;
+    --line:#2c3a48; --line2:#3a4c5e;
+    --txt:#e8eef4; --muted:#8aa0b4; --faint:#5c7288;
+    --accent:#4cc2ff; --accent-dim:#1f3d52;
+    --ok:#3dcc91; --warn:#f2a33c; --crit:#ff5c5c; --info:#5ab6f0;
+    --ml:#b78af5; --llm:#ffd166; --sim:#ff8fa3; --live:#4cc2ff;
+    --mono:"SF Mono","Cascadia Code","JetBrains Mono",Consolas,monospace;
+    --sans:"Inter","Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:13px;overflow:hidden}
+  .microlabel{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .mono{font-family:var(--mono)}
+  button{font-family:inherit}
+
+  /* ===== SHELL ===== */
+  #shell{display:grid;height:100vh;grid-template-rows:40px 1fr}
+  #topbar{display:flex;align-items:center;gap:14px;background:var(--bg2);border-bottom:1px solid var(--line);padding:0 14px}
+  .brand{font-family:var(--mono);font-size:12px;letter-spacing:.2em}
+  .brand b{color:var(--accent)}
+  .divider{width:1px;height:18px;background:var(--line2)}
+  .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line2);padding:3px 9px;font-family:var(--mono);font-size:10px;color:var(--muted)}
+  .dot{width:6px;height:6px;border-radius:50%}
+  .dot-live{background:var(--ok);box-shadow:0 0 6px var(--ok);animation:pulse 2s infinite}
+  @keyframes pulse{50%{opacity:.35}}
+  .view-tabs{display:flex;border:1px solid var(--line2)}
+  .view-tabs button{background:none;border:none;color:var(--muted);font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:5px 16px;cursor:pointer}
+  .view-tabs button.active{background:var(--accent-dim);color:var(--accent)}
+  #clock{font-family:var(--mono);font-size:11px;color:var(--muted)}
+  #bell{position:relative;background:none;border:1px solid var(--line2);color:var(--muted);padding:4px 12px;cursor:pointer;font-family:var(--mono);font-size:10px;letter-spacing:.1em}
+  #bell:hover{border-color:var(--accent);color:var(--accent)}
+  #bell .cnt{position:absolute;top:-7px;right:-7px;background:var(--crit);color:#fff;border-radius:8px;min-width:15px;height:15px;font-size:9px;display:flex;align-items:center;justify-content:center;padding:0 4px;font-weight:700}
+  .panel-head{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--line);flex-shrink:0}
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-thumb{background:var(--line2)}
+
+  /* =========================================================
+     CRISIS SIMULATION VIEW
+  ==========================================================*/
+  #view-sim{display:grid;grid-template-columns:292px 1fr 300px;height:100%;overflow:hidden}
+
+  /* ---- left: crisis library + factor picker ---- */
+  #sim-rail{background:var(--bg2);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
+  #sim-rail-scroll{overflow-y:auto;flex:1}
+  .crisis{padding:7px 12px;border-bottom:1px solid var(--line);cursor:pointer;display:flex;gap:8px;align-items:flex-start}
+  .crisis:hover{background:var(--panel)}
+  .crisis .ic{font-size:13px;width:18px;text-align:center;flex-shrink:0;margin-top:1px}
+  .crisis .nm{font-size:11.5px;font-weight:600}
+  .crisis .ds{font-size:10px;color:var(--faint);margin-top:1px;line-height:1.35}
+  .crisis .add{margin-left:auto;flex-shrink:0;background:none;border:1px solid var(--line2);color:var(--accent);font-family:var(--mono);font-size:11px;width:20px;height:20px;cursor:pointer}
+  .crisis .add:hover{background:var(--accent-dim)}
+  .crisis.active-in-stack{opacity:.35;pointer-events:none}
+
+  /* active stack */
+  .stack-item{margin:6px 10px;border:1px solid var(--line2);border-left:3px solid var(--sim);background:var(--panel)}
+  .stack-item .sh{display:flex;align-items:center;gap:7px;padding:6px 9px}
+  .stack-item .sh .nm{font-size:11px;font-weight:600;flex:1}
+  .stack-item .rm{background:none;border:none;color:var(--faint);cursor:pointer;font-size:11px}
+  .stack-item .rm:hover{color:var(--crit)}
+  .stack-cfg{display:flex;gap:6px;padding:0 9px 8px;flex-wrap:wrap}
+  .stack-cfg select,.stack-cfg input{background:var(--bg);border:1px solid var(--line2);color:var(--txt);font-family:var(--mono);font-size:9.5px;padding:2px 5px;outline:none;width:70px}
+  .stack-cfg .lbl{font-family:var(--mono);font-size:8px;color:var(--faint);display:block;letter-spacing:.08em;text-transform:uppercase;margin-bottom:2px}
+  #stack-empty{padding:10px 14px;font-size:10.5px;color:var(--faint);line-height:1.5}
+
+  /* factor picker */
+  .fgroup{padding:4px 12px 2px;font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);border-bottom:1px dotted var(--line)}
+  .factor{display:flex;align-items:center;gap:8px;padding:5px 12px;cursor:pointer;font-size:11.5px}
+  .factor:hover{background:var(--panel)}
+  .factor .cb{width:12px;height:12px;border:1px solid var(--line2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;color:#08141c}
+  .factor.on .cb{background:var(--accent);border-color:var(--accent)}
+  .factor .fn{flex:1}
+  .factor .lv{font-family:var(--mono);font-size:10px;color:var(--muted)}
+  .factor .sw{width:8px;height:8px;flex-shrink:0;border-radius:2px}
+
+  /* ---- center ---- */
+  #sim-center{display:flex;flex-direction:column;overflow:hidden;min-width:0}
+  #run-bar{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--line);background:var(--bg2);flex-wrap:wrap}
+  .baseline-chip{border:1px solid var(--line2);border-left:3px solid var(--live);padding:4px 10px;font-family:var(--mono);font-size:9.5px;color:var(--muted)}
+  .baseline-chip b{color:var(--live)}
+  .cmp-toggle,.engine-toggle{display:flex;border:1px solid var(--line2)}
+  .cmp-toggle button,.engine-toggle button{background:none;border:none;color:var(--muted);font-family:var(--mono);font-size:9px;letter-spacing:.08em;padding:5px 11px;cursor:pointer;text-transform:uppercase}
+  .cmp-toggle button.active{background:var(--accent-dim);color:var(--accent)}
+  .engine-toggle button.active{background:#2a2140;color:var(--ml)}
+  .engine-toggle button:first-child.active{background:var(--accent-dim);color:var(--accent)}
+  .rb-param{display:flex;flex-direction:column;gap:2px}
+  .rb-param input{background:var(--panel);border:1px solid var(--line2);color:var(--txt);font-family:var(--mono);font-size:10px;padding:3px 6px;width:56px;outline:none}
+  #run-btn{margin-left:auto;background:var(--ok);border:none;color:#08141c;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.12em;padding:8px 22px;cursor:pointer;text-transform:uppercase}
+  #run-btn:disabled{opacity:.5;cursor:wait}
+
+  #lanes{flex:1;overflow-y:auto;min-height:0;padding:6px 0}
+  .lane{border-bottom:1px solid var(--line);padding:4px 14px 8px}
+  .lane-hd{display:flex;align-items:baseline;gap:10px;padding:4px 0}
+  .lane-hd .sw{width:8px;height:8px;border-radius:2px}
+  .lane-hd .nm{font-size:11.5px;font-weight:600}
+  .lane-hd .scope{font-family:var(--mono);font-size:8.5px;color:var(--faint);letter-spacing:.1em;text-transform:uppercase}
+  .lane-hd .vals{margin-left:auto;font-family:var(--mono);font-size:9.5px;color:var(--muted);display:flex;gap:14px}
+  .lane-hd .vals b{font-weight:600}
+  .lane svg{display:block}
+  .split-wrap{display:flex;gap:10px}
+  .split-wrap .half{flex:1;min-width:0}
+  .half-lbl{font-family:var(--mono);font-size:8px;letter-spacing:.14em;color:var(--faint);text-transform:uppercase;padding:2px 0}
+  #lanes-empty{padding:40px;text-align:center;color:var(--faint);font-size:12px;line-height:1.7}
+
+  #sim-timeline{height:96px;border-top:1px solid var(--line);background:var(--bg2);display:flex;flex-direction:column;flex-shrink:0}
+  #sim-timeline-body{flex:1;position:relative}
+  .legend{display:flex;gap:12px;font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:.06em}
+  .legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+  .legend s{display:inline-block;width:14px;height:2px;margin-right:4px;vertical-align:3px;text-decoration:none}
+
+  /* ---- right: results ---- */
+  #sim-results{background:var(--bg2);border-left:1px solid var(--line);overflow-y:auto}
+  .insp-sec{padding:10px 14px;border-bottom:1px solid var(--line)}
+  .fres{border:1px solid var(--line);background:var(--panel);padding:7px 9px;margin-top:8px}
+  .fres .t{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600}
+  .fres .t .sw{width:7px;height:7px;border-radius:2px}
+  .fres .rw{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--muted);padding:2px 0}
+  .fres .rw b{color:var(--txt)} .fres .rw b.c{color:var(--crit)} .fres .rw b.w{color:var(--warn)} .fres .rw b.g{color:var(--ok)}
+  .model-card{border:1px solid #3a2f55;background:#1d1830;padding:8px 10px;margin-top:6px}
+  .model-card .rw{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--muted);padding:2px 0}
+  .model-card .rw b{color:var(--ml)}
+
+  /* =========================================================
+     DATA FLUX VIEW (unchanged from v1)
+  ==========================================================*/
+  #view-flux{display:none;grid-template-columns:250px 1fr 312px;grid-template-rows:1fr 148px;height:100%;overflow:hidden;
+    grid-template-areas:"rail canvas insp" "rail log insp"}
+  #flux-rail{grid-area:rail;background:var(--bg2);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
+  #flux-list{overflow-y:auto;flex:1}
+  .flux{padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer;border-left:2px solid transparent}
+  .flux:hover{background:var(--panel)}
+  .flux.sel{background:var(--accent-dim);border-left-color:var(--accent)}
+  .flux .top{display:flex;align-items:center;gap:7px}
+  .flux .nm{font-size:12px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .flux .proto{font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:var(--faint);text-transform:uppercase}
+  .flux .meta{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--faint);margin-top:3px}
+  .flux .eps{color:var(--accent)}
+  .flux.err .eps{color:var(--crit)}
+  .new-btn{margin:10px 12px;background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:6px 0;cursor:pointer}
+  .new-btn:hover{background:var(--accent);color:#08141c}
+  #flux-canvas{grid-area:canvas;position:relative;overflow:hidden;
+    background:radial-gradient(circle at 1px 1px, rgba(90,140,180,.08) 1px, transparent 0);background-size:26px 26px}
+  #flux-canvas svg{position:absolute;inset:0;width:100%;height:100%}
+  .col-label{font-family:var(--mono);font-size:9px;letter-spacing:.16em;fill:var(--faint)}
+  .fnode{cursor:pointer}
+  .fnode rect{fill:var(--panel);stroke:var(--line2);stroke-width:1}
+  .fnode.sel rect,.fnode:hover rect{stroke:var(--accent)}
+  .fnode.anom rect{stroke:var(--crit);filter:drop-shadow(0 0 6px rgba(255,92,92,.4))}
+  .fnode text.t{fill:var(--txt);font-size:11px;font-weight:600;font-family:var(--sans)}
+  .fnode text.s{fill:var(--faint);font-size:8.5px;font-family:var(--mono);letter-spacing:.08em}
+  .fedge{stroke:var(--line2);stroke-width:1.2;fill:none}
+  .fedge.hot{stroke:var(--accent)}
+  .fedge.bad{stroke:var(--crit);stroke-dasharray:4 3}
+  .eps-lbl{fill:var(--faint);font-size:8.5px;font-family:var(--mono)}
+  .flowdot{fill:var(--accent)} .flowdot.bad{fill:var(--crit)}
+  #log{grid-area:log;background:#0b0f13;border-top:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
+  #log-body{flex:1;overflow-y:auto;padding:6px 12px;font-family:var(--mono);font-size:10px;line-height:1.7}
+  #log-body .ln{white-space:nowrap;color:var(--muted)}
+  #log-body .t{color:var(--faint)} #log-body .src{color:var(--accent)}
+  #log-body .warnln{color:var(--warn)} #log-body .critln{color:var(--crit)} #log-body .mlln{color:var(--ml)}
+  #flux-insp{grid-area:insp;background:var(--bg2);border-left:1px solid var(--line);overflow-y:auto}
+
+  /* anomaly / notification cards */
+  .anom-card{border:1px solid var(--line2);background:var(--panel);margin-top:8px}
+  .anom-card .hd{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid var(--line)}
+  .badge{font-family:var(--mono);font-size:8px;letter-spacing:.1em;padding:2px 6px;text-transform:uppercase;font-weight:700}
+  .badge.ml{background:#2a2140;color:var(--ml);border:1px solid #4a3a6e}
+  .badge.llm{background:#332b12;color:var(--llm);border:1px solid #6e5c2a}
+  .badge.sev-critical{background:#3a1518;color:var(--crit);border:1px solid #6e2a2e}
+  .badge.sev-warn{background:#38290f;color:var(--warn);border:1px solid #6e552a}
+  .badge.sev-info{background:#12293a;color:var(--info);border:1px solid #2a4e6e}
+  .anom-card .ttl{font-size:11.5px;font-weight:600;flex:1}
+  .anom-card .body{padding:8px 10px}
+  .anom-card .det{font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.6}
+  .anom-card .det b{color:var(--txt)}
+  .llm-block{margin-top:8px;border-left:2px solid var(--llm);background:#16150e;padding:7px 9px}
+  .llm-block .lbl{font-family:var(--mono);font-size:8px;letter-spacing:.12em;color:var(--llm);text-transform:uppercase;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+  .llm-block .txt{font-size:11.5px;color:#e8e2c8;line-height:1.5}
+  .cursor{display:inline-block;width:6px;height:11px;background:var(--llm);animation:pulse 1s infinite;vertical-align:-1px}
+  .actions{display:flex;gap:6px;padding:0 10px 9px}
+  .abtn{background:none;border:1px solid var(--line2);color:var(--accent);font-family:var(--mono);font-size:9px;letter-spacing:.08em;padding:3px 10px;cursor:pointer;text-transform:uppercase}
+  .abtn:hover{background:var(--accent-dim)}
+  .abtn.ghost{color:var(--faint)}
+
+  #drawer{position:fixed;top:40px;right:-380px;bottom:0;width:372px;background:var(--bg2);border-left:1px solid var(--line2);z-index:40;transition:right .25s;display:flex;flex-direction:column;box-shadow:-12px 0 32px rgba(0,0,0,.5)}
+  #drawer.open{right:0}
+  #drawer-list{overflow-y:auto;flex:1;padding:0 12px 12px}
+  #toasts{position:fixed;bottom:16px;right:16px;z-index:50;display:flex;flex-direction:column;gap:8px;width:340px}
+  .toast{background:var(--panel2);border:1px solid var(--line2);border-left:3px solid var(--ml);padding:9px 12px;animation:slidein .25s;cursor:pointer}
+  @keyframes slidein{from{transform:translateX(30px);opacity:0}}
+  .toast .tt{font-size:11.5px;font-weight:600;display:flex;gap:8px;align-items:center}
+  .toast .tx{font-size:10.5px;color:var(--muted);margin-top:3px;line-height:1.4}
+
+  #modal-bg{position:fixed;inset:0;background:rgba(4,8,12,.7);z-index:60;display:none;align-items:center;justify-content:center}
+  #modal{width:460px;background:var(--bg2);border:1px solid var(--line2);box-shadow:0 24px 60px rgba(0,0,0,.6)}
+  #modal .mb{padding:14px}
+  .frow{margin-bottom:10px}
+  .frow label{display:block;margin-bottom:4px}
+  .frow select,.frow input{width:100%;background:var(--panel);border:1px solid var(--line2);color:var(--txt);font-family:var(--mono);font-size:11px;padding:6px 8px;outline:none}
+  .map-preview{border:1px dashed var(--line2);padding:8px 10px;font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.7}
+  .map-preview b{color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="shell">
+  <header id="topbar">
+    <span class="brand">OBSCYRO<b>·</b>TWIN OPS</span>
+    <span class="divider"></span>
+    <span class="chip">ENV <b style="color:var(--txt)">chum-prod</b></span>
+    <span class="chip"><span class="dot dot-live"></span>STREAM</span>
+    <div class="view-tabs" id="view-tabs">
+      <button data-v="sim" class="active">Crisis Simulation</button>
+      <button data-v="flux">Data Flux</button>
+    </div>
+    <span id="clock" class="mono" style="margin-left:auto"></span>
+    <button id="bell">⚠ ALERTS<span class="cnt" id="bell-cnt">3</span></button>
+  </header>
+
+  <div style="position:relative;overflow:hidden">
+    <!-- ================= CRISIS SIMULATION ================= -->
+    <div id="view-sim">
+      <aside id="sim-rail">
+        <div class="panel-head"><span class="microlabel">1 · Crisis library — stack scenarios</span></div>
+        <div id="sim-rail-scroll">
+          <div id="crisis-lib"></div>
+          <div class="panel-head" style="border-top:1px solid var(--line)"><span class="microlabel">Active stack</span><span class="microlabel" id="stack-count"></span></div>
+          <div id="stack-list"></div>
+          <div class="panel-head" style="border-top:1px solid var(--line)"><span class="microlabel">2 · Factors to watch evolve</span><span class="microlabel" id="factor-count"></span></div>
+          <div id="factor-list"></div>
+        </div>
+      </aside>
+
+      <main id="sim-center">
+        <div id="run-bar">
+          <span class="baseline-chip">BASELINE <b>live twin</b> · snapshot <span id="anchor-ts">—</span> · 512 inst</span>
+          <div class="cmp-toggle" id="cmp-toggle">
+            <button class="active" data-c="overlay">Overlay</button>
+            <button data-c="split">Split</button>
+          </div>
+          <div class="rb-param"><span class="microlabel">Horizon h</span><input id="p-hor" value="72"></div>
+          <div class="rb-param"><span class="microlabel">Runs</span><input id="p-runs" value="10"></div>
+          <div class="rb-param"><span class="microlabel">Seed</span><input id="p-seed" placeholder="auto"></div>
+          <div class="rb-param"><span class="microlabel">Engine</span>
+            <div class="engine-toggle" id="engine-toggle">
+              <button class="active" data-e="mech">Mechanistic</button>
+              <button data-e="ml">ML·GNN</button>
+            </div>
+          </div>
+          <button id="run-btn" onclick="runSim()">▶ Run vs live</button>
+        </div>
+        <div id="lanes"></div>
+        <div id="sim-timeline">
+          <div class="panel-head">
+            <span class="microlabel">Projected alert timeline · threshold crossings + crisis onsets</span>
+            <span class="legend"><span><s style="background:var(--live)"></s>LIVE</span><span><s style="background:var(--sim)"></s>SIMULATED</span><span><s style="background:var(--faint)"></s>BASELINE (no crisis)</span><span><i style="background:var(--crit)"></i>CRIT</span><span><i style="background:var(--warn)"></i>WARN</span><span><i style="background:var(--info)"></i>ONSET</span></span>
+          </div>
+          <div id="sim-timeline-body"></div>
+        </div>
+      </main>
+
+      <aside id="sim-results">
+        <div class="panel-head"><span class="microlabel">Run vs reality</span><span class="microlabel" id="run-id">NOT RUN</span></div>
+        <div id="results-body"></div>
+      </aside>
+    </div>
+
+    <!-- ================= DATA FLUX ================= -->
+    <div id="view-flux">
+      <aside id="flux-rail">
+        <div class="panel-head"><span class="microlabel">Data fluxes · sources</span><span class="microlabel" id="flux-count"></span></div>
+        <button class="new-btn" onclick="openModal()">+ Attach flux to twin</button>
+        <div id="flux-list"></div>
+      </aside>
+      <main id="flux-canvas"></main>
+      <div id="log">
+        <div class="panel-head"><span class="microlabel">Live ingest stream · normalize → ontology</span>
+          <span class="legend"><span style="color:var(--ml)">■ ML detector</span><span style="color:var(--warn)">■ warn</span><span style="color:var(--crit)">■ critical</span></span></div>
+        <div id="log-body"></div>
+      </div>
+      <aside id="flux-insp">
+        <div class="panel-head"><span class="microlabel">Anomaly detection · ML + LLM</span><span class="microlabel" id="anom-count"></span></div>
+        <div id="anom-list" style="padding:0 12px 12px"></div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<div id="drawer">
+  <div class="panel-head"><span class="microlabel">Notification center — ML detections · LLM triage</span>
+    <button class="abtn ghost" onclick="toggleDrawer()">✕</button></div>
+  <div id="drawer-list"></div>
+</div>
+<div id="toasts"></div>
+
+<div id="modal-bg">
+  <div id="modal">
+    <div class="panel-head"><span class="microlabel">Attach data flux → digital twin</span>
+      <button class="abtn ghost" onclick="closeModal()">✕</button></div>
+    <div class="mb">
+      <div class="frow"><label class="microlabel">Source type</label>
+        <select id="m-proto"><option>HTTP source · polling (GET, auth: header)</option><option>Webhook · /webhooks/:token</option><option>SSE stream</option></select></div>
+      <div class="frow"><label class="microlabel">Endpoint / name</label>
+        <input id="m-name" value="pharmacy-stock-api" placeholder="https://…"></div>
+      <div class="frow"><label class="microlabel">Target twin unit</label>
+        <select id="m-unit"><option>CHUM Montréal (hospital)</option><option>Emergency Dept</option><option selected>Pharmacy</option><option>Central Lab</option><option>ICU North</option></select></div>
+      <div class="frow"><label class="microlabel">Ontology mapping preview</label>
+        <div class="map-preview">$.items[*].sku &nbsp;→ <b>Medication.code</b> (SNOMED normalize)<br>$.items[*].qty &nbsp;→ <b>Medication.stockLevel</b><br>$.ts &nbsp;→ <b>freshness anchor</b> · anomaly baseline: 24h EWMA</div></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="abtn ghost" onclick="closeModal()">Cancel</button>
+        <button class="abtn" onclick="attachFlux()">Attach & start streaming</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   Shapes mirror backend: simulation.ts (OutbreakParams,
+   AlertTimelineEvent), ml-simulation.ts (Intervention,
+   SimQuantileBands, GraphSpec), twin-clone.ts (scenario =
+   frozen copy of live twin), live-analysis.ts (baselines).
+========================================================= */
+function rnd(a,b){return a+Math.random()*(b-a)}
+function clamp(v,a,b){return Math.min(b,Math.max(a,v))}
+const SEVC={critical:"var(--crit)",warn:"var(--warn)",info:"var(--info)"};
+let view="sim", engine="mech", cmpMode="overlay", runCount=0;
+
+/* ---------------- FACTORS (twin metrics you can watch) ---------------- */
+const FACTORS=[
+  {id:"hosp-occ", scope:"Hospital",   name:"Avg occupancy",     base:74, fmt:v=>Math.round(v)+"%",  warn:85, crit:95,  color:"#4cc2ff", sens:{occ:1,intake:.25,staff:.15,beds:.5}},
+  {id:"hosp-int", scope:"Hospital",   name:"Intake rate /hr",   base:6.2,fmt:v=>v.toFixed(1),       warn:9,  crit:12,  color:"#3dcc91", sens:{intake:1}},
+  {id:"hosp-beds",scope:"Hospital",   name:"Beds available",    base:74, fmt:v=>Math.round(v),      warn:30, crit:12,  color:"#8fd14f", invert:true, sens:{occ:-.9,beds:-1,intake:-.3}},
+  {id:"iso-dem",  scope:"Hospital",   name:"Isolation demand",  base:4,  fmt:v=>Math.round(v),      warn:10, crit:16,  color:"#5ab6f0", sens:{iso:1,intake:.15}},
+  {id:"staff",    scope:"Hospital",   name:"Staff load",        base:78, fmt:v=>Math.round(v)+"%",  warn:90, crit:100, color:"#f2a33c", sens:{staff:1,intake:.35,occ:.25}},
+  {id:"era-occ",  scope:"ER Ward A",  name:"Occupancy",         base:96, fmt:v=>Math.round(v)+"%",  warn:85, crit:95,  color:"#ff8fa3", sens:{occ:1.15,intake:.6,beds:.6}},
+  {id:"erb-occ",  scope:"ER Ward B",  name:"Occupancy",         base:86, fmt:v=>Math.round(v)+"%",  warn:85, crit:95,  color:"#e0a3ff", sens:{occ:.95,intake:.5,beds:.55}},
+  {id:"icu-occ",  scope:"ICU North",  name:"Occupancy",         base:92, fmt:v=>Math.round(v)+"%",  warn:85, crit:95,  color:"#ffd166", sens:{occ:.8,iso:.5,staff:.2}},
+  {id:"lab-tat",  scope:"Central Lab",name:"Turnaround min",    base:42, fmt:v=>Math.round(v)+"m",  warn:75, crit:120, color:"#b78af5", sens:{lab:1,intake:.4}},
+];
+let selFactors=new Set(["hosp-occ","era-occ","iso-dem"]);
+
+/* ---------------- CRISIS LIBRARY (composable) ----------------
+   Each crisis emits effect channels over time (hours since onset):
+   occ / intake / iso / staff / beds / lab / unc  — factors subscribe
+   via their sensitivity map. Mirrors Intervention/GraphSpec knobs. */
+const gauss=(t,p,w)=>t<0?0:Math.exp(-Math.pow((t-p)/w,2));
+const ramp=(t,d)=>t<0?0:Math.min(t/d,1);
+const decay=(t,d)=>t<0?0:Math.exp(-t/d);
+const CRISES=[
+  {id:"covid",ic:"🦠",nm:"Infectious index case (COVID)",ds:"Inject 1 positive patient → epidemic wave over contact graph",
+   ch:(t,k)=>({occ:.5*gauss(t,48,24)*k, intake:.25*gauss(t,40,20)*k, iso:1.2*gauss(t,36,18)*k, staff:.35*gauss(t,44,22)*k, lab:.45*gauss(t,30,16)*k})},
+  {id:"surge",ic:"📈",nm:"Patient intake surge",ds:"Sustained admission ramp (+% per hour, e.g. flu season peak day)",
+   ch:(t,k)=>({intake:.9*ramp(t,6)*k, occ:.45*ramp(t,14)*k, staff:.3*ramp(t,10)*k})},
+  {id:"masscas",ic:"🚑",nm:"Mass casualty event",ds:"Sudden influx: multi-vehicle accident / disaster, N patients in <1h",
+   ch:(t,k)=>({intake:2.2*decay(t,3)*k, occ:.38*decay(t,48)*(t>0?1:0)*k, lab:.8*decay(t,6)*k, staff:.6*decay(t,10)*k})},
+  {id:"staffout",ic:"🧑‍⚕️",nm:"Staff shortage",ds:"Sick-out / strike: −% nursing capacity, slower discharge",
+   ch:(t,k)=>({staff:.5*ramp(t,4)*k, occ:.25*ramp(t,20)*k})},
+  {id:"wardclose",ic:"🚧",nm:"Ward closure / outage",ds:"Flood, contamination, or works: a ward's beds go offline",
+   ch:(t,k)=>({beds:.4*ramp(t,2)*k, occ:.3*ramp(t,3)*k})},
+  {id:"equip",ic:"⚙️",nm:"Equipment failure (lab)",ds:"Analyzer down: lab turnaround degrades, decisions delayed",
+   ch:(t,k)=>({lab:1.2*decay(t,30)*(t>0?1:0)*k, occ:.15*ramp(t,12)*k})},
+  {id:"supply",ic:"💊",nm:"Supply shortage (meds/PPE)",ds:"Stock-out trajectory on critical medication or PPE",
+   ch:(t,k)=>({staff:.25*ramp(t,24)*k, iso:.2*ramp(t,24)*k})},
+  {id:"season",ic:"🌡️",nm:"Seasonal / heatwave surge",ds:"Slow environmental ramp over days (heatwave, cold snap)",
+   ch:(t,k)=>({intake:.35*ramp(t,48)*k, occ:.3*ramp(t,60)*k})},
+  {id:"evac",ic:"🏥",nm:"Regional transfer wave",ds:"Neighbouring hospital evacuates → transfer influx",
+   ch:(t,k)=>({intake:.5*decay(t,12)*(t>0?1:0)*k, occ:.3*ramp(t,8)*k})},
+  {id:"fluxout",ic:"📡",nm:"Data source outage",ds:"A flux goes dark: twin visibility degrades (uncertainty grows)",
+   ch:(t,k)=>({unc:.6*ramp(t,4)*k})},
+];
+/* active stack: instances with intensity ×, onset T+h */
+let stack=[{cid:"covid",k:1,t0:0}];
+
+/* ---------------- LIVE HISTORY (mock stream, ticks forward) ----------------
+   time unit = hours relative to run anchor; 1 real s = 2 sim min  */
+const SIMRATE=1/30; // hr per real second
+let anchorReal=Date.now();
+const HIST_H=24;
+const liveHist={}; // factorId -> [{t,v}]
+FACTORS.forEach(f=>{
+  let v=f.base; const arr=[];
+  for(let t=-HIST_H;t<=0;t+=.5){v=clamp(v+rnd(-1,1)*f.base*.012,f.base*.75,f.base*1.2);arr.push({t,v})}
+  liveHist[f.id]=arr;
+});
+function nowH(){return (Date.now()-anchorReal)/1000*SIMRATE}
+
+/* ---------------- SIM RESULT ---------------- */
+let simRun=null; // {proj:{fid:[{t,v,lo,hi}]}, baseProj:{fid:[{t,v}]}, events:[], anchorH, H}
+function effectAt(t){ // sum channels across stack
+  const out={occ:0,intake:0,iso:0,staff:0,beds:0,lab:0,unc:0};
+  for(const s of stack){const c=CRISES.find(c=>c.id===s.cid);
+    const e=c.ch(t-s.t0,s.k);for(const k in e)out[k]+=e[k]}
+  return out;
+}
+function computeSim(){
+  const H=+document.getElementById("p-hor").value||72;
+  const proj={},baseProj={};
+  FACTORS.forEach(f=>{
+    if(!selFactors.has(f.id))return;
+    const p=[],b=[];
+    const v0=liveHist[f.id][liveHist[f.id].length-1].v;
+    for(let t=0;t<=H;t+=1){
+      const e=effectAt(t);
+      let mult=0;for(const k in f.sens)mult+=f.sens[k]*(e[k]||0);
+      let v=f.invert? v0*(1+mult) : v0*(1+mult);
+      v=Math.max(0,v);
+      const band=(engine==="ml"?0.16:0.07)+(e.unc||0)*.5;
+      p.push({t,v,lo:v*(1-band),hi:v*(1+band)});
+      b.push({t,v:v0*(1+rnd(-.005,.005))});
+    }
+    proj[f.id]=p;baseProj[f.id]=b;
+  });
+  // events: crisis onsets + threshold crossings
+  const events=stack.map(s=>({t:s.t0,sev:"info",msg:CRISES.find(c=>c.id===s.cid).nm+" · onset"}));
+  FACTORS.forEach(f=>{
+    if(!proj[f.id])return;
+    const crossed={warn:false,crit:false};
+    for(const pt of proj[f.id]){
+      const breach=f.invert? pt.v<=f.crit : pt.v>=f.crit;
+      const wbreach=f.invert? pt.v<=f.warn : pt.v>=f.warn;
+      const wasW=f.invert? f.base<=f.warn : f.base>=f.warn;
+      if(!crossed.crit&&breach){crossed.crit=true;events.push({t:pt.t,sev:"critical",msg:f.scope+" · "+f.name+" crosses critical ("+f.fmt(pt.v)+")"})}
+      else if(!crossed.warn&&wbreach&&!wasW){crossed.warn=true;events.push({t:pt.t,sev:"warn",msg:f.scope+" · "+f.name+" crosses warn ("+f.fmt(pt.v)+")"})}
+    }
+  });
+  simRun={proj,baseProj,events:events.sort((a,b)=>a.t-b.t),anchorH:nowH(),H};
+}
+
+/* =========================================================
+   RENDER — LEFT RAIL
+========================================================= */
+function renderCrisisLib(){
+  document.getElementById("crisis-lib").innerHTML=CRISES.map(c=>{
+    const inStack=stack.some(s=>s.cid===c.id);
+    return `<div class="crisis ${inStack?"active-in-stack":""}">
+      <span class="ic">${c.ic}</span>
+      <span style="flex:1"><span class="nm">${c.nm}</span><div class="ds">${c.ds}</div></span>
+      <button class="add" title="Add to stack" onclick="addCrisis('${c.id}')">+</button>
+    </div>`}).join("");
+}
+function renderStack(){
+  const el=document.getElementById("stack-list");
+  document.getElementById("stack-count").textContent=stack.length+" STACKED";
+  el.innerHTML=stack.length===0?'<div id="stack-empty">Empty — add crises from the library above. Stacked crises compose: their effects sum on every factor.</div>'
+   :stack.map((s,i)=>{const c=CRISES.find(c=>c.id===s.cid);
+    return `<div class="stack-item">
+      <div class="sh"><span>${c.ic}</span><span class="nm">${c.nm}</span>
+        <button class="rm" onclick="stack.splice(${i},1);renderCrisisLib();renderStack()">✕</button></div>
+      <div class="stack-cfg">
+        <span><span class="lbl">Intensity</span>
+          <select onchange="stack[${i}].k=+this.value">
+            ${[[.5,"×0.5 mild"],[1,"×1 expected"],[1.5,"×1.5 severe"],[2,"×2 extreme"]].map(o=>`<option value="${o[0]}" ${s.k===o[0]?"selected":""}>${o[1]}</option>`).join("")}
+          </select></span>
+        <span><span class="lbl">Onset T+h</span><input type="number" value="${s.t0}" min="0" onchange="stack[${i}].t0=+this.value"></span>
+      </div>
+    </div>`}).join("");
+}
+window.addCrisis=id=>{if(!stack.some(s=>s.cid===id)){stack.push({cid:id,k:1,t0:0});renderCrisisLib();renderStack()}};
+
+function renderFactors(){
+  const groups={};
+  FACTORS.forEach(f=>(groups[f.scope]??=[]).push(f));
+  document.getElementById("factor-list").innerHTML=Object.entries(groups).map(([g,fs])=>
+    `<div class="fgroup">${g}</div>`+fs.map(f=>{
+      const on=selFactors.has(f.id);
+      const cur=liveHist[f.id][liveHist[f.id].length-1].v;
+      return `<div class="factor ${on?"on":""}" onclick="toggleFactor('${f.id}')">
+        <span class="cb">${on?"✓":""}</span><span class="sw" style="background:${f.color}"></span>
+        <span class="fn">${f.name}</span><span class="lv">${f.fmt(cur)}</span>
+      </div>`}).join("")).join("");
+  document.getElementById("factor-count").textContent=selFactors.size+" SELECTED";
+}
+window.toggleFactor=id=>{selFactors.has(id)?selFactors.delete(id):selFactors.add(id);
+  renderFactors();renderLanes();if(simRun)renderResults()};
+
+/* =========================================================
+   RENDER — CHART LANES (live vs sim)
+========================================================= */
+function laneSVG(f,w,h,tMin,tMax,drawLive,drawSim){
+  const hist=liveHist[f.id];
+  const allV=[...hist.map(p=>p.v)];
+  if(simRun&&simRun.proj[f.id]){allV.push(...simRun.proj[f.id].map(p=>p.hi))}
+  allV.push(f.crit*1.05,f.base*1.1);
+  const maxY=Math.max(...allV)*1.08, minY=Math.min(...allV,0)*0.92;
+  const x=t=>44+(t-tMin)/(tMax-tMin)*(w-58);
+  const y=v=>h-16-((v-minY)/(maxY-minY))*(h-26);
+  const now=nowH();
+  let s="";
+  // threshold lines
+  [[f.warn,"var(--warn)"],[f.crit,"var(--crit)"]].forEach(([v,c])=>{
+    s+=`<line x1="44" y1="${y(v)}" x2="${w-14}" y2="${y(v)}" stroke="${c}" stroke-width=".6" stroke-dasharray="2 4" opacity=".55"/>
+        <text x="${w-12}" y="${y(v)+3}" fill="${c}" font-size="8" font-family="var(--mono)" opacity=".8" text-anchor="start"></text>`;
+  });
+  // grid labels
+  [minY+(maxY-minY)*.15,minY+(maxY-minY)*.85].forEach(v=>{
+    s+=`<text x="40" y="${y(v)+3}" text-anchor="end" fill="var(--faint)" font-size="8" font-family="var(--mono)">${f.fmt(v)}</text>`});
+  if(drawLive){
+    const pts=hist.filter(p=>p.t>=tMin&&p.t<=Math.min(now,tMax));
+    s+=`<polyline points="${pts.map(p=>x(p.t)+","+y(p.v)).join(" ")}" fill="none" stroke="var(--live)" stroke-width="1.6"/>`;
+    const last=pts[pts.length-1];
+    if(last)s+=`<circle cx="${x(last.t)}" cy="${y(last.v)}" r="3" fill="var(--live)"><animate attributeName="opacity" values="1;.3;1" dur="1.6s" repeatCount="indefinite"/></circle>`;
+  }
+  if(drawSim&&simRun&&simRun.proj[f.id]){
+    const pr=simRun.proj[f.id].filter(p=>p.t>=Math.max(tMin,0)&&p.t<=tMax);
+    const bp=simRun.baseProj[f.id].filter(p=>p.t>=Math.max(tMin,0)&&p.t<=tMax);
+    s+=`<polygon points="${pr.map(p=>x(p.t)+","+y(p.hi)).join(" ")} ${pr.slice().reverse().map(p=>x(p.t)+","+y(p.lo)).join(" ")}" fill="${engine==="ml"?"rgba(183,138,245,.13)":"rgba(255,143,163,.10)"}"/>`;
+    s+=`<polyline points="${bp.map(p=>x(p.t)+","+y(p.v)).join(" ")}" fill="none" stroke="var(--faint)" stroke-width="1" stroke-dasharray="2 3"/>`;
+    s+=`<polyline points="${pr.map(p=>x(p.t)+","+y(p.v)).join(" ")}" fill="none" stroke="var(--sim)" stroke-width="1.7" stroke-dasharray="6 3"/>`;
+    // crisis onset markers
+    stack.forEach(st=>{if(st.t0>=tMin&&st.t0<=tMax)
+      s+=`<line x1="${x(st.t0)}" y1="10" x2="${x(st.t0)}" y2="${h-16}" stroke="var(--info)" stroke-width=".7" stroke-dasharray="2 3" opacity=".7"/>`});
+  }
+  // NOW marker
+  if(now>=tMin&&now<=tMax)
+    s+=`<line x1="${x(now)}" y1="6" x2="${x(now)}" y2="${h-14}" stroke="var(--txt)" stroke-width=".9" opacity=".65"/>
+        <text x="${x(now)+4}" y="12" fill="var(--txt)" font-size="8" font-family="var(--mono)" opacity=".8">NOW</text>`;
+  // x labels
+  const step=Math.ceil((tMax-tMin)/6/12)*12||12;
+  for(let t=Math.ceil(tMin/step)*step;t<=tMax;t+=step)
+    s+=`<text x="${x(t)}" y="${h-4}" text-anchor="middle" fill="var(--faint)" font-size="8" font-family="var(--mono)">${t===0?"T0":(t>0?"+":"")+t+"h"}</text>`;
+  return `<svg width="${w}" height="${h}">${s}</svg>`;
+}
+
+function renderLanes(){
+  const el=document.getElementById("lanes");
+  const fs=FACTORS.filter(f=>selFactors.has(f.id));
+  if(fs.length===0){el.innerHTML='<div id="lanes-empty">Select at least one factor in the left rail<br>to build your live-vs-sim comparison lanes.</div>';return}
+  const W=el.clientWidth-28||800;
+  const H=+document.getElementById("p-hor").value||72;
+  const laneH=Math.max(96,Math.min(150,Math.floor((el.clientHeight-10)/fs.length)-34));
+  el.innerHTML=fs.map(f=>{
+    const cur=liveHist[f.id][liveHist[f.id].length-1].v;
+    let peakTxt="—",divTxt="—";
+    if(simRun&&simRun.proj[f.id]){
+      const pk=simRun.proj[f.id].reduce((a,b)=>(f.invert?b.v<a.v:b.v>a.v)?b:a);
+      peakTxt=f.fmt(pk.v)+" @ +"+pk.t+"h";
+      const simNow=simRun.proj[f.id].find(p=>p.t>=Math.round(nowH()));
+      if(simNow)divTxt=(simNow.v>=cur?"+":"")+f.fmt(simNow.v-cur).replace("%","")+" vs live";
+    }
+    const hd=`<div class="lane-hd"><span class="sw" style="background:${f.color}"></span>
+      <span class="nm">${f.name}</span><span class="scope">${f.scope}</span>
+      <span class="vals"><span>LIVE <b style="color:var(--live)">${f.fmt(cur)}</b></span>
+      <span>SIM PEAK <b style="color:var(--sim)">${peakTxt}</b></span>
+      <span>Δ NOW <b>${divTxt}</b></span></span></div>`;
+    if(cmpMode==="overlay"){
+      return `<div class="lane">${hd}${laneSVG(f,W,laneH,-HIST_H,H,true,true)}</div>`;
+    }
+    const hw=Math.floor((W-10)/2);
+    return `<div class="lane">${hd}<div class="split-wrap">
+      <div class="half"><div class="half-lbl">◉ Live twin — reality</div>${laneSVG(f,hw,laneH,-HIST_H,Math.max(nowH()+6,6),true,false)}</div>
+      <div class="half"><div class="half-lbl">◌ Simulated twin — scenario stack</div>${laneSVG(f,hw,laneH,0,H,false,true)}</div>
+    </div></div>`;
+  }).join("");
+}
+
+function renderSimTimeline(){
+  const el=document.getElementById("sim-timeline-body");
+  const w=el.clientWidth||900,h=el.clientHeight||56;
+  if(!simRun){el.innerHTML=`<div style="padding:14px;color:var(--faint);font-size:11px;font-family:var(--mono)">Run the scenario stack to project alerts.</div>`;return}
+  const H=simRun.H,x=t=>44+t/H*(w-70);
+  el.innerHTML=`<svg width="${w}" height="${h}">
+    <line x1="44" y1="${h/2}" x2="${w-26}" y2="${h/2}" stroke="var(--line2)"/>
+    ${simRun.events.map(e=>`<g><circle cx="${x(e.t)}" cy="${h/2}" r="5" fill="${SEVC[e.sev]}"><title>+${e.t}h — ${e.msg}</title></circle>
+      <circle cx="${x(e.t)}" cy="${h/2}" r="9" fill="none" stroke="${SEVC[e.sev]}" opacity=".3"/>
+      <text x="${x(e.t)}" y="${h/2+20}" text-anchor="middle" fill="var(--faint)" font-size="8" font-family="var(--mono)">+${e.t}h</text></g>`).join("")}
+  </svg>`;
+}
+
+/* =========================================================
+   RENDER — RESULTS (run vs reality)
+========================================================= */
+function renderResults(){
+  const el=document.getElementById("results-body");
+  if(!simRun){el.innerHTML=`<div class="insp-sec" style="color:var(--faint);font-size:11px;line-height:1.7">
+    1 — Stack crises in the library<br>2 — Pick factors to watch<br>3 — Run vs live<br><br>
+    The simulation forks the <b style="color:var(--txt)">current live twin state</b> (cloneSubtree) and projects each selected factor; the live line keeps streaming so you can watch reality diverge from — or confirm — the projection.</div>`;return}
+  const fs=FACTORS.filter(f=>selFactors.has(f.id));
+  el.innerHTML=`
+  <div class="insp-sec"><span class="microlabel">Scenario stack · ${stack.length} crises composed</span>
+    ${stack.map(s=>{const c=CRISES.find(c=>c.id===s.cid);
+      return `<div class="fres" style="border-left:3px solid var(--sim)"><div class="t">${c.ic} ${c.nm}</div>
+      <div class="rw"><span>intensity</span><b>×${s.k}</b></div><div class="rw"><span>onset</span><b>T+${s.t0}h</b></div></div>`}).join("")}
+  </div>
+  <div class="insp-sec"><span class="microlabel">Factor outcomes vs reality</span>
+    ${fs.map(f=>{
+      const cur=liveHist[f.id][liveHist[f.id].length-1].v;
+      const pr=simRun.proj[f.id];if(!pr)return"";
+      const pk=pr.reduce((a,b)=>(f.invert?b.v<a.v:b.v>a.v)?b:a);
+      const critX=pr.find(p=>f.invert?p.v<=f.crit:p.v>=f.crit);
+      const end=pr[pr.length-1];
+      return `<div class="fres"><div class="t"><span class="sw" style="background:${f.color}"></span>${f.scope} · ${f.name}</div>
+        <div class="rw"><span>live now</span><b style="color:var(--live)">${f.fmt(cur)}</b></div>
+        <div class="rw"><span>sim peak</span><b class="${critX?"c":"w"}">${f.fmt(pk.v)} @ +${pk.t}h</b></div>
+        <div class="rw"><span>time to critical</span><b class="${critX?"c":"g"}">${critX?"+"+critX.t+"h":"never"}</b></div>
+        <div class="rw"><span>end of horizon</span><b>${f.fmt(end.v)}</b></div>
+        <div class="rw"><span>Δ vs no-crisis baseline</span><b>${(pk.v>=f.base?"+":"")+Math.round((pk.v-simRun.baseProj[f.id][pk.t].v)/simRun.baseProj[f.id][pk.t].v*100)}%</b></div>
+      </div>`}).join("")}
+  </div>
+  <div class="insp-sec"><span class="microlabel">Engine</span>
+    ${engine==="ml"?`<div class="model-card">
+      <div class="rw"><span>model</span><b>gnn-seir v1.3.2</b></div>
+      <div class="rw"><span>baseline fork</span><b>live snapshot ${new Date(anchorReal).toLocaleTimeString("en-CA",{hour12:false})}</b></div>
+      <div class="rw"><span>graph_spec</span><b>contact graph · 188 edges</b></div>
+      <div class="rw"><span>uncertainty</span><b>p10–p90 band</b></div>
+      <div class="rw"><span>runs</span><b>${document.getElementById("p-runs").value} stochastic</b></div></div>`
+    :`<div class="model-card" style="border-color:var(--line2);background:var(--panel)">
+      <div class="rw"><span>engine</span><b style="color:var(--accent)">mechanistic SEIR + queueing</b></div>
+      <div class="rw"><span>baseline fork</span><b style="color:var(--accent)">live snapshot ${new Date(anchorReal).toLocaleTimeString("en-CA",{hour12:false})}</b></div>
+      <div class="rw"><span>rng</span><b style="color:var(--accent)">mulberry32 · seed ${document.getElementById("p-seed").value||"auto"}</b></div></div>`}
+  </div>`;
+}
+
+/* =========================================================
+   RUN
+========================================================= */
+window.runSim=()=>{
+  if(stack.length===0){alert("Stack at least one crisis scenario first.");return}
+  if(selFactors.size===0){alert("Select at least one factor to watch.");return}
+  const b=document.getElementById("run-btn");
+  b.disabled=true;b.textContent="RUNNING…";
+  setTimeout(()=>{
+    runCount++;anchorReal=Date.now();
+    computeSim();
+    document.getElementById("run-id").textContent="RUN #"+runCount;
+    document.getElementById("anchor-ts").textContent=new Date(anchorReal).toLocaleTimeString("en-CA",{hour12:false});
+    renderLanes();renderSimTimeline();renderResults();
+    b.disabled=false;b.textContent="▶ Run vs live";
+    const firstCrit=simRun.events.find(e=>e.sev==="critical");
+    pushNotif({sev:firstCrit?"warn":"info",title:"Run #"+runCount+" — "+stack.length+" crisis stack vs live twin",
+      detector:engine==="ml"?"gnn-seir v1.3.2":"mechanistic SEIR",score:null,z:null,
+      detail:(firstCrit?("first critical: "+firstCrit.msg+" at +"+firstCrit.t+"h"):"no critical crossings in horizon"),flux:null,
+      llm:firstCrit?("Under this stack, "+firstCrit.msg.split(" crosses")[0]+" breaches critical at +"+firstCrit.t+"h. Watch the live line: if reality tracks the projection for the next 2–3h, pre-stage overflow beds and staffing before the crossing — acting at +"+Math.max(1,firstCrit.t-6)+"h keeps you ahead of the curve."):"Projected load stays inside capacity across the horizon. Re-run at ×1.5 intensity to find your breaking point and set alert thresholds just below it.",conf:.87});
+  },850);
+};
+
+/* =========================================================
+   DATA FLUX VIEW (unchanged)
+========================================================= */
+let fluxes=[
+  {id:"f1",name:"hl7-adt-2",proto:"webhook",unit:"Emergency Dept",eps:14.2,status:"ok",anom:true},
+  {id:"f2",name:"lab-lis-feed",proto:"http poll",unit:"Central Lab",eps:6.8,status:"ok",anom:false},
+  {id:"f3",name:"iot-bed-sensors",proto:"sse",unit:"ICU North",eps:22.4,status:"ok",anom:false},
+  {id:"f4",name:"pharmacy-api",proto:"http poll",unit:"Pharmacy",eps:1.1,status:"ok",anom:false},
+];
+let selFlux="f1";
+let anomalies=[
+  {id:"an1",sev:"critical",title:"Occupancy spike — ER Ward A",detector:"ewma-zscore",score:0.94,z:3.4,
+   detail:"occupancyPct 96% vs 24h baseline 81% · z=3.4 · window 15m",flux:"f1",
+   llm:"Divert incoming ambulances to ER Ward B (86%, 5 beds free). Expedite 4 discharge-ready patients flagged in ER Ward A. If admission rate holds >8/hr, open surge protocol level 1 within 45 min.",conf:.91},
+  {id:"an2",sev:"warn",title:"Freshness stall — hl7-adt-2",detector:"gap-detector",score:0.71,z:2.2,
+   detail:"inter-event gap 210s vs p95 baseline 40s · webhook /webhooks/:token",flux:"f1",
+   llm:"Source hl7-adt-2 likely degraded upstream, not schema drift (payloads valid). Retry queue is draining. Recommend: notify integration on-call; fall back to 5-min polling on the ADT REST mirror until gap < 60s.",conf:.84},
+  {id:"an3",sev:"info",title:"Duplicate-rate rise — lab-lis-feed",detector:"iforest-batch",score:0.55,z:1.7,
+   detail:"dedupe rate 7.2% vs baseline 2.1% · 412 events / 15m",flux:"f2",
+   llm:"Duplicates share identical accession IDs with differing timestamps — consistent with LIS retry storm, not data corruption. Safe to keep ingesting; dedupe on accessionId+resultCode. No clinical impact expected.",conf:.77},
+];
+let notifs=[...anomalies];
+
+function renderFluxList(){
+  document.getElementById("flux-list").innerHTML=fluxes.map(f=>`
+    <div class="flux ${selFlux===f.id?"sel":""} ${f.anom?"err":""}" onclick="selFlux='${f.id}';renderFluxList();renderFluxCanvas()">
+      <div class="top"><span class="dot" style="background:${f.anom?"var(--crit)":"var(--ok)"}"></span>
+        <span class="nm">${f.name}</span><span class="proto">${f.proto}</span></div>
+      <div class="meta"><span>→ ${f.unit}</span><span class="eps">${f.eps.toFixed(1)} ev/s</span></div>
+    </div>`).join("");
+  document.getElementById("flux-count").textContent=fluxes.length+" ACTIVE";
+}
+function renderFluxCanvas(){
+  const el=document.getElementById("flux-canvas");
+  const w=el.clientWidth||800,h=el.clientHeight||500;
+  const cx=[70,w*.42,w*.72];const NW=150,NH=44;
+  const pipe=[{t:"Parse / Detect",s:"format-detect · 4 fmt"},{t:"Normalize",s:"SNOMED · dedupe"},{t:"Ontology map",s:"instances + links"}];
+  const twins=[{id:"t1",t:"Emergency Dept",s:"occ 91%"},{id:"t2",t:"ICU North",s:"occ 92%"},{id:"t3",t:"Central Lab",s:"167 linked"},{id:"t4",t:"Pharmacy",s:"stock ok"}];
+  const srcY=i=>60+i*(NH+34),pipeY=i=>110+i*(NH+52),twinY=i=>60+i*(NH+34);
+  const unitTwin={"Emergency Dept":"t1","ICU North":"t2","Central Lab":"t3","Pharmacy":"t4"};
+  const node=(x,y,t,s,cls,id)=>`<g class="fnode ${cls||""}" transform="translate(${x},${y})" ${id?`onclick="selFlux='${id}';renderFluxList();renderFluxCanvas()"`:""}>
+    <rect width="${NW}" height="${NH}"/><text class="t" x="10" y="18">${t}</text><text class="s" x="10" y="33">${s}</text></g>`;
+  const edge=(x1,y1,x2,y2,cls,eps,slow)=>{const mx=(x1+x2)/2;
+    const d=`M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`;
+    return `<path class="fedge ${cls||""}" d="${d}"/>
+      ${eps?`<text class="eps-lbl" x="${mx}" y="${(y1+y2)/2-6}" text-anchor="middle">${eps}</text>`:""}
+      <circle class="flowdot ${cls==="bad"?"bad":""}" r="2.4"><animateMotion dur="${slow||2.2}s" repeatCount="indefinite" path="${d}"/></circle>`};
+  let svg=`<text class="col-label" x="${cx[0]}" y="34">SOURCES · FLUX</text>
+           <text class="col-label" x="${cx[1]}" y="34">INGEST PIPELINE</text>
+           <text class="col-label" x="${cx[2]}" y="34">DIGITAL TWIN</text>`;
+  fluxes.forEach((f,i)=>{const sel=selFlux===f.id;
+    svg+=node(cx[0],srcY(i),f.name,f.proto+" · "+f.eps.toFixed(1)+" ev/s",(f.anom?"anom ":"")+(sel?"sel":""),f.id);
+    svg+=edge(cx[0]+NW,srcY(i)+NH/2,cx[1],pipeY(0)+NH/2,f.anom?"bad":sel?"hot":"",f.eps.toFixed(1)+" ev/s",f.anom?3.6:2.2)});
+  pipe.forEach((p,i)=>{svg+=node(cx[1],pipeY(i),p.t,p.s);
+    if(i<pipe.length-1)svg+=edge(cx[1]+NW/2,pipeY(i)+NH,cx[1]+NW/2+.01,pipeY(i+1),"","",1.6)});
+  twins.forEach((t,i)=>{svg+=node(cx[2],twinY(i),t.t,t.s)});
+  fluxes.forEach(f=>{const t=unitTwin[f.unit];if(!t)return;
+    const ti=twins.findIndex(x=>x.id===t);
+    svg+=edge(cx[1]+NW,pipeY(2)+NH/2,cx[2],twinY(ti)+NH/2,selFlux===f.id?"hot":"","",2.8)});
+  el.innerHTML=`<svg width="${w}" height="${h}">${svg}</svg>`;
+}
+function anomCard(a,inDrawer){
+  return `<div class="anom-card">
+    <div class="hd"><span class="badge sev-${a.sev}">${a.sev}</span><span class="ttl">${a.title}</span><span class="badge ml">ML</span></div>
+    <div class="body">
+      <div class="det">detector <b>${a.detector}</b>${a.score!=null?` · score <b>${a.score}</b> · z <b>${a.z}</b>`:""}<br>${a.detail}</div>
+      <div class="llm-block"><div class="lbl"><span class="badge llm">LLM</span>triage & recommendation · conf ${Math.round(a.conf*100)}%</div>
+        <div class="txt" id="llm-${inDrawer?"d-":""}${a.id}"></div></div>
+    </div>
+    <div class="actions">
+      <button class="abtn" onclick="ackAnom('${a.id}')">Ack</button>
+      <button class="abtn" onclick="alert('Would create twin alert + notify on-call')">Escalate</button>
+      <button class="abtn ghost" onclick="alert('Opens unit in Live Twin command view')">Open unit →</button>
+    </div>
+  </div>`;
+}
+const typed=new Set();
+function typeLLM(a,pref){
+  const el=document.getElementById("llm-"+pref+a.id);if(!el)return;
+  const key=pref+a.id;
+  if(typed.has(key)){el.textContent=a.llm;return}
+  typed.add(key);let i=0;el.innerHTML='<span class="cursor"></span>';
+  const iv=setInterval(()=>{i+=3;
+    if(i>=a.llm.length){el.textContent=a.llm;clearInterval(iv)}
+    else el.innerHTML=a.llm.slice(0,i)+'<span class="cursor"></span>'},16);
+}
+function renderAnoms(){
+  document.getElementById("anom-list").innerHTML=anomalies.map(a=>anomCard(a,false)).join("");
+  document.getElementById("anom-count").textContent=anomalies.length+" OPEN";
+  anomalies.forEach(a=>typeLLM(a,""));renderDrawer();
+}
+function renderDrawer(){
+  document.getElementById("drawer-list").innerHTML=notifs.map(a=>anomCard(a,true)).join("")||'<p style="color:var(--faint);font-size:11px;padding:16px 4px">No open notifications</p>';
+  notifs.forEach(a=>typeLLM(a,"d-"));
+  document.getElementById("bell-cnt").textContent=notifs.length;
+  document.getElementById("bell-cnt").style.display=notifs.length?"flex":"none";
+}
+window.ackAnom=id=>{anomalies=anomalies.filter(a=>a.id!==id);notifs=notifs.filter(a=>a.id!==id);
+  fluxes.forEach(f=>{if(!anomalies.some(a=>a.flux===f.id))f.anom=false});
+  renderAnoms();renderFluxList();renderFluxCanvas()};
+function pushNotif(a){
+  a.id="an"+Math.random().toString(36).slice(2,7);
+  notifs.unshift(a);
+  if(a.flux)anomalies.unshift(a);
+  renderAnoms();
+  const t=document.createElement("div");t.className="toast";
+  t.innerHTML=`<div class="tt"><span class="badge ml">ML</span>${a.title}</div><div class="tx"><span class="badge llm">LLM</span> ${a.llm.slice(0,110)}…</div>`;
+  t.onclick=()=>{t.remove();openDrawer()};
+  document.getElementById("toasts").appendChild(t);
+  setTimeout(()=>t.remove(),9000);
+}
+const LOGPOOL=[
+  ["hl7-adt-2","ADT^A01 admit → Patient/8841 linked → ER Ward A",""],
+  ["iot-bed-sensors","bed ICU-N-07 occupied=true · Bed.state updated",""],
+  ["lab-lis-feed","OBX result CRP=182 → Observation/5521 · normalized (SNOMED 55235003)",""],
+  ["pharmacy-api","stock delta: ceftriaxone -12 → Medication.stockLevel",""],
+  ["hl7-adt-2","dedupe: accession A-99812 duplicate suppressed","warnln"],
+  ["iot-bed-sensors","freshness ok · 2s lag",""],
+  ["ml/ewma-zscore","score ER Ward A occupancyPct z=3.4 → alert emitted","mlln"],
+  ["lab-lis-feed","batch 42 events normalized in 180ms",""],
+  ["ml/gap-detector","hl7-adt-2 inter-event gap 210s > p95 → warn","critln"],
+];
+function logTick(){
+  const b=document.getElementById("log-body");
+  const e=LOGPOOL[Math.floor(Math.random()*LOGPOOL.length)];
+  const ts=new Date().toLocaleTimeString("en-CA",{hour12:false});
+  const d=document.createElement("div");d.className="ln "+(e[2]||"");
+  d.innerHTML=`<span class="t">${ts}</span> <span class="src">[${e[0]}]</span> ${e[1]}`;
+  b.appendChild(d);
+  while(b.children.length>60)b.removeChild(b.firstChild);
+  b.scrollTop=b.scrollHeight;
+}
+window.openModal=()=>{document.getElementById("modal-bg").style.display="flex"};
+window.closeModal=()=>{document.getElementById("modal-bg").style.display="none"};
+window.attachFlux=()=>{
+  const name=document.getElementById("m-name").value||"new-source";
+  const unit=document.getElementById("m-unit").value.replace(/\s*\(.*\)/,"");
+  const proto=document.getElementById("m-proto").value.split(" ")[0].toLowerCase();
+  fluxes.push({id:"f"+(fluxes.length+1),name,proto:proto==="webhook"?"webhook":proto==="sse"?"sse":"http poll",unit,eps:.2,status:"ok",anom:false});
+  closeModal();renderFluxList();renderFluxCanvas();
+  pushNotif({sev:"info",title:"Flux attached — "+name,detector:"pipeline",score:null,z:null,
+    detail:"mapped → "+unit+" · baseline learning window started (24h EWMA)",flux:"f"+fluxes.length,
+    llm:"New flux "+name+" attached to "+unit+". Anomaly baselines need ~2h of traffic before scoring is reliable; alerts suppressed until then. Schema mapping validated against ontology — 0 conflicts.",conf:.95});
+};
+
+/* =========================================================
+   SHELL WIRING + TICKS
+========================================================= */
+document.querySelectorAll("#view-tabs button").forEach(b=>b.onclick=()=>{
+  view=b.dataset.v;
+  document.querySelectorAll("#view-tabs button").forEach(x=>x.classList.toggle("active",x===b));
+  document.getElementById("view-sim").style.display=view==="sim"?"grid":"none";
+  document.getElementById("view-flux").style.display=view==="flux"?"grid":"none";
+  if(view==="sim"){renderLanes();renderSimTimeline()}else{renderFluxCanvas();renderAnoms()}
+});
+document.querySelectorAll("#engine-toggle button").forEach(b=>b.onclick=()=>{
+  engine=b.dataset.e;
+  document.querySelectorAll("#engine-toggle button").forEach(x=>x.classList.toggle("active",x===b));
+  if(simRun){computeSim();renderLanes();renderResults()}
+});
+document.querySelectorAll("#cmp-toggle button").forEach(b=>b.onclick=()=>{
+  cmpMode=b.dataset.c;
+  document.querySelectorAll("#cmp-toggle button").forEach(x=>x.classList.toggle("active",x===b));
+  renderLanes();
+});
+const drawer=document.getElementById("drawer");
+window.toggleDrawer=()=>drawer.classList.toggle("open");
+window.openDrawer=()=>drawer.classList.add("open");
+document.getElementById("bell").onclick=toggleDrawer;
+function tickClock(){document.getElementById("clock").textContent=new Date().toLocaleTimeString("en-CA",{hour12:false})+" EDT"}
+setInterval(tickClock,1000);tickClock();
+
+/* live stream tick: history advances, lanes re-render → cross-reference */
+setInterval(()=>{
+  const t=nowH();
+  FACTORS.forEach(f=>{
+    const h=liveHist[f.id],last=h[h.length-1];
+    if(t-last.t>=.25){
+      let drift=0;
+      /* reality loosely follows the crisis if one is "actually happening" (covid stack demo): stay near baseline with noise */
+      const v=clamp(last.v+rnd(-1,1)*f.base*.014+drift,f.base*.7,f.base*1.25);
+      h.push({t,v});
+      if(h.length>400)h.shift();
+    }
+  });
+  if(view==="sim"){renderLanes();renderFactors()}
+  else{fluxes.forEach(f=>f.eps=clamp(f.eps+rnd(-.8,.9),.1,30));renderFluxList();logTick();if(Math.random()<.5)logTick()}
+},2000);
+
+setTimeout(()=>pushNotif({sev:"warn",title:"Admission-rate drift — Emergency Dept",detector:"ewma-zscore",score:.68,z:2.1,
+  detail:"admits/hr 9.4 vs baseline 6.2 · sustained 25m",flux:"f1",
+  llm:"Admission velocity is 52% above baseline and climbing. At this rate ER Ward A saturates in ~70 min. This matches your running 'intake surge' simulation within 8% — reality is tracking the projection. Recommend pre-staging 4 flex beds in Post-Op Ward now.",conf:.86}),25000);
+
+/* init */
+document.getElementById("anchor-ts").textContent=new Date(anchorReal).toLocaleTimeString("en-CA",{hour12:false});
+renderCrisisLib();renderStack();renderFactors();renderLanes();renderSimTimeline();renderResults();
+renderFluxList();renderAnoms();
+window.addEventListener("resize",()=>{if(view==="sim"){renderLanes();renderSimTimeline()}else renderFluxCanvas()});
+</script>
+</body>
+</html>

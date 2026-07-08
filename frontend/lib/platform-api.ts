@@ -896,6 +896,18 @@ export async function fetchTwinUnit(
   return apiFetch(`/v1/ontology/${encEnv(env)}/twin/units/${unitId}`);
 }
 
+export async function listTwinAlerts(
+  env: string,
+  opts?: { unitId?: string; limit?: number; offset?: number },
+): Promise<{ alerts: TwinAlert[] }> {
+  const qs = new URLSearchParams();
+  if (opts?.unitId) qs.set("unitId", opts.unitId);
+  if (opts?.limit != null) qs.set("limit", String(opts.limit));
+  if (opts?.offset != null) qs.set("offset", String(opts.offset));
+  const q = qs.toString();
+  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/alerts${q ? `?${q}` : ""}`);
+}
+
 export async function ackTwinAlert(
   env: string,
   alertId: string,

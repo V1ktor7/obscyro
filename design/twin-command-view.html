@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Obscyro — Twin Command View (Design Prototype)</title>
+<style>
+  :root{
+    --bg:#0e1318; --bg2:#151b22; --panel:#1a222b; --panel2:#202a35;
+    --line:#2c3a48; --line2:#3a4c5e;
+    --txt:#e8eef4; --muted:#8aa0b4; --faint:#5c7288;
+    --accent:#4cc2ff; --accent-dim:#1f3d52;
+    --ok:#3dcc91; --warn:#f2a33c; --crit:#ff5c5c; --info:#5ab6f0;
+    --mono:"SF Mono","Cascadia Code","JetBrains Mono",Consolas,monospace;
+    --sans:"Inter","Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:13px;overflow:hidden}
+  .microlabel{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .mono{font-family:var(--mono)}
+
+  /* ============ SHELL GRID ============ */
+  #shell{display:grid;height:100vh;
+    grid-template-rows:40px 58px 1fr 128px;
+    grid-template-columns:248px 1fr 304px;
+    grid-template-areas:
+      "top top top"
+      "kpi kpi kpi"
+      "tree canvas inspector"
+      "ribbon ribbon inspector";
+  }
+
+  /* ============ COMMAND BAR ============ */
+  #topbar{grid-area:top;display:flex;align-items:center;gap:14px;background:var(--bg2);
+    border-bottom:1px solid var(--line);padding:0 14px;}
+  #topbar .brand{font-family:var(--mono);font-size:12px;letter-spacing:.2em;color:var(--txt)}
+  #topbar .brand b{color:var(--accent)}
+  .divider{width:1px;height:18px;background:var(--line2)}
+  .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line2);
+    padding:3px 9px;font-family:var(--mono);font-size:10px;color:var(--muted);cursor:default}
+  .chip .dot{width:6px;height:6px;border-radius:50%}
+  .dot-live{background:var(--ok);box-shadow:0 0 6px var(--ok);animation:pulse 2s infinite}
+  @keyframes pulse{50%{opacity:.4}}
+  #search{flex:1;max-width:360px;background:var(--panel);border:1px solid var(--line);
+    color:var(--txt);font-family:var(--mono);font-size:11px;padding:5px 10px;outline:none}
+  #search::placeholder{color:var(--faint)}
+  #search:focus{border-color:var(--accent)}
+  #clock{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .mode-toggle{display:flex;border:1px solid var(--line2)}
+  .mode-toggle button{background:none;border:none;color:var(--muted);font-family:var(--mono);
+    font-size:10px;letter-spacing:.1em;padding:4px 12px;cursor:pointer;text-transform:uppercase}
+  .mode-toggle button.active{background:var(--accent-dim);color:var(--accent)}
+
+  /* ============ KPI STRIP ============ */
+  #kpis{grid-area:kpi;display:grid;grid-template-columns:repeat(6,1fr);background:var(--bg2);
+    border-bottom:1px solid var(--line)}
+  .kpi{border-right:1px solid var(--line);padding:8px 14px;display:flex;flex-direction:column;justify-content:center;position:relative;overflow:hidden}
+  .kpi:last-child{border-right:none}
+  .kpi .val{font-family:var(--mono);font-size:19px;font-weight:600;line-height:1.15}
+  .kpi .sub{font-family:var(--mono);font-size:9px;color:var(--faint);margin-top:1px}
+  .kpi .delta-up{color:var(--crit)} .kpi .delta-down{color:var(--ok)}
+  .kpi svg.spark{position:absolute;right:10px;bottom:6px;opacity:.75}
+  .kpi.alert-crit .val{color:var(--crit)}
+  .kpi.alert-warn .val{color:var(--warn)}
+
+  /* ============ LEFT: ONTOLOGY TREE ============ */
+  #tree{grid-area:tree;background:var(--bg2);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;overflow:hidden}
+  .panel-head{display:flex;align-items:center;justify-content:space-between;
+    padding:8px 12px;border-bottom:1px solid var(--line);flex-shrink:0}
+  #tree-list{overflow-y:auto;flex:1;padding:4px 0}
+  .tnode{display:flex;align-items:center;gap:7px;padding:5px 10px;cursor:pointer;border-left:2px solid transparent}
+  .tnode:hover{background:var(--panel)}
+  .tnode.sel{background:var(--accent-dim);border-left-color:var(--accent)}
+  .tnode .sev{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+  .tnode .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
+  .tnode .kind-ic{font-family:var(--mono);font-size:8px;color:var(--faint);letter-spacing:.08em;text-transform:uppercase;flex-shrink:0}
+  .tnode .occbar{width:34px;height:4px;background:var(--line);flex-shrink:0;position:relative}
+  .tnode .occbar i{position:absolute;left:0;top:0;bottom:0;background:var(--accent)}
+  .kind-filters{display:flex;gap:4px;padding:8px 10px;border-bottom:1px solid var(--line);flex-wrap:wrap;flex-shrink:0}
+  .kf{font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;
+    border:1px solid var(--line2);color:var(--muted);background:none;padding:2px 8px;cursor:pointer}
+  .kf.active{background:var(--accent-dim);color:var(--accent);border-color:var(--accent)}
+
+  /* ============ CENTER: CANVAS ============ */
+  #center{grid-area:canvas;position:relative;overflow:hidden;background:
+    radial-gradient(circle at 1px 1px, rgba(90,140,180,.10) 1px, transparent 0);
+    background-size:26px 26px;background-color:var(--bg)}
+  #canvas-tabs{position:absolute;top:10px;left:12px;z-index:5;display:flex;border:1px solid var(--line2);background:var(--bg2)}
+  #canvas-tabs button{background:none;border:none;color:var(--muted);font-family:var(--mono);
+    font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:5px 14px;cursor:pointer}
+  #canvas-tabs button.active{background:var(--accent-dim);color:var(--accent)}
+  #metric-select{position:absolute;top:10px;right:12px;z-index:5;background:var(--bg2);
+    border:1px solid var(--line2);color:var(--muted);font-family:var(--mono);font-size:10px;padding:5px 8px;outline:none}
+  #graph-wrap{position:absolute;inset:0;overflow:auto}
+  #graph{position:relative;width:1400px;height:900px;margin:40px auto 0}
+  #edges{position:absolute;inset:0;pointer-events:none}
+  .edge{stroke:var(--line2);stroke-width:1.2;fill:none}
+  .edge.hot{stroke:var(--accent);stroke-width:1.6;filter:drop-shadow(0 0 3px rgba(76,194,255,.5))}
+
+  .unit{position:absolute;width:172px;background:var(--panel);border:1px solid var(--line2);
+    cursor:pointer;transition:border-color .15s, box-shadow .15s}
+  .unit:hover{border-color:var(--accent)}
+  .unit.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 0 18px rgba(76,194,255,.25)}
+  .unit.dim{opacity:.28;pointer-events:none}
+  .unit .hd{display:flex;align-items:center;gap:6px;padding:6px 8px 3px}
+  .unit .sev{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+  .unit .nm{font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .unit .bd{display:flex;align-items:flex-end;justify-content:space-between;padding:0 8px 6px}
+  .unit .metric{font-family:var(--mono);font-size:16px;font-weight:600;line-height:1}
+  .unit .metric small{font-size:9px;color:var(--faint);font-weight:400}
+  .unit .kind{font-family:var(--mono);font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+  .unit .occ-track{height:3px;background:var(--line);margin:0}
+  .unit .occ-fill{height:100%;background:var(--accent);transition:width .6s}
+  .unit .occ-fill.w{background:var(--warn)} .unit .occ-fill.c{background:var(--crit)}
+  .unit .abadge{position:absolute;top:-7px;right:-7px;min-width:15px;height:15px;border-radius:8px;
+    background:var(--crit);color:#fff;font-family:var(--mono);font-size:9px;display:flex;
+    align-items:center;justify-content:center;padding:0 4px;font-weight:700}
+  .unit .abadge.w{background:var(--warn);color:#1a1205}
+  .unit svg.uspark{display:block;margin:2px 8px 0;opacity:.8}
+
+  /* grid view */
+  #grid-view{position:absolute;inset:0;overflow:auto;padding:52px 16px 16px;display:none}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--faint);text-align:left;padding:7px 10px;border-bottom:1px solid var(--line2);
+    position:sticky;top:0;background:var(--bg)}
+  td{padding:6px 10px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--muted)}
+  td.nm{color:var(--txt);font-family:var(--sans);font-size:12px}
+  tr:hover td{background:var(--panel)}
+  tr.sel td{background:var(--accent-dim)}
+  .cellbar{display:inline-block;width:56px;height:5px;background:var(--line);vertical-align:middle;margin-right:7px;position:relative}
+  .cellbar i{position:absolute;left:0;top:0;bottom:0;background:var(--accent)}
+
+  /* ============ RIGHT: INSPECTOR ============ */
+  #inspector{grid-area:inspector;background:var(--bg2);border-left:1px solid var(--line);
+    overflow-y:auto;display:flex;flex-direction:column}
+  #insp-empty{padding:40px 20px;color:var(--faint);font-size:12px;text-align:center;line-height:1.6}
+  .insp-sec{padding:10px 14px;border-bottom:1px solid var(--line)}
+  .insp-title{font-size:14px;font-weight:600}
+  .insp-id{font-family:var(--mono);font-size:9px;color:var(--faint);margin-top:2px}
+  .gauge-row{display:flex;gap:10px;align-items:center;margin-top:4px}
+  .mini-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;flex:1}
+  .ms{border:1px solid var(--line);padding:6px 8px;background:var(--panel)}
+  .ms .v{font-family:var(--mono);font-size:14px;font-weight:600}
+  .typerow{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;
+    color:var(--muted);padding:3px 0;border-bottom:1px dotted var(--line)}
+  .typerow b{color:var(--txt)}
+  .alert-card{border:1px solid var(--line2);border-left:3px solid var(--warn);background:var(--panel);
+    padding:8px 10px;margin-top:8px}
+  .alert-card.crit{border-left-color:var(--crit)}
+  .alert-card.info{border-left-color:var(--info)}
+  .alert-card .msg{font-size:11.5px;color:var(--txt);line-height:1.4}
+  .alert-card .meta{font-family:var(--mono);font-size:9px;color:var(--faint);margin-top:4px;display:flex;justify-content:space-between;align-items:center}
+  .ack-btn{background:none;border:1px solid var(--line2);color:var(--accent);font-family:var(--mono);
+    font-size:9px;letter-spacing:.1em;padding:2px 9px;cursor:pointer;text-transform:uppercase}
+  .ack-btn:hover{background:var(--accent-dim)}
+  .reco{font-size:11.5px;color:var(--muted);padding:5px 0 5px 14px;position:relative;line-height:1.45}
+  .reco:before{content:"→";position:absolute;left:0;color:var(--accent);font-family:var(--mono)}
+
+  /* ============ BOTTOM RIBBON ============ */
+  #ribbon{grid-area:ribbon;background:var(--bg2);border-top:1px solid var(--line);
+    display:flex;flex-direction:column;overflow:hidden}
+  #ribbon-body{flex:1;position:relative}
+  #ribbon svg{display:block}
+  .evt{cursor:pointer}
+  .legend{display:flex;gap:14px;font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:.08em}
+  .legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-thumb{background:var(--line2)}
+  ::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+<div id="shell">
+
+  <!-- COMMAND BAR -->
+  <header id="topbar">
+    <span class="brand">OBSCYRO<b>·</b>TWIN OPS</span>
+    <span class="divider"></span>
+    <span class="chip">ENV <b style="color:var(--txt)">chum-prod</b> · operations</span>
+    <span class="chip"><span class="dot dot-live"></span><span id="stream-label">STREAM</span></span>
+    <input id="search" placeholder="⌘K  search units, alerts, instances…">
+    <div class="mode-toggle" id="sim-toggle">
+      <button class="active" data-mode="live">Live</button>
+      <button data-mode="sim">Simulation</button>
+    </div>
+    <span id="clock" class="mono"></span>
+  </header>
+
+  <!-- KPI STRIP -->
+  <section id="kpis"></section>
+
+  <!-- LEFT TREE -->
+  <aside id="tree">
+    <div class="panel-head">
+      <span class="microlabel">Ontology · OrgUnits</span>
+      <span class="microlabel" id="unit-count"></span>
+    </div>
+    <div class="kind-filters" id="kind-filters"></div>
+    <div id="tree-list"></div>
+  </aside>
+
+  <!-- CENTER CANVAS -->
+  <main id="center">
+    <div id="canvas-tabs">
+      <button class="active" data-view="graph">Graph</button>
+      <button data-view="grid">Grid</button>
+    </div>
+    <select id="metric-select" class="mono">
+      <option value="occupancyPct">Occupancy %</option>
+      <option value="count:Patient">Patients</option>
+      <option value="count:Bed">Beds</option>
+      <option value="freshnessSeconds">Freshness</option>
+      <option value="linkedInstanceCount">Linked instances</option>
+    </select>
+    <div id="graph-wrap"><div id="graph">
+      <svg id="edges" width="1400" height="900"></svg>
+      <div id="nodes"></div>
+    </div></div>
+    <div id="grid-view"></div>
+  </main>
+
+  <!-- RIGHT INSPECTOR -->
+  <aside id="inspector">
+    <div id="insp-empty">Select a unit on the graph,<br>tree, or grid to inspect<br>metrics · alerts · recommendations</div>
+    <div id="insp-body" style="display:none"></div>
+  </aside>
+
+  <!-- BOTTOM RIBBON -->
+  <footer id="ribbon">
+    <div class="panel-head">
+      <span class="microlabel" id="ribbon-title">Alert timeline · last 15 min</span>
+      <span class="legend" id="ribbon-legend">
+        <span><i style="background:var(--crit)"></i>CRITICAL</span>
+        <span><i style="background:var(--warn)"></i>WARN</span>
+        <span><i style="background:var(--info)"></i>INFO</span>
+      </span>
+    </div>
+    <div id="ribbon-body"></div>
+  </footer>
+</div>
+
+<script>
+/* ================================================================
+   MOCK STATE — mirrors TwinTreeSnapshot / TwinUnitDetail shapes
+   from lib/platform-api.ts + backend/src/services/twin.ts
+================================================================ */
+const KINDS = ["hospital","department","ward","lab","bed"];
+const units = [
+  {id:"u-chum",  name:"CHUM Montréal",     kind:"hospital",   parent:null,     occ:74, patients:212, beds:286, linked:512, fresh:4},
+  {id:"u-emerg", name:"Emergency Dept",    kind:"department", parent:"u-chum", occ:91, patients:64,  beds:70,  linked:141, fresh:2},
+  {id:"u-icu",   name:"Intensive Care",    kind:"department", parent:"u-chum", occ:88, patients:22,  beds:25,  linked:96,  fresh:3},
+  {id:"u-surg",  name:"Surgery",           kind:"department", parent:"u-chum", occ:62, patients:31,  beds:50,  linked:88,  fresh:6},
+  {id:"u-lab",   name:"Central Lab",       kind:"lab",        parent:"u-chum", occ:null,patients:0,  beds:0,   linked:167, fresh:1},
+  {id:"u-era",   name:"ER Ward A",         kind:"ward",       parent:"u-emerg",occ:96, patients:34,  beds:35,  linked:71,  fresh:2},
+  {id:"u-erb",   name:"ER Ward B",         kind:"ward",       parent:"u-emerg",occ:86, patients:30,  beds:35,  linked:63,  fresh:5},
+  {id:"u-icn",   name:"ICU North",         kind:"ward",       parent:"u-icu",  occ:92, patients:12,  beds:13,  linked:52,  fresh:3},
+  {id:"u-ics",   name:"ICU South",         kind:"ward",       parent:"u-icu",  occ:83, patients:10,  beds:12,  linked:44,  fresh:4},
+  {id:"u-pop",   name:"Post-Op Ward",      kind:"ward",       parent:"u-surg", occ:58, patients:14,  beds:24,  linked:39,  fresh:8},
+];
+units.forEach(u=>{u.hist=Array.from({length:24},()=>u.occ==null?0:clamp(u.occ+rnd(-6,6),0,100));});
+
+let alerts = [
+  {id:"a1",unit:"u-era",sev:"critical",msg:"ER Ward A occupancy 96% — above critical threshold (95%)",metric:"occupancyPct",val:96,t:-2,
+   reco:"Divert incoming ambulances to ER Ward B (86%) — 5 beds available"},
+  {id:"a2",unit:"u-icn",sev:"warn",msg:"ICU North occupancy 92% — above warning threshold (90%)",metric:"occupancyPct",val:92,t:-6,
+   reco:"Review step-down candidates; Post-Op Ward at 58% has capacity"},
+  {id:"a3",unit:"u-lab",sev:"info",msg:"Central Lab ingest burst: 167 linked instances (+38 in 5 min)",metric:"linkedInstanceCount",val:167,t:-9,reco:null},
+  {id:"a4",unit:"u-emerg",sev:"warn",msg:"Emergency Dept data freshness degraded on source hl7-adt-2",metric:"freshnessSeconds",val:210,t:-12,
+   reco:"Check webhook source hl7-adt-2 — last event 3.5 min ago"},
+];
+let events = alerts.map(a=>({t:a.t,sev:a.sev,msg:a.msg}));
+
+/* SEIR trajectory — mirrors runOutbreakSimulation DailyTrajectory[] */
+const seir = Array.from({length:30},(_,d)=>{const N=286;
+  const I=Math.round(N*.42*Math.exp(-Math.pow((d-12)/5.5,2)));
+  const E=Math.round(N*.30*Math.exp(-Math.pow((d-9)/4.5,2)));
+  const R=Math.round(N*.9/(1+Math.exp(-(d-14)/3)));
+  return {day:d,S:Math.max(N-I-E-R,0),E,I,R,iso:Math.round(I*.6)};});
+
+let selected=null, metric="occupancyPct", kindFilter=null, view="graph", mode="live";
+
+function rnd(a,b){return a+Math.random()*(b-a)}
+function clamp(v,a,b){return Math.min(b,Math.max(a,v))}
+const SEVC={critical:"var(--crit)",warn:"var(--warn)",info:"var(--info)",ok:"var(--ok)"};
+function worstSev(uid){
+  const s=alerts.filter(a=>a.unit===uid).map(a=>a.sev);
+  if(s.includes("critical"))return"critical"; if(s.includes("warn"))return"warn";
+  if(s.includes("info"))return"info"; return"ok";
+}
+function fmtMetric(u,key){
+  if(key==="occupancyPct")return u.occ==null?"—":Math.round(u.occ)+"%";
+  if(key==="count:Patient")return String(u.patients);
+  if(key==="count:Bed")return String(u.beds);
+  if(key==="freshnessSeconds")return u.fresh<60?u.fresh+"s":Math.round(u.fresh/60)+"m";
+  return String(u.linked);
+}
+
+/* ================= LAYOUT (tiered, auto) ================= */
+const POS={}, W=172, H=58;
+(function layout(){
+  const tiers={}; units.forEach(u=>{let d=0,p=u.parent;while(p){d++;p=units.find(x=>x.id===p)?.parent??null}u.depth=d;(tiers[d]??=[]).push(u)});
+  Object.entries(tiers).forEach(([d,list])=>{
+    const total=list.length*(W+64)-64;
+    list.forEach((u,i)=>{POS[u.id]={x:700-total/2+i*(W+64),y:70+d*175}});
+  });
+})();
+
+/* ================= RENDER: KPIs ================= */
+function renderKpis(){
+  const wards=units.filter(u=>u.occ!=null&&u.kind!=="hospital");
+  const avg=Math.round(wards.reduce((s,u)=>s+u.occ,0)/wards.length);
+  const crit=alerts.filter(a=>a.sev==="critical").length;
+  const open=alerts.length;
+  const bedsFree=units.filter(u=>u.kind==="ward").reduce((s,u)=>s+(u.beds-u.patients),0);
+  const fresh=Math.max(...units.map(u=>u.fresh));
+  const linked=units[0].linked;
+  const spark=h=>{const pts=h.slice(-16).map((v,i)=>`${i*4},${18-v/100*16}`).join(" ");
+    return `<svg class="spark" width="64" height="20"><polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.2"/></svg>`}
+  document.getElementById("kpis").innerHTML=[
+    {l:"AVG OCCUPANCY",v:avg+"%",s:"across 5 wards",cls:avg>90?"alert-crit":avg>80?"alert-warn":"",sp:spark(units[0].hist)},
+    {l:"OPEN ALERTS",v:open,s:crit+" critical · "+alerts.filter(a=>a.sev==="warn").length+" warn",cls:crit?"alert-crit":open?"alert-warn":""},
+    {l:"CRITICAL UNITS",v:units.filter(u=>worstSev(u.id)==="critical").length,s:"of "+units.length+" org units",cls:crit?"alert-crit":""},
+    {l:"BEDS AVAILABLE",v:bedsFree,s:"of "+units.filter(u=>u.kind==="ward").reduce((s,u)=>s+u.beds,0)+" ward beds"},
+    {l:"DATA FRESHNESS",v:fresh+"s",s:"worst source lag",cls:fresh>120?"alert-warn":""},
+    {l:"LINKED INSTANCES",v:linked,s:"patients · beds · devices",sp:""},
+  ].map(k=>`<div class="kpi ${k.cls||""}"><span class="microlabel">${k.l}</span>
+    <span class="val">${k.v}</span><span class="sub">${k.s}</span>${k.sp||""}</div>`).join("");
+}
+
+/* ================= RENDER: TREE ================= */
+function renderTree(){
+  const list=document.getElementById("tree-list");
+  const rows=[];
+  (function walk(pid,ind){units.filter(u=>u.parent===pid).forEach(u=>{
+    if(!kindFilter||u.kind===kindFilter||hasDesc(u.id)){
+      rows.push({u,ind});walk(u.id,ind+1)}})})(null,0);
+  function hasDesc(id){return units.some(x=>x.parent===id&&(!kindFilter||x.kind===kindFilter||hasDesc(x.id)))}
+  list.innerHTML=rows.map(({u,ind})=>`
+    <div class="tnode ${selected===u.id?"sel":""}" style="padding-left:${10+ind*14}px" onclick="select('${u.id}')">
+      <span class="sev" style="background:${SEVC[worstSev(u.id)]}"></span>
+      <span class="nm">${u.name}</span>
+      <span class="kind-ic">${u.kind.slice(0,4)}</span>
+      ${u.occ!=null?`<span class="occbar"><i style="width:${u.occ}%"></i></span>`:""}
+    </div>`).join("");
+  document.getElementById("unit-count").textContent=units.length+" UNITS";
+  const kf=document.getElementById("kind-filters");
+  kf.innerHTML=`<button class="kf ${!kindFilter?"active":""}" onclick="setKind(null)">All</button>`+
+    KINDS.filter(k=>units.some(u=>u.kind===k)).map(k=>
+    `<button class="kf ${kindFilter===k?"active":""}" onclick="setKind('${k}')">${k}</button>`).join("");
+}
+
+/* ================= RENDER: GRAPH ================= */
+function renderGraph(){
+  const svg=document.getElementById("edges");
+  svg.innerHTML=units.filter(u=>u.parent).map(u=>{
+    const a=POS[u.parent],b=POS[u.id];
+    const x1=a.x+W/2,y1=a.y+H,x2=b.x+W/2,y2=b.y,my=(y1+y2)/2;
+    const hot=selected===u.id||selected===u.parent;
+    return `<path class="edge ${hot?"hot":""}" d="M${x1},${y1} L${x1},${my} L${x2},${my} L${x2},${y2}"/>`}).join("");
+  const nodes=document.getElementById("nodes");
+  nodes.innerHTML=units.map(u=>{
+    const p=POS[u.id],sev=worstSev(u.id);
+    const nA=alerts.filter(a=>a.unit===u.id).length;
+    const dim=kindFilter&&u.kind!==kindFilter;
+    const occ=u.occ??0, occCls=occ>=95?"c":occ>=85?"w":"";
+    const pts=u.hist.slice(-20).map((v,i)=>`${i*8},${14-v/100*12}`).join(" ");
+    return `<div class="unit ${selected===u.id?"sel":""} ${dim?"dim":""}" id="n-${u.id}"
+      style="left:${p.x}px;top:${p.y}px" onclick="select('${u.id}')">
+      ${nA?`<span class="abadge ${sev==="warn"?"w":""}">${nA}</span>`:""}
+      <div class="hd"><span class="sev" style="background:${SEVC[sev]}"></span><span class="nm">${u.name}</span></div>
+      ${u.occ!=null?`<svg class="uspark" width="156" height="15"><polyline points="${pts}" fill="none" stroke="var(--faint)" stroke-width="1"/></svg>`:`<div style="height:17px"></div>`}
+      <div class="bd"><span class="kind">${u.kind}</span>
+        <span class="metric">${fmtMetric(u,metric)}${metric==="occupancyPct"&&u.occ!=null?"":""}</span></div>
+      ${u.occ!=null?`<div class="occ-track"><div class="occ-fill ${occCls}" style="width:${occ}%"></div></div>`:""}
+    </div>`}).join("");
+}
+
+/* ================= RENDER: GRID ================= */
+function renderGrid(){
+  const rows=units.filter(u=>!kindFilter||u.kind===kindFilter)
+    .slice().sort((a,b)=>(b.occ??-1)-(a.occ??-1));
+  document.getElementById("grid-view").innerHTML=`<table>
+    <thead><tr><th></th><th>Unit</th><th>Kind</th><th>Occupancy</th><th>Patients</th><th>Beds</th><th>Linked</th><th>Freshness</th><th>Alerts</th></tr></thead>
+    <tbody>${rows.map(u=>`<tr class="${selected===u.id?"sel":""}" onclick="select('${u.id}')" style="cursor:pointer">
+      <td><span class="sev" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${SEVC[worstSev(u.id)]}"></span></td>
+      <td class="nm">${u.name}</td><td>${u.kind}</td>
+      <td>${u.occ==null?"—":`<span class="cellbar"><i style="width:${u.occ}%;background:${u.occ>=95?"var(--crit)":u.occ>=85?"var(--warn)":"var(--accent)"}"></i></span>${Math.round(u.occ)}%`}</td>
+      <td>${u.patients}</td><td>${u.beds||"—"}</td><td>${u.linked}</td><td>${u.fresh}s</td>
+      <td>${alerts.filter(a=>a.unit===u.id).length||""}</td></tr>`).join("")}</tbody></table>`;
+}
+
+/* ================= RENDER: INSPECTOR ================= */
+function renderInspector(){
+  const empty=document.getElementById("insp-empty"),body=document.getElementById("insp-body");
+  if(!selected){empty.style.display="block";body.style.display="none";return}
+  const u=units.find(x=>x.id===selected);
+  empty.style.display="none";body.style.display="block";
+  const ua=alerts.filter(a=>a.unit===u.id);
+  const occ=u.occ??0;
+  const arc=(pct)=>{const r=26,c=2*Math.PI*r,off=c*(1-pct/100);
+    const col=pct>=95?"var(--crit)":pct>=85?"var(--warn)":"var(--accent)";
+    return `<svg width="66" height="66" viewBox="0 0 66 66">
+      <circle cx="33" cy="33" r="${r}" fill="none" stroke="var(--line)" stroke-width="5"/>
+      <circle cx="33" cy="33" r="${r}" fill="none" stroke="${col}" stroke-width="5"
+        stroke-dasharray="${c}" stroke-dashoffset="${off}" transform="rotate(-90 33 33)" stroke-linecap="butt"/>
+      <text x="33" y="37" text-anchor="middle" fill="var(--txt)" font-family="var(--mono)" font-size="13" font-weight="600">${u.occ==null?"—":Math.round(pct)+"%"}</text></svg>`};
+  body.innerHTML=`
+  <div class="insp-sec">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div><div class="insp-title">${u.name}</div>
+      <div class="insp-id">${u.id} · ${u.kind.toUpperCase()} · depth ${u.depth}</div></div>
+      <button class="ack-btn" onclick="select(null)">✕</button>
+    </div>
+    <div class="gauge-row">${arc(occ)}
+      <div class="mini-stats">
+        <div class="ms"><span class="microlabel">Linked</span><div class="v">${u.linked}</div></div>
+        <div class="ms"><span class="microlabel">Freshness</span><div class="v">${u.fresh}s</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="insp-sec"><span class="microlabel">Instances by type</span>
+    <div style="margin-top:6px">
+      <div class="typerow"><span>Patient</span><b>${u.patients}</b></div>
+      <div class="typerow"><span>Bed</span><b>${u.beds}</b></div>
+      <div class="typerow"><span>Device</span><b>${Math.round(u.linked*.18)}</b></div>
+      <div class="typerow"><span>Observation</span><b>${Math.round(u.linked*.4)}</b></div>
+    </div>
+  </div>
+  <div class="insp-sec"><span class="microlabel">Open alerts (${ua.length})</span>
+    ${ua.length===0?`<p style="color:var(--faint);font-size:11px;margin-top:6px">None — nominal</p>`:
+    ua.map(a=>`<div class="alert-card ${a.sev==="critical"?"crit":a.sev==="info"?"info":""}">
+      <div class="msg">${a.msg}</div>
+      <div class="meta"><span>${a.metric} = ${a.val} · ${-a.t}m ago</span>
+      <button class="ack-btn" onclick="ack('${a.id}')">Ack</button></div></div>`).join("")}
+  </div>
+  ${ua.some(a=>a.reco)?`<div class="insp-sec"><span class="microlabel">Recommendations</span>
+    ${ua.filter(a=>a.reco).map(a=>`<div class="reco">${a.reco}</div>`).join("")}</div>`:""}`;
+}
+
+/* ================= RENDER: RIBBON ================= */
+function renderRibbon(){
+  const el=document.getElementById("ribbon-body");
+  const w=el.clientWidth||1000,h=el.clientHeight||86;
+  if(mode==="sim"){
+    document.getElementById("ribbon-title").textContent="SEIR outbreak trajectory · 30 days · β=0.32 R₀=2.4";
+    document.getElementById("ribbon-legend").innerHTML=
+      `<span><i style="background:var(--warn)"></i>EXPOSED</span><span><i style="background:var(--crit)"></i>INFECTIOUS</span><span><i style="background:var(--ok)"></i>RECOVERED</span><span><i style="background:var(--info)"></i>ISOLATION DEMAND</span>`;
+    const N=286,x=d=>20+d/(seir.length-1)*(w-40),y=v=>h-8-(v/N)*(h-20);
+    const line=(k,c)=>`<polyline points="${seir.map(p=>`${x(p.day)},${y(p[k])}`).join(" ")}" fill="none" stroke="${c}" stroke-width="1.5"/>`;
+    const area=`<polygon points="20,${h-8} ${seir.map(p=>`${x(p.day)},${y(p.I)}`).join(" ")} ${x(29)},${h-8}" fill="rgba(255,92,92,.12)"/>`;
+    el.innerHTML=`<svg width="${w}" height="${h}">${area}${line("E","var(--warn)")}${line("I","var(--crit)")}${line("R","var(--ok)")}${line("iso","var(--info)")}
+      ${[0,10,20,29].map(d=>`<text x="${x(d)}" y="${h-1}" fill="var(--faint)" font-size="8" font-family="var(--mono)" text-anchor="middle">D${d}</text>`).join("")}
+      <line x1="${x(12)}" y1="6" x2="${x(12)}" y2="${h-10}" stroke="var(--crit)" stroke-dasharray="3 3" stroke-width=".8"/>
+      <text x="${x(12)+4}" y="14" fill="var(--crit)" font-size="8" font-family="var(--mono)">PEAK D12 · I=${Math.max(...seir.map(p=>p.I))}</text></svg>`;
+  } else {
+    document.getElementById("ribbon-title").textContent="Alert timeline · last 15 min";
+    document.getElementById("ribbon-legend").innerHTML=
+      `<span><i style="background:var(--crit)"></i>CRITICAL</span><span><i style="background:var(--warn)"></i>WARN</span><span><i style="background:var(--info)"></i>INFO</span>`;
+    const x=t=>w-20+(t/15)*(w-40);
+    el.innerHTML=`<svg width="${w}" height="${h}">
+      <line x1="20" y1="${h/2}" x2="${w-20}" y2="${h/2}" stroke="var(--line2)" stroke-width="1"/>
+      ${[-15,-10,-5,0].map(t=>`<g><line x1="${x(t)}" y1="${h/2-4}" x2="${x(t)}" y2="${h/2+4}" stroke="var(--line2)"/>
+        <text x="${x(t)}" y="${h-4}" fill="var(--faint)" font-size="8" font-family="var(--mono)" text-anchor="middle">${t===0?"now":t+"m"}</text></g>`).join("")}
+      ${events.map((e,i)=>`<g class="evt"><circle cx="${x(e.t)}" cy="${h/2}" r="5"
+        fill="${SEVC[e.sev]}" opacity=".9"><title>${e.msg}</title></circle>
+        <circle cx="${x(e.t)}" cy="${h/2}" r="9" fill="none" stroke="${SEVC[e.sev]}" opacity=".3"/></g>`).join("")}
+    </svg>`;
+  }
+}
+
+/* ================= ACTIONS ================= */
+window.select=id=>{selected=id;renderAll()};
+window.setKind=k=>{kindFilter=k;renderAll()};
+window.ack=id=>{alerts=alerts.filter(a=>a.id!==id);renderAll()};
+document.querySelectorAll("#canvas-tabs button").forEach(b=>b.onclick=()=>{
+  view=b.dataset.view;
+  document.querySelectorAll("#canvas-tabs button").forEach(x=>x.classList.toggle("active",x===b));
+  document.getElementById("graph-wrap").style.display=view==="graph"?"block":"none";
+  document.getElementById("grid-view").style.display=view==="grid"?"block":"none";
+  renderAll();
+});
+document.querySelectorAll("#sim-toggle button").forEach(b=>b.onclick=()=>{
+  mode=b.dataset.mode;
+  document.querySelectorAll("#sim-toggle button").forEach(x=>x.classList.toggle("active",x===b));
+  renderRibbon();
+});
+document.getElementById("metric-select").onchange=e=>{metric=e.target.value;renderGraph()};
+
+/* ================= LIVE TICK (mock SSE) ================= */
+setInterval(()=>{
+  units.forEach(u=>{
+    if(u.occ!=null&&u.kind!=="hospital"){u.occ=clamp(u.occ+rnd(-1.6,1.6),40,99);u.hist.push(u.occ);u.hist.shift()}
+    u.fresh=Math.max(1,Math.round(u.fresh+rnd(-1.5,1.8)));
+    u.linked+=Math.random()<.3?1:0;
+  });
+  const h=units.find(u=>u.id==="u-chum");
+  const wards=units.filter(u=>u.kind==="ward");
+  h.occ=wards.reduce((s,u)=>s+u.occ,0)/wards.length; h.hist.push(h.occ);h.hist.shift();
+  events.forEach(e=>e.t-=2/60); alerts.forEach(a=>a.t-=2/60);
+  events=events.filter(e=>e.t>-15);
+  renderAll();
+},2000);
+
+function tickClock(){document.getElementById("clock").textContent=
+  new Date().toLocaleTimeString("en-CA",{hour12:false})+" EDT";}
+setInterval(tickClock,1000);tickClock();
+
+function renderAll(){renderKpis();renderTree();renderGraph();renderGrid();renderInspector();renderRibbon()}
+renderAll();
+window.addEventListener("resize",renderRibbon);
+</script>
+</body>
+</html>
