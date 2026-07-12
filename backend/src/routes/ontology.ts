@@ -487,6 +487,109 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
+  const typeSummaryOut = z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    description: z.string().nullable(),
+    propertyCount: z.number().int(),
+    instanceCount: z.number().int(),
+    dependents: z.number().int(),
+    createdAt: z.string(),
+  });
+
+  app.get(
+    "/ontology/:env/summary",
+    {
+      schema: {
+        summary: "Aggregate counts for an environment (ontology manager landing page)",
+        description:
+          "One call returning per-object-type instance/dependent counts plus environment totals: object types, link types, properties, instances, and open data-quality flags.",
+        tags: ["ontology"],
+        params: z.object({ env: z.string().min(1) }),
+        response: {
+          200: z.object({
+            totals: z.object({
+              objectTypes: z.number().int(),
+              linkTypes: z.number().int(),
+              properties: z.number().int(),
+              instances: z.number().int(),
+              openFlags: z.number().int(),
+            }),
+            types: z.array(typeSummaryOut),
+          }),
+          404: errorEnvelope,
+        },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+
+      const types = await req.db.query<{
+        id: string;
+        name: string;
+        description: string | null;
+        property_count: number;
+        instance_count: string;
+        created_at: Date;
+      }>(
+        `SELECT t.id, t.name, t.description,
+                COALESCE(jsonb_array_length(t.property_schema), 0) AS property_count,
+                COUNT(oi.id) AS instance_count,
+                t.created_at
+           FROM app.ontology_object_types t
+           LEFT JOIN app.ontology_object_instances oi ON oi.object_type_id = t.id
+          WHERE t.environment_id = $1
+          GROUP BY t.id
+          ORDER BY t.name ASC`,
+        [env.id],
+      );
+
+      const links = await req.db.query<{ from_type_id: string; to_type_id: string }>(
+        `SELECT from_type_id, to_type_id
+           FROM app.ontology_link_types
+          WHERE environment_id = $1`,
+        [env.id],
+      );
+
+      const flags = await req.db.query<{ count: string }>(
+        `SELECT COUNT(*) AS count
+           FROM app.data_quality_flag
+          WHERE environment_id = $1 AND status = 'open'`,
+        [env.id],
+      );
+
+      const dependents = new Map<string, number>();
+      for (const l of links.rows) {
+        dependents.set(l.from_type_id, (dependents.get(l.from_type_id) ?? 0) + 1);
+        if (l.to_type_id !== l.from_type_id) {
+          dependents.set(l.to_type_id, (dependents.get(l.to_type_id) ?? 0) + 1);
+        }
+      }
+
+      const typeSummaries = types.rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        description: r.description,
+        propertyCount: r.property_count,
+        instanceCount: Number(r.instance_count),
+        dependents: dependents.get(r.id) ?? 0,
+        createdAt: r.created_at.toISOString(),
+      }));
+
+      return {
+        totals: {
+          objectTypes: typeSummaries.length,
+          linkTypes: links.rows.length,
+          properties: typeSummaries.reduce((sum, t) => sum + t.propertyCount, 0),
+          instances: typeSummaries.reduce((sum, t) => sum + t.instanceCount, 0),
+          openFlags: Number(flags.rows[0]?.count ?? 0),
+        },
+        types: typeSummaries,
+      };
+    },
+  );
+
   app.get(
     "/ontology/:env/types/:name",
     {

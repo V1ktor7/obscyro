@@ -499,6 +499,31 @@ export async function listEnvTypes(
   return apiFetch(`/v1/ontology/${encodeURIComponent(env)}/types`);
 }
 
+export interface EnvTypeSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  propertyCount: number;
+  instanceCount: number;
+  dependents: number;
+  createdAt: string;
+}
+
+export interface OntologySummary {
+  totals: {
+    objectTypes: number;
+    linkTypes: number;
+    properties: number;
+    instances: number;
+    openFlags: number;
+  };
+  types: EnvTypeSummary[];
+}
+
+export async function getOntologySummary(env: string): Promise<OntologySummary> {
+  return apiFetch(`/v1/ontology/${encodeURIComponent(env)}/summary`);
+}
+
 export async function getEnvType(env: string, name: string): Promise<EnvObjectType> {
   return apiFetch(`/v1/ontology/${encodeURIComponent(env)}/types/${encodeURIComponent(name)}`);
 }
