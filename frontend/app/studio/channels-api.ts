@@ -15,7 +15,6 @@ import {
   pipelineResultsToCombined,
   sha256Hex,
   translateCode,
-  type ConceptOut,
   type ContextOut,
   type PersistedSummary,
   type PipelineResult,
