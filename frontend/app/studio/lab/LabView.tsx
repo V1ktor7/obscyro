@@ -10,7 +10,7 @@
  * event-injected simulation, all through /v1/ontology/:env/lab/*.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   AlertTriangle,
@@ -30,6 +30,7 @@ import {
 import { cn } from "@/lib/cn";
 import { listEnvTypes, type EnvObjectType } from "@/lib/platform-api";
 import { listChannels, type DataChannel } from "../channels-api";
+import { numericColumns, parseCsvRows } from "../csv-parse";
 import {
   deleteLabModel,
   forecastLabModel,
@@ -42,7 +43,6 @@ import {
   type ForecastResult,
   type LabModel,
   type LabSignal,
-  type ModelFeature,
 } from "../lab-api";
 import { useStudio } from "../StudioShell";
 
@@ -545,6 +545,34 @@ function TrainTab({
   const [training, setTraining] = useState(false);
   const [lastTrained, setLastTrained] = useState<LabModel | null>(null);
 
+  // CSV training source
+  const [mode, setMode] = useState<"signals" | "csv">("signals");
+  const [csvName, setCsvName] = useState("");
+  const [csvCols, setCsvCols] = useState<Record<string, number[]> | null>(null);
+  const [csvTarget, setCsvTarget] = useState("");
+  const [csvFeatures, setCsvFeatures] = useState<Set<string>>(new Set());
+  const [dragOver, setDragOver] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  function readCsvFile(file: File) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const rows = parseCsvRows(String(reader.result ?? ""));
+      const cols = numericColumns(rows);
+      const names = Object.keys(cols);
+      if (names.length === 0) {
+        onError("No numeric columns found in that file — the CSV needs a header row and numeric values.");
+        return;
+      }
+      setCsvName(file.name);
+      setCsvCols(cols);
+      setCsvTarget(names[0]);
+      setCsvFeatures(new Set(names.slice(1)));
+      setLastTrained(null);
+    };
+    reader.readAsText(file);
+  }
+
   useEffect(() => {
     setTarget((cur) =>
       cur && entitySignals.some((s) => s.signal === cur)
@@ -593,23 +621,35 @@ function TrainTab({
       onError("Give the model a name before training.");
       return;
     }
-    if (!target) {
+    if (mode === "csv") {
+      if (!csvCols || !csvTarget) {
+        onError("Import a CSV file and pick a target column first.");
+        return;
+      }
+    } else if (!target) {
       onError("Pick a target signal.");
       return;
     }
     setTraining(true);
     try {
-      const features: ModelFeature[] = Array.from(selected, ([signal, lag]) => ({
-        signal,
-        lag,
-      }));
-      const model = await trainLabModel(env, {
-        name: name.trim(),
-        targetSignal: target,
-        features,
-        horizonHours: horizon,
-        windowHours: window_,
-      });
+      const model = await trainLabModel(
+        env,
+        mode === "csv"
+          ? {
+              name: name.trim(),
+              targetSignal: csvTarget,
+              features: Array.from(csvFeatures, (signal) => ({ signal, lag: 1 })),
+              horizonHours: horizon,
+              dataset: csvCols!,
+            }
+          : {
+              name: name.trim(),
+              targetSignal: target,
+              features: Array.from(selected, ([signal, lag]) => ({ signal, lag })),
+              horizonHours: horizon,
+              windowHours: window_,
+            },
+      );
       setLastTrained(model);
       onTrained();
     } catch (err) {
@@ -663,6 +703,35 @@ function TrainTab({
           </label>
         </div>
 
+        <div className="mt-2 flex items-center gap-1">
+          <span className={cn(LABEL, "mb-0 mr-1")}>Training source</span>
+          {(
+            [
+              ["signals", "Live signals"],
+              ["csv", "CSV file"],
+            ] as const
+          ).map(([m, label]) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => {
+                setMode(m);
+                setLastTrained(null);
+              }}
+              className={cn(
+                "rounded px-2 py-0.5 text-[11px]",
+                mode === m
+                  ? "bg-[#e7f2fd] font-medium text-[#215db0]"
+                  : "border border-[#d3d8de] text-[#8f99a8] hover:text-[#404854]",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {mode === "signals" ? (
+        <>
         <label className="mt-2 block">
           <span className={LABEL}>Target (from {entity ?? "entity"})</span>
           <select
@@ -773,6 +842,114 @@ function TrainTab({
             </div>
           </>
         ) : null}
+        </>
+        ) : (
+        <>
+        <p className={cn(LABEL, "mt-3")}>Training file</p>
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            const file = e.dataTransfer.files?.[0];
+            if (file) readCsvFile(file);
+          }}
+          onClick={() => fileRef.current?.click()}
+          className={cn(
+            "flex cursor-pointer flex-col items-center gap-1 rounded-md border border-dashed px-4 py-6 text-center transition-colors",
+            dragOver
+              ? "border-[#2d72d2] bg-[#e7f2fd]"
+              : "border-[#c5cbd3] bg-[#f6f7f9] hover:border-[#8f99a8]",
+          )}
+        >
+          <span className="text-xs font-medium text-[#1c2127]">
+            {csvName || "Drop a CSV here, or click to browse"}
+          </span>
+          <span className="text-[10px] text-[#8f99a8]">
+            header row = column names · rows ordered oldest → newest · numeric columns become
+            signals
+          </span>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv,.tsv,.txt,text/csv"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) readCsvFile(file);
+              e.target.value = "";
+            }}
+          />
+        </div>
+        {csvCols ? (
+          <>
+            <div className="mt-2 flex flex-wrap items-end gap-2">
+              <label className="block">
+                <span className={LABEL}>Target column</span>
+                <select
+                  value={csvTarget}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setCsvTarget(next);
+                    setCsvFeatures((cur) => {
+                      const s = new Set(cur);
+                      s.delete(next);
+                      return s;
+                    });
+                  }}
+                  className={cn(FIELD, "min-w-[160px] font-medium")}
+                >
+                  {Object.keys(csvCols).map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <span className="pb-1 text-[11px] text-[#8f99a8]">
+                {csvCols[csvTarget]?.length.toLocaleString() ?? 0} rows ·{" "}
+                {Object.keys(csvCols).length} numeric columns
+              </span>
+            </div>
+            <p className={cn(LABEL, "mt-2")}>Feature columns · {csvFeatures.size} selected</p>
+            <div className="flex flex-wrap gap-1.5">
+              {Object.keys(csvCols)
+                .filter((c) => c !== csvTarget)
+                .map((c) => {
+                  const on = csvFeatures.has(c);
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() =>
+                        setCsvFeatures((cur) => {
+                          const s = new Set(cur);
+                          if (s.has(c)) s.delete(c);
+                          else s.add(c);
+                          return s;
+                        })
+                      }
+                      className={cn(
+                        "flex items-center gap-1 rounded px-2 py-0.5 text-[11px]",
+                        on
+                          ? "bg-emerald-50 font-medium text-emerald-700"
+                          : "border border-[#d3d8de] text-[#8f99a8] hover:text-[#404854]",
+                      )}
+                    >
+                      {on ? <Check className="h-2.5 w-2.5" /> : <Plus className="h-2.5 w-2.5" />}
+                      {c}
+                    </button>
+                  );
+                })}
+            </div>
+          </>
+        ) : null}
+        </>
+        )}
 
         <div className="mt-3 flex items-center gap-2">
           <span className="text-[10.5px] text-[#8f99a8]">

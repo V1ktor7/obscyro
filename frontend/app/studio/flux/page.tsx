@@ -1,5 +1,5 @@
-import FluxView from "./FluxView";
+import DataHealthView from "./DataHealthView";
 
 export default function FluxPage() {
-  return <FluxView />;
+  return <DataHealthView />;
 }

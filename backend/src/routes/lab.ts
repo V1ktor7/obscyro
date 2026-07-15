@@ -205,6 +205,13 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
           features: z.array(featureIn).max(10),
           horizonHours: z.number().int().min(6).max(168).optional(),
           windowHours: z.number().int().min(72).max(2160).optional(),
+          // Uploaded CSV columns (name → ordered numeric values, oldest first).
+          dataset: z
+            .record(z.string().min(1).max(120), z.array(z.number()).min(60).max(20000))
+            .optional()
+            .refine((d) => d === undefined || Object.keys(d).length <= 24, {
+              message: "Dataset may contain at most 24 columns.",
+            }),
         }),
         response: { 201: modelOut, 400: errorEnvelope, 404: errorEnvelope },
       },
@@ -217,6 +224,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
         features: req.body.features,
         horizonHours: req.body.horizonHours,
         windowHours: req.body.windowHours,
+        dataset: req.body.dataset,
       });
       const version = await nextModelVersion(req.db, env.id, req.body.name.trim());
       const { rows } = await req.db.query<{ id: string; created_at: Date }>(

@@ -49,6 +49,10 @@ export interface ModelSpec {
   stds: number[];
   targetMean: number;
   targetStd: number;
+  /** "signals" trains on live env series; "csv" on an uploaded dataset. */
+  source?: "signals" | "csv";
+  /** For CSV models: the tail of each used column, kept for forecasting. */
+  csvColumns?: Record<string, number[]>;
 }
 
 export interface ModelMetrics {
@@ -447,17 +451,35 @@ export async function trainModel(
     features: ModelFeature[];
     horizonHours?: number;
     windowHours?: number;
+    /** When present, train on this uploaded dataset instead of live signals. */
+    dataset?: Record<string, number[]>;
   },
 ): Promise<TrainResult> {
-  const windowHours = Math.min(Math.max(opts.windowHours ?? 24 * 14, 72), 24 * 90);
   const horizonHours = Math.min(Math.max(opts.horizonHours ?? 48, 6), 24 * 7);
   const features = opts.features
     .filter((f) => f.signal !== opts.targetSignal)
     .slice(0, 10)
     .map((f) => ({ signal: f.signal, lag: Math.min(Math.max(f.lag || 1, 1), 48) }));
 
-  const signalNames = [opts.targetSignal, ...features.map((f) => f.signal)];
-  const { series } = await buildSeries(db, environmentId, signalNames, windowHours);
+  let windowHours: number;
+  let series: Map<string, number[]>;
+  if (opts.dataset) {
+    series = new Map(Object.entries(opts.dataset));
+    const targetCol = series.get(opts.targetSignal);
+    if (!targetCol) {
+      throw BadRequest("UNKNOWN_COLUMN", `Column "${opts.targetSignal}" not found in the dataset.`);
+    }
+    for (const f of features) {
+      if (!series.has(f.signal)) {
+        throw BadRequest("UNKNOWN_COLUMN", `Column "${f.signal}" not found in the dataset.`);
+      }
+    }
+    windowHours = targetCol.length;
+  } else {
+    windowHours = Math.min(Math.max(opts.windowHours ?? 24 * 14, 72), 24 * 90);
+    const signalNames = [opts.targetSignal, ...features.map((f) => f.signal)];
+    series = (await buildSeries(db, environmentId, signalNames, windowHours)).series;
+  }
   const target = series.get(opts.targetSignal)!;
   const featSeries = features.map((f) => ({ values: series.get(f.signal)!, lag: f.lag }));
 
@@ -545,21 +567,30 @@ export async function trainModel(
     samples: rows.length,
   };
 
-  return {
-    spec: {
-      targetSignal: opts.targetSignal,
-      features,
-      arLags: AR_LAGS,
-      horizonHours,
-      windowHours,
-      weights,
-      means,
-      stds,
-      targetMean,
-      targetStd,
-    },
-    metrics,
+  const spec: ModelSpec = {
+    targetSignal: opts.targetSignal,
+    features,
+    arLags: AR_LAGS,
+    horizonHours,
+    windowHours,
+    weights,
+    means,
+    stds,
+    targetMean,
+    targetStd,
+    source: opts.dataset ? "csv" : "signals",
   };
+  if (opts.dataset) {
+    // Keep the tail of every used column so the model can forecast later.
+    const TAIL = 720;
+    const csvColumns: Record<string, number[]> = {};
+    const used = [opts.targetSignal, ...features.map((f) => f.signal)];
+    for (const name of used) {
+      csvColumns[name] = series.get(name)!.slice(-TAIL);
+    }
+    spec.csvColumns = csvColumns;
+  }
+  return { spec, metrics };
 }
 
 // --- forecast + event simulation ----------------------------------------------
@@ -593,8 +624,24 @@ export async function forecastModel(
     );
   }
 
-  const signalNames = [spec.targetSignal, ...spec.features.map((f) => f.signal)];
-  const { hours, series } = await buildSeries(db, environmentId, signalNames, spec.windowHours);
+  let hours: string[];
+  let series: Map<string, number[]>;
+  if (spec.source === "csv" && spec.csvColumns) {
+    // CSV models forecast from the stored dataset tail; synthesize hourly
+    // timestamps ending now so the chart has a consistent time axis.
+    series = new Map(Object.entries(spec.csvColumns));
+    const len = series.get(spec.targetSignal)?.length ?? 0;
+    const endHour = Math.floor(Date.now() / 3_600_000);
+    hours = [];
+    for (let i = len - 1; i >= 0; i--) {
+      hours.push(new Date((endHour - i) * 3_600_000).toISOString());
+    }
+  } else {
+    const signalNames = [spec.targetSignal, ...spec.features.map((f) => f.signal)];
+    const built = await buildSeries(db, environmentId, signalNames, spec.windowHours);
+    hours = built.hours;
+    series = built.series;
+  }
   const target = series.get(spec.targetSignal)!;
   const featSeries = spec.features.map((f) => ({ values: series.get(f.signal)!, lag: f.lag }));
   const dim = 1 + spec.arLags.length + spec.features.length;

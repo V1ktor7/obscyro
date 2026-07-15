@@ -101,6 +101,8 @@ export async function trainLabModel(
     features: ModelFeature[];
     horizonHours?: number;
     windowHours?: number;
+    /** Uploaded CSV columns (name → ordered numeric values, oldest first). */
+    dataset?: Record<string, number[]>;
   },
 ): Promise<LabModel> {
   return apiFetch(`/v1/ontology/${enc(env)}/lab/models`, { method: "POST", body });

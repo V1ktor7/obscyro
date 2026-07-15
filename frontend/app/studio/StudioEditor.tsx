@@ -39,6 +39,7 @@ import {
 import { useStudio } from "./StudioShell";
 import NodeDataPanel from "./NodeDataPanel";
 import SchemaMappingPanel from "./SchemaMappingPanel";
+import { parseCsvRows } from "./csv-parse";
 import {
   getUpstreamInput,
   mergeNodeOutputs,
@@ -112,6 +113,7 @@ import type { SanitizedWebhookConfig, WebhookMethod } from "./webhook-schema";
 
 type NodeType =
   | "input"
+  | "dataset"
   | "rest"
   | "source"
   | "webhook"
@@ -143,6 +145,8 @@ function formatEnvLabel(env: EnvironmentSummary, showOrg: boolean): string {
 
 type NodeConfig = {
   sampleText?: string;
+  csvText?: string;
+  csvFileName?: string;
   payloadJson?: string;
   sourceId?: string;
   webhookUrl?: string;
@@ -219,6 +223,7 @@ const NODE_ACCENTS: Record<
   { text: string; bar: string; border: string; hex: string }
 > = {
   input: { text: "text-sky-600", bar: "bg-sky-400", border: "border-sky-400", hex: "#0284c7" },
+  dataset: { text: "text-sky-600", bar: "bg-sky-400", border: "border-sky-400", hex: "#0284c7" },
   rest: { text: "text-sky-600", bar: "bg-sky-400", border: "border-sky-400", hex: "#0284c7" },
   source: { text: "text-sky-600", bar: "bg-sky-400", border: "border-sky-400", hex: "#0284c7" },
   webhook: { text: "text-sky-600", bar: "bg-sky-400", border: "border-sky-400", hex: "#0284c7" },
@@ -276,6 +281,8 @@ function defaultCode(type: NodeType): string {
   switch (type) {
     case "input":
       return `function run() {\n  return { text: input.text, language: "auto" };\n}`;
+    case "dataset":
+      return `function run() {\n  // Rows parsed from the imported CSV file (header row = keys).\n  return { records: parseCsv(config.csvText) };\n}`;
     case "rest":
       return `function run(input) {\n  // POST /v1/ingest or paste JSON payload\n  return input.payload;\n}`;
     case "source":
@@ -322,6 +329,11 @@ function nodeDefaults(type: NodeType): {
           sampleText:
             "62yo with chest pain. Father had an MI. Rule out pulmonary embolism.",
         },
+      };
+    case "dataset":
+      return {
+        title: "Dataset (CSV import)",
+        config: { csvText: "", csvFileName: "" },
       };
     case "rest":
       return {
@@ -586,6 +598,18 @@ async function executeNode(
   switch (node.type) {
     case "input":
       return { text: node.config.sampleText ?? "" };
+
+    case "dataset": {
+      const rows = parseCsvRows(node.config.csvText ?? "");
+      if (rows.length === 0) {
+        throw new Error("Import a CSV file (or paste CSV text) on the Dataset node first.");
+      }
+      return {
+        text: JSON.stringify(rows, null, 2),
+        payload: rows,
+        contentType: "application/json",
+      };
+    }
 
     case "rest": {
       try {
@@ -952,6 +976,14 @@ function NodeIcon({ type }: { type: NodeType }) {
           <path d="M4 7h16M4 12h10M4 17h7" />
         </svg>
       );
+    case "dataset":
+      return (
+        <svg {...common}>
+          <ellipse cx="12" cy="6" rx="7" ry="3" />
+          <path d="M5 6v12c0 1.66 3.13 3 7 3s7-1.34 7-3V6" />
+          <path d="M5 12c0 1.66 3.13 3 7 3s7-1.34 7-3" />
+        </svg>
+      );
     case "rest":
       return (
         <svg {...common}>
@@ -1086,6 +1118,7 @@ function DecisionBadge({ decision }: { decision: DemoResult["decision"] }) {
 
 const PALETTE: { type: NodeType; label: string; variants: StudioVariant[] }[] = [
   { type: "input", label: "Input", variants: ["parser", "workspace"] },
+  { type: "dataset", label: "Dataset (CSV import)", variants: ["parser", "workspace"] },
   { type: "source", label: "Source", variants: ["parser", "workspace"] },
   { type: "webhook", label: "Webhook intake", variants: ["parser", "workspace"] },
   { type: "transform", label: "Transform", variants: ["parser"] },
@@ -2087,7 +2120,7 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
       {/* Editor toolbar — Reset / Run for the current graph */}
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-gray-200 px-4">
         <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400">
-          {variant === "parser" ? "Ontology Parser" : "Studio Obscyro"}
+          {variant === "parser" ? "Ontology Parser" : "Data Studio"}
         </span>
         <div className="flex items-center gap-3">
           {runError ? (
@@ -2912,6 +2945,90 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+function DatasetNodeConfig({
+  node,
+  onConfig,
+}: {
+  node: FlowNode;
+  onConfig: (partial: NodeConfig) => void;
+}) {
+  const [dragOver, setDragOver] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  const rows = useMemo(() => parseCsvRows(node.config.csvText ?? ""), [node.config.csvText]);
+  const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+
+  function readFile(file: File) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      onConfig({ csvText: String(reader.result ?? ""), csvFileName: file.name });
+    };
+    reader.readAsText(file);
+  }
+
+  return (
+    <>
+      <Field label="Import file (CSV / TSV)">
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            const file = e.dataTransfer.files?.[0];
+            if (file) readFile(file);
+          }}
+          onClick={() => fileRef.current?.click()}
+          className={cn(
+            "flex cursor-pointer flex-col items-center gap-1 rounded-md border border-dashed px-3 py-5 text-center transition-colors",
+            dragOver
+              ? "border-sky-400 bg-sky-50"
+              : "border-gray-300 bg-gray-50 hover:border-gray-400",
+          )}
+        >
+          <span className="text-xs font-medium text-gray-700">
+            {node.config.csvFileName || "Drop a CSV here, or click to browse"}
+          </span>
+          <span className="text-[10px] text-gray-400">
+            first row = column names · comma, semicolon, or tab delimited
+          </span>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv,.tsv,.txt,text/csv"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) readFile(file);
+              e.target.value = "";
+            }}
+          />
+        </div>
+      </Field>
+      {rows.length > 0 ? (
+        <div className="mb-4 rounded-md border border-gray-200 bg-white px-2.5 py-2 text-[11px] text-gray-600">
+          <span className="font-medium text-gray-800">
+            {rows.length.toLocaleString()} rows · {columns.length} columns
+          </span>
+          <span className="mt-0.5 block truncate text-gray-400">{columns.join(", ")}</span>
+        </div>
+      ) : null}
+      <Field label="Or paste CSV text">
+        <textarea
+          value={node.config.csvText ?? ""}
+          onChange={(e) => onConfig({ csvText: e.target.value })}
+          rows={5}
+          placeholder={"mrn,ward,occupancy\n48-2210,ED,42"}
+          className="w-full resize-none rounded-md border border-gray-200 bg-gray-50 p-2.5 font-mono text-[11px] text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+        />
+      </Field>
+    </>
+  );
+}
+
 function Slider({
   label,
   value,
@@ -3017,6 +3134,9 @@ function LowCodeForm({
           />
         </Field>
       );
+
+    case "dataset":
+      return <DatasetNodeConfig node={node} onConfig={onConfig} />;
 
     case "source":
       return (

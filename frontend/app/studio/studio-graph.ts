@@ -65,21 +65,73 @@ export function pointGeom(a: Point, b: Point): Geom {
   return { a, b, c1: { x: a.x + dx, y: a.y }, c2: { x: b.x - dx, y: b.y } };
 }
 
-export function pathD(g: Geom): string {
-  return `M ${g.a.x},${g.a.y} C ${g.c1.x},${g.c1.y} ${g.c2.x},${g.c2.y} ${g.b.x},${g.b.y}`;
+/** Waypoints for orthogonal (right-angle) edge routing between two ports. */
+function orthoPoints(g: Geom): Point[] {
+  const { a, b } = g;
+  if (Math.abs(b.y - a.y) < 2) return [a, b];
+  if (b.x - a.x >= 48) {
+    const midX = (a.x + b.x) / 2;
+    return [a, { x: midX, y: a.y }, { x: midX, y: b.y }, b];
+  }
+  // Backward edge: exit right, drop to a midline, re-enter from the left.
+  const outX = a.x + 24;
+  const inX = b.x - 24;
+  const midY = (a.y + b.y) / 2;
+  return [
+    a,
+    { x: outX, y: a.y },
+    { x: outX, y: midY },
+    { x: inX, y: midY },
+    { x: inX, y: b.y },
+    b,
+  ];
 }
 
+const CORNER_R = 6;
+
+/** Orthogonal path with small rounded corners (Foundry-style elbows). */
+export function pathD(g: Geom): string {
+  const pts = orthoPoints(g);
+  if (pts.length === 2) return `M ${pts[0].x},${pts[0].y} L ${pts[1].x},${pts[1].y}`;
+  let d = `M ${pts[0].x},${pts[0].y}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const prev = pts[i - 1];
+    const cur = pts[i];
+    const next = pts[i + 1];
+    const inLen = Math.hypot(cur.x - prev.x, cur.y - prev.y);
+    const outLen = Math.hypot(next.x - cur.x, next.y - cur.y);
+    const r = Math.min(CORNER_R, inLen / 2, outLen / 2);
+    const inUx = (cur.x - prev.x) / (inLen || 1);
+    const inUy = (cur.y - prev.y) / (inLen || 1);
+    const outUx = (next.x - cur.x) / (outLen || 1);
+    const outUy = (next.y - cur.y) / (outLen || 1);
+    d += ` L ${cur.x - inUx * r},${cur.y - inUy * r}`;
+    d += ` Q ${cur.x},${cur.y} ${cur.x + outUx * r},${cur.y + outUy * r}`;
+  }
+  d += ` L ${pts[pts.length - 1].x},${pts[pts.length - 1].y}`;
+  return d;
+}
+
+/** Point at fraction t along the orthogonal route (name kept for callers). */
 export function bezierPoint(g: Geom, t: number): Point {
-  const u = 1 - t;
-  const x =
-    u * u * u * g.a.x +
-    3 * u * u * t * g.c1.x +
-    3 * u * t * t * g.c2.x +
-    t * t * t * g.b.x;
-  const y =
-    u * u * u * g.a.y +
-    3 * u * u * t * g.c1.y +
-    3 * u * t * t * g.c2.y +
-    t * t * t * g.b.y;
-  return { x, y };
+  const pts = orthoPoints(g);
+  let total = 0;
+  const lens: number[] = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const l = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+    lens.push(l);
+    total += l;
+  }
+  let remain = Math.max(0, Math.min(1, t)) * total;
+  for (let i = 0; i < lens.length; i++) {
+    if (remain <= lens[i] || i === lens.length - 1) {
+      const f = lens[i] === 0 ? 0 : remain / lens[i];
+      return {
+        x: pts[i].x + (pts[i + 1].x - pts[i].x) * f,
+        y: pts[i].y + (pts[i + 1].y - pts[i].y) * f,
+      };
+    }
+    remain -= lens[i];
+  }
+  return pts[pts.length - 1];
 }
