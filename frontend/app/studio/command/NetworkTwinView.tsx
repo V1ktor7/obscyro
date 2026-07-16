@@ -63,6 +63,17 @@ interface LayerToggles {
   other: boolean;
 }
 
+// Minimal GeoJSON shape for the flow sources (avoids depending on the
+// ambient GeoJSON namespace, which is not guaranteed in every build env).
+interface FlowFeatureCollection {
+  type: "FeatureCollection";
+  features: {
+    type: "Feature";
+    properties: { linkType: string };
+    geometry: { type: "LineString"; coordinates: [number, number][] };
+  }[];
+}
+
 interface SavedView {
   name: string;
   layers: LayerToggles;
@@ -299,7 +310,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     ensureFlowLayers(map);
     for (const kind of Object.keys(FLOW_STYLE) as TwinFlowKind[]) {
       const source = map.getSource(`twin-flow-${kind}`) as
-        | { setData: (d: GeoJSON.FeatureCollection) => void }
+        | { setData: (d: FlowFeatureCollection) => void }
         | undefined;
       if (!source) continue;
       const features = layers[kind]
