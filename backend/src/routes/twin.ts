@@ -12,6 +12,7 @@ import {
   ackAlert,
   createAlertRule,
   deleteAlertRule,
+  getTwinNetwork,
   getTwinTreeSnapshot,
   listAlertRules,
   listOpenAlerts,
@@ -56,6 +57,27 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
       return getTwinTreeSnapshot(req.db, env.id);
+    },
+  );
+
+  app.get(
+    "/ontology/:env/twin/network",
+    {
+      schema: {
+        summary: "Network-level twin: geolocated root sites + typed inter-site flows",
+        description:
+          "Root units with metrics, alert rollups, and latitude/longitude read from " +
+          "instance properties (null when unset), plus flows — link instances that " +
+          "connect two sites, classified as patient / supply / data / other.",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1) }),
+        response: { 200: z.record(z.unknown()), 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      return getTwinNetwork(req.db, env.id);
     },
   );
 

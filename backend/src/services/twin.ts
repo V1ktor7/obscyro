@@ -699,6 +699,92 @@ export async function getTwinTreeSnapshot(db: DbClient, environmentId: string) {
   };
 }
 
+/** Classify an inter-site link type into a flow lane for the network map. */
+function flowKind(linkType: string): "patient" | "supply" | "data" | "other" {
+  const n = linkType.toLowerCase();
+  if (/transfer|refer|patient|admit/.test(n)) return "patient";
+  if (/suppl|ship|deliver|stock|resource|order/.test(n)) return "supply";
+  if (/feed|data|hl7|fhir|report|sync/.test(n)) return "data";
+  return "other";
+}
+
+/**
+ * Network-level twin: root units as geolocated sites (latitude/longitude read
+ * from instance properties; null when unset) plus typed flows — ontology link
+ * instances connecting two root sites.
+ */
+export async function getTwinNetwork(db: DbClient, environmentId: string) {
+  const snapshot = await getTwinTreeSnapshot(db, environmentId);
+  const rootSet = new Set(snapshot.roots);
+  const rootIds = snapshot.roots;
+
+  const coords = new Map<string, { latitude: number | null; longitude: number | null }>();
+  if (rootIds.length > 0) {
+    const { rows } = await db.query<{ id: string; properties: Record<string, unknown> }>(
+      `SELECT id, properties FROM app.ontology_object_instances WHERE id = ANY($1::uuid[])`,
+      [rootIds],
+    );
+    for (const r of rows) {
+      const p = r.properties ?? {};
+      const num = (...keys: string[]): number | null => {
+        for (const k of keys) {
+          const v = Number(p[k]);
+          if (Number.isFinite(v) && v !== 0) return v;
+        }
+        return null;
+      };
+      coords.set(r.id, {
+        latitude: num("latitude", "lat"),
+        longitude: num("longitude", "lng", "lon"),
+      });
+    }
+  }
+
+  let flows: {
+    id: string;
+    linkType: string;
+    kind: "patient" | "supply" | "data" | "other";
+    fromId: string;
+    toId: string;
+  }[] = [];
+  if (rootIds.length > 1) {
+    const { rows } = await db.query<{
+      id: string;
+      link_type: string;
+      from_instance_id: string;
+      to_instance_id: string;
+    }>(
+      `SELECT li.id, lt.name AS link_type, li.from_instance_id, li.to_instance_id
+         FROM app.ontology_link_instances li
+         JOIN app.ontology_link_types lt ON lt.id = li.link_type_id
+        WHERE lt.environment_id = $1
+          AND li.from_instance_id = ANY($2::uuid[])
+          AND li.to_instance_id = ANY($2::uuid[])
+          AND li.from_instance_id <> li.to_instance_id`,
+      [environmentId, rootIds],
+    );
+    flows = rows.map((r) => ({
+      id: r.id,
+      linkType: r.link_type,
+      kind: flowKind(r.link_type),
+      fromId: r.from_instance_id,
+      toId: r.to_instance_id,
+    }));
+  }
+
+  return {
+    computedAt: snapshot.computedAt,
+    sites: snapshot.nodes
+      .filter((n) => rootSet.has(n.id))
+      .map((n) => ({
+        ...n,
+        latitude: coords.get(n.id)?.latitude ?? null,
+        longitude: coords.get(n.id)?.longitude ?? null,
+      })),
+    flows,
+  };
+}
+
 export async function seedTwinDemo(
   db: DbClient,
   environmentId: string,

@@ -914,6 +914,31 @@ export async function fetchTwinTree(env: string): Promise<TwinTreeSnapshot> {
   return apiFetch(`/v1/ontology/${encEnv(env)}/twin/tree`);
 }
 
+export type TwinFlowKind = "patient" | "supply" | "data" | "other";
+
+export interface TwinNetworkSite extends TwinUnitNode {
+  latitude: number | null;
+  longitude: number | null;
+}
+
+export interface TwinNetworkFlow {
+  id: string;
+  linkType: string;
+  kind: TwinFlowKind;
+  fromId: string;
+  toId: string;
+}
+
+export interface TwinNetworkSnapshot {
+  computedAt: string;
+  sites: TwinNetworkSite[];
+  flows: TwinNetworkFlow[];
+}
+
+export async function fetchTwinNetwork(env: string): Promise<TwinNetworkSnapshot> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/network`);
+}
+
 export async function fetchTwinUnit(
   env: string,
   unitId: string,
