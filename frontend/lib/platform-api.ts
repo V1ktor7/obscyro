@@ -442,10 +442,13 @@ export type LinkCardinality =
   | "many_to_one"
   | "many_to_many";
 
+export type ObjectNature = "physical" | "conceptual";
+
 export interface EnvObjectType {
   id: string;
   name: string;
   description: string | null;
+  nature: ObjectNature | null;
   propertySchema: { key: string; type: string; label?: string }[];
   createdAt: string;
 }
@@ -491,6 +494,17 @@ export async function createEnvironment(body: {
   type: EnvironmentType;
 }): Promise<EnvironmentSummary> {
   return apiFetch("/v1/ontology/environments", { method: "POST", body });
+}
+
+/** Copy another environment's ontology (types, instances, links) into `env`. */
+export async function importEnvironment(
+  env: string,
+  fromEnv: string,
+): Promise<{ types: number; instances: number; linkTypes: number; links: number }> {
+  return apiFetch(`/v1/ontology/${encodeURIComponent(env)}/import`, {
+    method: "POST",
+    body: { fromEnv },
+  });
 }
 
 export async function listEnvTypes(
@@ -570,7 +584,12 @@ export async function createEnvLink(
 
 export async function createEnvType(
   env: string,
-  body: { name: string; description?: string; propertySchema?: PropertyDefinition[] },
+  body: {
+    name: string;
+    description?: string;
+    nature?: ObjectNature | null;
+    propertySchema?: PropertyDefinition[];
+  },
 ): Promise<EnvObjectType> {
   return apiFetch(`/v1/ontology/${encodeURIComponent(env)}/types`, { method: "POST", body });
 }
@@ -578,7 +597,11 @@ export async function createEnvType(
 export async function updateEnvType(
   env: string,
   name: string,
-  body: { description?: string | null; propertySchema?: PropertyDefinition[] },
+  body: {
+    description?: string | null;
+    nature?: ObjectNature | null;
+    propertySchema?: PropertyDefinition[];
+  },
 ): Promise<EnvObjectType> {
   return apiFetch(`/v1/ontology/${encodeURIComponent(env)}/types/${encodeURIComponent(name)}`, {
     method: "PATCH",

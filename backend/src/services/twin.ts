@@ -709,23 +709,42 @@ function flowKind(linkType: string): "patient" | "supply" | "data" | "other" {
 }
 
 /**
- * Network-level twin: root units as geolocated sites (latitude/longitude read
- * from instance properties; null when unset) plus typed flows — ontology link
- * instances connecting two root sites.
+ * Network-level twin. Sites are instances of object types tagged
+ * nature='physical' (the principled selection), plus the twin tree's root
+ * units as a fallback so environments without nature tags keep working.
+ * Flows are ontology link instances connecting two sites, typed by link name.
  */
 export async function getTwinNetwork(db: DbClient, environmentId: string) {
   const snapshot = await getTwinTreeSnapshot(db, environmentId);
-  const rootSet = new Set(snapshot.roots);
-  const rootIds = snapshot.roots;
+  const nodeById = new Map(snapshot.nodes.map((n) => [n.id, n]));
+
+  const physical = await db.query<{
+    id: string;
+    type_name: string;
+    properties: Record<string, unknown>;
+  }>(
+    `SELECT oi.id, t.name AS type_name, oi.properties
+       FROM app.ontology_object_instances oi
+       JOIN app.ontology_object_types t ON t.id = oi.object_type_id
+      WHERE t.environment_id = $1 AND t.nature = 'physical'
+      ORDER BY oi.created_at ASC
+      LIMIT 500`,
+    [environmentId],
+  );
+  const physicalById = new Map(physical.rows.map((r) => [r.id, r]));
+
+  const siteIds = Array.from(new Set([...physicalById.keys(), ...snapshot.roots]));
 
   const coords = new Map<string, { latitude: number | null; longitude: number | null }>();
-  if (rootIds.length > 0) {
+  const propsById = new Map<string, Record<string, unknown>>();
+  if (siteIds.length > 0) {
     const { rows } = await db.query<{ id: string; properties: Record<string, unknown> }>(
       `SELECT id, properties FROM app.ontology_object_instances WHERE id = ANY($1::uuid[])`,
-      [rootIds],
+      [siteIds],
     );
     for (const r of rows) {
       const p = r.properties ?? {};
+      propsById.set(r.id, p);
       const num = (...keys: string[]): number | null => {
         for (const k of keys) {
           const v = Number(p[k]);
@@ -740,6 +759,34 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
     }
   }
 
+  const siteName = (id: string): string => {
+    const p = propsById.get(id) ?? {};
+    for (const key of ["name", "display", "label", "identifier"]) {
+      if (typeof p[key] === "string" && (p[key] as string).trim()) return p[key] as string;
+    }
+    return physicalById.get(id)?.type_name ?? "Site";
+  };
+
+  const sites = siteIds.map((id) => {
+    const node = nodeById.get(id);
+    const phys = physicalById.get(id);
+    const base = node ?? {
+      id,
+      name: siteName(id),
+      kind: phys?.type_name ?? "site",
+      code: "",
+      parentId: null,
+      metrics: emptyMetrics(id),
+      worstAlertSeverity: null,
+      openAlertCount: 0,
+    };
+    return {
+      ...base,
+      latitude: coords.get(id)?.latitude ?? null,
+      longitude: coords.get(id)?.longitude ?? null,
+    };
+  });
+
   let flows: {
     id: string;
     linkType: string;
@@ -747,7 +794,7 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
     fromId: string;
     toId: string;
   }[] = [];
-  if (rootIds.length > 1) {
+  if (siteIds.length > 1) {
     const { rows } = await db.query<{
       id: string;
       link_type: string;
@@ -761,7 +808,7 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
           AND li.from_instance_id = ANY($2::uuid[])
           AND li.to_instance_id = ANY($2::uuid[])
           AND li.from_instance_id <> li.to_instance_id`,
-      [environmentId, rootIds],
+      [environmentId, siteIds],
     );
     flows = rows.map((r) => ({
       id: r.id,
@@ -772,17 +819,7 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
     }));
   }
 
-  return {
-    computedAt: snapshot.computedAt,
-    sites: snapshot.nodes
-      .filter((n) => rootSet.has(n.id))
-      .map((n) => ({
-        ...n,
-        latitude: coords.get(n.id)?.latitude ?? null,
-        longitude: coords.get(n.id)?.longitude ?? null,
-      })),
-    flows,
-  };
+  return { computedAt: snapshot.computedAt, sites, flows };
 }
 
 export async function seedTwinDemo(

@@ -59,6 +59,7 @@ import {
   deleteEnvType,
   getEnvObject,
   getOntologySummary,
+  importEnvironment,
   listEnvObjects,
   listEnvTypes,
   updateEnvObject,
@@ -70,6 +71,7 @@ import {
   type EnvironmentType,
   type EnvTypeSummary,
   type LinkCardinality,
+  type ObjectNature,
   type OntologySummary,
   type PropertyDefinition,
   type PropertyType,
@@ -877,6 +879,7 @@ export default function ManagerView() {
             view={view}
             env={env}
             envInfo={envInfo}
+            environments={environments}
             summary={summary}
             types={types}
             linkTypes={linkTypes}
@@ -901,6 +904,7 @@ export default function ManagerView() {
               setSelectedEnv(slug);
               bumpOntology();
             }}
+            onImported={() => bumpOntology()}
             onError={setError}
           />
         )}
@@ -914,9 +918,9 @@ export default function ManagerView() {
             setPanel("none");
             setPendingTypePos(null);
           }}
-          onSubmit={async (name, description, schema) => {
+          onSubmit={async (name, description, schema, nature) => {
             if (!env) return;
-            await createEnvType(env, { name, description, propertySchema: schema });
+            await createEnvType(env, { name, description, nature, propertySchema: schema });
             if (pendingTypePos) {
               const next = { ...savedLayout, [name]: pendingTypePos };
               setSavedLayout(next);
@@ -988,9 +992,13 @@ export default function ManagerView() {
           mode="edit"
           initial={selectedTypeDef}
           onClose={() => setSelectedType(null)}
-          onSubmit={async (_name, description, schema) => {
+          onSubmit={async (_name, description, schema, nature) => {
             if (!env) return;
-            await updateEnvType(env, selectedTypeDef.name, { description, propertySchema: schema });
+            await updateEnvType(env, selectedTypeDef.name, {
+              description,
+              nature,
+              propertySchema: schema,
+            });
             await loadTypes();
             notifyChanged();
           }}
@@ -1433,6 +1441,7 @@ function ResourcePages({
   view,
   env,
   envInfo,
+  environments,
   summary,
   types,
   linkTypes,
@@ -1444,11 +1453,13 @@ function ResourcePages({
   onNewLinkType,
   onDeleteLinkType,
   onEnvCreated,
+  onImported,
   onError,
 }: {
   view: View;
   env: string | null;
   envInfo: { name: string; slug: string; type: string; organizationName: string } | null;
+  environments: { id: string; name: string; slug: string; organizationName: string }[];
   summary: OntologySummary | null;
   types: EnvObjectType[];
   linkTypes: EnvLinkType[];
@@ -1460,8 +1471,29 @@ function ResourcePages({
   onNewLinkType: () => void;
   onDeleteLinkType: (name: string) => Promise<void>;
   onEnvCreated: (slug: string) => Promise<void>;
+  onImported: () => void;
   onError: (msg: string) => void;
 }) {
+  const [importFrom, setImportFrom] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
+
+  async function handleImport() {
+    if (!env || !importFrom || importing) return;
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const res = await importEnvironment(env, importFrom);
+      setImportResult(
+        `Imported ${res.types} types, ${res.instances.toLocaleString()} instances, ${res.linkTypes} link types, ${res.links.toLocaleString()} links.`,
+      );
+      onImported();
+    } catch (err) {
+      onError((err as Error).message);
+    } finally {
+      setImporting(false);
+    }
+  }
   if (view === "objectTypes") {
     const stats = summary?.types ?? [];
     return (
@@ -1857,6 +1889,43 @@ function ResourcePages({
               </table>
             </div>
           ) : null}
+          <div className="rounded-md border border-[#d3d8de] bg-white p-3">
+            <p className="mb-1 text-xs font-semibold text-[#1c2127]">
+              Import from another environment
+            </p>
+            <p className="mb-2 text-[10.5px] leading-relaxed text-[#8f99a8]">
+              Copies types, instances, and links into this environment — use it to
+              consolidate domain-split environments into one world environment. The source
+              is left untouched.
+            </p>
+            <div className="flex items-center gap-2">
+              <select
+                value={importFrom}
+                onChange={(e) => setImportFrom(e.target.value)}
+                className="min-w-0 flex-1 rounded border border-[#d3d8de] bg-[#f6f7f9] px-2 py-1.5 text-xs text-[#1c2127] focus:border-[#2d72d2] focus:outline-none"
+              >
+                <option value="">choose a source environment…</option>
+                {environments
+                  .filter((e) => e.slug !== env)
+                  .map((e) => (
+                    <option key={e.id} value={e.slug}>
+                      {e.name} ({e.organizationName})
+                    </option>
+                  ))}
+              </select>
+              <button
+                type="button"
+                disabled={!importFrom || importing}
+                onClick={() => void handleImport()}
+                className="shrink-0 rounded bg-[#2d72d2] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#215db0] disabled:bg-[#c5cbd3]"
+              >
+                {importing ? "Importing…" : "Import"}
+              </button>
+            </div>
+            {importResult ? (
+              <p className="mt-2 text-[11px] text-emerald-700">{importResult}</p>
+            ) : null}
+          </div>
           <div className="rounded-md border border-[#d3d8de] bg-white">
             <EnvironmentCreator onCreated={onEnvCreated} onError={onError} />
           </div>
@@ -2044,12 +2113,18 @@ function TypeEditorPanel({
   mode: "create" | "edit";
   initial?: EnvObjectType;
   onClose: () => void;
-  onSubmit: (name: string, description: string, schema: PropertyDefinition[]) => Promise<void>;
+  onSubmit: (
+    name: string,
+    description: string,
+    schema: PropertyDefinition[],
+    nature: ObjectNature | null,
+  ) => Promise<void>;
   onDelete?: () => Promise<void>;
   onError: (msg: string) => void;
 }) {
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
+  const [nature, setNature] = useState<ObjectNature | "">(initial?.nature ?? "");
   const [rows, setRows] = useState<PropertyDefinition[]>(
     (initial?.propertySchema as PropertyDefinition[]) ?? [],
   );
@@ -2067,6 +2142,7 @@ function TypeEditorPanel({
         name.trim(),
         description.trim(),
         rows.filter((r) => r.key.trim()).map((r) => ({ ...r, key: r.key.trim() })),
+        nature === "" ? null : nature,
       );
     } catch (err) {
       onError((err as Error).message);
@@ -2098,6 +2174,17 @@ function TypeEditorPanel({
             rows={2}
             className="w-full resize-none rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none"
           />
+        </Labelled>
+        <Labelled label="Nature">
+          <select
+            value={nature}
+            onChange={(e) => setNature(e.target.value as ObjectNature | "")}
+            className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none"
+          >
+            <option value="">Unspecified</option>
+            <option value="physical">Physical — real-world extent, twin anchor (lat/lng)</option>
+            <option value="conceptual">Conceptual — grouping/classifier, no footprint</option>
+          </select>
         </Labelled>
         <Labelled label="Properties">
           <PropertyRowsEditor rows={rows} onChange={setRows} />

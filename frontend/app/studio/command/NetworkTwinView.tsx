@@ -25,7 +25,9 @@ import {
   HeartPulse,
   Loader2,
   Map as MapIcon,
+  MapPin,
   Mountain,
+  Plus,
   RefreshCw,
   Satellite,
   Save,
@@ -34,9 +36,14 @@ import {
 
 import { cn } from "@/lib/cn";
 import {
+  createEnvObject,
+  createEnvType,
   fetchTwinNetwork,
+  getEnvObject,
   listIngestEvents,
   listTwinAlerts,
+  updateEnvObject,
+  updateEnvType,
   type TwinAlert,
   type TwinFlowKind,
   type TwinNetworkSite,
@@ -143,6 +150,89 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   const markersRef = useRef<Marker[]>([]);
   const fittedRef = useRef(false);
 
+  // Site placement (add / move) — click handler lives in a ref so the map's
+  // single click listener always sees current state.
+  const [placing, setPlacing] = useState<null | { mode: "add" } | { mode: "move"; siteId: string }>(
+    null,
+  );
+  const [pendingPos, setPendingPos] = useState<[number, number] | null>(null);
+  const [siteName, setSiteName] = useState("");
+  const [siteKind, setSiteKind] = useState("hospital");
+  const [savingSite, setSavingSite] = useState(false);
+  const mapClickRef = useRef<((lng: number, lat: number) => void) | null>(null);
+
+  mapClickRef.current = (lng: number, lat: number) => {
+    if (!placing) return;
+    if (placing.mode === "add") {
+      setPendingPos([lng, lat]);
+      setPlacing(null);
+    } else {
+      const siteId = placing.siteId;
+      setPlacing(null);
+      void (async () => {
+        if (!env) return;
+        try {
+          const { object } = await getEnvObject(env, siteId);
+          await updateEnvObject(env, siteId, {
+            properties: { ...object.properties, latitude: lat, longitude: lng },
+          });
+          await load();
+        } catch (err) {
+          setError((err as Error).message);
+        }
+      })();
+    }
+  };
+
+  useEffect(() => {
+    const canvas = mapRef.current?.getCanvas();
+    if (canvas) canvas.style.cursor = placing ? "crosshair" : "";
+  }, [placing]);
+
+  async function createSite() {
+    if (!env || !pendingPos || savingSite) return;
+    if (!siteName.trim()) {
+      setError("Give the site a name.");
+      return;
+    }
+    setSavingSite(true);
+    try {
+      // Ensure the physical Institution type exists (tagged for the twin).
+      try {
+        await createEnvType(env, {
+          name: "Institution",
+          description: "Physical site of the healthcare network",
+          nature: "physical",
+          propertySchema: [
+            { key: "name", type: "string" },
+            { key: "kind", type: "string" },
+            { key: "latitude", type: "number" },
+            { key: "longitude", type: "number" },
+          ],
+        });
+      } catch {
+        await updateEnvType(env, "Institution", { nature: "physical" }).catch(() => undefined);
+      }
+      await createEnvObject(env, {
+        type: "Institution",
+        properties: {
+          name: siteName.trim(),
+          kind: siteKind,
+          latitude: pendingPos[1],
+          longitude: pendingPos[0],
+        },
+        provenance: { source: "twin-add-site" },
+      });
+      setPendingPos(null);
+      setSiteName("");
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSavingSite(false);
+    }
+  }
+
   // --- data ------------------------------------------------------------------
 
   const load = useCallback(async () => {
@@ -211,6 +301,9 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
       });
       map.on("style.load", () => {
         ensureFlowLayers(map);
+      });
+      map.on("click", (e) => {
+        mapClickRef.current?.(e.lngLat.lng, e.lngLat.lat);
       });
     })();
     return () => {
@@ -449,6 +542,17 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
             latitude/longitude in Manager
           </span>
         ) : null}
+        {placing ? (
+          <span className="flex items-center gap-1.5 rounded bg-[#e7f2fd] px-2 py-0.5 text-[11px] font-medium text-[#215db0]">
+            <MapPin className="h-3 w-3" />
+            {placing.mode === "add"
+              ? "click the map to place the new site"
+              : "click the map to set the new location"}
+            <button type="button" onClick={() => setPlacing(null)} aria-label="Cancel placement">
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ) : null}
         <span className="flex-1" />
         <button
           type="button"
@@ -457,6 +561,20 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         >
           {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
           Refresh
+        </button>
+        <button
+          type="button"
+          disabled={!env || !MAPBOX_TOKEN}
+          onClick={() => setPlacing(placing?.mode === "add" ? null : { mode: "add" })}
+          className={cn(
+            "flex items-center gap-1 rounded px-2.5 py-1.5 text-xs font-medium",
+            placing?.mode === "add"
+              ? "bg-[#e7f2fd] text-[#215db0]"
+              : "bg-[#2d72d2] text-white hover:bg-[#215db0] disabled:bg-[#c5cbd3]",
+          )}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add site
         </button>
       </div>
 
@@ -580,6 +698,52 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                   )}
                 </button>
               </div>
+              {pendingPos ? (
+                <div className="absolute left-1/2 top-6 z-20 w-72 -translate-x-1/2 rounded-md border border-[#d3d8de] bg-white p-3 shadow-lg">
+                  <p className="mb-2 text-xs font-semibold text-[#1c2127]">New site</p>
+                  <input
+                    value={siteName}
+                    onChange={(e) => setSiteName(e.target.value)}
+                    placeholder="e.g. Hôpital Nord"
+                    autoFocus
+                    className="mb-2 w-full rounded border border-[#d3d8de] bg-[#f6f7f9] px-2 py-1.5 text-xs text-[#1c2127] focus:border-[#2d72d2] focus:outline-none"
+                  />
+                  <div className="mb-2 flex items-center gap-2">
+                    <select
+                      value={siteKind}
+                      onChange={(e) => setSiteKind(e.target.value)}
+                      className="flex-1 rounded border border-[#d3d8de] bg-[#f6f7f9] px-2 py-1.5 text-xs text-[#1c2127] focus:border-[#2d72d2] focus:outline-none"
+                    >
+                      <option value="hospital">Hospital</option>
+                      <option value="clinic">Clinic</option>
+                      <option value="lab">Lab</option>
+                      <option value="pharmacy">Pharmacy</option>
+                      <option value="supplier">Supplier</option>
+                      <option value="other">Other</option>
+                    </select>
+                    <span className="font-mono text-[10px] text-[#8f99a8]">
+                      {pendingPos[1].toFixed(4)}, {pendingPos[0].toFixed(4)}
+                    </span>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPendingPos(null)}
+                      className="rounded border border-[#d3d8de] px-2.5 py-1 text-xs text-[#404854]"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={savingSite}
+                      onClick={() => void createSite()}
+                      className="rounded bg-[#2d72d2] px-2.5 py-1 text-xs font-medium text-white hover:bg-[#215db0] disabled:bg-[#c5cbd3]"
+                    >
+                      {savingSite ? "Creating…" : "Create site"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               <div className="absolute bottom-2 left-2 flex gap-3 rounded border border-[#d3d8de] bg-white/90 px-2.5 py-1 text-[10px] text-[#5f6b7c]">
                 <span className="flex items-center gap-1">
                   <span className="h-[3px] w-3 rounded bg-[#2d72d2]" />
@@ -676,6 +840,14 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
             ) : null}
 
             <div className="mt-auto flex flex-col gap-1.5 pt-3">
+              <button
+                type="button"
+                onClick={() => setPlacing({ mode: "move", siteId: selected.id })}
+                className="flex items-center gap-1.5 rounded border border-[#d3d8de] px-2.5 py-1.5 text-xs text-[#404854] hover:border-[#2d72d2]"
+              >
+                <MapPin className="h-3.5 w-3.5" />
+                Edit location
+              </button>
               <button
                 type="button"
                 onClick={onDrillIn}

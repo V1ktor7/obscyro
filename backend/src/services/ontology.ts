@@ -392,3 +392,147 @@ export async function countInstancesForEnv(
   );
   return Number(rows[0]?.count ?? 0);
 }
+
+/**
+ * Copy an environment's ontology into another: object types (merged by name,
+ * nature filled in when the target lacks one), instances, link types, and
+ * link instances. Used to consolidate domain-split environments into one
+ * "world" environment. Instance copies record their origin in provenance.
+ */
+export async function importEnvironment(
+  db: DbClient,
+  targetEnvId: string,
+  sourceEnvId: string,
+): Promise<{ types: number; instances: number; linkTypes: number; links: number }> {
+  const srcTypes = await db.query<{
+    id: string;
+    name: string;
+    description: string | null;
+    nature: "physical" | "conceptual" | null;
+    property_schema: PropertyDef[];
+  }>(
+    `SELECT id, name, description, nature, property_schema
+       FROM app.ontology_object_types
+      WHERE environment_id = $1`,
+    [sourceEnvId],
+  );
+
+  const typeMap = new Map<string, string>();
+  for (const t of srcTypes.rows) {
+    const targetTypeId = await getOrCreateObjectType(
+      db,
+      targetEnvId,
+      t.name,
+      t.description,
+      t.property_schema ?? [],
+    );
+    if (t.nature) {
+      await db.query(
+        `UPDATE app.ontology_object_types SET nature = COALESCE(nature, $2) WHERE id = $1`,
+        [targetTypeId, t.nature],
+      );
+    }
+    typeMap.set(t.id, targetTypeId);
+  }
+
+  const srcInstances = await db.query<{
+    id: string;
+    object_type_id: string;
+    properties: Record<string, unknown>;
+    provenance: Record<string, unknown>;
+  }>(
+    `SELECT oi.id, oi.object_type_id, oi.properties, oi.provenance
+       FROM app.ontology_object_instances oi
+       JOIN app.ontology_object_types t ON t.id = oi.object_type_id
+      WHERE t.environment_id = $1
+      ORDER BY oi.created_at ASC
+      LIMIT 10000`,
+    [sourceEnvId],
+  );
+
+  const instanceMap = new Map<string, string>();
+  for (const inst of srcInstances.rows) {
+    const targetTypeId = typeMap.get(inst.object_type_id);
+    if (!targetTypeId) continue;
+    const { rows } = await db.query<{ id: string }>(
+      `INSERT INTO app.ontology_object_instances (object_type_id, properties, provenance)
+       VALUES ($1, $2::jsonb, $3::jsonb)
+       RETURNING id`,
+      [
+        targetTypeId,
+        JSON.stringify(inst.properties ?? {}),
+        JSON.stringify({
+          ...(inst.provenance ?? {}),
+          importedFromEnvironment: sourceEnvId,
+          importedFromInstance: inst.id,
+        }),
+      ],
+    );
+    instanceMap.set(inst.id, rows[0]!.id);
+  }
+
+  const srcLinkTypes = await db.query<{
+    id: string;
+    name: string;
+    from_type_id: string;
+    to_type_id: string;
+    cardinality: string;
+  }>(
+    `SELECT id, name, from_type_id, to_type_id, cardinality
+       FROM app.ontology_link_types
+      WHERE environment_id = $1`,
+    [sourceEnvId],
+  );
+
+  const linkTypeMap = new Map<string, string>();
+  for (const lt of srcLinkTypes.rows) {
+    const fromType = typeMap.get(lt.from_type_id);
+    const toType = typeMap.get(lt.to_type_id);
+    if (!fromType || !toType) continue;
+    const targetLinkTypeId = await getOrCreateLinkType(
+      db,
+      targetEnvId,
+      lt.name,
+      fromType,
+      toType,
+      lt.cardinality,
+    );
+    linkTypeMap.set(lt.id, targetLinkTypeId);
+  }
+
+  const srcLinks = await db.query<{
+    link_type_id: string;
+    from_instance_id: string;
+    to_instance_id: string;
+    provenance: Record<string, unknown>;
+  }>(
+    `SELECT li.link_type_id, li.from_instance_id, li.to_instance_id, li.provenance
+       FROM app.ontology_link_instances li
+       JOIN app.ontology_link_types lt ON lt.id = li.link_type_id
+      WHERE lt.environment_id = $1
+      LIMIT 20000`,
+    [sourceEnvId],
+  );
+
+  let links = 0;
+  for (const li of srcLinks.rows) {
+    const linkTypeId = linkTypeMap.get(li.link_type_id);
+    const fromId = instanceMap.get(li.from_instance_id);
+    const toId = instanceMap.get(li.to_instance_id);
+    if (!linkTypeId || !fromId || !toId) continue;
+    const inserted = await db.query(
+      `INSERT INTO app.ontology_link_instances (link_type_id, from_instance_id, to_instance_id, provenance)
+       VALUES ($1, $2, $3, $4::jsonb)
+       ON CONFLICT (link_type_id, from_instance_id, to_instance_id) DO NOTHING`,
+      [linkTypeId, fromId, toId, JSON.stringify(li.provenance ?? {})],
+    );
+    links += inserted.rowCount ?? 0;
+  }
+
+  return {
+    types: typeMap.size,
+    instances: instanceMap.size,
+    linkTypes: linkTypeMap.size,
+    links,
+  };
+}

@@ -10,6 +10,7 @@ import { ensureUserOrganization, resolveOrganizationsForUser } from "../services
 import {
   getOrCreateLinkType,
   getOrCreateObjectType,
+  importEnvironment,
   resolveEnvironment,
   seedEntityEnvironmentSchema,
   type EnvironmentType,
@@ -405,10 +406,13 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
+  const natureEnum = z.enum(["physical", "conceptual"]);
+
   const objectTypeOut = z.object({
     id: z.string().uuid(),
     name: z.string(),
     description: z.string().nullable(),
+    nature: natureEnum.nullable(),
     propertySchema: z.array(propertyDef),
     createdAt: z.string(),
   });
@@ -444,10 +448,11 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         id: string;
         name: string;
         description: string | null;
+        nature: "physical" | "conceptual" | null;
         property_schema: unknown;
         created_at: Date;
       }>(
-        `SELECT id, name, description, property_schema, created_at
+        `SELECT id, name, description, nature, property_schema, created_at
            FROM app.ontology_object_types
           WHERE environment_id = $1
           ORDER BY name ASC`,
@@ -473,6 +478,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
           id: r.id,
           name: r.name,
           description: r.description,
+          nature: r.nature,
           propertySchema: r.property_schema as z.infer<typeof propertyDef>[],
           createdAt: r.created_at.toISOString(),
         })),
@@ -484,6 +490,42 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
           cardinality: r.cardinality,
         })),
       };
+    },
+  );
+
+  app.post(
+    "/ontology/:env/import",
+    {
+      schema: {
+        summary: "Import another environment's ontology into this one",
+        description:
+          "Copies object types (merged by name), instances, link types, and links from " +
+          "the source environment into :env — used to consolidate domain-split " +
+          "environments into one world environment. Instance copies keep their origin " +
+          "in provenance. The source environment is left untouched.",
+        tags: ["ontology"],
+        params: z.object({ env: z.string().min(1) }),
+        body: z.object({ fromEnv: z.string().min(1) }),
+        response: {
+          200: z.object({
+            types: z.number().int(),
+            instances: z.number().int(),
+            linkTypes: z.number().int(),
+            links: z.number().int(),
+          }),
+          400: errorEnvelope,
+          404: errorEnvelope,
+        },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const target = await resolveEnvironment(req.db, userId, req.params.env);
+      const source = await resolveEnvironment(req.db, userId, req.body.fromEnv);
+      if (target.id === source.id) {
+        throw BadRequest("SAME_ENVIRONMENT", "Source and target environments are the same.");
+      }
+      return importEnvironment(req.db, target.id, source.id);
     },
   );
 
@@ -607,10 +649,11 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         id: string;
         name: string;
         description: string | null;
+        nature: "physical" | "conceptual" | null;
         property_schema: unknown;
         created_at: Date;
       }>(
-        `SELECT id, name, description, property_schema, created_at
+        `SELECT id, name, description, nature, property_schema, created_at
            FROM app.ontology_object_types
           WHERE environment_id = $1 AND name = $2`,
         [env.id, req.params.name],
@@ -621,6 +664,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         id: r.id,
         name: r.name,
         description: r.description,
+        nature: r.nature,
         propertySchema: r.property_schema as z.infer<typeof propertyDef>[],
         createdAt: r.created_at.toISOString(),
       };
@@ -920,6 +964,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         body: z.object({
           name: z.string().trim().min(1).max(120),
           description: z.string().trim().max(500).optional(),
+          nature: natureEnum.nullable().optional(),
           propertySchema: z.array(propertyDef).default([]),
         }),
         response: { 201: objectTypeOut, 404: errorEnvelope, 409: errorEnvelope },
@@ -944,14 +989,21 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         req.body.description ?? null,
         req.body.propertySchema,
       );
+      if (req.body.nature !== undefined) {
+        await req.db.query(`UPDATE app.ontology_object_types SET nature = $2 WHERE id = $1`, [
+          typeId,
+          req.body.nature,
+        ]);
+      }
       const { rows } = await req.db.query<{
         id: string;
         name: string;
         description: string | null;
+        nature: "physical" | "conceptual" | null;
         property_schema: unknown;
         created_at: Date;
       }>(
-        `SELECT id, name, description, property_schema, created_at
+        `SELECT id, name, description, nature, property_schema, created_at
            FROM app.ontology_object_types WHERE id = $1`,
         [typeId],
       );
@@ -960,6 +1012,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         id: r.id,
         name: r.name,
         description: r.description,
+        nature: r.nature,
         propertySchema: r.property_schema as z.infer<typeof propertyDef>[],
         createdAt: r.created_at.toISOString(),
       });
@@ -975,6 +1028,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         params: z.object({ env: z.string().min(1), name: z.string().min(1) }),
         body: z.object({
           description: z.string().trim().max(500).nullable().optional(),
+          nature: natureEnum.nullable().optional(),
           propertySchema: z.array(propertyDef).optional(),
         }),
         response: { 200: objectTypeOut, 404: errorEnvelope },
@@ -987,19 +1041,23 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         id: string;
         name: string;
         description: string | null;
+        nature: "physical" | "conceptual" | null;
         property_schema: unknown;
         created_at: Date;
       }>(
         `UPDATE app.ontology_object_types
             SET description = COALESCE($3, description),
-                property_schema = COALESCE($4::jsonb, property_schema)
+                property_schema = COALESCE($4::jsonb, property_schema),
+                nature = CASE WHEN $5::boolean THEN $6 ELSE nature END
           WHERE environment_id = $1 AND name = $2
-          RETURNING id, name, description, property_schema, created_at`,
+          RETURNING id, name, description, nature, property_schema, created_at`,
         [
           env.id,
           req.params.name,
           req.body.description ?? null,
           req.body.propertySchema ? JSON.stringify(req.body.propertySchema) : null,
+          req.body.nature !== undefined,
+          req.body.nature ?? null,
         ],
       );
       const r = rows[0];
@@ -1008,6 +1066,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         id: r.id,
         name: r.name,
         description: r.description,
+        nature: r.nature,
         propertySchema: r.property_schema as z.infer<typeof propertyDef>[],
         createdAt: r.created_at.toISOString(),
       };
