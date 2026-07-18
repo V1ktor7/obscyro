@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ChevronUp,
   CircleDashed,
+  Copy,
   Database,
   Loader2,
   Pause,
@@ -34,6 +35,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/cn";
+import { listIngestSources, type IngestSource } from "@/lib/platform-api";
 import {
   createChannel,
   deleteChannel,
@@ -41,6 +43,7 @@ import {
   listChannelRuns,
   listChannels,
   newStep,
+  provisionChannelWebhook,
   stepSummary,
   updateChannel,
   STEP_LABELS,
@@ -100,6 +103,9 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
   const [runError, setRunError] = useState<string | null>(null);
   const runningRef = useRef(false);
 
+  const [sources, setSources] = useState<IngestSource[]>([]);
+  const [provisioning, setProvisioning] = useState(false);
+
   const selected = useMemo(
     () => channels.find((c) => c.slug === selectedSlug) ?? null,
     [channels, selectedSlug],
@@ -129,6 +135,13 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
     setError(null);
     void loadChannels();
   }, [loadChannels]);
+
+  useEffect(() => {
+    if (!hasKey) return;
+    listIngestSources()
+      .then(({ sources: list }) => setSources(list))
+      .catch(() => setSources([]));
+  }, [hasKey, env]);
 
   useEffect(() => {
     setDraftSteps(selected ? selected.steps.map((s) => ({ ...s, config: { ...s.config } })) : []);
@@ -202,6 +215,34 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
       await deleteChannel(env, selected.slug);
       setSelectedSlug(null);
       await loadChannels();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleProvisionWebhook() {
+    if (!env || !selected || provisioning) return;
+    setProvisioning(true);
+    try {
+      await provisionChannelWebhook(env, selected.slug);
+      await loadChannels();
+      const { sources: list } = await listIngestSources().catch(() => ({ sources: [] }));
+      setSources(list);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setProvisioning(false);
+    }
+  }
+
+  async function handleBindSource(sourceId: string | null) {
+    if (!env || !selected || busy) return;
+    setBusy(true);
+    try {
+      const updated = await updateChannel(env, selected.slug, { sourceId });
+      setChannels((cur) => cur.map((c) => (c.id === updated.id ? updated : c)));
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -509,6 +550,18 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                         step.type === "extract" ? undefined : () => removeStep(step.id)
                       }
                       onConfig={(key, value) => patchStepConfig(step.id, key, value)}
+                      intake={
+                        step.type === "intake"
+                          ? {
+                              webhookUrl: selected.webhookUrl,
+                              sourceId: selected.sourceId,
+                              sources,
+                              provisioning,
+                              onProvision: () => void handleProvisionWebhook(),
+                              onBindSource: (id) => void handleBindSource(id),
+                            }
+                          : undefined
+                      }
                     />
                   </div>
                 ))}
@@ -785,6 +838,15 @@ function StepInserter({
   );
 }
 
+interface IntakeContext {
+  webhookUrl: string | null;
+  sourceId: string | null;
+  sources: IngestSource[];
+  provisioning: boolean;
+  onProvision: () => void;
+  onBindSource: (sourceId: string | null) => void;
+}
+
 function StepCard({
   step,
   index,
@@ -793,6 +855,7 @@ function StepCard({
   onMove,
   onRemove,
   onConfig,
+  intake,
 }: {
   step: ChannelStep;
   index: number;
@@ -801,6 +864,7 @@ function StepCard({
   onMove: (delta: -1 | 1) => void;
   onRemove?: () => void;
   onConfig: (key: string, value: unknown) => void;
+  intake?: IntakeContext;
 }) {
   const [expanded, setExpanded] = useState(false);
   const { Icon, bg, text } = STEP_VISUALS[step.type];
@@ -876,7 +940,7 @@ function StepCard({
       </div>
       {expanded ? (
         <div className="border-t border-[#e5e8eb] px-3 py-2.5">
-          <StepConfigForm step={step} onConfig={onConfig} />
+          <StepConfigForm step={step} onConfig={onConfig} intake={intake} />
         </div>
       ) : null}
     </div>
@@ -890,38 +954,103 @@ const LABEL = "mb-0.5 block text-[10px] font-medium uppercase tracking-wide text
 function StepConfigForm({
   step,
   onConfig,
+  intake,
 }: {
   step: ChannelStep;
   onConfig: (key: string, value: unknown) => void;
+  intake?: IntakeContext;
 }) {
   const c = step.config;
   switch (step.type) {
-    case "intake":
+    case "intake": {
+      const mode = (c.mode as string) || "paste";
       return (
-        <div className="grid grid-cols-2 gap-2">
-          <label className="block">
-            <span className={LABEL}>Mode</span>
-            <select
-              value={(c.mode as string) || "paste"}
-              onChange={(e) => onConfig("mode", e.target.value)}
-              className={FIELD}
-            >
-              <option value="paste">Paste / manual</option>
-              <option value="webhook">Webhook</option>
-              <option value="source">Ingest source</option>
-            </select>
-          </label>
-          <label className="block">
-            <span className={LABEL}>Reference (path or source)</span>
-            <input
-              value={(c.ref as string) || ""}
-              onChange={(e) => onConfig("ref", e.target.value)}
-              placeholder="/v1/webhooks/ed-notes"
-              className={FIELD}
-            />
-          </label>
+        <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className={LABEL}>Mode</span>
+              <select
+                value={mode}
+                onChange={(e) => onConfig("mode", e.target.value)}
+                className={FIELD}
+              >
+                <option value="paste">Paste / manual</option>
+                <option value="webhook">Webhook</option>
+                <option value="source">Ingest source</option>
+              </select>
+            </label>
+            {mode === "source" && intake ? (
+              <label className="block">
+                <span className={LABEL}>Ingest source</span>
+                <select
+                  value={intake.sourceId ?? ""}
+                  onChange={(e) => {
+                    const id = e.target.value || null;
+                    intake.onBindSource(id);
+                    onConfig("ref", id ?? "");
+                  }}
+                  className={FIELD}
+                >
+                  <option value="">choose a source…</option>
+                  {intake.sources.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.type})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : mode === "paste" ? (
+              <label className="block">
+                <span className={LABEL}>Reference (optional)</span>
+                <input
+                  value={(c.ref as string) || ""}
+                  onChange={(e) => onConfig("ref", e.target.value)}
+                  placeholder="note or note_text"
+                  className={FIELD}
+                />
+              </label>
+            ) : null}
+          </div>
+          {mode === "webhook" && intake ? (
+            intake.webhookUrl ? (
+              <div className="flex flex-col gap-1">
+                <span className={LABEL}>Webhook URL (POST payloads here)</span>
+                <WebhookUrlRow url={intake.webhookUrl} />
+                <p className="text-[10px] text-[#8f99a8]">
+                  Payloads run this channel server-side while it is live. Send{" "}
+                  <span className="font-mono">{'{ "text": "…" }'}</span> or set a JSON field
+                  path in the transform step.
+                </p>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={intake.provisioning}
+                  onClick={intake.onProvision}
+                  className="flex items-center gap-1 rounded bg-[#2d72d2] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#215db0] disabled:bg-[#c5cbd3]"
+                >
+                  {intake.provisioning ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Webhook className="h-3 w-3" />
+                  )}
+                  Generate webhook URL
+                </button>
+                <span className="text-[10px] text-[#8f99a8]">
+                  Creates a dedicated inbound webhook for this channel.
+                </span>
+              </div>
+            )
+          ) : null}
+          {mode === "source" && intake?.sourceId ? (
+            <p className="text-[10px] text-[#8f99a8]">
+              New events on this source run the channel server-side while it is live.
+            </p>
+          ) : null}
         </div>
       );
+    }
     case "transform":
       return (
         <div className="grid grid-cols-2 gap-2">
@@ -1040,6 +1169,27 @@ function StepConfigForm({
         </div>
       );
   }
+}
+
+function WebhookUrlRow({ url }: { url: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="flex gap-1.5">
+      <input readOnly value={url} className={cn(FIELD, "font-mono text-[10px]")} />
+      <button
+        type="button"
+        onClick={() => {
+          void navigator.clipboard.writeText(url);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        }}
+        className="shrink-0 rounded border border-[#d3d8de] bg-white px-2 text-[#5f6b7c] hover:border-[#2d72d2] hover:text-[#2d72d2]"
+        aria-label="Copy webhook URL"
+      >
+        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      </button>
+    </div>
+  );
 }
 
 const STAGE_ORDER: ChannelStepType[] = ["intake", "transform", "extract", "validate", "save"];

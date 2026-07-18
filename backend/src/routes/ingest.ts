@@ -14,6 +14,7 @@ import {
   verifyJwtHS256,
   type WebhookAuthType,
 } from "../lib/webhook-auth.js";
+import { dispatchChannelsForSource } from "../services/channel-runner.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
 
 const errorEnvelope = z.object({
@@ -517,6 +518,9 @@ const ingestRoutes: FastifyPluginAsync = async (fastify) => {
         [req.params.id, userId, JSON.stringify(payload), "application/json"],
       );
       const row = inserted.rows[0]!;
+
+      void dispatchChannelsForSource(req.params.id, payload, "webhook");
+
       return reply.code(201).send({
         eventId: row.id,
         receivedAt: row.received_at.toISOString(),
@@ -559,6 +563,11 @@ const ingestRoutes: FastifyPluginAsync = async (fastify) => {
         ],
       );
       const row = inserted.rows[0]!;
+
+      if (req.body.sourceId) {
+        void dispatchChannelsForSource(req.body.sourceId, req.body.payload ?? {}, "source");
+      }
+
       return reply.code(201).send({
         eventId: row.id,
         receivedAt: row.received_at.toISOString(),
@@ -708,6 +717,10 @@ const ingestRoutes: FastifyPluginAsync = async (fastify) => {
         [source.id, source.user_id, JSON.stringify(payload), contentType],
       );
       const row = inserted.rows[0]!;
+
+      // Fire-and-forget: run live channels bound to this source.
+      void dispatchChannelsForSource(source.id, payload, "webhook");
+
       return sendWebhookResponse(reply, config.response, {
         eventId: row.id,
         receivedAt: row.received_at.toISOString(),

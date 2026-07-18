@@ -21,6 +21,7 @@ import {
 import {
   AlertTriangle,
   Box,
+  Boxes,
   Calculator,
   CheckCircle2,
   Database,
@@ -29,13 +30,16 @@ import {
   FileText,
   Filter,
   GitBranch,
+  GitMerge,
   Languages,
   Loader2,
   Play,
   Ruler,
   ScanSearch,
   Search,
+  Send,
   Settings2,
+  Sigma,
   Trash2,
   X,
   type LucideIcon,
@@ -47,9 +51,13 @@ import {
   decide,
   extractConcepts,
   extractContexts,
+  listEnvObjects,
+  runSourceFetch,
   translateCode,
+  updateEnvObject,
 } from "@/lib/platform-api";
 import { numericColumns, parseCsvRows } from "../csv-parse";
+import { defaultSourceRequest, type KeyValue } from "../source-schema";
 import { pathD, type Geom } from "../studio-graph";
 import { useStudio } from "../StudioShell";
 
@@ -60,13 +68,17 @@ import { useStudio } from "../StudioShell";
 type StudioNodeType =
   | "dataset"
   | "text"
+  | "ontologySource"
   | "extractMap"
   | "crosswalk"
   | "ucum"
   | "filter"
   | "formula"
+  | "aggregate"
+  | "merge"
   | "saveOntology"
-  | "exportCsv";
+  | "exportCsv"
+  | "httpExport";
 
 type Row = Record<string, unknown>;
 
@@ -110,13 +122,17 @@ const NODE_META: Record<
 > = {
   dataset: { label: "Dataset (CSV)", menuHint: "manual file import", category: "Inputs", icon: Database, block: "bg-[#e7f2fd] text-[#215db0]" },
   text: { label: "Text input", menuHint: "paste clinical text", category: "Inputs", icon: FileText, block: "bg-[#e7f2fd] text-[#215db0]" },
+  ontologySource: { label: "Ontology source", menuHint: "fetch instances by type", category: "Inputs", icon: Boxes, block: "bg-[#e7f2fd] text-[#215db0]" },
   extractMap: { label: "Extract + map to SNOMED", menuHint: "NLP concepts + contexts", category: "Mapping", icon: ScanSearch, block: "bg-[#f2ebfb] text-[#6b3fa0]" },
   crosswalk: { label: "Crosswalk (terminology)", menuHint: "SNOMED → ICD-10 · ICD-O · CTV3", category: "Mapping", icon: Languages, block: "bg-[#f2ebfb] text-[#6b3fa0]" },
   ucum: { label: "UCUM normalize", menuHint: "unit conversion", category: "Mapping", icon: Ruler, block: "bg-[#f2ebfb] text-[#6b3fa0]" },
   filter: { label: "Filter rows", menuHint: "column · operator · value", category: "Filter + clean", icon: Filter, block: "bg-[#e9f5f4] text-[#0f6b68]" },
   formula: { label: "Formula", menuHint: "derive column (JS expression)", category: "Filter + clean", icon: Calculator, block: "bg-[#e9f5f4] text-[#0f6b68]" },
+  aggregate: { label: "Aggregate", menuHint: "group by · count · sum · avg", category: "Filter + clean", icon: Sigma, block: "bg-[#e9f5f4] text-[#0f6b68]" },
+  merge: { label: "Merge inputs", menuHint: "union or join multiple sources", category: "Filter + clean", icon: GitMerge, block: "bg-[#e9f5f4] text-[#0f6b68]" },
   saveOntology: { label: "Save to ontology", menuHint: "records → instances", category: "Act + serve", icon: Box, block: "bg-[#f2ebfb] text-[#6b3fa0]", writes: true },
   exportCsv: { label: "Export CSV", menuHint: "download output", category: "Act + serve", icon: FileDown, block: "bg-[#e8f4ec] text-[#1c6e42]", writes: true },
+  httpExport: { label: "HTTP export", menuHint: "POST rows to an external URL", category: "Act + serve", icon: Send, block: "bg-[#e8f4ec] text-[#1c6e42]", writes: true },
 };
 
 const CATEGORIES = ["Inputs", "Mapping", "Filter + clean", "Act + serve"];
@@ -127,6 +143,8 @@ function defaultConfig(type: StudioNodeType): Record<string, string> {
       return { csvText: "", csvFileName: "" };
     case "text":
       return { text: "62yo with chest pain. Father had an MI. Rule out pulmonary embolism." };
+    case "ontologySource":
+      return { objectType: "ClinicalFinding", where: "", limit: "100" };
     case "extractMap":
       return { language: "auto", acceptThreshold: "0.85" };
     case "crosswalk":
@@ -137,10 +155,16 @@ function defaultConfig(type: StudioNodeType): Record<string, string> {
       return { column: "", op: ">", value: "" };
     case "formula":
       return { newColumn: "derived", expression: "Number(row.value) * 2" };
+    case "aggregate":
+      return { groupBy: "", metrics: "" };
+    case "merge":
+      return { mode: "union", joinKey: "id", joinType: "left" };
     case "saveOntology":
-      return { objectType: "ClinicalFinding" };
+      return { objectType: "ClinicalFinding", mode: "create" };
     case "exportCsv":
       return { fileName: "export.csv" };
+    case "httpExport":
+      return { url: "", method: "POST", headersJson: "", bodyMode: "rows" };
   }
 }
 
@@ -190,12 +214,14 @@ function toCsv(rows: Row[]): string {
 }
 
 /** Static config problems per node (drives the toolbar validation chips). */
-function nodeIssue(node: StudioNode, hasIncoming: boolean): string | null {
+function nodeIssue(node: StudioNode, incomingCount: number): string | null {
   switch (node.type) {
     case "dataset":
       return node.config.csvText.trim() ? null : "no CSV imported";
     case "text":
       return node.config.text.trim() ? null : "no text";
+    case "ontologySource":
+      return node.config.objectType.trim() ? null : "no object type";
     case "filter":
       if (!node.config.column.trim()) return "no filter column";
       break;
@@ -204,13 +230,25 @@ function nodeIssue(node: StudioNode, hasIncoming: boolean): string | null {
         return "formula incomplete";
       }
       break;
+    case "aggregate":
+      if (!node.config.groupBy.trim()) return "no group-by column";
+      break;
+    case "merge":
+      if (incomingCount < 2) return "needs 2+ inputs";
+      if ((node.config.mode || "union") === "join" && !node.config.joinKey.trim()) {
+        return "no join key";
+      }
+      return null;
     case "saveOntology":
       if (!node.config.objectType.trim()) return "no object type";
+      break;
+    case "httpExport":
+      if (!node.config.url.trim()) return "no URL";
       break;
     default:
       break;
   }
-  return hasIncoming ? null : "not connected";
+  return incomingCount > 0 ? null : "not connected";
 }
 
 // ---------------------------------------------------------------------------
@@ -279,16 +317,21 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
   }, [env, name, nodes, edges]);
 
   const selected = nodes.find((n) => n.id === selectedId) ?? null;
+  // Multiple parents are meaningful for merge nodes; other nodes read parents[0].
   const incoming = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const e of edges) m.set(e.target, e.source);
+    const m = new Map<string, string[]>();
+    for (const e of edges) {
+      const list = m.get(e.target);
+      if (list) list.push(e.source);
+      else m.set(e.target, [e.source]);
+    }
     return m;
   }, [edges]);
 
   const issues = useMemo(
     () =>
       nodes
-        .map((n) => ({ node: n, issue: nodeIssue(n, incoming.has(n.id)) }))
+        .map((n) => ({ node: n, issue: nodeIssue(n, incoming.get(n.id)?.length ?? 0) }))
         .filter((x): x is { node: StudioNode; issue: string } => x.issue !== null),
     [nodes, incoming],
   );
@@ -328,10 +371,15 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
 
   function connect(source: string, target: string) {
     if (source === target) return;
-    setEdges((cur) => [
-      ...cur.filter((e) => e.target !== target),
-      { id: nextId(), source, target },
-    ]);
+    const targetNode = nodes.find((n) => n.id === target);
+    setEdges((cur) => {
+      // Merge nodes accept several parents; everything else keeps one.
+      const kept =
+        targetNode?.type === "merge"
+          ? cur.filter((e) => !(e.target === target && e.source === source))
+          : cur.filter((e) => e.target !== target);
+      return [...kept, { id: nextId(), source, target }];
+    });
   }
 
   // --- canvas interactions ----------------------------------------------------
@@ -399,10 +447,12 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
     try {
       for (const node of topoOrder()) {
         setRunStage(node.name);
-        const parent = incoming.get(node.id);
-        const input = parent ? out.get(parent) : undefined;
+        const parents = incoming.get(node.id) ?? [];
+        const inputs = parents
+          .map((p) => out.get(p))
+          .filter((r): r is NodeResult => r !== undefined);
         try {
-          out.set(node.id, await executeNode(node, input, write, env));
+          out.set(node.id, await executeNode(node, inputs, write, env));
         } catch (err) {
           out.set(node.id, { status: "error", summary: (err as Error).message });
         }
@@ -572,7 +622,7 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
             const meta = NODE_META[node.type];
             const Icon = meta.icon;
             const result = results.get(node.id);
-            const issue = nodeIssue(node, incoming.has(node.id));
+            const issue = nodeIssue(node, incoming.get(node.id)?.length ?? 0);
             const isSelected = node.id === selectedId;
             return (
               <div
@@ -823,11 +873,12 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
 
 async function executeNode(
   node: StudioNode,
-  input: NodeResult | undefined,
+  inputs: NodeResult[],
   write: boolean,
   env: string | null,
 ): Promise<NodeResult> {
   const c = node.config;
+  const input: NodeResult | undefined = inputs[0];
   const needRows = (): Row[] => {
     if (!input?.rows || input.rows.length === 0) {
       throw new Error("This node needs records from an upstream node.");
@@ -850,6 +901,27 @@ async function executeNode(
       const text = (c.text ?? "").trim();
       if (!text) throw new Error("Paste some text first.");
       return { status: "ok", text, summary: `${text.length} chars` };
+    }
+
+    case "ontologySource": {
+      if (!env) throw new Error("Select an environment first.");
+      const objectType = c.objectType.trim();
+      if (!objectType) throw new Error("Set an object type (open the node settings).");
+      const limit = Math.max(1, Math.min(1000, Number(c.limit) || 100));
+      const { objects } = await listEnvObjects(env, {
+        type: objectType,
+        where: c.where.trim() || undefined,
+        limit,
+      });
+      const rows: Row[] = objects.map((o) => ({ id: o.id, ...o.properties }));
+      if (rows.length === 0) {
+        return { status: "warn", rows: [], summary: `no ${objectType} instances` };
+      }
+      return {
+        status: "ok",
+        rows,
+        summary: `${rows.length.toLocaleString()} ${objectType} instance${rows.length === 1 ? "" : "s"}`,
+      };
     }
 
     case "extractMap": {
@@ -985,30 +1057,140 @@ async function executeNode(
       };
     }
 
+    case "aggregate": {
+      const rows = needRows();
+      const groupBy = c.groupBy.trim();
+      if (!groupBy) throw new Error("Set a group-by column (open the node settings).");
+      // metrics: comma-separated "fn:column" pairs (sum/avg/min/max); count is always emitted.
+      const metrics = (c.metrics ?? "")
+        .split(",")
+        .map((m) => m.trim())
+        .filter(Boolean)
+        .map((m) => {
+          const [fn, col] = m.split(":").map((x) => x.trim());
+          return { fn: (fn || "").toLowerCase(), col: col || "" };
+        })
+        .filter(
+          (m): m is { fn: "sum" | "avg" | "min" | "max"; col: string } =>
+            ["sum", "avg", "min", "max"].includes(m.fn) && m.col !== "",
+        );
+      const groups = new Map<string, Row[]>();
+      for (const r of rows) {
+        const key = String(r[groupBy] ?? "");
+        const list = groups.get(key);
+        if (list) list.push(r);
+        else groups.set(key, [r]);
+      }
+      const out: Row[] = Array.from(groups.entries()).map(([key, members]) => {
+        const row: Row = { [groupBy]: key, count: members.length };
+        for (const { fn, col } of metrics) {
+          const values = members.map((m) => Number(m[col])).filter((v) => Number.isFinite(v));
+          let v: number | null = null;
+          if (values.length > 0) {
+            if (fn === "sum") v = values.reduce((a, b) => a + b, 0);
+            else if (fn === "avg") v = values.reduce((a, b) => a + b, 0) / values.length;
+            else if (fn === "min") v = Math.min(...values);
+            else v = Math.max(...values);
+          }
+          row[`${fn}_${col}`] = v === null ? null : Number(v.toFixed(4));
+        }
+        return row;
+      });
+      return {
+        status: "ok",
+        rows: out,
+        summary: `${out.length} group${out.length === 1 ? "" : "s"} from ${rows.length} rows`,
+      };
+    }
+
+    case "merge": {
+      const inputRows = inputs
+        .map((r) => r.rows)
+        .filter((r): r is Row[] => Array.isArray(r) && r.length > 0);
+      if (inputRows.length < 2) {
+        throw new Error("Connect at least two upstream nodes with records.");
+      }
+      const mode = c.mode || "union";
+      if (mode === "union") {
+        const out = inputRows.flat();
+        return {
+          status: "ok",
+          rows: out,
+          summary: `union · ${out.length} rows from ${inputRows.length} inputs`,
+        };
+      }
+      const key = c.joinKey.trim();
+      if (!key) throw new Error("Set a join key (open the node settings).");
+      const joinType = c.joinType === "inner" ? "inner" : "left";
+      // Left-fold: join the first input against each subsequent one on `key`.
+      let out = inputRows[0];
+      for (let i = 1; i < inputRows.length; i++) {
+        const right = new Map<string, Row>();
+        for (const r of inputRows[i]) {
+          const k = String(r[key] ?? "");
+          if (k !== "" && !right.has(k)) right.set(k, r);
+        }
+        const joined: Row[] = [];
+        for (const l of out) {
+          const match = right.get(String(l[key] ?? ""));
+          if (match) joined.push({ ...match, ...l });
+          else if (joinType === "left") joined.push(l);
+        }
+        out = joined;
+      }
+      return {
+        status: out.length === 0 ? "warn" : "ok",
+        rows: out,
+        summary: `${joinType} join on ${key} · ${out.length} rows`,
+      };
+    }
+
     case "saveOntology": {
       const rows = needRows();
       if (!env) throw new Error("Select an environment first.");
       const objectType = c.objectType.trim() || "ClinicalFinding";
+      const update = (c.mode || "create") === "update";
       const capped = rows.slice(0, 200);
+      const verb = update ? "update" : "create";
       if (!write) {
         return {
           status: "ok",
           rows: capped,
-          summary: `would create ${capped.length} ${objectType} instance${capped.length === 1 ? "" : "s"} (preview)`,
+          summary: `would ${verb} ${capped.length} ${objectType} instance${capped.length === 1 ? "" : "s"} (preview)`,
         };
       }
       let created = 0;
+      let updated = 0;
+      let skipped = 0;
       for (const r of capped) {
         const properties: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(r)) {
-          if (v !== null && v !== undefined && v !== "") properties[k] = v;
+          if (k !== "id" && v !== null && v !== undefined && v !== "") properties[k] = v;
         }
-        await createEnvObject(env, {
-          type: objectType,
-          properties,
-          provenance: { source: "data-studio", flow: node.name },
-        });
-        created++;
+        if (update) {
+          // Rows must carry the instance id (e.g. from an ontology source node).
+          const id = typeof r.id === "string" ? r.id.trim() : "";
+          if (!id) {
+            skipped++;
+            continue;
+          }
+          await updateEnvObject(env, id, { properties });
+          updated++;
+        } else {
+          await createEnvObject(env, {
+            type: objectType,
+            properties,
+            provenance: { source: "data-studio", flow: node.name },
+          });
+          created++;
+        }
+      }
+      if (update) {
+        return {
+          status: skipped > 0 ? "warn" : "ok",
+          rows: capped,
+          summary: `${updated} updated${skipped > 0 ? ` · ${skipped} rows missing id` : ""}`,
+        };
       }
       return {
         status: "ok",
@@ -1031,6 +1213,75 @@ async function executeNode(
       a.click();
       URL.revokeObjectURL(url);
       return { status: "ok", rows, summary: `exported ${rows.length} rows` };
+    }
+
+    case "httpExport": {
+      const rows = needRows();
+      const url = c.url.trim();
+      if (!url) throw new Error("Set a destination URL (open the node settings).");
+      const method = (c.method || "POST") as "POST" | "PUT" | "PATCH";
+      const perRow = c.bodyMode === "perRow";
+      if (!write) {
+        return {
+          status: "ok",
+          rows,
+          summary: `would ${method} ${perRow ? `${rows.length} requests (1/row)` : `${rows.length} rows`} to ${url} (preview)`,
+        };
+      }
+      let headers: KeyValue[] = [];
+      if (c.headersJson.trim()) {
+        try {
+          const parsed = JSON.parse(c.headersJson) as Record<string, string>;
+          headers = Object.entries(parsed).map(([name, value]) => ({
+            name,
+            value: String(value),
+          }));
+        } catch {
+          throw new Error("Headers must be a JSON object, e.g. {\"X-Api-Key\": \"…\"}.");
+        }
+      }
+      // Outbound call goes through the server-side proxy (POST /v1/source/fetch)
+      // — no CORS issues and the request originates from the backend.
+      const send = async (body: unknown) =>
+        runSourceFetch({
+          ...defaultSourceRequest(),
+          method,
+          url,
+          sendHeaders: headers.length > 0,
+          headerParameters: headers,
+          sendBody: true,
+          bodyType: "json",
+          body: JSON.stringify(body),
+          response: { format: "json", jsonPath: null, includeHeaders: false, neverError: true },
+        });
+      if (perRow) {
+        const capped = rows.slice(0, 100);
+        let ok = 0;
+        let failed = 0;
+        for (const r of capped) {
+          const res = await send(r);
+          if (res.ok) ok++;
+          else failed++;
+        }
+        return {
+          status: failed > 0 ? "warn" : "ok",
+          rows,
+          summary: `${ok} of ${capped.length} requests delivered${failed > 0 ? ` · ${failed} failed` : ""}`,
+        };
+      }
+      const res = await send({ rows });
+      if (!res.ok) {
+        return {
+          status: "error",
+          rows,
+          summary: `${method} ${url} → ${res.status} ${res.statusText}`,
+        };
+      }
+      return {
+        status: "ok",
+        rows,
+        summary: `${rows.length} rows delivered · HTTP ${res.status}`,
+      };
     }
   }
 }
@@ -1155,6 +1406,47 @@ function NodeInspector({
               className={cn(FIELD, "resize-y")}
             />
           </label>
+        ) : null}
+
+        {node.type === "ontologySource" ? (
+          <>
+            <div className="mb-2 grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className={LABEL}>Object type</span>
+                <input
+                  value={node.config.objectType}
+                  onChange={(e) => onPatchConfig("objectType", e.target.value)}
+                  placeholder="ClinicalFinding"
+                  className={FIELD}
+                />
+              </label>
+              <label className="block">
+                <span className={LABEL}>Limit</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={node.config.limit}
+                  onChange={(e) => onPatchConfig("limit", e.target.value)}
+                  className={FIELD}
+                />
+              </label>
+            </div>
+            <label className="block">
+              <span className={LABEL}>Where filter (optional)</span>
+              <input
+                value={node.config.where}
+                onChange={(e) => onPatchConfig("where", e.target.value)}
+                placeholder="decision=accept"
+                className={FIELD}
+              />
+            </label>
+            <p className="mt-2 text-[10.5px] leading-relaxed text-[#8f99a8]">
+              Rows are the flattened instance properties plus an <code>id</code> column —
+              chain into Save to ontology (update mode) to edit and write back, or HTTP
+              export to post elsewhere.
+            </p>
+          </>
         ) : null}
 
         {node.type === "extractMap" ? (
@@ -1289,19 +1581,158 @@ function NodeInspector({
           </>
         ) : null}
 
-        {node.type === "saveOntology" ? (
+        {node.type === "aggregate" ? (
           <>
-            <label className="block">
-              <span className={LABEL}>Object type</span>
+            <label className="mb-2 block">
+              <span className={LABEL}>Group by column</span>
               <input
-                value={node.config.objectType}
-                onChange={(e) => onPatchConfig("objectType", e.target.value)}
+                value={node.config.groupBy}
+                onChange={(e) => onPatchConfig("groupBy", e.target.value)}
+                placeholder="assertion"
                 className={FIELD}
               />
             </label>
+            <label className="block">
+              <span className={LABEL}>Metrics (fn:column, comma-separated)</span>
+              <input
+                value={node.config.metrics}
+                onChange={(e) => onPatchConfig("metrics", e.target.value)}
+                placeholder="sum:value, avg:confidence"
+                className={cn(FIELD, "font-mono text-[11px]")}
+              />
+            </label>
             <p className="mt-2 text-[10.5px] leading-relaxed text-[#8f99a8]">
-              Run creates up to 200 instances per execution (Preview only counts). Run a Data
-              Flux quality scan afterwards to gate what came in.
+              A <code>count</code> column is always emitted per group. Supported functions:
+              sum, avg, min, max.
+            </p>
+          </>
+        ) : null}
+
+        {node.type === "merge" ? (
+          <>
+            <label className="mb-2 block">
+              <span className={LABEL}>Mode</span>
+              <select
+                value={node.config.mode || "union"}
+                onChange={(e) => onPatchConfig("mode", e.target.value)}
+                className={FIELD}
+              >
+                <option value="union">Union (stack all rows)</option>
+                <option value="join">Join (match rows on a key)</option>
+              </select>
+            </label>
+            {(node.config.mode || "union") === "join" ? (
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block">
+                  <span className={LABEL}>Join key</span>
+                  <input
+                    value={node.config.joinKey}
+                    onChange={(e) => onPatchConfig("joinKey", e.target.value)}
+                    placeholder="id"
+                    className={FIELD}
+                  />
+                </label>
+                <label className="block">
+                  <span className={LABEL}>Join type</span>
+                  <select
+                    value={node.config.joinType || "left"}
+                    onChange={(e) => onPatchConfig("joinType", e.target.value)}
+                    className={FIELD}
+                  >
+                    <option value="left">Left (keep unmatched)</option>
+                    <option value="inner">Inner (matched only)</option>
+                  </select>
+                </label>
+              </div>
+            ) : null}
+            <p className="mt-2 text-[10.5px] leading-relaxed text-[#8f99a8]">
+              Connect two or more upstream nodes into this node&apos;s input port. Joins
+              fold left-to-right from the first connected input.
+            </p>
+          </>
+        ) : null}
+
+        {node.type === "saveOntology" ? (
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className={LABEL}>Object type</span>
+                <input
+                  value={node.config.objectType}
+                  onChange={(e) => onPatchConfig("objectType", e.target.value)}
+                  className={FIELD}
+                />
+              </label>
+              <label className="block">
+                <span className={LABEL}>Mode</span>
+                <select
+                  value={node.config.mode || "create"}
+                  onChange={(e) => onPatchConfig("mode", e.target.value)}
+                  className={FIELD}
+                >
+                  <option value="create">Create instances</option>
+                  <option value="update">Update by id column</option>
+                </select>
+              </label>
+            </div>
+            <p className="mt-2 text-[10.5px] leading-relaxed text-[#8f99a8]">
+              {(node.config.mode || "create") === "update"
+                ? "Update writes each row's properties onto the instance in its id column (rows without an id are skipped). Feed it from an Ontology source node."
+                : "Run creates up to 200 instances per execution (Preview only counts). Run a Data Flux quality scan afterwards to gate what came in."}
+            </p>
+          </>
+        ) : null}
+
+        {node.type === "httpExport" ? (
+          <>
+            <div className="mb-2 grid grid-cols-3 gap-2">
+              <label className="block">
+                <span className={LABEL}>Method</span>
+                <select
+                  value={node.config.method || "POST"}
+                  onChange={(e) => onPatchConfig("method", e.target.value)}
+                  className={FIELD}
+                >
+                  <option value="POST">POST</option>
+                  <option value="PUT">PUT</option>
+                  <option value="PATCH">PATCH</option>
+                </select>
+              </label>
+              <label className="col-span-2 block">
+                <span className={LABEL}>URL</span>
+                <input
+                  value={node.config.url}
+                  onChange={(e) => onPatchConfig("url", e.target.value)}
+                  placeholder="https://api.example.com/import"
+                  className={cn(FIELD, "font-mono text-[11px]")}
+                />
+              </label>
+            </div>
+            <label className="mb-2 block">
+              <span className={LABEL}>Body</span>
+              <select
+                value={node.config.bodyMode || "rows"}
+                onChange={(e) => onPatchConfig("bodyMode", e.target.value)}
+                className={FIELD}
+              >
+                <option value="rows">{'One request · { "rows": [...] }'}</option>
+                <option value="perRow">One request per row (max 100)</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className={LABEL}>Headers (JSON object, optional)</span>
+              <textarea
+                value={node.config.headersJson}
+                onChange={(e) => onPatchConfig("headersJson", e.target.value)}
+                rows={3}
+                placeholder='{"Authorization": "Bearer …"}'
+                className={cn(FIELD, "resize-y font-mono text-[11px]")}
+              />
+            </label>
+            <p className="mt-2 text-[10.5px] leading-relaxed text-[#8f99a8]">
+              Sends JSON through the platform&apos;s server-side HTTP proxy on Run
+              (Preview shows a dry-run summary) — no CORS limits, and the request
+              originates from the backend.
             </p>
           </>
         ) : null}

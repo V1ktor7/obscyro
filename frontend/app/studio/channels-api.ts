@@ -45,6 +45,10 @@ export interface DataChannel {
   slug: string;
   status: ChannelStatus;
   steps: ChannelStep[];
+  /** Ingest source feeding this channel (webhook or shared source), if bound. */
+  sourceId: string | null;
+  /** Inbound webhook URL when the bound source is a webhook. */
+  webhookUrl: string | null;
   createdAt: string;
   updatedAt: string;
   lastRunAt: string | null;
@@ -83,11 +87,30 @@ export async function createChannel(
 export async function updateChannel(
   env: string,
   slug: string,
-  body: { name?: string; status?: ChannelStatus; steps?: ChannelStep[] },
+  body: {
+    name?: string;
+    status?: ChannelStatus;
+    steps?: ChannelStep[];
+    sourceId?: string | null;
+  },
 ): Promise<DataChannel> {
   return apiFetch(`/v1/ontology/${enc(env)}/channels/${enc(slug)}`, {
     method: "PATCH",
     body,
+  });
+}
+
+/**
+ * Provision (or fetch) the dedicated inbound webhook for a channel. Payloads
+ * POSTed to the returned URL run the channel server-side while it is live.
+ */
+export async function provisionChannelWebhook(
+  env: string,
+  slug: string,
+): Promise<{ sourceId: string; webhookUrl: string; method: string }> {
+  return apiFetch(`/v1/ontology/${enc(env)}/channels/${enc(slug)}/webhook`, {
+    method: "POST",
+    body: {},
   });
 }
 
