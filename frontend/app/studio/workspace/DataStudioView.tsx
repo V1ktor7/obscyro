@@ -34,6 +34,7 @@ import {
   Languages,
   Loader2,
   Play,
+  RadioTower,
   Ruler,
   ScanSearch,
   Search,
@@ -57,6 +58,7 @@ import {
   updateEnvObject,
 } from "@/lib/platform-api";
 import { numericColumns, parseCsvRows } from "../csv-parse";
+import { listFeedSends } from "../feed-sim";
 import { defaultSourceRequest, type KeyValue } from "../source-schema";
 import { pathD, type Geom } from "../studio-graph";
 import { useStudio } from "../StudioShell";
@@ -68,6 +70,7 @@ import { useStudio } from "../StudioShell";
 type StudioNodeType =
   | "dataset"
   | "text"
+  | "feedSim"
   | "ontologySource"
   | "extractMap"
   | "crosswalk"
@@ -122,6 +125,7 @@ const NODE_META: Record<
 > = {
   dataset: { label: "Dataset (CSV)", menuHint: "manual file import", category: "Inputs", icon: Database, block: "bg-[#e7f2fd] text-[#215db0]" },
   text: { label: "Text input", menuHint: "paste clinical text", category: "Inputs", icon: FileText, block: "bg-[#e7f2fd] text-[#215db0]" },
+  feedSim: { label: "Feed simulator", menuHint: "objects sent by simulator streams", category: "Inputs", icon: RadioTower, block: "bg-[#e7f2fd] text-[#215db0]" },
   ontologySource: { label: "Ontology source", menuHint: "fetch instances by type", category: "Inputs", icon: Boxes, block: "bg-[#e7f2fd] text-[#215db0]" },
   extractMap: { label: "Extract + map to SNOMED", menuHint: "NLP concepts + contexts", category: "Mapping", icon: ScanSearch, block: "bg-[#f2ebfb] text-[#6b3fa0]" },
   crosswalk: { label: "Crosswalk (terminology)", menuHint: "SNOMED → ICD-10 · ICD-O · CTV3", category: "Mapping", icon: Languages, block: "bg-[#f2ebfb] text-[#6b3fa0]" },
@@ -143,6 +147,8 @@ function defaultConfig(type: StudioNodeType): Record<string, string> {
       return { csvText: "", csvFileName: "" };
     case "text":
       return { text: "62yo with chest pain. Father had an MI. Rule out pulmonary embolism." };
+    case "feedSim":
+      return { streamName: "", limit: "200" };
     case "ontologySource":
       return { objectType: "ClinicalFinding", where: "", limit: "100" };
     case "extractMap":
@@ -220,6 +226,8 @@ function nodeIssue(node: StudioNode, incomingCount: number): string | null {
       return node.config.csvText.trim() ? null : "no CSV imported";
     case "text":
       return node.config.text.trim() ? null : "no text";
+    case "feedSim":
+      return null;
     case "ontologySource":
       return node.config.objectType.trim() ? null : "no object type";
     case "filter":
@@ -903,6 +911,29 @@ async function executeNode(
       return { status: "ok", text, summary: `${text.length} chars` };
     }
 
+    case "feedSim": {
+      if (!env) throw new Error("Select an environment first.");
+      const limit = Math.max(1, Math.min(500, Number(c.limit) || 200));
+      const { sends } = await listFeedSends(env, { stream: c.streamName, limit });
+      if (sends.length === 0) {
+        throw new Error(
+          "No simulator objects yet — start a stream in Model Lab → Feed simulator, then run again.",
+        );
+      }
+      const rows: Row[] = sends.map((e) => {
+        const base =
+          e.payload && typeof e.payload === "object" && !Array.isArray(e.payload)
+            ? (e.payload as Row)
+            : { payload: e.payload };
+        return { ...base, _stream: e.streamName, _sent_at: e.createdAt };
+      });
+      return {
+        status: "ok",
+        rows,
+        summary: `${rows.length} objects from ${c.streamName.trim() ? `"${c.streamName.trim()}"` : "all streams"}`,
+      };
+    }
+
     case "ontologySource": {
       if (!env) throw new Error("Select an environment first.");
       const objectType = c.objectType.trim();
@@ -1406,6 +1437,38 @@ function NodeInspector({
               className={cn(FIELD, "resize-y")}
             />
           </label>
+        ) : null}
+
+        {node.type === "feedSim" ? (
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className={LABEL}>Stream filter (optional)</span>
+                <input
+                  value={node.config.streamName}
+                  onChange={(e) => onPatchConfig("streamName", e.target.value)}
+                  placeholder="Lab results"
+                  className={FIELD}
+                />
+              </label>
+              <label className="block">
+                <span className={LABEL}>Max objects</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={500}
+                  value={node.config.limit}
+                  onChange={(e) => onPatchConfig("limit", e.target.value)}
+                  className={FIELD}
+                />
+              </label>
+            </div>
+            <p className="mt-2 text-[10.5px] leading-relaxed text-[#8f99a8]">
+              Reads the most recent objects sent by Model Lab → Feed simulator streams
+              (server-side send log). Leave the filter empty for all streams; each row
+              carries _stream and _sent_at columns.
+            </p>
+          </>
         ) : null}
 
         {node.type === "ontologySource" ? (

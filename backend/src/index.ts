@@ -18,10 +18,13 @@ import pgPlugin from "./plugins/pg.js";
 import rateLimitPlugin from "./plugins/rate-limit.js";
 import requestLog from "./plugins/request-log.js";
 import usagePlugin from "./plugins/usage.js";
+import { pool } from "./db/pool.js";
+import { startFeedScheduler } from "./services/feed-sim.js";
 import authRoutes from "./routes/auth.js";
 import batchRoutes from "./routes/batch.js";
 import channelsRoutes from "./routes/channels.js";
 import conceptsRoutes from "./routes/concepts.js";
+import feedStreamRoutes from "./routes/feed-streams.js";
 import disambiguateRoutes from "./routes/disambiguate.js";
 import extractRoutes from "./routes/extract.js";
 import dataQualityRoutes from "./routes/data-quality.js";
@@ -148,6 +151,7 @@ await app.register(ingestRoutes, { prefix: "/v1" });
 await app.register(sourceRoutes, { prefix: "/v1" });
 await app.register(ontologyRoutes, { prefix: "/v1" });
 await app.register(channelsRoutes, { prefix: "/v1" });
+await app.register(feedStreamRoutes, { prefix: "/v1" });
 await app.register(labRoutes, { prefix: "/v1" });
 await app.register(conceptsRoutes, { prefix: "/v1" });
 await app.register(synonymsRoutes, { prefix: "/v1" });
@@ -164,6 +168,7 @@ await app.register(dataQualityRoutes, { prefix: "/v1" });
 
 try {
   await app.listen({ port, host });
+  startFeedScheduler(pool, app.log);
 } catch (err) {
   app.log.error(err);
   process.exit(1);

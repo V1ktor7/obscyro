@@ -22,6 +22,7 @@ import {
   Loader2,
   Play,
   Plus,
+  RadioTower,
   Trash2,
   X,
   Zap,
@@ -31,6 +32,7 @@ import { cn } from "@/lib/cn";
 import { listEnvTypes, type EnvObjectType } from "@/lib/platform-api";
 import { listChannels, type DataChannel } from "../channels-api";
 import { numericColumns, parseCsvRows } from "../csv-parse";
+import FeedSimulatorTab from "./FeedSimulatorTab";
 import {
   deleteLabModel,
   forecastLabModel,
@@ -46,7 +48,7 @@ import {
 } from "../lab-api";
 import { useStudio } from "../StudioShell";
 
-type Tab = "causality" | "train" | "compare";
+type Tab = "causality" | "train" | "compare" | "feed";
 
 const FIELD =
   "rounded border border-[#d3d8de] bg-[#f6f7f9] px-2 py-1 text-xs text-[#1c2127] focus:border-[#2d72d2] focus:outline-none";
@@ -246,6 +248,7 @@ export default function LabView() {
             ["causality", "Causality", Brain],
             ["train", "Train", GraduationCap],
             ["compare", "Simulate + predict vs reality", ChartLine],
+            ["feed", "Feed simulator", RadioTower],
           ] as const
         ).map(([key, label, Icon]) => (
           <button
@@ -298,8 +301,10 @@ export default function LabView() {
             onDeleted={() => void refreshModels()}
             onError={setError}
           />
-        ) : (
+        ) : tab === "compare" ? (
           <CompareTab env={env} models={models} labelOf={labelOf} onError={setError} />
+        ) : (
+          <FeedSimulatorTab env={env} />
         )}
       </div>
     </div>
