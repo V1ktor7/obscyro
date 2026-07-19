@@ -62,7 +62,6 @@ const TABS: { href: string; label: string; sub: string }[] = [
   { href: "/studio/manager", label: "Ontology Manager", sub: "model" },
   { href: "/studio/workspace", label: "Data Studio", sub: "build" },
   { href: "/studio/command", label: "Live Twin", sub: "twin" },
-  { href: "/studio/crisis", label: "Simulation", sub: "sim" },
   { href: "/studio/lab", label: "Model Lab", sub: "ml" },
   { href: "/studio/flux", label: "Data Flux", sub: "flux" },
 ];

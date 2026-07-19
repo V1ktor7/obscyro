@@ -402,10 +402,10 @@ export default function CommandView() {
               Live
             </span>
             <Link
-              href="/studio/crisis"
+              href="/studio/lab"
               className="px-3 py-1 font-mono text-[10px] uppercase tracking-wide text-gray-500 hover:text-gray-800"
             >
-              Simulation
+              Model Lab
             </Link>
           </div>
           <Button
