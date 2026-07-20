@@ -50,11 +50,6 @@ import {
 } from "../command-ui";
 import { useStudio } from "../StudioShell";
 import {
-  loadTwinLayout,
-  mergeTwinPositions,
-  saveTwinLayout,
-} from "../twin-layout-persist";
-import {
   loadTwinPreferences,
   saveTwinPreferences,
 } from "../twin-preferences";
@@ -63,7 +58,8 @@ import {
   formatFreshness,
   formatTwinMetric,
 } from "../twin-ui";
-import CommandCanvas from "./CommandCanvas";
+import CommandTree from "./CommandTree";
+import CommandTreemap from "./CommandTreemap";
 
 const HIST_CAP = 40;
 
@@ -91,15 +87,9 @@ export default function CommandView() {
   const [displayMetric, setDisplayMetric] = useState("occupancyPct");
   const [kindFilter, setKindFilter] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<"graph" | "grid">("graph");
-  const [positions, setPositions] = useState<
-    Map<string, { x: number; y: number }>
-  >(() => new Map());
+  const [view, setView] = useState<"treemap" | "tree" | "grid">("treemap");
 
-  // Per-unit occupancy history + avg-occupancy KPI history (client ring buffers).
-  const [unitHist, setUnitHist] = useState<Map<string, number[]>>(
-    () => new Map(),
-  );
+  // Avg-occupancy KPI history (client ring buffer).
   const [avgHist, setAvgHist] = useState<number[]>([]);
   const lastComputedAt = useRef<string | null>(null);
 
@@ -108,7 +98,6 @@ export default function CommandView() {
     const prefs = loadTwinPreferences(env);
     setDisplayMetric(prefs.displayMetric);
     setKindFilter(prefs.kindFilter);
-    setUnitHist(new Map());
     setAvgHist([]);
     setSelectedUnitId(null);
     lastComputedAt.current = null;
@@ -118,21 +107,8 @@ export default function CommandView() {
     (snap: TwinTreeSnapshot) => {
       setSnapshot(snap);
       if (!env) return;
-      const ids = snap.nodes.map((n) => n.id);
-      setPositions(
-        mergeTwinPositions(ids, snap.edges, snap.roots, loadTwinLayout(env)),
-      );
       if (lastComputedAt.current !== snap.computedAt) {
         lastComputedAt.current = snap.computedAt;
-        setUnitHist((cur) => {
-          const next = new Map(cur);
-          for (const n of snap.nodes) {
-            if (n.metrics.occupancyPct == null) continue;
-            const arr = [...(next.get(n.id) ?? []), n.metrics.occupancyPct];
-            next.set(n.id, arr.slice(-HIST_CAP));
-          }
-          return next;
-        });
         const occNodes = snap.nodes.filter(
           (n) => n.metrics.occupancyPct != null,
         );
@@ -226,18 +202,6 @@ export default function CommandView() {
       .catch((err) => setError((err as Error).message))
       .finally(() => setDetailLoading(false));
   }, [env, selectedUnitId, isOperations, snapshot?.computedAt]);
-
-  const handlePositionChange = useCallback(
-    (unitId: string, pos: { x: number; y: number }) => {
-      setPositions((cur) => {
-        const next = new Map(cur);
-        next.set(unitId, pos);
-        if (env) saveTwinLayout(env, Object.fromEntries(next));
-        return next;
-      });
-    },
-    [env],
-  );
 
   const handleMetricChange = (key: string) => {
     setDisplayMetric(key);
@@ -532,7 +496,8 @@ export default function CommandView() {
               value={view}
               options={
                 [
-                  { value: "graph", label: "Graph" },
+                  { value: "treemap", label: "Treemap" },
+                  { value: "tree", label: "Tree" },
                   { value: "grid", label: "Grid" },
                 ] as const
               }
@@ -552,17 +517,23 @@ export default function CommandView() {
               ))}
             </select>
           </div>
-          {view === "graph" ? (
-            <CommandCanvas
+          {view === "treemap" ? (
+            <CommandTreemap
               snapshot={snapshot}
               selectedUnitId={selectedUnitId}
               displayMetric={displayMetric}
               kindFilter={kindFilter}
               search={search}
-              positions={positions}
-              history={unitHist}
               onSelectUnit={setSelectedUnitId}
-              onPositionChange={handlePositionChange}
+            />
+          ) : view === "tree" ? (
+            <CommandTree
+              snapshot={snapshot}
+              selectedUnitId={selectedUnitId}
+              displayMetric={displayMetric}
+              kindFilter={kindFilter}
+              search={search}
+              onSelectUnit={setSelectedUnitId}
             />
           ) : (
             <GridTable
@@ -588,7 +559,7 @@ export default function CommandView() {
             />
           ) : (
             <p className="px-6 py-12 text-center text-xs leading-relaxed text-gray-400">
-              Select a unit on the graph,
+              Select a unit on the treemap,
               <br />
               tree, or grid to inspect
               <br />
