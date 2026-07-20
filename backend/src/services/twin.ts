@@ -832,6 +832,18 @@ export async function seedTwinDemo(
   void orgId;
   const schema = await seedTwinSchema(db, environmentId);
 
+  // Idempotent: clear any previous demo data first, otherwise every click
+  // stacks another CHUM tree on top of the last one. Links cascade with the
+  // instances they connect.
+  await db.query(
+    `DELETE FROM app.ontology_object_instances oi
+       USING app.ontology_object_types t
+      WHERE oi.object_type_id = t.id
+        AND t.environment_id = $1
+        AND oi.provenance->>'source' = 'twin-demo'`,
+    [environmentId],
+  );
+
   async function mkUnit(name: string, kind: string, code: string): Promise<string> {
     return insertObjectInstance(
       db,
@@ -846,16 +858,20 @@ export async function seedTwinDemo(
   const h2 = await mkUnit("Hôpital Saint-Luc", "hospital", "HSL");
   const h1Lab = await mkUnit("HND Lab", "lab", "HND-LAB");
   const h1Ward = await mkUnit("HND Ward 3A", "ward", "HND-W3A");
+  const h1Ed = await mkUnit("HND Emergency", "ward", "HND-ED");
   const h2Lab = await mkUnit("HSL Lab", "lab", "HSL-LAB");
   const h2Ward = await mkUnit("HSL Ward 2B", "ward", "HSL-W2B");
+  const h2Icu = await mkUnit("HSL ICU", "ward", "HSL-ICU");
 
   const containsLinks: Array<[string, string]> = [
     [root, h1],
     [root, h2],
     [h1, h1Lab],
     [h1, h1Ward],
+    [h1, h1Ed],
     [h2, h2Lab],
     [h2, h2Ward],
+    [h2, h2Icu],
   ];
   for (const [from, to] of containsLinks) {
     await insertLinkInstance(db, schema.containsLinkTypeId, from, to, {
@@ -863,30 +879,53 @@ export async function seedTwinDemo(
     });
   }
 
-  let instanceCount = 7;
-  for (const wardId of [h1Ward, h2Ward]) {
-    const patientId = await insertObjectInstance(
-      db,
-      schema.patientTypeId,
-      { identifier: `P-${wardId.slice(0, 4)}`, label: "Demo patient" },
-      { source: "twin-demo" },
-    );
-    await insertLinkInstance(db, schema.locatedInLinkTypeId, patientId, wardId, {
-      source: "twin-demo",
-    });
-    instanceCount++;
+  let instanceCount = 9;
 
-    const bedId = await insertObjectInstance(
-      db,
-      schema.bedTypeId,
-      { label: "Bed 1", status: "occupied" },
-      { source: "twin-demo" },
-    );
-    await insertLinkInstance(db, schema.locatedInBedLinkTypeId, bedId, wardId, {
-      source: "twin-demo",
-    });
-    instanceCount++;
+  // Varied bed occupancy so the canvas shows a real spread (green / amber /
+  // red) instead of a uniform 100% wall.
+  const wards: Array<{ id: string; code: string; beds: number; occupied: number }> = [
+    { id: h1Ward, code: "HND-W3A", beds: 10, occupied: 7 }, // 70% — healthy
+    { id: h1Ed, code: "HND-ED", beds: 8, occupied: 8 }, // 100% — critical
+    { id: h2Ward, code: "HSL-W2B", beds: 10, occupied: 9 }, // 90% — warn
+    { id: h2Icu, code: "HSL-ICU", beds: 6, occupied: 4 }, // 67% — healthy
+  ];
+
+  for (const ward of wards) {
+    for (let i = 1; i <= ward.beds; i++) {
+      const occupied = i <= ward.occupied;
+      const bedId = await insertObjectInstance(
+        db,
+        schema.bedTypeId,
+        {
+          label: `${ward.code} Bed ${i}`,
+          status: occupied ? "occupied" : "free",
+        },
+        { source: "twin-demo" },
+      );
+      await insertLinkInstance(db, schema.locatedInBedLinkTypeId, bedId, ward.id, {
+        source: "twin-demo",
+      });
+      instanceCount++;
+
+      // One patient per occupied bed keeps patient counts consistent with
+      // occupancy without exploding the seed size.
+      if (occupied) {
+        const patientId = await insertObjectInstance(
+          db,
+          schema.patientTypeId,
+          {
+            identifier: `${ward.code}-P${String(i).padStart(2, "0")}`,
+            label: "Demo patient",
+          },
+          { source: "twin-demo" },
+        );
+        await insertLinkInstance(db, schema.locatedInLinkTypeId, patientId, ward.id, {
+          source: "twin-demo",
+        });
+        instanceCount++;
+      }
+    }
   }
 
-  return { unitCount: 7, instanceCount };
+  return { unitCount: 9, instanceCount };
 }
