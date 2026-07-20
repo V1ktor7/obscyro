@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 
 import type { DbClient } from "../lib/db.js";
 
@@ -400,6 +400,12 @@ async function tickStream(db: DbClient, stream: FeedStreamRow, budget: number): 
   return sent + failed;
 }
 
+// Session-level advisory lock key: only the holder ticks streams, so running
+// several backend instances never double-sends. The lock releases when the
+// holder's connection drops, letting another instance take over.
+const FEED_SIM_LOCK_KEY = 74_231_001;
+const LEADER_RETRY_TICKS = 5;
+
 /** Start the feed scheduler. Call once after the server begins listening. */
 export function startFeedScheduler(pool: Pool, log: { info: (msg: string) => void; error: (obj: unknown, msg?: string) => void }): void {
   if (schedulerStarted) return;
@@ -410,12 +416,58 @@ export function startFeedScheduler(pool: Pool, log: { info: (msg: string) => voi
   schedulerStarted = true;
   log.info("feed-sim scheduler started");
 
+  // Leadership state. The dedicated client pins the Postgres session that
+  // owns the advisory lock; it is never used for queries.
+  let lockClient: PoolClient | null = null;
+  let isLeader = false;
+  let ticksSinceLeaderAttempt = LEADER_RETRY_TICKS;
+
+  const dropLeadership = () => {
+    isLeader = false;
+    if (lockClient) {
+      // Destroy (not release) so the session — and its advisory lock — dies.
+      lockClient.release(true);
+      lockClient = null;
+    }
+  };
+
+  const tryAcquireLeadership = async (): Promise<boolean> => {
+    if (isLeader && lockClient) return true;
+    try {
+      const client = await pool.connect();
+      const { rows } = await client.query<{ ok: boolean }>(
+        "SELECT pg_try_advisory_lock($1) AS ok",
+        [FEED_SIM_LOCK_KEY],
+      );
+      if (!rows[0]?.ok) {
+        client.release();
+        return false;
+      }
+      lockClient = client;
+      isLeader = true;
+      client.on("error", () => {
+        log.info("feed-sim scheduler: lock session lost, dropping leadership");
+        dropLeadership();
+      });
+      log.info("feed-sim scheduler: leadership acquired");
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   let ticking = false;
   setInterval(() => {
     if (ticking) return;
     ticking = true;
     void (async () => {
       try {
+        if (!isLeader) {
+          ticksSinceLeaderAttempt += 1;
+          if (ticksSinceLeaderAttempt < LEADER_RETRY_TICKS) return;
+          ticksSinceLeaderAttempt = 0;
+          if (!(await tryAcquireLeadership())) return;
+        }
         const { rows } = await pool.query<FeedStreamRow>(
           `SELECT id, environment_id, name, config, sent_count, dataset_index,
                   surge_until, surge_factor, stall_until

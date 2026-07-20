@@ -14,7 +14,7 @@ import {
   verifyJwtHS256,
   type WebhookAuthType,
 } from "../lib/webhook-auth.js";
-import { dispatchChannelsForSource } from "../services/channel-runner.js";
+import { enqueueChannelJobs } from "../services/channel-jobs.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
 
 const errorEnvelope = z.object({
@@ -519,7 +519,7 @@ const ingestRoutes: FastifyPluginAsync = async (fastify) => {
       );
       const row = inserted.rows[0]!;
 
-      void dispatchChannelsForSource(req.params.id, payload, "webhook");
+      await enqueueChannelJobs(req.db, req.params.id, payload, "webhook", row.id);
 
       return reply.code(201).send({
         eventId: row.id,
@@ -565,7 +565,7 @@ const ingestRoutes: FastifyPluginAsync = async (fastify) => {
       const row = inserted.rows[0]!;
 
       if (req.body.sourceId) {
-        void dispatchChannelsForSource(req.body.sourceId, req.body.payload ?? {}, "source");
+        await enqueueChannelJobs(req.db, req.body.sourceId, req.body.payload ?? {}, "source", row.id);
       }
 
       return reply.code(201).send({
@@ -718,8 +718,8 @@ const ingestRoutes: FastifyPluginAsync = async (fastify) => {
       );
       const row = inserted.rows[0]!;
 
-      // Fire-and-forget: run live channels bound to this source.
-      void dispatchChannelsForSource(source.id, payload, "webhook");
+      // Durable: the job insert is the handoff — the worker loop picks it up.
+      await enqueueChannelJobs(req.db, source.id, payload, "webhook", row.id);
 
       return sendWebhookResponse(reply, config.response, {
         eventId: row.id,

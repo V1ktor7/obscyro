@@ -19,6 +19,7 @@ import rateLimitPlugin from "./plugins/rate-limit.js";
 import requestLog from "./plugins/request-log.js";
 import usagePlugin from "./plugins/usage.js";
 import { pool } from "./db/pool.js";
+import { startChannelJobWorker } from "./services/channel-jobs.js";
 import { startFeedScheduler } from "./services/feed-sim.js";
 import authRoutes from "./routes/auth.js";
 import batchRoutes from "./routes/batch.js";
@@ -169,6 +170,7 @@ await app.register(dataQualityRoutes, { prefix: "/v1" });
 try {
   await app.listen({ port, host });
   startFeedScheduler(pool, app.log);
+  startChannelJobWorker(pool, app.log);
 } catch (err) {
   app.log.error(err);
   process.exit(1);

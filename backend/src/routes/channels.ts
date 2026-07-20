@@ -31,6 +31,7 @@ const channelStats = z.object({
   avgDurationMs: z.number().nullable(),
   savedToday: z.number().int(),
   flaggedToday: z.number().int(),
+  queuedJobs: z.number().int(),
 });
 
 const channelOut = z.object({
@@ -132,6 +133,7 @@ interface ChannelRow {
   avg_duration_ms: string | null;
   saved_today: string;
   flagged_today: string;
+  queued_jobs: string;
 }
 
 function channelRowOut(r: ChannelRow): z.infer<typeof channelOut> {
@@ -151,6 +153,7 @@ function channelRowOut(r: ChannelRow): z.infer<typeof channelOut> {
       avgDurationMs: r.avg_duration_ms === null ? null : Math.round(Number(r.avg_duration_ms)),
       savedToday: Number(r.saved_today),
       flaggedToday: Number(r.flagged_today),
+      queuedJobs: Number(r.queued_jobs),
     },
   };
 }
@@ -162,7 +165,9 @@ const CHANNEL_SELECT = `
          COUNT(r.id) FILTER (WHERE r.created_at >= date_trunc('day', now())) AS runs_today,
          AVG(r.duration_ms) FILTER (WHERE r.created_at >= date_trunc('day', now())) AS avg_duration_ms,
          COALESCE(SUM(r.saved_count) FILTER (WHERE r.created_at >= date_trunc('day', now())), 0) AS saved_today,
-         COALESCE(SUM(r.flagged_count) FILTER (WHERE r.created_at >= date_trunc('day', now())), 0) AS flagged_today
+         COALESCE(SUM(r.flagged_count) FILTER (WHERE r.created_at >= date_trunc('day', now())), 0) AS flagged_today,
+         (SELECT COUNT(*) FROM app.channel_job jq
+           WHERE jq.channel_id = c.id AND jq.status IN ('queued', 'running')) AS queued_jobs
     FROM app.data_channel c
     LEFT JOIN app.ingest_sources s ON s.id = c.source_id
     LEFT JOIN app.data_channel_run r ON r.channel_id = c.id`;

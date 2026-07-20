@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
-import { pool } from "../db/pool.js";
 import type { DbClient } from "../lib/db.js";
+import { AppError } from "../lib/errors.js";
 import { proxyToNlp } from "../lib/nlp.js";
 import {
   CLINICAL_FINDING_SCHEMA,
@@ -22,6 +22,7 @@ import {
 // field extraction) → extract (NLP concepts + contexts) → validate
 // (min-confidence, duplicates) → save (persistExtractResults). Translation is
 // display-only in the client runner and is skipped here — it never persists.
+// Execution is driven by the durable job queue in channel-jobs.ts.
 // ---------------------------------------------------------------------------
 
 export interface ChannelStepRow {
@@ -117,44 +118,77 @@ export interface ChannelRunOutcome {
   savedCount: number;
   flaggedCount: number;
   error: string | null;
+  /** AppError code when available (e.g. NLP_UNAVAILABLE) — lets the job worker classify retryable failures. */
+  errorCode: string | null;
+  durationMs: number;
+  stepTimings: Record<string, number>;
+}
+
+/** Failure codes worth retrying: the input is fine, a dependency was down. */
+const RETRYABLE_ERROR_CODES = new Set(["NLP_UNAVAILABLE", "NLP_UPSTREAM_ERROR"]);
+
+export function isRetryableOutcome(outcome: ChannelRunOutcome): boolean {
+  return (
+    outcome.status === "failed" &&
+    outcome.errorCode !== null &&
+    RETRYABLE_ERROR_CODES.has(outcome.errorCode)
+  );
+}
+
+/** Persist a run's final outcome into the channel run history. Never throws. */
+export async function recordChannelRun(
+  db: DbClient,
+  channelId: string,
+  trigger: "webhook" | "source",
+  inputChars: number,
+  outcome: ChannelRunOutcome,
+): Promise<void> {
+  await db
+    .query(
+      `INSERT INTO app.data_channel_run
+              (channel_id, status, run_trigger, input_chars, concept_count,
+               saved_count, flagged_count, duration_ms, step_timings, error)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)`,
+      [
+        channelId,
+        outcome.status,
+        trigger,
+        inputChars,
+        outcome.conceptCount,
+        outcome.savedCount,
+        outcome.flaggedCount,
+        outcome.durationMs,
+        JSON.stringify(outcome.stepTimings),
+        outcome.error,
+      ],
+    )
+    .catch(() => undefined);
 }
 
 /**
- * Execute a channel's enabled steps over `inputText` and record the run.
- * Never throws — failures are recorded as failed runs and returned.
+ * Execute a channel's enabled steps over `inputText` WITHOUT recording the
+ * run. Never throws — failures are returned as failed outcomes. The job
+ * worker records only final outcomes so retried attempts don't pollute the
+ * run history.
  */
-export async function runChannel(
+export async function executeChannel(
   db: DbClient,
   channel: RunnableChannel,
   inputText: string,
-  trigger: "webhook" | "source",
 ): Promise<ChannelRunOutcome> {
   const t0 = Date.now();
   const timings: Record<string, number> = {};
 
-  const record = async (outcome: ChannelRunOutcome): Promise<ChannelRunOutcome> => {
-    await db
-      .query(
-        `INSERT INTO app.data_channel_run
-                (channel_id, status, run_trigger, input_chars, concept_count,
-                 saved_count, flagged_count, duration_ms, step_timings, error)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)`,
-        [
-          channel.id,
-          outcome.status,
-          trigger,
-          inputText.length,
-          outcome.conceptCount,
-          outcome.savedCount,
-          outcome.flaggedCount,
-          Date.now() - t0,
-          JSON.stringify(timings),
-          outcome.error,
-        ],
-      )
-      .catch(() => undefined);
-    return outcome;
-  };
+  const outcome = (
+    partial: Omit<ChannelRunOutcome, "durationMs" | "stepTimings" | "errorCode"> & {
+      errorCode?: string | null;
+    },
+  ): ChannelRunOutcome => ({
+    ...partial,
+    errorCode: partial.errorCode ?? null,
+    durationMs: Date.now() - t0,
+    stepTimings: timings,
+  });
 
   try {
     const enabled = channel.steps.filter((s) => s.enabled);
@@ -196,24 +230,26 @@ export async function runChannel(
     }
     text = text.trim();
     if (!text) {
-      return record({
+      return outcome({
         status: "failed",
         conceptCount: 0,
         savedCount: 0,
         flaggedCount: 0,
         error: "Input is empty after the transform step.",
+        errorCode: "EMPTY_INPUT",
       });
     }
 
     // --- extract --------------------------------------------------------------
     const extract = step("extract");
     if (!extract) {
-      return record({
+      return outcome({
         status: "failed",
         conceptCount: 0,
         savedCount: 0,
         flaggedCount: 0,
         error: "Channel has no enabled extract step.",
+        errorCode: "NO_EXTRACT_STEP",
       });
     }
     const tExtract = Date.now();
@@ -320,12 +356,13 @@ export async function runChannel(
       );
       const env = envRes.rows[0];
       if (!env) {
-        return record({
+        return outcome({
           status: "failed",
           conceptCount: results.length + duplicateCount,
           savedCount: 0,
           flaggedCount,
           error: "Channel environment not found.",
+          errorCode: "ENVIRONMENT_NOT_FOUND",
         });
       }
 
@@ -368,7 +405,7 @@ export async function runChannel(
       timings.save = Date.now() - t;
     }
 
-    return record({
+    return outcome({
       status: flaggedCount > 0 ? "flagged" : "succeeded",
       conceptCount: results.length + duplicateCount,
       savedCount,
@@ -376,56 +413,25 @@ export async function runChannel(
       error: null,
     });
   } catch (err) {
-    return record({
+    return outcome({
       status: "failed",
       conceptCount: 0,
       savedCount: 0,
       flaggedCount: 0,
       error: (err as Error).message,
+      errorCode: err instanceof AppError ? err.code : "INTERNAL_ERROR",
     });
   }
 }
 
-/**
- * Fire the live channels bound to an ingest source for a newly stored event.
- * Uses the shared pool (not a request-scoped client) so callers can
- * fire-and-forget after the webhook response is sent. Never throws.
- */
-export async function dispatchChannelsForSource(
-  sourceId: string,
-  payload: unknown,
-  trigger: "webhook" | "source" = "webhook",
-): Promise<void> {
-  const db: DbClient = { query: (sql, params) => pool.query(sql, params) };
-  try {
-    const { rows } = await db.query<{
-      id: string;
-      environment_id: string;
-      status: "draft" | "live" | "paused";
-      steps: unknown;
-    }>(
-      `SELECT id, environment_id, status, steps
-         FROM app.data_channel
-        WHERE source_id = $1 AND status = 'live'`,
-      [sourceId],
-    );
-    if (rows.length === 0) return;
-
-    const inputText = payloadToInputText(payload);
-    for (const row of rows) {
-      await runChannel(
-        db,
-        {
-          id: row.id,
-          environmentId: row.environment_id,
-          status: row.status,
-          steps: (row.steps as ChannelStepRow[]) ?? [],
-        },
-        inputText,
-        trigger,
-      );
-    }
-  } catch {
-    /* dispatch must never break the webhook response */
-  }
+/** Execute a channel and record the run in one call (manual/one-shot use). */
+export async function runChannel(
+  db: DbClient,
+  channel: RunnableChannel,
+  inputText: string,
+  trigger: "webhook" | "source",
+): Promise<ChannelRunOutcome> {
+  const result = await executeChannel(db, channel, inputText);
+  await recordChannelRun(db, channel.id, trigger, inputText.length, result);
+  return result;
 }
