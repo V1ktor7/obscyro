@@ -115,7 +115,7 @@ export default function CommandTree({
   if (!snapshot || snapshot.nodes.length === 0) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-        <p className="text-sm text-gray-400">
+        <p className="text-sm text-[#8f99a8]">
           No OrgUnits in this environment. Seed the CHUM demo to get started.
         </p>
       </div>
@@ -152,7 +152,7 @@ export default function CommandTree({
               key={n.id}
               className={cn(
                 "absolute rounded-md border transition-opacity",
-                selected ? "ring-2 ring-indigo-400" : "",
+                selected ? "ring-2 ring-[#2d72d2]" : "",
                 dimmed && "opacity-35",
               )}
               style={{
@@ -161,7 +161,7 @@ export default function CommandTree({
                 width: NODE_W,
                 height: NODE_H,
                 background: isLeaf ? tone.bg : "#ffffff",
-                borderColor: selected ? "#6366f1" : isLeaf ? tone.border : "#d3d8de",
+                borderColor: selected ? "#2d72d2" : isLeaf ? tone.border : "#d3d8de",
               }}
             >
               <button

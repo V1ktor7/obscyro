@@ -148,7 +148,7 @@ export default function CommandTreemap({
   if (!snapshot || snapshot.nodes.length === 0) {
     return (
       <div ref={ref} className="flex min-h-0 flex-1 items-center justify-center p-6">
-        <p className="text-sm text-gray-400">
+        <p className="text-sm text-[#8f99a8]">
           No OrgUnits in this environment. Seed the CHUM demo to get started.
         </p>
       </div>
@@ -183,7 +183,7 @@ export default function CommandTreemap({
                 key={n.id}
                 className={cn(
                   "absolute rounded-md border transition-opacity",
-                  selected ? "border-indigo-400 ring-1 ring-indigo-200" : "border-[#d3d8de]",
+                  selected ? "border-[#2d72d2] ring-1 ring-[#b5d4f4]" : "border-[#d3d8de]",
                   dimmed && "opacity-40",
                 )}
                 style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
@@ -216,7 +216,7 @@ export default function CommandTreemap({
               onClick={() => onSelectUnit(n.id)}
               className={cn(
                 "absolute flex flex-col justify-between overflow-hidden rounded-md border p-1.5 text-left transition-opacity",
-                selected ? "ring-2 ring-indigo-400" : "",
+                selected ? "ring-2 ring-[#2d72d2]" : "",
                 dimmed && "opacity-40",
               )}
               style={{
@@ -225,7 +225,7 @@ export default function CommandTreemap({
                 width: rect.w,
                 height: rect.h,
                 background: tone.bg,
-                borderColor: selected ? "#6366f1" : tone.border,
+                borderColor: selected ? "#2d72d2" : tone.border,
               }}
             >
               <span className="flex items-start gap-1">
