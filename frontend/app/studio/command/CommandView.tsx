@@ -398,7 +398,7 @@ export default function CommandView() {
 
       {/* ---- KPI strip ---- */}
       {kpis ? (
-        <div className="grid shrink-0 grid-cols-3 border-b border-[#d3d8de] bg-[#f6f7f9]/40 lg:grid-cols-6">
+        <div className="grid shrink-0 grid-cols-2 gap-2 border-b border-[#d3d8de] bg-[#f6f7f9] px-3 py-2.5 sm:grid-cols-3 lg:grid-cols-6">
           <KpiCell
             label="Avg occupancy"
             value={kpis.avgOcc != null ? `${Math.round(kpis.avgOcc)}%` : "—"}
@@ -460,7 +460,7 @@ export default function CommandView() {
       {/* ---- Main 3-column zone ---- */}
       <div className="flex min-h-0 flex-1">
         {/* Left: ontology tree */}
-        <aside className="flex w-60 shrink-0 flex-col border-r border-[#d3d8de]">
+        <aside className="flex w-60 shrink-0 flex-col border-r border-[#d3d8de] bg-white">
           <PanelHead
             title="Ontology · OrgUnits"
             right={
@@ -491,9 +491,9 @@ export default function CommandView() {
           />
         </aside>
 
-        {/* Center: graph / grid */}
-        <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="absolute left-3 top-2.5 z-10">
+        {/* Center: treemap / tree / grid */}
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#f6f7f9]">
+          <div className="flex shrink-0 items-center gap-2 border-b border-[#d3d8de] bg-white px-3 py-2">
             <ModeToggle
               value={view}
               options={
@@ -505,12 +505,10 @@ export default function CommandView() {
               }
               onChange={setView}
             />
-          </div>
-          <div className="absolute right-3 top-2.5 z-10">
             <select
               value={displayMetric}
               onChange={(e) => handleMetricChange(e.target.value)}
-              className="rounded border border-[#d3d8de] bg-white px-2 py-1 text-[10px] text-[#5f6b7c] focus:border-[#2d72d2] focus:outline-none"
+              className="ml-auto rounded border border-[#d3d8de] bg-white px-2 py-1 text-[11px] text-[#5f6b7c] focus:border-[#2d72d2] focus:outline-none"
             >
               {DISPLAY_METRIC_OPTIONS.map((o) => (
                 <option key={o.key} value={o.key}>
@@ -549,7 +547,7 @@ export default function CommandView() {
         </main>
 
         {/* Right: inspector */}
-        <aside className="w-80 shrink-0 overflow-y-auto border-l border-[#d3d8de]">
+        <aside className="w-80 shrink-0 overflow-y-auto border-l border-[#d3d8de] bg-white">
           {selectedUnitId ? (
             <InspectorPanel
               unitId={selectedUnitId}
@@ -593,7 +591,7 @@ function KindChip({
       type="button"
       onClick={onClick}
       className={cn(
-        "rounded border px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide transition-colors",
+        "rounded border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide transition-colors",
         active
           ? "border-[#b5d4f4] bg-[#e7f2fd] text-[#215db0]"
           : "border-[#d3d8de] text-[#5f6b7c] hover:text-[#1c2127]",
@@ -660,25 +658,32 @@ function TreeRail({
             type="button"
             onClick={() => onSelect(node.id)}
             className={cn(
-              "flex w-full items-center gap-1.5 border-l-2 py-1 pr-2 text-left transition-colors",
+              "mx-1.5 flex items-center gap-2 rounded py-1.5 pr-2 text-left transition-colors",
               selectedUnitId === node.id
-                ? "border-[#2d72d2] bg-[#e7f2fd]"
-                : "border-transparent hover:bg-[#f6f7f9]",
+                ? "bg-[#e7f2fd]"
+                : "hover:bg-[#f6f7f9]",
             )}
-            style={{ paddingLeft: 10 + depth * 12 }}
+            style={{ paddingLeft: 8 + depth * 12, width: "calc(100% - 12px)" }}
           >
             <span
               className="h-1.5 w-1.5 shrink-0 rounded-full"
               style={{ background: severityHex(node.worstAlertSeverity) }}
             />
-            <span className="min-w-0 flex-1 truncate text-[11px] text-[#5f6b7c]">
+            <span
+              className={cn(
+                "min-w-0 flex-1 truncate text-xs",
+                selectedUnitId === node.id
+                  ? "font-medium text-[#215db0]"
+                  : "text-[#1c2127]",
+              )}
+            >
               {node.name}
             </span>
-            <span className="shrink-0 text-[8px] font-medium uppercase tracking-wide text-[#8f99a8]">
+            <span className="shrink-0 text-[9px] font-medium uppercase tracking-wide text-[#8f99a8]">
               {node.kind.slice(0, 4)}
             </span>
             {occ != null ? (
-              <span className="relative h-1 w-8 shrink-0 rounded bg-[#e5e8eb]">
+              <span className="relative h-1.5 w-9 shrink-0 rounded bg-[#e5e8eb]">
                 <span
                   className="absolute inset-y-0 left-0 rounded"
                   style={{

@@ -16,9 +16,9 @@ import { severityHex } from "../command-ui";
 import { formatTwinMetric } from "../twin-ui";
 import { buildForest, occTone, type TreeNode } from "./twin-hierarchy";
 
-const NODE_W = 108;
-const NODE_H = 42;
-const H_GAP = 16;
+const NODE_W = 124;
+const NODE_H = 48;
+const H_GAP = 18;
 const LEVEL_GAP = 92;
 const PAD = 24;
 
@@ -126,7 +126,7 @@ export default function CommandTree({
 
   return (
     <div
-      className="relative min-h-0 flex-1 overflow-auto pt-10"
+      className="relative min-h-0 flex-1 overflow-auto p-3"
       style={{
         backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.05) 1px, transparent 1px)",
         backgroundSize: "22px 22px",
@@ -175,7 +175,7 @@ export default function CommandTree({
                     style={{ background: severityHex(n.worstAlertSeverity) }}
                   />
                   <span
-                    className="truncate text-[10.5px] font-medium"
+                    className="truncate text-[11.5px] font-medium"
                     style={{ color: isLeaf ? tone.text : "#1c2127" }}
                     title={n.name}
                   >
@@ -183,11 +183,11 @@ export default function CommandTree({
                   </span>
                 </span>
                 <span className="flex items-center justify-between">
-                  <span className="text-[8px] font-medium uppercase tracking-[0.1em] text-[#8f99a8]">
+                  <span className="text-[9px] font-medium uppercase tracking-wide text-[#8f99a8]">
                     {n.kind}
                   </span>
                   <span
-                    className="font-mono text-[12px] font-semibold leading-none"
+                    className="font-mono text-[13px] font-semibold leading-none"
                     style={{ color: isLeaf ? tone.text : "#404854" }}
                   >
                     {isLeaf ? metricVal : `${node.children.length}`}

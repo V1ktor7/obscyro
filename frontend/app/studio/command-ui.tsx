@@ -32,7 +32,7 @@ export function MicroLabel({
   return (
     <span
       className={cn(
-        "text-[9px] font-medium uppercase tracking-[0.12em] text-[#8f99a8]",
+        "text-[10px] font-medium uppercase tracking-wide text-[#8f99a8]",
         className,
       )}
     >
@@ -152,11 +152,11 @@ export function KpiCell({
   spark?: number[];
 }) {
   return (
-    <div className="relative flex flex-col justify-center overflow-hidden border-r border-[#d3d8de] px-3.5 py-1.5 last:border-r-0">
+    <div className="relative flex flex-col justify-center overflow-hidden rounded-md bg-white px-3 py-2 shadow-[inset_0_0_0_1px_#e5e8eb]">
       <MicroLabel>{label}</MicroLabel>
       <span
         className={cn(
-          "font-mono text-lg font-semibold leading-tight",
+          "text-lg font-semibold leading-tight",
           tone === "crit"
             ? "text-rose-600"
             : tone === "warn"
@@ -167,7 +167,7 @@ export function KpiCell({
         {value}
       </span>
       {sub ? (
-        <span className="truncate text-[9px] text-[#8f99a8]">{sub}</span>
+        <span className="truncate text-[10px] text-[#8f99a8]">{sub}</span>
       ) : null}
       {spark && spark.length > 1 ? (
         <Sparkline

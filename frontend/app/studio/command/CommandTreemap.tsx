@@ -30,7 +30,7 @@ interface Placed {
   hasHeader: boolean;
 }
 
-const HEADER_H = 17;
+const HEADER_H = 20;
 const GAP = 3;
 
 /** Squarified treemap of siblings within a rectangle (Bruls et al.). */
@@ -166,7 +166,7 @@ export default function CommandTreemap({
   const q = search.trim().toLowerCase();
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col p-2 pt-11">
+    <div className="flex min-h-0 flex-1 flex-col p-3">
       <div ref={ref} className="relative min-h-0 flex-1">
         {placed.map(({ node, rect, isLeaf }) => {
           const n = node.node;
@@ -198,10 +198,10 @@ export default function CommandTreemap({
                     className="h-1.5 w-1.5 shrink-0 rounded-full"
                     style={{ background: severityHex(n.worstAlertSeverity) }}
                   />
-                  <span className="truncate text-[10.5px] font-semibold text-[#404854]">
+                  <span className="truncate text-[11.5px] font-semibold text-[#1c2127]">
                     {n.name}
                   </span>
-                  <span className="ml-auto shrink-0 font-mono text-[9px] uppercase tracking-wide text-[#8f99a8]">
+                  <span className="ml-auto shrink-0 text-[10px] font-medium text-[#8f99a8]">
                     {node.children.length}
                   </span>
                 </button>
@@ -234,7 +234,7 @@ export default function CommandTreemap({
                   style={{ background: severityHex(n.worstAlertSeverity) }}
                 />
                 <span
-                  className="truncate text-[10.5px] font-medium leading-tight"
+                  className="truncate text-[11.5px] font-medium leading-tight"
                   style={{ color: tone.text }}
                   title={n.name}
                 >
@@ -243,7 +243,7 @@ export default function CommandTreemap({
               </span>
               {showMetric ? (
                 <span className="leading-none">
-                  <span className="text-[14px] font-semibold" style={{ color: tone.text }}>
+                  <span className="text-[15px] font-semibold" style={{ color: tone.text }}>
                     {metricVal}
                   </span>
                 </span>
@@ -265,7 +265,7 @@ export default function CommandTreemap({
           );
         })}
       </div>
-      <div className="mt-1.5 flex items-center gap-2 text-[10px] text-[#8f99a8]">
+      <div className="mt-2 flex items-center gap-2 text-[10.5px] text-[#8f99a8]">
         <span>size = capacity</span>
         <span>·</span>
         <span>color = occupancy</span>
