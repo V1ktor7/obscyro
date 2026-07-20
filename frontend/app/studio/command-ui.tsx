@@ -32,7 +32,7 @@ export function MicroLabel({
   return (
     <span
       className={cn(
-        "font-mono text-[9px] uppercase tracking-[0.14em] text-gray-400",
+        "text-[9px] font-medium uppercase tracking-[0.12em] text-[#8f99a8]",
         className,
       )}
     >
@@ -53,7 +53,7 @@ export function PanelHead({
   return (
     <div
       className={cn(
-        "flex shrink-0 items-center justify-between gap-2 border-b border-gray-200 px-3 py-1.5",
+        "flex shrink-0 items-center justify-between gap-2 border-b border-[#d3d8de] px-3 py-1.5",
         className,
       )}
     >
@@ -73,7 +73,7 @@ export function Chip({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded border border-gray-200 bg-white px-2 py-0.5 font-mono text-[10px] text-gray-500",
+        "inline-flex items-center gap-1.5 rounded border border-[#d3d8de] bg-white px-2 py-0.5 text-[10px] text-[#5f6b7c]",
         className,
       )}
     >
@@ -94,7 +94,7 @@ export function LiveDot({
         ? "bg-amber-500"
         : mode === "error"
           ? "bg-rose-500"
-          : "bg-gray-300";
+          : "bg-[#c5cbd3]";
   return (
     <span
       className={cn(
@@ -110,7 +110,7 @@ export function Sparkline({
   values,
   width = 64,
   height = 18,
-  stroke = "#6366f1",
+  stroke = "#2d72d2",
   className,
 }: {
   values: number[];
@@ -152,7 +152,7 @@ export function KpiCell({
   spark?: number[];
 }) {
   return (
-    <div className="relative flex flex-col justify-center overflow-hidden border-r border-gray-200 px-3.5 py-1.5 last:border-r-0">
+    <div className="relative flex flex-col justify-center overflow-hidden border-r border-[#d3d8de] px-3.5 py-1.5 last:border-r-0">
       <MicroLabel>{label}</MicroLabel>
       <span
         className={cn(
@@ -161,13 +161,13 @@ export function KpiCell({
             ? "text-rose-600"
             : tone === "warn"
               ? "text-amber-600"
-              : "text-gray-900",
+              : "text-[#1c2127]",
         )}
       >
         {value}
       </span>
       {sub ? (
-        <span className="truncate font-mono text-[9px] text-gray-400">{sub}</span>
+        <span className="truncate text-[9px] text-[#8f99a8]">{sub}</span>
       ) : null}
       {spark && spark.length > 1 ? (
         <Sparkline
@@ -191,17 +191,17 @@ export function ModeToggle<T extends string>({
   className?: string;
 }) {
   return (
-    <div className={cn("inline-flex rounded border border-gray-200 bg-white", className)}>
+    <div className={cn("inline-flex rounded border border-[#d3d8de] bg-white", className)}>
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           onClick={() => onChange(o.value)}
           className={cn(
-            "px-3 py-1 font-mono text-[10px] uppercase tracking-wide transition-colors",
+            "px-3 py-1 text-[10px] font-medium uppercase tracking-wide transition-colors",
             value === o.value
-              ? "bg-indigo-50 text-indigo-700"
-              : "text-gray-500 hover:text-gray-800",
+              ? "bg-[#e7f2fd] text-[#215db0]"
+              : "text-[#5f6b7c] hover:text-[#1c2127]",
           )}
         >
           {o.label}
@@ -225,12 +225,12 @@ export function GaugeArc({
   const off = c * (1 - clamped / 100);
   const color =
     pct == null
-      ? "#9ca3af"
+      ? "#8f99a8"
       : clamped >= 95
         ? SEV_HEX.critical
-        : clamped >= 85
+        : clamped >= 80
           ? SEV_HEX.warn
-          : "#6366f1";
+          : OCC_OK_HEX;
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
       <circle
@@ -238,7 +238,7 @@ export function GaugeArc({
         cy={size / 2}
         r={r}
         fill="none"
-        stroke="#e5e7eb"
+        stroke="#e5e8eb"
         strokeWidth={5}
       />
       <circle
@@ -256,7 +256,7 @@ export function GaugeArc({
         x={size / 2}
         y={size / 2 + 4}
         textAnchor="middle"
-        className="fill-gray-800 font-mono text-[13px] font-semibold"
+        className="fill-[#1c2127] font-mono text-[13px] font-semibold"
       >
         {pct == null ? "—" : `${Math.round(clamped)}%`}
       </text>
@@ -264,10 +264,17 @@ export function GaugeArc({
   );
 }
 
+/**
+ * Occupancy fill: same 3-stop scale (and thresholds) the treemap/tree legend
+ * shows — green <80, amber 80–95, red ≥95 — so the rail, grid, gauge, and
+ * canvas all agree on what "healthy" looks like.
+ */
+export const OCC_OK_HEX = "#1d9e75";
+
 export function occFillColor(pct: number): string {
   if (pct >= 95) return SEV_HEX.critical;
-  if (pct >= 85) return SEV_HEX.warn;
-  return "#6366f1";
+  if (pct >= 80) return SEV_HEX.warn;
+  return OCC_OK_HEX;
 }
 
 /** Observe an element's width (for full-bleed SVG panels). */

@@ -183,7 +183,7 @@ export default function CommandTree({
                   </span>
                 </span>
                 <span className="flex items-center justify-between">
-                  <span className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#8f99a8]">
+                  <span className="text-[8px] font-medium uppercase tracking-[0.1em] text-[#8f99a8]">
                     {n.kind}
                   </span>
                   <span
@@ -218,7 +218,7 @@ export default function CommandTree({
                       return next;
                     })
                   }
-                  className="absolute -bottom-2 left-1/2 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full border border-[#d3d8de] bg-white font-mono text-[9px] leading-none text-[#5f6b7c] hover:border-[#2d72d2] hover:text-[#2d72d2]"
+                  className="absolute -bottom-2 left-1/2 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full border border-[#d3d8de] bg-white text-[9px] leading-none text-[#5f6b7c] hover:border-[#2d72d2] hover:text-[#2d72d2]"
                   title={isCol ? "Expand" : "Collapse"}
                   aria-label={isCol ? "Expand branch" : "Collapse branch"}
                 >

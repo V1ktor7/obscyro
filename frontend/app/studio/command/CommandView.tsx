@@ -510,7 +510,7 @@ export default function CommandView() {
             <select
               value={displayMetric}
               onChange={(e) => handleMetricChange(e.target.value)}
-              className="rounded border border-[#d3d8de] bg-white px-2 py-1 font-mono text-[10px] text-[#5f6b7c] focus:border-[#2d72d2] focus:outline-none"
+              className="rounded border border-[#d3d8de] bg-white px-2 py-1 text-[10px] text-[#5f6b7c] focus:border-[#2d72d2] focus:outline-none"
             >
               {DISPLAY_METRIC_OPTIONS.map((o) => (
                 <option key={o.key} value={o.key}>
@@ -780,7 +780,7 @@ function GridTable({
                   />
                 </td>
                 <td className="px-2.5 py-1.5 text-[#1c2127]">{n.name}</td>
-                <td className="px-2.5 py-1.5 font-mono text-[10px] text-[#5f6b7c]">
+                <td className="px-2.5 py-1.5 text-[10px] uppercase tracking-wide text-[#8f99a8]">
                   {n.kind}
                 </td>
                 <td className="px-2.5 py-1.5 font-mono text-[11px] text-[#5f6b7c]">
@@ -896,7 +896,7 @@ function InspectorPanel({
                   ([t, c]) => (
                     <div
                       key={t}
-                      className="flex justify-between border-b border-dotted border-[#e5e8eb] py-0.5 font-mono text-[11px] text-[#5f6b7c]"
+                      className="flex justify-between border-b border-dotted border-[#e5e8eb] py-0.5 text-[11px] text-[#5f6b7c]"
                     >
                       <span>{t}</span>
                       <b className="text-[#1c2127]">{c}</b>
@@ -952,7 +952,7 @@ function InspectorPanel({
                     key={i}
                     className="relative py-1 pl-4 text-[11px] leading-snug text-[#5f6b7c]"
                   >
-                    <span className="absolute left-0 font-mono text-[#215db0]">
+                    <span className="absolute left-0 text-[#215db0]">
                       →
                     </span>
                     {r}
