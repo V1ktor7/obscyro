@@ -11,7 +11,49 @@ const readiness = z.object({
     latencyMs: z.number().optional(),
     error: z.string().optional(),
   }),
+  nlp: z.object({
+    configured: z.boolean(),
+    ok: z.boolean(),
+    latencyMs: z.number().optional(),
+    modelLoaded: z.boolean().optional(),
+    error: z.string().optional(),
+  }),
 });
+
+const NLP_PROBE_TIMEOUT_MS = 3_000;
+
+type NlpHealth = z.infer<typeof readiness>["nlp"];
+
+/** Probe the NLP service's /health. Never throws. */
+async function probeNlp(): Promise<NlpHealth> {
+  const base = process.env.NLP_SERVICE_URL?.replace(/\/$/, "");
+  if (!base) return { configured: false, ok: false, error: "NLP_SERVICE_URL is not set." };
+
+  const start = process.hrtime.bigint();
+  try {
+    const res = await fetch(`${base}/health`, {
+      signal: AbortSignal.timeout(NLP_PROBE_TIMEOUT_MS),
+    });
+    const latencyMs = Number(Number(process.hrtime.bigint() - start) / 1_000_000);
+    if (!res.ok) {
+      return {
+        configured: true,
+        ok: false,
+        latencyMs: Number(latencyMs.toFixed(2)),
+        error: `Extraction service returned HTTP ${res.status}.`,
+      };
+    }
+    const body = (await res.json().catch(() => ({}))) as { model_loaded?: boolean };
+    return {
+      configured: true,
+      ok: true,
+      latencyMs: Number(latencyMs.toFixed(2)),
+      ...(typeof body.model_loaded === "boolean" ? { modelLoaded: body.model_loaded } : {}),
+    };
+  } catch {
+    return { configured: true, ok: false, error: "Extraction service is unreachable." };
+  }
+}
 
 const errorEnvelope = z.object({
   error: z.object({
@@ -50,19 +92,25 @@ const healthRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (req, reply) => {
+      const nlpPromise = probeNlp();
       const start = process.hrtime.bigint();
       try {
         await req.db.query("SELECT 1");
         const latencyMs = Number(process.hrtime.bigint() - start) / 1_000_000;
+        const nlp = await nlpPromise;
         return reply.send({
-          status: "ok" as const,
+          // NLP down degrades extraction (jobs queue and retry) but the API
+          // itself is fine, so this stays a 200.
+          status: nlp.configured && !nlp.ok ? ("degraded" as const) : ("ok" as const),
           database: { ok: true, latencyMs: Number(latencyMs.toFixed(2)) },
+          nlp,
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return reply.code(503).send({
           status: "degraded" as const,
           database: { ok: false, error: message },
+          nlp: await nlpPromise,
         });
       }
     },

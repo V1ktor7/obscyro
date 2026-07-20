@@ -6,7 +6,7 @@
  * same calls the graph editor nodes make), then records the run server-side.
  */
 
-import { apiFetch } from "@/lib/auth";
+import { API_BASE, apiFetch } from "@/lib/auth";
 import {
   decide,
   extractConcepts,
@@ -37,6 +37,8 @@ export interface ChannelStats {
   avgDurationMs: number | null;
   savedToday: number;
   flaggedToday: number;
+  /** Jobs waiting or retrying in the server-side queue. */
+  queuedJobs: number;
 }
 
 export interface DataChannel {
@@ -67,6 +69,30 @@ export interface ChannelRun {
   stepTimings: Record<string, unknown>;
   error: string | null;
   createdAt: string;
+}
+
+export interface PlatformHealth {
+  status: "ok" | "degraded";
+  database: { ok: boolean; latencyMs?: number; error?: string };
+  nlp: {
+    configured: boolean;
+    ok: boolean;
+    latencyMs?: number;
+    modelLoaded?: boolean;
+    error?: string;
+  };
+}
+
+/** Public readiness probe (no auth). Returns null when the API is unreachable. */
+export async function getPlatformHealth(): Promise<PlatformHealth | null> {
+  try {
+    const res = await fetch(`${API_BASE}/v1/health`, {
+      headers: { Accept: "application/json" },
+    });
+    return (await res.json()) as PlatformHealth;
+  } catch {
+    return null;
+  }
 }
 
 function enc(s: string): string {

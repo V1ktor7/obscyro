@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import time
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from app.context import extract_contexts
-from app.embeddings import search_span
+from app.embeddings import encode_texts, get_encoder, search_span
 from app.ner import extract_spans
+from app.pg_index import pg_embedding_count
 from app.schemas import (
     ConceptInput,
     ConceptOut,
@@ -19,17 +23,57 @@ from app.schemas import (
     ExtractResultOut,
 )
 
+_model_loaded = False
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    # Preload the embedding model before uvicorn accepts requests: the first
+    # SentenceTransformer load takes tens of seconds (plus a HuggingFace
+    # download on a cold cache), which would otherwise blow the backend's
+    # proxy timeout and burn a channel-job retry. With the preload here, the
+    # container healthcheck only turns healthy once extraction actually works.
+    global _model_loaded
+    get_encoder()
+    encode_texts(["warm-up"])
+    _model_loaded = True
+    yield
+
+
 app = FastAPI(
     title="Obscyro NLP — Clinical extraction",
     description="Concept extraction (NER + embeddings) and context extraction (ConText rules). No generative LLM.",
     version="0.1.0",
+    lifespan=_lifespan,
 )
+
+_EMBEDDING_COUNT_TTL_S = 60.0
+_embedding_count_cache: tuple[float, int | None] = (0.0, None)
+
+
+def _cached_embedding_count() -> int | None:
+    """SNOMED embedding row count, cached ~60s. None when the DB is unreachable."""
+    global _embedding_count_cache
+    ts, value = _embedding_count_cache
+    now = time.monotonic()
+    if now - ts < _EMBEDDING_COUNT_TTL_S:
+        return value
+    try:
+        value = pg_embedding_count()
+    except Exception:
+        value = None
+    _embedding_count_cache = (now, value)
+    return value
 
 
 @app.get("/health")
 def health() -> dict:
-    """Liveness probe — must not block on DB or model load."""
-    return {"status": "ok"}
+    """Readiness probe: the model is loaded (lifespan ran) and SNOMED vectors exist."""
+    return {
+        "status": "ok" if _model_loaded else "loading",
+        "model_loaded": _model_loaded,
+        "snomed_embedding_rows": _cached_embedding_count(),
+    }
 
 
 def _extract_concepts_body(text: str, language: str) -> list[ConceptOut]:

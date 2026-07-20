@@ -40,6 +40,7 @@ import {
   createChannel,
   deleteChannel,
   executeChannel,
+  getPlatformHealth,
   listChannelRuns,
   listChannels,
   newStep,
@@ -92,6 +93,8 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
   const [runs, setRuns] = useState<ChannelRun[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [nlpDown, setNlpDown] = useState(false);
+  const [nlpNoticeDismissed, setNlpNoticeDismissed] = useState(false);
 
   const [newName, setNewName] = useState("");
   const [showNewForm, setShowNewForm] = useState(false);
@@ -142,6 +145,27 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
       .then(({ sources: list }) => setSources(list))
       .catch(() => setSources([]));
   }, [hasKey, env]);
+
+  // Surface extraction-service outages: poll the readiness probe so users see
+  // why runs queue/fail instead of a silent empty Manager.
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      const health = await getPlatformHealth();
+      if (cancelled || !health) return;
+      const down = health.nlp.configured && !health.nlp.ok;
+      setNlpDown((prev) => {
+        if (down && !prev) setNlpNoticeDismissed(false);
+        return down;
+      });
+    };
+    void check();
+    const timer = setInterval(() => void check(), 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     setDraftSteps(selected ? selected.steps.map((s) => ({ ...s, config: { ...s.config } })) : []);
@@ -367,6 +391,22 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
         </div>
       ) : null}
 
+      {nlpDown && !nlpNoticeDismissed ? (
+        <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-[11px] text-amber-700">
+          <AlertTriangle className="h-3 w-3 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">
+            Extraction service unreachable — incoming data is queued and will retry automatically.
+          </span>
+          <button
+            type="button"
+            onClick={() => setNlpNoticeDismissed(true)}
+            aria-label="Dismiss extraction service notice"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      ) : null}
+
       <div className="flex min-h-0 flex-1">
         {/* Channel list rail */}
         <aside className="flex w-52 shrink-0 flex-col overflow-y-auto border-r border-[#d3d8de] bg-white">
@@ -513,7 +553,14 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
 
               {/* Stats */}
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <StatCard label="Runs today" value={selected.stats.runsToday.toLocaleString()} />
+                <StatCard
+                  label={
+                    selected.stats.queuedJobs > 0
+                      ? `Runs today · ${selected.stats.queuedJobs.toLocaleString()} queued`
+                      : "Runs today"
+                  }
+                  value={selected.stats.runsToday.toLocaleString()}
+                />
                 <StatCard
                   label="Avg latency"
                   value={
@@ -577,7 +624,7 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                   <span>No runs yet — try a test run.</span>
                 ) : (
                   runs.map((r) => (
-                    <span key={r.id} className="flex items-center gap-1">
+                    <span key={r.id} className="flex items-center gap-1" title={r.error ?? undefined}>
                       {r.status === "failed" ? (
                         <X className="h-3 w-3 text-rose-500" />
                       ) : r.status === "flagged" ? (
@@ -588,6 +635,11 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                       {new Date(r.createdAt).toLocaleTimeString()} · {r.conceptCount} concepts ·{" "}
                       {r.savedCount} saved
                       {r.flaggedCount > 0 ? ` · ${r.flaggedCount} flagged` : ""}
+                      {r.status === "failed" && r.error ? (
+                        <span className="max-w-[16rem] truncate text-rose-500">
+                          · {r.error}
+                        </span>
+                      ) : null}
                     </span>
                   ))
                 )}
