@@ -4,7 +4,30 @@
  * hierarchy (containment or dendrogram) instead of a free graph.
  */
 
+import {
+  BedDouble,
+  Building2,
+  FlaskConical,
+  Hospital,
+  Layers,
+  type LucideIcon,
+} from "lucide-react";
+
 import type { TwinTreeSnapshot, TwinUnitNode } from "@/lib/platform-api";
+import { kindIconName, type TwinKindIcon } from "../twin-ui";
+
+const KIND_ICONS: Record<TwinKindIcon, LucideIcon> = {
+  Building2,
+  Hospital,
+  FlaskConical,
+  BedDouble,
+  Layers,
+};
+
+/** Lucide icon for an OrgUnit kind — the same vocabulary the rest of Studio uses. */
+export function kindIcon(kind: string): LucideIcon {
+  return KIND_ICONS[kindIconName(kind)];
+}
 
 export interface TreeNode {
   node: TwinUnitNode;

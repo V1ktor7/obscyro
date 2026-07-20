@@ -14,7 +14,20 @@ import type { TwinTreeSnapshot } from "@/lib/platform-api";
 
 import { severityHex } from "../command-ui";
 import { formatTwinMetric } from "../twin-ui";
-import { buildForest, occTone, type TreeNode } from "./twin-hierarchy";
+import { buildForest, kindIcon, occTone, type TreeNode } from "./twin-hierarchy";
+
+function NodeIcon({
+  kind,
+  className,
+  style,
+}: {
+  kind: string;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  const Icon = kindIcon(kind);
+  return <Icon className={className} style={style} />;
+}
 
 const NODE_W = 124;
 const NODE_H = 48;
@@ -174,6 +187,11 @@ export default function CommandTree({
                     className="h-1.5 w-1.5 shrink-0 rounded-full"
                     style={{ background: severityHex(n.worstAlertSeverity) }}
                   />
+                  <NodeIcon
+                    kind={n.kind}
+                    className="h-3.5 w-3.5 shrink-0"
+                    style={{ color: isLeaf ? tone.text : "#8f99a8" }}
+                  />
                   <span
                     className="truncate text-[11.5px] font-medium"
                     style={{ color: isLeaf ? tone.text : "#1c2127" }}
@@ -187,7 +205,7 @@ export default function CommandTree({
                     {n.kind}
                   </span>
                   <span
-                    className="font-mono text-[13px] font-semibold leading-none"
+                    className="text-[13px] font-semibold leading-none"
                     style={{ color: isLeaf ? tone.text : "#404854" }}
                   >
                     {isLeaf ? metricVal : `${node.children.length}`}
@@ -196,7 +214,7 @@ export default function CommandTree({
               </button>
               {n.openAlertCount > 0 ? (
                 <span
-                  className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 font-mono text-[9px] font-bold text-white"
+                  className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white"
                   style={{
                     background:
                       n.worstAlertSeverity === "critical"

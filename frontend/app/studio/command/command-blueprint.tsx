@@ -21,7 +21,7 @@ export function MicroLabel({
   return (
     <span
       className={cn(
-        "text-[9px] font-medium uppercase tracking-wide text-[#8f99a8]",
+        "text-[10px] font-medium uppercase tracking-wide text-[#8f99a8]",
         className,
       )}
     >
@@ -117,11 +117,11 @@ export function KpiCell({
   spark?: number[];
 }) {
   return (
-    <div className="relative flex flex-col justify-center overflow-hidden border-r border-[#d3d8de] px-3.5 py-1.5 last:border-r-0">
+    <div className="relative flex flex-col justify-center overflow-hidden rounded-md bg-white px-3 py-2 shadow-[inset_0_0_0_1px_#e5e8eb]">
       <MicroLabel>{label}</MicroLabel>
       <span
         className={cn(
-          "font-mono text-lg font-semibold leading-tight",
+          "text-lg font-semibold leading-tight",
           tone === "crit"
             ? "text-rose-600"
             : tone === "warn"
@@ -132,7 +132,7 @@ export function KpiCell({
         {value}
       </span>
       {sub ? (
-        <span className="truncate text-[9px] text-[#8f99a8]">{sub}</span>
+        <span className="truncate text-[10px] text-[#8f99a8]">{sub}</span>
       ) : null}
       {spark && spark.length > 1 ? (
         <Sparkline
@@ -198,9 +198,9 @@ export function GaugeArc({
       ? "#8f99a8"
       : clamped >= 95
         ? SEV_HEX.critical
-        : clamped >= 85
+        : clamped >= 80
           ? SEV_HEX.warn
-          : "#2d72d2";
+          : OCC_OK_HEX;
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
       <circle
@@ -226,7 +226,7 @@ export function GaugeArc({
         x={size / 2}
         y={size / 2 + 4}
         textAnchor="middle"
-        className="fill-[#1c2127] font-mono text-[13px] font-semibold"
+        className="fill-[#1c2127] text-[13px] font-semibold"
       >
         {pct == null ? "—" : `${Math.round(clamped)}%`}
       </text>
@@ -234,8 +234,15 @@ export function GaugeArc({
   );
 }
 
+/**
+ * Occupancy fill: the same 3-stop scale and thresholds the treemap/tree
+ * legend shows — green <80, amber 80-95, red >=95 — so the rail, grid,
+ * gauge, and canvas all agree on what "healthy" looks like.
+ */
+export const OCC_OK_HEX = "#1d9e75";
+
 export function occFillColor(pct: number): string {
   if (pct >= 95) return SEV_HEX.critical;
-  if (pct >= 85) return SEV_HEX.warn;
-  return "#2d72d2";
+  if (pct >= 80) return SEV_HEX.warn;
+  return OCC_OK_HEX;
 }

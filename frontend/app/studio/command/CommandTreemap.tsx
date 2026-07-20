@@ -14,7 +14,7 @@ import type { TwinTreeSnapshot } from "@/lib/platform-api";
 
 import { severityHex } from "../command-ui";
 import { formatTwinMetric } from "../twin-ui";
-import { buildForest, occTone, type TreeNode } from "./twin-hierarchy";
+import { buildForest, kindIcon, occTone, type TreeNode } from "./twin-hierarchy";
 
 interface Rect {
   x: number;
@@ -28,6 +28,19 @@ interface Placed {
   rect: Rect;
   isLeaf: boolean;
   hasHeader: boolean;
+}
+
+function CellIcon({
+  kind,
+  className,
+  style,
+}: {
+  kind: string;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  const Icon = kindIcon(kind);
+  return <Icon className={className} style={style} />;
 }
 
 const HEADER_H = 20;
@@ -198,6 +211,7 @@ export default function CommandTreemap({
                     className="h-1.5 w-1.5 shrink-0 rounded-full"
                     style={{ background: severityHex(n.worstAlertSeverity) }}
                   />
+                  <CellIcon kind={n.kind} className="h-3.5 w-3.5 shrink-0 text-[#8f99a8]" />
                   <span className="truncate text-[11.5px] font-semibold text-[#1c2127]">
                     {n.name}
                   </span>
@@ -233,6 +247,11 @@ export default function CommandTreemap({
                   className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full"
                   style={{ background: severityHex(n.worstAlertSeverity) }}
                 />
+                <CellIcon
+                  kind={n.kind}
+                  className="mt-px h-3.5 w-3.5 shrink-0"
+                  style={{ color: tone.text }}
+                />
                 <span
                   className="truncate text-[11.5px] font-medium leading-tight"
                   style={{ color: tone.text }}
@@ -250,7 +269,7 @@ export default function CommandTreemap({
               ) : null}
               {n.openAlertCount > 0 && rect.w > 40 ? (
                 <span
-                  className="absolute right-1 top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-1 font-mono text-[8px] font-bold text-white"
+                  className="absolute right-1 top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-1 text-[8px] font-bold text-white"
                   style={{
                     background:
                       n.worstAlertSeverity === "critical"

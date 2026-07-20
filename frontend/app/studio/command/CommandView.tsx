@@ -18,6 +18,8 @@ import {
   useState,
 } from "react";
 
+import { Search } from "lucide-react";
+
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { cn } from "@/lib/cn";
@@ -62,8 +64,14 @@ import {
 } from "./command-blueprint";
 import CommandTree from "./CommandTree";
 import CommandTreemap from "./CommandTreemap";
+import { kindIcon } from "./twin-hierarchy";
 
 const HIST_CAP = 40;
+
+function KindIcon({ kind, className }: { kind: string; className?: string }) {
+  const Icon = kindIcon(kind);
+  return <Icon className={className} />;
+}
 
 export default function CommandView() {
   const { hasKey, selectedEnv, environments, bumpOntology } = useStudio();
@@ -356,12 +364,15 @@ export default function CommandView() {
               ? "POLLING"
               : "…"}
         </Chip>
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search units…"
-          className="w-56 rounded border border-[#d3d8de] bg-white px-2 py-1 text-[11px] text-[#5f6b7c] placeholder:text-[#8f99a8] focus:border-[#2d72d2] focus:outline-none"
-        />
+        <span className="relative">
+          <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8f99a8]" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search units…"
+            className="w-56 rounded border border-[#d3d8de] bg-white py-1 pl-7 pr-2 text-xs text-[#1c2127] placeholder:text-[#8f99a8] focus:border-[#2d72d2] focus:outline-none"
+          />
+        </span>
         <div className="ml-auto flex items-center gap-2">
           <div className="inline-flex rounded border border-[#d3d8de] bg-white">
             <span className="bg-[#e7f2fd] px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-[#215db0]">
@@ -382,7 +393,7 @@ export default function CommandView() {
           >
             {seeding ? "Seeding…" : "Seed demo"}
           </Button>
-          <span className="font-mono text-[10px] text-[#8f99a8]">
+          <span className="text-[10px] text-[#8f99a8]">
             {snapshot
               ? `computed ${new Date(snapshot.computedAt).toLocaleTimeString("en-CA", { hour12: false })}`
               : ""}
@@ -669,6 +680,7 @@ function TreeRail({
               className="h-1.5 w-1.5 shrink-0 rounded-full"
               style={{ background: severityHex(node.worstAlertSeverity) }}
             />
+            <KindIcon kind={node.kind} className="h-3.5 w-3.5 shrink-0 text-[#8f99a8]" />
             <span
               className={cn(
                 "min-w-0 flex-1 truncate text-xs",
@@ -788,7 +800,7 @@ function GridTable({
                 <td className="px-2.5 py-1.5 text-[10px] uppercase tracking-wide text-[#8f99a8]">
                   {n.kind}
                 </td>
-                <td className="px-2.5 py-1.5 font-mono text-[11px] text-[#5f6b7c]">
+                <td className="px-2.5 py-1.5 text-[11px] text-[#5f6b7c]">
                   {occ != null ? (
                     <span className="inline-flex items-center gap-1.5">
                       <span className="relative inline-block h-1.5 w-14 rounded bg-[#e5e8eb] align-middle">
@@ -806,19 +818,19 @@ function GridTable({
                     "—"
                   )}
                 </td>
-                <td className="px-2.5 py-1.5 font-mono text-[11px] text-[#5f6b7c]">
+                <td className="px-2.5 py-1.5 text-[11px] text-[#5f6b7c]">
                   {formatTwinMetric(n.metrics, "count:Patient")}
                 </td>
-                <td className="px-2.5 py-1.5 font-mono text-[11px] text-[#5f6b7c]">
+                <td className="px-2.5 py-1.5 text-[11px] text-[#5f6b7c]">
                   {formatTwinMetric(n.metrics, "count:Bed")}
                 </td>
-                <td className="px-2.5 py-1.5 font-mono text-[11px] text-[#5f6b7c]">
+                <td className="px-2.5 py-1.5 text-[11px] text-[#5f6b7c]">
                   {n.metrics.linkedInstanceCount}
                 </td>
-                <td className="px-2.5 py-1.5 font-mono text-[11px] text-[#5f6b7c]">
+                <td className="px-2.5 py-1.5 text-[11px] text-[#5f6b7c]">
                   {formatTwinMetric(n.metrics, "freshnessSeconds")}
                 </td>
-                <td className="px-2.5 py-1.5 font-mono text-[11px] text-[#5f6b7c]">
+                <td className="px-2.5 py-1.5 text-[11px] text-[#5f6b7c]">
                   {n.openAlertCount || ""}
                 </td>
               </tr>
@@ -849,13 +861,19 @@ function InspectorPanel({
     <div>
       <div className="border-b border-[#d3d8de] px-3.5 py-3">
         <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-[#1c2127]">
-              {node?.name ?? "Unit"}
-            </p>
-            <p className="mt-0.5 font-mono text-[9px] text-[#8f99a8]">
-              {unitId.slice(0, 8)}… · {node?.kind.toUpperCase() ?? ""}
-            </p>
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#e7f2fd] text-[#215db0]">
+              <KindIcon kind={node?.kind ?? "org"} className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-[#1c2127]">
+                {node?.name ?? "Unit"}
+              </p>
+              <p className="mt-0.5 text-[10px] text-[#8f99a8]">
+                <span className="font-mono">{unitId.slice(0, 8)}…</span>
+                {node?.kind ? ` · ${node.kind}` : ""}
+              </p>
+            </div>
           </div>
           <button
             type="button"
@@ -873,13 +891,13 @@ function InspectorPanel({
             <div className="grid flex-1 grid-cols-2 gap-2">
               <div className="rounded border border-[#d3d8de] bg-[#f6f7f9]/60 px-2 py-1.5">
                 <MicroLabel>Linked</MicroLabel>
-                <p className="font-mono text-sm font-semibold text-[#1c2127]">
+                <p className="text-sm font-semibold text-[#1c2127]">
                   {detail.metrics.linkedInstanceCount}
                 </p>
               </div>
               <div className="rounded border border-[#d3d8de] bg-[#f6f7f9]/60 px-2 py-1.5">
                 <MicroLabel>Freshness</MicroLabel>
-                <p className="font-mono text-sm font-semibold text-[#1c2127]">
+                <p className="text-sm font-semibold text-[#1c2127]">
                   {formatFreshness(detail.metrics.freshnessSeconds).replace(
                     " ago",
                     "",
@@ -931,7 +949,7 @@ function InspectorPanel({
                     {a.message}
                   </p>
                   <div className="mt-1.5 flex items-center justify-between">
-                    <span className="font-mono text-[9px] text-[#8f99a8]">
+                    <span className="text-[9px] text-[#8f99a8]">
                       {a.metric} = {a.value}
                       {a.createdAt ? ` · ${timeAgo(a.createdAt)}` : ""}
                     </span>
@@ -1043,7 +1061,7 @@ function AlertRibbon({
                   x={x(m)}
                   y={h - 6}
                   textAnchor="middle"
-                  className="fill-[#8f99a8] font-mono text-[8px]"
+                  className="fill-[#8f99a8] text-[8px]"
                 >
                   {m === 0 ? "now" : `-${m}m`}
                 </text>
