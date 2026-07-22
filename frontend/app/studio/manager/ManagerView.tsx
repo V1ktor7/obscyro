@@ -410,13 +410,15 @@ export default function ManagerView() {
       .catch((err) => setError((err as Error).message));
   }, [view, env, ontologyVersion]);
 
-  const loadObjects = useCallback(async () => {
+  const loadObjects = useCallback(async (opts?: { silent?: boolean }) => {
     if (!env || !selectedType) {
       setObjects([]);
       return;
     }
-    setLoading(true);
-    setError(null);
+    if (!opts?.silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const { objects: o } = await listEnvObjects(env, {
         type: selectedType,
@@ -444,6 +446,14 @@ export default function ManagerView() {
     if (view === "instances") void loadObjects();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, env, selectedType, ontologyVersion]);
+
+  // Live refresh: webhook/feed writes land without a manual reload. Silent so
+  // the table doesn't flash a spinner every poll.
+  useEffect(() => {
+    if (view !== "instances" || !env) return;
+    const id = setInterval(() => void loadObjects({ silent: true }), 10_000);
+    return () => clearInterval(id);
+  }, [view, env, loadObjects]);
 
   async function openInstance(id: string) {
     if (!env) return;

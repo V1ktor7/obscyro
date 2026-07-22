@@ -9,6 +9,7 @@ from app.context import extract_contexts
 from app.embeddings import encode_texts, get_encoder, search_span
 from app.ner import extract_spans
 from app.pg_index import pg_embedding_count
+from app.populate import progress as populate_progress, start_auto_populate
 from app.schemas import (
     ConceptInput,
     ConceptOut,
@@ -37,6 +38,9 @@ async def _lifespan(app: FastAPI):
     get_encoder()
     encode_texts(["warm-up"])
     _model_loaded = True
+    # Self-heal: if SNOMED embeddings are missing (fresh prod DB), embed them
+    # in a background thread using this container's model + DATABASE_URL.
+    start_auto_populate()
     yield
 
 
@@ -73,6 +77,7 @@ def health() -> dict:
         "status": "ok" if _model_loaded else "loading",
         "model_loaded": _model_loaded,
         "snomed_embedding_rows": _cached_embedding_count(),
+        "populate": dict(populate_progress),
     }
 
 

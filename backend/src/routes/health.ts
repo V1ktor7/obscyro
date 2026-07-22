@@ -16,6 +16,15 @@ const readiness = z.object({
     ok: z.boolean(),
     latencyMs: z.number().optional(),
     modelLoaded: z.boolean().optional(),
+    snomedEmbeddingRows: z.number().nullable().optional(),
+    populate: z
+      .object({
+        state: z.string(),
+        inserted: z.number(),
+        target: z.number(),
+        error: z.string().nullable(),
+      })
+      .optional(),
     error: z.string().optional(),
   }),
 });
@@ -43,12 +52,29 @@ async function probeNlp(): Promise<NlpHealth> {
         error: `Extraction service returned HTTP ${res.status}.`,
       };
     }
-    const body = (await res.json().catch(() => ({}))) as { model_loaded?: boolean };
+    const body = (await res.json().catch(() => ({}))) as {
+      model_loaded?: boolean;
+      snomed_embedding_rows?: number | null;
+      populate?: { state?: string; inserted?: number; target?: number; error?: string | null };
+    };
     return {
       configured: true,
       ok: true,
       latencyMs: Number(latencyMs.toFixed(2)),
       ...(typeof body.model_loaded === "boolean" ? { modelLoaded: body.model_loaded } : {}),
+      ...(body.snomed_embedding_rows !== undefined
+        ? { snomedEmbeddingRows: body.snomed_embedding_rows }
+        : {}),
+      ...(body.populate && typeof body.populate.state === "string"
+        ? {
+            populate: {
+              state: body.populate.state,
+              inserted: body.populate.inserted ?? 0,
+              target: body.populate.target ?? 0,
+              error: body.populate.error ?? null,
+            },
+          }
+        : {}),
     };
   } catch {
     return { configured: true, ok: false, error: "Extraction service is unreachable." };
