@@ -25,6 +25,7 @@ const readiness = z.object({
         error: z.string().nullable(),
       })
       .optional(),
+    thresholds: z.record(z.number()).optional(),
     error: z.string().optional(),
   }),
 });
@@ -56,6 +57,7 @@ async function probeNlp(): Promise<NlpHealth> {
       model_loaded?: boolean;
       snomed_embedding_rows?: number | null;
       populate?: { state?: string; inserted?: number; target?: number; error?: string | null };
+      thresholds?: Record<string, number>;
     };
     return {
       configured: true,
@@ -65,6 +67,7 @@ async function probeNlp(): Promise<NlpHealth> {
       ...(body.snomed_embedding_rows !== undefined
         ? { snomedEmbeddingRows: body.snomed_embedding_rows }
         : {}),
+      ...(body.thresholds ? { thresholds: body.thresholds } : {}),
       ...(body.populate && typeof body.populate.state === "string"
         ? {
             populate: {

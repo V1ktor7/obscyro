@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from app.context import extract_contexts
 from app.embeddings import encode_texts, get_encoder, search_span
 from app.ner import extract_spans
+from app.config import CONTEXT_DEFAULT_CONF, MARGIN_MIN, RESOLVE_MIN
 from app.pg_index import pg_embedding_count
 from app.populate import progress as populate_progress, start_auto_populate
 from app.schemas import (
@@ -47,7 +48,7 @@ async def _lifespan(app: FastAPI):
 app = FastAPI(
     title="Obscyro NLP — Clinical extraction",
     description="Concept extraction (NER + embeddings) and context extraction (ConText rules). No generative LLM.",
-    version="0.1.0",
+    version="0.2.0",
     lifespan=_lifespan,
 )
 
@@ -78,6 +79,13 @@ def health() -> dict:
         "model_loaded": _model_loaded,
         "snomed_embedding_rows": _cached_embedding_count(),
         "populate": dict(populate_progress),
+        # Active thresholds so a stale deploy or env override is visible
+        # from outside without shell access.
+        "thresholds": {
+            "resolve_min": RESOLVE_MIN,
+            "margin_min": MARGIN_MIN,
+            "context_default_conf": CONTEXT_DEFAULT_CONF,
+        },
     }
 
 
