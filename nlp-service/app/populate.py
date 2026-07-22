@@ -114,20 +114,37 @@ def _run(langs: list[str], limit: int, batch_size: int, pause_s: float) -> None:
             # Yield CPU between batches so live extract requests stay responsive.
             time.sleep(pause_s)
 
-        # HNSW index makes search fast once the bulk load is in.
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                CREATE INDEX IF NOT EXISTS description_embeddings_hnsw_idx
-                ON snomed.description_embeddings
-                USING hnsw (embedding vector_cosine_ops)
-                """
-            )
-        conn.commit()
+        _ensure_index(conn)
         conn.close()
         progress.update(state="done")
     except Exception as exc:  # pragma: no cover — surfaced via /health
         progress.update(state="error", error=str(exc)[:300])
+
+
+def _ensure_index(conn) -> None:
+    """Create the HNSW index. Serial build: Railway Postgres ran out of shared
+    memory with parallel maintenance workers ("could not resize shared memory
+    segment"), so force workers off and keep maintenance memory modest."""
+    with conn.cursor() as cur:
+        cur.execute("SET max_parallel_maintenance_workers = 0")
+        cur.execute("SET maintenance_work_mem = '48MB'")
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS description_embeddings_hnsw_idx
+            ON snomed.description_embeddings
+            USING hnsw (embedding vector_cosine_ops)
+            """
+        )
+    conn.commit()
+
+
+def _ensure_index_bg() -> None:
+    try:
+        conn = _connect()
+        _ensure_index(conn)
+        conn.close()
+    except Exception as exc:
+        progress.update(error=f"index: {str(exc)[:200]}")
 
 
 def start_auto_populate() -> None:
@@ -158,6 +175,9 @@ def start_auto_populate() -> None:
     min_rows = _env_int("POPULATE_MIN_ROWS", 1000)
     if existing >= min_rows:
         progress.update(state="done", inserted=existing)
+        # Rows are in but the index may have failed on a previous boot —
+        # retry it in the background (no-op when it already exists).
+        threading.Thread(target=_ensure_index_bg, name="ensure-hnsw", daemon=True).start()
         return
 
     langs = [
