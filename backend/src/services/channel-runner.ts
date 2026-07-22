@@ -8,6 +8,7 @@ import {
   PATIENT_SCHEMA,
   getOrCreateLinkType,
   getOrCreateObjectType,
+  insertObjectInstance,
 } from "./ontology.js";
 import {
   persistExtractResults,
@@ -27,7 +28,7 @@ import {
 
 export interface ChannelStepRow {
   id: string;
-  type: "intake" | "transform" | "extract" | "validate" | "save";
+  type: "intake" | "transform" | "map" | "extract" | "validate" | "save";
   enabled: boolean;
   config: Record<string, unknown>;
 }
@@ -112,6 +113,30 @@ export function payloadToInputText(payload: unknown): string {
   return JSON.stringify(payload);
 }
 
+export interface StepIoEntry {
+  stepId: string;
+  type: string;
+  input: string;
+  output: string;
+  note?: string;
+}
+
+const STEP_IO_CLIP = 2000;
+
+/** Clip a value's JSON form for step-IO storage (runs are debug aids, not archives). */
+export function clipIo(value: unknown): string {
+  let text: string;
+  if (typeof value === "string") text = value;
+  else {
+    try {
+      text = JSON.stringify(value);
+    } catch {
+      text = String(value);
+    }
+  }
+  return text.length > STEP_IO_CLIP ? `${text.slice(0, STEP_IO_CLIP)}… [truncated]` : text;
+}
+
 export interface ChannelRunOutcome {
   status: "succeeded" | "flagged" | "failed";
   conceptCount: number;
@@ -122,6 +147,7 @@ export interface ChannelRunOutcome {
   errorCode: string | null;
   durationMs: number;
   stepTimings: Record<string, number>;
+  stepIo: StepIoEntry[];
 }
 
 /** Failure codes worth retrying: the input is fine, a dependency was down. */
@@ -147,8 +173,8 @@ export async function recordChannelRun(
     .query(
       `INSERT INTO app.data_channel_run
               (channel_id, status, run_trigger, input_chars, concept_count,
-               saved_count, flagged_count, duration_ms, step_timings, error)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)`,
+               saved_count, flagged_count, duration_ms, step_timings, step_io, error)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11)`,
       [
         channelId,
         outcome.status,
@@ -159,10 +185,159 @@ export async function recordChannelRun(
         outcome.flaggedCount,
         outcome.durationMs,
         JSON.stringify(outcome.stepTimings),
+        JSON.stringify(outcome.stepIo),
         outcome.error,
       ],
     )
     .catch(() => undefined);
+}
+
+export interface MappingRule {
+  from: string;
+  to: string;
+}
+
+/** Max payload items mapped per run when the webhook posts an array. */
+const MAP_BATCH_CAP = 100;
+
+/**
+ * Structured pipeline: map JSON payload keys onto an existing ontology object
+ * type and insert the instances directly. The target type must already exist
+ * in the environment — the mapper binds to the ontology, it does not invent
+ * schema on the fly.
+ */
+async function runMapPath(
+  db: DbClient,
+  channel: RunnableChannel,
+  map: ChannelStepRow,
+  inputText: string,
+  timings: Record<string, number>,
+  stepIo: StepIoEntry[],
+  outcome: (
+    partial: Omit<
+      ChannelRunOutcome,
+      "durationMs" | "stepTimings" | "stepIo" | "errorCode"
+    > & { errorCode?: string | null },
+  ) => ChannelRunOutcome,
+): Promise<ChannelRunOutcome> {
+  const t = Date.now();
+  const objectType = ((map.config.objectType as string) || "").trim();
+  const mappings = (Array.isArray(map.config.mappings) ? map.config.mappings : [])
+    .map((m) => ({
+      from: String((m as MappingRule).from ?? "").trim(),
+      to: String((m as MappingRule).to ?? "").trim(),
+    }))
+    .filter((m) => m.from && m.to);
+
+  if (!objectType) {
+    return outcome({
+      status: "failed",
+      conceptCount: 0,
+      savedCount: 0,
+      flaggedCount: 0,
+      error: "Map step has no target object type.",
+      errorCode: "MAP_NO_TYPE",
+    });
+  }
+  if (mappings.length === 0) {
+    return outcome({
+      status: "failed",
+      conceptCount: 0,
+      savedCount: 0,
+      flaggedCount: 0,
+      error: "Map step has no key mappings.",
+      errorCode: "MAP_NO_MAPPINGS",
+    });
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(inputText);
+  } catch {
+    return outcome({
+      status: "failed",
+      conceptCount: 0,
+      savedCount: 0,
+      flaggedCount: 0,
+      error: "Map step needs a JSON payload (object or array of objects).",
+      errorCode: "MAP_INPUT_NOT_JSON",
+    });
+  }
+  const items = (Array.isArray(parsed) ? parsed : [parsed])
+    .filter((x): x is Record<string, unknown> => Boolean(x) && typeof x === "object")
+    .slice(0, MAP_BATCH_CAP);
+  if (items.length === 0) {
+    return outcome({
+      status: "failed",
+      conceptCount: 0,
+      savedCount: 0,
+      flaggedCount: 0,
+      error: "Payload contains no JSON objects to map.",
+      errorCode: "MAP_INPUT_EMPTY",
+    });
+  }
+
+  const typeRes = await db.query<{ id: string }>(
+    `SELECT id FROM app.ontology_object_types WHERE environment_id = $1 AND name = $2`,
+    [channel.environmentId, objectType],
+  );
+  const typeId = typeRes.rows[0]?.id;
+  if (!typeId) {
+    return outcome({
+      status: "failed",
+      conceptCount: 0,
+      savedCount: 0,
+      flaggedCount: 0,
+      error: `Object type "${objectType}" does not exist in this environment.`,
+      errorCode: "MAP_TYPE_NOT_FOUND",
+    });
+  }
+
+  let savedCount = 0;
+  const previews: Array<Record<string, unknown>> = [];
+  for (const item of items) {
+    const properties: Record<string, unknown> = {};
+    for (const rule of mappings) {
+      const value = readPath(item, rule.from);
+      if (value === undefined) continue;
+      properties[rule.to] =
+        value === null || typeof value === "object" ? JSON.stringify(value) : value;
+    }
+    if (Object.keys(properties).length === 0) continue;
+    await insertObjectInstance(db, typeId, properties, {
+      source: "channel-map",
+      channelId: channel.id,
+    });
+    savedCount += 1;
+    if (previews.length < 3) previews.push(properties);
+  }
+  timings.map = Date.now() - t;
+  stepIo.push({
+    stepId: map.id,
+    type: "map",
+    input: clipIo(items.length === 1 ? items[0] : items),
+    output: clipIo({ objectType, savedCount, sample: previews }),
+    note: `${mappings.length} mapping${mappings.length === 1 ? "" : "s"}`,
+  });
+
+  if (savedCount === 0) {
+    return outcome({
+      status: "failed",
+      conceptCount: 0,
+      savedCount: 0,
+      flaggedCount: 0,
+      error: "No payload keys matched the configured mappings.",
+      errorCode: "MAP_NO_MATCHES",
+    });
+  }
+
+  return outcome({
+    status: "succeeded",
+    conceptCount: 0,
+    savedCount,
+    flaggedCount: 0,
+    error: null,
+  });
 }
 
 /**
@@ -178,21 +353,41 @@ export async function executeChannel(
 ): Promise<ChannelRunOutcome> {
   const t0 = Date.now();
   const timings: Record<string, number> = {};
+  const stepIo: StepIoEntry[] = [];
 
   const outcome = (
-    partial: Omit<ChannelRunOutcome, "durationMs" | "stepTimings" | "errorCode"> & {
-      errorCode?: string | null;
-    },
+    partial: Omit<
+      ChannelRunOutcome,
+      "durationMs" | "stepTimings" | "stepIo" | "errorCode"
+    > & { errorCode?: string | null },
   ): ChannelRunOutcome => ({
     ...partial,
     errorCode: partial.errorCode ?? null,
     durationMs: Date.now() - t0,
     stepTimings: timings,
+    stepIo,
   });
 
   try {
     const enabled = channel.steps.filter((s) => s.enabled);
     const step = (type: ChannelStepRow["type"]) => enabled.find((s) => s.type === type);
+
+    const intake = step("intake");
+    stepIo.push({
+      stepId: intake?.id ?? "intake",
+      type: "intake",
+      input: clipIo(inputText),
+      output: clipIo(inputText),
+    });
+
+    // --- map (structured payloads) -----------------------------------------
+    // A channel with an enabled map step is a structured pipeline: the JSON
+    // payload is mapped key-by-key onto an existing ontology object type and
+    // saved directly. NLP extract/validate never run — they are for free text.
+    const map = step("map");
+    if (map) {
+      return await runMapPath(db, channel, map, inputText, timings, stepIo, outcome);
+    }
 
     // --- transform ----------------------------------------------------------
     let text = inputText;
@@ -214,6 +409,13 @@ export async function executeChannel(
         }
       }
       timings.transform = Date.now() - t;
+      stepIo.push({
+        stepId: transform.id,
+        type: "transform",
+        input: clipIo(inputText),
+        output: clipIo(text),
+        note: fieldPath ? `field: ${fieldPath}` : "raw text",
+      });
     }
     if (!fieldPath) {
       // No explicit path — accept common `{ "text": ... }` / `{ "raw": ... }` payloads.
@@ -270,6 +472,15 @@ export async function executeChannel(
       ).contexts;
     }
     timings.extract = Date.now() - tExtract;
+    stepIo.push({
+      stepId: extract.id,
+      type: "extract",
+      input: clipIo(text),
+      output: clipIo(
+        concepts.map((c) => ({ span: c.span, code: c.code, status: c.status, cosine: c.cosine })),
+      ),
+      note: `${concepts.length} span${concepts.length === 1 ? "" : "s"}`,
+    });
 
     const ctxBySpan = new Map(contexts.map((c) => [c.span, c]));
     const emptyContext = {
@@ -323,6 +534,13 @@ export async function executeChannel(
           return true;
         });
       timings.validate = Date.now() - t;
+      stepIo.push({
+        stepId: validate.id,
+        type: "validate",
+        input: clipIo(results.length + duplicateCount),
+        output: clipIo(results.map((r) => ({ span: r.span, decision: r.decision }))),
+        note: duplicateCount > 0 ? `${duplicateCount} duplicate(s) dropped` : undefined,
+      });
     }
 
     const accepted = results.filter((r) => r.decision === "accept");
@@ -330,8 +548,59 @@ export async function executeChannel(
       (r) => r.decision === "flag" || r.decision === "escalate",
     ).length;
 
+    // --- review queue: flag does not mean discard --------------------------
+    // Non-accepted extractions are queued for human review; confirming one
+    // later persists it with the same save settings this run would have used.
+    const saveStep = step("save");
+    const reviewable = results.filter(
+      (r) => r.decision === "flag" || r.decision === "escalate",
+    );
+    if (reviewable.length > 0) {
+      const objectTypeForReview =
+        ((saveStep?.config.objectType as string) || "ClinicalFinding").trim();
+      const pidSourceForReview =
+        ((saveStep?.config.patientIdentifierSource as string) || "").trim();
+      let reviewIdentifier: string | undefined;
+      if (pidSourceForReview) {
+        try {
+          const parsed: unknown = JSON.parse(inputText);
+          if (parsed && typeof parsed === "object") {
+            const v = readPath(parsed as Record<string, unknown>, pidSourceForReview);
+            if (typeof v === "string" || typeof v === "number") reviewIdentifier = String(v);
+          }
+        } catch {
+          /* not JSON */
+        }
+      }
+      const inputHash = createHash("sha256").update(text).digest("hex");
+      for (const r of reviewable) {
+        await db
+          .query(
+            `INSERT INTO app.channel_review_item
+                    (channel_id, environment_id, span, code, display, decision, confidence, payload)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)`,
+            [
+              channel.id,
+              channel.environmentId,
+              r.span,
+              r.code,
+              r.candidates[0]?.display ?? r.span,
+              r.decision,
+              r.concept_confidence,
+              JSON.stringify({
+                result: r,
+                objectType: objectTypeForReview,
+                patientIdentifier: reviewIdentifier ?? null,
+                inputHash,
+              }),
+            ],
+          )
+          .catch(() => undefined);
+      }
+    }
+
     // --- save --------------------------------------------------------------------
-    const save = step("save");
+    const save = saveStep;
     let savedCount = 0;
     if (save && accepted.length > 0) {
       const t = Date.now();
@@ -403,6 +672,12 @@ export async function executeChannel(
       });
       savedCount = persisted.objectIds.length;
       timings.save = Date.now() - t;
+      stepIo.push({
+        stepId: save.id,
+        type: "save",
+        input: clipIo(accepted.map((r) => ({ span: r.span, code: r.code }))),
+        output: clipIo({ savedCount, objectType }),
+      });
     }
 
     return outcome({

@@ -14,6 +14,7 @@ function outcome(partial: Partial<ChannelRunOutcome>): ChannelRunOutcome {
     errorCode: null,
     durationMs: 1,
     stepTimings: {},
+    stepIo: [],
     ...partial,
   };
 }

@@ -7,7 +7,17 @@ import { z } from "zod";
 import type { DbClient } from "../lib/db.js";
 import { AppError, Conflict, NotFound } from "../lib/errors.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
-import { resolveEnvironment } from "../services/ontology.js";
+import {
+  CLINICAL_FINDING_SCHEMA,
+  PATIENT_SCHEMA,
+  getOrCreateLinkType,
+  getOrCreateObjectType,
+  resolveEnvironment,
+} from "../services/ontology.js";
+import {
+  persistExtractResults,
+  type PersistableExtractResult,
+} from "../services/persist-extract.js";
 
 // ---------------------------------------------------------------------------
 // Data channels — saved linear parse pipelines (intake → steps → save).
@@ -15,7 +25,7 @@ import { resolveEnvironment } from "../services/ontology.js";
 // "validate" do) live in the client runner, the API guarantees shape + order.
 // ---------------------------------------------------------------------------
 
-const stepType = z.enum(["intake", "transform", "extract", "validate", "save"]);
+const stepType = z.enum(["intake", "transform", "map", "extract", "validate", "save"]);
 
 const channelStep = z.object({
   id: z.string().min(1),
@@ -61,6 +71,15 @@ const runOut = z.object({
   flaggedCount: z.number().int(),
   durationMs: z.number().int().nullable(),
   stepTimings: z.record(z.unknown()),
+  stepIo: z.array(
+    z.object({
+      stepId: z.string(),
+      type: z.string(),
+      input: z.string(),
+      output: z.string(),
+      note: z.string().optional(),
+    }),
+  ),
   error: z.string().nullable(),
   createdAt: z.string(),
 });
@@ -92,6 +111,32 @@ function publicBase(): string {
 }
 
 type ChannelStep = z.infer<typeof channelStep>;
+
+interface StepIoOut {
+  stepId: string;
+  type: string;
+  input: string;
+  output: string;
+  note?: string;
+}
+
+/** step_io rows predating migration 027 are '[]'; tolerate any malformed shape. */
+function normalizeStepIo(raw: unknown): StepIoOut[] {
+  if (!Array.isArray(raw)) return [];
+  const out: StepIoOut[] = [];
+  for (const e of raw) {
+    if (!e || typeof e !== "object") continue;
+    const r = e as Record<string, unknown>;
+    out.push({
+      stepId: String(r.stepId ?? ""),
+      type: String(r.type ?? ""),
+      input: String(r.input ?? ""),
+      output: String(r.output ?? ""),
+      ...(typeof r.note === "string" ? { note: r.note } : {}),
+    });
+  }
+  return out;
+}
 
 function defaultSteps(): ChannelStep[] {
   return [
@@ -438,11 +483,12 @@ const channelsRoutes: FastifyPluginAsync = async (fastify) => {
         flagged_count: number;
         duration_ms: number | null;
         step_timings: Record<string, unknown>;
+        step_io: unknown;
         error: string | null;
         created_at: Date;
       }>(
         `SELECT id, status, run_trigger, input_chars, concept_count, saved_count,
-                flagged_count, duration_ms, step_timings, error, created_at
+                flagged_count, duration_ms, step_timings, step_io, error, created_at
            FROM app.data_channel_run
           WHERE channel_id = $1
           ORDER BY created_at DESC
@@ -460,6 +506,7 @@ const channelsRoutes: FastifyPluginAsync = async (fastify) => {
           flaggedCount: r.flagged_count,
           durationMs: r.duration_ms,
           stepTimings: r.step_timings,
+          stepIo: normalizeStepIo(r.step_io),
           error: r.error,
           createdAt: r.created_at.toISOString(),
         })),
@@ -483,6 +530,18 @@ const channelsRoutes: FastifyPluginAsync = async (fastify) => {
           flaggedCount: z.number().int().min(0).default(0),
           durationMs: z.number().int().min(0).nullable().optional(),
           stepTimings: z.record(z.number()).default({}),
+          stepIo: z
+            .array(
+              z.object({
+                stepId: z.string(),
+                type: z.string(),
+                input: z.string().max(4000),
+                output: z.string().max(4000),
+                note: z.string().max(400).optional(),
+              }),
+            )
+            .max(12)
+            .default([]),
           error: z.string().nullable().optional(),
         }),
         response: {
@@ -498,8 +557,8 @@ const channelsRoutes: FastifyPluginAsync = async (fastify) => {
       const { rows } = await req.db.query<{ id: string; created_at: Date }>(
         `INSERT INTO app.data_channel_run
                 (channel_id, status, run_trigger, input_chars, concept_count,
-                 saved_count, flagged_count, duration_ms, step_timings, error)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)
+                 saved_count, flagged_count, duration_ms, step_timings, step_io, error)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11)
          RETURNING id, created_at`,
         [
           channel.id,
@@ -511,6 +570,7 @@ const channelsRoutes: FastifyPluginAsync = async (fastify) => {
           req.body.flaggedCount,
           req.body.durationMs ?? null,
           JSON.stringify(req.body.stepTimings),
+          JSON.stringify(req.body.stepIo),
           req.body.error ?? null,
         ],
       );
@@ -524,6 +584,7 @@ const channelsRoutes: FastifyPluginAsync = async (fastify) => {
         flaggedCount: req.body.flaggedCount,
         durationMs: req.body.durationMs ?? null,
         stepTimings: req.body.stepTimings,
+        stepIo: req.body.stepIo,
         error: req.body.error ?? null,
         createdAt: rows[0]!.created_at.toISOString(),
       });
@@ -541,5 +602,200 @@ async function requireUserId(req: {
   if (!userId) throw NotFound("USER_NOT_FOUND", "User not found for API key.");
   return userId;
 }
+
+
+// ---------------------------------------------------------------------------
+// Review queue — flagged/escalated extractions parked for a human decision.
+// Confirming persists the instance with the settings the original run would
+// have used; rejecting closes the item. Nothing is silently discarded.
+// ---------------------------------------------------------------------------
+
+const reviewItemOut = z.object({
+  id: z.string().uuid(),
+  channelName: z.string(),
+  channelSlug: z.string(),
+  span: z.string(),
+  code: z.string().nullable(),
+  display: z.string().nullable(),
+  decision: z.enum(["flag", "escalate"]),
+  confidence: z.number().nullable(),
+  objectType: z.string(),
+  readableNote: z.string(),
+  status: z.enum(["pending", "confirmed", "rejected"]),
+  createdAt: z.string(),
+});
+
+interface ReviewRow {
+  id: string;
+  span: string;
+  code: string | null;
+  display: string | null;
+  decision: "flag" | "escalate";
+  confidence: number | null;
+  payload: {
+    result?: PersistableExtractResult;
+    objectType?: string;
+    patientIdentifier?: string | null;
+    inputHash?: string;
+  };
+  status: "pending" | "confirmed" | "rejected";
+  created_at: Date;
+  channel_name: string;
+  channel_slug: string;
+}
+
+const reviewRoutes: FastifyPluginAsync = async (fastify) => {
+  const app = fastify.withTypeProvider<ZodTypeProvider>();
+
+  app.get(
+    "/ontology/:env/review-items",
+    {
+      schema: {
+        summary: "List channel review items (flagged extractions awaiting a decision)",
+        tags: ["channels"],
+        params: z.object({ env: z.string().min(1) }),
+        querystring: z.object({
+          status: z.enum(["pending", "confirmed", "rejected"]).default("pending"),
+          limit: z.coerce.number().int().min(1).max(200).default(50),
+        }),
+        response: {
+          200: z.object({ items: z.array(reviewItemOut), pendingCount: z.number().int() }),
+          404: errorEnvelope,
+        },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const { rows } = await req.db.query<ReviewRow>(
+        `SELECT r.id, r.span, r.code, r.display, r.decision, r.confidence,
+                r.payload, r.status, r.created_at,
+                c.name AS channel_name, c.slug AS channel_slug
+           FROM app.channel_review_item r
+           JOIN app.data_channel c ON c.id = r.channel_id
+          WHERE r.environment_id = $1 AND r.status = $2
+          ORDER BY r.created_at DESC
+          LIMIT $3`,
+        [env.id, req.query.status, req.query.limit],
+      );
+      const pending = await req.db.query<{ n: string }>(
+        `SELECT COUNT(*)::bigint AS n FROM app.channel_review_item
+          WHERE environment_id = $1 AND status = 'pending'`,
+        [env.id],
+      );
+      return {
+        items: rows.map((r) => ({
+          id: r.id,
+          channelName: r.channel_name,
+          channelSlug: r.channel_slug,
+          span: r.span,
+          code: r.code,
+          display: r.display,
+          decision: r.decision,
+          confidence: r.confidence,
+          objectType: r.payload.objectType ?? "ClinicalFinding",
+          readableNote: r.payload.result?.readable_note ?? "",
+          status: r.status,
+          createdAt: r.created_at.toISOString(),
+        })),
+        pendingCount: Number(pending.rows[0]?.n ?? 0),
+      };
+    },
+  );
+
+  app.post(
+    "/ontology/:env/review-items/:id/resolve",
+    {
+      schema: {
+        summary: "Confirm (persist) or reject a review item",
+        tags: ["channels"],
+        params: z.object({ env: z.string().min(1), id: z.string().uuid() }),
+        body: z.object({ action: z.enum(["confirm", "reject"]) }),
+        response: {
+          200: z.object({
+            ok: z.literal(true),
+            status: z.enum(["confirmed", "rejected"]),
+            savedInstanceId: z.string().nullable(),
+          }),
+          404: errorEnvelope,
+          409: errorEnvelope,
+        },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const { rows } = await req.db.query<ReviewRow>(
+        `SELECT r.id, r.span, r.code, r.display, r.decision, r.confidence,
+                r.payload, r.status, r.created_at,
+                c.name AS channel_name, c.slug AS channel_slug
+           FROM app.channel_review_item r
+           JOIN app.data_channel c ON c.id = r.channel_id
+          WHERE r.environment_id = $1 AND r.id = $2`,
+        [env.id, req.params.id],
+      );
+      const item = rows[0];
+      if (!item) throw NotFound("REVIEW_ITEM_NOT_FOUND", "Review item not found.");
+      if (item.status !== "pending") {
+        throw Conflict("REVIEW_ALREADY_RESOLVED", `Item is already ${item.status}.`);
+      }
+
+      let savedInstanceId: string | null = null;
+      if (req.body.action === "confirm") {
+        const result = item.payload.result;
+        if (!result) {
+          throw Conflict("REVIEW_PAYLOAD_INVALID", "Item has no persistable payload.");
+        }
+        const objectType = item.payload.objectType ?? "ClinicalFinding";
+        const findingTypeId = await getOrCreateObjectType(
+          req.db,
+          env.id,
+          objectType,
+          "Clinical finding extracted from text with its context envelope",
+          CLINICAL_FINDING_SCHEMA,
+        );
+        const patientTypeId = await getOrCreateObjectType(
+          req.db,
+          env.id,
+          "Patient",
+          "Subject of clinical findings",
+          PATIENT_SCHEMA,
+        );
+        const linkTypeId = await getOrCreateLinkType(
+          req.db,
+          env.id,
+          "has_finding",
+          patientTypeId,
+          findingTypeId,
+          "many_to_many",
+        );
+        const persisted = await persistExtractResults({
+          environmentId: env.id,
+          environmentSlug: env.slug,
+          environmentName: env.name,
+          objectTypeName: objectType,
+          findingTypeId,
+          patientTypeId,
+          linkTypeId,
+          patientIdentifier: item.payload.patientIdentifier ?? undefined,
+          inputHash: item.payload.inputHash ?? "review-confirm",
+          results: [{ ...result, decision: "accept" }],
+        });
+        savedInstanceId = persisted.objectIds[0] ?? null;
+      }
+
+      const status = req.body.action === "confirm" ? ("confirmed" as const) : ("rejected" as const);
+      await req.db.query(
+        `UPDATE app.channel_review_item
+            SET status = $2, resolved_at = now()
+          WHERE id = $1`,
+        [item.id, status],
+      );
+      return { ok: true as const, status, savedInstanceId };
+    },
+  );
+};
+
+export { reviewRoutes };
 
 export default channelsRoutes;

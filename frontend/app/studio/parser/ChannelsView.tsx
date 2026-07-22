@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   AlertTriangle,
+  ArrowRightLeft,
   Check,
   ChevronDown,
   ChevronUp,
@@ -24,6 +25,7 @@ import {
   Pause,
   Play,
   Plus,
+  Inbox,
   Search,
   Settings2,
   ShieldCheck,
@@ -35,7 +37,11 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/cn";
-import { listIngestSources, type IngestSource } from "@/lib/platform-api";
+import {
+  listEnvTypes,
+  listIngestSources,
+  type IngestSource,
+} from "@/lib/platform-api";
 import {
   createChannel,
   deleteChannel,
@@ -44,7 +50,9 @@ import {
   listChannelRuns,
   listChannels,
   newStep,
+  listReviewItems,
   provisionChannelWebhook,
+  resolveReviewItem,
   stepSummary,
   updateChannel,
   STEP_LABELS,
@@ -54,6 +62,8 @@ import {
   type ChannelStepType,
   type ChannelStatus,
   type DataChannel,
+  type ReviewItem,
+  type StepIoEntry,
 } from "../channels-api";
 import { useStudio } from "../StudioShell";
 
@@ -63,6 +73,7 @@ const STEP_VISUALS: Record<
 > = {
   intake: { Icon: Webhook, bg: "bg-[#e7f2fd]", text: "text-[#215db0]" },
   transform: { Icon: Wand2, bg: "bg-[#f2ebfb]", text: "text-[#6b3fa0]" },
+  map: { Icon: ArrowRightLeft, bg: "bg-[#e6f7f2]", text: "text-[#0f6b58]" },
   extract: { Icon: Search, bg: "bg-[#e7f2fd]", text: "text-[#215db0]" },
   validate: { Icon: ShieldCheck, bg: "bg-[#fdf0e6]", text: "text-[#935610]" },
   save: { Icon: Database, bg: "bg-[#e8f4ec]", text: "text-[#1c6e42]" },
@@ -81,7 +92,7 @@ const SAMPLE_NOTE =
 
 // Only these step types can appear more than zero times; extract/save/intake
 // are singletons in the catalog once present.
-const SINGLETON_TYPES: ChannelStepType[] = ["intake", "extract", "save"];
+const SINGLETON_TYPES: ChannelStepType[] = ["intake", "map", "extract", "save"];
 
 export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void }) {
   const { hasKey, selectedEnv } = useStudio();
@@ -108,6 +119,12 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
 
   const [sources, setSources] = useState<IngestSource[]>([]);
   const [provisioning, setProvisioning] = useState(false);
+
+  const [envTypes, setEnvTypes] = useState<string[]>([]);
+  const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
+  const [reviewPending, setReviewPending] = useState(0);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
 
   const selected = useMemo(
     () => channels.find((c) => c.slug === selectedSlug) ?? null,
@@ -145,6 +162,50 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
       .then(({ sources: list }) => setSources(list))
       .catch(() => setSources([]));
   }, [hasKey, env]);
+
+  useEffect(() => {
+    if (!env) {
+      setEnvTypes([]);
+      return;
+    }
+    listEnvTypes(env)
+      .then(({ types }) => setEnvTypes(types.map((t) => t.name).sort()))
+      .catch(() => setEnvTypes([]));
+  }, [env]);
+
+  const loadReview = useCallback(async () => {
+    if (!env) {
+      setReviewItems([]);
+      setReviewPending(0);
+      return;
+    }
+    try {
+      const { items, pendingCount } = await listReviewItems(env, { status: "pending", limit: 25 });
+      setReviewItems(items);
+      setReviewPending(pendingCount);
+    } catch {
+      /* review queue is best-effort UI */
+    }
+  }, [env]);
+
+  useEffect(() => {
+    void loadReview();
+  }, [loadReview]);
+
+  async function handleResolveReview(id: string, action: "confirm" | "reject") {
+    if (!env || resolvingId) return;
+    setResolvingId(id);
+    try {
+      await resolveReviewItem(env, id, action);
+      setReviewItems((cur) => cur.filter((i) => i.id !== id));
+      setReviewPending((n) => Math.max(0, n - 1));
+      if (action === "confirm") await loadChannels();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setResolvingId(null);
+    }
+  }
 
   // Surface extraction-service outages: poll the readiness probe so users see
   // why runs queue/fail instead of a silent empty Manager.
@@ -186,7 +247,8 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
     await loadChannels();
     const { runs: r } = await listChannelRuns(env, selectedSlug, 5).catch(() => ({ runs: [] }));
     setRuns(r);
-  }, [env, selectedSlug, loadChannels]);
+    await loadReview();
+  }, [env, selectedSlug, loadChannels, loadReview]);
 
   async function handleCreate() {
     if (!env || !newName.trim() || busy) return;
@@ -597,6 +659,7 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                         step.type === "extract" ? undefined : () => removeStep(step.id)
                       }
                       onConfig={(key, value) => patchStepConfig(step.id, key, value)}
+                      envTypes={envTypes}
                       intake={
                         step.type === "intake"
                           ? {
@@ -618,32 +681,130 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                 />
               </div>
 
-              {/* Recent runs */}
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[#d3d8de] pt-2 text-[11px] text-[#8f99a8]">
+              {/* Recent runs: click one to inspect each step input/output */}
+              <div className="flex flex-col gap-1 border-t border-[#d3d8de] pt-2 text-[11px] text-[#8f99a8]">
                 {runs.length === 0 ? (
                   <span>No runs yet — try a test run.</span>
                 ) : (
                   runs.map((r) => (
-                    <span key={r.id} className="flex items-center gap-1" title={r.error ?? undefined}>
-                      {r.status === "failed" ? (
-                        <X className="h-3 w-3 text-rose-500" />
-                      ) : r.status === "flagged" ? (
-                        <AlertTriangle className="h-3 w-3 text-amber-500" />
-                      ) : (
-                        <Check className="h-3 w-3 text-emerald-600" />
-                      )}
-                      {new Date(r.createdAt).toLocaleTimeString()} · {r.conceptCount} concepts ·{" "}
-                      {r.savedCount} saved
-                      {r.flaggedCount > 0 ? ` · ${r.flaggedCount} flagged` : ""}
-                      {r.status === "failed" && r.error ? (
-                        <span className="max-w-[16rem] truncate text-rose-500">
-                          · {r.error}
+                    <div key={r.id}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedRunId((cur) => (cur === r.id ? null : r.id))
+                        }
+                        className={cn(
+                          "flex w-full items-center gap-1 rounded px-1 py-0.5 text-left hover:bg-[#f6f7f9]",
+                          expandedRunId === r.id && "bg-[#f6f7f9]",
+                        )}
+                        title={r.error ?? undefined}
+                      >
+                        {r.status === "failed" ? (
+                          <X className="h-3 w-3 shrink-0 text-rose-500" />
+                        ) : r.status === "flagged" ? (
+                          <AlertTriangle className="h-3 w-3 shrink-0 text-amber-500" />
+                        ) : (
+                          <Check className="h-3 w-3 shrink-0 text-emerald-600" />
+                        )}
+                        <span className="truncate">
+                          {new Date(r.createdAt).toLocaleTimeString()} · {r.conceptCount} concepts ·{" "}
+                          {r.savedCount} saved
+                          {r.flaggedCount > 0 ? ` · ${r.flaggedCount} flagged` : ""}
+                          {r.status === "failed" && r.error ? ` · ${r.error}` : ""}
                         </span>
+                        <ChevronDown
+                          className={cn(
+                            "ml-auto h-3 w-3 shrink-0 transition-transform",
+                            expandedRunId === r.id && "rotate-180",
+                          )}
+                        />
+                      </button>
+                      {expandedRunId === r.id ? (
+                        r.stepIo.length > 0 ? (
+                          <StepIoList entries={r.stepIo} />
+                        ) : (
+                          <p className="px-1 py-1 text-[10px] text-[#8f99a8]">
+                            No step snapshots for this run (recorded before step
+                            capture existed).
+                          </p>
+                        )
                       ) : null}
-                    </span>
+                    </div>
                   ))
                 )}
               </div>
+
+              {/* Review queue: flagged extractions awaiting a human decision */}
+              {reviewItems.length > 0 ? (
+                <div className="rounded-md border border-amber-200 bg-white">
+                  <div className="flex items-center gap-2 border-b border-amber-100 bg-amber-50/60 px-3 py-2">
+                    <Inbox className="h-3.5 w-3.5 text-amber-600" />
+                    <span className="text-xs font-semibold text-[#1c2127]">
+                      Review queue
+                    </span>
+                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                      {reviewPending} pending
+                    </span>
+                    <span className="ml-auto text-[10px] text-[#8f99a8]">
+                      flagged extractions are kept here, not discarded
+                    </span>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    {reviewItems.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center gap-2 border-b border-[#f0f2f5] px-3 py-1.5 last:border-b-0"
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-1.5">
+                            <span className="truncate text-xs font-medium text-[#1c2127]">
+                              {item.span}
+                            </span>
+                            {item.code ? (
+                              <span className="shrink-0 rounded bg-[#e7f2fd] px-1 py-0.5 font-mono text-[9px] text-[#215db0]">
+                                {item.code}
+                              </span>
+                            ) : null}
+                            <span
+                              className={cn(
+                                "shrink-0 rounded px-1 py-0.5 text-[9px] font-medium",
+                                item.decision === "escalate"
+                                  ? "bg-rose-50 text-rose-700"
+                                  : "bg-amber-50 text-amber-700",
+                              )}
+                            >
+                              {item.decision}
+                            </span>
+                          </span>
+                          <span className="block truncate text-[10px] text-[#8f99a8]">
+                            {item.display ?? item.span}
+                            {item.confidence !== null
+                              ? ` · ${(item.confidence * 100).toFixed(0)}%`
+                              : ""}{" "}
+                            · {item.channelName} · {new Date(item.createdAt).toLocaleString()}
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          disabled={resolvingId !== null}
+                          onClick={() => void handleResolveReview(item.id, "confirm")}
+                          className="shrink-0 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                        >
+                          {resolvingId === item.id ? "…" : "Confirm & save"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={resolvingId !== null}
+                          onClick={() => void handleResolveReview(item.id, "reject")}
+                          className="shrink-0 rounded border border-[#d3d8de] px-2 py-1 text-[10px] font-medium text-[#5f6b7c] hover:bg-[#f6f7f9] disabled:opacity-50"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           )}
         </div>
@@ -708,6 +869,10 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                   stage={runStage}
                   timings={outcome?.timings ?? {}}
                 />
+              ) : null}
+
+              {outcome && outcome.stepIo.length > 0 ? (
+                <StepIoList entries={outcome.stepIo} />
               ) : null}
 
               {outcome ? (
@@ -899,6 +1064,53 @@ interface IntakeContext {
   onBindSource: (sourceId: string | null) => void;
 }
 
+/** Per-step input/output snapshots for a run — the debugging view. */
+function StepIoList({ entries }: { entries: StepIoEntry[] }) {
+  return (
+    <div className="mb-1 flex flex-col gap-1 rounded border border-[#e5e8eb] bg-[#fafbfc] p-2">
+      {entries.map((e, i) => {
+        const visuals = STEP_VISUALS[e.type as ChannelStepType];
+        const Icon = visuals?.Icon;
+        return (
+          <div key={`${e.stepId}-${i}`} className="flex flex-col gap-0.5">
+            <span className="flex items-center gap-1.5">
+              {Icon ? (
+                <span
+                  className={cn(
+                    "flex h-4 w-4 items-center justify-center rounded",
+                    visuals.bg,
+                    visuals.text,
+                  )}
+                >
+                  <Icon className="h-2.5 w-2.5" />
+                </span>
+              ) : null}
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#5f6b7c]">
+                {e.type}
+              </span>
+              {e.note ? <span className="text-[10px] text-[#8f99a8]">{e.note}</span> : null}
+            </span>
+            <div className="grid grid-cols-2 gap-1">
+              <div className="min-w-0">
+                <span className="block text-[9px] uppercase tracking-wide text-[#8f99a8]">in</span>
+                <pre className="max-h-24 overflow-auto whitespace-pre-wrap break-all rounded bg-white p-1 font-mono text-[9.5px] leading-snug text-[#404854] ring-1 ring-[#e5e8eb]">
+                  {e.input || "—"}
+                </pre>
+              </div>
+              <div className="min-w-0">
+                <span className="block text-[9px] uppercase tracking-wide text-[#8f99a8]">out</span>
+                <pre className="max-h-24 overflow-auto whitespace-pre-wrap break-all rounded bg-white p-1 font-mono text-[9.5px] leading-snug text-[#404854] ring-1 ring-[#e5e8eb]">
+                  {e.output || "—"}
+                </pre>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function StepCard({
   step,
   index,
@@ -907,6 +1119,7 @@ function StepCard({
   onMove,
   onRemove,
   onConfig,
+  envTypes,
   intake,
 }: {
   step: ChannelStep;
@@ -916,6 +1129,7 @@ function StepCard({
   onMove: (delta: -1 | 1) => void;
   onRemove?: () => void;
   onConfig: (key: string, value: unknown) => void;
+  envTypes?: string[];
   intake?: IntakeContext;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -992,7 +1206,7 @@ function StepCard({
       </div>
       {expanded ? (
         <div className="border-t border-[#e5e8eb] px-3 py-2.5">
-          <StepConfigForm step={step} onConfig={onConfig} intake={intake} />
+          <StepConfigForm step={step} onConfig={onConfig} envTypes={envTypes} intake={intake} />
         </div>
       ) : null}
     </div>
@@ -1006,10 +1220,12 @@ const LABEL = "mb-0.5 block text-[10px] font-medium uppercase tracking-wide text
 function StepConfigForm({
   step,
   onConfig,
+  envTypes,
   intake,
 }: {
   step: ChannelStep;
   onConfig: (key: string, value: unknown) => void;
+  envTypes?: string[];
   intake?: IntakeContext;
 }) {
   const c = step.config;
@@ -1129,6 +1345,86 @@ function StepConfigForm({
           </label>
         </div>
       );
+    case "map": {
+      const rules = (Array.isArray(c.mappings) ? c.mappings : []) as {
+        from: string;
+        to: string;
+      }[];
+      const setRules = (next: { from: string; to: string }[]) => onConfig("mappings", next);
+      const types = envTypes ?? [];
+      return (
+        <div className="flex flex-col gap-2">
+          <label className="block">
+            <span className={LABEL}>Target object type (from the ontology)</span>
+            {types.length > 0 ? (
+              <select
+                value={(c.objectType as string) || ""}
+                onChange={(e) => onConfig("objectType", e.target.value)}
+                className={FIELD}
+              >
+                <option value="">Select a type…</option>
+                {types.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                value={(c.objectType as string) || ""}
+                onChange={(e) => onConfig("objectType", e.target.value)}
+                placeholder="LabResult"
+                className={FIELD}
+              />
+            )}
+          </label>
+          <div className="flex flex-col gap-1.5">
+            <span className={LABEL}>Key mappings — payload key → property</span>
+            {rules.map((rule, i) => (
+              <div key={i} className="flex items-center gap-1.5">
+                <input
+                  value={rule.from}
+                  onChange={(e) =>
+                    setRules(rules.map((r, j) => (j === i ? { ...r, from: e.target.value } : r)))
+                  }
+                  placeholder="payload key (e.g. mrn or lab.value)"
+                  className={FIELD}
+                />
+                <ArrowRightLeft className="h-3 w-3 shrink-0 text-[#8f99a8]" />
+                <input
+                  value={rule.to}
+                  onChange={(e) =>
+                    setRules(rules.map((r, j) => (j === i ? { ...r, to: e.target.value } : r)))
+                  }
+                  placeholder="property (e.g. identifier)"
+                  className={FIELD}
+                />
+                <button
+                  type="button"
+                  onClick={() => setRules(rules.filter((_, j) => j !== i))}
+                  className="shrink-0 rounded p-0.5 text-[#8f99a8] hover:text-rose-600"
+                  aria-label="Remove mapping"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setRules([...rules, { from: "", to: "" }])}
+              className="self-start text-[11px] text-[#2d72d2] hover:underline"
+            >
+              + add mapping
+            </button>
+          </div>
+          <p className="text-[10px] leading-relaxed text-[#8f99a8]">
+            Structured JSON payloads are mapped key-by-key onto the selected object
+            type and saved directly — the NLP extract/validate steps are skipped.
+            Arrays map each object (max 100 per payload).
+          </p>
+        </div>
+      );
+    }
     case "extract":
       return (
         <div className="grid grid-cols-3 gap-2">

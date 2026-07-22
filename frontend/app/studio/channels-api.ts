@@ -7,6 +7,7 @@
  */
 
 import { API_BASE, apiFetch } from "@/lib/auth";
+import { createEnvObject } from "@/lib/platform-api";
 import {
   decide,
   extractConcepts,
@@ -21,7 +22,7 @@ import {
 } from "@/lib/platform-api";
 import { readPath } from "./studio-data";
 
-export type ChannelStepType = "intake" | "transform" | "extract" | "validate" | "save";
+export type ChannelStepType = "intake" | "transform" | "map" | "extract" | "validate" | "save";
 export type ChannelStatus = "draft" | "live" | "paused";
 export type ChannelRunStatus = "succeeded" | "flagged" | "failed";
 
@@ -67,6 +68,7 @@ export interface ChannelRun {
   flaggedCount: number;
   durationMs: number | null;
   stepTimings: Record<string, unknown>;
+  stepIo: StepIoEntry[];
   error: string | null;
   createdAt: string;
 }
@@ -164,6 +166,7 @@ export async function recordChannelRun(
     flaggedCount?: number;
     durationMs?: number | null;
     stepTimings?: Record<string, number>;
+    stepIo?: StepIoEntry[];
     error?: string | null;
   },
 ): Promise<ChannelRun> {
@@ -180,6 +183,7 @@ export async function recordChannelRun(
 export const STEP_LABELS: Record<ChannelStepType, string> = {
   intake: "Intake",
   transform: "Transform",
+  map: "Map to ontology",
   extract: "Extract + map to SNOMED",
   validate: "Validate",
   save: "Save to ontology",
@@ -192,6 +196,13 @@ export function newStep(type: ChannelStepType): ChannelStep {
       return { id, type, enabled: true, config: { mode: "paste", ref: "" } };
     case "transform":
       return { id, type, enabled: true, config: { language: "auto", fieldPath: "" } };
+    case "map":
+      return {
+        id,
+        type,
+        enabled: true,
+        config: { objectType: "", mappings: [{ from: "", to: "" }] },
+      };
     case "extract":
       return {
         id,
@@ -224,6 +235,15 @@ export function stepSummary(step: ChannelStep): string {
       const lang = (c.language as string) || "auto";
       const path = (c.fieldPath as string) || "";
       return `language: ${lang}${path ? ` · field: ${path}` : " · raw text"}`;
+    }
+    case "map": {
+      const type = (c.objectType as string) || "";
+      const rules = Array.isArray(c.mappings)
+        ? (c.mappings as { from?: string; to?: string }[]).filter((m) => m.from && m.to)
+        : [];
+      return type
+        ? `${rules.length} key${rules.length === 1 ? "" : "s"} → ${type}`
+        : "select a target object type";
     }
     case "extract": {
       const th = Number(c.acceptThreshold ?? 0.85);
@@ -258,12 +278,36 @@ export interface ChannelResultRow {
   translation: string | null;
 }
 
+export interface StepIoEntry {
+  stepId: string;
+  type: string;
+  input: string;
+  output: string;
+  note?: string;
+}
+
+const STEP_IO_CLIP = 2000;
+
+function clipIo(value: unknown): string {
+  let text: string;
+  if (typeof value === "string") text = value;
+  else {
+    try {
+      text = JSON.stringify(value);
+    } catch {
+      text = String(value);
+    }
+  }
+  return text.length > STEP_IO_CLIP ? `${text.slice(0, STEP_IO_CLIP)}… [truncated]` : text;
+}
+
 export interface ChannelRunOutcome {
   rows: ChannelResultRow[];
   acceptedCount: number;
   flaggedCount: number;
   persisted: PersistedSummary | null;
   timings: Record<string, number>;
+  stepIo: StepIoEntry[];
   durationMs: number;
   status: ChannelRunStatus;
   error: string | null;
@@ -287,7 +331,14 @@ export async function executeChannel(
   const enabled = channel.steps.filter((s) => s.enabled);
   const step = (type: ChannelStepType) => enabled.find((s) => s.type === type);
   const timings: Record<string, number> = {};
+  const stepIo: StepIoEntry[] = [];
   const t0 = now();
+  stepIo.push({
+    stepId: step("intake")?.id ?? "intake",
+    type: "intake",
+    input: clipIo(inputText),
+    output: clipIo(inputText),
+  });
 
   const finishFailed = async (message: string) => {
     await recordChannelRun(env, channel.slug, {
@@ -295,9 +346,95 @@ export async function executeChannel(
       inputChars: inputText.length,
       durationMs: Math.round(now() - t0),
       stepTimings: timings,
+      stepIo,
       error: message,
     }).catch(() => undefined);
   };
+
+  // --- map (structured payloads bypass NLP entirely) -----------------------
+  const mapStep = step("map");
+  if (mapStep) {
+    try {
+      const objectType = ((mapStep.config.objectType as string) || "").trim();
+      const rules = (Array.isArray(mapStep.config.mappings) ? mapStep.config.mappings : [])
+        .map((m) => ({
+          from: String((m as { from?: string }).from ?? "").trim(),
+          to: String((m as { to?: string }).to ?? "").trim(),
+        }))
+        .filter((m) => m.from && m.to);
+      if (!objectType) throw new Error("Map step has no target object type.");
+      if (rules.length === 0) throw new Error("Map step has no key mappings.");
+      onStage?.("map");
+      const t = now();
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(inputText);
+      } catch {
+        throw new Error("Map step needs a JSON payload (object or array of objects).");
+      }
+      const items = (Array.isArray(parsed) ? parsed : [parsed])
+        .filter((x): x is Record<string, unknown> => Boolean(x) && typeof x === "object")
+        .slice(0, 100);
+      if (items.length === 0) throw new Error("Payload contains no JSON objects to map.");
+
+      let savedCount = 0;
+      const sample: Record<string, unknown>[] = [];
+      for (const item of items) {
+        const properties: Record<string, unknown> = {};
+        for (const rule of rules) {
+          const value = readPath(item, rule.from);
+          if (value === undefined) continue;
+          properties[rule.to] =
+            value === null || typeof value === "object" ? JSON.stringify(value) : value;
+        }
+        if (Object.keys(properties).length === 0) continue;
+        await createEnvObject(env, {
+          type: objectType,
+          properties,
+          provenance: { source: "channel-map", channel: channel.slug },
+        });
+        savedCount += 1;
+        if (sample.length < 3) sample.push(properties);
+      }
+      timings.map = Math.round(now() - t);
+      stepIo.push({
+        stepId: mapStep.id,
+        type: "map",
+        input: clipIo(items.length === 1 ? items[0] : items),
+        output: clipIo({ objectType, savedCount, sample }),
+        note: `${rules.length} mapping${rules.length === 1 ? "" : "s"}`,
+      });
+      if (savedCount === 0) throw new Error("No payload keys matched the configured mappings.");
+
+      const durationMs = Math.round(now() - t0);
+      await recordChannelRun(env, channel.slug, {
+        status: "succeeded",
+        inputChars: inputText.length,
+        conceptCount: 0,
+        savedCount,
+        flaggedCount: 0,
+        durationMs,
+        stepTimings: timings,
+        stepIo,
+      }).catch(() => undefined);
+      onStage?.("done");
+      return {
+        rows: [],
+        acceptedCount: savedCount,
+        flaggedCount: 0,
+        persisted: null,
+        timings,
+        stepIo,
+        durationMs,
+        status: "succeeded",
+        error: null,
+      };
+    } catch (err) {
+      const message = (err as Error).message;
+      await finishFailed(message);
+      throw err;
+    }
+  }
 
   try {
     // --- transform ---------------------------------------------------------
@@ -322,6 +459,13 @@ export async function executeChannel(
       }
       text = text.trim();
       timings.transform = Math.round(now() - t);
+      stepIo.push({
+        stepId: transform.id,
+        type: "transform",
+        input: clipIo(inputText),
+        output: clipIo(text),
+        note: fieldPath ? `field: ${fieldPath}` : "raw text",
+      });
     }
     if (!text) throw new Error("Input is empty after the transform step.");
 
@@ -387,6 +531,15 @@ export async function executeChannel(
       });
     }
     timings.extract = Math.round(now() - tExtract);
+    stepIo.push({
+      stepId: extract.id,
+      type: "extract",
+      input: clipIo(text),
+      output: clipIo(
+        results.map((r) => ({ span: r.span, code: r.code, decision: r.decision })),
+      ),
+      note: `${results.length} span${results.length === 1 ? "" : "s"}`,
+    });
 
     // --- validate ------------------------------------------------------------
     const validate = step("validate");
@@ -419,6 +572,12 @@ export async function executeChannel(
         return r;
       });
       timings.validate = Math.round(now() - t);
+      stepIo.push({
+        stepId: validate.id,
+        type: "validate",
+        input: clipIo(results.length),
+        output: clipIo(rows.map((r) => ({ span: r.span, decision: r.decision }))),
+      });
     }
 
     const acceptedSpans = new Set(
@@ -461,6 +620,12 @@ export async function executeChannel(
       });
       persisted = summary;
       timings.save = Math.round(now() - t);
+      stepIo.push({
+        stepId: save.id,
+        type: "save",
+        input: clipIo(acceptedResults.map((r) => ({ span: r.span, code: r.code }))),
+        output: clipIo({ savedCount: summary.objectIds.length, objectType }),
+      });
     }
 
     const durationMs = Math.round(now() - t0);
@@ -473,6 +638,7 @@ export async function executeChannel(
       flaggedCount,
       durationMs,
       stepTimings: timings,
+      stepIo,
     }).catch(() => undefined);
     onStage?.("done");
 
@@ -482,6 +648,7 @@ export async function executeChannel(
       flaggedCount,
       persisted,
       timings,
+      stepIo,
       durationMs,
       status,
       error: null,
@@ -491,4 +658,45 @@ export async function executeChannel(
     await finishFailed(message);
     throw err;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Review queue — flagged extractions parked for a human decision
+// ---------------------------------------------------------------------------
+
+export interface ReviewItem {
+  id: string;
+  channelName: string;
+  channelSlug: string;
+  span: string;
+  code: string | null;
+  display: string | null;
+  decision: "flag" | "escalate";
+  confidence: number | null;
+  objectType: string;
+  readableNote: string;
+  status: "pending" | "confirmed" | "rejected";
+  createdAt: string;
+}
+
+export async function listReviewItems(
+  env: string,
+  opts?: { status?: "pending" | "confirmed" | "rejected"; limit?: number },
+): Promise<{ items: ReviewItem[]; pendingCount: number }> {
+  const qs = new URLSearchParams();
+  if (opts?.status) qs.set("status", opts.status);
+  if (opts?.limit) qs.set("limit", String(opts.limit));
+  const q = qs.toString();
+  return apiFetch(`/v1/ontology/${enc(env)}/review-items${q ? `?${q}` : ""}`);
+}
+
+export async function resolveReviewItem(
+  env: string,
+  id: string,
+  action: "confirm" | "reject",
+): Promise<{ ok: true; status: "confirmed" | "rejected"; savedInstanceId: string | null }> {
+  return apiFetch(`/v1/ontology/${enc(env)}/review-items/${enc(id)}/resolve`, {
+    method: "POST",
+    body: { action },
+  });
 }
