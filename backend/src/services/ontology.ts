@@ -41,6 +41,7 @@ export interface PropertyDef {
   key: string;
   type: "string" | "number" | "boolean" | "object" | "array";
   label?: string;
+  required?: boolean;
 }
 
 /**
@@ -197,6 +198,74 @@ export async function insertObjectInstance(
     [objectTypeId, JSON.stringify(properties), JSON.stringify(provenance)],
   );
   return rows[0]!.id;
+}
+
+/** Find one instance of a type whose property equals a value (text compare). */
+export async function findInstanceIdByKey(
+  db: DbClient,
+  objectTypeId: string,
+  keyProp: string,
+  keyValue: string,
+): Promise<string | null> {
+  const { rows } = await db.query<{ id: string }>(
+    `SELECT id FROM app.ontology_object_instances
+      WHERE object_type_id = $1 AND properties ->> $2 = $3
+      ORDER BY created_at ASC
+      LIMIT 1`,
+    [objectTypeId, keyProp, keyValue],
+  );
+  return rows[0]?.id ?? null;
+}
+
+/**
+ * Upsert an instance by a natural key: if one already exists whose identity
+ * properties all match, merge the new properties into it; otherwise insert.
+ * This is the ingestion-path dedupe that a plain insert lacks — webhook
+ * retries and looped feeds re-send the same object, and without a key that
+ * silently doubles the graph.
+ */
+export async function upsertInstanceByIdentity(
+  db: DbClient,
+  objectTypeId: string,
+  identityKeys: string[],
+  properties: Record<string, unknown>,
+  provenance: Record<string, unknown>,
+): Promise<{ id: string; created: boolean }> {
+  const usableKeys = identityKeys.filter(
+    (k) => properties[k] !== undefined && properties[k] !== null && properties[k] !== "",
+  );
+  if (usableKeys.length === 0) {
+    const id = await insertObjectInstance(db, objectTypeId, properties, provenance);
+    return { id, created: true };
+  }
+
+  const conds: string[] = [];
+  const params: unknown[] = [objectTypeId];
+  for (const k of usableKeys) {
+    params.push(k, String(properties[k]));
+    conds.push(`properties ->> $${params.length - 1} = $${params.length}`);
+  }
+  const found = await db.query<{ id: string }>(
+    `SELECT id FROM app.ontology_object_instances
+      WHERE object_type_id = $1 AND ${conds.join(" AND ")}
+      ORDER BY created_at ASC
+      LIMIT 1`,
+    params,
+  );
+  const existing = found.rows[0]?.id;
+  if (existing) {
+    await db.query(
+      `UPDATE app.ontology_object_instances
+          SET properties = properties || $2::jsonb,
+              provenance = provenance || $3::jsonb,
+              updated_at = now()
+        WHERE id = $1`,
+      [existing, JSON.stringify(properties), JSON.stringify(provenance)],
+    );
+    return { id: existing, created: false };
+  }
+  const id = await insertObjectInstance(db, objectTypeId, properties, provenance);
+  return { id, created: true };
 }
 
 export interface FindingInstanceColumns {

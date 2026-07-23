@@ -18,6 +18,11 @@ import {
   persistExtractResults,
   type PersistableExtractResult,
 } from "../services/persist-extract.js";
+import {
+  buildMapProperties,
+  type MappingRule,
+} from "../services/channel-runner.js";
+import { findInstanceIdByKey, type PropertyDef } from "../services/ontology.js";
 
 // ---------------------------------------------------------------------------
 // Data channels — saved linear parse pipelines (intake → steps → save).
@@ -700,6 +705,88 @@ const reviewRoutes: FastifyPluginAsync = async (fastify) => {
         })),
         pendingCount: Number(pending.rows[0]?.n ?? 0),
       };
+    },
+  );
+
+  // Dry-run the Map step against a sample payload using the SAME transform the
+  // live runner uses (buildMapProperties) — so the editor preview can never
+  // drift from what actually gets written. Read-only: no instances created.
+  app.post(
+    "/ontology/:env/map-preview",
+    {
+      schema: {
+        summary: "Preview the Map step transform against a sample payload (read-only)",
+        tags: ["channels"],
+        params: z.object({ env: z.string().min(1) }),
+        body: z.object({
+          objectType: z.string().min(1),
+          identity: z.array(z.string()).default([]),
+          mappings: z.array(z.record(z.unknown())).default([]),
+          sample: z.unknown(),
+        }),
+        response: {
+          200: z.object({
+            items: z.array(
+              z.object({
+                properties: z.record(z.unknown()),
+                issues: z.array(z.object({ field: z.string(), reason: z.string() })),
+                missingRequired: z.array(z.string()),
+                action: z.enum(["insert", "update", "review"]),
+              }),
+            ),
+            typeExists: z.boolean(),
+          }),
+          404: errorEnvelope,
+        },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const { objectType, identity, mappings, sample } = req.body;
+
+      const typeRes = await req.db.query<{ id: string; property_schema: PropertyDef[] }>(
+        `SELECT id, property_schema FROM app.ontology_object_types
+          WHERE environment_id = $1 AND name = $2`,
+        [env.id, objectType],
+      );
+      const typeId = typeRes.rows[0]?.id ?? null;
+      const schema = typeRes.rows[0]?.property_schema ?? [];
+      const rules = mappings as unknown as MappingRule[];
+      const scalarRules = rules.filter(
+        (r) => r.from && (r.kind ?? "scalar") === "scalar" && r.to,
+      );
+
+      const rawItems = Array.isArray(sample) ? sample : [sample];
+      const items = rawItems
+        .filter((x): x is Record<string, unknown> => Boolean(x) && typeof x === "object")
+        .slice(0, 20);
+
+      const out = [];
+      for (const item of items) {
+        const { properties, issues, missingRequired } = buildMapProperties(
+          item,
+          scalarRules,
+          schema,
+        );
+        let action: "insert" | "update" | "review" = "insert";
+        if (issues.length > 0 || missingRequired.length > 0) {
+          action = "review";
+        } else if (typeId && identity.length > 0) {
+          const key = identity.find((k) => properties[k] != null);
+          if (key) {
+            const existing = await findInstanceIdByKey(
+              req.db,
+              typeId,
+              key,
+              String(properties[key]),
+            );
+            if (existing) action = "update";
+          }
+        }
+        out.push({ properties, issues, missingRequired, action });
+      }
+      return { items: out, typeExists: typeId !== null };
     },
   );
 

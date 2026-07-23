@@ -6,9 +6,13 @@ import { proxyToNlp } from "../lib/nlp.js";
 import {
   CLINICAL_FINDING_SCHEMA,
   PATIENT_SCHEMA,
+  findInstanceIdByKey,
   getOrCreateLinkType,
   getOrCreateObjectType,
+  insertLinkInstance,
   insertObjectInstance,
+  upsertInstanceByIdentity,
+  type PropertyDef,
 } from "./ontology.js";
 import {
   persistExtractResults,
@@ -192,9 +196,103 @@ export async function recordChannelRun(
     .catch(() => undefined);
 }
 
+export type CoerceKind = "string" | "number" | "boolean" | "date";
+export type OnMissing = "skip" | "null" | "flag";
+
 export interface MappingRule {
   from: string;
-  to: string;
+  /** Scalar target property (scalar rules) — omitted for link rules. */
+  to?: string;
+  kind?: "scalar" | "link";
+  coerce?: CoerceKind;
+  onMissing?: OnMissing;
+  /** Link rules: resolve/create a target object and connect it. */
+  linkType?: string;
+  targetType?: string;
+  targetKey?: string;
+  createMissing?: boolean;
+}
+
+export interface MapIssue {
+  field: string;
+  reason: string;
+}
+
+/**
+ * Coerce a raw payload value to a declared type. Locale-aware for numbers
+ * ("3,2" and "1 234,5" are valid FR decimals). Returns an issue instead of a
+ * silent NaN/garbage so the item can be routed to review, not the ontology.
+ */
+export function coerceValue(
+  value: unknown,
+  kind: CoerceKind | undefined,
+  field: string,
+): { value: unknown; issue: MapIssue | null } {
+  if (value === null || value === undefined) return { value, issue: null };
+  if (!kind || kind === "string") {
+    return { value: typeof value === "object" ? JSON.stringify(value) : String(value), issue: null };
+  }
+  if (kind === "number") {
+    if (typeof value === "number") return { value, issue: null };
+    const raw = String(value).trim().replace(/\s/g, "").replace(",", ".");
+    const n = Number(raw);
+    if (raw === "" || Number.isNaN(n)) {
+      return { value: null, issue: { field, reason: `"${String(value)}" is not a number` } };
+    }
+    return { value: n, issue: null };
+  }
+  if (kind === "boolean") {
+    const s = String(value).trim().toLowerCase();
+    if (["true", "1", "yes", "oui", "y"].includes(s)) return { value: true, issue: null };
+    if (["false", "0", "no", "non", "n"].includes(s)) return { value: false, issue: null };
+    return { value: null, issue: { field, reason: `"${String(value)}" is not a boolean` } };
+  }
+  // date
+  const d = new Date(String(value));
+  if (Number.isNaN(d.getTime())) {
+    return { value: null, issue: { field, reason: `"${String(value)}" is not a date` } };
+  }
+  return { value: d.toISOString(), issue: null };
+}
+
+export interface MapItemBuild {
+  properties: Record<string, unknown>;
+  issues: MapIssue[];
+  missingRequired: string[];
+}
+
+/**
+ * Build one target object's properties from a payload item and the scalar
+ * mapping rules, honoring per-rule missing-value policy and coercion, then
+ * check the type's required properties. Pure: no DB, so the dry-run preview
+ * and the live runner share one transform (no client/server drift).
+ */
+export function buildMapProperties(
+  item: Record<string, unknown>,
+  scalarRules: MappingRule[],
+  schema: PropertyDef[],
+): MapItemBuild {
+  const properties: Record<string, unknown> = {};
+  const issues: MapIssue[] = [];
+  for (const rule of scalarRules) {
+    const to = (rule.to ?? "").trim();
+    if (!to) continue;
+    const raw = readPath(item, rule.from);
+    if (raw === undefined) {
+      const policy = rule.onMissing ?? "skip";
+      if (policy === "null") properties[to] = null;
+      else if (policy === "flag") issues.push({ field: rule.from, reason: "missing in payload" });
+      continue;
+    }
+    const { value, issue } = coerceValue(raw, rule.coerce, rule.from);
+    if (issue) issues.push(issue);
+    else properties[to] = value;
+  }
+  const missingRequired = schema
+    .filter((p) => p.required)
+    .filter((p) => properties[p.key] === undefined || properties[p.key] === null)
+    .map((p) => p.key);
+  return { properties, issues, missingRequired };
 }
 
 /** Max payload items mapped per run when the webhook posts an array. */
@@ -222,12 +320,15 @@ async function runMapPath(
 ): Promise<ChannelRunOutcome> {
   const t = Date.now();
   const objectType = ((map.config.objectType as string) || "").trim();
-  const mappings = (Array.isArray(map.config.mappings) ? map.config.mappings : [])
-    .map((m) => ({
-      from: String((m as MappingRule).from ?? "").trim(),
-      to: String((m as MappingRule).to ?? "").trim(),
-    }))
-    .filter((m) => m.from && m.to);
+  const identity = (Array.isArray(map.config.identity) ? map.config.identity : [])
+    .map((k) => String(k).trim())
+    .filter(Boolean);
+  const rules: MappingRule[] = (Array.isArray(map.config.mappings) ? map.config.mappings : [])
+    .map((m) => m as MappingRule)
+    .filter((m) => String(m.from ?? "").trim());
+  const scalarRules = rules.filter((r) => (r.kind ?? "scalar") === "scalar" && r.to);
+  const linkRules = rules.filter((r) => r.kind === "link" && r.targetType && r.targetKey);
+  const mappings = scalarRules;
 
   if (!objectType) {
     return outcome({
@@ -239,7 +340,7 @@ async function runMapPath(
       errorCode: "MAP_NO_TYPE",
     });
   }
-  if (mappings.length === 0) {
+  if (mappings.length === 0 && linkRules.length === 0) {
     return outcome({
       status: "failed",
       conceptCount: 0,
@@ -277,11 +378,13 @@ async function runMapPath(
     });
   }
 
-  const typeRes = await db.query<{ id: string }>(
-    `SELECT id FROM app.ontology_object_types WHERE environment_id = $1 AND name = $2`,
+  const typeRes = await db.query<{ id: string; property_schema: PropertyDef[] }>(
+    `SELECT id, property_schema FROM app.ontology_object_types
+      WHERE environment_id = $1 AND name = $2`,
     [channel.environmentId, objectType],
   );
   const typeId = typeRes.rows[0]?.id;
+  const schema = typeRes.rows[0]?.property_schema ?? [];
   if (!typeId) {
     return outcome({
       status: "failed",
@@ -294,21 +397,89 @@ async function runMapPath(
   }
 
   let savedCount = 0;
+  let reviewCount = 0;
+  let linkCount = 0;
   const previews: Array<Record<string, unknown>> = [];
   for (const item of items) {
-    const properties: Record<string, unknown> = {};
-    for (const rule of mappings) {
-      const value = readPath(item, rule.from);
-      if (value === undefined) continue;
-      properties[rule.to] =
-        value === null || typeof value === "object" ? JSON.stringify(value) : value;
+    const { properties, issues, missingRequired } = buildMapProperties(item, scalarRules, schema);
+    if (Object.keys(properties).length === 0 && issues.length === 0) continue;
+
+    // Coercion failure or a missing required property → the object would be
+    // wrong/incomplete, so park it in the review queue instead of writing it.
+    if (issues.length > 0 || missingRequired.length > 0) {
+      const label =
+        identity.map((k) => properties[k]).filter(Boolean).join(" · ") || objectType;
+      await db
+        .query(
+          `INSERT INTO app.channel_review_item
+                  (channel_id, environment_id, span, code, display, decision, confidence, payload)
+           VALUES ($1, $2, $3, $4, $5, 'flag', $6, $7::jsonb)`,
+          [
+            channel.id,
+            channel.environmentId,
+            label,
+            null,
+            objectType,
+            null,
+            JSON.stringify({
+              kind: "map",
+              objectType,
+              identity,
+              properties,
+              issues,
+              missingRequired,
+              item,
+            }),
+          ],
+        )
+        .catch(() => undefined);
+      reviewCount += 1;
+      continue;
     }
-    if (Object.keys(properties).length === 0) continue;
-    await insertObjectInstance(db, typeId, properties, {
+
+    // Upsert on the identity key so retries / looped feeds update, not double.
+    const { id: objectId } = await upsertInstanceByIdentity(db, typeId, identity, properties, {
       source: "channel-map",
       channelId: channel.id,
     });
     savedCount += 1;
+
+    // Link rules: resolve (or create) the target object by key and connect it,
+    // so mapped references become graph edges instead of dead string columns.
+    for (const link of linkRules) {
+      const keyRaw = readPath(item, link.from);
+      if (keyRaw === undefined || keyRaw === null || keyRaw === "") continue;
+      const keyVal = String(keyRaw);
+      const targetTypeRes = await db.query<{ id: string }>(
+        `SELECT id FROM app.ontology_object_types WHERE environment_id = $1 AND name = $2`,
+        [channel.environmentId, link.targetType],
+      );
+      const targetTypeId = targetTypeRes.rows[0]?.id;
+      if (!targetTypeId) continue;
+      let targetId = await findInstanceIdByKey(db, targetTypeId, link.targetKey!, keyVal);
+      if (!targetId && link.createMissing) {
+        targetId = await insertObjectInstance(
+          db,
+          targetTypeId,
+          { [link.targetKey!]: keyVal },
+          { source: "channel-map", channelId: channel.id },
+        );
+      }
+      if (!targetId) continue;
+      const linkTypeId = await getOrCreateLinkType(
+        db,
+        channel.environmentId,
+        link.linkType || `${objectType}_${link.targetType}`,
+        typeId,
+        targetTypeId,
+        "many_to_many",
+      );
+      const created = await insertLinkInstance(db, linkTypeId, objectId, targetId, {
+        source: "channel-map",
+        channelId: channel.id,
+      });
+      if (created) linkCount += 1;
+    }
     if (previews.length < 3) previews.push(properties);
   }
   timings.map = Date.now() - t;
@@ -316,14 +487,17 @@ async function runMapPath(
     stepId: map.id,
     type: "map",
     input: clipIo(items.length === 1 ? items[0] : items),
-    output: clipIo({ objectType, savedCount, sample: previews }),
-    note: `${mappings.length} mapping${mappings.length === 1 ? "" : "s"}`,
+    output: clipIo({ objectType, savedCount, reviewCount, linkCount, sample: previews }),
+    note:
+      `${savedCount} saved` +
+      (linkCount > 0 ? `, ${linkCount} linked` : "") +
+      (reviewCount > 0 ? `, ${reviewCount} to review` : ""),
   });
 
-  if (savedCount === 0) {
+  if (savedCount === 0 && reviewCount === 0) {
     return outcome({
       status: "failed",
-      conceptCount: 0,
+      conceptCount: items.length,
       savedCount: 0,
       flaggedCount: 0,
       error: "No payload keys matched the configured mappings.",
@@ -332,10 +506,10 @@ async function runMapPath(
   }
 
   return outcome({
-    status: "succeeded",
-    conceptCount: 0,
+    status: reviewCount > 0 ? "flagged" : "succeeded",
+    conceptCount: items.length,
     savedCount,
-    flaggedCount: 0,
+    flaggedCount: reviewCount,
     error: null,
   });
 }
