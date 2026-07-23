@@ -320,23 +320,27 @@ export default function ManagerView() {
     setPanel("newLinkType");
   }
 
-  const loadTypes = useCallback(async () => {
-    if (!env) {
-      setTypes([]);
-      setLinkTypes([]);
-      setSummary(null);
-      return;
-    }
-    try {
-      const { types: t, linkTypes: lt } = await listEnvTypes(env);
-      setTypes(t);
-      setLinkTypes(lt);
-      setSelectedType((cur) => cur ?? t[0]?.name ?? null);
-      setSummary(await getOntologySummary(env).catch(() => null));
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  }, [env]);
+  const loadTypes = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!env) {
+        setTypes([]);
+        setLinkTypes([]);
+        setSummary(null);
+        return;
+      }
+      try {
+        const { types: t, linkTypes: lt } = await listEnvTypes(env);
+        setTypes(t);
+        setLinkTypes(lt);
+        setSelectedType((cur) => cur ?? t[0]?.name ?? null);
+        setSummary(await getOntologySummary(env).catch(() => null));
+      } catch (err) {
+        // A background poll must not clobber the screen with a transient error.
+        if (!opts?.silent) setError((err as Error).message);
+      }
+    },
+    [env],
+  );
 
   useEffect(() => {
     setDetail(null);
@@ -454,6 +458,14 @@ export default function ManagerView() {
     const id = setInterval(() => void loadObjects({ silent: true }), 10_000);
     return () => clearInterval(id);
   }, [view, env, loadObjects]);
+
+  // Same for the Discover landing: the type cards + counts are what a user
+  // watches while a feed runs, so poll the type list and summary too.
+  useEffect(() => {
+    if (view !== "discover" || !env) return;
+    const id = setInterval(() => void loadTypes({ silent: true }), 10_000);
+    return () => clearInterval(id);
+  }, [view, env, loadTypes]);
 
   async function openInstance(id: string) {
     if (!env) return;
