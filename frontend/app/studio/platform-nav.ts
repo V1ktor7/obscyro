@@ -33,8 +33,12 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Data",
     icon: "Database",
     capability: "data",
-    href: "/studio/parser",
+    href: "/studio/data",
     groups: [
+      {
+        title: "Workspace",
+        items: [{ label: "Projects & datasets", href: "/studio/data" }],
+      },
       {
         title: "Ingest",
         items: [
@@ -155,6 +159,7 @@ export const NAV_SECTIONS: NavSection[] = [
 export function sectionForPath(pathname: string): NavSection | null {
   const byPrefix: Record<string, string> = {
     "/studio/parser": "data",
+    "/studio/data": "data",
     "/studio/workspace": "pipelines",
     "/studio/manager": "ontology",
     "/studio/lab": "models",
