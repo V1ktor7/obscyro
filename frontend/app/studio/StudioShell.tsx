@@ -119,9 +119,22 @@ export default function StudioShell({ children }: { children: ReactNode }) {
       return;
     }
     let cancelled = false;
-    apiFetch<Identity>("/v1/me")
+    apiFetch<Partial<Identity>>("/v1/identity")
       .then((me) => {
-        if (!cancelled) setIdentity(me);
+        if (cancelled) return;
+        // Normalize: a shape mismatch must degrade the rail, never crash the
+        // whole studio. Missing capabilities => show everything and let the
+        // server reject what the role cannot reach.
+        setIdentity({
+          userId: me.userId ?? "",
+          email: me.email ?? "",
+          name: me.name ?? "",
+          organizationId: me.organizationId ?? null,
+          organizationName: me.organizationName ?? null,
+          roles: Array.isArray(me.roles) ? me.roles : [],
+          capabilities: Array.isArray(me.capabilities) ? me.capabilities : [],
+          dutyConflicts: Array.isArray(me.dutyConflicts) ? me.dutyConflicts : [],
+        });
       })
       .catch(() => {
         if (!cancelled) setIdentity(null);
@@ -321,14 +334,14 @@ export default function StudioShell({ children }: { children: ReactNode }) {
 
         <div className="flex min-h-0 flex-1">
           <Suspense fallback={<div className="w-14 shrink-0 border-r border-[#d3d8de] bg-[#f6f7f9]" />}>
-            <PlatformRail capabilities={identity?.capabilities ?? null} />
+            <PlatformRail capabilities={identity?.capabilities?.length ? identity.capabilities : null} />
           </Suspense>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
         </div>
 
         <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-[#d3d8de] bg-[#f6f7f9] px-3 text-[10.5px] text-[#5f6b7c]">
           <span>{identity?.email ?? "—"}</span>
-          {identity?.roles.length ? <span>· {identity.roles[0]}</span> : null}
+          {identity?.roles?.length ? <span>· {identity.roles[0]}</span> : null}
           <span className="ml-auto">{selectedEnv ?? "no environment"}</span>
           <span>EN · FR</span>
         </footer>
@@ -339,7 +352,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
         onClose={() => setPaletteOpen(false)}
         environments={environments.map((e) => ({ slug: e.slug, name: e.name }))}
         onSelectEnv={(slug) => setSelectedEnv(slug)}
-        capabilities={identity?.capabilities ?? null}
+        capabilities={identity?.capabilities?.length ? identity.capabilities : null}
       />
     </StudioContext.Provider>
   );

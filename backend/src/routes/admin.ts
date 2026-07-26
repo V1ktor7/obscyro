@@ -101,8 +101,10 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
 
   // --- Identity: drives role-filtered navigation in the shell ---------------
+  // Path is /identity, not /me: onboard.ts already owns /v1/me (account +
+  // API key + usage). Two routes on one path is a boot-time crash in Fastify.
   app.get(
-    "/me",
+    "/identity",
     {
       schema: {
         summary: "Current user identity, organization, and effective roles",
