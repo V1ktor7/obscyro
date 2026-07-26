@@ -12,6 +12,8 @@
  * and the Studio "Ontology source" node immediately see new types/instances.
  */
 
+import { useSearchParams } from "next/navigation";
+
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
@@ -92,6 +94,8 @@ import {
 import { listQualityFlags, type QualityFlag } from "../quality-api";
 import SchemaGraphCanvas from "./SchemaGraphCanvas";
 import { useStudio } from "../StudioShell";
+
+const VIEW_NAMES = ["discover","schema","instances","objectTypes","properties","linkTypes","actionTypes","typeGroups","valueSets","functions","proposals","history","health","cleanup","config"] as const;
 
 type View =
   | "discover"
@@ -231,6 +235,16 @@ export default function ManagerView() {
   } = useStudio();
 
   const [view, setView] = useState<View>("discover");
+
+  // The rail's sub-navigation deep-links with ?view=; keep URL and state in
+  // sync both ways so back/forward and shared links work.
+  const searchParams = useSearchParams();
+  const urlView = searchParams?.get("view") ?? null;
+  useEffect(() => {
+    if (urlView && (VIEW_NAMES as readonly string[]).includes(urlView)) {
+      setView(urlView as View);
+    }
+  }, [urlView]);
   const [types, setTypes] = useState<EnvObjectType[]>([]);
   const [linkTypes, setLinkTypes] = useState<EnvLinkType[]>([]);
   const [summary, setSummary] = useState<OntologySummary | null>(null);
