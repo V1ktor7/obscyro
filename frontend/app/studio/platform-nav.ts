@@ -29,6 +29,15 @@ export interface NavSection {
 
 export const NAV_SECTIONS: NavSection[] = [
   {
+    id: "home",
+    label: "Home",
+    icon: "Home",
+    // Always visible: it is how you reach a project without a dropdown.
+    capability: "*",
+    href: "/studio/home",
+    groups: [{ items: [{ label: "Overview", href: "/studio/home" }] }],
+  },
+  {
     id: "data",
     label: "Data",
     icon: "Database",
@@ -158,6 +167,7 @@ export const NAV_SECTIONS: NavSection[] = [
 /** Which section a pathname belongs to (longest prefix wins). */
 export function sectionForPath(pathname: string): NavSection | null {
   const byPrefix: Record<string, string> = {
+    "/studio/home": "home",
     "/studio/parser": "data",
     "/studio/data": "data",
     "/studio/workspace": "pipelines",

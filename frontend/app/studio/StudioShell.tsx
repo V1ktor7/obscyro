@@ -33,7 +33,6 @@ import {
   listEnvTypes,
   type EnvObjectType,
   type EnvironmentSummary,
-  type EnvironmentType,
   type HealthStatus,
 } from "@/lib/platform-api";
 
@@ -75,12 +74,6 @@ export function useStudio(): StudioContextValue {
     throw new Error("useStudio must be used inside <StudioShell>");
   }
   return ctx;
-}
-
-function envTypeBadge(type: EnvironmentType): string {
-  if (type === "reference") return "ref";
-  if (type === "operations") return "ops";
-  return "entity";
 }
 
 function HealthPill({ health }: { health: HealthStatus | "checking" }) {
@@ -231,11 +224,6 @@ export default function StudioShell({ children }: { children: ReactNode }) {
     [environments, selectedEnv],
   );
 
-  const showMultipleOrgs = useMemo(
-    () => new Set(environments.map((e) => e.organizationId)).size > 1,
-    [environments],
-  );
-
   const value = useMemo<StudioContextValue>(
     () => ({
       hasKey,
@@ -276,7 +264,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
     <StudioContext.Provider value={value}>
       <div className="flex h-screen flex-col bg-white text-[#1c2127]">
         <header className="flex h-11 shrink-0 items-center gap-3 border-b border-[#d3d8de] bg-[#f6f7f9] px-3">
-          <Link href="/studio/manager" className="flex items-baseline gap-1.5">
+          <Link href="/studio/home" className="flex items-baseline gap-1.5">
             <span className="text-sm font-medium lowercase tracking-tight">obscyro</span>
           </Link>
 
@@ -301,26 +289,19 @@ export default function StudioShell({ children }: { children: ReactNode }) {
 
           <div className="ml-auto flex items-center gap-2.5">
             <EnvBadge env={currentEnv} />
-            <label className="flex items-center gap-1.5">
-              <span className="sr-only">Environment</span>
-              <select
-                value={selectedEnv ?? ""}
-                onChange={(e) => setSelectedEnv(e.target.value || null)}
-                disabled={environments.length === 0}
-                className="max-w-[200px] rounded border border-[#d3d8de] bg-white px-2 py-1 text-[11.5px] text-[#1c2127] focus:border-[#2d72d2] focus:outline-none disabled:text-[#8f99a8]"
-              >
-                {environments.length === 0 ? (
-                  <option value="">no environments</option>
-                ) : (
-                  environments.map((env) => (
-                    <option key={env.id} value={env.slug}>
-                      {showMultipleOrgs ? `${env.organizationName} · ` : ""}
-                      {env.name} ({envTypeBadge(env.type)})
-                    </option>
-                  ))
-                )}
-              </select>
-            </label>
+            {currentEnv ? (
+              <span className="hidden items-center gap-1.5 text-[11.5px] sm:flex">
+                <Link href="/studio/home" className="text-[#5f6b7c] hover:text-[#1c2127]">
+                  Home
+                </Link>
+                <span className="text-[#8f99a8]">/</span>
+                <span className="font-medium text-[#1c2127]">{currentEnv.name}</span>
+              </span>
+            ) : (
+              <Link href="/studio/home" className="text-[11.5px] text-[#215db0] hover:underline">
+                Choose a project
+              </Link>
+            )}
             <HealthPill health={health} />
             <button
               type="button"

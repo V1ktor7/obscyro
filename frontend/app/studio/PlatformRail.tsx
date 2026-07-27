@@ -12,6 +12,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import {
   Activity,
   Box,
+  Home,
   Database,
   LineChart,
   Map as MapIcon,
@@ -26,6 +27,7 @@ import { cn } from "@/lib/cn";
 import { NAV_SECTIONS, sectionForPath, type NavSection } from "./platform-nav";
 
 const ICONS: Record<string, LucideIcon> = {
+  Home,
   Database,
   Workflow,
   Box,
@@ -45,7 +47,9 @@ export default function PlatformRail({ capabilities }: { capabilities: string[] 
   // Until identity resolves, show everything rather than flashing an empty
   // rail; the server rejects anything the role cannot actually reach.
   const visible = capabilities
-    ? NAV_SECTIONS.filter((s) => capabilities.includes(s.capability))
+    ? NAV_SECTIONS.filter(
+        (s) => s.capability === "*" || capabilities.includes(s.capability),
+      )
     : NAV_SECTIONS;
 
   return (
