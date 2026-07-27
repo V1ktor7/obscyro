@@ -8,13 +8,13 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 
 import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
   Database,
-  FolderPlus,
   Loader2,
   Plus,
   Radio,
@@ -27,7 +27,6 @@ import { cn } from "@/lib/cn";
 import { parseCsvRows } from "../csv-parse";
 import {
   createDataset,
-  createProject,
   getDataset,
   listDatasets,
   listProjects,
@@ -113,22 +112,6 @@ export default function DataView() {
     };
   }, [selected]);
 
-  async function handleNewProject() {
-    if (!selectedEnv) return;
-    const name = window.prompt("Project name");
-    if (!name?.trim()) return;
-    setBusy("project");
-    try {
-      const p = await createProject(selectedEnv, { name: name.trim() });
-      await loadProjects();
-      setActiveProject(p.id);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(null);
-    }
-  }
-
   async function handleNewStream() {
     if (!selectedEnv || !activeProject) return;
     const name = window.prompt("Stream dataset name (e.g. ADT raw)");
@@ -200,15 +183,12 @@ export default function DataView() {
             <span className="text-[10px] text-[#8f99a8]">{p.datasetCount}</span>
           </button>
         ))}
-        <button
-          type="button"
-          onClick={() => void handleNewProject()}
-          disabled={busy !== null}
-          className="flex items-center gap-1 px-2.5 py-1.5 text-[11.5px] text-[#215db0] hover:underline disabled:opacity-50"
-        >
-          <FolderPlus className="h-3.5 w-3.5" />
-          New project
-        </button>
+        <span className="ml-auto self-center pb-1 pr-1 text-[10.5px] text-[#8f99a8]">
+          projects are created on{" "}
+          <Link href="/studio/home" className="text-[#215db0] hover:underline">
+            Home
+          </Link>
+        </span>
       </div>
 
       {error ? (
@@ -312,6 +292,31 @@ export default function DataView() {
                 Datasets sit between a source and the ontology, so what arrives can be
                 previewed and replayed.
               </p>
+              {/* The primary actions belong where the user is already looking. */}
+              <div className="mt-3.5 flex items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={busy !== null || !activeProject}
+                  className="inline-flex items-center gap-1.5 rounded border border-[#2d72d2] bg-white px-3 py-1.5 text-xs font-medium text-[#215db0] hover:bg-[#e7f2fd] disabled:opacity-50"
+                >
+                  {busy === "upload" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Upload className="h-3.5 w-3.5" />
+                  )}
+                  Upload CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleNewStream()}
+                  disabled={busy !== null || !activeProject}
+                  className="inline-flex items-center gap-1.5 rounded border border-[#d3d8de] bg-white px-3 py-1.5 text-xs text-[#1c2127] hover:border-[#2d72d2] disabled:opacity-50"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  New stream
+                </button>
+              </div>
             </div>
           ) : (
             <>
