@@ -108,3 +108,69 @@ export async function runSync(
 export async function listSyncRuns(id: string, limit = 20): Promise<{ runs: SyncRun[] }> {
   return apiFetch(`/v1/syncs/${id}/runs?limit=${limit}`);
 }
+
+// --- Lineage graph + ontology output ---------------------------------------
+
+export interface GraphNode {
+  id: string;
+  type: "source" | "dataset" | "object_type";
+  name: string;
+  subtitle: string;
+  status: "ok" | "warn" | "idle";
+  count: number | null;
+}
+
+export interface GraphEdge {
+  from: string;
+  to: string;
+  kind: string;
+}
+
+export interface ColumnMapRule {
+  from: string;
+  to: string;
+  coerce?: "string" | "number" | "boolean" | "date";
+}
+
+export interface Datasource {
+  id: string;
+  projectId: string;
+  objectTypeId: string;
+  objectTypeName: string;
+  datasetId: string;
+  datasetName: string;
+  identityProperties: string[];
+  columnMapping: ColumnMapRule[];
+  writeback: boolean;
+  lastSyncedAt: string | null;
+  lastStatus: string | null;
+  lastError: string | null;
+}
+
+export async function getGraph(
+  env: string,
+): Promise<{ nodes: GraphNode[]; edges: GraphEdge[] }> {
+  return apiFetch(`/v1/ontology/${enc(env)}/graph`);
+}
+
+export async function listDatasources(env: string): Promise<{ datasources: Datasource[] }> {
+  return apiFetch(`/v1/ontology/${enc(env)}/datasources`);
+}
+
+export async function createDatasource(
+  env: string,
+  body: {
+    objectTypeName: string;
+    datasetId: string;
+    identityProperties: string[];
+    columnMapping: ColumnMapRule[];
+  },
+): Promise<Datasource> {
+  return apiFetch(`/v1/ontology/${enc(env)}/datasources`, { method: "POST", body });
+}
+
+export async function materialize(
+  id: string,
+): Promise<{ read: number; written: number; skipped: number; issues: { row: number; reason: string }[] }> {
+  return apiFetch(`/v1/datasources/${id}/materialize`, { method: "POST", body: {} });
+}
