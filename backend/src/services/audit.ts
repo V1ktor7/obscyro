@@ -15,7 +15,7 @@ export type AuditOutcome = "success" | "denied" | "error";
 
 export interface AuditEvent {
   organizationId?: string | null;
-  environmentId?: string | null;
+  projectId?: string | null;
   actorUserId?: string | null;
   actorEmail?: string | null;
   /** Dot-form verb, e.g. ontology.type.create, admin.role.grant. */
@@ -41,7 +41,7 @@ export async function recordAudit(db: DbClient, event: AuditEvent): Promise<void
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11)`,
       [
         event.organizationId ?? null,
-        event.environmentId ?? null,
+        event.projectId ?? null,
         event.actorUserId ?? null,
         event.actorEmail ?? null,
         event.action,

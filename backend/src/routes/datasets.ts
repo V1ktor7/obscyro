@@ -138,7 +138,7 @@ const datasetRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
       await recordAudit(req.db, {
-        environmentId: env.id,
+        projectId: env.id,
         actorUserId: userId,
         action: "dataset.create",
         resourceType: "dataset",

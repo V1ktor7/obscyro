@@ -641,7 +641,7 @@ const twinSimRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       req.log.info(
-        { environmentId: env.id, modelId, name: trainResult.name, version: trainResult.version, status: trainResult.status },
+        { projectId: env.id, modelId, name: trainResult.name, version: trainResult.version, status: trainResult.status },
         "simulation model training recorded",
       );
 

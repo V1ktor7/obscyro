@@ -14,6 +14,7 @@ import {
   verifyJwtHS256,
   type WebhookAuthType,
 } from "../lib/webhook-auth.js";
+import { ingestPush } from "../services/connectivity.js";
 import { enqueueChannelJobs } from "../services/channel-jobs.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
 
@@ -720,6 +721,19 @@ const ingestRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Durable: the job insert is the handoff — the worker loop picks it up.
       await enqueueChannelJobs(req.db, source.id, payload, "webhook", row.id);
+
+      // Land the raw payload in every stream dataset wired to this source.
+      // Runs alongside the channel path: the dataset is what makes the arrival
+      // durable, replayable and visible in lineage, and a failure here must not
+      // reject the caller's delivery.
+      const records = Array.isArray(payload)
+        ? payload.filter((r): r is Record<string, unknown> => Boolean(r) && typeof r === "object")
+        : payload && typeof payload === "object"
+          ? [payload as Record<string, unknown>]
+          : [{ raw: String(payload ?? "") }];
+      await ingestPush(req.db, source.id, records).catch((err) => {
+        req.log.warn({ err, sourceId: source.id }, "stream dataset landing failed");
+      });
 
       return sendWebhookResponse(reply, config.response, {
         eventId: row.id,

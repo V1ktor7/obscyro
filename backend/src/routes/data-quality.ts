@@ -75,7 +75,7 @@ const dataQualityRoutes: FastifyPluginAsync = async (fastify) => {
       });
       req.log.info(
         {
-          environmentId: env.id,
+          projectId: env.id,
           incremental: result.incremental,
           scannedCount: result.scannedCount,
           flagCount: result.summary.flagCount,
