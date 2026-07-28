@@ -8,7 +8,6 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 
 import {
   AlertTriangle,
@@ -29,10 +28,8 @@ import {
   createDataset,
   getDataset,
   listDatasets,
-  listProjects,
   loadRows,
   type Dataset,
-  type Project,
   type ReferenceEdge,
 } from "../datasets-api";
 import { useStudio } from "../StudioShell";
@@ -43,8 +40,6 @@ const LOAD_CHUNK = 5000;
 export default function DataView() {
   const { hasKey, selectedEnv } = useStudio();
 
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [activeProject, setActiveProject] = useState<string | null>(null);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<{
@@ -58,37 +53,19 @@ export default function DataView() {
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const loadProjects = useCallback(async () => {
-    if (!hasKey || !selectedEnv) {
-      setProjects([]);
-      return;
-    }
-    try {
-      const { projects: p } = await listProjects(selectedEnv);
-      setProjects(p);
-      setActiveProject((cur) => (cur && p.some((x) => x.id === cur) ? cur : p[0]?.id ?? null));
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  }, [hasKey, selectedEnv]);
-
-  useEffect(() => {
-    void loadProjects();
-  }, [loadProjects]);
-
   const loadDatasets = useCallback(async () => {
-    if (!selectedEnv || !activeProject) {
+    if (!selectedEnv) {
       setDatasets([]);
       return;
     }
     try {
-      const { datasets: d } = await listDatasets(selectedEnv, activeProject);
+      const { datasets: d } = await listDatasets(selectedEnv);
       setDatasets(d);
       setSelected((cur) => (cur && d.some((x) => x.id === cur) ? cur : d[0]?.id ?? null));
     } catch (err) {
       setError((err as Error).message);
     }
-  }, [selectedEnv, activeProject]);
+  }, [selectedEnv]);
 
   useEffect(() => {
     void loadDatasets();
@@ -113,12 +90,12 @@ export default function DataView() {
   }, [selected]);
 
   async function handleNewStream() {
-    if (!selectedEnv || !activeProject) return;
+    if (!selectedEnv) return;
     const name = window.prompt("Stream dataset name (e.g. ADT raw)");
     if (!name?.trim()) return;
     setBusy("stream");
     try {
-      await createDataset(selectedEnv, activeProject, { name: name.trim(), kind: "stream" });
+      await createDataset(selectedEnv, { name: name.trim(), kind: "stream" });
       await loadDatasets();
     } catch (err) {
       setError((err as Error).message);
@@ -129,14 +106,14 @@ export default function DataView() {
 
   /** CSV upload -> a table dataset carrying one immutable version. */
   async function handleUpload(file: File) {
-    if (!selectedEnv || !activeProject) return;
+    if (!selectedEnv) return;
     setBusy("upload");
     setError(null);
     try {
       const rows = parseCsvRows(await file.text());
       if (rows.length === 0) throw new Error("No rows found in that file.");
       const name = file.name.replace(/\.[^.]+$/, "");
-      const ds = await createDataset(selectedEnv, activeProject, {
+      const ds = await createDataset(selectedEnv, {
         name,
         kind: "table",
         description: `Uploaded from ${file.name}`,
@@ -161,36 +138,8 @@ export default function DataView() {
     return <p className="p-8 text-sm text-[#8f99a8]">Select an environment first.</p>;
   }
 
-  const project = projects.find((p) => p.id === activeProject) ?? null;
-
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* Project tabs */}
-      <div className="flex shrink-0 items-end gap-1 border-b border-[#d3d8de] bg-[#f6f7f9] px-3 pt-1.5">
-        {projects.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => setActiveProject(p.id)}
-            className={cn(
-              "flex items-center gap-1.5 rounded-t-md border px-3 py-1.5 text-[11.5px]",
-              p.id === activeProject
-                ? "border-[#d3d8de] border-b-white bg-white font-medium text-[#1c2127]"
-                : "border-transparent text-[#5f6b7c] hover:text-[#1c2127]",
-            )}
-          >
-            {p.name}
-            <span className="text-[10px] text-[#8f99a8]">{p.datasetCount}</span>
-          </button>
-        ))}
-        <span className="ml-auto self-center pb-1 pr-1 text-[10.5px] text-[#8f99a8]">
-          projects are created on{" "}
-          <Link href="/studio/home" className="text-[#215db0] hover:underline">
-            Home
-          </Link>
-        </span>
-      </div>
-
       {error ? (
         <p className="mx-3 mt-2 rounded border border-[#f4c0d1] bg-[#fceaef] px-3 py-2 text-xs text-[#a82255]">
           {error}
@@ -258,7 +207,7 @@ export default function DataView() {
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
-              disabled={busy !== null || !activeProject}
+              disabled={busy !== null}
               className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-[11.5px] text-[#215db0] hover:bg-[#f6f7f9] disabled:opacity-50"
             >
               {busy === "upload" ? (
@@ -271,7 +220,7 @@ export default function DataView() {
             <button
               type="button"
               onClick={() => void handleNewStream()}
-              disabled={busy !== null || !activeProject}
+              disabled={busy !== null}
               className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-[11.5px] text-[#215db0] hover:bg-[#f6f7f9] disabled:opacity-50"
             >
               <Plus className="h-3.5 w-3.5" />
@@ -285,7 +234,7 @@ export default function DataView() {
           {!detail ? (
             <div className="rounded-md border border-dashed border-[#d3d8de] bg-[#f6f7f9] px-6 py-12 text-center">
               <p className="text-sm font-medium text-[#1c2127]">
-                {project ? `${project.name} has no datasets yet` : "No project selected"}
+                {`${selectedEnv} has no datasets yet`}
               </p>
               <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-[#5f6b7c]">
                 Upload a CSV to create a versioned table, or add a stream for a live feed.
@@ -297,7 +246,7 @@ export default function DataView() {
                 <button
                   type="button"
                   onClick={() => fileRef.current?.click()}
-                  disabled={busy !== null || !activeProject}
+                  disabled={busy !== null}
                   className="inline-flex items-center gap-1.5 rounded border border-[#2d72d2] bg-white px-3 py-1.5 text-xs font-medium text-[#215db0] hover:bg-[#e7f2fd] disabled:opacity-50"
                 >
                   {busy === "upload" ? (
@@ -310,7 +259,7 @@ export default function DataView() {
                 <button
                   type="button"
                   onClick={() => void handleNewStream()}
-                  disabled={busy !== null || !activeProject}
+                  disabled={busy !== null}
                   className="inline-flex items-center gap-1.5 rounded border border-[#d3d8de] bg-white px-3 py-1.5 text-xs text-[#1c2127] hover:border-[#2d72d2] disabled:opacity-50"
                 >
                   <Plus className="h-3.5 w-3.5" />

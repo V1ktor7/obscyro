@@ -1,21 +1,14 @@
 /**
- * Projects and datasets — the data spine.
+ * Datasets — the data spine.
+ *
+ * A project is an environment (they collapsed in migration 032), so datasets
+ * are addressed directly under /ontology/:env.
  *
  * A dataset is either a `table` (versioned snapshots, for uploads and derived
  * outputs) or a `stream` (append-only with a retention window, for live feeds).
  */
 
 import { apiFetch } from "@/lib/auth";
-
-export interface Project {
-  id: string;
-  name: string;
-  slug: string;
-  description: string | null;
-  status: string;
-  datasetCount: number;
-  createdAt: string;
-}
 
 export interface ColumnDef {
   name: string;
@@ -50,27 +43,12 @@ function enc(s: string): string {
   return encodeURIComponent(s);
 }
 
-export async function listProjects(env: string): Promise<{ projects: Project[] }> {
-  return apiFetch(`/v1/ontology/${enc(env)}/projects`);
-}
-
-export async function createProject(
-  env: string,
-  body: { name: string; description?: string },
-): Promise<Project> {
-  return apiFetch(`/v1/ontology/${enc(env)}/projects`, { method: "POST", body });
-}
-
-export async function listDatasets(
-  env: string,
-  projectId: string,
-): Promise<{ datasets: Dataset[] }> {
-  return apiFetch(`/v1/ontology/${enc(env)}/projects/${projectId}/datasets`);
+export async function listDatasets(env: string): Promise<{ datasets: Dataset[] }> {
+  return apiFetch(`/v1/ontology/${enc(env)}/datasets`);
 }
 
 export async function createDataset(
   env: string,
-  projectId: string,
   body: {
     name: string;
     kind?: "table" | "stream";
@@ -78,10 +56,7 @@ export async function createDataset(
     retentionDays?: number;
   },
 ): Promise<Dataset> {
-  return apiFetch(`/v1/ontology/${enc(env)}/projects/${projectId}/datasets`, {
-    method: "POST",
-    body,
-  });
+  return apiFetch(`/v1/ontology/${enc(env)}/datasets`, { method: "POST", body });
 }
 
 export async function getDataset(

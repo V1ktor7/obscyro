@@ -135,8 +135,7 @@ const homeRoutes: FastifyPluginAsync = async (fastify) => {
                    JOIN app.ontology_object_types t2 ON t2.id = i.object_type_id
                   WHERE t2.environment_id = e.id) AS instance_count,
                 (SELECT COUNT(*) FROM app.dataset d
-                   JOIN app.project pr ON pr.id = d.project_id
-                  WHERE pr.environment_id = e.id) AS dataset_count,
+                  WHERE d.project_id = e.id) AS dataset_count,
                 (SELECT COUNT(*) FROM app.data_channel c
                   WHERE c.environment_id = e.id AND c.status = 'live') AS live_channel_count,
                 GREATEST(

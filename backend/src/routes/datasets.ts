@@ -19,7 +19,10 @@ import { resolveUserIdForApiKey } from "../services/login.js";
 import { resolveEnvironment } from "../services/ontology.js";
 
 // ---------------------------------------------------------------------------
-// Projects, datasets, and the reference graph.
+// Datasets and the reference graph.
+//
+// A project IS an environment (they collapsed in migration 032), so datasets
+// hang directly off /ontology/:env. Project listing lives on Home.
 // ---------------------------------------------------------------------------
 
 const errorEnvelope = z.object({
@@ -62,16 +65,6 @@ const datasetOut = z.object({
   updatedAt: z.string(),
 });
 
-const projectOut = z.object({
-  id: z.string(),
-  name: z.string(),
-  slug: z.string(),
-  description: z.string().nullable(),
-  status: z.string(),
-  datasetCount: z.number(),
-  createdAt: z.string(),
-});
-
 async function requireUserId(req: {
   apiKey?: { id: string } | null;
   db: DbClient;
@@ -83,153 +76,34 @@ async function requireUserId(req: {
   return userId;
 }
 
-/** Confirm a project belongs to an environment the caller can reach. */
-async function assertProjectInEnv(
-  db: DbClient,
-  projectId: string,
-  environmentId: string,
-): Promise<void> {
-  const { rows } = await db.query<{ id: string }>(
-    `SELECT id FROM app.project WHERE id = $1 AND environment_id = $2`,
-    [projectId, environmentId],
-  );
-  if (!rows[0]) throw NotFound("PROJECT_NOT_FOUND", "Project not found in this environment.");
-}
-
 const datasetRoutes: FastifyPluginAsync = async (fastify) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
 
-  // --- Projects -------------------------------------------------------------
-  app.get(
-    "/ontology/:env/projects",
-    {
-      schema: {
-        summary: "List projects in an environment",
-        tags: ["projects"],
-        params: z.object({ env: z.string().min(1) }),
-        response: { 200: z.object({ projects: z.array(projectOut) }), 404: errorEnvelope },
-      },
-    },
-    async (req) => {
-      const userId = await requireUserId(req);
-      const env = await resolveEnvironment(req.db, userId, req.params.env);
-      const { rows } = await req.db.query<{
-        id: string;
-        name: string;
-        slug: string;
-        description: string | null;
-        status: string;
-        dataset_count: string;
-        created_at: Date;
-      }>(
-        `SELECT p.id, p.name, p.slug, p.description, p.status,
-                COUNT(d.id) AS dataset_count, p.created_at
-           FROM app.project p
-           LEFT JOIN app.dataset d ON d.project_id = p.id
-          WHERE p.environment_id = $1
-          GROUP BY p.id
-          ORDER BY p.created_at ASC`,
-        [env.id],
-      );
-      return {
-        projects: rows.map((r) => ({
-          id: r.id,
-          name: r.name,
-          slug: r.slug,
-          description: r.description,
-          status: r.status,
-          datasetCount: Number(r.dataset_count),
-          createdAt: r.created_at.toISOString(),
-        })),
-      };
-    },
-  );
-
-  app.post(
-    "/ontology/:env/projects",
-    {
-      schema: {
-        summary: "Create a project",
-        tags: ["projects"],
-        params: z.object({ env: z.string().min(1) }),
-        body: z.object({
-          name: z.string().min(1).max(120),
-          description: z.string().max(500).optional(),
-        }),
-        response: { 201: projectOut, 404: errorEnvelope },
-      },
-    },
-    async (req, reply) => {
-      const userId = await requireUserId(req);
-      const env = await resolveEnvironment(req.db, userId, req.params.env);
-      const slug =
-        req.body.name
-          .toLowerCase()
-          .trim()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-+|-+$/g, "")
-          .slice(0, 64) || "project";
-      const { rows } = await req.db.query<{
-        id: string;
-        name: string;
-        slug: string;
-        description: string | null;
-        status: string;
-        created_at: Date;
-      }>(
-        `INSERT INTO app.project (environment_id, name, slug, description, created_by)
-         VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (environment_id, slug) DO UPDATE SET updated_at = now()
-         RETURNING id, name, slug, description, status, created_at`,
-        [env.id, req.body.name, slug, req.body.description ?? null, userId],
-      );
-      const p = rows[0]!;
-      await recordAudit(req.db, {
-        environmentId: env.id,
-        actorUserId: userId,
-        action: "project.create",
-        resourceType: "project",
-        resourceId: p.id,
-        metadata: { slug: p.slug },
-      });
-      return reply.code(201).send({
-        id: p.id,
-        name: p.name,
-        slug: p.slug,
-        description: p.description,
-        status: p.status,
-        datasetCount: 0,
-        createdAt: p.created_at.toISOString(),
-      });
-    },
-  );
-
   // --- Datasets -------------------------------------------------------------
   app.get(
-    "/ontology/:env/projects/:projectId/datasets",
+    "/ontology/:env/datasets",
     {
       schema: {
         summary: "List datasets in a project",
         tags: ["datasets"],
-        params: z.object({ env: z.string().min(1), projectId: z.string().uuid() }),
+        params: z.object({ env: z.string().min(1) }),
         response: { 200: z.object({ datasets: z.array(datasetOut) }), 404: errorEnvelope },
       },
     },
     async (req) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
-      await assertProjectInEnv(req.db, req.params.projectId, env.id);
-      return { datasets: await listDatasets(req.db, req.params.projectId) };
+      return { datasets: await listDatasets(req.db, env.id) };
     },
   );
 
   app.post(
-    "/ontology/:env/projects/:projectId/datasets",
+    "/ontology/:env/datasets",
     {
       schema: {
         summary: "Create a dataset (table = versioned, stream = append-only)",
         tags: ["datasets"],
-        params: z.object({ env: z.string().min(1), projectId: z.string().uuid() }),
+        params: z.object({ env: z.string().min(1) }),
         body: z.object({
           name: z.string().min(1).max(120),
           kind: z.enum(["table", "stream"]).default("table"),
@@ -243,9 +117,8 @@ const datasetRoutes: FastifyPluginAsync = async (fastify) => {
     async (req, reply) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
-      await assertProjectInEnv(req.db, req.params.projectId, env.id);
       const ds = await createDataset(req.db, {
-        projectId: req.params.projectId,
+        projectId: env.id,
         name: req.body.name,
         kind: req.body.kind,
         description: req.body.description,
