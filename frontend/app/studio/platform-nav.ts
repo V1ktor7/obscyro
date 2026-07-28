@@ -49,7 +49,14 @@ export const NAV_SECTIONS: NavSection[] = [
         items: [{ label: "Projects & datasets", href: "/studio/data" }],
       },
       {
-        title: "Ingest",
+        title: "Connect",
+        items: [
+          { label: "Sources", href: "/studio/sources?view=sources", view: "sources" },
+          { label: "Syncs", href: "/studio/sources?view=syncs", view: "syncs" },
+        ],
+      },
+      {
+        title: "Legacy",
         items: [
           { label: "Channels", href: "/studio/parser" },
           { label: "Feed simulator", href: "/studio/lab?tab=feed" },
@@ -179,6 +186,7 @@ export function sectionForPath(pathname: string): NavSection | null {
     "/studio/home": "home",
     "/studio/parser": "data",
     "/studio/data": "data",
+    "/studio/sources": "data",
     "/studio/workspace": "pipelines",
     "/studio/manager": "ontology",
     "/studio/lab": "models",
