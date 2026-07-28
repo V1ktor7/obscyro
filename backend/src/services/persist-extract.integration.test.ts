@@ -89,13 +89,18 @@ async function ensureTestLabEnvironment(): Promise<TestEnvContext> {
   const userId = await getUserId();
 
   const { rows: orgRows } = await db.query<{ id: string }>(
-    `SELECT o.id
-       FROM app.organizations o
-       JOIN app.organization_members om ON om.organization_id = o.id
-      WHERE om.user_id = $1
-      ORDER BY CASE WHEN o.slug = 'chum' THEN 0 ELSE 1 END
-      LIMIT 1`,
-    [userId],
+    // Own organization per suite: the ontology is one namespace per org, so
+    // sharing one would let suites overwrite each other's types.
+    `INSERT INTO app.organizations (name, slug, kind)
+     VALUES ($1, $1, 'institution')
+     ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
+     RETURNING id`,
+    ["itest-persist-extract"],
+  );
+  await db.query(
+    `INSERT INTO app.organization_members (organization_id, user_id, role)
+     VALUES ($1, $2, 'owner') ON CONFLICT DO NOTHING`,
+    [orgRows[0]!.id, userId],
   );
   assert.ok(orgRows[0], "user must belong to an organization (run migrations)");
   const organizationId = orgRows[0].id;

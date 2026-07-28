@@ -454,7 +454,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
       }>(
         `SELECT id, name, description, nature, property_schema, created_at
            FROM app.ontology_object_types
-          WHERE environment_id = $1
+          WHERE organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1)
           ORDER BY name ASC`,
         [env.id],
       );
@@ -469,7 +469,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
            FROM app.ontology_link_types lt
            JOIN app.ontology_object_types ft ON ft.id = lt.from_type_id
            JOIN app.ontology_object_types tt ON tt.id = lt.to_type_id
-          WHERE lt.environment_id = $1
+          WHERE lt.organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1)
           ORDER BY lt.name ASC`,
         [env.id],
       );
@@ -581,7 +581,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
                 t.created_at
            FROM app.ontology_object_types t
            LEFT JOIN app.ontology_object_instances oi ON oi.object_type_id = t.id
-          WHERE t.environment_id = $1
+          WHERE t.organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1)
           GROUP BY t.id
           ORDER BY t.name ASC`,
         [env.id],
@@ -590,7 +590,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
       const links = await req.db.query<{ from_type_id: string; to_type_id: string }>(
         `SELECT from_type_id, to_type_id
            FROM app.ontology_link_types
-          WHERE environment_id = $1`,
+          WHERE organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1)`,
         [env.id],
       );
 
@@ -655,7 +655,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
       }>(
         `SELECT id, name, description, nature, property_schema, created_at
            FROM app.ontology_object_types
-          WHERE environment_id = $1 AND name = $2`,
+          WHERE organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1) AND name = $2`,
         [env.id, req.params.name],
       );
       const r = rows[0];
@@ -712,7 +712,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
                         oi.properties, oi.provenance, oi.created_at, oi.updated_at
                    FROM app.ontology_object_instances oi
                    JOIN app.ontology_object_types t ON t.id = oi.object_type_id
-                  WHERE t.environment_id = $1`;
+                  WHERE t.organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1)`;
       if (req.query.type) {
         params.push(req.query.type);
         sql += ` AND t.name = $${params.length}`;
@@ -792,7 +792,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
                 oi.properties, oi.provenance, oi.created_at, oi.updated_at
            FROM app.ontology_object_instances oi
            JOIN app.ontology_object_types t ON t.id = oi.object_type_id
-          WHERE oi.id = $1 AND t.environment_id = $2`,
+          WHERE oi.id = $1 AND t.organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $2)`,
         [req.params.id, env.id],
       );
       const obj = objRes.rows[0];
@@ -814,7 +814,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
                 other.properties AS other_props
            FROM app.ontology_link_instances li
            JOIN app.ontology_link_types lt
-             ON lt.id = li.link_type_id AND lt.environment_id = $2
+             ON lt.id = li.link_type_id AND lt.organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $2)
            JOIN app.ontology_object_instances other
              ON other.id = CASE WHEN li.from_instance_id = $1
                                 THEN li.to_instance_id ELSE li.from_instance_id END
@@ -865,7 +865,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
       const typeRes = await req.db.query<{ id: string }>(
-        `SELECT id FROM app.ontology_object_types WHERE environment_id = $1 AND name = $2`,
+        `SELECT id FROM app.ontology_object_types WHERE organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1) AND name = $2`,
         [env.id, req.body.type],
       );
       const typeId = typeRes.rows[0]?.id;
@@ -910,7 +910,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
       const env = await resolveEnvironment(req.db, userId, req.params.env);
 
       const linkRes = await req.db.query<{ id: string }>(
-        `SELECT id FROM app.ontology_link_types WHERE environment_id = $1 AND name = $2`,
+        `SELECT id FROM app.ontology_link_types WHERE organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1) AND name = $2`,
         [env.id, req.body.linkType],
       );
       const linkTypeId = linkRes.rows[0]?.id;
@@ -923,7 +923,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         `SELECT oi.id
            FROM app.ontology_object_instances oi
            JOIN app.ontology_object_types t ON t.id = oi.object_type_id
-          WHERE t.environment_id = $1 AND oi.id = ANY($2::uuid[])`,
+          WHERE t.organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1) AND oi.id = ANY($2::uuid[])`,
         [env.id, [req.body.fromId, req.body.toId]],
       );
       if (endpoints.rowCount !== new Set([req.body.fromId, req.body.toId]).size) {
@@ -975,7 +975,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
       const env = await resolveEnvironment(req.db, userId, req.params.env);
 
       const existing = await req.db.query(
-        `SELECT 1 FROM app.ontology_object_types WHERE environment_id = $1 AND name = $2`,
+        `SELECT 1 FROM app.ontology_object_types WHERE organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1) AND name = $2`,
         [env.id, req.body.name],
       );
       if (existing.rowCount && existing.rowCount > 0) {
@@ -1087,7 +1087,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
       const result = await req.db.query(
-        `DELETE FROM app.ontology_object_types WHERE environment_id = $1 AND name = $2`,
+        `DELETE FROM app.ontology_object_types WHERE organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1) AND name = $2`,
         [env.id, req.params.name],
       );
       if (result.rowCount === 0) {
@@ -1121,7 +1121,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
 
       const typeRows = await req.db.query<{ id: string; name: string }>(
         `SELECT id, name FROM app.ontology_object_types
-          WHERE environment_id = $1 AND name = ANY($2::text[])`,
+          WHERE organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1) AND name = ANY($2::text[])`,
         [env.id, [req.body.fromType, req.body.toType]],
       );
       const byName = new Map(typeRows.rows.map((t) => [t.name, t.id]));
@@ -1132,7 +1132,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const existing = await req.db.query(
-        `SELECT 1 FROM app.ontology_link_types WHERE environment_id = $1 AND name = $2`,
+        `SELECT 1 FROM app.ontology_link_types WHERE organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1) AND name = $2`,
         [env.id, req.body.name],
       );
       if (existing.rowCount && existing.rowCount > 0) {
@@ -1171,7 +1171,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
       const result = await req.db.query(
-        `DELETE FROM app.ontology_link_types WHERE environment_id = $1 AND name = $2`,
+        `DELETE FROM app.ontology_link_types WHERE organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1) AND name = $2`,
         [env.id, req.params.name],
       );
       if (result.rowCount === 0) {
@@ -1200,7 +1200,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
             SET properties = $1::jsonb, updated_at = NOW()
            FROM app.ontology_object_types t
           WHERE oi.object_type_id = t.id
-            AND t.environment_id = $2
+            AND t.organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $2)
             AND oi.id = $3`,
         [JSON.stringify(req.body.properties), env.id, req.params.id],
       );
@@ -1228,7 +1228,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         `DELETE FROM app.ontology_object_instances oi
           USING app.ontology_object_types t
           WHERE oi.object_type_id = t.id
-            AND t.environment_id = $1
+            AND t.organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1)
             AND oi.id = $2`,
         [env.id, req.params.id],
       );
@@ -1256,7 +1256,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         `DELETE FROM app.ontology_link_instances li
           USING app.ontology_link_types lt
           WHERE li.link_type_id = lt.id
-            AND lt.environment_id = $1
+            AND lt.organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1)
             AND li.id = $2`,
         [env.id, req.params.id],
       );

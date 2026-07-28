@@ -726,7 +726,7 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
     `SELECT oi.id, t.name AS type_name, oi.properties
        FROM app.ontology_object_instances oi
        JOIN app.ontology_object_types t ON t.id = oi.object_type_id
-      WHERE t.environment_id = $1 AND t.nature = 'physical'
+      WHERE t.organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1) AND t.nature = 'physical'
       ORDER BY oi.created_at ASC
       LIMIT 500`,
     [environmentId],
@@ -804,7 +804,7 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
       `SELECT li.id, lt.name AS link_type, li.from_instance_id, li.to_instance_id
          FROM app.ontology_link_instances li
          JOIN app.ontology_link_types lt ON lt.id = li.link_type_id
-        WHERE lt.environment_id = $1
+        WHERE lt.organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1)
           AND li.from_instance_id = ANY($2::uuid[])
           AND li.to_instance_id = ANY($2::uuid[])
           AND li.from_instance_id <> li.to_instance_id`,
@@ -839,7 +839,7 @@ export async function seedTwinDemo(
     `DELETE FROM app.ontology_object_instances oi
        USING app.ontology_object_types t
       WHERE oi.object_type_id = t.id
-        AND t.environment_id = $1
+        AND t.organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1)
         AND oi.provenance->>'source' = 'twin-demo'`,
     [environmentId],
   );
