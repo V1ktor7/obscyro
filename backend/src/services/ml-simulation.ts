@@ -329,7 +329,7 @@ export async function listSimulationModels(
 ): Promise<SimulationModelRow[]> {
   const { rows } = await db.query<{
     id: string;
-    environment_id: string | null;
+    project_id: string | null;
     model_type: string;
     name: string;
     version: string;
@@ -340,10 +340,10 @@ export async function listSimulationModels(
     is_active: boolean;
     created_at: Date;
   }>(
-    `SELECT id, environment_id, model_type, name, version, dataset_version,
+    `SELECT id, project_id, model_type, name, version, dataset_version,
             status, metrics, artifact_uri, is_active, created_at
        FROM app.simulation_model
-      WHERE (environment_id = $1 OR environment_id IS NULL)
+      WHERE (project_id = $1 OR project_id IS NULL)
         AND organization_id = $2
       ORDER BY created_at DESC
       LIMIT $3 OFFSET $4`,
@@ -351,7 +351,7 @@ export async function listSimulationModels(
   );
   return rows.map((r) => ({
     id: r.id,
-    environmentId: r.environment_id,
+    environmentId: r.project_id,
     modelType: r.model_type,
     name: r.name,
     version: r.version,
@@ -381,10 +381,10 @@ export interface RecordModelOptions {
 export async function recordModel(opts: RecordModelOptions): Promise<string> {
   const { rows } = await opts.db.query<{ id: string }>(
     `INSERT INTO app.simulation_model
-       (environment_id, model_type, name, version, dataset_version, status,
+       (project_id, model_type, name, version, dataset_version, status,
         metrics, artifact_uri, owner_user_id, organization_id)
      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10)
-     ON CONFLICT (environment_id, name, version)
+     ON CONFLICT (project_id, name, version)
        DO UPDATE SET status = EXCLUDED.status,
                      metrics = EXCLUDED.metrics,
                      artifact_uri = EXCLUDED.artifact_uri,
@@ -417,7 +417,7 @@ export async function recordTrainingRun(opts: {
 }): Promise<string> {
   const { rows } = await opts.db.query<{ id: string }>(
     `INSERT INTO app.simulation_training_run
-       (model_id, environment_id, status, dataset_kind, metrics, seed, finished_at)
+       (model_id, project_id, status, dataset_kind, metrics, seed, finished_at)
      VALUES ($1, $2, $3, $4, $5::jsonb, $6, NOW())
      RETURNING id`,
     [

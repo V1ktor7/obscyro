@@ -106,8 +106,8 @@ async function ensureTestLabEnvironment(): Promise<TestEnvContext> {
   const organizationId = orgRows[0].id;
 
   const { rows: envRows } = await db.query<{ id: string }>(
-    `INSERT INTO app.ontology_environments
-       (owner_user_id, organization_id, name, slug, environment_type)
+    `INSERT INTO app.project
+       (owner_user_id, organization_id, name, slug, project_kind)
      VALUES ($1, $2, 'Test Lab', $3, 'entity')
      ON CONFLICT (organization_id, slug) DO UPDATE SET name = EXCLUDED.name
      RETURNING id`,
@@ -146,7 +146,7 @@ async function countPatientsWithIdentifier(identifier: string): Promise<number> 
     `SELECT COUNT(*)::text AS count
        FROM app.ontology_object_instances oi
        JOIN app.ontology_object_types ot ON ot.id = oi.object_type_id
-       JOIN app.ontology_environments e ON e.id = ot.environment_id
+       JOIN app.project e ON e.id = ot.project_id
       WHERE e.slug = $1
         AND ot.name = 'Patient'
         AND oi.properties->>'identifier' = $2`,
@@ -160,7 +160,7 @@ async function countFindingsWithCode(snomedCode: string): Promise<number> {
     `SELECT COUNT(*)::text AS count
        FROM app.ontology_object_instances oi
        JOIN app.ontology_object_types ot ON ot.id = oi.object_type_id
-       JOIN app.ontology_environments e ON e.id = ot.environment_id
+       JOIN app.project e ON e.id = ot.project_id
       WHERE e.slug = $1
         AND ot.name = 'ClinicalFinding'
         AND oi.code = $2`,
@@ -175,19 +175,19 @@ async function cleanupTestArtifacts(snomedCodes: string[], patientIds: string[])
       `DELETE FROM app.ontology_link_instances li
         USING app.ontology_object_instances oi,
               app.ontology_object_types ot,
-              app.ontology_environments e
+              app.project e
         WHERE li.to_instance_id = oi.id
           AND oi.object_type_id = ot.id
-          AND ot.environment_id = e.id
+          AND ot.project_id = e.id
           AND e.slug = $1
           AND oi.code = ANY($2::text[])`,
       [TEST_ENV_SLUG, snomedCodes],
     );
     await db.query(
       `DELETE FROM app.ontology_object_instances oi
-        USING app.ontology_object_types ot, app.ontology_environments e
+        USING app.ontology_object_types ot, app.project e
         WHERE oi.object_type_id = ot.id
-          AND ot.environment_id = e.id
+          AND ot.project_id = e.id
           AND e.slug = $1
           AND oi.code = ANY($2::text[])`,
       [TEST_ENV_SLUG, snomedCodes],

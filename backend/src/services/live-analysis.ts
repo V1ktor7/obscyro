@@ -85,7 +85,7 @@ export async function computeMetrics(
             MAX(oi.updated_at) AS newest
        FROM app.ontology_object_instances oi
        JOIN app.ontology_object_types t ON t.id = oi.object_type_id
-      WHERE t.environment_id = $1${where.sql}
+      WHERE t.project_id = $1${where.sql}
       GROUP BY t.name
       ORDER BY COUNT(*) DESC`,
     [environmentId, ...where.params],
@@ -115,7 +115,7 @@ export async function computeMetrics(
             COUNT(*)::text AS count
        FROM app.ontology_object_instances oi
        JOIN app.ontology_object_types t ON t.id = oi.object_type_id
-      WHERE t.environment_id = $1${where.sql}
+      WHERE t.project_id = $1${where.sql}
         AND COALESCE(oi.properties ->> 'status', oi.properties ->> 'occupancy_status') IS NOT NULL
       GROUP BY t.name, value
       ORDER BY t.name, value`,
@@ -159,7 +159,7 @@ export async function scoreInstance(
     `SELECT oi.id, t.name AS type_name, oi.properties
        FROM app.ontology_object_instances oi
        JOIN app.ontology_object_types t ON t.id = oi.object_type_id
-      WHERE t.environment_id = $1 AND oi.id = $2`,
+      WHERE t.project_id = $1 AND oi.id = $2`,
     [environmentId, instanceId],
   );
   const row = rows[0];
@@ -219,7 +219,7 @@ export async function listScoreSpecs(
   }>(
     `SELECT id, name, spec, is_default, created_at
        FROM app.metric_definition
-      WHERE environment_id = $1 AND kind = 'score'
+      WHERE project_id = $1 AND kind = 'score'
       ORDER BY is_default DESC, name ASC`,
     [environmentId],
   );
@@ -250,7 +250,7 @@ export async function upsertScoreSpec(
     if (input.isDefault) {
       await tx.query(
         `UPDATE app.metric_definition SET is_default = FALSE
-          WHERE environment_id = $1 AND kind = 'score' AND name <> $2`,
+          WHERE project_id = $1 AND kind = 'score' AND name <> $2`,
         [environmentId, input.name],
       );
     }
@@ -262,9 +262,9 @@ export async function upsertScoreSpec(
       created_at: Date;
     }>(
       `INSERT INTO app.metric_definition
-         (environment_id, name, kind, spec, is_default, owner_user_id, organization_id)
+         (project_id, name, kind, spec, is_default, owner_user_id, organization_id)
        VALUES ($1, $2, 'score', $3::jsonb, $4, $5, $6)
-       ON CONFLICT (environment_id, name)
+       ON CONFLICT (project_id, name)
        DO UPDATE SET spec = EXCLUDED.spec, is_default = EXCLUDED.is_default
        RETURNING id, name, spec, is_default, created_at`,
       [
@@ -294,7 +294,7 @@ export async function deleteScoreSpec(
 ): Promise<void> {
   const { rowCount } = await db.query(
     `DELETE FROM app.metric_definition
-      WHERE environment_id = $1 AND kind = 'score' AND name = $2`,
+      WHERE project_id = $1 AND kind = 'score' AND name = $2`,
     [environmentId, name],
   );
   if (!rowCount) throw NotFound("SCORE_SPEC_NOT_FOUND", "Score spec not found.");
@@ -312,7 +312,7 @@ export async function resolveScoreSpec(
   if (definition) {
     const { rows } = await db.query<{ spec: ScoreSpec }>(
       `SELECT spec FROM app.metric_definition
-        WHERE environment_id = $1 AND name = $2 AND kind = 'score'`,
+        WHERE project_id = $1 AND name = $2 AND kind = 'score'`,
       [environmentId, definition],
     );
     if (!rows[0]) {
@@ -322,7 +322,7 @@ export async function resolveScoreSpec(
   }
   const { rows } = await db.query<{ spec: ScoreSpec }>(
     `SELECT spec FROM app.metric_definition
-      WHERE environment_id = $1 AND kind = 'score' AND is_default
+      WHERE project_id = $1 AND kind = 'score' AND is_default
       LIMIT 1`,
     [environmentId],
   );

@@ -229,7 +229,7 @@ async function findChannel(
 ): Promise<ChannelRow> {
   const { rows } = await db.query<ChannelRow>(
     `${CHANNEL_SELECT}
-      WHERE c.environment_id = $1 AND c.slug = $2
+      WHERE c.project_id = $1 AND c.slug = $2
       GROUP BY c.id, s.webhook_token`,
     [environmentId, slug],
   );
@@ -259,7 +259,7 @@ const channelsRoutes: FastifyPluginAsync = async (fastify) => {
       const env = await resolveEnvironment(req.db, userId, req.params.env);
       const { rows } = await req.db.query<ChannelRow>(
         `${CHANNEL_SELECT}
-          WHERE c.environment_id = $1
+          WHERE c.project_id = $1
           GROUP BY c.id, s.webhook_token
           ORDER BY c.created_at ASC`,
         [env.id],
@@ -294,9 +294,9 @@ const channelsRoutes: FastifyPluginAsync = async (fastify) => {
       const steps = req.body.steps ?? defaultSteps();
       const { rows } = await req.db.query<{ id: string }>(
         `INSERT INTO app.data_channel
-                (environment_id, owner_user_id, organization_id, name, slug, steps)
+                (project_id, owner_user_id, organization_id, name, slug, steps)
          VALUES ($1, $2, $3, $4, $5, $6::jsonb)
-         ON CONFLICT (environment_id, slug) DO NOTHING
+         ON CONFLICT (project_id, slug) DO NOTHING
          RETURNING id`,
         [env.id, userId, env.organizationId, req.body.name.trim(), slug, JSON.stringify(steps)],
       );
@@ -678,14 +678,14 @@ const reviewRoutes: FastifyPluginAsync = async (fastify) => {
                 c.name AS channel_name, c.slug AS channel_slug
            FROM app.channel_review_item r
            JOIN app.data_channel c ON c.id = r.channel_id
-          WHERE r.environment_id = $1 AND r.status = $2
+          WHERE r.project_id = $1 AND r.status = $2
           ORDER BY r.created_at DESC
           LIMIT $3`,
         [env.id, req.query.status, req.query.limit],
       );
       const pending = await req.db.query<{ n: string }>(
         `SELECT COUNT(*)::bigint AS n FROM app.channel_review_item
-          WHERE environment_id = $1 AND status = 'pending'`,
+          WHERE project_id = $1 AND status = 'pending'`,
         [env.id],
       );
       return {
@@ -747,7 +747,7 @@ const reviewRoutes: FastifyPluginAsync = async (fastify) => {
 
       const typeRes = await req.db.query<{ id: string; property_schema: PropertyDef[] }>(
         `SELECT id, property_schema FROM app.ontology_object_types
-          WHERE environment_id = $1 AND name = $2`,
+          WHERE project_id = $1 AND name = $2`,
         [env.id, objectType],
       );
       const typeId = typeRes.rows[0]?.id ?? null;
@@ -818,7 +818,7 @@ const reviewRoutes: FastifyPluginAsync = async (fastify) => {
                 c.name AS channel_name, c.slug AS channel_slug
            FROM app.channel_review_item r
            JOIN app.data_channel c ON c.id = r.channel_id
-          WHERE r.environment_id = $1 AND r.id = $2`,
+          WHERE r.project_id = $1 AND r.id = $2`,
         [env.id, req.params.id],
       );
       const item = rows[0];

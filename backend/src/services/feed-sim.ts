@@ -217,7 +217,7 @@ export async function resolveStreamUrl(
     `SELECT s.webhook_token
        FROM app.data_channel c
        LEFT JOIN app.ingest_sources s ON s.id = c.source_id
-      WHERE c.environment_id = $1 AND c.slug = $2`,
+      WHERE c.project_id = $1 AND c.slug = $2`,
     [environmentId, config.channelSlug],
   );
   const token = rows[0]?.webhook_token;
@@ -243,7 +243,7 @@ let schedulerStarted = false;
 
 interface FeedStreamRow {
   id: string;
-  environment_id: string;
+  project_id: string;
   name: string;
   config: FeedStreamConfig;
   sent_count: string;
@@ -258,7 +258,7 @@ async function siteNames(db: DbClient, environmentId: string): Promise<string[]>
     `SELECT oi.properties
        FROM app.ontology_object_instances oi
        JOIN app.ontology_object_types t ON t.id = oi.object_type_id
-      WHERE t.environment_id = $1 AND t.nature = 'physical'
+      WHERE t.project_id = $1 AND t.nature = 'physical'
       LIMIT 20`,
     [environmentId],
   );
@@ -295,7 +295,7 @@ async function tickStream(db: DbClient, stream: FeedStreamRow, budget: number): 
     return 0;
   }
 
-  const url = await resolveStreamUrl(db, stream.environment_id, config);
+  const url = await resolveStreamUrl(db, stream.project_id, config);
   if (!url) {
     await db.query(
       `UPDATE app.feed_stream SET status = 'paused', last_error = 'no webhook target', updated_at = NOW() WHERE id = $1`,
@@ -304,7 +304,7 @@ async function tickStream(db: DbClient, stream: FeedStreamRow, budget: number): 
     return 0;
   }
 
-  const sites = await siteNames(db, stream.environment_id);
+  const sites = await siteNames(db, stream.project_id);
   const datasetRows =
     config.templateMode === "dataset" ? config.datasets.flatMap((d) => d.rows) : [];
   let datasetIndex = stream.dataset_index;
@@ -469,7 +469,7 @@ export function startFeedScheduler(pool: Pool, log: { info: (msg: string) => voi
           if (!(await tryAcquireLeadership())) return;
         }
         const { rows } = await pool.query<FeedStreamRow>(
-          `SELECT id, environment_id, name, config, sent_count, dataset_index,
+          `SELECT id, project_id, name, config, sent_count, dataset_index,
                   surge_until, surge_factor, stall_until
              FROM app.feed_stream
             WHERE status = 'running'

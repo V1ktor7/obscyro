@@ -380,7 +380,7 @@ async function runMapPath(
 
   const typeRes = await db.query<{ id: string; property_schema: PropertyDef[] }>(
     `SELECT id, property_schema FROM app.ontology_object_types
-      WHERE environment_id = $1 AND name = $2`,
+      WHERE project_id = $1 AND name = $2`,
     [channel.environmentId, objectType],
   );
   const typeId = typeRes.rows[0]?.id;
@@ -412,7 +412,7 @@ async function runMapPath(
       await db
         .query(
           `INSERT INTO app.channel_review_item
-                  (channel_id, environment_id, span, code, display, decision, confidence, payload)
+                  (channel_id, project_id, span, code, display, decision, confidence, payload)
            VALUES ($1, $2, $3, $4, $5, 'flag', $6, $7::jsonb)`,
           [
             channel.id,
@@ -451,7 +451,7 @@ async function runMapPath(
       if (keyRaw === undefined || keyRaw === null || keyRaw === "") continue;
       const keyVal = String(keyRaw);
       const targetTypeRes = await db.query<{ id: string }>(
-        `SELECT id FROM app.ontology_object_types WHERE environment_id = $1 AND name = $2`,
+        `SELECT id FROM app.ontology_object_types WHERE project_id = $1 AND name = $2`,
         [channel.environmentId, link.targetType],
       );
       const targetTypeId = targetTypeRes.rows[0]?.id;
@@ -751,7 +751,7 @@ export async function executeChannel(
         await db
           .query(
             `INSERT INTO app.channel_review_item
-                    (channel_id, environment_id, span, code, display, decision, confidence, payload)
+                    (channel_id, project_id, span, code, display, decision, confidence, payload)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)`,
             [
               channel.id,
@@ -794,7 +794,7 @@ export async function executeChannel(
       }
 
       const envRes = await db.query<{ id: string; slug: string; name: string }>(
-        `SELECT id, slug, name FROM app.ontology_environments WHERE id = $1`,
+        `SELECT id, slug, name FROM app.project WHERE id = $1`,
         [channel.environmentId],
       );
       const env = envRes.rows[0];

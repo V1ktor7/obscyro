@@ -23,25 +23,15 @@ import {
   Box,
   Braces,
   ChevronDown,
-  ChevronsUpDown,
-  Compass,
-  Eraser,
   FlaskConical,
   GitFork,
   GitPullRequest,
-  HeartPulse,
-  History,
-  LayoutGrid,
-  Link2,
   Pill,
   Plus,
-  Rows3,
   Search,
-  Settings,
   Sigma,
   Star,
   Stethoscope,
-  Table2,
   User,
   Zap,
   type LucideIcon,
@@ -514,7 +504,6 @@ export default function ManagerView() {
     );
   }
 
-  const totals = summary?.totals;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[#f6f7f9]">
@@ -597,154 +586,6 @@ export default function ManagerView() {
       </div>
 
       <div className="flex min-h-0 flex-1">
-        {/* Left rail — environment switcher, navigation, resources */}
-        <aside className="flex w-56 shrink-0 flex-col overflow-y-auto border-r border-[#d3d8de] bg-white">
-          <div className="relative border-b border-[#e5e8eb]">
-            <div className="flex items-center gap-2 px-3 py-2.5">
-              <div className="min-w-0">
-                <p className="truncate text-[12.5px] font-semibold text-[#1c2127]">
-                  {envInfo?.name ?? env ?? "No environment"}
-                </p>
-                <p className="truncate text-[11px] text-[#8f99a8]">
-                  {envInfo
-                    ? `${envInfo.organizationName} · ${envInfo.type}`
-                    : "Select an environment"}
-                </p>
-              </div>
-              <ChevronsUpDown className="ml-auto h-3.5 w-3.5 shrink-0 text-[#8f99a8]" />
-            </div>
-            <select
-              value={env ?? ""}
-              onChange={(e) => setSelectedEnv(e.target.value || null)}
-              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-              aria-label="Switch environment"
-            >
-              {environments.length === 0 ? (
-                <option value="">No environments</option>
-              ) : (
-                environments.map((e) => (
-                  <option key={e.id} value={e.slug}>
-                    {e.name} ({e.organizationName})
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-
-          <nav className="flex flex-col gap-0.5 p-2">
-            <RailItem
-              icon={Compass}
-              label="Discover"
-              active={view === "discover"}
-              onClick={() => setView("discover")}
-            />
-            <RailItem
-              icon={GitFork}
-              label="Schema graph"
-              active={view === "schema"}
-              onClick={() => setView("schema")}
-            />
-            <RailItem
-              icon={Table2}
-              label="Instances"
-              active={view === "instances"}
-              onClick={() => setView("instances")}
-            />
-            <RailItem
-              icon={GitPullRequest}
-              label="Proposals"
-              active={view === "proposals"}
-              onClick={() => setView("proposals")}
-            />
-            <RailItem
-              icon={History}
-              label="History"
-              active={view === "history"}
-              onClick={() => setView("history")}
-            />
-          </nav>
-
-          <div className="px-4 pb-1 pt-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[#8f99a8]">
-            Resources
-          </div>
-          <nav className="flex flex-col gap-0.5 px-2 pb-2">
-            <RailItem
-              icon={Box}
-              label="Object types"
-              count={totals?.objectTypes ?? types.length}
-              active={view === "objectTypes"}
-              onClick={() => setView("objectTypes")}
-            />
-            <RailItem
-              icon={Rows3}
-              label="Properties"
-              count={totals?.properties}
-              active={view === "properties"}
-              onClick={() => setView("properties")}
-            />
-            <RailItem
-              icon={Link2}
-              label="Link types"
-              count={totals?.linkTypes ?? linkTypes.length}
-              active={view === "linkTypes"}
-              onClick={() => setView("linkTypes")}
-            />
-            <RailItem
-              icon={Zap}
-              label="Action types"
-              active={view === "actionTypes"}
-              onClick={() => setView("actionTypes")}
-            />
-            <RailItem
-              icon={LayoutGrid}
-              label="Type groups"
-              count={typeGroups.length}
-              active={view === "typeGroups"}
-              onClick={() => setView("typeGroups")}
-            />
-            <RailItem
-              icon={Braces}
-              label="Value sets"
-              active={view === "valueSets"}
-              onClick={() => setView("valueSets")}
-            />
-            <RailItem
-              icon={Sigma}
-              label="Functions"
-              active={view === "functions"}
-              onClick={() => setView("functions")}
-            />
-          </nav>
-
-          <div className="px-4 pb-1 pt-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[#8f99a8]">
-            Maintenance
-          </div>
-          <nav className="flex flex-col gap-0.5 px-2 pb-2">
-            <RailItem
-              icon={HeartPulse}
-              label="Health issues"
-              count={totals?.openFlags ?? 0}
-              danger={(totals?.openFlags ?? 0) > 0}
-              active={view === "health"}
-              onClick={() => setView("health")}
-            />
-            <RailItem
-              icon={Eraser}
-              label="Cleanup"
-              active={view === "cleanup"}
-              onClick={() => setView("cleanup")}
-            />
-          </nav>
-
-          <div className="mt-auto border-t border-[#e5e8eb] p-2">
-            <RailItem
-              icon={Settings}
-              label="Ontology configuration"
-              active={view === "config"}
-              onClick={() => setView("config")}
-            />
-          </div>
-        </aside>
 
         {/* Center — discover / schema / instances */}
       <div className="flex min-w-0 flex-1 flex-col bg-white">
@@ -1056,48 +897,6 @@ export default function ManagerView() {
 // ---------------------------------------------------------------------------
 // Left rail item
 // ---------------------------------------------------------------------------
-
-function RailItem({
-  icon: Icon,
-  label,
-  count,
-  danger,
-  active,
-  onClick,
-}: {
-  icon: LucideIcon;
-  label: string;
-  count?: number;
-  danger?: boolean;
-  active?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex items-center gap-2 rounded px-2 py-1.5 text-left text-xs transition-colors",
-        active
-          ? "bg-[#e7f2fd] font-medium text-[#215db0]"
-          : "text-[#404854] hover:bg-[#f6f7f9]",
-      )}
-    >
-      <Icon className={cn("h-3.5 w-3.5 shrink-0", active ? "text-[#2d72d2]" : "text-[#8f99a8]")} />
-      <span className="truncate">{label}</span>
-      {count !== undefined ? (
-        <span
-          className={cn(
-            "ml-auto shrink-0 rounded px-1.5 text-[10px]",
-            danger ? "bg-rose-50 text-rose-700" : "bg-[#f6f7f9] text-[#5f6b7c]",
-          )}
-        >
-          {count.toLocaleString()}
-        </span>
-      ) : null}
-    </button>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Discover — Foundry-style landing page of object type cards

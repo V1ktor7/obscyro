@@ -166,7 +166,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
       }>(
         `SELECT id, name, version, status, spec, metrics, is_active, created_at
            FROM app.simulation_model
-          WHERE environment_id = $1 AND model_type = 'causal_arx'
+          WHERE project_id = $1 AND model_type = 'causal_arx'
           ORDER BY created_at DESC`,
         [env.id],
       );
@@ -229,7 +229,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
       const version = await nextModelVersion(req.db, env.id, req.body.name.trim());
       const { rows } = await req.db.query<{ id: string; created_at: Date }>(
         `INSERT INTO app.simulation_model
-                (environment_id, model_type, name, version, status, metrics, spec,
+                (project_id, model_type, name, version, status, metrics, spec,
                  owner_user_id, organization_id, is_active)
          VALUES ($1, 'causal_arx', $2, $3, 'ready', $4::jsonb, $5::jsonb, $6, $7, TRUE)
          RETURNING id, created_at`,
@@ -246,7 +246,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
       // Older versions of the same name are no longer the active one.
       await req.db.query(
         `UPDATE app.simulation_model SET is_active = FALSE
-          WHERE environment_id = $1 AND model_type = 'causal_arx'
+          WHERE project_id = $1 AND model_type = 'causal_arx'
             AND name = $2 AND id <> $3`,
         [env.id, req.body.name.trim(), rows[0]!.id],
       );
@@ -281,7 +281,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
       const env = await resolveEnvironment(req.db, userId, req.params.env);
       const result = await req.db.query(
         `DELETE FROM app.simulation_model
-          WHERE environment_id = $1 AND id = $2 AND model_type = 'causal_arx'`,
+          WHERE project_id = $1 AND id = $2 AND model_type = 'causal_arx'`,
         [env.id, req.params.id],
       );
       if (result.rowCount === 0) throw NotFound("MODEL_NOT_FOUND", "Model not found.");

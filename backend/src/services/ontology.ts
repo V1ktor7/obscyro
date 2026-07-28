@@ -85,12 +85,12 @@ export async function findEnvironment(
     slug: string;
     owner_user_id: string;
     organization_id: string;
-    environment_type: EnvironmentType;
+    project_kind: EnvironmentType;
     created_at: Date;
   }>(
     `SELECT e.id, e.name, e.slug, e.owner_user_id, e.organization_id,
-            e.environment_type, e.created_at
-       FROM app.ontology_environments e
+            e.project_kind, e.created_at
+       FROM app.project e
        JOIN app.organization_members om ON om.organization_id = e.organization_id
       WHERE om.user_id = $1 AND ${byUuid ? "e.id = $2" : "e.slug = $2"}`,
     [userId, envParam],
@@ -103,7 +103,7 @@ export async function findEnvironment(
     slug: row.slug,
     ownerUserId: row.owner_user_id,
     organizationId: row.organization_id,
-    environmentType: row.environment_type,
+    environmentType: row.project_kind,
     createdAt: row.created_at,
   };
 }
@@ -167,9 +167,9 @@ export async function getOrCreateObjectType(
 ): Promise<string> {
   const { rows } = await db.query<{ id: string }>(
     `INSERT INTO app.ontology_object_types
-            (environment_id, organization_id, name, description, property_schema)
+            (project_id, organization_id, name, description, property_schema)
      SELECT $1, e.organization_id, $2, $3, $4::jsonb
-       FROM app.ontology_environments e
+       FROM app.project e
       WHERE e.id = $1
      ON CONFLICT (organization_id, name) DO UPDATE SET name = EXCLUDED.name
      RETURNING id`,
@@ -192,9 +192,9 @@ export async function getOrCreateLinkType(
 ): Promise<string> {
   const { rows } = await db.query<{ id: string }>(
     `INSERT INTO app.ontology_link_types
-            (environment_id, organization_id, name, from_type_id, to_type_id, cardinality)
+            (project_id, organization_id, name, from_type_id, to_type_id, cardinality)
      SELECT $1, e.organization_id, $2, $3, $4, $5
-       FROM app.ontology_environments e
+       FROM app.project e
       WHERE e.id = $1
      ON CONFLICT (organization_id, name) DO UPDATE SET name = EXCLUDED.name
      RETURNING id`,
@@ -330,7 +330,7 @@ export async function createPipelineRun(
   source = "rest",
 ): Promise<string> {
   const { rows } = await db.query<{ id: string }>(
-    `INSERT INTO app.ontology_pipeline_run (environment_id, source, input_hash, status)
+    `INSERT INTO app.ontology_pipeline_run (project_id, source, input_hash, status)
      VALUES ($1, $2, $3, 'running')
      RETURNING id`,
     [environmentId, source, inputHash],
@@ -361,7 +361,7 @@ export async function insertFailedPipelineRun(
   source = "rest",
 ): Promise<void> {
   await db.query(
-    `INSERT INTO app.ontology_pipeline_run (environment_id, source, input_hash, status, finished_at)
+    `INSERT INTO app.ontology_pipeline_run (project_id, source, input_hash, status, finished_at)
      VALUES ($1, $2, $3, 'failed', NOW())`,
     [environmentId, source, inputHash],
   );
@@ -396,7 +396,7 @@ export async function listInstancesForEnv(
                     oi.created_at, oi.updated_at
                FROM app.ontology_object_instances oi
                JOIN app.ontology_object_types t ON t.id = oi.object_type_id
-              WHERE t.organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1)`;
+              WHERE t.organization_id = (SELECT organization_id FROM app.project WHERE id = $1)`;
   if (opts?.type) {
     params.push(opts.type);
     sql += ` AND t.name = $${params.length}`;
@@ -456,7 +456,7 @@ export async function listLinksForEnv(
        JOIN app.ontology_object_types ft ON ft.id = fi.object_type_id
        JOIN app.ontology_object_instances ti ON ti.id = li.to_instance_id
        JOIN app.ontology_object_types tt ON tt.id = ti.object_type_id
-      WHERE lt.organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1)`,
+      WHERE lt.organization_id = (SELECT organization_id FROM app.project WHERE id = $1)`,
     [environmentId],
   );
   return rows.map((r) => ({
@@ -478,7 +478,7 @@ export async function countInstancesForEnv(
     `SELECT COUNT(*)::text AS count
        FROM app.ontology_object_instances oi
        JOIN app.ontology_object_types t ON t.id = oi.object_type_id
-      WHERE t.organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1)`,
+      WHERE t.organization_id = (SELECT organization_id FROM app.project WHERE id = $1)`,
     [environmentId],
   );
   return Number(rows[0]?.count ?? 0);
@@ -504,7 +504,7 @@ export async function importEnvironment(
   }>(
     `SELECT id, name, description, nature, property_schema
        FROM app.ontology_object_types
-      WHERE organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1)`,
+      WHERE organization_id = (SELECT organization_id FROM app.project WHERE id = $1)`,
     [sourceEnvId],
   );
 
@@ -535,7 +535,7 @@ export async function importEnvironment(
     `SELECT oi.id, oi.object_type_id, oi.properties, oi.provenance
        FROM app.ontology_object_instances oi
        JOIN app.ontology_object_types t ON t.id = oi.object_type_id
-      WHERE t.organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1)
+      WHERE t.organization_id = (SELECT organization_id FROM app.project WHERE id = $1)
       ORDER BY oi.created_at ASC
       LIMIT 10000`,
     [sourceEnvId],
@@ -571,7 +571,7 @@ export async function importEnvironment(
   }>(
     `SELECT id, name, from_type_id, to_type_id, cardinality
        FROM app.ontology_link_types
-      WHERE organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1)`,
+      WHERE organization_id = (SELECT organization_id FROM app.project WHERE id = $1)`,
     [sourceEnvId],
   );
 
@@ -600,7 +600,7 @@ export async function importEnvironment(
     `SELECT li.link_type_id, li.from_instance_id, li.to_instance_id, li.provenance
        FROM app.ontology_link_instances li
        JOIN app.ontology_link_types lt ON lt.id = li.link_type_id
-      WHERE lt.organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1)
+      WHERE lt.organization_id = (SELECT organization_id FROM app.project WHERE id = $1)
       LIMIT 20000`,
     [sourceEnvId],
   );

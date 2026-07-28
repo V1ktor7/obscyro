@@ -91,6 +91,15 @@ export const NAV_SECTIONS: NavSection[] = [
         ],
       },
       {
+        title: "Resources",
+        items: [
+          { label: "Action types", href: "/studio/manager?view=actionTypes", view: "actionTypes" },
+          { label: "Type groups", href: "/studio/manager?view=typeGroups", view: "typeGroups" },
+          { label: "Value sets", href: "/studio/manager?view=valueSets", view: "valueSets" },
+          { label: "Functions", href: "/studio/manager?view=functions", view: "functions" },
+        ],
+      },
+      {
         title: "Maintenance",
         items: [
           { label: "Health issues", href: "/studio/manager?view=health", view: "health" },

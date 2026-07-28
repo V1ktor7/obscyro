@@ -66,8 +66,8 @@ async function ensureTestLabEnvironment(): Promise<{
   const organizationId = orgRows[0].id;
 
   const { rows: envRows } = await db.query<{ id: string }>(
-    `INSERT INTO app.ontology_environments
-       (owner_user_id, organization_id, name, slug, environment_type)
+    `INSERT INTO app.project
+       (owner_user_id, organization_id, name, slug, project_kind)
      VALUES ($1, $2, 'Test Lab', $3, 'entity')
      ON CONFLICT (organization_id, slug) DO UPDATE SET name = EXCLUDED.name
      RETURNING id`,
@@ -195,7 +195,7 @@ describe("live-analysis integration (test-lab)", () => {
     assert.equal(score.breakdown.respiratory_rate, 7);
 
     await db.query(
-      `DELETE FROM app.metric_definition WHERE environment_id = $1 AND name = $2`,
+      `DELETE FROM app.metric_definition WHERE project_id = $1 AND name = $2`,
       [ctx.environmentId, "custom-default"],
     );
   });

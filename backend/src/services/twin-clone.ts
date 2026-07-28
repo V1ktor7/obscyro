@@ -39,7 +39,7 @@ export async function getScenarioForEnv(
 ): Promise<ScenarioRow> {
   const { rows } = await db.query<{
     id: string;
-    environment_id: string;
+    project_id: string;
     name: string;
     params: Record<string, unknown>;
     root_unit_instance_id: string | null;
@@ -47,17 +47,17 @@ export async function getScenarioForEnv(
     organization_id: string;
     created_at: Date;
   }>(
-    `SELECT id, environment_id, name, params, root_unit_instance_id,
+    `SELECT id, project_id, name, params, root_unit_instance_id,
             owner_user_id, organization_id, created_at
        FROM app.scenario
-      WHERE id = $1 AND environment_id = $2`,
+      WHERE id = $1 AND project_id = $2`,
     [scenarioId, environmentId],
   );
   const r = rows[0];
   if (!r) throw NotFound("SCENARIO_NOT_FOUND", "Scenario not found in this environment.");
   return {
     id: r.id,
-    environmentId: r.environment_id,
+    environmentId: r.project_id,
     name: r.name,
     params: r.params ?? {},
     rootUnitInstanceId: r.root_unit_instance_id,
@@ -76,7 +76,7 @@ export async function listScenarios(
   const offset = clampOffset(page?.offset);
   const { rows } = await db.query<{
     id: string;
-    environment_id: string;
+    project_id: string;
     name: string;
     params: Record<string, unknown>;
     root_unit_instance_id: string | null;
@@ -84,17 +84,17 @@ export async function listScenarios(
     organization_id: string;
     created_at: Date;
   }>(
-    `SELECT id, environment_id, name, params, root_unit_instance_id,
+    `SELECT id, project_id, name, params, root_unit_instance_id,
             owner_user_id, organization_id, created_at
        FROM app.scenario
-      WHERE environment_id = $1
+      WHERE project_id = $1
       ORDER BY created_at DESC
       LIMIT $2 OFFSET $3`,
     [environmentId, limit, offset],
   );
   return rows.map((r) => ({
     id: r.id,
-    environmentId: r.environment_id,
+    environmentId: r.project_id,
     name: r.name,
     params: r.params ?? {},
     rootUnitInstanceId: r.root_unit_instance_id,
@@ -166,7 +166,7 @@ export async function cloneSubtree(
 
     const { rows: scenarioRows } = await tx.query<{ id: string }>(
       `INSERT INTO app.scenario
-         (environment_id, name, params, root_unit_instance_id, owner_user_id, organization_id)
+         (project_id, name, params, root_unit_instance_id, owner_user_id, organization_id)
        VALUES ($1, $2, '{}'::jsonb, $3, $4, $5)
        RETURNING id`,
       [environmentId, name, rootUnitId, userId, organizationId],

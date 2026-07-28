@@ -69,7 +69,7 @@ export async function listSignals(db: DbClient, environmentId: string): Promise<
   const signals: SignalInfo[] = [];
 
   const types = await db.query<{ id: string; name: string }>(
-    `SELECT id, name FROM app.ontology_object_types WHERE environment_id = $1 ORDER BY name`,
+    `SELECT id, name FROM app.ontology_object_types WHERE project_id = $1 ORDER BY name`,
     [environmentId],
   );
   for (const t of types.rows) {
@@ -103,7 +103,7 @@ export async function listSignals(db: DbClient, environmentId: string): Promise<
   }
 
   const channels = await db.query<{ slug: string; name: string }>(
-    `SELECT slug, name FROM app.data_channel WHERE environment_id = $1 ORDER BY name`,
+    `SELECT slug, name FROM app.data_channel WHERE project_id = $1 ORDER BY name`,
     [environmentId],
   );
   for (const c of channels.rows) {
@@ -153,7 +153,7 @@ export async function buildSeries(
           `SELECT date_trunc('hour', oi.created_at) AS h, COUNT(*) AS v
              FROM app.ontology_object_instances oi
              JOIN app.ontology_object_types t ON t.id = oi.object_type_id
-            WHERE t.environment_id = $1 AND t.name = $2
+            WHERE t.project_id = $1 AND t.name = $2
               AND oi.created_at >= NOW() - make_interval(hours => $3)
             GROUP BY 1`,
           [environmentId, typeName, windowHours],
@@ -165,7 +165,7 @@ export async function buildSeries(
                   AVG((oi.properties->>$4)::numeric) AS v
              FROM app.ontology_object_instances oi
              JOIN app.ontology_object_types t ON t.id = oi.object_type_id
-            WHERE t.environment_id = $1 AND t.name = $2
+            WHERE t.project_id = $1 AND t.name = $2
               AND oi.created_at >= NOW() - make_interval(hours => $3)
               AND oi.properties->>$4 ~ '^-?[0-9]+(\\.[0-9]+)?$'
             GROUP BY 1`,
@@ -191,7 +191,7 @@ export async function buildSeries(
                   COALESCE(SUM(r.flagged_count), 0) AS flagged
              FROM app.data_channel_run r
              JOIN app.data_channel c ON c.id = r.channel_id
-            WHERE c.environment_id = $1 AND c.slug = $2
+            WHERE c.project_id = $1 AND c.slug = $2
               AND r.created_at >= NOW() - make_interval(hours => $3)
             GROUP BY 1`,
           [environmentId, slug, windowHours],
@@ -350,13 +350,13 @@ export async function scanCausality(
   }
   const kept = Array.from(byPair.values()).sort((a, b) => b.strength - a.strength);
 
-  await db.query(`DELETE FROM app.causality_edge WHERE environment_id = $1`, [environmentId]);
+  await db.query(`DELETE FROM app.causality_edge WHERE project_id = $1`, [environmentId]);
   for (const e of kept) {
     await db.query(
       `INSERT INTO app.causality_edge
-              (environment_id, from_signal, to_signal, lag_hours, strength, confidence, sample_count)
+              (project_id, from_signal, to_signal, lag_hours, strength, confidence, sample_count)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
-       ON CONFLICT (environment_id, from_signal, to_signal) DO UPDATE
+       ON CONFLICT (project_id, from_signal, to_signal) DO UPDATE
           SET lag_hours = EXCLUDED.lag_hours, strength = EXCLUDED.strength,
               confidence = EXCLUDED.confidence, sample_count = EXCLUDED.sample_count,
               computed_at = NOW()`,
@@ -382,7 +382,7 @@ export async function listCausalityEdges(
   }>(
     `SELECT from_signal, to_signal, lag_hours, strength, confidence, sample_count, computed_at
        FROM app.causality_edge
-      WHERE environment_id = $1
+      WHERE project_id = $1
       ORDER BY strength DESC`,
     [environmentId],
   );
@@ -733,7 +733,7 @@ export async function nextModelVersion(
 ): Promise<string> {
   const { rows } = await db.query<{ count: string }>(
     `SELECT COUNT(*) AS count FROM app.simulation_model
-      WHERE environment_id = $1 AND name = $2`,
+      WHERE project_id = $1 AND name = $2`,
     [environmentId, name],
   );
   return `v${Number(rows[0]?.count ?? 0) + 1}`;
@@ -752,7 +752,7 @@ export async function getLabModel(
     metrics: ModelMetrics;
   }>(
     `SELECT id, name, version, spec, metrics FROM app.simulation_model
-      WHERE environment_id = $1 AND id = $2 AND model_type = 'causal_arx'`,
+      WHERE project_id = $1 AND id = $2 AND model_type = 'causal_arx'`,
     [environmentId, modelId],
   );
   const row = rows[0];

@@ -36,7 +36,7 @@ export async function recordAudit(db: DbClient, event: AuditEvent): Promise<void
   await db
     .query(
       `INSERT INTO app.audit_log
-              (organization_id, environment_id, actor_user_id, actor_email,
+              (organization_id, project_id, actor_user_id, actor_email,
                action, resource_type, resource_id, outcome, metadata, ip, user_agent)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11)`,
       [

@@ -406,7 +406,7 @@ export async function upsertFlag(
   // open findings are refreshed in place via the partial unique index.
   await db.query(
     `INSERT INTO app.data_quality_flag
-       (environment_id, instance_id, layer, severity, code, message, observed_value, status)
+       (project_id, instance_id, layer, severity, code, message, observed_value, status)
      SELECT $1, $2, $3, $4, $5, $6, $7, 'open'
       WHERE NOT EXISTS (
         SELECT 1 FROM app.data_quality_flag
@@ -438,7 +438,7 @@ interface ScanState {
 async function getScanState(db: DbClient, environmentId: string): Promise<ScanState> {
   const { rows } = await db.query<{ last_scanned_at: Date; last_full_at: Date | null }>(
     `SELECT last_scanned_at, last_full_at
-       FROM app.data_quality_scan_state WHERE environment_id = $1`,
+       FROM app.data_quality_scan_state WHERE project_id = $1`,
     [environmentId],
   );
   return {
@@ -454,9 +454,9 @@ async function recordScanState(
   wasFull: boolean,
 ): Promise<void> {
   await db.query(
-    `INSERT INTO app.data_quality_scan_state (environment_id, last_scanned_at, last_full_at, updated_at)
+    `INSERT INTO app.data_quality_scan_state (project_id, last_scanned_at, last_full_at, updated_at)
      VALUES ($1, $2, $3, NOW())
-     ON CONFLICT (environment_id)
+     ON CONFLICT (project_id)
      DO UPDATE SET last_scanned_at = GREATEST(app.data_quality_scan_state.last_scanned_at, EXCLUDED.last_scanned_at),
                    last_full_at = COALESCE(EXCLUDED.last_full_at, app.data_quality_scan_state.last_full_at),
                    updated_at = NOW()`,
@@ -571,7 +571,7 @@ export async function updateFlagStatus(
   status: "open" | "reviewed" | "dismissed",
 ): Promise<void> {
   const { rowCount } = await db.query(
-    `UPDATE app.data_quality_flag SET status = $3 WHERE id = $1 AND environment_id = $2`,
+    `UPDATE app.data_quality_flag SET status = $3 WHERE id = $1 AND project_id = $2`,
     [flagId, environmentId, status],
   );
   if (!rowCount) {
@@ -607,7 +607,7 @@ export async function listFlags(
   const params: unknown[] = [environmentId];
   let sql = `SELECT id, instance_id, layer, severity, code, message, observed_value, status, created_at
                FROM app.data_quality_flag
-              WHERE environment_id = $1`;
+              WHERE project_id = $1`;
   if (opts?.status) {
     params.push(opts.status);
     sql += ` AND status = $${params.length}`;

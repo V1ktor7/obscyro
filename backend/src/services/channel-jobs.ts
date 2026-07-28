@@ -69,11 +69,11 @@ interface ClaimedJob {
 async function processJob(db: DbClient, job: ClaimedJob): Promise<void> {
   const channelRes = await db.query<{
     id: string;
-    environment_id: string;
+    project_id: string;
     status: "draft" | "live" | "paused";
     steps: unknown;
   }>(
-    `SELECT id, environment_id, status, steps
+    `SELECT id, project_id, status, steps
        FROM app.data_channel
       WHERE id = $1`,
     [job.channel_id],
@@ -95,7 +95,7 @@ async function processJob(db: DbClient, job: ClaimedJob): Promise<void> {
     db,
     {
       id: channel.id,
-      environmentId: channel.environment_id,
+      environmentId: channel.project_id,
       status: channel.status,
       steps: (channel.steps as ChannelStepRow[]) ?? [],
     },

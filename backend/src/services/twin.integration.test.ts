@@ -61,8 +61,8 @@ async function ensureTwinTestEnvironment(): Promise<{
   const organizationId = orgRows[0].id;
 
   const { rows: envRows } = await db.query<{ id: string }>(
-    `INSERT INTO app.ontology_environments
-       (owner_user_id, organization_id, name, slug, environment_type)
+    `INSERT INTO app.project
+       (owner_user_id, organization_id, name, slug, project_kind)
      VALUES ($1, $2, 'Twin Test Lab', $3, 'operations')
      ON CONFLICT (organization_id, slug) DO UPDATE SET name = EXCLUDED.name
      RETURNING id`,
@@ -77,8 +77,8 @@ async function cleanupTwinArtifacts(
   environmentId: string,
   instanceIds: string[],
 ): Promise<void> {
-  await db.query(`DELETE FROM app.twin_alert WHERE environment_id = $1`, [environmentId]);
-  await db.query(`DELETE FROM app.twin_alert_rule WHERE environment_id = $1`, [environmentId]);
+  await db.query(`DELETE FROM app.twin_alert WHERE project_id = $1`, [environmentId]);
+  await db.query(`DELETE FROM app.twin_alert_rule WHERE project_id = $1`, [environmentId]);
   if (instanceIds.length) {
     await db.query(
       `DELETE FROM app.ontology_link_instances

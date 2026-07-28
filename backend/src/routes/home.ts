@@ -14,7 +14,7 @@ import { resolveUserIdForApiKey } from "../services/login.js";
 // activity from the audit trail, and a getting-started checklist derived from
 // what actually exists rather than a static list.
 //
-// "Project" here reads app.ontology_environments. The rename is a separate,
+// "Project" here reads app.project. The rename is a separate,
 // lower-risk migration; the UI label leads and the schema follows.
 // ---------------------------------------------------------------------------
 
@@ -128,22 +128,22 @@ const homeRoutes: FastifyPluginAsync = async (fastify) => {
         live_channel_count: string;
         last_activity_at: Date | null;
       }>(
-        `SELECT e.id, e.slug, e.name, COALESCE(e.environment_type, 'sandbox') AS kind,
+        `SELECT e.id, e.slug, e.name, COALESCE(e.project_kind, 'sandbox') AS kind,
                 (SELECT COUNT(*) FROM app.ontology_object_types t
-                  WHERE t.environment_id = e.id) AS object_type_count,
+                  WHERE t.project_id = e.id) AS object_type_count,
                 (SELECT COUNT(*) FROM app.ontology_object_instances i
                    JOIN app.ontology_object_types t2 ON t2.id = i.object_type_id
-                  WHERE t2.environment_id = e.id) AS instance_count,
+                  WHERE t2.project_id = e.id) AS instance_count,
                 (SELECT COUNT(*) FROM app.dataset d
                   WHERE d.project_id = e.id) AS dataset_count,
                 (SELECT COUNT(*) FROM app.data_channel c
-                  WHERE c.environment_id = e.id AND c.status = 'live') AS live_channel_count,
+                  WHERE c.project_id = e.id AND c.status = 'live') AS live_channel_count,
                 GREATEST(
                   e.created_at,
                   COALESCE((SELECT MAX(t3.created_at) FROM app.ontology_object_types t3
-                             WHERE t3.environment_id = e.id), e.created_at)
+                             WHERE t3.project_id = e.id), e.created_at)
                 ) AS last_activity_at
-           FROM app.ontology_environments e
+           FROM app.project e
            JOIN app.organization_members m ON m.organization_id = e.organization_id
           WHERE m.user_id = $1
           ORDER BY last_activity_at DESC NULLS LAST`,
@@ -182,7 +182,7 @@ const homeRoutes: FastifyPluginAsync = async (fastify) => {
         .query<{ n: string }>(
           `SELECT COUNT(*)::bigint AS n
              FROM app.channel_review_item r
-             JOIN app.ontology_environments e ON e.id = r.environment_id
+             JOIN app.project e ON e.id = r.project_id
              JOIN app.organization_members m ON m.organization_id = e.organization_id
             WHERE m.user_id = $1 AND r.status = 'pending'`,
           [userId],

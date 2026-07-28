@@ -403,7 +403,7 @@ export async function listAlertRules(
 ): Promise<TwinAlertRuleRow[]> {
   const { rows } = await db.query<{
     id: string;
-    environment_id: string;
+    project_id: string;
     unit_kind: string | null;
     metric: string;
     op: TwinAlertOp;
@@ -412,16 +412,16 @@ export async function listAlertRules(
     message_template: string;
     recommendation_template: string;
   }>(
-    `SELECT id, environment_id, unit_kind, metric, op, threshold::text,
+    `SELECT id, project_id, unit_kind, metric, op, threshold::text,
             severity, message_template, recommendation_template
        FROM app.twin_alert_rule
-      WHERE environment_id = $1
+      WHERE project_id = $1
       ORDER BY created_at ASC`,
     [environmentId],
   );
   return rows.map((r) => ({
     id: r.id,
-    environmentId: r.environment_id,
+    environmentId: r.project_id,
     unitKind: r.unit_kind,
     metric: r.metric,
     op: r.op,
@@ -463,9 +463,9 @@ export async function evaluateAlerts(
         inserted: boolean;
       }>(
         `INSERT INTO app.twin_alert
-           (environment_id, unit_instance_id, rule_id, severity, metric, value, message, recommendation, status)
+           (project_id, unit_instance_id, rule_id, severity, metric, value, message, recommendation, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'open')
-         ON CONFLICT (environment_id, unit_instance_id, rule_id) WHERE status = 'open'
+         ON CONFLICT (project_id, unit_instance_id, rule_id) WHERE status = 'open'
          DO UPDATE SET severity = EXCLUDED.severity,
                        metric = EXCLUDED.metric,
                        value = EXCLUDED.value,
@@ -510,10 +510,10 @@ export async function listOpenAlerts(
   page?: { limit?: number; offset?: number },
 ): Promise<TwinAlertRow[]> {
   const params: unknown[] = [environmentId];
-  let sql = `SELECT id, environment_id, unit_instance_id, rule_id, severity, metric,
+  let sql = `SELECT id, project_id, unit_instance_id, rule_id, severity, metric,
                     value::text, message, recommendation, status, created_at, acked_at
                FROM app.twin_alert
-              WHERE environment_id = $1 AND status = 'open'`;
+              WHERE project_id = $1 AND status = 'open'`;
   if (unitId) {
     params.push(unitId);
     sql += ` AND unit_instance_id = $${params.length}`;
@@ -527,7 +527,7 @@ export async function listOpenAlerts(
 
   const { rows } = await db.query<{
     id: string;
-    environment_id: string;
+    project_id: string;
     unit_instance_id: string;
     rule_id: string | null;
     severity: TwinAlertSeverity;
@@ -542,7 +542,7 @@ export async function listOpenAlerts(
 
   return rows.map((r) => ({
     id: r.id,
-    environmentId: r.environment_id,
+    environmentId: r.project_id,
     unitInstanceId: r.unit_instance_id,
     ruleId: r.rule_id,
     severity: r.severity,
@@ -563,7 +563,7 @@ export async function ackAlert(
 ): Promise<void> {
   const { rowCount } = await db.query(
     `UPDATE app.twin_alert SET status = 'ack', acked_at = NOW()
-      WHERE id = $1 AND environment_id = $2`,
+      WHERE id = $1 AND project_id = $2`,
     [alertId, environmentId],
   );
   if (!rowCount) throw NotFound("ALERT_NOT_FOUND", "Twin alert not found.");
@@ -596,7 +596,7 @@ export async function createAlertRule(
 ): Promise<TwinAlertRuleRow> {
   const { rows } = await db.query<{ id: string }>(
     `INSERT INTO app.twin_alert_rule
-       (environment_id, unit_kind, metric, op, threshold, severity,
+       (project_id, unit_kind, metric, op, threshold, severity,
         message_template, recommendation_template, owner_user_id, organization_id)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING id`,
@@ -640,7 +640,7 @@ export async function updateAlertRule(
             severity = COALESCE($7, severity),
             message_template = COALESCE($8, message_template),
             recommendation_template = COALESCE($9, recommendation_template)
-      WHERE id = $1 AND environment_id = $2
+      WHERE id = $1 AND project_id = $2
       RETURNING id`,
     [
       ruleId,
@@ -665,7 +665,7 @@ export async function deleteAlertRule(
   ruleId: string,
 ): Promise<void> {
   const { rowCount } = await db.query(
-    `DELETE FROM app.twin_alert_rule WHERE id = $1 AND environment_id = $2`,
+    `DELETE FROM app.twin_alert_rule WHERE id = $1 AND project_id = $2`,
     [ruleId, environmentId],
   );
   if (!rowCount) throw NotFound("RULE_NOT_FOUND", "Alert rule not found.");
@@ -726,7 +726,7 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
     `SELECT oi.id, t.name AS type_name, oi.properties
        FROM app.ontology_object_instances oi
        JOIN app.ontology_object_types t ON t.id = oi.object_type_id
-      WHERE t.organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1) AND t.nature = 'physical'
+      WHERE t.organization_id = (SELECT organization_id FROM app.project WHERE id = $1) AND t.nature = 'physical'
       ORDER BY oi.created_at ASC
       LIMIT 500`,
     [environmentId],
@@ -804,7 +804,7 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
       `SELECT li.id, lt.name AS link_type, li.from_instance_id, li.to_instance_id
          FROM app.ontology_link_instances li
          JOIN app.ontology_link_types lt ON lt.id = li.link_type_id
-        WHERE lt.organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1)
+        WHERE lt.organization_id = (SELECT organization_id FROM app.project WHERE id = $1)
           AND li.from_instance_id = ANY($2::uuid[])
           AND li.to_instance_id = ANY($2::uuid[])
           AND li.from_instance_id <> li.to_instance_id`,
@@ -839,7 +839,7 @@ export async function seedTwinDemo(
     `DELETE FROM app.ontology_object_instances oi
        USING app.ontology_object_types t
       WHERE oi.object_type_id = t.id
-        AND t.organization_id = (SELECT organization_id FROM app.ontology_environments WHERE id = $1)
+        AND t.organization_id = (SELECT organization_id FROM app.project WHERE id = $1)
         AND oi.provenance->>'source' = 'twin-demo'`,
     [environmentId],
   );

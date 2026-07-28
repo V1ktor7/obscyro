@@ -120,7 +120,7 @@ const STREAM_SELECT = `
 
 async function findStream(db: DbClient, environmentId: string, id: string): Promise<StreamRow> {
   const { rows } = await db.query<StreamRow>(
-    `${STREAM_SELECT} WHERE environment_id = $1 AND id = $2`,
+    `${STREAM_SELECT} WHERE project_id = $1 AND id = $2`,
     [environmentId, id],
   );
   const row = rows[0];
@@ -145,7 +145,7 @@ const feedStreamRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
       const { rows } = await req.db.query<StreamRow>(
-        `${STREAM_SELECT} WHERE environment_id = $1 ORDER BY created_at ASC`,
+        `${STREAM_SELECT} WHERE project_id = $1 ORDER BY created_at ASC`,
         [env.id],
       );
       return { streams: rows.map(streamRowOut) };
@@ -169,7 +169,7 @@ const feedStreamRoutes: FastifyPluginAsync = async (fastify) => {
       validateDatasetSize(req.body.config);
       const { rows } = await req.db.query<{ id: string }>(
         `INSERT INTO app.feed_stream
-                (environment_id, owner_user_id, organization_id, name, config)
+                (project_id, owner_user_id, organization_id, name, config)
          VALUES ($1, $2, $3, $4, $5::jsonb)
          RETURNING id`,
         [env.id, userId, env.organizationId, req.body.name.trim(), JSON.stringify(req.body.config)],
@@ -220,7 +220,7 @@ const feedStreamRoutes: FastifyPluginAsync = async (fastify) => {
                 last_error = CASE WHEN $5 = 'running' THEN NULL ELSE last_error END,
                 dataset_index = CASE WHEN $4 IS NOT NULL THEN 0 ELSE dataset_index END,
                 updated_at = NOW()
-          WHERE id = $1 AND environment_id = $2`,
+          WHERE id = $1 AND project_id = $2`,
         [
           req.params.id,
           env.id,
@@ -311,7 +311,7 @@ const feedStreamRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
       const params: unknown[] = [env.id];
-      let where = `s.environment_id = $1`;
+      let where = `s.project_id = $1`;
       if (req.query.streamId) {
         params.push(req.query.streamId);
         where += ` AND fs.stream_id = $${params.length}`;

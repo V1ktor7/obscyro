@@ -65,8 +65,8 @@ async function ensureCloneTestEnvironment(): Promise<{
   const organizationId = orgRows[0].id;
 
   const { rows: envRows } = await db.query<{ id: string }>(
-    `INSERT INTO app.ontology_environments
-       (owner_user_id, organization_id, name, slug, environment_type)
+    `INSERT INTO app.project
+       (owner_user_id, organization_id, name, slug, project_kind)
      VALUES ($1, $2, 'Twin Clone Test Lab', $3, 'operations')
      ON CONFLICT (organization_id, slug) DO UPDATE SET name = EXCLUDED.name
      RETURNING id`,
@@ -90,16 +90,16 @@ async function cleanupCloneArtifacts(
   instanceIds: string[],
 ): Promise<void> {
   await db.query(`DELETE FROM app.simulation_run WHERE scenario_id IN (
-    SELECT id FROM app.scenario WHERE environment_id = $1
+    SELECT id FROM app.scenario WHERE project_id = $1
   )`, [environmentId]);
   await db.query(`DELETE FROM app.scenario_link WHERE scenario_id IN (
-    SELECT id FROM app.scenario WHERE environment_id = $1
+    SELECT id FROM app.scenario WHERE project_id = $1
   )`, [environmentId]);
   await db.query(`DELETE FROM app.scenario_instance WHERE scenario_id IN (
-    SELECT id FROM app.scenario WHERE environment_id = $1
+    SELECT id FROM app.scenario WHERE project_id = $1
   )`, [environmentId]);
-  await db.query(`DELETE FROM app.scenario WHERE environment_id = $1`, [environmentId]);
-  await db.query(`DELETE FROM app.twin_alert_rule WHERE environment_id = $1`, [environmentId]);
+  await db.query(`DELETE FROM app.scenario WHERE project_id = $1`, [environmentId]);
+  await db.query(`DELETE FROM app.twin_alert_rule WHERE project_id = $1`, [environmentId]);
   if (instanceIds.length) {
     await db.query(
       `DELETE FROM app.ontology_link_instances
