@@ -1,6 +1,7 @@
 import type { DbClient } from "../lib/db.js";
 import { BadRequest, NotFound } from "../lib/errors.js";
 import { addReference, appendToStream, loadTableVersion } from "./datasets.js";
+import { fetchRecords, type RestConfig } from "./rest-connector.js";
 
 // ---------------------------------------------------------------------------
 // Data connectivity: Source → Sync → Dataset.
@@ -34,6 +35,8 @@ export interface ConnectorMeta {
   description: string;
   /** false = the shape is defined but execution is not implemented yet. */
   implemented: boolean;
+  /** Still runs for existing sources, but not offered for new ones. */
+  deprecated?: boolean;
 }
 
 /**
@@ -58,12 +61,23 @@ export const CONNECTORS: ConnectorMeta[] = [
     implemented: true,
   },
   {
-    kind: "http_poll",
-    label: "HTTP endpoint",
+    kind: "rest",
+    label: "REST / HTTP API",
     direction: "pull",
     modes: ["snapshot", "incremental"],
-    description: "Periodically GET a JSON or CSV endpoint.",
+    description:
+      "Call any JSON or CSV endpoint on a schedule. Method, query, headers, auth, " +
+      "the path to the record array, and pagination are all configurable.",
     implemented: true,
+  },
+  {
+    kind: "http_poll",
+    label: "HTTP endpoint (simple)",
+    direction: "pull",
+    modes: ["snapshot", "incremental"],
+    description: "Plain GET of a JSON endpoint. Superseded by REST / HTTP API.",
+    implemented: true,
+    deprecated: true,
   },
   {
     kind: "postgres",
@@ -288,9 +302,16 @@ export async function ingestPush(
   return { syncs: syncs.length, rowsWritten };
 }
 
+/** Connectors runPullSync knows how to call. */
+const PULLABLE = new Set<string>(["rest", "http_poll"]);
+
 /**
- * Run one pull sync (http_poll). Snapshot replaces the dataset with a new
- * version; incremental keeps only rows past the watermark and advances it.
+ * Run one pull sync. Snapshot replaces the dataset with a new version;
+ * incremental keeps only rows past the watermark and advances it.
+ *
+ * The HTTP work — auth, record path, flattening, pagination, SSRF refusal —
+ * lives in rest-connector so both connector kinds behave identically and the
+ * pipeline can reuse the same reader later.
  */
 export async function runPullSync(db: DbClient, syncId: string): Promise<SyncOutcome> {
   const sync = await getSync(db, syncId);
@@ -300,36 +321,17 @@ export async function runPullSync(db: DbClient, syncId: string): Promise<SyncOut
   }>(`SELECT type, connector_config FROM app.ingest_sources WHERE id = $1`, [sync.sourceId]);
   const src = srcRows[0];
   if (!src) return { rowsRead: 0, rowsWritten: 0, error: "Source not found." };
-  if (src.type !== "http_poll") {
+  if (!PULLABLE.has(src.type)) {
     return { rowsRead: 0, rowsWritten: 0, error: `Connector "${src.type}" cannot be pulled.` };
   }
 
-  const url = String(src.connector_config.url ?? "").trim();
+  const cfg = src.connector_config as unknown as RestConfig;
+  const url = String(cfg?.url ?? "").trim();
   if (!url) return { rowsRead: 0, rowsWritten: 0, error: "Source has no URL configured." };
 
   try {
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        ...(src.connector_config.headers as Record<string, string> | undefined),
-      },
-      signal: AbortSignal.timeout(30_000),
-    });
-    if (!res.ok) {
-      return { rowsRead: 0, rowsWritten: 0, error: `HTTP ${res.status} from source.` };
-    }
-    const body: unknown = await res.json();
-    // Accept a bare array or a wrapper with a records/data/items array.
-    const raw = Array.isArray(body)
-      ? body
-      : ((body as Record<string, unknown>)?.records ??
-        (body as Record<string, unknown>)?.data ??
-        (body as Record<string, unknown>)?.items ??
-        []);
-    let records = (Array.isArray(raw) ? raw : []).filter(
-      (r): r is Record<string, unknown> => Boolean(r) && typeof r === "object",
-    );
+    const { records: fetched, truncated } = await fetchRecords({ ...cfg, url });
+    let records = fetched;
     const rowsRead = records.length;
 
     let nextWatermark = sync.watermark;
@@ -355,7 +357,13 @@ export async function runPullSync(db: DbClient, syncId: string): Promise<SyncOut
         nextWatermark,
       ]);
     }
-    const outcome = { rowsRead, rowsWritten: records.length, error: null };
+    // Truncation is reported, not swallowed: a silently short read looks
+    // exactly like a source that had less data.
+    const outcome = {
+      rowsRead,
+      rowsWritten: records.length,
+      error: truncated ? "Row or page cap reached — this run may be incomplete." : null,
+    };
     await recordSyncRun(db, syncId, outcome);
     return outcome;
   } catch (err) {

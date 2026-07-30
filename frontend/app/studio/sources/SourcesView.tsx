@@ -35,8 +35,11 @@ import {
   listSyncRuns,
   listSyncs,
   runSync,
+  testRestConnector,
   type Connector,
   type ConnectorKind,
+  type RestConfig,
+  type RestTestResult,
   type Source,
   type Sync,
   type SyncMode,
@@ -434,19 +437,89 @@ function Dialog({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="w-[440px] overflow-hidden rounded-lg border border-[#d3d8de] bg-white shadow-lg"
+        className="flex max-h-[80vh] w-[460px] flex-col overflow-hidden rounded-lg border border-[#d3d8de] bg-white shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-[#d3d8de] px-4 py-2.5">
+        <div className="flex shrink-0 items-center justify-between border-b border-[#d3d8de] px-4 py-2.5">
           <p className="text-sm font-medium">{title}</p>
           <button type="button" onClick={onClose} aria-label="Close">
             <X className="h-4 w-4 text-[#8f99a8]" />
           </button>
         </div>
-        <div className="px-4 py-3">{children}</div>
+        <div className="overflow-y-auto px-4 py-3">{children}</div>
       </div>
     </div>
   );
+}
+
+const FIELD =
+  "mt-1 w-full rounded border border-[#d3d8de] px-2.5 py-1.5 text-xs focus:border-[#2d72d2] focus:outline-none";
+const MONO =
+  "mt-1 w-full rounded border border-[#d3d8de] px-2.5 py-1.5 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none";
+const LBL = "mt-3 block text-[11px] font-medium text-[#5f6b7c]";
+const HINT = "mt-1 text-[10.5px] leading-snug text-[#8f99a8]";
+
+/** Editor for a list of header or query-parameter pairs. */
+function PairRows({
+  pairs,
+  onChange,
+  keyPlaceholder,
+  valuePlaceholder,
+}: {
+  pairs: [string, string][];
+  onChange: (next: [string, string][]) => void;
+  keyPlaceholder: string;
+  valuePlaceholder: string;
+}) {
+  return (
+    <div className="mt-1 space-y-1">
+      {pairs.map(([k, v], i) => (
+        <div key={i} className="flex gap-1">
+          <input
+            value={k}
+            onChange={(e) => {
+              const next = [...pairs];
+              next[i] = [e.target.value, v];
+              onChange(next);
+            }}
+            placeholder={keyPlaceholder}
+            className="w-2/5 rounded border border-[#d3d8de] px-2 py-1 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
+          />
+          <input
+            value={v}
+            onChange={(e) => {
+              const next = [...pairs];
+              next[i] = [k, e.target.value];
+              onChange(next);
+            }}
+            placeholder={valuePlaceholder}
+            className="min-w-0 flex-1 rounded border border-[#d3d8de] px-2 py-1 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => onChange(pairs.filter((_, j) => j !== i))}
+            aria-label="Remove"
+            className="px-1 text-[#8f99a8] hover:text-[#a82255]"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={() => onChange([...pairs, ["", ""]])}
+        className="text-[11px] text-[#2d72d2] hover:underline"
+      >
+        + add
+      </button>
+    </div>
+  );
+}
+
+function pairsToRecord(pairs: [string, string][]): Record<string, string> | undefined {
+  const out: Record<string, string> = {};
+  for (const [k, v] of pairs) if (k.trim()) out[k.trim()] = v;
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 function NewSourceDialog({
@@ -468,7 +541,52 @@ function NewSourceDialog({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // REST specifics
+  const [method, setMethod] = useState<"GET" | "POST">("GET");
+  const [query, setQuery] = useState<[string, string][]>([]);
+  const [headers, setHeaders] = useState<[string, string][]>([]);
+  const [authKind, setAuthKind] = useState<"none" | "bearer" | "header" | "query">("none");
+  const [authName, setAuthName] = useState("");
+  const [authToken, setAuthToken] = useState("");
+  const [recordPath, setRecordPath] = useState("");
+  const [format, setFormat] = useState<"auto" | "json" | "csv">("auto");
+  const [pagKind, setPagKind] = useState<"none" | "page" | "offset" | "cursor">("none");
+  const [pagParam, setPagParam] = useState("page");
+  const [pagSizeParam, setPagSizeParam] = useState("");
+  const [pagSize, setPagSize] = useState(100);
+  const [cursorPath, setCursorPath] = useState("");
+  const [cursorParam, setCursorParam] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [test, setTest] = useState<RestTestResult | null>(null);
+
   const chosen = connectors.find((c) => c.kind === kind);
+  const isRest = kind === "rest";
+
+  function restConfig(): RestConfig {
+    return {
+      url: url.trim(),
+      method,
+      query: pairsToRecord(query),
+      headers: pairsToRecord(headers),
+      auth:
+        authKind === "none"
+          ? undefined
+          : { kind: authKind, name: authName.trim() || undefined, token: authToken },
+      recordPath: recordPath.trim() || undefined,
+      format,
+      pagination:
+        pagKind === "none"
+          ? { kind: "none" }
+          : {
+              kind: pagKind,
+              param: pagKind === "cursor" ? undefined : pagParam.trim(),
+              sizeParam: pagSizeParam.trim() || undefined,
+              pageSize: pagSize,
+              cursorPath: cursorPath.trim() || undefined,
+              cursorParam: cursorParam.trim() || undefined,
+            },
+    };
+  }
 
   return (
     <Dialog title="New source" onClose={onClose}>
@@ -476,7 +594,11 @@ function NewSourceDialog({
 
       <label className="block text-[11px] font-medium text-[#5f6b7c]">Connector</label>
       <div className="mt-1 space-y-1">
-        {connectors.map((c) => (
+        {/* Deprecated connectors keep working for existing sources but are not
+            offered again — two entries that both GET a URL is a worse catalogue. */}
+        {connectors
+          .filter((c) => !c.deprecated)
+          .map((c) => (
           <button
             key={c.kind}
             type="button"
@@ -522,13 +644,217 @@ function NewSourceDialog({
 
       {chosen?.direction === "pull" ? (
         <>
-          <label className="mt-3 block text-[11px] font-medium text-[#5f6b7c]">URL</label>
-          <input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://example.org/api/records"
-            className="mt-1 w-full rounded border border-[#d3d8de] px-2.5 py-1.5 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
-          />
+          <label className={LBL}>URL</label>
+          <div className="mt-1 flex gap-1">
+            {isRest ? (
+              <select
+                value={method}
+                onChange={(e) => setMethod(e.target.value as "GET" | "POST")}
+                className="rounded border border-[#d3d8de] px-1.5 py-1.5 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
+              >
+                <option>GET</option>
+                <option>POST</option>
+              </select>
+            ) : null}
+            <input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://example.org/api/records"
+              className="min-w-0 flex-1 rounded border border-[#d3d8de] px-2.5 py-1.5 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
+            />
+          </div>
+
+          {isRest ? (
+            <>
+              <label className={LBL}>Query parameters</label>
+              <PairRows
+                pairs={query}
+                onChange={setQuery}
+                keyPlaceholder="location"
+                valuePlaceholder="45.5,-73.6"
+              />
+
+              <label className={LBL}>Headers</label>
+              <PairRows
+                pairs={headers}
+                onChange={setHeaders}
+                keyPlaceholder="Accept"
+                valuePlaceholder="application/json"
+              />
+
+              <label className={LBL}>Authentication</label>
+              <select
+                value={authKind}
+                onChange={(e) =>
+                  setAuthKind(e.target.value as "none" | "bearer" | "header" | "query")
+                }
+                className={FIELD}
+              >
+                <option value="none">None</option>
+                <option value="bearer">Bearer token</option>
+                <option value="header">API key in a header</option>
+                <option value="query">API key in a query parameter</option>
+              </select>
+              {authKind !== "none" ? (
+                <div className="mt-1 flex gap-1">
+                  {authKind !== "bearer" ? (
+                    <input
+                      value={authName}
+                      onChange={(e) => setAuthName(e.target.value)}
+                      placeholder={authKind === "header" ? "X-Api-Key" : "key"}
+                      className="w-2/5 rounded border border-[#d3d8de] px-2 py-1 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
+                    />
+                  ) : null}
+                  <input
+                    value={authToken}
+                    onChange={(e) => setAuthToken(e.target.value)}
+                    type="password"
+                    placeholder="token"
+                    className="min-w-0 flex-1 rounded border border-[#d3d8de] px-2 py-1 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
+                  />
+                </div>
+              ) : null}
+
+              <label className={LBL}>Path to the records</label>
+              <input
+                value={recordPath}
+                onChange={(e) => setRecordPath(e.target.value)}
+                placeholder="results"
+                className={MONO}
+              />
+              <p className={HINT}>
+                Where the array lives in the response — <code>results</code>, or{" "}
+                <code>data.items</code> for something nested. Leave blank to try the usual
+                wrappers. Getting this wrong is the most common reason a source returns nothing.
+              </p>
+
+              <label className={LBL}>Response format</label>
+              <select
+                value={format}
+                onChange={(e) => setFormat(e.target.value as "auto" | "json" | "csv")}
+                className={FIELD}
+              >
+                <option value="auto">Detect from content type</option>
+                <option value="json">JSON</option>
+                <option value="csv">CSV / TSV</option>
+              </select>
+
+              <label className={LBL}>Pagination</label>
+              <select
+                value={pagKind}
+                onChange={(e) =>
+                  setPagKind(e.target.value as "none" | "page" | "offset" | "cursor")
+                }
+                className={FIELD}
+              >
+                <option value="none">Single request</option>
+                <option value="page">Page number</option>
+                <option value="offset">Row offset</option>
+                <option value="cursor">Cursor / next-page token</option>
+              </select>
+              {pagKind === "page" || pagKind === "offset" ? (
+                <div className="mt-1 flex gap-1">
+                  <input
+                    value={pagParam}
+                    onChange={(e) => setPagParam(e.target.value)}
+                    placeholder={pagKind === "page" ? "page" : "offset"}
+                    className="w-1/3 rounded border border-[#d3d8de] px-2 py-1 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
+                  />
+                  <input
+                    value={pagSizeParam}
+                    onChange={(e) => setPagSizeParam(e.target.value)}
+                    placeholder="per_page"
+                    className="w-1/3 rounded border border-[#d3d8de] px-2 py-1 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
+                  />
+                  <input
+                    value={pagSize}
+                    onChange={(e) => setPagSize(Number(e.target.value) || 100)}
+                    type="number"
+                    className="w-1/4 rounded border border-[#d3d8de] px-2 py-1 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
+                  />
+                </div>
+              ) : null}
+              {pagKind === "cursor" ? (
+                <div className="mt-1 flex gap-1">
+                  <input
+                    value={cursorPath}
+                    onChange={(e) => setCursorPath(e.target.value)}
+                    placeholder="next_page_token"
+                    className="min-w-0 flex-1 rounded border border-[#d3d8de] px-2 py-1 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
+                  />
+                  <input
+                    value={cursorParam}
+                    onChange={(e) => setCursorParam(e.target.value)}
+                    placeholder="pagetoken"
+                    className="min-w-0 flex-1 rounded border border-[#d3d8de] px-2 py-1 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
+                  />
+                </div>
+              ) : null}
+
+              {/* Checking the shape before saving beats a failed sync run per guess. */}
+              <div className="mt-3 rounded border border-[#d3d8de] bg-[#f6f7f9] p-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={!url.trim() || testing}
+                    onClick={async () => {
+                      setTesting(true);
+                      setTest(null);
+                      try {
+                        setTest(await testRestConnector(restConfig()));
+                      } catch (e) {
+                        setTest({
+                          ok: false,
+                          rowCount: 0,
+                          pages: 0,
+                          truncated: false,
+                          columns: [],
+                          sample: [],
+                          error: (e as Error).message,
+                        });
+                      } finally {
+                        setTesting(false);
+                      }
+                    }}
+                    className="flex items-center gap-1.5 rounded border border-[#d3d8de] bg-white px-2.5 py-1 text-[11px] font-medium text-[#404854] disabled:opacity-50"
+                  >
+                    {testing ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                    Test connection
+                  </button>
+                  {test ? (
+                    <span
+                      className={cn(
+                        "text-[11px]",
+                        test.ok ? "text-[#1d9e75]" : "text-[#a82255]",
+                      )}
+                    >
+                      {test.ok
+                        ? `${test.rowCount} row${test.rowCount === 1 ? "" : "s"} · ${test.columns.length} columns`
+                        : "no rows"}
+                    </span>
+                  ) : (
+                    <span className="text-[10.5px] text-[#8f99a8]">
+                      one capped request, nothing saved
+                    </span>
+                  )}
+                </div>
+                {test?.error ? (
+                  <p className="mt-1.5 text-[10.5px] leading-snug text-[#a82255]">{test.error}</p>
+                ) : null}
+                {test?.ok ? (
+                  <>
+                    <p className="mt-1.5 font-mono text-[10px] leading-relaxed text-[#5f6b7c]">
+                      {test.columns.slice(0, 12).join(" · ")}
+                      {test.columns.length > 12 ? ` +${test.columns.length - 12}` : ""}
+                    </p>
+                    <pre className="mt-1 max-h-24 overflow-auto rounded bg-white p-1.5 font-mono text-[10px] leading-snug text-[#404854]">
+                      {JSON.stringify(test.sample[0] ?? {}, null, 1)}
+                    </pre>
+                  </>
+                ) : null}
+              </div>
+            </>
+          ) : null}
         </>
       ) : (
         <p className="mt-3 text-[11px] leading-relaxed text-[#8f99a8]">
@@ -552,7 +878,15 @@ function NewSourceDialog({
             setBusy(true);
             setErr(null);
             try {
-              await onCreate(name.trim(), kind, url.trim() ? { url: url.trim() } : {});
+              await onCreate(
+                name.trim(),
+                kind,
+                isRest
+                  ? (restConfig() as unknown as Record<string, unknown>)
+                  : url.trim()
+                    ? { url: url.trim() }
+                    : {},
+              );
             } catch (e) {
               setErr((e as Error).message);
             } finally {

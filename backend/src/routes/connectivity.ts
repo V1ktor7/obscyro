@@ -14,6 +14,7 @@ import {
   runPullSync,
 } from "../services/connectivity.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
+import { fetchRecords, redactConfig } from "../services/rest-connector.js";
 import { resolveEnvironment } from "../services/ontology.js";
 
 // ---------------------------------------------------------------------------
@@ -61,6 +62,8 @@ const sourceOut = z.object({
   lastError: z.string().nullable(),
   syncCount: z.number(),
   createdAt: z.string(),
+  /** Connector settings with any stored credential replaced by a marker. */
+  config: z.record(z.unknown()),
 });
 
 function publicBase(): string {
@@ -99,6 +102,7 @@ const connectivityRoutes: FastifyPluginAsync = async (fastify) => {
                 modes: z.array(z.string()),
                 description: z.string(),
                 implemented: z.boolean(),
+                deprecated: z.boolean().optional(),
               }),
             ),
           }),
@@ -106,6 +110,100 @@ const connectivityRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async () => ({ connectors: CONNECTORS }),
+  );
+
+  // --- Try a REST config before committing to it ----------------------------
+  //
+  // A pull connector has four ways to be wrong that all look like "no data":
+  // the wrong record path, an auth header the API ignores, pagination that
+  // never advances, and a response that is CSV pretending to be JSON. Guessing
+  // at those against a saved source means a failed sync run per attempt, so
+  // this endpoint runs one capped fetch and hands back what it actually saw.
+  app.post(
+    "/connectors/rest/test",
+    {
+      schema: {
+        summary: "Fetch a few rows with a REST config without saving it",
+        tags: ["connectivity"],
+        body: z.object({
+          url: z.string().min(1),
+          method: z.enum(["GET", "POST"]).optional(),
+          query: z.record(z.string()).optional(),
+          headers: z.record(z.string()).optional(),
+          body: z.string().optional(),
+          auth: z
+            .object({
+              kind: z.enum(["none", "bearer", "header", "query"]),
+              name: z.string().optional(),
+              token: z.string().optional(),
+            })
+            .optional(),
+          recordPath: z.string().optional(),
+          flatten: z.boolean().optional(),
+          format: z.enum(["json", "csv", "auto"]).optional(),
+          pagination: z
+            .object({
+              kind: z.enum(["none", "page", "offset", "cursor"]),
+              param: z.string().optional(),
+              sizeParam: z.string().optional(),
+              pageSize: z.number().int().min(1).max(1000).optional(),
+              cursorPath: z.string().optional(),
+              cursorParam: z.string().optional(),
+              maxPages: z.number().int().min(1).max(50).optional(),
+            })
+            .optional(),
+        }),
+        response: {
+          200: z.object({
+            ok: z.boolean(),
+            rowCount: z.number(),
+            pages: z.number(),
+            truncated: z.boolean(),
+            columns: z.array(z.string()),
+            sample: z.array(z.record(z.unknown())),
+            error: z.string().nullable(),
+          }),
+        },
+      },
+    },
+    async (req) => {
+      await requireUserId(req);
+      try {
+        // One page, few rows: this is a shape check, not an import.
+        const { records, pages, truncated } = await fetchRecords(
+          { ...req.body, pagination: { ...(req.body.pagination ?? { kind: "none" }), maxPages: 1 } },
+          25,
+        );
+        const columns = Array.from(
+          records.reduce((set, r) => {
+            for (const k of Object.keys(r)) set.add(k);
+            return set;
+          }, new Set<string>()),
+        );
+        return {
+          ok: records.length > 0,
+          rowCount: records.length,
+          pages,
+          truncated,
+          columns,
+          sample: records.slice(0, 5),
+          error:
+            records.length === 0
+              ? "The call succeeded but no records were found. Check the record path — it is the path to the array, not to a single row."
+              : null,
+        };
+      } catch (err) {
+        return {
+          ok: false,
+          rowCount: 0,
+          pages: 0,
+          truncated: false,
+          columns: [],
+          sample: [],
+          error: (err as Error).message,
+        };
+      }
+    },
   );
 
   // --- Sources --------------------------------------------------------------
@@ -131,10 +229,11 @@ const connectivityRoutes: FastifyPluginAsync = async (fastify) => {
         last_error: string | null;
         sync_count: string;
         created_at: Date;
+        connector_config: Record<string, unknown> | null;
       }>(
         `SELECT s.id, s.name, s.type, s.status, s.webhook_token, s.last_error,
                 (SELECT COUNT(*) FROM app.sync y WHERE y.source_id = s.id) AS sync_count,
-                s.created_at
+                s.created_at, s.connector_config
            FROM app.ingest_sources s
           WHERE s.project_id = $1
           ORDER BY s.created_at ASC`,
@@ -150,6 +249,7 @@ const connectivityRoutes: FastifyPluginAsync = async (fastify) => {
           lastError: r.last_error,
           syncCount: Number(r.sync_count),
           createdAt: r.created_at.toISOString(),
+          config: redactConfig(r.connector_config ?? {}),
         })),
       };
     },
@@ -226,6 +326,7 @@ const connectivityRoutes: FastifyPluginAsync = async (fastify) => {
         lastError: r.last_error,
         syncCount: 0,
         createdAt: r.created_at.toISOString(),
+        config: redactConfig(req.body.config),
       });
     },
   );
