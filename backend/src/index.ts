@@ -22,6 +22,7 @@ import { pool } from "./db/pool.js";
 import { startChannelJobWorker } from "./services/channel-jobs.js";
 import { startFeedScheduler } from "./services/feed-sim.js";
 import { startSyncScheduler } from "./services/connectivity.js";
+import { startPipelineScheduler } from "./services/pipeline.js";
 import authRoutes from "./routes/auth.js";
 import batchRoutes from "./routes/batch.js";
 import channelsRoutes, { reviewRoutes } from "./routes/channels.js";
@@ -185,6 +186,7 @@ try {
   await app.listen({ port, host });
   startFeedScheduler(pool, app.log);
 startSyncScheduler(pool, app.log);
+startPipelineScheduler(pool, app.log);
   startChannelJobWorker(pool, app.log);
 } catch (err) {
   app.log.error(err);

@@ -290,6 +290,53 @@ export default function PipelinesView() {
             unsaved
           </span>
         ) : null}
+
+        {/* Live is what makes the twin move: the pipeline re-runs as rows land
+            on its stream input, instead of waiting for someone to press Run. */}
+        {current ? (
+          <button
+            type="button"
+            disabled={busy !== null}
+            title={
+              current.status === "live"
+                ? "Re-running as rows arrive. Click to pause."
+                : "Run automatically when rows land on the input stream."
+            }
+            onClick={async () => {
+              const next = current.status === "live" ? "paused" : "live";
+              setBusy("status");
+              setError(null);
+              try {
+                const saved = await savePipeline(current.id, {
+                  nodes,
+                  edges,
+                  status: next,
+                });
+                setCurrent(saved);
+                setDirty(false);
+                setPipelines((ps) => ps.map((p) => (p.id === saved.id ? saved : p)));
+              } catch (e) {
+                setError((e as Error).message);
+              } finally {
+                setBusy(null);
+              }
+            }}
+            className={cn(
+              "flex items-center gap-1.5 rounded border px-2 py-1 text-[11px] font-medium",
+              current.status === "live"
+                ? "border-[#1d9e75] bg-[#e8f6f0] text-[#12684c]"
+                : "border-[#d3d8de] text-[#5f6b7c]",
+            )}
+          >
+            <span
+              className={cn(
+                "h-1.5 w-1.5 rounded-full",
+                current.status === "live" ? "animate-pulse bg-[#1d9e75]" : "bg-[#c5cbd3]",
+              )}
+            />
+            {current.status === "live" ? "Live" : "Go live"}
+          </button>
+        ) : null}
         {error ? (
           <span className="max-w-[42ch] truncate text-[11px] text-[#a82255]" title={error}>
             {error}

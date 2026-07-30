@@ -1102,6 +1102,76 @@ export interface PipelineRunRow {
   finishedAt: string | null;
 }
 
+// ---------------------------------------------------------------------------
+// Live pipelines
+//
+// A pipeline marked live re-runs when rows land on its input stream, so the
+// ontology — and the twin's SSE reading it — move without anyone pressing a
+// button. That was the missing half: the twin already streams every few
+// seconds, it was just faithfully pushing data nothing had changed.
+//
+// This is a scheduler rather than a hook on appendToStream deliberately. The
+// append happens inside the webhook request, and hospital integration engines
+// retry on timeout — running a whole pipeline there would turn a slow model
+// call into duplicate inbound messages.
+// ---------------------------------------------------------------------------
+
+const PIPELINE_TICK_MS = 5_000;
+const PIPELINE_BATCH = 3;
+let pipelineSchedulerStarted = false;
+
+/** Live pipelines whose stream input has rows newer than their last run. */
+export async function findDuePipelines(db: DbClient, limit = PIPELINE_BATCH): Promise<string[]> {
+  const { rows } = await db.query<{ id: string }>(
+    `SELECT DISTINCT p.id, p.last_run_at
+       FROM app.pipeline p
+       JOIN LATERAL jsonb_array_elements(p.nodes) AS n ON TRUE
+       JOIN app.dataset d
+         ON d.id = (n->'config'->>'datasetId')::uuid
+      WHERE p.status = 'live'
+        AND n->>'kind' = 'dataset_input'
+        -- Guard the cast: a half-configured node holds '' or a name, and
+        -- ::uuid on that aborts the whole query rather than skipping the row.
+        AND n->'config'->>'datasetId' ~ '^[0-9a-fA-F-]{36}$'
+        AND d.kind = 'stream'
+        AND d.last_written_at IS NOT NULL
+        AND (p.last_run_at IS NULL OR d.last_written_at > p.last_run_at)
+      ORDER BY p.last_run_at ASC NULLS FIRST
+      LIMIT $1`,
+    [limit],
+  );
+  return rows.map((r) => r.id);
+}
+
+export function startPipelineScheduler(
+  pool: { query: DbClient["query"] },
+  log: { info: (o: unknown, m?: string) => void; warn: (o: unknown, m?: string) => void },
+): void {
+  if (pipelineSchedulerStarted || process.env.PIPELINE_SCHEDULER_DISABLED === "1") return;
+  pipelineSchedulerStarted = true;
+  log.info({ tickMs: PIPELINE_TICK_MS }, "pipeline scheduler started");
+
+  setInterval(() => {
+    void (async () => {
+      const db = pool as DbClient;
+      try {
+        for (const id of await findDuePipelines(db)) {
+          // One failure must not stop the others: a live pipeline that errors
+          // records the error on itself and the rest keep moving.
+          try {
+            const p = await getPipeline(db, id);
+            await execute(db, p, { trigger: "stream" });
+          } catch (err) {
+            log.warn({ err, pipelineId: id }, "live pipeline run failed");
+          }
+        }
+      } catch (err) {
+        log.warn({ err }, "pipeline scheduler tick failed");
+      }
+    })();
+  }, PIPELINE_TICK_MS).unref?.();
+}
+
 export async function listRuns(db: DbClient, pipelineId: string, limit = 20): Promise<PipelineRunRow[]> {
   const { rows } = await db.query<{
     id: string;
