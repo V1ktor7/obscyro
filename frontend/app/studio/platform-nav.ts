@@ -74,7 +74,7 @@ export const NAV_SECTIONS: NavSection[] = [
       {
         items: [
           { label: "Graph", href: "/studio/lineage" },
-          { label: "Builder", href: "/studio/workspace" },
+          { label: "Builder", href: "/studio/pipelines" },
         ],
       },
     ],
