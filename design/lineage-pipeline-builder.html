@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Obscyro — Lineage · Pipeline Builder (mockup)</title>
+<style>
+  :root{--bg:#f6f7f9;--line:#d3d8de;--line-soft:#e5e8eb;--ink:#1c2127;--ink-2:#404854;--ink-3:#5f6b7c;--ink-4:#8f99a8;
+    --acc:#2d72d2;--acc-dark:#215db0;--acc-soft:#e7f2fd;--ok:#1d9e75;--warn:#d9822b;--warn-bg:#fdf6ec;--warn-line:#f0d9b5;--bad:#c23030;
+    --in:#1d9e75;--tf:#7961a8;--out:#2d72d2;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.45 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  .micro{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.045em;color:var(--ink-4)}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+  .panel{background:#fff;border:1px solid var(--line);border-radius:6px}
+  .head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 11px;border-bottom:1px solid var(--line)}
+  .btn{height:26px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 11px;border-radius:4px;
+    font-size:11.5px;font-weight:500;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink-2);font-family:inherit}
+  .btn-primary{background:var(--acc);border-color:var(--acc-dark);color:#fff}
+  .pill{display:inline-flex;align-items:center;gap:4px;border-radius:3px;padding:1px 6px;font-size:9.5px;font-weight:500}
+  .p-ok{background:#e8f6f0;color:#12684c}.p-warn{background:var(--warn-bg);color:#8a5a12}.p-acc{background:var(--acc-soft);color:var(--acc-dark)}
+
+  /* shell */
+  .top{display:flex;align-items:center;gap:10px;padding:9px 14px;background:#fff;border-bottom:1px solid var(--line)}
+  .top h1{font-size:14px;font-weight:600;margin:0}
+  .crumb{font-size:11.5px;color:var(--ink-4)}
+  .top .r{margin-left:auto;display:flex;gap:6px;align-items:center}
+  .tabs{display:flex;gap:2px;padding:0 14px;background:#fff;border-bottom:1px solid var(--line)}
+  .tab{padding:6px 13px;font-size:11.5px;font-weight:500;color:var(--ink-3);border:1px solid transparent;border-bottom:none;
+    border-radius:5px 5px 0 0;cursor:pointer;position:relative;top:1px}
+  .tab.on{background:var(--bg);border-color:var(--line);color:var(--acc-dark)}
+
+  .shell{display:grid;grid-template-columns:196px minmax(0,1fr) 302px;height:calc(100vh - 78px)}
+  .col{overflow:auto;border-right:1px solid var(--line);background:#fff}
+  .col:last-child{border-right:0;border-left:1px solid var(--line)}
+
+  /* palette */
+  .pgrp{padding:7px 0 3px}
+  .pgrp .t{padding:3px 11px 5px}
+  .pnode{display:flex;align-items:center;gap:7px;margin:0 8px 4px;padding:6px 8px;border:1px solid var(--line);border-radius:5px;
+    cursor:grab;background:#fff}
+  .pnode:hover{border-color:var(--acc);background:var(--acc-soft)}
+  .pnode .ic{width:19px;height:19px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10.5px;color:#fff;flex:none}
+  .pnode .nm{font-size:11.5px;font-weight:500}
+  .pnode .d{font-size:9.5px;color:var(--ink-4)}
+  .i-in{background:var(--in)}.i-tf{background:var(--tf)}.i-out{background:var(--out)}
+
+  /* canvas */
+  .canvas{position:relative;background:var(--bg);
+    background-image:radial-gradient(#dfe3e8 1px,transparent 1px);background-size:16px 16px;overflow:hidden}
+  .node{position:absolute;width:160px;background:#fff;border:1px solid var(--line);border-radius:6px;cursor:grab;
+    box-shadow:0 1px 2px rgba(16,22,26,.07);user-select:none}
+  .node.sel{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc-soft),0 1px 2px rgba(16,22,26,.1)}
+  .node.err{border-color:var(--bad)}
+  .node .nh{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--line-soft)}
+  .node .nh .ic{width:17px;height:17px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9.5px;color:#fff;flex:none}
+  .node .nh .nm{font-size:11.5px;font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .node .nb{padding:5px 8px;font-size:10px;color:var(--ink-3);line-height:1.5}
+  .node .nf{display:flex;align-items:center;justify-content:space-between;padding:3px 8px;border-top:1px solid var(--line-soft);
+    font-size:9.5px;color:var(--ink-4)}
+  .port{position:absolute;width:11px;height:11px;border-radius:50%;background:#fff;border:1.5px solid var(--ink-4);top:50%;
+    transform:translateY(-50%);cursor:crosshair}
+  .port:hover{border-color:var(--acc);background:var(--acc-soft)}
+  .port.i{left:-6px}.port.o{right:-6px}
+  svg.wires{position:absolute;inset:0;pointer-events:none}
+
+  .cbar{position:absolute;left:10px;bottom:10px;display:flex;gap:6px;background:#fff;border:1px solid var(--line);
+    border-radius:5px;padding:4px}
+  .cbar button{border:0;background:transparent;width:24px;height:22px;border-radius:3px;cursor:pointer;color:var(--ink-3);font-size:12px}
+  .cbar button:hover{background:#f1f3f5}
+  .badge{position:absolute;right:10px;top:10px;display:flex;gap:6px}
+
+  /* inspector */
+  .fld{padding:8px 11px;border-bottom:1px solid var(--line-soft)}
+  .fld>.micro{display:block;margin-bottom:4px}
+  select,input[type=text]{width:100%;height:26px;border:1px solid var(--line);border-radius:4px;background:#fff;padding:0 7px;
+    font-size:11.5px;color:var(--ink);font-family:inherit}
+  .io{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line-soft)}
+  .io>div{background:#fff;padding:6px 8px}
+  .io .micro{display:block;margin-bottom:4px}
+  .row{font-size:10px;line-height:1.6;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row b{font-weight:500;color:var(--ink-4)}
+  .added{background:#e8f6f0}.removed{background:#fdecec;text-decoration:line-through;color:var(--ink-4)}
+  .stat{display:flex;justify-content:space-between;padding:3px 11px;font-size:10.5px;color:var(--ink-3)}
+  .stat b{font-weight:600;color:var(--ink)}
+  .note{padding:8px 11px;font-size:10.5px;line-height:1.55;color:var(--ink-3);background:#f8f9fa}
+  .warnbox{margin:8px 11px;padding:7px 8px;background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:4px;
+    font-size:10.5px;line-height:1.5;color:#8a5a12}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>Pipeline Builder</h1>
+  <span class="crumb">CHUM-lab / clinical-intake</span>
+  <span class="pill p-warn">draft · unsaved</span>
+  <span class="r">
+    <span class="micro" id="valid"></span>
+    <button class="btn">Preview run</button>
+    <button class="btn">Save</button>
+    <button class="btn btn-primary">Deploy</button>
+  </span>
+</div>
+<div class="tabs">
+  <div class="tab">Graph <span class="micro" style="margin-left:4px">read-only</span></div>
+  <div class="tab on">Builder</div>
+</div>
+
+<div class="shell">
+  <!-- palette -->
+  <div class="col" id="palette"></div>
+
+  <!-- canvas -->
+  <div class="canvas" id="canvas">
+    <svg class="wires" id="wires"></svg>
+    <div class="badge">
+      <span class="pill p-acc" id="cnt"></span>
+    </div>
+    <div class="cbar">
+      <button title="Zoom in">+</button><button title="Zoom out">−</button>
+      <button title="Fit">⛶</button><button title="Auto-layout">⇄</button>
+    </div>
+  </div>
+
+  <!-- inspector -->
+  <div class="col" id="insp"></div>
+</div>
+
+<script>
+/* ---------------- model ---------------- */
+const PALETTE=[
+  {g:'Input',items:[
+    {k:'dataset',ic:'⛁',c:'in',nm:'Dataset',d:'read a table or stream'},
+  ]},
+  {g:'Transform',items:[
+    {k:'filter',ic:'⧩',c:'tf',nm:'Filter',d:'keep rows matching a rule'},
+    {k:'derive',ic:'ƒ',c:'tf',nm:'Derive column',d:'compute a new field'},
+    {k:'cast',ic:'⇄',c:'tf',nm:'Cast / clean',d:'types, trim, nulls'},
+    {k:'join',ic:'⋈',c:'tf',nm:'Join',d:'combine two inputs'},
+    {k:'aggregate',ic:'Σ',c:'tf',nm:'Aggregate',d:'group and summarise'},
+    {k:'nlp',ic:'✦',c:'tf',nm:'Extract → SNOMED',d:'free text to coded concepts'},
+    {k:'validate',ic:'✓',c:'tf',nm:'Validate',d:'route low-confidence to review'},
+  ]},
+  {g:'Output',items:[
+    {k:'object',ic:'◈',c:'out',nm:'Object type',d:'upsert into the ontology'},
+    {k:'dsout',ic:'⛁',c:'out',nm:'Dataset',d:'write a derived table'},
+  ]},
+];
+
+const NODES=[
+  {id:'n1',k:'dataset',x:20,y:40,nm:'patient_intake',sub:'stream · 12,480 rows',rows:12480},
+  {id:'n2',k:'cast',x:198,y:40,nm:'Clean',sub:'trim · nulls · dates',rows:12480},
+  {id:'n3',k:'nlp',x:376,y:40,nm:'Extract → SNOMED',sub:'threshold 0.85',rows:11902},
+  {id:'n4',k:'validate',x:554,y:40,nm:'Validate',sub:'below 0.6 → review',rows:11340},
+  {id:'n5',k:'object',x:732,y:40,nm:'ClinicalFinding',sub:'key: encounterId + code',rows:11340},
+  {id:'n6',k:'filter',x:198,y:210,nm:'Adults only',sub:'age ≥ 18',rows:9204},
+  {id:'n7',k:'dsout',x:376,y:210,nm:'adults_cohort',sub:'derived table',rows:9204},
+];
+const EDGES=[['n1','n2'],['n2','n3'],['n3','n4'],['n4','n5'],['n1','n6'],['n6','n7']];
+const META={dataset:{ic:'⛁',c:'in'},cast:{ic:'⇄',c:'tf'},nlp:{ic:'✦',c:'tf'},validate:{ic:'✓',c:'tf'},
+  object:{ic:'◈',c:'out'},filter:{ic:'⧩',c:'tf'},derive:{ic:'ƒ',c:'tf'},join:{ic:'⋈',c:'tf'},
+  aggregate:{ic:'Σ',c:'tf'},dsout:{ic:'⛁',c:'out'}};
+let sel='n3';
+
+/* ---------------- palette ---------------- */
+document.getElementById('palette').innerHTML=PALETTE.map(g=>`
+  <div class="pgrp"><div class="t micro">${g.g}</div>
+  ${g.items.map(i=>`<div class="pnode"><span class="ic i-${i.c}">${i.ic}</span>
+    <span><span class="nm">${i.nm}</span><br><span class="d">${i.d}</span></span></div>`).join('')}</div>`).join('')
+  + `<div class="note">Drag a node onto the canvas, then connect ports. Every pipeline needs at least one
+     <b>Input</b> and one <b>Output</b>.</div>`;
+
+/* ---------------- canvas ---------------- */
+const cv=document.getElementById('canvas');
+function drawNodes(){
+  cv.querySelectorAll('.node').forEach(n=>n.remove());
+  NODES.forEach(n=>{
+    const m=META[n.k], el=document.createElement('div');
+    el.className='node'+(sel===n.id?' sel':'');
+    el.style.left=n.x+'px'; el.style.top=n.y+'px'; el.dataset.id=n.id;
+    el.innerHTML=`<div class="nh"><span class="ic i-${m.c}">${m.ic}</span><span class="nm">${n.nm}</span></div>
+      <div class="nb">${n.sub}</div>
+      <div class="nf"><span>${n.rows.toLocaleString()} rows</span><span class="pill p-ok">ok</span></div>
+      ${n.k!=='dataset'?'<div class="port i"></div>':''}
+      ${n.k!=='object'&&n.k!=='dsout'?'<div class="port o"></div>':''}`;
+    cv.appendChild(el);
+    el.addEventListener('mousedown',e=>{
+      if(e.target.classList.contains('port'))return;
+      sel=n.id; drawAll(); const sx=e.clientX-n.x, sy=e.clientY-n.y;
+      const mv=ev=>{n.x=ev.clientX-sx;n.y=ev.clientY-sy;el.style.left=n.x+'px';el.style.top=n.y+'px';drawWires();};
+      const up=()=>{document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);};
+      document.addEventListener('mousemove',mv);document.addEventListener('mouseup',up);
+    });
+  });
+}
+function drawWires(){
+  const W=document.getElementById('wires');
+  W.innerHTML=`<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5"
+    orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#9aa5b1"/></marker></defs>`+
+    EDGES.map(([a,b])=>{
+      const A=NODES.find(n=>n.id===a), B=NODES.find(n=>n.id===b);
+      const x1=A.x+160, y1=A.y+37, x2=B.x, y2=B.y+37, mx=(x1+x2)/2;
+      return `<path d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2-8},${y2}" fill="none" stroke="#8a94a0"
+        stroke-width="1.6" marker-end="url(#a)"/>`;
+    }).join('');
+  document.getElementById('cnt').textContent=`${NODES.length} nodes · ${EDGES.length} edges`;
+}
+
+/* ---------------- inspector ---------------- */
+const CFG={
+  nlp:`<div class="fld"><span class="micro">Text column</span>
+      <select><option>note_text</option><option>chief_complaint</option></select></div>
+    <div class="fld"><span class="micro">Confidence threshold</span>
+      <select><option>0.85</option><option>0.75</option><option>0.90</option></select></div>
+    <div class="fld"><span class="micro">Contexts captured</span>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:2px">
+        <span class="pill p-acc">assertion</span><span class="pill p-acc">subject</span><span class="pill p-acc">certainty</span></div></div>`,
+  validate:`<div class="fld"><span class="micro">Below confidence</span><select><option>0.6 → review queue</option><option>0.6 → drop</option></select></div>
+    <div class="fld"><span class="micro">Duplicates</span><select><option>skip</option><option>keep newest</option></select></div>`,
+  object:`<div class="fld"><span class="micro">Object type</span><select><option>ClinicalFinding</option><option>Patient</option></select></div>
+    <div class="fld"><span class="micro">Identity (primary key)</span>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:2px"><span class="pill p-acc">encounterId</span><span class="pill p-acc">code</span></div></div>
+    <div class="fld"><span class="micro">On re-run</span><select><option>upsert (update matching)</option><option>append</option></select></div>`,
+  dataset:`<div class="fld"><span class="micro">Dataset</span><select><option>patient_intake</option><option>seqaleatoire-semaines</option></select></div>
+    <div class="fld"><span class="micro">Read mode</span><select><option>live — follow the stream</option><option>latest version</option></select></div>`,
+};
+const IO={
+  nlp:{in:['<b>note_text</b> "c/o chest pain…"','<b>encounterId</b> E-40912','<b>recordedAt</b> 2026-07-29'],
+       out:['<b>encounterId</b> E-40912','<span class="added"><b>code</b> 29857009</span>','<span class="added"><b>term</b> Chest pain</span>','<span class="added"><b>assertion</b> present</span>','<span class="added"><b>confidence</b> 0.91</span>','<span class="removed"><b>note_text</b> …</span>']},
+  validate:{in:['<b>code</b> 29857009','<b>confidence</b> 0.91'],out:['<b>code</b> 29857009','<b>confidence</b> 0.91','<span class="added"><b>_route</b> accept</span>']},
+  object:{in:['<b>encounterId</b> E-40912','<b>code</b> 29857009'],out:['<b>ClinicalFinding</b> upserted','<b>key</b> E-40912 · 29857009']},
+  dataset:{in:['—'],out:['<b>note_text</b> string','<b>encounterId</b> string','<b>recordedAt</b> timestamp']},
+};
+function drawInsp(){
+  const n=NODES.find(x=>x.id===sel), m=META[n.k];
+  const io=IO[n.k]||{in:['—'],out:['—']};
+  document.getElementById('insp').innerHTML=`
+    <div class="head"><span class="micro">Node</span><span class="pill p-ok">ok</span></div>
+    <div class="fld" style="display:flex;align-items:center;gap:7px">
+      <span class="ic i-${m.c}" style="width:19px;height:19px;border-radius:4px;display:flex;align-items:center;
+        justify-content:center;font-size:10.5px;color:#fff;background:var(--${m.c})">${m.ic}</span>
+      <input type="text" value="${n.nm}" style="flex:1" /></div>
+    ${CFG[n.k]||'<div class="fld"><span class="micro">Rule</span><input type="text" value="age >= 18" /></div>'}
+
+    <div class="head" style="border-top:1px solid var(--line)"><span class="micro">Input → Output</span>
+      <span class="micro">first row</span></div>
+    <div class="io">
+      <div><span class="micro">In</span>${io.in.map(r=>`<div class="row">${r}</div>`).join('')}</div>
+      <div><span class="micro">Out</span>${io.out.map(r=>`<div class="row">${r}</div>`).join('')}</div>
+    </div>
+    <div style="padding:6px 0;border-bottom:1px solid var(--line-soft)">
+      <div class="stat"><span>Rows in</span><b>${(n.rows+578).toLocaleString()}</b></div>
+      <div class="stat"><span>Rows out</span><b>${n.rows.toLocaleString()}</b></div>
+      <div class="stat"><span>Dropped</span><b style="color:var(--warn)">578</b></div>
+    </div>
+    ${n.k==='nlp'?`<div class="warnbox"><b>578 rows produced no concept.</b> They are dropped here, not flagged —
+      add a Validate node downstream if you need them reviewed instead of lost.</div>`:''}
+    ${n.k==='dataset'?`<div class="warnbox"><b>Live mode.</b> This pipeline re-runs as rows arrive on the stream,
+      so the ontology — and the twin reading it — update without a manual materialize.</div>`:''}
+    <div class="note">Every node shows what went in and what came out. That is the thing the linear
+      channel editor could never show you.</div>`;
+}
+function drawAll(){drawNodes();drawWires();drawInsp();
+  document.getElementById('valid').textContent='✓ 6 nodes valid · 1 output';}
+drawAll();
+</script>
+</body>
+</html>

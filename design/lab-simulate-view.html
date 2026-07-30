@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Obscyro — Model Lab · Simulate (mockup)</title>
+<style>
+  :root {
+    --bg:#f6f7f9; --line:#d3d8de; --line-soft:#e5e8eb;
+    --ink:#1c2127; --ink-2:#404854; --ink-3:#5f6b7c; --ink-4:#8f99a8;
+    --acc:#2d72d2; --acc-dark:#215db0; --acc-soft:#e7f2fd;
+    --ok:#1d9e75; --warn:#d9822b; --warn-bg:#fdf6ec; --warn-line:#f0d9b5; --bad:#c23030;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:13px/1.45 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+  .micro { font-size:10px; font-weight:500; text-transform:uppercase; letter-spacing:.045em; color:var(--ink-4); }
+  .mono { font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-variant-numeric:tabular-nums; }
+  .panel { background:#fff; border:1px solid var(--line); border-radius:6px; }
+  .panel-head { display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding:6px 11px; border-bottom:1px solid var(--line); }
+  .wrap { max-width:1400px; margin:0 auto; padding:16px; }
+  .tabs { display:flex; gap:2px; border-bottom:1px solid var(--line); margin-bottom:14px; }
+  .tab { padding:7px 14px; font-size:12px; font-weight:500; color:var(--ink-3); border:1px solid transparent;
+    border-bottom:none; border-radius:5px 5px 0 0; cursor:pointer; position:relative; top:1px; }
+  .tab.on { background:#fff; border-color:var(--line); color:var(--acc-dark); }
+  h1 { font-size:16px; font-weight:600; margin:0 0 3px; letter-spacing:-.01em; }
+  .sub { font-size:11.5px; color:var(--ink-3); max-width:700px; margin-bottom:12px; }
+
+  .depbanner { display:flex; align-items:center; gap:8px; padding:7px 11px; font-size:11px;
+    background:var(--warn-bg); border:1px solid var(--warn-line); border-radius:5px; color:#8a5a12; margin-bottom:12px; }
+  .depbanner b { color:#6b430b; } .depbanner .r { margin-left:auto; }
+
+  /* scenario cards */
+  .scen { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-bottom:12px; }
+  .scard { background:#fff; border:1px solid var(--line); border-radius:6px; padding:9px 10px; cursor:pointer; position:relative; }
+  .scard.on { border-color:var(--acc); background:var(--acc-soft); box-shadow:inset 0 0 0 1px var(--acc); }
+  .scard .ico { font-size:15px; line-height:1; margin-bottom:5px; display:block; }
+  .scard .t { font-size:12px; font-weight:600; margin-bottom:2px; }
+  .scard .d { font-size:10.5px; color:var(--ink-3); line-height:1.4; }
+  .scard .new { position:absolute; top:-7px; right:8px; font-size:8.5px; font-weight:600; text-transform:uppercase;
+    letter-spacing:.04em; background:var(--ok); color:#fff; border-radius:3px; padding:1px 5px; }
+
+  .body { display:grid; grid-template-columns:288px minmax(0,1fr) 324px; gap:12px; align-items:start; }
+  .stack { display:flex; flex-direction:column; gap:12px; }
+
+  /* setup */
+  .fld { padding:8px 11px; border-bottom:1px solid var(--line-soft); }
+  .fld:last-child { border-bottom:0; }
+  .fld > .micro { display:block; margin-bottom:4px; }
+  select, input[type=text] { width:100%; height:26px; border:1px solid var(--line); border-radius:4px; background:#fff;
+    padding:0 7px; font-size:11.5px; color:var(--ink); font-family:inherit; }
+  input[type=range] { width:100%; accent-color:var(--acc); }
+  .scales { display:grid; grid-template-columns:1fr 1fr; gap:4px; }
+  .sc { border:1px solid var(--line); border-radius:4px; padding:5px 7px; cursor:pointer; background:#fff; }
+  .sc.on { border-color:var(--acc); background:var(--acc-soft); }
+  .sc .n { font-size:11.5px; font-weight:600; color:var(--ink); }
+  .sc.on .n { color:var(--acc-dark); }
+  .sc .u { font-size:9.5px; color:var(--ink-4); }
+  .scnote { margin-top:6px; font-size:10.5px; line-height:1.5; color:var(--ink-3);
+    background:#f8f9fa; border-radius:4px; padding:6px 7px; }
+  .scnote b { color:var(--ink-2); }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+  .engine { display:flex; align-items:center; gap:7px; font-size:11.5px; }
+  .pill { display:inline-flex; align-items:center; gap:4px; border-radius:3px; padding:1px 6px; font-size:9.5px; font-weight:500; }
+  .p-ok{background:#e8f6f0;color:#12684c}.p-warn{background:var(--warn-bg);color:#8a5a12;border:1px solid var(--warn-line)}
+  .p-acc{background:var(--acc-soft);color:var(--acc-dark)}
+  .btn { height:28px; display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:0 12px;
+    border-radius:4px; font-size:12px; font-weight:500; cursor:pointer; border:1px solid var(--line);
+    background:#fff; color:var(--ink-2); font-family:inherit; }
+  .btn-primary { background:var(--acc); border-color:var(--acc-dark); color:#fff; }
+  .btn-lg { height:34px; width:100%; font-size:12.5px; }
+
+  /* map */
+  .maphead { display:flex; align-items:center; gap:10px; }
+  .legend { display:flex; align-items:center; gap:6px; margin-left:auto; }
+  .ramp { height:8px; width:96px; border-radius:2px; border:1px solid var(--line-soft);
+    background:linear-gradient(90deg,#fff,#fbe3c0,#ef9a6a,#c23030); }
+  .maparea { position:relative; background:#fbfcfd; }
+  .tl { display:flex; align-items:center; gap:9px; padding:7px 11px; border-top:1px solid var(--line-soft); }
+  .tl input { flex:1; }
+  .tl .d { font-size:11px; color:var(--ink-2); min-width:52px; font-variant-numeric:tabular-nums; }
+
+  /* outcome */
+  .head { padding:11px; border-bottom:1px solid var(--line-soft); }
+  .head .big { font-size:26px; font-weight:600; letter-spacing:-.02em; line-height:1.05; }
+  .head .cap { font-size:11.5px; color:var(--ink-3); margin-top:5px; line-height:1.5; }
+  .kv { display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:10px 11px; }
+  .kv div { background:#f8f9fa; border-radius:4px; padding:5px 7px; }
+  .kv .v { font-size:13.5px; font-weight:600; }
+  .kv .v small { font-size:10px; font-weight:400; color:var(--ink-4); }
+  .iv { display:flex; align-items:center; gap:8px; padding:6px 11px; border-bottom:1px solid var(--line-soft); cursor:pointer; }
+  .iv:hover { background:#f8f9fa; } .iv:last-child { border-bottom:0; }
+  .iv .nm { font-size:11.5px; flex:1; }
+  .iv .nm small { display:block; color:var(--ink-4); font-size:10px; }
+  .iv .delta { font-size:12px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .bar { height:5px; border-radius:3px; }
+  .idle { padding:28px 16px; text-align:center; font-size:11.5px; color:var(--ink-4); line-height:1.65; }
+  .prov { padding:8px 11px; font-size:10.5px; line-height:1.55; color:var(--ink-3); border-top:1px solid var(--line-soft); }
+  .prov b { color:var(--ink-2); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="tabs">
+    <div class="tab">Correlation</div><div class="tab">Train</div><div class="tab on">Simulate</div>
+  </div>
+
+  <h1>Simulate</h1>
+  <div class="sub">
+    Forecasting asks <i>what happens next</i>. Simulation asks <b>what happens if</b> — you change something in the
+    twin that has not happened, and the engine replays the world under that change. Every run is a comparison
+    against the same world without it.
+  </div>
+
+  <div class="depbanner">⚠ <span><b>simulation-service is not deployed.</b> Mechanistic runs fall back to the
+    in-process approximation — directionally right, but not the calibrated engine.</span>
+    <span class="r"><button class="btn" style="height:23px;font-size:11px">Deploy on Railway</button></span></div>
+
+  <!-- scenario type -->
+  <div class="scen" id="scen"></div>
+
+  <div class="body">
+    <!-- ============ SETUP ============ -->
+    <div class="panel">
+      <div class="panel-head"><span class="micro">Scenario</span><span class="micro">seed 4417</span></div>
+
+      <div class="fld"><span class="micro">Scale — what a node is</span>
+        <div class="scales" id="scales"></div>
+        <div class="scnote" id="scNote"></div>
+      </div>
+
+      <div class="fld"><span class="micro" id="whereLbl">Origin</span>
+        <select id="origin"></select></div>
+
+      <div class="fld"><span class="micro">Starts</span>
+        <select><option>in 3 days</option><option>now</option><option>in 7 days</option><option>in 14 days</option></select></div>
+
+      <div class="fld"><span class="micro">Magnitude — <b id="magV" class="mono" style="color:var(--ink-2)">R₀ 2.4</b></span>
+        <input type="range" id="mag" min="8" max="45" value="24" />
+        <div style="display:flex;justify-content:space-between"><span class="micro">mild 0.8</span><span class="micro">severe 4.5</span></div></div>
+
+      <div class="fld"><span class="micro">Engine</span>
+        <div class="engine" id="engine"></div>
+        <div class="scnote" id="engNote" style="margin-top:6px"></div></div>
+
+      <div class="fld"><div class="row2">
+        <div><span class="micro">Horizon</span><select><option>30 days</option><option>60 days</option><option>90 days</option></select></div>
+        <div><span class="micro">Runs</span><select id="runs"><option>50</option><option>10</option><option>200</option></select></div>
+      </div></div>
+
+      <div class="fld"><button class="btn btn-primary btn-lg" id="run">▶ Run scenario</button>
+        <div class="micro" style="text-align:center;margin-top:6px" id="runHint"></div></div>
+    </div>
+
+    <!-- ============ CANVAS ============ -->
+    <div class="stack">
+      <div class="panel">
+        <div class="panel-head"><span class="maphead"><span class="micro">Where it spreads</span>
+          <span class="pill p-acc" id="mapScale"></span></span>
+          <span class="legend"><span class="micro">0%</span><div class="ramp"></div><span class="micro">60%+ affected</span></span></div>
+        <div class="maparea"><svg width="100%" height="300" viewBox="0 0 740 300" id="map"></svg></div>
+        <div class="tl"><span class="micro">Day</span><input type="range" id="day" min="0" max="30" value="12" />
+          <span class="d mono" id="dayV">12 / 30</span>
+          <button class="btn" style="height:23px;font-size:11px" id="play">▶ Play</button></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><span class="micro">Outcome vs. the same world without the event</span>
+          <span class="micro">median with 10–90% band · 50 runs</span></div>
+        <div style="padding:10px 12px 4px"><svg width="100%" height="152" viewBox="0 0 740 152" id="fan"></svg></div>
+        <div style="display:flex;gap:14px;padding:0 12px 10px">
+          <span class="micro" style="display:flex;align-items:center;gap:5px">
+            <svg width="14" height="3"><line x1="0" y1="1.5" x2="14" y2="1.5" stroke="#8f99a8" stroke-width="1.6" stroke-dasharray="3 2"/></svg>baseline — no event</span>
+          <span class="micro" style="display:flex;align-items:center;gap:5px">
+            <svg width="14" height="3"><line x1="0" y1="1.5" x2="14" y2="1.5" stroke="#c23030" stroke-width="1.8"/></svg>scenario</span>
+          <span class="micro" style="display:flex;align-items:center;gap:5px">
+            <svg width="14" height="3"><line x1="0" y1="1.5" x2="14" y2="1.5" stroke="#2d72d2" stroke-width="1.8"/></svg>scenario + best intervention</span>
+          <span class="micro" style="margin-left:auto">shaded = capacity exceeded</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ READ-OUT ============ -->
+    <div class="stack">
+      <div class="panel">
+        <div class="panel-head"><span class="micro">What this means</span><span class="micro" id="outTag"></span></div>
+        <div id="out"><div class="idle">Set the scenario and run it.<br />The read-out lands here as a comparison,<br />never as a single number.</div></div>
+      </div>
+
+      <div class="panel" id="ivPanel" style="display:none">
+        <div class="panel-head"><span class="micro">What if we acted</span><span class="micro">re-run with a change</span></div>
+        <div id="ivs"></div>
+        <div class="prov">Each row re-runs the identical world — same seed, same contacts — with one thing
+          changed. That is the only comparison that means anything; two runs with different seeds do not.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= config ================= */
+const SCENARIOS = [
+  {id:'outbreak', ico:'🦠', t:'Outbreak',        d:'A pathogen is introduced at one node and spreads along contacts.'},
+  {id:'geo',      ico:'🗺️', t:'Geographic event', d:'Something hits a place — flood, heatwave, closure — and radiates outward.', neu:true},
+  {id:'surge',    ico:'📈', t:'Demand surge',     d:'Arrivals rise by a set amount over a window.'},
+  {id:'closure',  ico:'⛔', t:'Capacity loss',    d:'A unit or site goes offline; its load redistributes.'},
+  {id:'staff',    ico:'👥', t:'Staff shortage',   d:'Care-hours drop; length of stay and transfer risk rise.'},
+];
+const SCALES = {
+  unit: {t:'Unit', u:'a bed', n:6,
+    note:'Nodes are <b>beds and bays</b> in one ward. Edges are shared-room and shared-nurse contact. Backed by <b>Bed</b> objects in 6 West.',
+    eng:'Contact SEIR', real:true, engNote:'Individual-level. Exact for small n, pointless above a few hundred nodes.'},
+  facility:{t:'Facility', u:'a ward', n:8,
+    note:'Nodes are <b>wards</b>. Edges are patient transfers and shared staff. This is what the twin runs today — backed by <b>OrgUnit</b> + transfer history.',
+    eng:'Contact SEIR', real:true, engNote:'The deployed model. Calibrated against 2022–24 transfer records.'},
+  region:{t:'Region', u:'a site', n:11,
+    note:'Nodes are <b>facilities across a territory</b>. Edges are inter-site transfers <i>and</i> physical distance. Needs <b>lat/lng on OrgUnit</b> — already there from the globe view.',
+    eng:'Spatial SEIR', real:true, engNote:'Same engine, spatial edge weights. Distance decay is a fitted parameter, not a guess.'},
+  population:{t:'Population', u:'a census area', n:34,
+    note:'Nodes are <b>census areas of ~50k people</b>, not individuals. Edges are commuting flows. Backed by the <b>CCHS + census dataset</b> — 1.7 M people across 34 areas.',
+    eng:'Metapopulation SEIR', real:false, engNote:'Compartments per area coupled by a mobility matrix. Not yet in the service — this is the model class to add for population-scale questions.'},
+};
+const ORIGINS = {
+  unit:['Bay 6W-04','Bay 6W-11','Bay 6W-02','Isolation room 6W-A'],
+  facility:['6 West — medicine','7 East — surgery','ICU','Emergency','Long-term care'],
+  region:['Jewish General','Royal Victoria','Sacré-Cœur','Maisonneuve-Rosemont','Lakeshore','Verdun'],
+  population:['Montréal-Nord','Côte-des-Neiges','Villeray','Ahuntsic','Saint-Léonard','Rivière-des-Prairies'],
+};
+let scen='outbreak', scale='region', day=12, ran=false, iv='none', timer=null;
+
+/* deterministic node layouts */
+function nodes(sc){
+  const out=[]; const R=(s)=>{let x=Math.sin(s)*10000; return x-Math.floor(x);};
+  if(sc==='unit'||sc==='facility'){ const n=SCALES[sc].n, cols=4;
+    for(let i=0;i<n;i++) out.push({x:150+(i%cols)*135, y:95+Math.floor(i/cols)*105, r:sc==='unit'?18:24,
+      name:(ORIGINS[sc][i]||`${SCALES[sc].t} ${i+1}`)}); }
+  else if(sc==='region'){ const pts=[[150,95],[248,140],[196,205],[318,80],[392,150],[350,222],[470,105],[540,178],[612,120],[268,58],[452,238]];
+    pts.forEach((p,i)=>out.push({x:p[0],y:p[1],r:13+R(i)*11,name:ORIGINS.region[i]||`Site ${i+1}`})); }
+  else { let i=0; for(let r=0;r<5;r++) for(let c=0;c<7;c++){ if(i>=34) break;
+      out.push({x:160+c*68+(r%2?34:0), y:62+r*50, r:16, hex:true, name:ORIGINS.population[i]||`Area ${i+1}`}); i++; } }
+  return out;
+}
+/* attack rate at a node on a given day: distance from origin + time */
+function attack(nds,oi,i,d){
+  const o=nds[oi], n=nds[i];
+  const dist=Math.hypot(n.x-o.x,n.y-o.y)/(scale==='population'?150:190);
+  const t=(d/30)*6 - dist*1.5;
+  return Math.max(0, Math.min(.82, 1/(1+Math.exp(-t)) * (0.88 - dist*0.16)));
+}
+function heat(v){ const s=Math.min(1,v/0.6);
+  const stops=[[255,255,255],[251,227,192],[239,154,106],[194,48,48]];
+  const p=s*(stops.length-1), i=Math.min(stops.length-2,Math.floor(p)), f=p-i;
+  const c=stops[i].map((a,k)=>Math.round(a+(stops[i+1][k]-a)*f));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+/* ================= renderers ================= */
+function renderScen(){
+  document.getElementById('scen').innerHTML = SCENARIOS.map(s=>`
+    <div class="scard ${scen===s.id?'on':''}" data-s="${s.id}">${s.neu?'<span class="new">new</span>':''}
+      <span class="ico">${s.ico}</span><div class="t">${s.t}</div><div class="d">${s.d}</div></div>`).join('');
+  document.querySelectorAll('.scard').forEach(e=>e.onclick=()=>{ scen=e.dataset.s;
+    if(scen==='geo'&&scale!=='region'&&scale!=='population') scale='region'; renderAll(); });
+}
+function renderScales(){
+  document.getElementById('scales').innerHTML = Object.entries(SCALES).map(([k,v])=>`
+    <div class="sc ${scale===k?'on':''}" data-k="${k}"><div class="n">${v.t}</div><div class="u">node = ${v.u}</div></div>`).join('');
+  document.querySelectorAll('.sc').forEach(e=>e.onclick=()=>{ scale=e.dataset.k; renderAll(); });
+  const v=SCALES[scale];
+  document.getElementById('scNote').innerHTML=v.note;
+  document.getElementById('engine').innerHTML=
+    `<b style="font-weight:600">${v.eng}</b>${v.real?'<span class="pill p-ok">runnable</span>':'<span class="pill p-warn">not built yet</span>'}`;
+  document.getElementById('engNote').innerHTML=v.engNote;
+  document.getElementById('whereLbl').textContent = scale==='population'?'Origin area':scale==='region'?'Origin site':'Origin node';
+  document.getElementById('origin').innerHTML=(ORIGINS[scale]||[]).map(o=>`<option>${o}</option>`).join('');
+  document.getElementById('mapScale').textContent=`${nodes(scale).length} nodes · ${v.u.replace('a ','')}`;
+  document.getElementById('runHint').textContent=`${nodes(scale).length} nodes · 50 runs · ≈ ${v.real?'7 s':'engine missing'}`;
+}
+function renderMap(){
+  const nds=nodes(scale), oi=0, svg=document.getElementById('map');
+  let h='';
+  if(scale==='region') h+=`<path d="M92,150 C110,72 210,34 320,42 C452,52 560,58 640,92 C692,116 686,196 622,222
+     C540,254 430,272 320,262 C200,250 112,222 92,150 Z" fill="#eef1f4" stroke="#dfe4e9"/>`;
+  if(scale==='unit'||scale==='facility') h+=`<rect x="112" y="52" width="520" height="200" rx="8" fill="#eef1f4" stroke="#dfe4e9"/>`;
+  /* edges */
+  nds.forEach((a,i)=>nds.forEach((b,j)=>{ if(j<=i) return;
+    const d=Math.hypot(a.x-b.x,a.y-b.y); if(d>(scale==='population'?78:135)) return;
+    const w=Math.min(2.4, 90/d), flow=(attack(nds,oi,i,day)+attack(nds,oi,j,day))/2;
+    h+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${flow>.18?'#e0a189':'#cfd6dd'}"
+        stroke-width="${w}" stroke-opacity="${.3+flow*.6}"/>`; }));
+  /* nodes */
+  nds.forEach((n,i)=>{ const a=attack(nds,oi,i,day), c=heat(a);
+    h += n.hex
+      ? `<polygon points="${[0,1,2,3,4,5].map(k=>{const ang=Math.PI/180*(60*k-30);
+          return `${(n.x+n.r*Math.cos(ang)).toFixed(1)},${(n.y+n.r*Math.sin(ang)).toFixed(1)}`;}).join(' ')}"
+          fill="${c}" stroke="${i===oi?'#7a1f1f':'#b9c2cc'}" stroke-width="${i===oi?2:1}"/>`
+      : `<circle cx="${n.x}" cy="${n.y}" r="${n.r}" fill="${c}" stroke="${i===oi?'#7a1f1f':'#b9c2cc'}" stroke-width="${i===oi?2:1}"/>`;
+    if(i===oi) h+=`<circle cx="${n.x}" cy="${n.y}" r="${n.r+6}" fill="none" stroke="#c23030" stroke-width="1" stroke-dasharray="3 2"/>`;
+    if(a>.32) h+=`<text x="${n.x}" y="${n.y+3.5}" text-anchor="middle" font-size="9.5" fill="${a>.5?'#fff':'#5f3a1a'}"
+        font-family="ui-monospace,monospace">${Math.round(a*100)}</text>`;
+    if(scale!=='population'||i<7) h+=`<text x="${n.x}" y="${n.y+n.r+11}" text-anchor="middle" font-size="9" fill="#5f6b7c">${n.name}</text>`;
+  });
+  h+=`<text x="${nds[oi].x}" y="${nds[oi].y-nds[oi].r-11}" text-anchor="middle" font-size="9.5" fill="#c23030" font-weight="600">origin</text>`;
+  svg.innerHTML=h;
+  document.getElementById('dayV').textContent=`${day} / 30`;
+}
+function curve(f){ return Array.from({length:31},(_,d)=>f(d)); }
+function poly(v,w,h,mx){ return v.map((y,i)=>`${(i/(v.length-1)*w).toFixed(1)},${(h-8-(y/mx)*(h-20)).toFixed(1)}`).join(' '); }
+function renderFan(){
+  const mag=+document.getElementById('mag').value/10;
+  const base=curve(d=>28+Math.sin(d/6)*3+d*0.12);
+  const sc  =curve(d=>28+70*Math.exp(-Math.pow((d-12)/5.2,2))*(mag/2.4)+d*0.12);
+  const best=curve(d=>28+34*Math.exp(-Math.pow((d-15)/6.4,2))*(mag/2.4)+d*0.12);
+  const mx=110, w=740, h=152, cap=88;
+  const band=(v,sp)=>`${poly(v.map(y=>y*(1+sp)),w,h,mx)} ${poly(v.map(y=>y*(1-sp)),w,h,mx).split(' ').reverse().join(' ')}`;
+  document.getElementById('fan').innerHTML=`
+    <rect x="0" y="0" width="${w}" height="${h-8-(cap/mx)*(h-20)}" fill="#fdf1f1"/>
+    <line x1="0" y1="${h-8-(cap/mx)*(h-20)}" x2="${w}" y2="${h-8-(cap/mx)*(h-20)}" stroke="#e3b0b0" stroke-dasharray="4 3"/>
+    <text x="6" y="${h-12-(cap/mx)*(h-20)}" font-size="9.5" fill="#a33">bed capacity</text>
+    <polygon points="${band(sc,.17)}" fill="#c23030" fill-opacity=".13"/>
+    <polygon points="${band(best,.15)}" fill="#2d72d2" fill-opacity=".12"/>
+    <polyline points="${poly(base,w,h,mx)}" fill="none" stroke="#8f99a8" stroke-width="1.6" stroke-dasharray="3 2"/>
+    <polyline points="${poly(best,w,h,mx)}" fill="none" stroke="#2d72d2" stroke-width="1.8"/>
+    <polyline points="${poly(sc,w,h,mx)}" fill="none" stroke="#c23030" stroke-width="1.8"/>
+    <line x1="${day/30*w}" y1="0" x2="${day/30*w}" y2="${h}" stroke="#1c2127" stroke-width="1" stroke-opacity=".35"/>`;
+}
+function renderOut(){
+  if(!ran){ document.getElementById('out').innerHTML=
+    `<div class="idle">Set the scenario and run it.<br />The read-out lands here as a comparison,<br />never as a single number.</div>`;
+    document.getElementById('outTag').textContent=''; document.getElementById('ivPanel').style.display='none'; return; }
+  const mag=+document.getElementById('mag').value/10, v=SCALES[scale];
+  const peak=Math.round(62+mag*17), over=Math.max(0,Math.round((peak-88)/3));
+  document.getElementById('outTag').textContent=v.eng.toLowerCase();
+  document.getElementById('out').innerHTML=`
+    <div class="head">
+      <div class="big" style="color:${peak>88?'var(--bad)':'var(--warn)'}">${peak > 88 ? 'Capacity exceeded' : 'Stays within capacity'}</div>
+      <div class="cap">Peak on <b>day 12</b> at <b>${peak} beds</b> against 88 available — ${peak>88
+        ? `<b>${over} days over</b> in the median run. 41 of 50 runs breach.`
+        : 'no run breaches capacity.'}
+        Baseline for the same period peaks at 31.</div>
+    </div>
+    <div class="kv">
+      <div><div class="micro">Peak day</div><div class="v mono">12 <small>± 2.4</small></div></div>
+      <div><div class="micro">Total affected</div><div class="v mono">${Math.round(mag*340)} <small>10–90%: ±${Math.round(mag*90)}</small></div></div>
+      <div><div class="micro">Nodes reached</div><div class="v mono">${Math.min(nodes(scale).length,Math.round(nodes(scale).length*.72))} / ${nodes(scale).length}</div></div>
+      <div><div class="micro">Runs breaching</div><div class="v mono">${peak>88?41:0} / 50</div></div>
+    </div>
+    <div class="prov">Ran <b>${v.eng}</b> on ${nodes(scale).length} nodes, seed 4417, 50 replicates.
+      ${v.real?'':'<b style="color:#8a5a12">This engine is not built — the numbers above are the facility model stretched to this scale, which understates mixing.</b> '}
+      Bands are run-to-run spread only; they do not cover being wrong about R₀.</div>`;
+  const IVS=[
+    {n:'Do nothing', s:'the baseline for comparison', d:0, c:'#8f99a8'},
+    {n:'Close the origin node', s:'day 3, redistribute load', d:-38, c:'#2d72d2'},
+    {n:'Add 12 isolation beds', s:'available from day 5', d:-24, c:'#2d72d2'},
+    {n:'Both', s:'closure + isolation capacity', d:-51, c:'var(--ok)'},
+  ];
+  document.getElementById('ivPanel').style.display='';
+  document.getElementById('ivs').innerHTML=IVS.map(x=>`
+    <div class="iv"><div class="nm">${x.n}<small>${x.s}</small></div>
+      <div class="bar" style="width:${Math.abs(x.d)*1.1+4}px;background:${x.c}"></div>
+      <div class="delta" style="color:${x.d?'var(--ok)':'var(--ink-4)'}">${x.d?x.d+'%':'—'}</div></div>`).join('');
+}
+function renderAll(){ renderScen(); renderScales(); renderMap(); renderFan(); renderOut(); }
+
+/* ================= wiring ================= */
+document.getElementById('day').oninput=e=>{ day=+e.target.value; renderMap(); renderFan(); };
+document.getElementById('mag').oninput=e=>{ const r=(e.target.value/10).toFixed(1);
+  document.getElementById('magV').textContent='R₀ '+r; renderFan(); renderOut(); };
+document.getElementById('origin').onchange=()=>{ renderMap(); };
+document.getElementById('run').onclick=()=>{ const b=document.getElementById('run');
+  b.textContent='Running 50 replicates…'; setTimeout(()=>{ ran=true; b.textContent='▶ Re-run'; renderOut(); },700); };
+document.getElementById('play').onclick=()=>{ if(timer){clearInterval(timer);timer=null;
+    document.getElementById('play').textContent='▶ Play'; return;}
+  document.getElementById('play').textContent='❚❚ Pause';
+  timer=setInterval(()=>{ day=(day+1)%31; document.getElementById('day').value=day; renderMap(); renderFan(); },260); };
+
+renderAll();
+</script>
+</body>
+</html>

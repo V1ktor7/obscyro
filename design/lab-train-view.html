@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Obscyro — Model Lab · Train (mockup)</title>
+<style>
+  :root {
+    --bg:#f6f7f9; --line:#d3d8de; --line-soft:#e5e8eb;
+    --ink:#1c2127; --ink-2:#404854; --ink-3:#5f6b7c; --ink-4:#8f99a8;
+    --acc:#2d72d2; --acc-dark:#215db0; --acc-soft:#e7f2fd;
+    --ok:#1d9e75; --warn:#d9822b; --warn-bg:#fdf6ec; --warn-line:#f0d9b5;
+    --bad:#c23030;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:13px/1.45 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+  .micro { font-size:10px; font-weight:500; text-transform:uppercase; letter-spacing:.045em; color:var(--ink-4); }
+  .mono { font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-variant-numeric:tabular-nums; }
+  .panel { background:#fff; border:1px solid var(--line); border-radius:6px; }
+  .panel-head { display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding:6px 11px; border-bottom:1px solid var(--line); }
+
+  .wrap { max-width:1360px; margin:0 auto; padding:16px; }
+  .tabs { display:flex; gap:2px; border-bottom:1px solid var(--line); margin-bottom:14px; }
+  .tab { padding:7px 14px; font-size:12px; font-weight:500; color:var(--ink-3); border:1px solid transparent;
+    border-bottom:none; border-radius:5px 5px 0 0; cursor:pointer; position:relative; top:1px; }
+  .tab.on { background:#fff; border-color:var(--line); color:var(--acc-dark); }
+  h1 { font-size:16px; font-weight:600; margin:0 0 3px; letter-spacing:-.01em; }
+  .sub { font-size:11.5px; color:var(--ink-3); max-width:680px; margin-bottom:14px; }
+
+  .body { display:grid; grid-template-columns:minmax(0,1fr) 330px; gap:12px; align-items:start; }
+  .stack { display:flex; flex-direction:column; gap:12px; }
+
+  /* step headers */
+  .step { display:flex; align-items:center; gap:8px; }
+  .num { width:17px; height:17px; border-radius:50%; background:var(--acc-soft); color:var(--acc-dark);
+    font-size:10px; font-weight:600; display:flex; align-items:center; justify-content:center; flex:none; }
+  .step .lbl { font-size:11px; font-weight:600; color:var(--ink-2); }
+  .step .aside { margin-left:auto; }
+
+  /* the sentence */
+  .sentence { padding:14px 14px 15px; font-size:15px; line-height:2.15; color:var(--ink-2); letter-spacing:-.005em; }
+  .sel { position:relative; display:inline-block; }
+  .sel select { appearance:none; border:0; border-bottom:1.5px dashed var(--acc); background:var(--acc-soft);
+    color:var(--acc-dark); font:inherit; font-weight:600; font-size:15px; padding:1px 20px 2px 7px;
+    border-radius:4px 4px 0 0; cursor:pointer; }
+  .sel::after { content:"▾"; position:absolute; right:6px; top:2px; font-size:10px; color:var(--acc-dark); pointer-events:none; }
+  .sentence .note { display:block; font-size:11px; color:var(--ink-4); line-height:1.5; margin-top:8px; }
+
+  /* feature table */
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; font-size:10px; font-weight:500; text-transform:uppercase; letter-spacing:.04em;
+    color:var(--ink-4); padding:6px 11px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  td { padding:6px 11px; border-bottom:1px solid var(--line-soft); font-size:11.5px; color:var(--ink-2); vertical-align:middle; }
+  tbody tr:last-child td { border-bottom:0; }
+  tr.off td { color:var(--ink-4); }
+  tr.off td .sname { color:var(--ink-4); }
+  .sname { font-weight:500; color:var(--ink); }
+  .dot { width:5px; height:5px; border-radius:50%; display:inline-block; flex:none; }
+  .d-ds{background:#1d9e75}.d-ot{background:var(--acc)}.d-ch{background:#8f99a8}.d-self{background:#7961a8}
+  input[type=checkbox]{margin:0;accent-color:var(--acc);width:12px;height:12px}
+  .stepper { display:inline-flex; align-items:center; border:1px solid var(--line); border-radius:4px; overflow:hidden; height:21px; }
+  .stepper button { border:0; background:#fff; width:18px; font-size:12px; line-height:1; color:var(--ink-3); cursor:pointer; }
+  .stepper button:hover{background:#f1f3f5}
+  .stepper .v { padding:0 6px; font-size:10.5px; min-width:38px; text-align:center; border-left:1px solid var(--line-soft);
+    border-right:1px solid var(--line-soft); font-variant-numeric:tabular-nums; }
+  .bar { height:5px; border-radius:3px; background:var(--acc-dark); }
+  .pill { display:inline-flex; align-items:center; gap:4px; border-radius:3px; padding:1px 6px; font-size:9.5px; font-weight:500; }
+  .p-ok { background:#e8f6f0; color:#12684c; }
+  .p-warn { background:var(--warn-bg); color:#8a5a12; border:1px solid var(--warn-line); }
+  .p-self { background:#f0edf7; color:#5b4a86; }
+  .p-rec { background:var(--acc-soft); color:var(--acc-dark); }
+
+  .banner { display:flex; align-items:flex-start; gap:8px; padding:8px 11px; font-size:11px; line-height:1.55;
+    background:var(--warn-bg); border-top:1px solid var(--warn-line); color:#8a5a12; }
+  .banner b { color:#6b430b; }
+  .banner .fix { margin-left:auto; flex:none; }
+
+  /* method cards */
+  .methods { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; padding:10px 11px; }
+  .mcard { border:1px solid var(--line); border-radius:5px; padding:9px 10px; cursor:pointer; background:#fff; position:relative; }
+  .mcard.on { border-color:var(--acc); background:var(--acc-soft); box-shadow:inset 0 0 0 1px var(--acc); }
+  .mcard .t { font-size:12px; font-weight:600; margin-bottom:2px; }
+  .mcard .d { font-size:10.5px; color:var(--ink-3); line-height:1.45; }
+  .mcard .badge { position:absolute; top:-7px; right:8px; font-size:8.5px; font-weight:600; text-transform:uppercase;
+    letter-spacing:.04em; background:var(--acc-dark); color:#fff; border-radius:3px; padding:1px 5px; }
+  .mfoot { padding:0 11px 10px; display:flex; align-items:center; gap:6px; font-size:11px; color:var(--ink-3); }
+
+  /* right column */
+  .btn { height:28px; display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:0 12px;
+    border-radius:4px; font-size:12px; font-weight:500; cursor:pointer; border:1px solid var(--line);
+    background:#fff; color:var(--ink-2); font-family:inherit; }
+  .btn-primary { background:var(--acc); border-color:var(--acc-dark); color:#fff; }
+  .btn-primary:disabled { background:#a7c3e8; border-color:#a7c3e8; cursor:not-allowed; }
+  .btn-lg { height:34px; width:100%; font-size:12.5px; }
+  .check { display:flex; align-items:flex-start; gap:7px; padding:6px 11px; font-size:11px; line-height:1.5;
+    border-bottom:1px solid var(--line-soft); }
+  .check:last-child { border-bottom:0; }
+  .ic { flex:none; width:13px; height:13px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:8.5px; font-weight:700; color:#fff; margin-top:1px; }
+  .ic-ok{background:var(--ok)} .ic-warn{background:var(--warn)} .ic-bad{background:var(--bad)}
+  .check .k { color:var(--ink-2); } .check .k b { font-weight:600; color:var(--ink); }
+  .check .m { display:block; color:var(--ink-4); font-size:10.5px; }
+
+  .verdict { padding:12px 11px 10px; text-align:center; border-bottom:1px solid var(--line-soft); }
+  .verdict .big { font-size:31px; font-weight:600; letter-spacing:-.025em; line-height:1; color:var(--ok); }
+  .verdict .cap { font-size:11px; color:var(--ink-3); margin-top:5px; line-height:1.45; }
+  .kv { display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:10px 11px; }
+  .kv div { background:#f8f9fa; border-radius:4px; padding:5px 7px; }
+  .kv .v { font-size:13px; font-weight:600; }
+  .imp { padding:2px 11px 11px; }
+  .imp-row { display:flex; align-items:center; gap:7px; margin-top:5px; font-size:10.5px; }
+  .imp-row .n { width:96px; text-align:right; color:var(--ink-3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .acts { display:flex; gap:6px; padding:0 11px 11px; } .acts .btn { flex:1; }
+  .idle { padding:26px 16px; text-align:center; font-size:11.5px; color:var(--ink-4); line-height:1.65; }
+
+  /* backtest */
+  .bt { padding:10px 12px 12px; }
+  .bt-legend { display:flex; gap:14px; margin-top:5px; }
+  .lg { display:flex; align-items:center; gap:5px; font-size:10px; color:var(--ink-4); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="tabs">
+    <div class="tab">Correlation</div>
+    <div class="tab on">Train</div>
+    <div class="tab">Simulate</div>
+  </div>
+
+  <h1>Train</h1>
+  <div class="sub">
+    A model here answers one question: <b>given what I know today, what will this number be later?</b>
+    Everything below is that question, spelled out — what to predict, how far ahead, and what the model
+    is allowed to look at.
+  </div>
+
+  <div class="body">
+    <!-- ================= LEFT ================= -->
+    <div class="stack">
+
+      <!-- 1. THE QUESTION -->
+      <div class="panel">
+        <div class="panel-head"><span class="step"><i class="num">1</i><span class="lbl">The question</span></span>
+          <span class="micro">plain language</span></div>
+        <div class="sentence">
+          Predict
+          <span class="sel"><select id="qTarget">
+            <option>Bed · avg occupancy</option><option>Encounter · created/h</option>
+            <option>Patient · created/h</option><option>INSPQ · hospitalizations/day</option>
+          </select></span>
+          <span class="sel"><select id="qHorizon">
+            <option value="24">24 hours</option><option value="48" selected>48 hours</option>
+            <option value="72">72 hours</option><option value="168">7 days</option>
+          </select></span>
+          ahead, for
+          <span class="sel"><select><option>Jewish General — 6 West</option><option>Jewish General — all units</option>
+            <option>Every unit, one model each</option></select></span>,
+          learning from the last
+          <span class="sel"><select><option>30 days</option><option>14 days</option><option>90 days</option></select></span>
+          of
+          <span class="sel"><select><option>live signals</option><option>dataset: inspq_covid</option>
+            <option>dataset: cchs_2021</option></select></span>.
+          <span class="note" id="qNote"></span>
+        </div>
+      </div>
+
+      <!-- 2. FEATURES -->
+      <div class="panel">
+        <div class="panel-head"><span class="step"><i class="num">2</i><span class="lbl">What it may look at</span></span>
+          <span class="micro" id="fCount"></span></div>
+        <table>
+          <thead><tr>
+            <th style="width:26px"></th><th>Signal</th><th style="width:118px">Known this far ahead</th>
+            <th style="width:112px">Correlation</th><th style="width:132px">At prediction time</th>
+          </tr></thead>
+          <tbody id="fRows"></tbody>
+        </table>
+        <div id="fBanner"></div>
+      </div>
+
+      <!-- 3. METHOD -->
+      <div class="panel">
+        <div class="panel-head"><span class="step"><i class="num">3</i><span class="lbl">Method</span></span>
+          <span class="micro">pick one, or let it choose</span></div>
+        <div class="methods" id="methods"></div>
+        <div class="mfoot">
+          <input type="checkbox" id="auto" /><label for="auto">Try all three and keep whichever backtests best</label>
+        </div>
+      </div>
+
+      <!-- 4. BACKTEST -->
+      <div class="panel" id="btPanel" style="display:none">
+        <div class="panel-head"><span class="step"><i class="num">4</i><span class="lbl">Backtest</span></span>
+          <span class="micro">last 7 days held out — never seen during training</span></div>
+        <div class="bt">
+          <svg width="100%" height="132" viewBox="0 0 860 132" preserveAspectRatio="none" id="btSvg"></svg>
+          <div class="bt-legend">
+            <span class="lg"><svg width="14" height="3"><line x1="0" y1="1.5" x2="14" y2="1.5" stroke="#404854" stroke-width="1.6"/></svg>actual</span>
+            <span class="lg"><svg width="14" height="3"><line x1="0" y1="1.5" x2="14" y2="1.5" stroke="#2d72d2" stroke-width="1.6" stroke-dasharray="4 2"/></svg>model</span>
+            <span class="lg"><svg width="14" height="3"><line x1="0" y1="1.5" x2="14" y2="1.5" stroke="#c5cbd3" stroke-width="1.6" stroke-dasharray="2 2"/></svg>baseline (same hour last week)</span>
+            <span class="lg" style="margin-left:auto"><i style="width:9px;height:9px;background:#eef3fa;border:1px solid #d3d8de;display:inline-block;border-radius:2px"></i>held out</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= RIGHT ================= -->
+    <div class="stack">
+      <div class="panel">
+        <div class="panel-head"><span class="micro">Before you train</span><span class="micro" id="rdVerdict"></span></div>
+        <div id="readiness"></div>
+        <div style="padding:10px 11px">
+          <button class="btn btn-primary btn-lg" id="trainBtn">Train model</button>
+          <div class="micro" style="text-align:center;margin-top:6px" id="trainHint">≈ 4 s · 720 hourly points</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><span class="micro">Result</span><span class="micro" id="resTag"></span></div>
+        <div id="result"><div class="idle">Nothing trained yet.<br />The result appears here with an honest<br />comparison against a naive baseline.</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------------- state ---------------- */
+const FEATURES = [
+  {id:'self', src:'self', name:'Bed · avg occupancy — its own history', lead:48, r:.94, self:true, on:true},
+  {id:'f1', src:'ds', name:'INSPQ · cases/day',        lead:168, r:.74, on:true, rec:true},
+  {id:'f2', src:'ds', name:'INSPQ · hospitalizations/day', lead:72, r:.86, on:true, rec:true},
+  {id:'f3', src:'ot', name:'Encounter · created/h',     lead:36, r:.64, on:true, rec:true},
+  {id:'f4', src:'ot', name:'LabResult · created/h',     lead:12, r:.41, on:true},
+  {id:'f5', src:'ch', name:'Intake · saved/h',          lead:1,  r:.36, on:true},
+  {id:'f6', src:'ch', name:'Intake · flagged/h',        lead:2,  r:-.28, on:false},
+];
+const METHODS = [
+  {id:'ridge', t:'Trend + lags', d:'Ridge regression over lagged values. Fast, stable on short history, and every weight is readable.', rec:true},
+  {id:'gbt',   t:'Boosted trees', d:'Finds thresholds and interactions a straight line misses. Wants more than 30 days.'},
+  {id:'naive', t:'Seasonal naive', d:'“Same hour last week.” Not really a model — the bar everything else has to clear.'},
+];
+let horizon = 48, method = 'ridge', trained = false;
+
+/* hours read better up to 3 days; past that, days */
+const fmt = h => h>=72 ? (h%24===0 ? (h/24)+' d' : (h/24).toFixed(1)+' d') : h+' h';
+
+/* ---------------- features ---------------- */
+function renderFeatures(){
+  const on = FEATURES.filter(f=>f.on);
+  const leaky = on.filter(f=>f.lead<horizon);
+  document.getElementById('fRows').innerHTML = FEATURES.map(f=>{
+    const bad = f.on && f.lead<horizon;
+    return `<tr class="${f.on?'':'off'}" data-id="${f.id}">
+      <td><input type="checkbox" ${f.on?'checked':''} data-c="${f.id}"/></td>
+      <td><span style="display:flex;align-items:center;gap:6px">
+        <i class="dot d-${f.src}"></i><span class="sname">${f.name}</span>
+        ${f.self?'<span class="pill p-self">auto</span>':''}
+        ${f.rec?'<span class="pill p-rec">from correlation</span>':''}</span></td>
+      <td><span class="stepper"><button data-m="-1" data-id="${f.id}">−</button>
+        <span class="v">${fmt(f.lead)}</span><button data-m="1" data-id="${f.id}">+</button></span></td>
+      <td><span style="display:flex;align-items:center;gap:6px">
+        <div class="bar" style="width:${Math.abs(f.r)*48}px;background:${f.r<0?'#b45309':'#215db0'}"></div>
+        <span class="mono" style="font-size:10.5px">${f.r.toFixed(2)}</span></span></td>
+      <td>${bad
+        ? `<span class="pill p-warn">⚠ not known yet</span>`
+        : f.on ? `<span class="pill p-ok">✓ available</span>` : `<span style="color:var(--ink-4);font-size:10.5px">—</span>`}</td>
+    </tr>`;}).join('');
+
+  document.getElementById('fCount').textContent =
+    `${on.length} of ${FEATURES.length} selected${leaky.length?` · ${leaky.length} unusable`:''}`;
+
+  document.getElementById('fBanner').innerHTML = leaky.length ? `
+    <div class="banner"><span>⚠</span><span>
+      <b>${leaky.length} feature${leaky.length>1?'s are':' is'} only known ${fmt(Math.max(...leaky.map(f=>f.lead)))} or less ahead,
+      but you are predicting ${fmt(horizon)} out.</b> At prediction time ${leaky.length>1?'those values do':'that value does'}
+      not exist yet, so training on ${leaky.length>1?'them':'it'} would flatter the score and fail in production.
+    </span><span class="fix"><button class="btn" id="fixAll" style="height:23px;font-size:11px">Shift to ${fmt(horizon)}</button></span></div>` : '';
+
+  document.querySelectorAll('[data-c]').forEach(el=>el.addEventListener('change',()=>{
+    const f=FEATURES.find(x=>x.id===el.dataset.c); f.on=el.checked; reset(); }));
+  document.querySelectorAll('.stepper button').forEach(el=>el.addEventListener('click',()=>{
+    const f=FEATURES.find(x=>x.id===el.dataset.id);
+    const step = f.lead>=48?24: f.lead>=12?6:1;
+    f.lead=Math.max(1, f.lead + (+el.dataset.m)*step); reset(); }));
+  const fx=document.getElementById('fixAll');
+  if(fx) fx.addEventListener('click',()=>{ leaky.forEach(f=>f.lead=horizon); reset(); });
+}
+
+/* ---------------- methods ---------------- */
+function renderMethods(){
+  document.getElementById('methods').innerHTML = METHODS.map(m=>`
+    <div class="mcard ${method===m.id?'on':''}" data-m="${m.id}">
+      ${m.rec?'<span class="badge">recommended</span>':''}
+      <div class="t">${m.t}</div><div class="d">${m.d}</div></div>`).join('');
+  document.querySelectorAll('.mcard').forEach(el=>el.addEventListener('click',()=>{
+    method=el.dataset.m; renderMethods(); reset(); }));
+}
+
+/* ---------------- readiness ---------------- */
+function renderReadiness(){
+  const on=FEATURES.filter(f=>f.on), leaky=on.filter(f=>f.lead<horizon);
+  const checks=[
+    {s:'ok',k:'<b>720</b> hourly points',m:'30-day window, enough for this method'},
+    {s:'ok',k:'Target varies',m:'σ 4.1 pp · range 41–92% — not flat'},
+    {s:'warn',k:'<b>3.2%</b> gaps',m:'forward-filled; longest gap 5 h'},
+    leaky.length
+      ? {s:'bad',k:`<b>${leaky.length}</b> feature${leaky.length>1?'s':''} not known ${fmt(horizon)} ahead`,m:'fix or drop before training'}
+      : {s:'ok',k:`All ${on.length} features available at ${fmt(horizon)}`,m:'no look-ahead leakage'},
+    {s:'ok',k:'Held-out period reserved',m:'last 7 days excluded from fitting'},
+  ];
+  document.getElementById('readiness').innerHTML = checks.map(c=>`
+    <div class="check"><i class="ic ic-${c.s}">${c.s==='ok'?'✓':c.s==='warn'?'!':'✕'}</i>
+      <span class="k">${c.k}<span class="m">${c.m}</span></span></div>`).join('');
+  const v=document.getElementById('rdVerdict');
+  v.textContent = leaky.length? 'blocked' : 'ready';
+  v.style.color = leaky.length? 'var(--bad)' : 'var(--ok)';
+  const b=document.getElementById('trainBtn');
+  b.disabled = leaky.length>0;
+  b.textContent = leaky.length? `Fix ${leaky.length} problem${leaky.length>1?'s':''} first` : 'Train model';
+  document.getElementById('trainHint').textContent =
+    `≈ 4 s · ${on.length} feature${on.length>1?'s':''} · ${method==='gbt'?'boosted trees':method==='naive'?'seasonal naive':'ridge'}`;
+}
+
+/* ---------------- result + backtest ---------------- */
+function walk(seed,n,base,amp){ let v=base,o=[]; for(let i=0;i<n;i++){ seed=(seed*1103515245+12345)&0x7fffffff;
+  v=Math.max(30,Math.min(96,v+((seed>>16)%9)-4+Math.sin(i/9)*amp)); o.push(v);} return o; }
+function poly(v,w,h,mn,mx){ const sp=mx-mn||1;
+  return v.map((y,i)=>`${(i/(v.length-1)*w).toFixed(1)},${(h-6-((y-mn)/sp)*(h-14)).toFixed(1)}`).join(' '); }
+
+function renderBacktest(){
+  const n=96, actual=walk(7,n,62,3.2);
+  const model=actual.map((v,i)=> i<n*0.72 ? v+((i%5)-2)*0.5 : v+((i%7)-3)*1.5);
+  const base =actual.map((v,i)=> i<n*0.72 ? v+((i%6)-3)*0.9 : v+((i%9)-4)*2.9);
+  const mn=Math.min(...actual,...model,...base)-2, mx=Math.max(...actual,...model,...base)+2;
+  const cut=860*0.72;
+  document.getElementById('btSvg').innerHTML=`
+    <rect x="${cut}" y="0" width="${860-cut}" height="132" fill="#eef3fa"/>
+    <line x1="${cut}" y1="0" x2="${cut}" y2="132" stroke="#a7c3e8" stroke-width="1" stroke-dasharray="3 3"/>
+    <text x="${cut+7}" y="13" font-size="9.5" fill="#215db0" font-family="inherit">held out · 7 d</text>
+    <text x="${cut-7}" y="13" font-size="9.5" fill="#8f99a8" text-anchor="end" font-family="inherit">trained on</text>
+    <polyline points="${poly(base,860,132,mn,mx)}"   fill="none" stroke="#c5cbd3" stroke-width="1.4" stroke-dasharray="2 2"/>
+    <polyline points="${poly(model,860,132,mn,mx)}"  fill="none" stroke="#2d72d2" stroke-width="1.6" stroke-dasharray="4 2"/>
+    <polyline points="${poly(actual,860,132,mn,mx)}" fill="none" stroke="#404854" stroke-width="1.6"/>`;
+}
+
+function renderResult(){
+  const on=FEATURES.filter(f=>f.on && !f.self);
+  const gain = method==='naive'?0:method==='gbt'?9:14;
+  const tot = on.reduce((a,f)=>a+Math.abs(f.r),0)||1;
+  document.getElementById('resTag').textContent = method==='gbt'?'boosted trees':method==='naive'?'seasonal naive':'ridge · trend + lags';
+  document.getElementById('result').innerHTML = `
+    <div class="verdict">
+      <div class="big" style="color:${gain>=10?'var(--ok)':gain>0?'var(--warn)':'var(--ink-4)'}">${gain?'+'+gain+'%':'0%'}</div>
+      <div class="cap">${gain>=10
+        ? 'better than “same hour last week”.<br />Worth using, with the caveats below.'
+        : gain>0 ? 'better than “same hour last week”.<br />Marginal — check it holds next week before relying on it.'
+        : 'This <i>is</i> the baseline. Use it as the bar, not as a forecast.'}</div>
+    </div>
+    <div class="kv">
+      <div><div class="micro">Error (MAE)</div><div class="v mono">3.4 pp</div></div>
+      <div><div class="micro">Baseline</div><div class="v mono">4.0 pp</div></div>
+      <div><div class="micro">Held-out points</div><div class="v mono">168</div></div>
+      <div><div class="micro">Horizon</div><div class="v mono">${fmt(horizon)}</div></div>
+    </div>
+    <div class="imp"><div class="micro" style="margin-bottom:2px">What it leaned on</div>
+      <div class="imp-row"><span class="n">own history</span>
+        <div class="bar" style="width:52%;background:#7961a8"></div><span class="mono">52%</span></div>
+      ${on.map(f=>{ const w=Math.round(Math.abs(f.r)/tot*48);
+        return `<div class="imp-row"><span class="n" title="${f.name}">${f.name.replace(' · ',' ')}</span>
+          <div class="bar" style="width:${w}%"></div><span class="mono">${w}%</span></div>`;}).join('')}
+    </div>
+    <div class="acts">
+      <button class="btn btn-primary">Save model</button>
+      <button class="btn">Use in Simulate →</button>
+    </div>`;
+}
+
+/* ---------------- wiring ---------------- */
+function reset(){ trained=false; document.getElementById('btPanel').style.display='none';
+  document.getElementById('resTag').textContent='';
+  document.getElementById('result').innerHTML =
+    `<div class="idle">Nothing trained yet.<br />The result appears here with an honest<br />comparison against a naive baseline.</div>`;
+  renderAll(); }
+function renderAll(){ renderFeatures(); renderMethods(); renderReadiness();
+  document.getElementById('qNote').innerHTML =
+    `Every feature below must be knowable <b>${fmt(horizon)} in advance</b> — that is what “${fmt(horizon)} ahead” costs you.`; }
+
+document.getElementById('qHorizon').addEventListener('change',e=>{ horizon=+e.target.value; reset(); });
+document.getElementById('qTarget').addEventListener('change',()=>reset());
+document.getElementById('trainBtn').addEventListener('click',()=>{
+  const b=document.getElementById('trainBtn'); b.textContent='Training…'; b.disabled=true;
+  setTimeout(()=>{ trained=true; b.textContent='Retrain'; b.disabled=false;
+    document.getElementById('btPanel').style.display=''; renderBacktest(); renderResult(); }, 700);
+});
+
+renderAll();
+</script>
+</body>
+</html>
