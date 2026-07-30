@@ -75,6 +75,8 @@ const runOut = z.object({
       out: z.number(),
       dropped: z.number(),
       ms: z.number(),
+      linked: z.number().optional(),
+      unresolved: z.number().optional(),
       error: z.string().optional(),
     }),
   ),

@@ -9,7 +9,13 @@ import {
   type MappingRule,
 } from "./channel-runner.js";
 import { addReference, loadTableVersion, previewRows } from "./datasets.js";
-import { upsertInstanceByIdentity, type PropertyDef } from "./ontology.js";
+import {
+  findInstanceIdByKey,
+  getOrCreateLinkType,
+  insertLinkInstance,
+  upsertInstanceByIdentity,
+  type PropertyDef,
+} from "./ontology.js";
 
 // ---------------------------------------------------------------------------
 // Pipeline execution.
@@ -83,7 +89,31 @@ export interface NodeStat {
   out: number;
   dropped: number;
   ms: number;
+  /** Links created, on an object output that has link rules. */
+  linked?: number;
+  /** Rows whose link target could not be found — reported, never silent. */
+  unresolved?: number;
   error?: string;
+}
+
+/**
+ * Attach a new instance to an existing one.
+ *
+ * A property holding "6 Ouest — médecine" is a string; a link to the OrgUnit of
+ * that name is a graph edge, and only the second one makes the twin count the
+ * patient. This is the rule that turns the first into the second.
+ */
+export interface LinkRule {
+  /** Link type name, e.g. "located_in". Created if it does not exist. */
+  linkType: string;
+  /** Object type to search, e.g. "OrgUnit". */
+  targetType: string;
+  /** Column on the row holding the value to match. */
+  fromColumn: string;
+  /** Property on the target instance to match it against, e.g. "name". */
+  targetProperty: string;
+  /** "out" = the new instance is the source of the link. Default "out". */
+  direction?: "out" | "in";
 }
 
 export interface RunResult {
@@ -296,6 +326,21 @@ export function validate(p: Pick<Pipeline, "nodes" | "edges">): ValidationIssue[
     }
     if (n.kind === "dataset_output" && !n.config.datasetId) {
       issues.push({ nodeId: n.id, message: "Pick a dataset to write to." });
+    }
+    if (n.kind === "object_output") {
+      // A half-filled link rule is worse than none: it looks configured on the
+      // canvas and silently links nothing.
+      for (const r of (n.config.linkRules ?? []) as LinkRule[]) {
+        const missing = (["linkType", "targetType", "fromColumn", "targetProperty"] as const).filter(
+          (k) => !r?.[k],
+        );
+        if (missing.length > 0) {
+          issues.push({
+            nodeId: n.id,
+            message: `A link rule is incomplete — missing ${missing.join(", ")}.`,
+          });
+        }
+      }
     }
     if (n.kind === "text_field" && !n.config.column) {
       issues.push({ nodeId: n.id, message: "Pick the column that holds the text." });
@@ -807,6 +852,7 @@ export async function execute(
       const inRows = ins.flatMap((e) => produced.get(e.from) ?? []);
       let out: Row[] = [];
       let dropped = 0;
+      let linkCounts: { linked: number; unresolved: number } | null = null;
 
       switch (node.kind) {
         case "dataset_input": {
@@ -873,6 +919,7 @@ export async function execute(
           out = inRows;
           dropped = r.skipped;
           rowsOut += r.written;
+          linkCounts = { linked: r.linked, unresolved: r.unresolved };
           break;
         }
       }
@@ -884,6 +931,7 @@ export async function execute(
         out: out.length,
         dropped,
         ms: Date.now() - started,
+        ...(linkCounts ?? {}),
       };
       if (preview) samples[node.id] = out.slice(0, 5);
     }
@@ -903,11 +951,16 @@ async function writeObjects(
   node: PipelineNode,
   rows: Row[],
   preview: boolean,
-): Promise<{ written: number; skipped: number }> {
+): Promise<{ written: number; skipped: number; linked: number; unresolved: number }> {
   const typeName = String(node.config.objectTypeName ?? "");
   const identity = (node.config.identityProperties ?? []) as string[];
   const mapping = (node.config.columnMapping ?? []) as MappingRule[];
-  if (!typeName || identity.length === 0) return { written: 0, skipped: rows.length };
+  const linkRules = ((node.config.linkRules ?? []) as LinkRule[]).filter(
+    (r) => r?.linkType && r.targetType && r.fromColumn && r.targetProperty,
+  );
+  if (!typeName || identity.length === 0) {
+    return { written: 0, skipped: rows.length, linked: 0, unresolved: 0 };
+  }
 
   const t = await db.query<{ id: string; property_schema: PropertyDef[] }>(
     `SELECT t.id, t.property_schema
@@ -921,24 +974,94 @@ async function writeObjects(
   const schema = t.rows[0]?.property_schema ?? [];
   const rules = mapping.filter((r) => r.from && r.to);
 
+  // Resolve each rule's target type and link type once rather than per row.
+  // A file of 100 patients all on six wards would otherwise do 200 lookups
+  // for six answers.
+  const resolved: {
+    rule: LinkRule;
+    targetTypeId: string;
+    linkTypeId: string;
+    cache: Map<string, string | null>;
+  }[] = [];
+  for (const rule of linkRules) {
+    const tt = await db.query<{ id: string }>(
+      `SELECT t.id FROM app.ontology_object_types t
+         JOIN app.project p ON p.organization_id = t.organization_id
+        WHERE p.id = $1 AND t.name = $2`,
+      [pipeline.projectId, rule.targetType],
+    );
+    const targetTypeId = tt.rows[0]?.id;
+    if (!targetTypeId) {
+      throw NotFound("TYPE_NOT_FOUND", `Link target type "${rule.targetType}" not found.`);
+    }
+    const out = (rule.direction ?? "out") === "out";
+    const linkTypeId = await getOrCreateLinkType(
+      db,
+      pipeline.projectId,
+      rule.linkType,
+      out ? objectTypeId : targetTypeId,
+      out ? targetTypeId : objectTypeId,
+      "many_to_one",
+    );
+    resolved.push({ rule, targetTypeId, linkTypeId, cache: new Map() });
+  }
+
   let written = 0;
   let skipped = 0;
+  let linked = 0;
+  let unresolved = 0;
+
   for (const row of rows) {
     const { properties, issues, missingRequired } = buildMapProperties(row, rules, schema);
     if (issues.length > 0 || missingRequired.length > 0) {
       skipped++;
       continue;
     }
+
+    let instanceId: string | null = null;
     if (!preview) {
-      await upsertInstanceByIdentity(db, objectTypeId, identity, properties, {
+      const up = await upsertInstanceByIdentity(db, objectTypeId, identity, properties, {
         source: "pipeline",
         pipelineId: pipeline.id,
         nodeId: node.id,
       });
+      instanceId = up.id;
     }
     written++;
+
+    for (const r of resolved) {
+      const raw = row[r.rule.fromColumn];
+      if (raw === null || raw === undefined || String(raw).trim() === "") {
+        unresolved++;
+        continue;
+      }
+      const key = String(raw).trim();
+
+      let targetId = r.cache.get(key);
+      if (targetId === undefined) {
+        targetId = await findInstanceIdByKey(db, r.targetTypeId, r.rule.targetProperty, key);
+        r.cache.set(key, targetId);
+      }
+      // A patient on a ward the ontology has never heard of is a real finding,
+      // not a row to drop. The instance stands; the miss is counted.
+      if (!targetId) {
+        unresolved++;
+        continue;
+      }
+      if (!preview && instanceId) {
+        const out = (r.rule.direction ?? "out") === "out";
+        await insertLinkInstance(
+          db,
+          r.linkTypeId,
+          out ? instanceId : targetId,
+          out ? targetId : instanceId,
+          { source: "pipeline", pipelineId: pipeline.id, nodeId: node.id },
+        );
+      }
+      linked++;
+    }
   }
-  return { written, skipped };
+  return { written, skipped, linked, unresolved };
 }
 
 async function finishRun(

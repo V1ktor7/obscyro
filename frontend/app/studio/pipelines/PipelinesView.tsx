@@ -31,6 +31,7 @@ import {
   previewPipeline,
   runPipeline,
   savePipeline,
+  type LinkRule,
   type NodeKind,
   type NodeMeta,
   type Pipeline,
@@ -1319,6 +1320,109 @@ function Inspector({
                 + add
               </button>
             </div>
+
+            {/* Links are what the twin counts. A property holding "6 Ouest"
+                is a string; a link to the OrgUnit of that name is an edge. */}
+            <label className={L}>Links to other objects</label>
+            <div className="mt-1 space-y-2">
+              {((cfg.linkRules as LinkRule[] | undefined) ?? []).map((r, i) => {
+                const patch = (next: Partial<LinkRule>) => {
+                  const list = [...((cfg.linkRules as LinkRule[]) ?? [])];
+                  list[i] = { ...r, ...next };
+                  onConfig({ linkRules: list });
+                };
+                return (
+                  <div key={i} className="rounded border border-[#e5e8eb] bg-[#f8f9fa] p-1.5">
+                    <div className="flex items-center gap-1">
+                      <select
+                        value={r.fromColumn ?? ""}
+                        onChange={(e) => patch({ fromColumn: e.target.value })}
+                        className="min-w-0 flex-1 rounded border border-[#d3d8de] px-1.5 py-1 text-[11px]"
+                      >
+                        <option value="">column</option>
+                        {columns.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onConfig({
+                            linkRules: ((cfg.linkRules as LinkRule[]) ?? []).filter(
+                              (_, j) => j !== i,
+                            ),
+                          })
+                        }
+                        aria-label="Remove link rule"
+                        className="text-[#8f99a8] hover:text-[#a82255]"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <div className="mt-1 flex items-center gap-1">
+                      <span className="text-[10px] text-[#8f99a8]">matches</span>
+                      <input
+                        value={r.targetType ?? ""}
+                        onChange={(e) => patch({ targetType: e.target.value })}
+                        placeholder="OrgUnit"
+                        className="min-w-0 flex-1 rounded border border-[#d3d8de] px-1.5 py-1 text-[11px]"
+                      />
+                      <span className="text-[10px] text-[#8f99a8]">.</span>
+                      <input
+                        value={r.targetProperty ?? ""}
+                        onChange={(e) => patch({ targetProperty: e.target.value })}
+                        placeholder="name"
+                        className="min-w-0 flex-1 rounded border border-[#d3d8de] px-1.5 py-1 text-[11px]"
+                      />
+                    </div>
+                    <div className="mt-1 flex items-center gap-1">
+                      <select
+                        value={r.direction ?? "out"}
+                        onChange={(e) =>
+                          patch({ direction: e.target.value as "out" | "in" })
+                        }
+                        className="rounded border border-[#d3d8de] px-1.5 py-1 text-[11px]"
+                      >
+                        <option value="out">this →</option>
+                        <option value="in">← this</option>
+                      </select>
+                      <input
+                        value={r.linkType ?? ""}
+                        onChange={(e) => patch({ linkType: e.target.value })}
+                        placeholder="located_in"
+                        className="min-w-0 flex-1 rounded border border-[#d3d8de] px-1.5 py-1 font-mono text-[11px]"
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() =>
+                  onConfig({
+                    linkRules: [
+                      ...((cfg.linkRules as LinkRule[]) ?? []),
+                      {
+                        fromColumn: "",
+                        targetType: "OrgUnit",
+                        targetProperty: "name",
+                        linkType: "located_in",
+                        direction: "out",
+                      },
+                    ],
+                  })
+                }
+                className="text-[11px] text-[#2d72d2] hover:underline"
+              >
+                + add link
+              </button>
+            </div>
+            <p className="mt-1 text-[10.5px] leading-snug text-[#8f99a8]">
+              The twin counts a patient toward a unit only when they are linked to it. A column
+              holding the unit name is not enough on its own.
+            </p>
           </>
         ) : null}
       </div>
@@ -1349,6 +1453,33 @@ function Inspector({
               </p>
             </div>
           </div>
+
+          {stat.linked !== undefined || stat.unresolved !== undefined ? (
+            <div className="mt-1.5 grid grid-cols-2 gap-1.5 text-center">
+              <div className="rounded bg-[#f8f9fa] py-1">
+                <p className="text-[10px] text-[#8f99a8]">links made</p>
+                <p className="text-xs font-semibold">{(stat.linked ?? 0).toLocaleString()}</p>
+              </div>
+              <div className="rounded bg-[#f8f9fa] py-1">
+                <p className="text-[10px] text-[#8f99a8]">no match</p>
+                <p
+                  className={cn(
+                    "text-xs font-semibold",
+                    (stat.unresolved ?? 0) > 0 ? "text-[#d9822b]" : "text-[#1c2127]",
+                  )}
+                >
+                  {(stat.unresolved ?? 0).toLocaleString()}
+                </p>
+              </div>
+            </div>
+          ) : null}
+          {(stat.unresolved ?? 0) > 0 ? (
+            <p className="mt-1.5 rounded bg-[#fdf6ec] px-2 py-1.5 text-[10.5px] leading-snug text-[#8a5a12]">
+              {stat.unresolved} row{stat.unresolved === 1 ? "" : "s"} named a target that does not
+              exist in the ontology. The instances were written; they are just not attached, so the
+              twin will not count them.
+            </p>
+          ) : null}
         </div>
       ) : null}
 

@@ -66,7 +66,20 @@ export interface NodeStat {
   out: number;
   dropped: number;
   ms: number;
+  /** Links created, on an object output that has link rules. */
+  linked?: number;
+  /** Rows whose link target could not be found. */
+  unresolved?: number;
   error?: string;
+}
+
+/** Attach a new instance to an existing one by matching a column to a property. */
+export interface LinkRule {
+  linkType: string;
+  targetType: string;
+  fromColumn: string;
+  targetProperty: string;
+  direction?: "out" | "in";
 }
 
 export interface RunResult {
