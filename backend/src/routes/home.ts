@@ -181,7 +181,7 @@ const homeRoutes: FastifyPluginAsync = async (fastify) => {
       const reviewRes = await req.db
         .query<{ n: string }>(
           `SELECT COUNT(*)::bigint AS n
-             FROM app.channel_review_item r
+             FROM app.review_item r
              JOIN app.project e ON e.id = r.project_id
              JOIN app.organization_members m ON m.organization_id = e.organization_id
             WHERE m.user_id = $1 AND r.status = 'pending'`,

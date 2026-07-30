@@ -411,7 +411,7 @@ async function runMapPath(
         identity.map((k) => properties[k]).filter(Boolean).join(" · ") || objectType;
       await db
         .query(
-          `INSERT INTO app.channel_review_item
+          `INSERT INTO app.review_item
                   (channel_id, project_id, span, code, display, decision, confidence, payload)
            VALUES ($1, $2, $3, $4, $5, 'flag', $6, $7::jsonb)`,
           [
@@ -750,7 +750,7 @@ export async function executeChannel(
       for (const r of reviewable) {
         await db
           .query(
-            `INSERT INTO app.channel_review_item
+            `INSERT INTO app.review_item
                     (channel_id, project_id, span, code, display, decision, confidence, payload)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)`,
             [

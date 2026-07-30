@@ -676,7 +676,7 @@ const reviewRoutes: FastifyPluginAsync = async (fastify) => {
         `SELECT r.id, r.span, r.code, r.display, r.decision, r.confidence,
                 r.payload, r.status, r.created_at,
                 c.name AS channel_name, c.slug AS channel_slug
-           FROM app.channel_review_item r
+           FROM app.review_item r
            JOIN app.data_channel c ON c.id = r.channel_id
           WHERE r.project_id = $1 AND r.status = $2
           ORDER BY r.created_at DESC
@@ -684,7 +684,7 @@ const reviewRoutes: FastifyPluginAsync = async (fastify) => {
         [env.id, req.query.status, req.query.limit],
       );
       const pending = await req.db.query<{ n: string }>(
-        `SELECT COUNT(*)::bigint AS n FROM app.channel_review_item
+        `SELECT COUNT(*)::bigint AS n FROM app.review_item
           WHERE project_id = $1 AND status = 'pending'`,
         [env.id],
       );
@@ -816,7 +816,7 @@ const reviewRoutes: FastifyPluginAsync = async (fastify) => {
         `SELECT r.id, r.span, r.code, r.display, r.decision, r.confidence,
                 r.payload, r.status, r.created_at,
                 c.name AS channel_name, c.slug AS channel_slug
-           FROM app.channel_review_item r
+           FROM app.review_item r
            JOIN app.data_channel c ON c.id = r.channel_id
           WHERE r.project_id = $1 AND r.id = $2`,
         [env.id, req.params.id],
@@ -873,7 +873,7 @@ const reviewRoutes: FastifyPluginAsync = async (fastify) => {
 
       const status = req.body.action === "confirm" ? ("confirmed" as const) : ("rejected" as const);
       await req.db.query(
-        `UPDATE app.channel_review_item
+        `UPDATE app.review_item
             SET status = $2, resolved_at = now()
           WHERE id = $1`,
         [item.id, status],

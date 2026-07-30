@@ -4,6 +4,7 @@ import {
   Box,
   Columns3,
   Database,
+  FileText,
   FunctionSquare,
   Filter as FilterIcon,
   Loader2,
@@ -11,6 +12,8 @@ import {
   Play,
   Plus,
   Save,
+  ShieldCheck,
+  Stethoscope,
   Trash2,
   Wand2,
   X,
@@ -56,6 +59,9 @@ const ICON: Record<NodeKind, typeof Database> = {
   select: Columns3,
   derive: FunctionSquare,
   join: Merge,
+  text_field: FileText,
+  extract_snomed: Stethoscope,
+  validate_confidence: ShieldCheck,
   object_output: Box,
   dataset_output: Database,
 };
@@ -65,6 +71,7 @@ const TONE: Record<string, { bg: string; fg: string }> = {
   Clean: { bg: "bg-[#f0edf7]", fg: "text-[#5b4a86]" },
   Shape: { bg: "bg-[#f0edf7]", fg: "text-[#5b4a86]" },
   Combine: { bg: "bg-[#f0edf7]", fg: "text-[#5b4a86]" },
+  Clinical: { bg: "bg-[#fdeef4]", fg: "text-[#a82255]" },
   Output: { bg: "bg-[#e7f2fd]", fg: "text-[#215db0]" },
 };
 
@@ -373,7 +380,7 @@ function Palette({
   onAdd: (m: NodeMeta) => void;
 }) {
   const groups = useMemo(() => {
-    const order = ["Input", "Clean", "Shape", "Combine", "Output"];
+    const order = ["Input", "Clean", "Shape", "Combine", "Clinical", "Output"];
     return order
       .map((g) => ({ g, items: catalogue.filter((c) => c.category === g) }))
       .filter((x) => x.items.length > 0);
@@ -1015,6 +1022,127 @@ function Inspector({
               <code className="text-[10px]">_right</code> appended rather than overwriting the left
               value.
             </p>
+          </>
+        ) : null}
+
+        {node.kind === "text_field" ? (
+          <>
+            <label className={L}>Column holding the text</label>
+            {colSelect(String(cfg.column ?? ""), (v) => onConfig({ column: v }))}
+            <label className={L}>Path inside it (optional)</label>
+            <input
+              value={String(cfg.fieldPath ?? "")}
+              onChange={(e) => onConfig({ fieldPath: e.target.value })}
+              placeholder="note.body"
+              className={F}
+            />
+            <p className="mt-1 text-[10.5px] leading-snug text-[#8f99a8]">
+              Only needed when the column holds JSON rather than plain text.
+            </p>
+            <label className={L}>Write the text as</label>
+            <input
+              value={String(cfg.as ?? "")}
+              onChange={(e) => onConfig({ as: e.target.value })}
+              placeholder="text"
+              className={F}
+            />
+          </>
+        ) : null}
+
+        {node.kind === "extract_snomed" ? (
+          <>
+            <label className={L}>Text column</label>
+            {colSelect(String(cfg.textColumn ?? ""), (v) => onConfig({ textColumn: v }))}
+            <label className={L}>Language</label>
+            <select
+              value={String(cfg.language ?? "auto")}
+              onChange={(e) => onConfig({ language: e.target.value })}
+              className={F}
+            >
+              <option value="auto">detect</option>
+              <option value="fr">French</option>
+              <option value="en">English</option>
+            </select>
+            <label className={L}>Accept threshold</label>
+            <input
+              type="number"
+              step="0.05"
+              min="0"
+              max="1"
+              value={Number(cfg.acceptThreshold ?? 0.85)}
+              onChange={(e) => onConfig({ acceptThreshold: Number(e.target.value) })}
+              className={F}
+            />
+            <label className="mt-2 flex items-center gap-1.5 text-[11px]">
+              <input
+                type="checkbox"
+                checked={cfg.withContexts !== false}
+                onChange={(e) => onConfig({ withContexts: e.target.checked })}
+                className="h-3 w-3 accent-[#2d72d2]"
+              />
+              Capture assertion, subject and certainty
+            </label>
+            <p className="mt-2 rounded bg-[#e7f2fd] px-2 py-1.5 text-[10.5px] leading-snug text-[#215db0]">
+              This node fans out — one note becomes one row per concept found. Rows going up here
+              is expected. A note that yields nothing is counted as dropped rather than vanishing.
+            </p>
+          </>
+        ) : null}
+
+        {node.kind === "validate_confidence" ? (
+          <>
+            <label className={L}>Minimum confidence</label>
+            <input
+              type="number"
+              step="0.05"
+              min="0"
+              max="1"
+              value={Number(cfg.minConfidence ?? 0.6)}
+              onChange={(e) => onConfig({ minConfidence: Number(e.target.value) })}
+              className={F}
+            />
+            <label className={L}>Below that</label>
+            <select
+              value={String(cfg.onLow ?? "flag")}
+              onChange={(e) => onConfig({ onLow: e.target.value })}
+              className={F}
+            >
+              <option value="flag">mark it and keep going</option>
+              <option value="review">send to the review queue</option>
+              <option value="drop">discard it</option>
+            </select>
+            {cfg.onLow === "drop" ? (
+              <p className="mt-1 rounded bg-[#fdf6ec] px-2 py-1.5 text-[10.5px] leading-snug text-[#8a5a12]">
+                A discarded clinical finding is gone with no record. Review keeps it recoverable.
+              </p>
+            ) : null}
+            <label className={L}>Treat as duplicate when these match</label>
+            <div className="mt-1 max-h-32 space-y-0.5 overflow-y-auto rounded border border-[#e5e8eb] p-1.5">
+              {columns.length === 0 ? (
+                <p className="text-[10.5px] text-[#8f99a8]">Preview to see the columns.</p>
+              ) : (
+                columns.map((c) => {
+                  const list = (cfg.dedupeOn as string[] | undefined) ?? [];
+                  return (
+                    <label key={c} className="flex items-center gap-1.5 text-[11px]">
+                      <input
+                        type="checkbox"
+                        checked={list.includes(c)}
+                        onChange={() =>
+                          onConfig({
+                            dedupeOn: list.includes(c)
+                              ? list.filter((x) => x !== c)
+                              : [...list, c],
+                          })
+                        }
+                        className="h-3 w-3 accent-[#2d72d2]"
+                      />
+                      <span className="truncate">{c}</span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
           </>
         ) : null}
 

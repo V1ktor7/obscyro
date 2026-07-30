@@ -16,6 +16,7 @@ import {
   listPipelines,
   listRuns,
   NODE_CATALOGUE,
+  NODE_KINDS,
   savePipeline,
   validate,
   type PipelineEdge,
@@ -36,16 +37,7 @@ const errorEnvelope = z.object({
 
 const nodeSchema = z.object({
   id: z.string().min(1),
-  kind: z.enum([
-    "dataset_input",
-    "filter",
-    "select",
-    "derive",
-    "cast",
-    "join",
-    "object_output",
-    "dataset_output",
-  ]),
+  kind: z.enum(NODE_KINDS),
   name: z.string(),
   x: z.number(),
   y: z.number(),

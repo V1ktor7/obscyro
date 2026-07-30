@@ -15,10 +15,13 @@ export type NodeKind =
   | "derive"
   | "cast"
   | "join"
+  | "text_field"
+  | "extract_snomed"
+  | "validate_confidence"
   | "object_output"
   | "dataset_output";
 
-export type NodeCategory = "Input" | "Clean" | "Shape" | "Combine" | "Output";
+export type NodeCategory = "Input" | "Clean" | "Shape" | "Combine" | "Clinical" | "Output";
 
 export interface NodeMeta {
   kind: NodeKind;

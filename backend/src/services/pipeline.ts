@@ -1,6 +1,13 @@
 import type { DbClient } from "../lib/db.js";
 import { BadRequest, NotFound } from "../lib/errors.js";
-import { buildMapProperties, coerceValue, type MappingRule } from "./channel-runner.js";
+import { proxyToNlp } from "../lib/nlp.js";
+import {
+  buildMapProperties,
+  coerceValue,
+  decide,
+  readPath,
+  type MappingRule,
+} from "./channel-runner.js";
 import { addReference, loadTableVersion, previewRows } from "./datasets.js";
 import { upsertInstanceByIdentity, type PropertyDef } from "./ontology.js";
 
@@ -20,15 +27,26 @@ import { upsertInstanceByIdentity, type PropertyDef } from "./ontology.js";
 
 export type Row = Record<string, unknown>;
 
-export type NodeKind =
-  | "dataset_input"
-  | "filter"
-  | "select"
-  | "derive"
-  | "cast"
-  | "join"
-  | "object_output"
-  | "dataset_output";
+/**
+ * The single list of node kinds. The route's zod enum is built from this rather
+ * than repeating it — a schema that silently disagrees with the type accepts a
+ * node the executor cannot run, or rejects one it can.
+ */
+export const NODE_KINDS = [
+  "dataset_input",
+  "filter",
+  "select",
+  "derive",
+  "cast",
+  "join",
+  "text_field",
+  "extract_snomed",
+  "validate_confidence",
+  "object_output",
+  "dataset_output",
+] as const;
+
+export type NodeKind = (typeof NODE_KINDS)[number];
 
 export interface PipelineNode {
   id: string;
@@ -85,7 +103,7 @@ const MAX_ROWS = 50_000;
 export interface NodeMeta {
   kind: NodeKind;
   label: string;
-  category: "Input" | "Clean" | "Shape" | "Combine" | "Output";
+  category: "Input" | "Clean" | "Shape" | "Combine" | "Clinical" | "Output";
   description: string;
   inputs: number;
   outputs: number;
@@ -142,6 +160,30 @@ export const NODE_CATALOGUE: NodeMeta[] = [
     category: "Combine",
     description: "Combine two inputs on a key.",
     inputs: 2,
+    outputs: 1,
+  },
+  {
+    kind: "text_field",
+    label: "Text field",
+    category: "Clinical",
+    description: "Pull the free text out of a column, following a path into JSON if needed.",
+    inputs: 1,
+    outputs: 1,
+  },
+  {
+    kind: "extract_snomed",
+    label: "Extract → SNOMED",
+    category: "Clinical",
+    description: "Find clinical concepts in free text. One note becomes one row per concept.",
+    inputs: 1,
+    outputs: 1,
+  },
+  {
+    kind: "validate_confidence",
+    label: "Validate",
+    category: "Clinical",
+    description: "Route low-confidence rows to review, and drop duplicates.",
+    inputs: 1,
     outputs: 1,
   },
   {
@@ -254,6 +296,37 @@ export function validate(p: Pick<Pipeline, "nodes" | "edges">): ValidationIssue[
     }
     if (n.kind === "dataset_output" && !n.config.datasetId) {
       issues.push({ nodeId: n.id, message: "Pick a dataset to write to." });
+    }
+    if (n.kind === "text_field" && !n.config.column) {
+      issues.push({ nodeId: n.id, message: "Pick the column that holds the text." });
+    }
+    if (n.kind === "extract_snomed" && !process.env.NLP_SERVICE_URL) {
+      issues.push({
+        nodeId: n.id,
+        message: "Extraction needs NLP_SERVICE_URL configured — this node cannot run without it.",
+      });
+    }
+  }
+
+  // Sending free text straight to the ontology writes the note, not the
+  // concepts in it; the extraction has to sit between them.
+  const extracts = p.nodes.filter((n) => n.kind === "extract_snomed");
+  for (const e of extracts) {
+    const reaches = (from: string, seen = new Set<string>()): boolean => {
+      if (seen.has(from)) return false;
+      seen.add(from);
+      return p.edges
+        .filter((x) => x.from === from)
+        .some((x) => {
+          const next = p.nodes.find((n) => n.id === x.to);
+          return next?.kind === "object_output" || reaches(x.to, seen);
+        });
+    };
+    if (!reaches(e.id)) {
+      issues.push({
+        nodeId: e.id,
+        message: "Extracted concepts do not reach an output — they are computed and discarded.",
+      });
     }
   }
   return issues;
@@ -464,6 +537,229 @@ export function applyJoin(
   return out;
 }
 
+// --- clinical text nodes ----------------------------------------------------
+//
+// These three carried the channel's actual value. Splitting them out of the
+// linear runner is what lets any dataset feed them, and what lets the concepts
+// they produce be filtered, joined and mapped like any other rows.
+
+interface NlpConcept {
+  span: string;
+  candidates: Array<{ code: string; display: string; cosine: number }>;
+  code: string | null;
+  cosine: number;
+  concept_confidence: number;
+  status: "resolved" | "flag" | "unresolved";
+}
+
+interface NlpAxis {
+  value: string;
+  confidence: number;
+}
+
+interface NlpContext {
+  span: string;
+  context: {
+    assertion: NlpAxis | null;
+    subject: NlpAxis | null;
+    temporality: NlpAxis | null;
+    certainty: NlpAxis | null;
+    role: NlpAxis | null;
+  };
+  context_confidence: number;
+  readable_note: string;
+}
+
+/**
+ * Pull the free text out of a row. A column may hold plain text or a JSON blob
+ * the useful part is buried in, so a dot path is accepted for the second case.
+ */
+export function applyTextField(
+  rows: Row[],
+  cfg: Record<string, unknown>,
+): { rows: Row[]; dropped: number } {
+  const from = String(cfg.column ?? "");
+  const path = String(cfg.fieldPath ?? "").trim();
+  const as = String(cfg.as ?? "text");
+  if (!from) return { rows, dropped: 0 };
+
+  const out: Row[] = [];
+  let dropped = 0;
+  for (const r of rows) {
+    let text = r[from];
+    if (path) {
+      const source =
+        typeof text === "string" ? safeJson(text) : (text as Record<string, unknown> | null);
+      if (source) text = readPath(source, path);
+    }
+    // A row with no text cannot be extracted from; dropping it here and
+    // counting it beats sending empty strings to the model.
+    if (typeof text !== "string" || text.trim() === "") {
+      dropped++;
+      continue;
+    }
+    out.push({ ...r, [as]: text });
+  }
+  return { rows: out, dropped };
+}
+
+function safeJson(s: string): Record<string, unknown> | null {
+  try {
+    const v: unknown = JSON.parse(s);
+    return v && typeof v === "object" ? (v as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Extract SNOMED concepts from a text column.
+ *
+ * This node fans out: one note produces one row per concept found. Row counts
+ * going up here is correct, not a bug — and a note that yields nothing is
+ * counted as dropped rather than vanishing, which is the failure the channel
+ * version reported only in aggregate.
+ */
+export async function applyExtractSnomed(
+  rows: Row[],
+  cfg: Record<string, unknown>,
+): Promise<{ rows: Row[]; dropped: number }> {
+  const textCol = String(cfg.textColumn ?? "text");
+  const language = String(cfg.language ?? "auto");
+  const threshold = Number(cfg.acceptThreshold ?? 0.85);
+  const withContexts = cfg.withContexts !== false;
+
+  const out: Row[] = [];
+  let dropped = 0;
+
+  for (const r of rows) {
+    const text = r[textCol];
+    if (typeof text !== "string" || text.trim() === "") {
+      dropped++;
+      continue;
+    }
+
+    const { concepts } = await proxyToNlp<{ concepts: NlpConcept[] }>("/extract/concepts", {
+      text,
+      language,
+    });
+    if (concepts.length === 0) {
+      dropped++;
+      continue;
+    }
+
+    let contexts: NlpContext[] = [];
+    if (withContexts) {
+      contexts = (
+        await proxyToNlp<{ contexts: NlpContext[] }>("/extract/contexts", {
+          text,
+          language,
+          concepts: concepts.map((c) => ({ span: c.span, code: c.code })),
+        })
+      ).contexts;
+    }
+    const ctxBySpan = new Map(contexts.map((c) => [c.span, c]));
+
+    for (const c of concepts) {
+      const ctx = ctxBySpan.get(c.span);
+      const assertion = ctx?.context.assertion?.value ?? "affirmed";
+      const certainty = ctx?.context.certainty?.value ?? "confirmed";
+      const contextConfidence = ctx?.context_confidence ?? 0;
+      // The source row is carried through so downstream nodes can still see
+      // the patient, encounter and timestamp the concept came from.
+      out.push({
+        ...r,
+        span: c.span,
+        code: c.code,
+        display: c.candidates[0]?.display ?? null,
+        assertion,
+        certainty,
+        subject: ctx?.context.subject?.value ?? null,
+        temporality: ctx?.context.temporality?.value ?? null,
+        conceptConfidence: c.concept_confidence,
+        contextConfidence,
+        readableNote: ctx?.readable_note ?? "",
+        decision: decide(c.status, contextConfidence, assertion, certainty, threshold),
+      });
+    }
+  }
+  return { rows: out, dropped };
+}
+
+/**
+ * Route rows by confidence and drop duplicates.
+ *
+ * "review" writes to the shared review queue rather than discarding: a
+ * low-confidence clinical finding that silently disappears is the worst
+ * outcome available, worse than a false positive somebody can reject.
+ */
+export async function applyValidate(
+  db: DbClient,
+  pipeline: Pipeline,
+  node: PipelineNode,
+  rows: Row[],
+  preview: boolean,
+): Promise<{ rows: Row[]; dropped: number; queued: number }> {
+  const cfg = node.config;
+  const min = Number(cfg.minConfidence ?? 0);
+  const onLow = String(cfg.onLow ?? "flag");
+  const dedupeOn = (Array.isArray(cfg.dedupeOn) ? cfg.dedupeOn : []) as string[];
+
+  const seen = new Set<string>();
+  const out: Row[] = [];
+  let dropped = 0;
+  let queued = 0;
+
+  for (const r of rows) {
+    if (dedupeOn.length > 0) {
+      const key = dedupeOn.map((c) => String(r[c] ?? "")).join(" ");
+      if (seen.has(key)) {
+        dropped++;
+        continue;
+      }
+      seen.add(key);
+    }
+
+    const confidence = Number(r.contextConfidence ?? r.conceptConfidence ?? 1);
+    const low = Number.isFinite(confidence) && confidence < min;
+    if (!low) {
+      out.push(r);
+      continue;
+    }
+
+    if (onLow === "drop") {
+      dropped++;
+    } else if (onLow === "review") {
+      dropped++;
+      queued++;
+      if (!preview) {
+        await db
+          .query(
+            `INSERT INTO app.review_item
+                    (pipeline_id, node_id, project_id, span, code, display,
+                     decision, confidence, payload)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)`,
+            [
+              pipeline.id,
+              node.id,
+              pipeline.projectId,
+              String(r.span ?? ""),
+              r.code ?? null,
+              r.display ?? null,
+              r.decision === "escalate" ? "escalate" : "flag",
+              confidence,
+              JSON.stringify({ row: r, nodeName: node.name }),
+            ],
+          )
+          .catch(() => undefined);
+      }
+    } else {
+      out.push({ ...r, decision: "flag" });
+    }
+  }
+  return { rows: out, dropped, queued };
+}
+
 // --- execution --------------------------------------------------------------
 
 export interface RunOptions {
@@ -530,6 +826,24 @@ export async function execute(
           break;
         case "cast": {
           const r = applyCast(inRows, node.config);
+          out = r.rows;
+          dropped = r.dropped;
+          break;
+        }
+        case "text_field": {
+          const r = applyTextField(inRows, node.config);
+          out = r.rows;
+          dropped = r.dropped;
+          break;
+        }
+        case "extract_snomed": {
+          const r = await applyExtractSnomed(inRows, node.config);
+          out = r.rows;
+          dropped = r.dropped;
+          break;
+        }
+        case "validate_confidence": {
+          const r = await applyValidate(db, pipeline, node, inRows, preview);
           out = r.rows;
           dropped = r.dropped;
           break;
