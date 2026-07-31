@@ -141,16 +141,25 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
         summary: "SSE stream of twin tree rollups and alerts (~5s)",
         tags: ["twin"],
         params: z.object({ env: z.string().min(1) }),
+        // With a scenario the stream shows the world under that scenario's
+        // edits, recomputed on the same cadence as reality.
+        querystring: z.object({
+          scenarioId: z.string().uuid().optional(),
+          atOffsetHours: z.coerce.number().int().min(0).optional(),
+        }),
       },
     },
     async (req, reply) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const lens = req.query.scenarioId
+        ? { scenarioId: req.query.scenarioId, atOffsetHours: req.query.atOffsetHours ?? 0 }
+        : undefined;
 
       startSseStream(req, reply, {
         name: "twin",
         intervalMs: config.twinSseIntervalMs,
-        produce: () => getTwinTreeSnapshot(req.db, env.id),
+        produce: () => getTwinTreeSnapshot(req.db, env.id, lens),
       });
     },
   );

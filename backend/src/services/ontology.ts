@@ -2,6 +2,8 @@ import type { DbClient } from "../lib/db.js";
 
 import { NotFound } from "../lib/errors.js";
 import { assertLensSupported, type ReadLens } from "./ontology-lens.js";
+import { applyOverridesToInstances, applyOverridesToLinks } from "./scenario-apply.js";
+import { resolveOverrides } from "./scenario-overrides.js";
 
 export interface EnvInstanceRow {
   id: string;
@@ -392,9 +394,7 @@ export async function listInstancesForEnv(
   environmentId: string,
   opts?: { type?: string; wherePairs?: Array<[string, string]>; limit?: number } & ReadLens,
 ): Promise<EnvInstanceRow[]> {
-  // Every ontology read goes through the lens. Today it only permits "live",
-  // and says so rather than returning live data under a scenario's name.
-  assertLensSupported(opts);
+  assertLensSupported(opts, ["live", "scenario"]);
   const params: unknown[] = [environmentId];
   let sql = `SELECT oi.id, oi.object_type_id, t.name AS type_name,
                     oi.properties, oi.provenance, t.property_schema,
@@ -427,7 +427,7 @@ export async function listInstancesForEnv(
     updated_at: Date;
   }>(sql, params);
 
-  return rows.map((r) => ({
+  const live: EnvInstanceRow[] = rows.map((r) => ({
     id: r.id,
     typeId: r.object_type_id,
     typeName: r.type_name,
@@ -437,6 +437,13 @@ export async function listInstancesForEnv(
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }));
+  if (!opts?.scenarioId) return live;
+
+  const overrides = await resolveOverrides(db, opts.scenarioId, opts.atOffsetHours ?? 0);
+  const merged = applyOverridesToInstances(live, overrides, opts.scenarioId);
+  // The base query filtered by type; a scenario that creates something of
+  // another type must not leak into that answer.
+  return opts.type ? merged.filter((i) => i.typeName === opts.type) : merged;
 }
 
 /** List link instances within an environment. */
@@ -445,7 +452,7 @@ export async function listLinksForEnv(
   environmentId: string,
   lens?: ReadLens,
 ): Promise<EnvLinkRow[]> {
-  assertLensSupported(lens);
+  assertLensSupported(lens, ["live", "scenario"]);
   const { rows } = await db.query<{
     id: string;
     link_type_name: string;
@@ -468,7 +475,7 @@ export async function listLinksForEnv(
         AND li.valid_to IS NULL`,
     [environmentId],
   );
-  return rows.map((r) => ({
+  const liveLinks: EnvLinkRow[] = rows.map((r) => ({
     id: r.id,
     linkTypeName: r.link_type_name,
     fromInstanceId: r.from_instance_id,
@@ -476,6 +483,17 @@ export async function listLinksForEnv(
     fromTypeName: r.from_type_name,
     toTypeName: r.to_type_name,
   }));
+  if (!lens?.scenarioId) return liveLinks;
+
+  // Endpoints are needed for two things: the type names of links the scenario
+  // creates, and dropping links whose endpoint the scenario deleted. Both need
+  // the instances *after* overrides, not the base ones.
+  const instances = await listInstancesForEnv(db, environmentId, {
+    limit: 20000,
+    ...lens,
+  });
+  const overrides = await resolveOverrides(db, lens.scenarioId, lens.atOffsetHours ?? 0);
+  return applyOverridesToLinks(liveLinks, overrides, lens.scenarioId, instances);
 }
 
 /** Count instances in an environment (for simulation read-only guard tests). */

@@ -1224,11 +1224,18 @@ export function subscribeTwinStream(
   env: string,
   onData: (snapshot: TwinTreeSnapshot) => void,
   onError: () => void,
-  opts?: { maxRetries?: number },
+  opts?: { maxRetries?: number; scenarioId?: string; atOffsetHours?: number },
 ): () => void {
   const controller = new AbortController();
   const token = getStoredKey();
-  const url = `${API_BASE}/v1/ontology/${encEnv(env)}/twin/stream`;
+  // With a scenario the stream shows the world under that scenario's edits,
+  // recomputed on the same cadence as reality.
+  const qs = new URLSearchParams();
+  if (opts?.scenarioId) qs.set("scenarioId", opts.scenarioId);
+  if (opts?.atOffsetHours != null) qs.set("atOffsetHours", String(opts.atOffsetHours));
+  const query = qs.toString();
+  const url =
+    `${API_BASE}/v1/ontology/${encEnv(env)}/twin/stream` + (query ? `?${query}` : "");
   const maxRetries = opts?.maxRetries ?? 5;
   let stopped = false;
 
