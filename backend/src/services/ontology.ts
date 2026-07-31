@@ -1,6 +1,7 @@
 import type { DbClient } from "../lib/db.js";
 
 import { NotFound } from "../lib/errors.js";
+import { assertLensSupported, type ReadLens } from "./ontology-lens.js";
 
 export interface EnvInstanceRow {
   id: string;
@@ -377,7 +378,8 @@ export async function insertLinkInstance(
   const { rows } = await db.query<{ id: string }>(
     `INSERT INTO app.ontology_link_instances (link_type_id, from_instance_id, to_instance_id, provenance)
      VALUES ($1, $2, $3, $4::jsonb)
-     ON CONFLICT (link_type_id, from_instance_id, to_instance_id) DO NOTHING
+     ON CONFLICT (link_type_id, from_instance_id, to_instance_id)
+            WHERE valid_to IS NULL DO NOTHING
      RETURNING id`,
     [linkTypeId, fromInstanceId, toInstanceId, JSON.stringify(provenance)],
   );
@@ -388,8 +390,11 @@ export async function insertLinkInstance(
 export async function listInstancesForEnv(
   db: DbClient,
   environmentId: string,
-  opts?: { type?: string; wherePairs?: Array<[string, string]>; limit?: number },
+  opts?: { type?: string; wherePairs?: Array<[string, string]>; limit?: number } & ReadLens,
 ): Promise<EnvInstanceRow[]> {
+  // Every ontology read goes through the lens. Today it only permits "live",
+  // and says so rather than returning live data under a scenario's name.
+  assertLensSupported(opts);
   const params: unknown[] = [environmentId];
   let sql = `SELECT oi.id, oi.object_type_id, t.name AS type_name,
                     oi.properties, oi.provenance, t.property_schema,
@@ -438,7 +443,9 @@ export async function listInstancesForEnv(
 export async function listLinksForEnv(
   db: DbClient,
   environmentId: string,
+  lens?: ReadLens,
 ): Promise<EnvLinkRow[]> {
+  assertLensSupported(lens);
   const { rows } = await db.query<{
     id: string;
     link_type_name: string;
@@ -456,7 +463,9 @@ export async function listLinksForEnv(
        JOIN app.ontology_object_types ft ON ft.id = fi.object_type_id
        JOIN app.ontology_object_instances ti ON ti.id = li.to_instance_id
        JOIN app.ontology_object_types tt ON tt.id = ti.object_type_id
-      WHERE lt.organization_id = (SELECT organization_id FROM app.project WHERE id = $1)`,
+      -- open links only; a closed one was true once, not now
+      WHERE lt.organization_id = (SELECT organization_id FROM app.project WHERE id = $1)
+        AND li.valid_to IS NULL`,
     [environmentId],
   );
   return rows.map((r) => ({
@@ -601,6 +610,7 @@ export async function importEnvironment(
        FROM app.ontology_link_instances li
        JOIN app.ontology_link_types lt ON lt.id = li.link_type_id
       WHERE lt.organization_id = (SELECT organization_id FROM app.project WHERE id = $1)
+        AND li.valid_to IS NULL
       LIMIT 20000`,
     [sourceEnvId],
   );
@@ -614,7 +624,8 @@ export async function importEnvironment(
     const inserted = await db.query(
       `INSERT INTO app.ontology_link_instances (link_type_id, from_instance_id, to_instance_id, provenance)
        VALUES ($1, $2, $3, $4::jsonb)
-       ON CONFLICT (link_type_id, from_instance_id, to_instance_id) DO NOTHING`,
+       ON CONFLICT (link_type_id, from_instance_id, to_instance_id)
+            WHERE valid_to IS NULL DO NOTHING`,
       [linkTypeId, fromId, toId, JSON.stringify(li.provenance ?? {})],
     );
     links += inserted.rowCount ?? 0;

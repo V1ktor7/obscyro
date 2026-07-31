@@ -1,6 +1,7 @@
 import { clampLimit, clampOffset, config } from "../lib/config.js";
 import type { DbClient } from "../lib/db.js";
 import { NotFound } from "../lib/errors.js";
+import type { ReadLens } from "./ontology-lens.js";
 import {
   getOrCreateLinkType,
   getOrCreateObjectType,
@@ -155,12 +156,14 @@ export async function seedTwinSchema(
 export async function getUnitTree(
   db: DbClient,
   environmentId: string,
+  lens?: ReadLens,
 ): Promise<{ nodes: TwinUnitNode[]; edges: TwinTreeEdge[]; roots: string[] }> {
   const instances = await listInstancesForEnv(db, environmentId, {
     type: ORG_UNIT_TYPE,
     limit: config.rollupInstanceCap,
+    ...lens,
   });
-  const links = await listLinksForEnv(db, environmentId);
+  const links = await listLinksForEnv(db, environmentId, lens);
   const unitIds = new Set(instances.map((i) => i.id));
 
   const edges: TwinTreeEdge[] = [];
@@ -259,15 +262,17 @@ function mergeChildMetrics(parent: UnitMetrics, child: UnitMetrics): void {
 export async function rollupAllUnits(
   db: DbClient,
   environmentId: string,
+  lens?: ReadLens,
 ): Promise<Map<string, UnitMetrics>> {
-  const { nodes, edges } = await getUnitTree(db, environmentId);
+  const { nodes, edges } = await getUnitTree(db, environmentId, lens);
   const unitIds = new Set(nodes.map((n) => n.id));
   const descendants = buildDescendantMap(unitIds, edges);
 
   const allInstances = await listInstancesForEnv(db, environmentId, {
     limit: config.rollupInstanceCap,
+    ...lens,
   });
-  const links = await listLinksForEnv(db, environmentId);
+  const links = await listLinksForEnv(db, environmentId, lens);
   const now = Date.now();
 
   const instanceById = new Map(allInstances.map((i) => [i.id, i]));
@@ -671,9 +676,9 @@ export async function deleteAlertRule(
   if (!rowCount) throw NotFound("RULE_NOT_FOUND", "Alert rule not found.");
 }
 
-export async function getTwinTreeSnapshot(db: DbClient, environmentId: string) {
-  const tree = await getUnitTree(db, environmentId);
-  const metricsByUnit = await rollupAllUnits(db, environmentId);
+export async function getTwinTreeSnapshot(db: DbClient, environmentId: string, lens?: ReadLens) {
+  const tree = await getUnitTree(db, environmentId, lens);
+  const metricsByUnit = await rollupAllUnits(db, environmentId, lens);
   const unitKinds = new Map(tree.nodes.map((n) => [n.id, n.kind]));
   await evaluateAlerts(db, environmentId, metricsByUnit, unitKinds);
   const openAlerts = await listOpenAlerts(db, environmentId, undefined, {
@@ -807,7 +812,8 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
         WHERE lt.organization_id = (SELECT organization_id FROM app.project WHERE id = $1)
           AND li.from_instance_id = ANY($2::uuid[])
           AND li.to_instance_id = ANY($2::uuid[])
-          AND li.from_instance_id <> li.to_instance_id`,
+          AND li.from_instance_id <> li.to_instance_id
+          AND li.valid_to IS NULL`,
       [environmentId, siteIds],
     );
     flows = rows.map((r) => ({

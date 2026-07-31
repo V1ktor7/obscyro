@@ -819,7 +819,8 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
              ON other.id = CASE WHEN li.from_instance_id = $1
                                 THEN li.to_instance_id ELSE li.from_instance_id END
            JOIN app.ontology_object_types ot ON ot.id = other.object_type_id
-          WHERE li.from_instance_id = $1 OR li.to_instance_id = $1
+          WHERE (li.from_instance_id = $1 OR li.to_instance_id = $1)
+            AND li.valid_to IS NULL
           ORDER BY li.created_at DESC`,
         [req.params.id, env.id],
       );
@@ -1252,16 +1253,21 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
     async (req) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
+      // Closing rather than deleting: the link stops being true now, but it
+      // stays on the record as having been true until now. Deleting the row
+      // makes every past moment unreconstructable.
       const result = await req.db.query(
-        `DELETE FROM app.ontology_link_instances li
-          USING app.ontology_link_types lt
+        `UPDATE app.ontology_link_instances li
+            SET valid_to = NOW()
+           FROM app.ontology_link_types lt
           WHERE li.link_type_id = lt.id
             AND lt.organization_id = (SELECT organization_id FROM app.project WHERE id = $1)
-            AND li.id = $2`,
+            AND li.id = $2
+            AND li.valid_to IS NULL`,
         [env.id, req.params.id],
       );
       if (result.rowCount === 0) {
-        throw NotFound("LINK_NOT_FOUND", "Link not found in this environment.");
+        throw NotFound("LINK_NOT_FOUND", "Link not found in this environment, or already closed.");
       }
       return { ok: true as const };
     },

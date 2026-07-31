@@ -180,6 +180,7 @@ export async function findExistingFinding(
            ON li.to_instance_id = oi.id
           AND li.link_type_id = $3
           AND li.from_instance_id = $4
+          AND li.valid_to IS NULL
         WHERE oi.object_type_id = $1
           AND oi.code = $2
         LIMIT 1`,
@@ -199,6 +200,7 @@ export async function findExistingFinding(
             FROM app.ontology_link_instances li
            WHERE li.to_instance_id = oi.id
              AND li.link_type_id = $3
+             AND li.valid_to IS NULL
         )
       LIMIT 1`,
     [findingTypeId, snomedCode, linkTypeId],

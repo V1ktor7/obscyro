@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Obscyro — Scenarios (mockup)</title>
+<style>
+  :root{--bg:#f6f7f9;--line:#d3d8de;--soft:#e5e8eb;--ink:#1c2127;--ink2:#404854;--ink3:#5f6b7c;--ink4:#8f99a8;
+    --acc:#2d72d2;--accd:#215db0;--accs:#e7f2fd;--ok:#1d9e75;--warn:#d9822b;--warnbg:#fdf6ec;--warnln:#f0d9b5;--bad:#c23030;
+    --epi:#c2306b;--cap:#2d72d2;--flow:#1d9e75;--det:#7961a8;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.45 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  .micro{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.045em;color:var(--ink4)}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+  .btn{height:26px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 11px;border-radius:4px;
+    font-size:11.5px;font-weight:500;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink2);font-family:inherit}
+  .btn-p{background:var(--acc);border-color:var(--accd);color:#fff}
+  .pill{display:inline-flex;align-items:center;gap:4px;border-radius:3px;padding:1px 6px;font-size:9.5px;font-weight:500}
+  .p-ok{background:#e8f6f0;color:#12684c}.p-warn{background:var(--warnbg);color:#8a5a12;border:1px solid var(--warnln)}
+  .p-acc{background:var(--accs);color:var(--accd)}
+
+  .top{display:flex;align-items:center;gap:9px;padding:8px 14px;background:#fff;border-bottom:1px solid var(--line)}
+  .top h1{font-size:14px;font-weight:600;margin:0}
+  .top .r{margin-left:auto;display:flex;gap:6px;align-items:center}
+  select,input[type=text],input[type=number]{height:24px;border:1px solid var(--line);border-radius:4px;background:#fff;
+    padding:0 6px;font-size:11.5px;color:var(--ink);font-family:inherit}
+
+  .shell{display:grid;grid-template-columns:178px minmax(0,1fr) 292px;height:calc(100vh - 41px)}
+  .col{overflow:auto;background:#fff}
+  .col.l{border-right:1px solid var(--line)}
+  .col.r{border-left:1px solid var(--line)}
+
+  /* palette */
+  .pgrp{padding:6px 0 2px}
+  .pgrp .t{padding:3px 11px 4px}
+  .ev{display:flex;align-items:center;gap:7px;margin:0 7px 3px;padding:5px 7px;border:1px solid var(--line);border-radius:5px;
+    cursor:grab;background:#fff;user-select:none}
+  .ev:hover{border-color:var(--acc);background:var(--accs)}
+  .ev.na{opacity:.5;cursor:not-allowed}
+  .ev .sw{width:3px;height:20px;border-radius:2px;flex:none}
+  .ev .nm{font-size:11px;font-weight:500;line-height:1.25}
+  .ev .d{font-size:9px;color:var(--ink4)}
+
+  /* variants */
+  .vars{display:flex;align-items:center;gap:4px;padding:7px 12px;border-bottom:1px solid var(--soft);background:#fbfcfd}
+  .vtab{padding:3px 10px;border:1px solid var(--line);border-radius:4px;background:#fff;font-size:11px;cursor:pointer;
+    display:flex;align-items:center;gap:5px}
+  .vtab.on{border-color:var(--acc);background:var(--accs);color:var(--accd);font-weight:600}
+  .vtab .dot{width:7px;height:7px;border-radius:50%}
+
+  /* timeline */
+  .tl{padding:10px 12px 4px}
+  .tlhead{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .axis{position:relative;height:16px;margin-left:96px;border-bottom:1px solid var(--soft)}
+  .axis span{position:absolute;top:1px;font-size:9.5px;color:var(--ink4);transform:translateX(-50%)}
+  .track{display:flex;align-items:center;height:34px;border-bottom:1px solid #f1f3f5}
+  .track .lb{width:96px;flex:none;font-size:10px;color:var(--ink3);padding-right:8px;text-align:right;
+    text-transform:uppercase;letter-spacing:.03em}
+  .lane{position:relative;flex:1;height:100%;background:
+    repeating-linear-gradient(90deg,transparent 0,transparent calc(10% - 1px),#eef1f4 calc(10% - 1px),#eef1f4 10%)}
+  .blk{position:absolute;top:6px;height:22px;border-radius:4px;color:#fff;font-size:10px;display:flex;align-items:center;
+    padding:0 6px;cursor:grab;white-space:nowrap;overflow:hidden;user-select:none;box-shadow:0 1px 2px rgba(16,22,26,.18)}
+  .blk.sel{outline:2px solid var(--ink);outline-offset:1px;z-index:3}
+  .blk .h{position:absolute;right:0;top:0;width:6px;height:100%;cursor:ew-resize;background:rgba(255,255,255,.35)}
+
+  /* outcome */
+  .out{border-top:1px solid var(--line);padding:9px 12px 12px}
+  .lg{display:flex;gap:13px;margin-top:5px}
+  .lg span{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--ink4)}
+
+  /* inspector */
+  .fld{padding:7px 11px;border-bottom:1px solid var(--soft)}
+  .fld>.micro{display:block;margin-bottom:4px}
+  .fld input,.fld select{width:100%}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .pick{display:flex;gap:4px}
+  .pick select{min-width:0;flex:1}
+  .peekbtn{border:1px solid var(--line);background:#fff;border-radius:4px;width:26px;cursor:pointer;color:var(--ink3);font-size:11px}
+  .peekbtn:hover{border-color:var(--acc);color:var(--accd)}
+  .idle{padding:26px 14px;text-align:center;font-size:11.5px;color:var(--ink4);line-height:1.6}
+  .note{padding:8px 11px;font-size:10.5px;line-height:1.5;color:var(--ink3);background:#f8f9fa}
+  .warnbox{margin:8px 11px;padding:7px 8px;background:var(--warnbg);border:1px solid var(--warnln);border-radius:4px;
+    font-size:10.5px;line-height:1.5;color:#8a5a12}
+
+  /* peek */
+  .scrim{position:fixed;inset:0;background:rgba(16,22,26,.18);display:none}
+  .scrim.on{display:block}
+  .peek{position:fixed;top:0;right:0;width:380px;height:100%;background:#fff;border-left:1px solid var(--line);
+    box-shadow:-4px 0 16px rgba(16,22,26,.12);display:none;flex-direction:column}
+  .peek.on{display:flex}
+  .peek .h{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line)}
+  .peek .b{overflow:auto;padding:0 0 12px}
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;font-size:9.5px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;color:var(--ink4);
+    padding:5px 12px;border-bottom:1px solid var(--soft)}
+  td{padding:4px 12px;border-bottom:1px solid #f4f6f7;font-size:11px;color:var(--ink2)}
+  tr.clk{cursor:pointer} tr.clk:hover td{background:#f8f9fa}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>Scenarios</h1>
+  <span class="micro">CHUM-lab</span>
+  <input type="text" value="Éclosion 6 Ouest — hiver" style="width:190px" />
+  <span class="r">
+    <span class="micro">horizon</span><select><option>30 d</option><option>60 d</option><option>90 d</option></select>
+    <span class="micro">runs</span><select><option>50</option><option>10</option><option>200</option></select>
+    <span class="micro">seed</span><input type="number" value="4417" style="width:64px" class="mono" />
+    <button class="btn">Save</button>
+    <button class="btn btn-p" id="run">▶ Run all variants</button>
+  </span>
+</div>
+
+<div class="shell">
+  <!-- ============ PALETTE ============ -->
+  <div class="col l">
+    <div id="palette"></div>
+    <div class="note">Drag an event onto the timeline. A scenario is whatever you compose — there are no
+      preset situations, only primitives you place in time.</div>
+  </div>
+
+  <!-- ============ CENTER ============ -->
+  <div class="col" style="display:flex;flex-direction:column">
+    <div class="vars" id="vars"></div>
+
+    <div class="tl">
+      <div class="tlhead">
+        <span class="micro">Timeline</span>
+        <span class="pill p-acc" id="evCount"></span>
+        <span class="micro" style="margin-left:auto">drag to move · drag the right edge to extend</span>
+      </div>
+      <div class="axis" id="axis"></div>
+      <div id="tracks"></div>
+    </div>
+
+    <div class="out">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="micro">Occupancy — every variant against the same world without events</span>
+        <span class="micro" style="margin-left:auto">median · 10–90 % band · 50 runs</span>
+      </div>
+      <svg width="100%" height="150" viewBox="0 0 840 150" id="chart" style="margin-top:6px"></svg>
+      <div class="lg" id="legend"></div>
+    </div>
+  </div>
+
+  <!-- ============ INSPECTOR ============ -->
+  <div class="col r" id="insp"></div>
+</div>
+
+<!-- ============ PEEK ============ -->
+<div class="scrim" id="scrim"></div>
+<aside class="peek" id="peek">
+  <div class="h">
+    <span class="micro">Org unit</span>
+    <b style="font-size:12.5px" id="peekName"></b>
+    <button class="btn" style="margin-left:auto;height:22px" id="peekClose">Close</button>
+  </div>
+  <div class="b" id="peekBody"></div>
+</aside>
+
+<script>
+/* ================= primitives ================= */
+/* Marked against what the service actually implements today. Anything not
+   implemented is offered but says so — the same rule the node palette uses. */
+const PRIMS = [
+  {g:'Epidemiological', items:[
+    {k:'introduce', nm:'Introduce cases',    d:'N index cases at a node',        c:'epi', ok:true},
+    {k:'transmis',  nm:'Change transmission',d:'R₀ × factor from this day',      c:'epi', ok:false},
+    {k:'import',    nm:'Imported cases',     d:'arrivals/day from outside',      c:'epi', ok:false},
+  ]},
+  {g:'Capacity', items:[
+    {k:'close',     nm:'Close a node',       d:'unit offline, load redistributes',c:'cap', ok:true},
+    {k:'beds',      nm:'Add isolation beds', d:'+N beds available',              c:'cap', ok:true},
+    {k:'staff',     nm:'Staffing change',    d:'care capacity × factor',         c:'cap', ok:false},
+  ]},
+  {g:'Flow', items:[
+    {k:'contact',   nm:'Change contact rate',d:'edge weight × factor',           c:'flow',ok:false},
+    {k:'influx',    nm:'External influx',    d:'N arrivals/day into a node',     c:'flow',ok:false},
+    {k:'divert',    nm:'Divert admissions',  d:'route arrivals elsewhere',       c:'flow',ok:false},
+  ]},
+  {g:'Detection', items:[
+    {k:'screen',    nm:'Screening',          d:'detection rate × factor',        c:'det', ok:false},
+  ]},
+];
+const META = {}; PRIMS.forEach(g=>g.items.forEach(i=>META[i.k]=i));
+const TRACKS = [
+  {c:'epi',  lb:'Epidemiological'},
+  {c:'cap',  lb:'Capacity'},
+  {c:'flow', lb:'Flow'},
+  {c:'det',  lb:'Detection'},
+];
+const UNITS = ['6 Ouest — médecine','7 Est — chirurgie','Soins intensifs','Urgence','Cardiologie','Gériatrie'];
+const HORIZON = 30;
+
+let variants = [
+  {id:'v0', name:'Baseline', color:'#8f99a8', locked:true, events:[]},
+  {id:'v1', name:'Variant A', color:'#c23030', events:[
+    {id:'e1', k:'introduce', day:2,  len:1, unit:'6 Ouest — médecine', n:3},
+    {id:'e2', k:'close',     day:9,  len:7, unit:'6 Ouest — médecine'},
+  ]},
+  {id:'v2', name:'Variant B', color:'#2d72d2', events:[
+    {id:'e3', k:'introduce', day:2,  len:1, unit:'6 Ouest — médecine', n:3},
+    {id:'e4', k:'beds',      day:5,  len:25, unit:'Soins intensifs', n:12},
+  ]},
+];
+let active = 'v1', sel = 'e1', uid = 10;
+
+/* ================= palette ================= */
+document.getElementById('palette').innerHTML = PRIMS.map(g=>`
+  <div class="pgrp"><div class="t micro">${g.g}</div>
+  ${g.items.map(i=>`<div class="ev ${i.ok?'':'na'}" draggable="${i.ok}" data-k="${i.k}" title="${i.d}">
+    <span class="sw" style="background:var(--${i.c})"></span>
+    <span><span class="nm">${i.nm}</span><br><span class="d">${i.ok?i.d:'not in the engine yet'}</span></span>
+  </div>`).join('')}</div>`).join('');
+
+document.querySelectorAll('.ev[draggable=true]').forEach(el=>{
+  el.addEventListener('dragstart',e=>e.dataTransfer.setData('k', el.dataset.k));
+});
+
+/* ================= variants ================= */
+function cur(){ return variants.find(v=>v.id===active); }
+function renderVars(){
+  document.getElementById('vars').innerHTML =
+    variants.map(v=>`<div class="vtab ${active===v.id?'on':''}" data-v="${v.id}">
+      <span class="dot" style="background:${v.color}"></span>${v.name}
+      <span style="color:var(--ink4);font-size:10px">${v.locked?'—':v.events.length}</span></div>`).join('')
+    + `<button class="btn" id="addVar" style="height:24px">+ variant</button>
+       <span class="micro" style="margin-left:auto">same seed, same contacts — only the events differ</span>`;
+  document.querySelectorAll('.vtab').forEach(el=>el.onclick=()=>{ active=el.dataset.v; sel=null; renderAll(); });
+  document.getElementById('addVar').onclick=()=>{
+    const src = cur();
+    variants.push({id:'v'+(++uid), name:'Variant '+String.fromCharCode(65+variants.length-1),
+      color:'#7961a8', events: src.events.map(e=>({...e, id:'e'+(++uid)}))});
+    active = variants[variants.length-1].id; renderAll();
+  };
+}
+
+/* ================= timeline ================= */
+function renderAxis(){
+  document.getElementById('axis').innerHTML =
+    Array.from({length:7},(_,i)=>{ const d=Math.round(i*HORIZON/6);
+      return `<span style="left:${(d/HORIZON*100).toFixed(2)}%">d${d}</span>`;}).join('');
+}
+function renderTracks(){
+  const v = cur();
+  document.getElementById('tracks').innerHTML = TRACKS.map(t=>`
+    <div class="track"><div class="lb">${t.lb}</div><div class="lane" data-c="${t.c}"></div></div>`).join('');
+  document.getElementById('evCount').textContent =
+    v.locked ? 'baseline — no events' : `${v.events.length} event${v.events.length===1?'':'s'}`;
+
+  document.querySelectorAll('.lane').forEach(lane=>{
+    const c = lane.dataset.c;
+    v.events.filter(e=>META[e.k].c===c).forEach(e=>{
+      const b=document.createElement('div');
+      b.className='blk'+(sel===e.id?' sel':'');
+      b.style.left=(e.day/HORIZON*100)+'%';
+      b.style.width=Math.max(3,(e.len/HORIZON*100))+'%';
+      b.style.background=`var(--${c})`;
+      b.innerHTML=`${META[e.k].nm}${e.unit?' · '+e.unit.split(' —')[0]:''}<span class="h"></span>`;
+      b.onmousedown=(ev)=>{
+        if(v.locked) return;
+        sel=e.id; renderAll();
+        const rect=lane.getBoundingClientRect();
+        const resize=ev.target.classList.contains('h');
+        const x0=ev.clientX, d0=e.day, l0=e.len;
+        const mv=(m)=>{ const dd=Math.round((m.clientX-x0)/rect.width*HORIZON);
+          if(resize) e.len=Math.max(1,Math.min(HORIZON-e.day,l0+dd));
+          else e.day=Math.max(0,Math.min(HORIZON-e.len,d0+dd));
+          renderTracks(); renderInsp(); };
+        const up=()=>{document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);renderChart();};
+        document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+      };
+      lane.appendChild(b);
+    });
+
+    lane.ondragover=(e)=>{ if(!v.locked) e.preventDefault(); };
+    lane.ondrop=(e)=>{
+      e.preventDefault(); if(v.locked) return;
+      const k=e.dataTransfer.getData('k'); if(!k||META[k].c!==c) return;
+      const rect=lane.getBoundingClientRect();
+      const day=Math.max(0,Math.round((e.clientX-rect.left)/rect.width*HORIZON));
+      const ne={id:'e'+(++uid),k,day,len:k==='introduce'?1:7,unit:UNITS[0],n:k==='beds'?12:3};
+      v.events.push(ne); sel=ne.id; renderAll();
+    };
+  });
+}
+
+/* ================= inspector ================= */
+function renderInsp(){
+  const v=cur();
+  const e=v.events.find(x=>x.id===sel);
+  const box=document.getElementById('insp');
+  if(v.locked){
+    box.innerHTML=`<div class="idle"><b>Baseline</b><br />The same world with nothing done to it.<br />
+      Every variant is measured against this.</div>`; return;
+  }
+  if(!e){ box.innerHTML=`<div class="idle">Drag an event onto a track,<br />then select it to set its parameters.</div>`; return; }
+  const m=META[e.k];
+  box.innerHTML=`
+    <div class="fld" style="display:flex;align-items:center;gap:7px">
+      <span class="sw" style="width:3px;height:18px;border-radius:2px;background:var(--${m.c});display:inline-block"></span>
+      <b style="font-size:12.5px">${m.nm}</b>
+      <button class="btn" style="margin-left:auto;height:22px" id="del">Remove</button>
+    </div>
+    ${!m.ok?`<div class="warnbox"><b>Not in the engine yet.</b> You can place it and save the scenario;
+      the run will skip it and say so rather than pretending it applied.</div>`:''}
+    <div class="fld"><span class="micro">Target</span>
+      <div class="pick">
+        <select id="unitSel">${UNITS.map(u=>`<option ${u===e.unit?'selected':''}>${u}</option>`).join('')}</select>
+        <button class="peekbtn" id="peekOpen" title="Look at this unit without leaving">◱</button>
+      </div>
+    </div>
+    <div class="fld"><div class="row2">
+      <div><span class="micro">Starts day</span><input type="number" id="day" value="${e.day}" min="0" max="${HORIZON}" /></div>
+      <div><span class="micro">Lasts (days)</span><input type="number" id="len" value="${e.len}" min="1" max="${HORIZON}" /></div>
+    </div></div>
+    ${['introduce','beds','import','influx'].includes(e.k)?`
+      <div class="fld"><span class="micro">${e.k==='beds'?'Beds added':e.k==='introduce'?'Index cases':'Arrivals per day'}</span>
+        <input type="number" id="n" value="${e.n ?? 1}" min="1" /></div>`:''}
+    ${['transmis','staff','contact','screen'].includes(e.k)?`
+      <div class="fld"><span class="micro">Multiplier</span><input type="number" step="0.05" value="1.4" /></div>`:''}
+    <div class="note">Events compose. Two introductions on different days, or a closure that starts before the
+      beds arrive, are both just placements on the timeline — nothing here is a preset.</div>`;
+
+  document.getElementById('del').onclick=()=>{ v.events=v.events.filter(x=>x.id!==e.id); sel=null; renderAll(); };
+  document.getElementById('unitSel').onchange=(ev)=>{ e.unit=ev.target.value; renderTracks(); };
+  document.getElementById('day').oninput=(ev)=>{ e.day=+ev.target.value; renderTracks(); renderChart(); };
+  document.getElementById('len').oninput=(ev)=>{ e.len=+ev.target.value; renderTracks(); renderChart(); };
+  const n=document.getElementById('n'); if(n) n.oninput=(ev)=>{ e.n=+ev.target.value; renderChart(); };
+  document.getElementById('peekOpen').onclick=()=>openPeek(e.unit);
+}
+
+/* ================= chart ================= */
+function curveFor(v){
+  if(v.locked) return Array.from({length:HORIZON+1},(_,d)=>30+Math.sin(d/6)*2.5+d*0.1);
+  const intro=v.events.find(e=>e.k==='introduce');
+  const close=v.events.find(e=>e.k==='close');
+  const beds =v.events.find(e=>e.k==='beds');
+  const start=intro?intro.day:0, amp=(intro?intro.n:0)*22;
+  return Array.from({length:HORIZON+1},(_,d)=>{
+    let y=30+Math.sin(d/6)*2.5+d*0.1;
+    if(intro&&d>=start) y+=amp*Math.exp(-Math.pow((d-start-9)/5.4,2));
+    if(close&&d>=close.day) y*=0.66;
+    if(beds&&d>=beds.day) y*=0.82;
+    return y;
+  });
+}
+function poly(v,w,h,mx){ return v.map((y,i)=>`${(i/(v.length-1)*w).toFixed(1)},${(h-8-(y/mx)*(h-20)).toFixed(1)}`).join(' '); }
+function renderChart(){
+  const w=840,h=150,mx=120,cap=88;
+  const capY=h-8-(cap/mx)*(h-20);
+  let svg=`<rect x="0" y="0" width="${w}" height="${capY}" fill="#fdf1f1"/>
+    <line x1="0" y1="${capY}" x2="${w}" y2="${capY}" stroke="#e3b0b0" stroke-dasharray="4 3"/>
+    <text x="6" y="${capY-4}" font-size="9.5" fill="#a33">bed capacity</text>`;
+  variants.forEach(v=>{
+    const c=curveFor(v);
+    if(!v.locked){
+      const up=poly(c.map(y=>y*1.16),w,h,mx), dn=poly(c.map(y=>y*0.86),w,h,mx).split(' ').reverse().join(' ');
+      svg+=`<polygon points="${up} ${dn}" fill="${v.color}" fill-opacity=".11"/>`;
+    }
+    svg+=`<polyline points="${poly(c,w,h,mx)}" fill="none" stroke="${v.color}" stroke-width="${v.locked?1.5:1.9}"
+      ${v.locked?'stroke-dasharray="3 2"':''}/>`;
+  });
+  document.getElementById('chart').innerHTML=svg;
+  document.getElementById('legend').innerHTML=variants.map(v=>`
+    <span><svg width="14" height="3"><line x1="0" y1="1.5" x2="14" y2="1.5" stroke="${v.color}"
+      stroke-width="1.8" ${v.locked?'stroke-dasharray="3 2"':''}/></svg>${v.name}</span>`).join('')
+    + `<span style="margin-left:auto">shaded = over capacity</span>`;
+}
+
+/* ================= peek ================= */
+const BEDS=[['6W-01','occupied'],['6W-02','occupied'],['6W-03','free'],['6W-04','occupied'],['6W-05','cleaning']];
+function openPeek(unit){
+  document.getElementById('peekName').textContent=unit;
+  document.getElementById('peekBody').innerHTML=`
+    <div style="padding:9px 12px;display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      ${[['Occupancy','86 %'],['Beds','24'],['Patients','21'],['Staff','9']].map(([k,v])=>
+        `<div style="background:#f8f9fa;border-radius:4px;padding:5px 7px">
+          <div class="micro">${k}</div><div style="font-size:13px;font-weight:600" class="mono">${v}</div></div>`).join('')}
+    </div>
+    <table><thead><tr><th>Bed</th><th>Status</th></tr></thead><tbody>
+      ${BEDS.map(([b,s])=>`<tr><td class="mono">${b}</td><td>${s}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="note">Contained by <b>CHUM</b> · 3 inbound transfer links · linked to 21 Patient instances.</div>`;
+  document.getElementById('peek').classList.add('on');
+  document.getElementById('scrim').classList.add('on');
+}
+function closePeek(){ document.getElementById('peek').classList.remove('on');
+  document.getElementById('scrim').classList.remove('on'); }
+document.getElementById('peekClose').onclick=closePeek;
+document.getElementById('scrim').onclick=closePeek;
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closePeek(); });
+
+document.getElementById('run').onclick=(e)=>{
+  e.target.textContent='Running 3 × 50…';
+  setTimeout(()=>{ e.target.textContent='▶ Re-run all variants'; renderChart(); },700);
+};
+
+function renderAll(){ renderVars(); renderAxis(); renderTracks(); renderInsp(); renderChart(); }
+renderAll();
+</script>
+</body>
+</html>
