@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Obscyro — Twin canvas (mockup v2)</title>
+<style>
+  :root{--bg:#f6f7f9;--line:#d3d8de;--soft:#e5e8eb;--ink:#1c2127;--ink2:#404854;--ink3:#5f6b7c;--ink4:#8f99a8;
+    --acc:#2d72d2;--accd:#215db0;--accs:#e7f2fd;--ok:#1d9e75;--warn:#d9822b;--warnbg:#fdf6ec;--warnln:#f0d9b5;
+    --crit:#c23030;--critbg:#fdf1f1;--scen:#5b4a86;--scenbg:#f0edf7;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.45 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  .micro{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.045em;color:var(--ink4)}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+  select,input{height:26px;border:1px solid var(--line);border-radius:4px;background:#fff;padding:0 7px;
+    font-size:11.5px;color:var(--ink);font-family:inherit}
+  .btn{height:26px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border-radius:4px;font-size:11.5px;
+    cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink2);font-family:inherit}
+
+  /* ---- one header, three groups ---- */
+  .bar{display:flex;align-items:center;gap:8px;padding:7px 12px;background:#fff;border-bottom:1px solid var(--line)}
+  .grp{display:flex;align-items:center;gap:6px}
+  .sep{width:1px;height:20px;background:var(--soft)}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden;height:26px}
+  .seg button{border:0;background:transparent;padding:0 10px;font:inherit;font-size:10px;font-weight:500;
+    text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);cursor:pointer}
+  .seg button.on{background:var(--accs);color:var(--accd)}
+  .scenpill{display:inline-flex;align-items:center;gap:6px;background:var(--scen);color:#fff;border-radius:4px;
+    padding:3px 9px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--ok)}
+
+  /* ---- the one banner that earns its space ---- */
+  .stale{display:flex;align-items:center;gap:9px;padding:7px 12px;background:var(--warnbg);
+    border-bottom:1px solid var(--warnln);font-size:11.5px;color:#8a5a12}
+  .stale b{color:#6b430b}
+
+  /* ---- 3 KPIs, ranked ---- */
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;padding:10px 12px}
+  .kpi{background:#fff;border:1px solid var(--line);border-radius:6px;padding:9px 11px;position:relative;overflow:hidden}
+  .kpi .v{font-size:25px;font-weight:600;letter-spacing:-.02em;line-height:1.05}
+  .kpi .s{font-size:10.5px;color:var(--ink4);margin-top:3px}
+  .kpi.attn{border-color:#e6b8b8;background:var(--critbg)}
+  .kpi.attn .v{color:var(--crit)}
+
+  /* ---- body ---- */
+  .body{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:10px;padding:0 12px 12px;align-items:start}
+  .panel{background:#fff;border:1px solid var(--line);border-radius:6px}
+  .ph{display:flex;align-items:center;gap:8px;padding:7px 11px;border-bottom:1px solid var(--line)}
+
+  /* attention list — the default view */
+  .row{display:grid;grid-template-columns:14px 1fr 96px 88px 74px 60px;align-items:center;gap:10px;
+    padding:7px 11px;border-bottom:1px solid #f2f4f6;cursor:pointer}
+  .row:hover{background:#f8f9fa}
+  .row.sel{background:var(--accs)}
+  .row:last-child{border-bottom:0}
+  .sev{width:8px;height:8px;border-radius:50%}
+  .s-crit{background:var(--crit)}.s-warn{background:var(--warn)}.s-ok{background:var(--ok)}
+  .nm{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .path{font-size:10px;color:var(--ink4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar-occ{height:6px;border-radius:3px;background:#eef1f4;overflow:hidden}
+  .bar-occ i{display:block;height:100%;border-radius:3px}
+  .num{font-size:12px;text-align:right}
+  .tag{font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink4);text-align:right}
+  .delta{font-size:11px;font-weight:600;text-align:right}
+
+  /* inspector */
+  .ins{padding:10px 11px}
+  .gauge{display:flex;align-items:center;gap:12px}
+  .kv{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
+  .kv div{background:#f8f9fa;border-radius:4px;padding:5px 7px}
+  .kv .n{font-size:13px;font-weight:600}
+  .sect{margin-top:11px;border-top:1px solid var(--soft);padding-top:9px}
+  .lrow{display:flex;justify-content:space-between;font-size:11.5px;padding:2px 0;color:var(--ink2)}
+  .scennote{margin-top:10px;background:var(--scenbg);border:1px solid #d9d2e6;border-radius:4px;padding:7px 8px;
+    font-size:10.5px;line-height:1.5;color:var(--scen)}
+</style>
+</head>
+<body>
+
+<!-- ================= HEADER: context | view | scenario ================= -->
+<div class="bar">
+  <div class="grp">
+    <span class="dot"></span>
+    <b style="font-size:12.5px">chum-operations</b>
+    <span class="micro">29 units</span>
+  </div>
+  <div class="sep"></div>
+  <div class="grp">
+    <div class="seg">
+      <button class="on">Attention</button>
+      <button>Capacity</button>
+      <button>Hierarchy</button>
+    </div>
+    <input placeholder="Filter units…" style="width:150px" />
+    <select style="width:120px"><option>All kinds</option><option>Wards</option><option>Labs</option></select>
+  </div>
+  <div class="sep"></div>
+  <div class="grp" style="margin-left:auto">
+    <select style="width:150px"><option>test_scenarion (1)</option><option>Reality</option></select>
+    <span class="scenpill">▲ Not reality</span>
+    <button class="btn">Edits</button>
+  </div>
+</div>
+
+<!-- ================= the one banner that earns its space ================= -->
+<div class="stale">
+  <span>⚠</span>
+  <span><b>Data is 11 days old.</b> Newest write to any unit was 267 h ago, so everything below
+    describes the world as it was on 21 July — not now.</span>
+  <button class="btn" style="margin-left:auto;height:22px">Check syncs</button>
+</div>
+
+<!-- ================= 3 KPIs, ranked by what you act on ================= -->
+<div class="kpis">
+  <div class="kpi attn">
+    <span class="micro" style="color:#a35">Needs attention</span>
+    <div class="v">3</div>
+    <div class="s" style="color:#a35">units ≥ 95% · 0 open alerts</div>
+  </div>
+  <div class="kpi">
+    <span class="micro">Beds available</span>
+    <div class="v">110</div>
+    <div class="s">of 194 · 77% average occupancy</div>
+  </div>
+  <div class="kpi">
+    <span class="micro">Under this scenario</span>
+    <div class="v" style="color:var(--scen)">+12</div>
+    <div class="s">beds vs reality · 1 edit applied</div>
+  </div>
+</div>
+
+<div class="body">
+  <!-- ================= attention list ================= -->
+  <div class="panel">
+    <div class="ph">
+      <span class="micro">Units by attention</span>
+      <span class="micro" style="margin-left:auto">occupancy · beds · change vs reality</span>
+    </div>
+    <div id="rows"></div>
+  </div>
+
+  <!-- ================= inspector ================= -->
+  <div class="panel">
+    <div class="ph"><span class="micro">Unit</span><span class="micro" id="insKind"></span></div>
+    <div class="ins" id="ins"></div>
+  </div>
+</div>
+
+<script>
+const UNITS = [
+  {n:'HND Emergency', path:'CHUM › Notre-Dame', kind:'ward', occ:97, beds:16, used:16, d:0,  sev:'crit'},
+  {n:'HSL ICU',       path:'CHUM › Saint-Luc',  kind:'ward', occ:96, beds:12, used:12, d:0,  sev:'crit'},
+  {n:'HSL Ward 2B',   path:'CHUM › Saint-Luc',  kind:'ward', occ:95, beds:20, used:19, d:0,  sev:'crit'},
+  {n:'HND Ward 3A',   path:'CHUM › Notre-Dame', kind:'ward', occ:71, beds:24, used:17, d:12, sev:'ok'},
+  {n:'HCS Med-Surg A',path:'CHUM › Sacré-Cœur', kind:'ward', occ:83, beds:29, used:24, d:0,  sev:'warn'},
+  {n:'HSL Ward 2A',   path:'CHUM › Saint-Luc',  kind:'ward', occ:50, beds:20, used:10, d:0,  sev:'ok'},
+  {n:'HND Lab',       path:'CHUM › Notre-Dame', kind:'lab',  occ:null,beds:0, used:0,  d:0,  sev:'ok'},
+  {n:'HSL Lab',       path:'CHUM › Saint-Luc',  kind:'lab',  occ:null,beds:0, used:0,  d:0,  sev:'ok'},
+];
+let sel = 0;
+
+const occColor = (o) => o >= 95 ? 'var(--crit)' : o >= 80 ? 'var(--warn)' : 'var(--ok)';
+
+function renderRows(){
+  document.getElementById('rows').innerHTML = UNITS.map((u,i)=>`
+    <div class="row ${i===sel?'sel':''}" data-i="${i}">
+      <span class="sev s-${u.sev}"></span>
+      <span style="min-width:0">
+        <div class="nm">${u.n}</div>
+        <div class="path">${u.path}</div>
+      </span>
+      ${u.occ==null
+        ? `<span class="tag">no beds</span>`
+        : `<span><div class="bar-occ"><i style="width:${u.occ}%;background:${occColor(u.occ)}"></i></div></span>`}
+      <span class="num mono">${u.occ==null?'—':u.occ+'%'}</span>
+      <span class="num mono" style="color:var(--ink4)">${u.beds?u.used+'/'+u.beds:'—'}</span>
+      <span class="delta" style="color:${u.d?'var(--scen)':'var(--ink4)'}">${u.d?'+'+u.d:'·'}</span>
+    </div>`).join('');
+  document.querySelectorAll('.row').forEach(el=>el.onclick=()=>{ sel=+el.dataset.i; renderRows(); renderIns(); });
+}
+
+function renderIns(){
+  const u = UNITS[sel];
+  document.getElementById('insKind').textContent = u.kind;
+  const pct = u.occ ?? 0;
+  document.getElementById('ins').innerHTML = `
+    <div style="font-size:13.5px;font-weight:600">${u.n}</div>
+    <div style="font-size:10.5px;color:var(--ink4);margin-bottom:9px">${u.path}</div>
+    <div class="gauge">
+      <svg width="62" height="62" viewBox="0 0 62 62">
+        <circle cx="31" cy="31" r="25" fill="none" stroke="#eef1f4" stroke-width="5"/>
+        <circle cx="31" cy="31" r="25" fill="none" stroke="${u.occ==null?'#c5cbd3':occColor(pct)}" stroke-width="5"
+          stroke-dasharray="${2*Math.PI*25}" stroke-dashoffset="${2*Math.PI*25*(1-pct/100)}"
+          transform="rotate(-90 31 31)"/>
+        <text x="31" y="35" text-anchor="middle" font-size="13" font-weight="600" class="mono"
+          fill="#1c2127">${u.occ==null?'—':u.occ+'%'}</text>
+      </svg>
+      <div style="font-size:11.5px;line-height:1.6;color:var(--ink2)">
+        ${u.beds?`<b>${u.used}</b> of <b>${u.beds}</b> beds occupied<br />`:'No beds in this unit<br />'}
+        <span style="color:var(--ink4)">updated 29 s ago</span>
+      </div>
+    </div>
+    <div class="kv">
+      <div><div class="micro">Patients</div><div class="n mono">${u.used}</div></div>
+      <div><div class="micro">Open alerts</div><div class="n mono">0</div></div>
+    </div>
+    <div class="sect">
+      <div class="micro" style="margin-bottom:4px">Linked instances</div>
+      <div class="lrow"><span>Bed</span><b class="mono">${u.beds}</b></div>
+      <div class="lrow"><span>Patient</span><b class="mono">${u.used}</b></div>
+    </div>
+    ${u.d?`<div class="scennote"><b>Changed by this scenario.</b> ${u.d} beds added on day 0.
+      Without the scenario this unit is at ${Math.round(u.used/(u.beds-u.d)*100)}%.</div>`:''}
+    <div class="sect">
+      <button class="btn" style="width:100%">Add a scenario edit here</button>
+    </div>`;
+}
+
+renderRows(); renderIns();
+</script>
+</body>
+</html>

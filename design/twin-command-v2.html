@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>Obscyro — Poste de commandement (maquette v2)</title>
+<style>
+  :root{--bg:#f6f7f9;--line:#d3d8de;--soft:#e5e8eb;--ink:#1c2127;--ink2:#404854;--ink3:#5f6b7c;--ink4:#8f99a8;
+    --acc:#2d72d2;--accd:#215db0;--accs:#e7f2fd;--ok:#1d9e75;--okbg:#e8f6f0;--warn:#d9822b;--warnbg:#fdf6ec;
+    --warnln:#f0d9b5;--crit:#c23030;--critbg:#fdf1f1;--scen:#5b4a86;--scenbg:#f0edf7;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.45 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  .micro{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.045em;color:var(--ink4)}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+  select,input{height:26px;border:1px solid var(--line);border-radius:4px;background:#fff;padding:0 7px;font-size:11.5px;font-family:inherit;color:var(--ink)}
+  .btn{height:26px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border-radius:4px;font-size:11.5px;
+    cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink2);font-family:inherit}
+  .btn-p{background:var(--acc);border-color:var(--accd);color:#fff}
+  .panel{background:#fff;border:1px solid var(--line);border-radius:6px}
+
+  .bar{display:flex;align-items:center;gap:8px;padding:7px 12px;background:#fff;border-bottom:1px solid var(--line)}
+  .sep{width:1px;height:20px;background:var(--soft)}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden;height:26px}
+  .seg button{border:0;background:transparent;padding:0 11px;font:inherit;font-size:10px;font-weight:500;
+    text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);cursor:pointer}
+  .seg button.on{background:var(--accs);color:var(--accd)}
+
+  .shell{display:grid;grid-template-columns:210px minmax(0,1fr);gap:9px;padding:10px 12px;align-items:start}
+
+  /* domaines */
+  .dom{display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;border-left:3px solid transparent}
+  .dom:hover{background:#f8f9fa}
+  .dom.on{background:var(--accs);border-left-color:var(--acc)}
+  .dom .ic{width:20px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;flex:none}
+  .dom .n{flex:1;font-size:11.5px;font-weight:500;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dom .c{font-size:10px;color:var(--ink4);font-variant-numeric:tabular-nums}
+  .dom .c.hot{color:var(--crit);font-weight:700}
+
+  /* tableau */
+  .board{display:grid;gap:8px}
+  .col{background:#fff;border:1px solid var(--line);border-radius:6px;display:flex;flex-direction:column;min-height:250px}
+  .colh{display:flex;align-items:center;gap:6px;padding:7px 9px;border-bottom:1px solid var(--soft)}
+  .colh .n{width:17px;height:17px;border-radius:4px;background:#f1f3f5;color:var(--ink3);font-size:10px;
+    display:flex;align-items:center;justify-content:center;font-weight:600}
+  .cards{padding:7px;display:flex;flex-direction:column;gap:6px;flex:1}
+  .card{border:1px solid var(--line);border-left-width:3px;border-radius:5px;padding:7px 8px;cursor:pointer;background:#fff}
+  .card:hover{border-color:var(--acc)}
+  .card.sel{border-color:var(--acc);background:var(--accs)}
+  .c-crit{border-left-color:var(--crit)}.c-warn{border-left-color:var(--warn)}.c-info{border-left-color:var(--acc)}
+  .card .t{font-size:11.5px;font-weight:600;line-height:1.3}
+  .card .u{font-size:10px;color:var(--ink4);margin-top:1px}
+  .card .m{display:flex;align-items:center;gap:6px;margin-top:5px;font-size:9.5px;color:var(--ink4)}
+  .chip{border-radius:3px;padding:1px 5px;font-size:9px;font-weight:600}
+  .ch-crit{background:var(--critbg);color:var(--crit)}
+  .empty{padding:14px 8px;text-align:center;font-size:10.5px;color:var(--ink4)}
+
+  .lower{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:9px;padding:0 12px 12px;align-items:start}
+  .ph{display:flex;align-items:center;gap:8px;padding:7px 11px;border-bottom:1px solid var(--line)}
+  .opt{display:grid;grid-template-columns:16px 1fr 96px 70px;align-items:center;gap:9px;padding:8px 11px;
+    border-bottom:1px solid #f2f4f6;cursor:pointer}
+  .opt:hover{background:#f8f9fa} .opt.on{background:var(--accs)} .opt:last-child{border-bottom:0}
+  .rank{font-size:9px;font-weight:700;text-align:center;border-radius:3px;padding:1px 0}
+  .r1{background:var(--okbg);color:#12684c}.r2{background:var(--accs);color:var(--accd)}.r3{background:#f1f3f5;color:var(--ink3)}
+  .num{font-size:11.5px;text-align:right}
+  .ins{padding:10px 11px}
+  .kv{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .kv div{background:#f8f9fa;border-radius:4px;padding:5px 7px}
+  .kv .n{font-size:13px;font-weight:600}
+  .sect{margin-top:10px;border-top:1px solid var(--soft);padding-top:9px}
+  .note{background:var(--warnbg);border:1px solid var(--warnln);border-radius:4px;padding:7px 8px;
+    font-size:10.5px;line-height:1.5;color:#8a5a12;margin:9px 11px}
+  .trail{font-size:10.5px;color:var(--ink3);line-height:1.7}
+  .trail b{color:var(--ink2)}
+  .flowtag{font-size:9.5px;color:var(--ink4);font-style:italic}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <b style="font-size:12.5px">chum-operations</b>
+  <span class="micro">29 unités</span>
+  <div class="sep"></div>
+  <div class="seg"><button class="on">Réponse</button><button>Unités</button><button>Réseau</button></div>
+  <input placeholder="Filtrer…" style="width:130px" />
+  <div class="sep"></div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
+    <select style="width:140px"><option>Réalité</option><option>test_scenarion</option></select>
+    <button class="btn">Chronologie</button>
+  </div>
+</div>
+
+<div class="shell">
+  <!-- ===== domaines ===== -->
+  <div class="panel" style="overflow:hidden">
+    <div class="ph"><span class="micro">Domaines</span><span class="micro" id="tot"></span></div>
+    <div id="doms"></div>
+    <div style="padding:8px 10px;border-top:1px solid var(--soft);font-size:10.5px;line-height:1.5;color:var(--ink4)">
+      Chaque domaine a son propre flux. Un bris d'approvisionnement ne passe pas par les mêmes
+      étapes qu'une éclosion.
+    </div>
+  </div>
+
+  <!-- ===== tableau ===== -->
+  <div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+      <b style="font-size:12.5px" id="domName"></b>
+      <span class="flowtag" id="flowName"></span>
+      <span class="micro" style="margin-left:auto">glisser une carte pour la faire avancer</span>
+    </div>
+    <div class="board" id="board"></div>
+  </div>
+</div>
+
+<div class="lower">
+  <div class="panel">
+    <div class="ph"><span class="micro">Options</span><span class="micro" id="optFor"></span></div>
+    <div id="opts"></div>
+    <div class="note">
+      <b>Des options, pas des recommandations.</b> Le classement reflète des faits mesurables —
+      capacité, délai, stock. Jamais un jugement clinique. La décision est consignée au nom de qui la prend.
+    </div>
+  </div>
+  <div class="panel">
+    <div class="ph"><span class="micro">Signal</span><span class="micro" id="insId"></span></div>
+    <div class="ins" id="ins"></div>
+  </div>
+</div>
+
+<script>
+/* Le flux appartient au type de signal, pas à la page. */
+const FLOWS = {
+  triage:   ['Détecté','Évalué','Options','En cours','Résolu'],
+  supply:   ['Détecté','Confirmé','Substitution','Commandé','Reçu'],
+  ipac:     ['Suspecté','Investigué','Mesures','Surveillance','Levé'],
+  systems:  ['Détecté','Diagnostiqué','Corrigé','Vérifié'],
+  workforce:['Détecté','Couvert ?','Remplacement','Comblé'],
+  govern:   ['Signalé','Examiné','Statué'],
+};
+
+const DOMAINS = [
+  {k:'flow',   n:'Flux patient',      ic:'🛏️', bg:'#e7f2fd', flow:'triage',    fn:'flux de triage'},
+  {k:'ipac',   n:'Clinique / éclosion',ic:'🦠', bg:'#fdeef4', flow:'ipac',      fn:'flux PCI'},
+  {k:'staff',  n:'Personnel',          ic:'👥', bg:'#f0edf7', flow:'workforce', fn:'flux de remplacement'},
+  {k:'supply', n:'Approvisionnement',  ic:'📦', bg:'#e8f6f0', flow:'supply',    fn:'flux logistique'},
+  {k:'equip',  n:'Équipement',         ic:'🔧', bg:'#fdf6ec', flow:'systems',   fn:'flux technique'},
+  {k:'data',   n:'Données & systèmes', ic:'🔌', bg:'#eef1f4', flow:'systems',   fn:'flux technique'},
+  {k:'access', n:'Accès & demande',    ic:'📈', bg:'#e7f2fd', flow:'triage',    fn:'flux de triage'},
+  {k:'gov',    n:'Gouvernance',        ic:'🛡️', bg:'#f0edf7', flow:'govern',    fn:'flux de conformité'},
+];
+
+const SIGNALS = [
+  {id:'S-1042', d:'flow',  st:0, t:'Occupation ≥ 95 %', u:'HND Emergency', sev:'crit', age:'12 min',
+   detail:'16 lits sur 16 occupés. Trois admissions en attente.'},
+  {id:'S-1041', d:'flow',  st:1, t:'Occupation ≥ 95 %', u:'HSL ICU', sev:'crit', age:'26 min',
+   detail:'12 lits sur 12 depuis 40 minutes.'},
+  {id:'S-1037', d:'flow',  st:3, t:'Congé retardé', u:'HCS Med-Surg A', sev:'info', age:'4 h',
+   detail:'6 congés signés en attente de transport.'},
+
+  {id:'S-1039', d:'ipac',  st:0, t:'Grappe suspectée', u:'HSL Ward 2B', sev:'warn', age:'1 h',
+   detail:'4 findings SNOMED concordants en 24 h sur la même unité.'},
+  {id:'S-1028', d:'ipac',  st:2, t:'C. difficile confirmé', u:'HND Ward 3A', sev:'crit', age:'2 j',
+   detail:'2 cas confirmés. Cohortage en place.'},
+
+  {id:'S-1044', d:'data',  st:0, t:'Flux arrêté — 267 h', u:'Synchro ADT', sev:'crit', age:'11 j',
+   detail:'Aucune écriture depuis le 21 juillet. Tout le jumeau décrit un monde périmé.'},
+  {id:'S-1043', d:'data',  st:1, t:'Qualité dégradée', u:'seqaleatoire', sev:'warn', age:'6 h',
+   detail:'23 % des lignes rejetées à la conversion de date.'},
+
+  {id:'S-1036', d:'supply',st:0, t:'Rupture — vancomycine', u:'HSL Pharmacie', sev:'crit', age:'3 h',
+   detail:'Stock à 2 jours. Fournisseur en allocation.'},
+  {id:'S-1033', d:'supply',st:2, t:'Chaîne de froid rompue', u:'HND Labo', sev:'warn', age:'8 h',
+   detail:'Réfrigérateur à 11 °C pendant 40 min. 3 lots à évaluer.'},
+
+  {id:'S-1040', d:'staff', st:0, t:'Effectif sous seuil', u:'HSL ICU · nuit', sev:'crit', age:'50 min',
+   detail:'2 infirmières pour 12 lits. Ratio cible 1:2.'},
+  {id:'S-1031', d:'staff', st:2, t:'Absence non couverte', u:'HND Emergency', sev:'warn', age:'5 h',
+   detail:'Quart de 16 h non comblé.'},
+
+  {id:'S-1029', d:'equip', st:1, t:'IRM hors service', u:'HND Imagerie', sev:'warn', age:'1 j',
+   detail:'Panne compresseur. 14 examens à replanifier.'},
+
+  {id:'S-1026', d:'access',st:0, t:'Détournement ambulance', u:'HND Emergency', sev:'crit', age:'35 min',
+   detail:'Urgence en débordement, détournement demandé au CIUSSS.'},
+
+  {id:'S-1019', d:'gov',   st:1, t:'Accès anormal au dossier', u:'—', sev:'warn', age:'1 j',
+   detail:'42 consultations hors unité d\'affectation en 3 h.'},
+];
+
+/* Les options dépendent du type, pas d'un modèle unique. */
+const OPTIONS = {
+  'S-1042':[{r:1,n:'Transférer 3 patients → HSL Ward 2A',m:'10 lits libres',d:'18 min'},
+            {r:2,n:'Ouvrir 4 lits de débordement',m:'sur place',d:'45 min'},
+            {r:3,n:'Dérouter les arrivées → Sacré-Cœur',m:'5 lits libres',d:'32 min'}],
+  'S-1044':[{r:1,n:'Relancer la synchro ADT',m:'dernier run : échec',d:'2 min'},
+            {r:2,n:'Vérifier la source à l\'hôpital',m:'webhook silencieux',d:'—'},
+            {r:3,n:'Marquer le jumeau comme non fiable',m:'bandeau global',d:'immédiat'}],
+  'S-1036':[{r:1,n:'Emprunter à Notre-Dame',m:'stock 9 jours',d:'2 h'},
+            {r:2,n:'Substituer — daptomycine',m:'protocole PCI requis',d:'—'},
+            {r:3,n:'Commande urgente fournisseur',m:'allocation',d:'5 j'}],
+  'S-1040':[{r:1,n:'Rappel volontaire — liste de garde',m:'3 disponibles',d:'1 h'},
+            {r:2,n:'Redéployer depuis HSL Ward 2A',m:'ratio 1:4 après',d:'20 min'},
+            {r:3,n:'Agence externe',m:'coût majoré',d:'4 h'}],
+  'S-1039':[{r:1,n:'Cohortage de l\'unité',m:'4 patients visés',d:'immédiat'},
+            {r:2,n:'Dépistage élargi',m:'20 prélèvements',d:'6 h'}],
+};
+
+let dom = 'flow', sel = 'S-1042';
+
+const inDom = () => SIGNALS.filter(s=>s.d===dom);
+const meta  = () => DOMAINS.find(d=>d.k===dom);
+
+function renderDoms(){
+  document.getElementById('tot').textContent = `${SIGNALS.length} ouverts`;
+  document.getElementById('doms').innerHTML = DOMAINS.map(d=>{
+    const list = SIGNALS.filter(s=>s.d===d.k);
+    const crit = list.filter(s=>s.sev==='crit').length;
+    return `<div class="dom ${dom===d.k?'on':''}" data-k="${d.k}">
+      <span class="ic" style="background:${d.bg}">${d.ic}</span>
+      <span class="n">${d.n}</span>
+      <span class="c ${crit?'hot':''}">${crit?crit+'!':''} ${list.length}</span>
+    </div>`;}).join('');
+  document.querySelectorAll('.dom').forEach(el=>el.onclick=()=>{
+    dom=el.dataset.k; sel=inDom()[0]?.id ?? ''; renderAll(); });
+}
+
+function renderBoard(){
+  const m = meta(), stages = FLOWS[m.flow];
+  document.getElementById('domName').textContent = m.n;
+  document.getElementById('flowName').textContent = `— ${m.fn} · ${stages.length} étapes`;
+  const b = document.getElementById('board');
+  b.style.gridTemplateColumns = `repeat(${stages.length}, minmax(0,1fr))`;
+  b.innerHTML = stages.map((st,i)=>{
+    const items = inDom().filter(s=>s.st===i);
+    return `<div class="col">
+      <div class="colh"><span class="micro">${st}</span><span class="n">${items.length}</span></div>
+      <div class="cards">
+        ${items.length===0?'<div class="empty">—</div>':items.map(s=>`
+          <div class="card c-${s.sev} ${sel===s.id?'sel':''}" data-id="${s.id}">
+            <div class="t">${s.t}</div><div class="u">${s.u}</div>
+            <div class="m"><span class="mono">${s.id}</span><span>${s.age}</span>
+              ${s.sev==='crit'?'<span class="chip ch-crit">critique</span>':''}</div>
+          </div>`).join('')}
+      </div></div>`;}).join('');
+  document.querySelectorAll('.card').forEach(el=>el.onclick=()=>{ sel=el.dataset.id; renderAll(); });
+}
+
+function renderOpts(){
+  const s = SIGNALS.find(x=>x.id===sel);
+  const list = OPTIONS[sel] ?? [];
+  document.getElementById('optFor').textContent = s?`${s.u} · ${s.id}`:'';
+  document.getElementById('opts').innerHTML = list.length===0
+    ? `<div class="empty" style="padding:20px">Aucune option calculée pour ce signal.</div>`
+    : list.map((o,i)=>`<div class="opt ${i===0?'on':''}">
+        <span class="rank r${o.r}">${o.r}</span>
+        <span style="font-size:11.5px">${o.n}</span>
+        <span class="micro">${o.m}</span>
+        <span class="num mono">${o.d}</span></div>`).join('')
+      + `<div style="padding:8px 11px;display:flex;gap:6px">
+           <button class="btn btn-p">Retenir</button><button class="btn">Simuler d'abord</button></div>`;
+}
+
+function renderIns(){
+  const s = SIGNALS.find(x=>x.id===sel);
+  const box = document.getElementById('ins');
+  if(!s){ box.innerHTML='<div class="empty" style="padding:22px">Aucun signal.</div>';
+    document.getElementById('insId').textContent=''; return; }
+  const stages = FLOWS[meta().flow];
+  document.getElementById('insId').textContent = s.id;
+  box.innerHTML = `
+    <div style="font-size:13.5px;font-weight:600">${s.t}</div>
+    <div style="font-size:10.5px;color:var(--ink4);margin-bottom:9px">${s.u} · il y a ${s.age}</div>
+    <p style="font-size:11.5px;line-height:1.55;color:var(--ink2);margin:0">${s.detail}</p>
+    <div class="kv" style="margin-top:10px">
+      <div><div class="micro">Étape</div><div class="n" style="font-size:11.5px">${stages[s.st]}</div></div>
+      <div><div class="micro">Gravité</div><div class="n" style="font-size:11.5px;color:${
+        s.sev==='crit'?'var(--crit)':s.sev==='warn'?'var(--warn)':'var(--ink2)'}">${
+        s.sev==='crit'?'Critique':s.sev==='warn'?'Avertissement':'Information'}</div></div>
+    </div>
+    <div class="sect">
+      <div class="micro" style="margin-bottom:5px">Journal de décision</div>
+      <div class="trail">
+        <b>détecté</b> — règle automatique<br />
+        <b>évalué</b> — V. Morency, il y a 6 min<br />
+        <b>en attente</b> — aucune option retenue
+      </div>
+    </div>
+    <div class="sect" style="display:flex;gap:6px">
+      <button class="btn" style="flex:1">Reculer</button>
+      <button class="btn btn-p" style="flex:1">Avancer →</button>
+    </div>`;
+}
+
+function renderAll(){ renderDoms(); renderBoard(); renderOpts(); renderIns(); }
+renderAll();
+</script>
+</body>
+</html>

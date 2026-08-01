@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Obscyro — Poste de commandement (maquette)</title>
+<style>
+  :root{--bg:#f6f7f9;--line:#d3d8de;--soft:#e5e8eb;--ink:#1c2127;--ink2:#404854;--ink3:#5f6b7c;--ink4:#8f99a8;
+    --acc:#2d72d2;--accd:#215db0;--accs:#e7f2fd;--ok:#1d9e75;--okbg:#e8f6f0;--warn:#d9822b;--warnbg:#fdf6ec;
+    --warnln:#f0d9b5;--crit:#c23030;--critbg:#fdf1f1;--scen:#5b4a86;--scenbg:#f0edf7;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.45 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  .micro{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.045em;color:var(--ink4)}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+  select,input{height:26px;border:1px solid var(--line);border-radius:4px;background:#fff;padding:0 7px;font-size:11.5px;font-family:inherit;color:var(--ink)}
+  .btn{height:26px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border-radius:4px;font-size:11.5px;
+    cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink2);font-family:inherit}
+  .btn-p{background:var(--acc);border-color:var(--accd);color:#fff}
+  .panel{background:#fff;border:1px solid var(--line);border-radius:6px}
+
+  .bar{display:flex;align-items:center;gap:8px;padding:7px 12px;background:#fff;border-bottom:1px solid var(--line)}
+  .sep{width:1px;height:20px;background:var(--soft)}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden;height:26px}
+  .seg button{border:0;background:transparent;padding:0 11px;font:inherit;font-size:10px;font-weight:500;
+    text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);cursor:pointer}
+  .seg button.on{background:var(--accs);color:var(--accd)}
+  .scenpill{display:inline-flex;align-items:center;gap:6px;background:var(--scen);color:#fff;border-radius:4px;
+    padding:3px 9px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+
+  /* ---- kanban ---- */
+  .board{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;padding:10px 12px}
+  .col{background:#fff;border:1px solid var(--line);border-radius:6px;display:flex;flex-direction:column;min-height:330px}
+  .colh{display:flex;align-items:center;gap:6px;padding:7px 9px;border-bottom:1px solid var(--soft)}
+  .colh .n{width:17px;height:17px;border-radius:4px;background:#f1f3f5;color:var(--ink3);font-size:10px;
+    display:flex;align-items:center;justify-content:center;font-weight:600}
+  .cards{padding:7px;display:flex;flex-direction:column;gap:6px;flex:1}
+  .card{border:1px solid var(--line);border-left-width:3px;border-radius:5px;padding:7px 8px;cursor:pointer;background:#fff}
+  .card:hover{border-color:var(--acc)}
+  .card.sel{border-color:var(--acc);background:var(--accs)}
+  .card.c-crit{border-left-color:var(--crit)}
+  .card.c-warn{border-left-color:var(--warn)}
+  .card.c-info{border-left-color:var(--acc)}
+  .card .t{font-size:11.5px;font-weight:600;line-height:1.3}
+  .card .u{font-size:10px;color:var(--ink4);margin-top:1px}
+  .card .m{display:flex;align-items:center;gap:6px;margin-top:5px;font-size:9.5px;color:var(--ink4)}
+  .chip{border-radius:3px;padding:1px 5px;font-size:9px;font-weight:600;letter-spacing:.02em}
+  .ch-crit{background:var(--critbg);color:var(--crit)}
+  .ch-warn{background:var(--warnbg);color:#8a5a12}
+  .ch-scen{background:var(--scenbg);color:var(--scen)}
+  .empty{padding:16px 8px;text-align:center;font-size:10.5px;color:var(--ink4)}
+
+  /* ---- detail ---- */
+  .lower{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:9px;padding:0 12px 12px;align-items:start}
+  .ph{display:flex;align-items:center;gap:8px;padding:7px 11px;border-bottom:1px solid var(--line)}
+  .opt{display:grid;grid-template-columns:16px 1fr 92px 78px 66px;align-items:center;gap:9px;padding:8px 11px;
+    border-bottom:1px solid #f2f4f6;cursor:pointer}
+  .opt:hover{background:#f8f9fa}
+  .opt.on{background:var(--accs)}
+  .opt:last-child{border-bottom:0}
+  .rank{font-size:9px;font-weight:700;text-align:center;border-radius:3px;padding:1px 0}
+  .r1{background:var(--okbg);color:#12684c}.r2{background:var(--accs);color:var(--accd)}.r3{background:#f1f3f5;color:var(--ink3)}
+  .bar-o{height:5px;border-radius:3px;background:#eef1f4;overflow:hidden}
+  .bar-o i{display:block;height:100%;border-radius:3px}
+  .num{font-size:11.5px;text-align:right}
+  .ins{padding:10px 11px}
+  .kv{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .kv div{background:#f8f9fa;border-radius:4px;padding:5px 7px}
+  .kv .n{font-size:13px;font-weight:600}
+  .sect{margin-top:10px;border-top:1px solid var(--soft);padding-top:9px}
+  .note{background:var(--warnbg);border:1px solid var(--warnln);border-radius:4px;padding:7px 8px;
+    font-size:10.5px;line-height:1.5;color:#8a5a12;margin-top:9px}
+  .trail{font-size:10.5px;color:var(--ink3);line-height:1.7}
+  .trail b{color:var(--ink2)}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <b style="font-size:12.5px">chum-operations</b>
+  <span class="micro">29 unités · 194 lits</span>
+  <div class="sep"></div>
+  <div class="seg">
+    <button class="on">Réponse</button>
+    <button>Unités</button>
+    <button>Réseau</button>
+  </div>
+  <input placeholder="Filtrer…" style="width:140px" />
+  <div class="sep"></div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
+    <select style="width:150px"><option>Réalité</option><option>test_scenarion (1)</option></select>
+    <button class="btn">Chronologie</button>
+  </div>
+</div>
+
+<!-- ================= le tableau ================= -->
+<div class="board" id="board"></div>
+
+<!-- ================= options + détail ================= -->
+<div class="lower">
+  <div class="panel">
+    <div class="ph">
+      <span class="micro">Options de réponse</span>
+      <span class="micro" id="optFor"></span>
+      <span class="micro" style="margin-left:auto">capacité · délai · impact</span>
+    </div>
+    <div id="opts"></div>
+    <div class="note">
+      <b>Ce sont des options, pas des recommandations.</b> Le classement reflète la capacité et le
+      délai — pas un jugement clinique. La décision et son motif sont consignés au nom de la personne
+      qui la prend.
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="ph"><span class="micro">Signal</span><span class="micro" id="insId"></span></div>
+    <div class="ins" id="ins"></div>
+  </div>
+</div>
+
+<script>
+const STAGES = [
+  {k:'detected', n:'Détecté'},
+  {k:'assessed', n:'Évalué'},
+  {k:'options',  n:'Options'},
+  {k:'running',  n:'En cours'},
+  {k:'resolved', n:'Résolu'},
+];
+
+const SIGNALS = [
+  {id:'S-1042', t:'Occupation ≥ 95 %', u:'HND Emergency', sev:'crit', stage:'options', age:'12 min',
+   detail:'16 lits sur 16 occupés. Trois admissions en attente à l\'urgence.', scen:false},
+  {id:'S-1041', t:'Occupation ≥ 95 %', u:'HSL ICU', sev:'crit', stage:'assessed', age:'26 min',
+   detail:'12 lits sur 12 occupés depuis 40 minutes.', scen:false},
+  {id:'S-1039', t:'Éclosion suspectée', u:'HSL Ward 2B', sev:'warn', stage:'detected', age:'1 h',
+   detail:'4 findings SNOMED concordants en 24 h sur la même unité.', scen:false},
+  {id:'S-1038', t:'Données périmées', u:'HND Ward 3A', sev:'warn', stage:'detected', age:'3 h',
+   detail:'Aucune écriture depuis 267 h. La synchro ADT est peut-être arrêtée.', scen:false},
+  {id:'S-1035', t:'Occupation ≥ 80 %', u:'HCS Med-Surg A', sev:'info', stage:'running', age:'2 h',
+   detail:'24 lits sur 29. Transfert de 3 patients engagé vers HSL Ward 2A.', scen:false},
+  {id:'S-1030', t:'Fermeture planifiée', u:'HND Ward 3A', sev:'info', stage:'options', age:'—',
+   detail:'Scénario : fermeture au jour 9 pendant 7 jours.', scen:true},
+  {id:'S-1021', t:'Occupation ≥ 95 %', u:'HSL Ward 2A', sev:'info', stage:'resolved', age:'hier',
+   detail:'Résolu par ajout de 4 lits.', scen:false},
+];
+
+const OPTIONS = {
+  'S-1042': [
+    {r:1, n:'Transférer 3 patients → HSL Ward 2A', free:10, delay:'18 min', impact:-19},
+    {r:2, n:'Ouvrir 4 lits de débordement sur place', free:4, delay:'45 min', impact:-12},
+    {r:3, n:'Dérouter les arrivées → Sacré-Cœur', free:5, delay:'32 min', impact:-8},
+  ],
+  'S-1030': [
+    {r:1, n:'Répartir 17 patients sur 2 unités', free:14, delay:'—', impact:-71},
+    {r:2, n:'Reporter la fermeture au jour 14', free:0, delay:'—', impact:0},
+  ],
+};
+
+let sel = 'S-1042';
+
+function renderBoard(){
+  document.getElementById('board').innerHTML = STAGES.map(st=>{
+    const items = SIGNALS.filter(s=>s.stage===st.k);
+    return `<div class="col">
+      <div class="colh"><span class="micro">${st.n}</span><span class="n">${items.length}</span></div>
+      <div class="cards">
+        ${items.length===0 ? '<div class="empty">—</div>' : items.map(s=>`
+          <div class="card c-${s.sev} ${sel===s.id?'sel':''}" data-id="${s.id}">
+            <div class="t">${s.t}</div>
+            <div class="u">${s.u}</div>
+            <div class="m">
+              <span class="mono">${s.id}</span>
+              <span>${s.age}</span>
+              ${s.sev==='crit'?'<span class="chip ch-crit">critique</span>':''}
+              ${s.scen?'<span class="chip ch-scen">scénario</span>':''}
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+  document.querySelectorAll('.card').forEach(el=>el.onclick=()=>{ sel=el.dataset.id; renderAll(); });
+}
+
+function renderOpts(){
+  const s = SIGNALS.find(x=>x.id===sel);
+  const list = OPTIONS[sel] ?? [];
+  document.getElementById('optFor').textContent = s ? `${s.u} · ${s.id}` : '';
+  document.getElementById('opts').innerHTML = list.length===0
+    ? `<div class="empty" style="padding:22px">Aucune option générée pour ce signal.<br />
+         Passez-le à « Options » pour en calculer.</div>`
+    : list.map((o,i)=>`
+      <div class="opt ${i===0?'on':''}">
+        <span class="rank r${o.r}">${o.r}</span>
+        <span style="font-size:11.5px">${o.n}</span>
+        <span><div class="bar-o"><i style="width:${Math.min(100,o.free*7)}%;background:var(--ok)"></i></div>
+          <span class="micro">${o.free} lits libres</span></span>
+        <span class="num mono">${o.delay}</span>
+        <span class="num mono" style="color:${o.impact<0?'var(--ok)':'var(--ink4)'}">${o.impact?o.impact+' pts':'—'}</span>
+      </div>`).join('')
+      + `<div style="padding:8px 11px;display:flex;gap:6px">
+           <button class="btn btn-p">Retenir cette option</button>
+           <button class="btn">Simuler d'abord</button>
+         </div>`;
+}
+
+function renderIns(){
+  const s = SIGNALS.find(x=>x.id===sel);
+  if(!s) return;
+  document.getElementById('insId').textContent = s.id;
+  document.getElementById('ins').innerHTML = `
+    <div style="font-size:13.5px;font-weight:600">${s.t}</div>
+    <div style="font-size:10.5px;color:var(--ink4);margin-bottom:9px">${s.u} · détecté il y a ${s.age}</div>
+    <p style="font-size:11.5px;line-height:1.55;color:var(--ink2);margin:0">${s.detail}</p>
+    <div class="kv" style="margin-top:10px">
+      <div><div class="micro">Occupation</div><div class="n mono">97 %</div></div>
+      <div><div class="micro">Lits</div><div class="n mono">16 / 16</div></div>
+    </div>
+    <div class="sect">
+      <div class="micro" style="margin-bottom:5px">Journal de décision</div>
+      <div class="trail">
+        <b>02:14</b> — détecté automatiquement (règle « occupation ≥ 95 % »)<br />
+        <b>02:19</b> — évalué par <b>V. Morency</b><br />
+        <b>02:22</b> — options calculées, 3 possibilités
+      </div>
+    </div>
+    <div class="sect" style="display:flex;gap:6px">
+      <button class="btn" style="flex:1">Reculer</button>
+      <button class="btn btn-p" style="flex:1">Avancer →</button>
+    </div>`;
+}
+
+function renderAll(){ renderBoard(); renderOpts(); renderIns(); }
+renderAll();
+</script>
+</body>
+</html>
