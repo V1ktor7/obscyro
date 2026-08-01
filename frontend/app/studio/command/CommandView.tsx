@@ -35,7 +35,12 @@ import {
   type TwinUnitDetail,
   type TwinUnitNode,
 } from "@/lib/platform-api";
-import { listOverlayScenarios, type OverlayScenario } from "../scenarios-api";
+import {
+  createOverlayScenario,
+  listOverlayScenarios,
+  type OverlayScenario,
+} from "../scenarios-api";
+import ScenarioPanel from "./ScenarioPanel";
 
 import {
   LiveDot,
@@ -91,6 +96,7 @@ export default function CommandView() {
   const [alerts, setAlerts] = useState<TwinAlert[]>([]);
   const [scenarios, setScenarios] = useState<OverlayScenario[]>([]);
   const [scenarioId, setScenarioId] = useState<string>("");
+  const [showEdits, setShowEdits] = useState(false);
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
   const [unitDetail, setUnitDetail] = useState<TwinUnitDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -397,12 +403,42 @@ export default function CommandView() {
             ))}
           </select>
         ) : null}
+        <button
+          type="button"
+          onClick={async () => {
+            const name = window.prompt("Scenario name");
+            if (!name?.trim() || !env) return;
+            try {
+              const created = await createOverlayScenario(env, { name: name.trim() });
+              setScenarios((cur) => [
+                ...cur,
+                { ...created, overrideCount: 0 } as OverlayScenario,
+              ]);
+              setScenarioId(created.id);
+              setShowEdits(true);
+            } catch (e) {
+              window.alert((e as Error).message);
+            }
+          }}
+          className="rounded border border-[#d3d8de] bg-white px-2 py-1 text-xs text-[#404854]"
+        >
+          + Scenario
+        </button>
         {scenarioId ? (
-          // A twin showing scenario numbers that look exactly like reality is
-          // the dangerous state; the banner is deliberately hard to miss.
-          <span className="rounded bg-[#5b4a86] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-            Scenario — not reality
-          </span>
+          <>
+            {/* A twin showing scenario numbers that look exactly like reality
+                is the dangerous state; the banner is deliberately hard to miss. */}
+            <span className="rounded bg-[#5b4a86] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+              Scenario — not reality
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowEdits((v) => !v)}
+              className="rounded border border-[#7961a8] bg-[#f0edf7] px-2 py-1 text-xs font-medium text-[#5b4a86]"
+            >
+              {showEdits ? "Hide edits" : "Edits"}
+            </button>
+          </>
         ) : null}
         <span className="relative">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8f99a8]" />
@@ -440,6 +476,14 @@ export default function CommandView() {
           </span>
         </div>
       </div>
+
+      {scenarioId && showEdits ? (
+        <ScenarioPanel
+          scenarioId={scenarioId}
+          units={(snapshot?.nodes ?? []).map((n) => ({ id: n.id, name: n.name }))}
+          onClose={() => setShowEdits(false)}
+        />
+      ) : null}
 
       {error ? (
         <p className="mx-3 mt-2 rounded border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-700">
