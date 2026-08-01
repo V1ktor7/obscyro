@@ -12,6 +12,7 @@ import {
   createOverlayScenario,
   deleteOverride,
   getOverlayScenario,
+  listOverlayScenarios,
   listOverrides,
   resolveOverrides,
   scenarioChain,
@@ -71,6 +72,28 @@ async function requireUserId(req: {
 
 const scenarioOverrideRoutes: FastifyPluginAsync = async (fastify) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
+
+  app.get(
+    "/ontology/:env/overlay-scenarios",
+    {
+      schema: {
+        summary: "Overlay scenarios in a project",
+        tags: ["scenarios"],
+        params: z.object({ env: z.string().min(1) }),
+        response: {
+          200: z.object({
+            scenarios: z.array(scenarioOut.extend({ overrideCount: z.number() })),
+          }),
+          404: errorEnvelope,
+        },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      return { scenarios: await listOverlayScenarios(req.db, env.id) };
+    },
+  );
 
   app.post(
     "/ontology/:env/overlay-scenarios",

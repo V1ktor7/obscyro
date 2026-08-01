@@ -35,6 +35,7 @@ import {
   type TwinUnitDetail,
   type TwinUnitNode,
 } from "@/lib/platform-api";
+import { listOverlayScenarios, type OverlayScenario } from "../scenarios-api";
 
 import {
   LiveDot,
@@ -88,6 +89,8 @@ export default function CommandView() {
     "idle",
   );
   const [alerts, setAlerts] = useState<TwinAlert[]>([]);
+  const [scenarios, setScenarios] = useState<OverlayScenario[]>([]);
+  const [scenarioId, setScenarioId] = useState<string>("");
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
   const [unitDetail, setUnitDetail] = useState<TwinUnitDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -183,6 +186,7 @@ export default function CommandView() {
         if (!stopped) applySnapshot(snap);
       },
       startPoll,
+      scenarioId ? { scenarioId } : undefined,
     );
 
     return () => {
@@ -190,7 +194,16 @@ export default function CommandView() {
       stop();
       if (pollId) clearInterval(pollId);
     };
-  }, [env, hasKey, isOperations, applySnapshot]);
+    // Re-subscribing on scenarioId is the point: the stream itself resolves
+    // through the scenario, so switching means a new connection.
+  }, [env, hasKey, isOperations, applySnapshot, scenarioId]);
+
+  useEffect(() => {
+    if (!env || !hasKey) return;
+    void listOverlayScenarios(env)
+      .then((r) => setScenarios(r.scenarios))
+      .catch(() => setScenarios([]));
+  }, [env, hasKey]);
 
   // Alerts poll (10s).
   useEffect(() => {
@@ -364,6 +377,33 @@ export default function CommandView() {
               ? "POLLING"
               : "…"}
         </Chip>
+        {scenarios.length > 0 ? (
+          <select
+            value={scenarioId}
+            onChange={(e) => setScenarioId(e.target.value)}
+            aria-label="View through a scenario"
+            className={cn(
+              "rounded border px-2 py-1 text-xs focus:outline-none",
+              scenarioId
+                ? "border-[#7961a8] bg-[#f0edf7] font-medium text-[#5b4a86]"
+                : "border-[#d3d8de] bg-white text-[#404854]",
+            )}
+          >
+            <option value="">Reality</option>
+            {scenarios.map((s2) => (
+              <option key={s2.id} value={s2.id}>
+                {s2.name} ({s2.overrideCount})
+              </option>
+            ))}
+          </select>
+        ) : null}
+        {scenarioId ? (
+          // A twin showing scenario numbers that look exactly like reality is
+          // the dangerous state; the banner is deliberately hard to miss.
+          <span className="rounded bg-[#5b4a86] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+            Scenario — not reality
+          </span>
+        ) : null}
         <span className="relative">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8f99a8]" />
           <input

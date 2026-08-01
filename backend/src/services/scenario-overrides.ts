@@ -138,6 +138,25 @@ export async function scenarioChain(db: DbClient, id: string): Promise<Scenario[
   return chain;
 }
 
+/** Every overlay scenario in a project, with how many edits each carries. */
+export async function listOverlayScenarios(
+  db: DbClient,
+  projectId: string,
+): Promise<(Scenario & { overrideCount: number })[]> {
+  const { rows } = await db.query<ScenarioDbRow & { override_count: string }>(
+    `SELECT s.id, s.project_id, s.name, s.description, s.parent_scenario_id,
+            s.base_as_of, s.status, s.created_at,
+            (SELECT COUNT(*) FROM app.scenario_override o WHERE o.scenario_id = s.id)
+              AS override_count
+       FROM app.scenario s
+      WHERE s.project_id = $1
+        AND s.status <> 'archived'
+      ORDER BY s.created_at ASC`,
+    [projectId],
+  );
+  return rows.map((r) => ({ ...outScenario(r), overrideCount: Number(r.override_count) }));
+}
+
 export async function createOverlayScenario(
   db: DbClient,
   input: {
