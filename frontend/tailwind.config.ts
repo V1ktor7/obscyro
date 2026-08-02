@@ -23,6 +23,49 @@ const config: Config = {
     },
     extend: {
       colors: {
+        // --- Studio palette -------------------------------------------------
+        //
+        // The Studio's colours were written as hex literals — `text-[#8f99a8]`
+        // appears 332 times, `border-[#d3d8de]` 291 — which means restyling
+        // anything is hundreds of edits and drifting is invisible. These are
+        // the same values, named.
+        //
+        // The reference is the Ontology › Discover view: canvas, white cards,
+        // one border colour, four text weights.
+        //
+        // Purely additive. Nothing renders differently until call sites are
+        // migrated, which is deliberate: the tokens land first so the migration
+        // is mechanical and reviewable.
+        ink: {
+          DEFAULT: "#1c2127", // headings, primary text
+          body: "#404854",
+          muted: "#5f6b7c",
+          faint: "#8f99a8", // labels, metadata
+          ghost: "#c5cbd3", // disabled, inactive dots
+        },
+        line: {
+          DEFAULT: "#d3d8de", // panel and card borders
+          soft: "#e5e8eb", // dividers inside a panel
+          faint: "#eef1f4", // row separators
+        },
+        canvas: {
+          DEFAULT: "#f6f7f9", // the page behind white cards
+          raised: "#f8f9fa", // inset blocks on white
+        },
+        brand: {
+          DEFAULT: "#2d72d2",
+          deep: "#215db0", // text and borders on brand-soft
+          soft: "#e7f2fd", // selected rows, active chips
+        },
+        // Severity. `ink` variants exist because the mid tone fails contrast on
+        // its own soft background.
+        ok: { DEFAULT: "#1d9e75", soft: "#e8f6f0", ink: "#1c6e42" },
+        warn: { DEFAULT: "#d9822b", soft: "#fdf6ec", line: "#f0d9b5", ink: "#935610" },
+        danger: { DEFAULT: "#c23030", soft: "#fdf1f1", ink: "#a82255" },
+        // Scenario overlay — deliberately not a severity. It means "you are not
+        // looking at reality", which is a different axis from "this is bad".
+        scenario: { DEFAULT: "#5b4a86", soft: "#f0edf7" },
+
         bg: {
           DEFAULT: "var(--bg-primary)",
           primary: "var(--bg-primary)",
