@@ -144,8 +144,18 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Twin",
     icon: "Map",
     capability: "twin",
-    href: "/studio/command",
-    groups: [{ items: [{ label: "Unit canvas", href: "/studio/command" }] }],
+    href: "/studio/response",
+    groups: [
+      {
+        items: [
+          // Three of these were reachable only by typing the URL.
+          { label: "Response", href: "/studio/response" },
+          { label: "Units", href: "/studio/command" },
+          { label: "Network", href: "/studio/live" },
+          { label: "Scenarios", href: "/studio/simulation" },
+        ],
+      },
+    ],
   },
   {
     id: "health",
@@ -196,10 +206,14 @@ export function sectionForPath(pathname: string): NavSection | null {
     "/studio/sources": "data",
     "/studio/workspace": "pipelines",
     "/studio/lineage": "pipelines",
+    "/studio/pipelines": "pipelines",
     "/studio/manager": "ontology",
     "/studio/lab": "models",
+    "/studio/response": "twin",
     "/studio/command": "twin",
     "/studio/live": "twin",
+    "/studio/crisis": "twin",
+    "/studio/simulation": "twin",
     "/studio/flux": "health",
     "/studio/govern": "govern",
     "/studio/admin": "admin",
