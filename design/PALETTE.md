@@ -49,13 +49,23 @@ méta       text-[10px] text-ink-faint
 sélection  border-brand bg-brand-soft
 ```
 
+## L'exception : les teintes catégorielles
+
+`TYPE_TINTS` dans `ManagerView` reste en hex littéral, volontairement. Ce sont
+six couleurs attribuées par hachage du nom d'un type, pour qu'un type garde la
+même partout. Elles ne veulent rien dire — la cinquième teinte est rose parce
+qu'elle est la cinquième, pas parce que quelque chose ne va pas.
+
+Les nommer `danger` ou `ok` ferait déduire une gravité qui n'existe pas. Une
+échelle catégorielle et une échelle sémantique ne se mélangent pas.
+
 ## État de la migration
 
-`ResponseView` est converti (85 remplacements). Le reste utilise encore des
-littéraux, et environ 390 des ~850 occurrences de gris Tailwind sont dans du
-code mort ou condamné :
+`ResponseView` (85 remplacements) et `ManagerView` (151 classes dérivées + 134
+littéraux) sont convertis. Le reste utilise encore des littéraux, et environ 390
+des ~850 occurrences de gris Tailwind sont dans du code mort ou condamné :
 
-- `StudioOntologyMode` — importé nulle part
+- ~~`StudioOntologyMode`~~ — supprimé, 572 lignes importées nulle part
 - `StudioEditor` et ses quatre panneaux — partent avec les canaux
 
 Ne pas restyler ce qui va être supprimé. Ne remplacer que les hex identiques :

@@ -115,6 +115,15 @@ const TYPE_ICONS: [RegExp, LucideIcon][] = [
   [/finding|diagnosis|condition|disease|symptom|encounter|visit/i, Activity],
 ];
 
+/**
+ * Categorical tints, picked by hashing a type name so a type keeps the same
+ * colour everywhere.
+ *
+ * Deliberately literals rather than palette tokens. These carry no meaning —
+ * the fifth tint is pink because it is the fifth, not because anything is
+ * wrong — and naming them `danger` or `ok` would make a reader infer a severity
+ * that is not there.
+ */
 const TYPE_TINTS = [
   { bg: "bg-[#e7f2fd]", text: "text-[#215db0]", bgHex: "#e7f2fd", fgHex: "#215db0" },
   { bg: "bg-[#e8f4ec]", text: "text-[#1c6e42]", bgHex: "#e8f4ec", fgHex: "#1c6e42" },
@@ -497,7 +506,7 @@ export default function ManagerView() {
   if (!hasKey) {
     return (
       <div className="flex flex-1 items-center justify-center bg-white">
-        <p className="max-w-sm text-center text-sm text-gray-500">
+        <p className="max-w-sm text-center text-sm text-ink-muted">
           Sign in and create an API key to model ontology environments.
         </p>
       </div>
@@ -506,20 +515,20 @@ export default function ManagerView() {
 
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#f6f7f9]">
+    <div className="flex min-h-0 flex-1 flex-col bg-canvas">
       {/* Top bar — title, global search, primary action */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-[#d3d8de] bg-white px-4 py-2">
+      <div className="flex shrink-0 items-center gap-3 border-b border-line bg-white px-4 py-2">
         <div className="flex items-center gap-2">
-          <span className="flex h-6 w-6 items-center justify-center rounded bg-[#e7f2fd] text-[#2d72d2]">
+          <span className="flex h-6 w-6 items-center justify-center rounded bg-brand-soft text-brand">
             <Box className="h-3.5 w-3.5" />
           </span>
-          <span className="text-[13px] font-semibold text-[#1c2127]">
+          <span className="text-[13px] font-semibold text-ink">
             Ontology management
           </span>
         </div>
         <div className="flex flex-1 justify-center">
-          <div className="flex w-full max-w-md items-center gap-2 rounded border border-[#d3d8de] bg-[#f6f7f9] px-2.5 py-1.5 focus-within:border-[#2d72d2]">
-            <Search className="h-3.5 w-3.5 shrink-0 text-[#5f6b7c]" />
+          <div className="flex w-full max-w-md items-center gap-2 rounded border border-line bg-canvas px-2.5 py-1.5 focus-within:border-brand">
+            <Search className="h-3.5 w-3.5 shrink-0 text-ink-muted" />
             <input
               ref={searchRef}
               value={search}
@@ -528,15 +537,15 @@ export default function ManagerView() {
                 setView("discover");
               }}
               placeholder="Search object types by name or description…"
-              className="w-full bg-transparent text-xs text-[#1c2127] placeholder:text-[#8f99a8] focus:outline-none"
+              className="w-full bg-transparent text-xs text-ink placeholder:text-ink-faint focus:outline-none"
             />
-            <kbd className="shrink-0 rounded border border-[#d3d8de] bg-white px-1 text-[10px] text-[#5f6b7c]">
+            <kbd className="shrink-0 rounded border border-line bg-white px-1 text-[10px] text-ink-muted">
               ⌘K
             </kbd>
           </div>
         </div>
-        <span className="hidden items-center gap-1.5 rounded border border-[#d3d8de] px-2 py-1 text-[11px] text-[#404854] md:flex">
-          <GitFork className="h-3 w-3 text-[#5f6b7c]" />
+        <span className="hidden items-center gap-1.5 rounded border border-line px-2 py-1 text-[11px] text-ink-body md:flex">
+          <GitFork className="h-3 w-3 text-ink-muted" />
           {env ?? "no environment"}
         </span>
         <div className="relative">
@@ -544,7 +553,7 @@ export default function ManagerView() {
             type="button"
             disabled={!env}
             onClick={() => setNewMenuOpen((v) => !v)}
-            className="flex items-center gap-1 rounded bg-[#2d72d2] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#215db0] disabled:bg-[#c5cbd3]"
+            className="flex items-center gap-1 rounded bg-brand px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-deep disabled:bg-ink-ghost"
           >
             <Plus className="h-3.5 w-3.5" />
             New
@@ -557,7 +566,7 @@ export default function ManagerView() {
                 onClick={() => setNewMenuOpen(false)}
                 aria-hidden="true"
               />
-              <div className="absolute right-0 z-20 mt-1 w-44 rounded-md border border-[#d3d8de] bg-white py-1 shadow-lg">
+              <div className="absolute right-0 z-20 mt-1 w-44 rounded-md border border-line bg-white py-1 shadow-lg">
                 {(
                   [
                     ["Object type", () => setPanel("newType"), true],
@@ -574,7 +583,7 @@ export default function ManagerView() {
                       setNewMenuOpen(false);
                       action();
                     }}
-                    className="block w-full px-3 py-1.5 text-left text-xs text-[#404854] hover:bg-[#f6f7f9] disabled:text-[#c5cbd3]"
+                    className="block w-full px-3 py-1.5 text-left text-xs text-ink-body hover:bg-canvas disabled:text-ink-ghost"
                   >
                     {label}
                   </button>
@@ -590,8 +599,8 @@ export default function ManagerView() {
         {/* Center — discover / schema / instances */}
       <div className="flex min-w-0 flex-1 flex-col bg-white">
         {view === "schema" || view === "instances" ? (
-        <div className="flex items-center justify-between border-b border-[#d3d8de] px-4 py-2">
-          <div className="flex rounded-md border border-[#d3d8de] p-0.5">
+        <div className="flex items-center justify-between border-b border-line px-4 py-2">
+          <div className="flex rounded-md border border-line p-0.5">
             {(["schema", "instances"] as const).map((v) => (
               <button
                 key={v}
@@ -599,7 +608,7 @@ export default function ManagerView() {
                 onClick={() => setView(v)}
                 className={cn(
                   "rounded px-3 py-1 text-xs font-medium capitalize transition-colors",
-                  view === v ? "bg-gray-900 text-white" : "text-gray-500 hover:text-gray-900",
+                  view === v ? "bg-brand-soft text-brand-deep" : "text-ink-muted hover:text-ink",
                 )}
               >
                 {v}
@@ -615,12 +624,12 @@ export default function ManagerView() {
                   if (e.key === "Enter") void loadObjects();
                 }}
                 placeholder="where: assertion:affirmed,subject:patient"
-                className="w-72 rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 font-mono text-[11px] text-gray-800 focus:border-gray-400 focus:outline-none"
+                className="w-72 rounded-md border border-line bg-white px-2.5 py-1.5 font-mono text-[11px] text-ink focus:border-brand focus:outline-none"
               />
               <button
                 type="button"
                 onClick={() => void loadObjects()}
-                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                className="rounded-md border border-line bg-white px-3 py-1.5 text-xs text-ink-body hover:bg-canvas-raised"
               >
                 Refresh
               </button>
@@ -628,14 +637,14 @@ export default function ManagerView() {
                 type="button"
                 disabled={!selectedType}
                 onClick={() => setPanel("newInstance")}
-                className="rounded-md bg-gray-900 px-3 py-1.5 text-xs text-white hover:bg-gray-700 disabled:bg-gray-300"
+                className="rounded-md bg-brand px-3 py-1.5 text-xs text-white hover:bg-brand-deep disabled:bg-ink-ghost"
               >
                 + Instance
               </button>
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <span className="hidden text-[10px] text-gray-400 lg:inline">
+              <span className="hidden text-[10px] text-ink-faint lg:inline">
                 Drag boxes · drag ports to link · double-click to add type
               </span>
               <button
@@ -645,8 +654,8 @@ export default function ManagerView() {
                 className={cn(
                   "rounded-md border px-3 py-1.5 text-xs transition-colors",
                   placementMode
-                    ? "border-indigo-400 bg-indigo-50 text-indigo-700"
-                    : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50",
+                    ? "border-brand bg-brand-soft text-brand-deep"
+                    : "border-line bg-white text-ink-body hover:bg-canvas-raised",
                 )}
               >
                 + Type
@@ -655,7 +664,7 @@ export default function ManagerView() {
                 type="button"
                 disabled={!env || types.length === 0}
                 onClick={resetLayout}
-                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 disabled:text-gray-300"
+                className="rounded-md border border-line bg-white px-3 py-1.5 text-xs text-ink-body hover:bg-canvas-raised disabled:text-ink-ghost"
               >
                 Reset layout
               </button>
@@ -704,16 +713,16 @@ export default function ManagerView() {
         ) : view === "instances" ? (
           <div className="min-h-0 flex-1 overflow-auto p-4">
             {loading ? (
-              <p className="text-sm text-gray-400">Loading…</p>
+              <p className="text-sm text-ink-faint">Loading…</p>
             ) : objects.length === 0 ? (
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-ink-faint">
                 No instances{selectedType ? ` of ${selectedType}` : ""}
                 {whereInput.trim() ? " match this filter." : " yet."}
               </p>
             ) : (
               <table className="w-full border-collapse text-left text-xs">
                 <thead>
-                  <tr className="border-b border-gray-200 text-[10px] uppercase tracking-wide text-gray-400">
+                  <tr className="border-b border-line text-[10px] uppercase tracking-wide text-ink-faint">
                     <th className="px-2 py-1.5 font-medium">Label</th>
                     <th className="px-2 py-1.5 font-medium">Type</th>
                     <th className="px-2 py-1.5 font-medium">Updated</th>
@@ -726,11 +735,11 @@ export default function ManagerView() {
                       key={o.id}
                       onClick={() => openInstance(o.id)}
                       className={cn(
-                        "cursor-pointer border-b border-gray-100 hover:bg-gray-50",
-                        detail?.object.id === o.id ? "bg-indigo-50" : "",
+                        "cursor-pointer border-b border-line-faint hover:bg-canvas-raised",
+                        detail?.object.id === o.id ? "bg-brand-soft" : "",
                       )}
                     >
-                      <td className="px-2 py-1.5 font-medium text-gray-800">
+                      <td className="px-2 py-1.5 font-medium text-ink">
                         <span className="inline-flex items-center gap-1.5">
                           {instanceLabel(o)}
                           {(flagCounts.get(o.id) ?? 0) > 0 ? (
@@ -738,11 +747,11 @@ export default function ManagerView() {
                           ) : null}
                         </span>
                       </td>
-                      <td className="px-2 py-1.5 text-gray-500">{o.typeName}</td>
-                      <td className="px-2 py-1.5 text-gray-400">
+                      <td className="px-2 py-1.5 text-ink-muted">{o.typeName}</td>
+                      <td className="px-2 py-1.5 text-ink-faint">
                         {new Date(o.updatedAt).toLocaleString()}
                       </td>
-                      <td className="px-2 py-1.5 text-gray-400">
+                      <td className="px-2 py-1.5 text-ink-faint">
                         {(o.provenance.source as string) ?? "—"}
                       </td>
                     </tr>
@@ -921,7 +930,7 @@ function TypeCard({
     <button
       type="button"
       onClick={onOpen}
-      className="flex flex-col gap-2 rounded-md border border-[#d3d8de] bg-white p-3 text-left transition-colors hover:border-[#2d72d2]"
+      className="flex flex-col gap-2 rounded-md border border-line bg-white p-3 text-left transition-colors hover:border-brand"
     >
       <div className="flex items-start gap-2.5">
         <span
@@ -934,10 +943,10 @@ function TypeCard({
           <Icon className="h-4 w-4" />
         </span>
         <span className="min-w-0">
-          <span className="block truncate text-[13px] font-semibold text-[#1c2127]">
+          <span className="block truncate text-[13px] font-semibold text-ink">
             {stat.name}
           </span>
-          <span className="block text-[11px] text-[#5f6b7c]">
+          <span className="block text-[11px] text-ink-muted">
             {stat.instanceCount.toLocaleString()} object{stat.instanceCount === 1 ? "" : "s"}
           </span>
         </span>
@@ -961,12 +970,12 @@ function TypeCard({
           <Star
             className={cn(
               "h-3.5 w-3.5",
-              favorite ? "fill-amber-400 text-amber-400" : "text-[#c5cbd3] hover:text-[#8f99a8]",
+              favorite ? "fill-amber-400 text-amber-400" : "text-ink-ghost hover:text-ink-faint",
             )}
           />
         </span>
       </div>
-      <div className="text-[11px] text-[#5f6b7c]">
+      <div className="text-[11px] text-ink-muted">
         {stat.dependents} dependent{stat.dependents === 1 ? "" : "s"} · {stat.propertyCount}{" "}
         propert{stat.propertyCount === 1 ? "y" : "ies"}
       </div>
@@ -982,7 +991,7 @@ function TypeCard({
         </span>
       ) : null}
       {stat.description ? (
-        <p className="line-clamp-2 text-[11px] leading-relaxed text-[#404854]">
+        <p className="line-clamp-2 text-[11px] leading-relaxed text-ink-body">
           {stat.description}
         </p>
       ) : null}
@@ -1056,13 +1065,13 @@ function DiscoverSection({
   return (
     <section>
       <div className="mb-2 flex items-center gap-2">
-        <h3 className="text-[13px] font-semibold text-[#1c2127]">{title}</h3>
-        <span className="rounded bg-[#eef1f4] px-1.5 text-[10px] text-[#5f6b7c]">{count}</span>
+        <h3 className="text-[13px] font-semibold text-ink">{title}</h3>
+        <span className="rounded bg-line-faint px-1.5 text-[10px] text-ink-muted">{count}</span>
         {onSeeAll ? (
           <button
             type="button"
             onClick={onSeeAll}
-            className="ml-auto flex items-center gap-1 text-[11px] text-[#2d72d2] hover:underline"
+            className="ml-auto flex items-center gap-1 text-[11px] text-brand hover:underline"
           >
             See all
             <ArrowRight className="h-3 w-3" />
@@ -1119,8 +1128,8 @@ function DiscoverView({
 
   if (!hasEnv) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-[#f6f7f9]">
-        <p className="max-w-sm text-center text-sm text-[#5f6b7c]">
+      <div className="flex flex-1 items-center justify-center bg-canvas">
+        <p className="max-w-sm text-center text-sm text-ink-muted">
           Select or create an environment in the left rail to start modeling.
         </p>
       </div>
@@ -1139,7 +1148,7 @@ function DiscoverView({
   );
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto bg-[#f6f7f9] p-4">
+    <div className="min-h-0 flex-1 overflow-auto bg-canvas p-4">
       <div className="flex flex-col gap-5">
         {q ? (
           <DiscoverSection title="Search results" count={filtered.length}>
@@ -1176,11 +1185,11 @@ function DiscoverView({
                     key={g.name}
                     type="button"
                     onClick={() => onNavigate("typeGroups")}
-                    className="flex flex-col items-center gap-1.5 rounded-md border border-[#d3d8de] bg-white p-3 transition-colors hover:border-[#2d72d2]"
+                    className="flex flex-col items-center gap-1.5 rounded-md border border-line bg-white p-3 transition-colors hover:border-brand"
                   >
                     <GroupThumb group={g} />
-                    <span className="text-xs font-medium text-[#1c2127]">{g.name}</span>
-                    <span className="text-[10px] text-[#8f99a8]">
+                    <span className="text-xs font-medium text-ink">{g.name}</span>
+                    <span className="text-[10px] text-ink-faint">
                       {g.members.length} types · {g.links.length} links
                     </span>
                   </button>
@@ -1197,23 +1206,23 @@ function DiscoverView({
           </>
         )}
         {allTypes.length === 0 ? (
-          <div className="flex flex-col items-start gap-2 rounded-md border border-dashed border-[#c5cbd3] bg-white p-6">
-            <p className="text-sm font-medium text-[#1c2127]">Start your ontology</p>
-            <p className="text-xs text-[#5f6b7c]">
+          <div className="flex flex-col items-start gap-2 rounded-md border border-dashed border-ink-ghost bg-white p-6">
+            <p className="text-sm font-medium text-ink">Start your ontology</p>
+            <p className="text-xs text-ink-muted">
               Define your first clinical object type — Patient, Encounter, Medication — then
               link them in the schema graph.
             </p>
             <button
               type="button"
               onClick={onNewType}
-              className="mt-1 flex items-center gap-1 rounded bg-[#2d72d2] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#215db0]"
+              className="mt-1 flex items-center gap-1 rounded bg-brand px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-deep"
             >
               <Plus className="h-3.5 w-3.5" />
               New object type
             </button>
           </div>
         ) : q && filtered.length === 0 ? (
-          <p className="text-xs text-[#5f6b7c]">No object types match “{search.trim()}”.</p>
+          <p className="text-xs text-ink-muted">No object types match “{search.trim()}”.</p>
         ) : null}
       </div>
     </div>
@@ -1234,11 +1243,11 @@ function PageShell({
   children: ReactNode;
 }) {
   return (
-    <div className="min-h-0 flex-1 overflow-auto bg-[#f6f7f9] p-4">
+    <div className="min-h-0 flex-1 overflow-auto bg-canvas p-4">
       <div className="mb-3 flex items-center gap-2">
-        <h2 className="text-[15px] font-semibold text-[#1c2127]">{title}</h2>
+        <h2 className="text-[15px] font-semibold text-ink">{title}</h2>
         {count !== undefined ? (
-          <span className="rounded bg-[#eef1f4] px-1.5 text-[10px] text-[#5f6b7c]">
+          <span className="rounded bg-line-faint px-1.5 text-[10px] text-ink-muted">
             {count.toLocaleString()}
           </span>
         ) : null}
@@ -1259,9 +1268,9 @@ function PlaceholderPage({
 }) {
   return (
     <PageShell title={title}>
-      <div className="flex flex-col items-start gap-2 rounded-md border border-dashed border-[#c5cbd3] bg-white p-6">
-        <Icon className="h-5 w-5 text-[#8f99a8]" />
-        <p className="text-xs leading-relaxed text-[#5f6b7c]">{body}</p>
+      <div className="flex flex-col items-start gap-2 rounded-md border border-dashed border-ink-ghost bg-white p-6">
+        <Icon className="h-5 w-5 text-ink-faint" />
+        <p className="text-xs leading-relaxed text-ink-muted">{body}</p>
       </div>
     </PageShell>
   );
@@ -1269,8 +1278,8 @@ function PlaceholderPage({
 
 const RESOURCE_TABLE = "w-full border-collapse rounded-md text-left text-xs";
 const RESOURCE_TH =
-  "border-b border-[#d3d8de] px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-[#8f99a8]";
-const RESOURCE_TD = "border-b border-[#e5e8eb] px-3 py-2";
+  "border-b border-line px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-ink-faint";
+const RESOURCE_TD = "border-b border-line-soft px-3 py-2";
 
 function ResourcePages({
   view,
@@ -1333,7 +1342,7 @@ function ResourcePages({
     const stats = summary?.types ?? [];
     return (
       <PageShell title="Object types" count={stats.length}>
-        <div className="overflow-hidden rounded-md border border-[#d3d8de] bg-white">
+        <div className="overflow-hidden rounded-md border border-line bg-white">
           <table className={RESOURCE_TABLE}>
             <thead>
               <tr>
@@ -1351,9 +1360,9 @@ function ResourcePages({
                   <tr
                     key={s.id}
                     onClick={() => onOpenType(s.name)}
-                    className="cursor-pointer text-[#404854] hover:bg-[#f6f7f9]"
+                    className="cursor-pointer text-ink-body hover:bg-canvas"
                   >
-                    <td className={cn(RESOURCE_TD, "font-medium text-[#1c2127]")}>
+                    <td className={cn(RESOURCE_TD, "font-medium text-ink")}>
                       <span className="flex items-center gap-2">
                         <span
                           className={cn(
@@ -1367,7 +1376,7 @@ function ResourcePages({
                         {s.name}
                       </span>
                     </td>
-                    <td className={cn(RESOURCE_TD, "max-w-xs truncate text-[#5f6b7c]")}>
+                    <td className={cn(RESOURCE_TD, "max-w-xs truncate text-ink-muted")}>
                       {s.description ?? "—"}
                     </td>
                     <td className={RESOURCE_TD}>{s.propertyCount}</td>
@@ -1378,7 +1387,7 @@ function ResourcePages({
               })}
               {stats.length === 0 ? (
                 <tr>
-                  <td className={cn(RESOURCE_TD, "text-[#8f99a8]")} colSpan={5}>
+                  <td className={cn(RESOURCE_TD, "text-ink-faint")} colSpan={5}>
                     No object types yet.
                   </td>
                 </tr>
@@ -1396,7 +1405,7 @@ function ResourcePages({
     );
     return (
       <PageShell title="Properties" count={rows.length}>
-        <div className="overflow-hidden rounded-md border border-[#d3d8de] bg-white">
+        <div className="overflow-hidden rounded-md border border-line bg-white">
           <table className={RESOURCE_TABLE}>
             <thead>
               <tr>
@@ -1410,12 +1419,12 @@ function ResourcePages({
                 <tr
                   key={`${r.type}.${r.key}.${i}`}
                   onClick={() => onOpenType(r.type)}
-                  className="cursor-pointer text-[#404854] hover:bg-[#f6f7f9]"
+                  className="cursor-pointer text-ink-body hover:bg-canvas"
                 >
-                  <td className={cn(RESOURCE_TD, "font-medium text-[#1c2127]")}>
+                  <td className={cn(RESOURCE_TD, "font-medium text-ink")}>
                     {r.label ?? r.key}
                     {r.label ? (
-                      <span className="ml-1.5 font-normal text-[#8f99a8]">({r.key})</span>
+                      <span className="ml-1.5 font-normal text-ink-faint">({r.key})</span>
                     ) : null}
                   </td>
                   <td className={cn(RESOURCE_TD, "font-mono text-[11px]")}>{r.kind}</td>
@@ -1424,7 +1433,7 @@ function ResourcePages({
               ))}
               {rows.length === 0 ? (
                 <tr>
-                  <td className={cn(RESOURCE_TD, "text-[#8f99a8]")} colSpan={3}>
+                  <td className={cn(RESOURCE_TD, "text-ink-faint")} colSpan={3}>
                     No properties defined yet.
                   </td>
                 </tr>
@@ -1443,13 +1452,13 @@ function ResourcePages({
           <button
             type="button"
             onClick={onNewLinkType}
-            className="flex items-center gap-1 rounded bg-[#2d72d2] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#215db0]"
+            className="flex items-center gap-1 rounded bg-brand px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-deep"
           >
             <Plus className="h-3.5 w-3.5" />
             New link type
           </button>
         </div>
-        <div className="overflow-hidden rounded-md border border-[#d3d8de] bg-white">
+        <div className="overflow-hidden rounded-md border border-line bg-white">
           <table className={RESOURCE_TABLE}>
             <thead>
               <tr>
@@ -1462,8 +1471,8 @@ function ResourcePages({
             </thead>
             <tbody>
               {linkTypes.map((lt) => (
-                <tr key={lt.id} className="text-[#404854] hover:bg-[#f6f7f9]">
-                  <td className={cn(RESOURCE_TD, "font-medium text-[#1c2127]")}>{lt.name}</td>
+                <tr key={lt.id} className="text-ink-body hover:bg-canvas">
+                  <td className={cn(RESOURCE_TD, "font-medium text-ink")}>{lt.name}</td>
                   <td className={RESOURCE_TD}>{lt.fromType}</td>
                   <td className={RESOURCE_TD}>{lt.toType}</td>
                   <td className={cn(RESOURCE_TD, "font-mono text-[11px]")}>{lt.cardinality}</td>
@@ -1471,7 +1480,7 @@ function ResourcePages({
                     <button
                       type="button"
                       onClick={() => void onDeleteLinkType(lt.name)}
-                      className="text-[10px] text-[#8f99a8] hover:text-rose-600"
+                      className="text-[10px] text-ink-faint hover:text-rose-600"
                     >
                       delete
                     </button>
@@ -1480,7 +1489,7 @@ function ResourcePages({
               ))}
               {linkTypes.length === 0 ? (
                 <tr>
-                  <td className={cn(RESOURCE_TD, "text-[#8f99a8]")} colSpan={5}>
+                  <td className={cn(RESOURCE_TD, "text-ink-faint")} colSpan={5}>
                     No link types yet.
                   </td>
                 </tr>
@@ -1496,7 +1505,7 @@ function ResourcePages({
     return (
       <PageShell title="Type groups" count={typeGroups.length}>
         {typeGroups.length === 0 ? (
-          <p className="text-xs text-[#8f99a8]">
+          <p className="text-xs text-ink-faint">
             Groups appear once object types are connected by link types.
           </p>
         ) : (
@@ -1504,10 +1513,10 @@ function ResourcePages({
             {typeGroups.map((g) => (
               <div
                 key={g.name}
-                className="flex flex-col gap-2 rounded-md border border-[#d3d8de] bg-white p-3"
+                className="flex flex-col gap-2 rounded-md border border-line bg-white p-3"
               >
                 <GroupThumb group={g} />
-                <p className="text-xs font-semibold text-[#1c2127]">{g.name}</p>
+                <p className="text-xs font-semibold text-ink">{g.name}</p>
                 <div className="flex flex-wrap gap-1">
                   {g.members.map((m) => {
                     const { tint } = typeVisual(m);
@@ -1538,7 +1547,7 @@ function ResourcePages({
   if (view === "health") {
     return (
       <PageShell title="Health issues" count={healthFlags.length}>
-        <div className="overflow-hidden rounded-md border border-[#d3d8de] bg-white">
+        <div className="overflow-hidden rounded-md border border-line bg-white">
           <table className={RESOURCE_TABLE}>
             <thead>
               <tr>
@@ -1554,7 +1563,7 @@ function ResourcePages({
                 <tr
                   key={f.id}
                   onClick={() => onOpenInstance(f.instanceId)}
-                  className="cursor-pointer text-[#404854] hover:bg-[#f6f7f9]"
+                  className="cursor-pointer text-ink-body hover:bg-canvas"
                 >
                   <td className={RESOURCE_TD}>
                     <span
@@ -1564,7 +1573,7 @@ function ResourcePages({
                           ? "bg-rose-50 text-rose-700"
                           : f.severity === "warn"
                             ? "bg-amber-50 text-amber-700"
-                            : "bg-[#eef1f4] text-[#5f6b7c]",
+                            : "bg-line-faint text-ink-muted",
                       )}
                     >
                       {f.severity}
@@ -1573,14 +1582,14 @@ function ResourcePages({
                   <td className={cn(RESOURCE_TD, "font-mono text-[11px]")}>{f.code}</td>
                   <td className={cn(RESOURCE_TD, "max-w-sm truncate")}>{f.message}</td>
                   <td className={RESOURCE_TD}>{f.layer}</td>
-                  <td className={cn(RESOURCE_TD, "text-[#8f99a8]")}>
+                  <td className={cn(RESOURCE_TD, "text-ink-faint")}>
                     {new Date(f.createdAt).toLocaleString()}
                   </td>
                 </tr>
               ))}
               {healthFlags.length === 0 ? (
                 <tr>
-                  <td className={cn(RESOURCE_TD, "text-[#8f99a8]")} colSpan={5}>
+                  <td className={cn(RESOURCE_TD, "text-ink-faint")} colSpan={5}>
                     No open health issues. Run a quality scan from Data Quality to check.
                   </td>
                 </tr>
@@ -1595,10 +1604,10 @@ function ResourcePages({
   if (view === "history") {
     return (
       <PageShell title="History" count={recentObjects.length}>
-        <p className="mb-2 text-[11px] text-[#8f99a8]">
+        <p className="mb-2 text-[11px] text-ink-faint">
           Most recently created instances in this environment.
         </p>
-        <div className="overflow-hidden rounded-md border border-[#d3d8de] bg-white">
+        <div className="overflow-hidden rounded-md border border-line bg-white">
           <table className={RESOURCE_TABLE}>
             <thead>
               <tr>
@@ -1613,23 +1622,23 @@ function ResourcePages({
                 <tr
                   key={o.id}
                   onClick={() => onOpenInstance(o.id)}
-                  className="cursor-pointer text-[#404854] hover:bg-[#f6f7f9]"
+                  className="cursor-pointer text-ink-body hover:bg-canvas"
                 >
-                  <td className={cn(RESOURCE_TD, "font-medium text-[#1c2127]")}>
+                  <td className={cn(RESOURCE_TD, "font-medium text-ink")}>
                     {instanceLabel(o)}
                   </td>
                   <td className={RESOURCE_TD}>{o.typeName}</td>
-                  <td className={cn(RESOURCE_TD, "text-[#8f99a8]")}>
+                  <td className={cn(RESOURCE_TD, "text-ink-faint")}>
                     {new Date(o.createdAt).toLocaleString()}
                   </td>
-                  <td className={cn(RESOURCE_TD, "text-[#8f99a8]")}>
+                  <td className={cn(RESOURCE_TD, "text-ink-faint")}>
                     {new Date(o.updatedAt).toLocaleString()}
                   </td>
                 </tr>
               ))}
               {recentObjects.length === 0 ? (
                 <tr>
-                  <td className={cn(RESOURCE_TD, "text-[#8f99a8]")} colSpan={4}>
+                  <td className={cn(RESOURCE_TD, "text-ink-faint")} colSpan={4}>
                     No activity yet.
                   </td>
                 </tr>
@@ -1648,12 +1657,12 @@ function ResourcePages({
     return (
       <PageShell title="Cleanup">
         <div className="flex flex-col gap-4">
-          <div className="rounded-md border border-[#d3d8de] bg-white p-3">
-            <p className="mb-1 text-xs font-semibold text-[#1c2127]">
+          <div className="rounded-md border border-line bg-white p-3">
+            <p className="mb-1 text-xs font-semibold text-ink">
               Object types without instances ({empty.length})
             </p>
             {empty.length === 0 ? (
-              <p className="text-[11px] text-[#8f99a8]">None — every type has data.</p>
+              <p className="text-[11px] text-ink-faint">None — every type has data.</p>
             ) : (
               <div className="flex flex-wrap gap-1">
                 {empty.map((s) => (
@@ -1661,7 +1670,7 @@ function ResourcePages({
                     key={s.id}
                     type="button"
                     onClick={() => onOpenType(s.name)}
-                    className="rounded border border-[#d3d8de] px-1.5 py-0.5 text-[10px] text-[#404854] hover:border-[#2d72d2]"
+                    className="rounded border border-line px-1.5 py-0.5 text-[10px] text-ink-body hover:border-brand"
                   >
                     {s.name}
                   </button>
@@ -1669,12 +1678,12 @@ function ResourcePages({
               </div>
             )}
           </div>
-          <div className="rounded-md border border-[#d3d8de] bg-white p-3">
-            <p className="mb-1 text-xs font-semibold text-[#1c2127]">
+          <div className="rounded-md border border-line bg-white p-3">
+            <p className="mb-1 text-xs font-semibold text-ink">
               Object types missing a description ({undocumented.length})
             </p>
             {undocumented.length === 0 ? (
-              <p className="text-[11px] text-[#8f99a8]">None — everything is documented.</p>
+              <p className="text-[11px] text-ink-faint">None — everything is documented.</p>
             ) : (
               <div className="flex flex-wrap gap-1">
                 {undocumented.map((s) => (
@@ -1682,7 +1691,7 @@ function ResourcePages({
                     key={s.id}
                     type="button"
                     onClick={() => onOpenType(s.name)}
-                    className="rounded border border-[#d3d8de] px-1.5 py-0.5 text-[10px] text-[#404854] hover:border-[#2d72d2]"
+                    className="rounded border border-line px-1.5 py-0.5 text-[10px] text-ink-body hover:border-brand"
                   >
                     {s.name}
                   </button>
@@ -1700,35 +1709,35 @@ function ResourcePages({
       <PageShell title="Ontology configuration">
         <div className="flex max-w-md flex-col gap-4">
           {envInfo ? (
-            <div className="rounded-md border border-[#d3d8de] bg-white p-3">
-              <p className="mb-2 text-xs font-semibold text-[#1c2127]">Current environment</p>
-              <table className="w-full text-xs text-[#404854]">
+            <div className="rounded-md border border-line bg-white p-3">
+              <p className="mb-2 text-xs font-semibold text-ink">Current environment</p>
+              <table className="w-full text-xs text-ink-body">
                 <tbody>
                   <tr>
-                    <td className="py-0.5 text-[#8f99a8]">Name</td>
+                    <td className="py-0.5 text-ink-faint">Name</td>
                     <td className="py-0.5 text-right font-medium">{envInfo.name}</td>
                   </tr>
                   <tr>
-                    <td className="py-0.5 text-[#8f99a8]">Slug</td>
+                    <td className="py-0.5 text-ink-faint">Slug</td>
                     <td className="py-0.5 text-right font-mono text-[11px]">{envInfo.slug}</td>
                   </tr>
                   <tr>
-                    <td className="py-0.5 text-[#8f99a8]">Type</td>
+                    <td className="py-0.5 text-ink-faint">Type</td>
                     <td className="py-0.5 text-right">{envInfo.type}</td>
                   </tr>
                   <tr>
-                    <td className="py-0.5 text-[#8f99a8]">Organization</td>
+                    <td className="py-0.5 text-ink-faint">Organization</td>
                     <td className="py-0.5 text-right">{envInfo.organizationName}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
           ) : null}
-          <div className="rounded-md border border-[#d3d8de] bg-white p-3">
-            <p className="mb-1 text-xs font-semibold text-[#1c2127]">
+          <div className="rounded-md border border-line bg-white p-3">
+            <p className="mb-1 text-xs font-semibold text-ink">
               Import from another environment
             </p>
-            <p className="mb-2 text-[10.5px] leading-relaxed text-[#8f99a8]">
+            <p className="mb-2 text-[10.5px] leading-relaxed text-ink-faint">
               Copies types, instances, and links into this environment — use it to
               consolidate domain-split environments into one world environment. The source
               is left untouched.
@@ -1737,7 +1746,7 @@ function ResourcePages({
               <select
                 value={importFrom}
                 onChange={(e) => setImportFrom(e.target.value)}
-                className="min-w-0 flex-1 rounded border border-[#d3d8de] bg-[#f6f7f9] px-2 py-1.5 text-xs text-[#1c2127] focus:border-[#2d72d2] focus:outline-none"
+                className="min-w-0 flex-1 rounded border border-line bg-canvas px-2 py-1.5 text-xs text-ink focus:border-brand focus:outline-none"
               >
                 <option value="">choose a source environment…</option>
                 {environments
@@ -1752,7 +1761,7 @@ function ResourcePages({
                 type="button"
                 disabled={!importFrom || importing}
                 onClick={() => void handleImport()}
-                className="shrink-0 rounded bg-[#2d72d2] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#215db0] disabled:bg-[#c5cbd3]"
+                className="shrink-0 rounded bg-brand px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-deep disabled:bg-ink-ghost"
               >
                 {importing ? "Importing…" : "Import"}
               </button>
@@ -1761,7 +1770,7 @@ function ResourcePages({
               <p className="mt-2 text-[11px] text-emerald-700">{importResult}</p>
             ) : null}
           </div>
-          <div className="rounded-md border border-[#d3d8de] bg-white">
+          <div className="rounded-md border border-line bg-white">
             <EnvironmentCreator onCreated={onEnvCreated} onError={onError} />
           </div>
         </div>
@@ -1835,8 +1844,8 @@ function EnvironmentCreator({
   }
 
   return (
-    <div className="border-b border-gray-100 p-3">
-      <div className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400">
+    <div className="border-b border-line-faint p-3">
+      <div className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint">
         New environment
       </div>
       <div className="flex flex-col gap-1.5">
@@ -1847,23 +1856,23 @@ function EnvironmentCreator({
             if (e.key === "Enter") void submit();
           }}
           placeholder="e.g. Site A Clinical"
-          className="w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs text-gray-800 focus:border-gray-400 focus:outline-none"
+          className="w-full rounded-md border border-line bg-white px-2 py-1.5 text-xs text-ink focus:border-brand focus:outline-none"
         />
         <select
           value={type}
           onChange={(e) => setType(e.target.value as EnvironmentType)}
-          className="w-full rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs text-gray-800 focus:border-gray-400 focus:outline-none"
+          className="w-full rounded-md border border-line bg-white px-2 py-1.5 text-xs text-ink focus:border-brand focus:outline-none"
         >
           <option value="reference">Reference</option>
           <option value="entity">Entity</option>
           <option value="operations">Operations</option>
         </select>
-        <p className="text-[10px] leading-relaxed text-gray-400">{ENV_TYPE_HELP[type]}</p>
+        <p className="text-[10px] leading-relaxed text-ink-faint">{ENV_TYPE_HELP[type]}</p>
         <button
           type="button"
           onClick={submit}
           disabled={busy || !name.trim()}
-          className="w-full rounded-md bg-gray-900 px-2.5 py-1.5 text-xs text-white hover:bg-gray-700 disabled:bg-gray-300"
+          className="w-full rounded-md bg-brand px-2.5 py-1.5 text-xs text-white hover:bg-brand-deep disabled:bg-ink-ghost"
         >
           Add environment
         </button>
@@ -1895,7 +1904,7 @@ function PropertyRowsEditor({
               onChange(next);
             }}
             placeholder="key"
-            className="min-w-0 flex-1 rounded border border-gray-200 bg-gray-50 px-1.5 py-1 text-[11px] text-gray-800 focus:border-gray-400 focus:outline-none"
+            className="min-w-0 flex-1 rounded border border-line bg-white px-1.5 py-1 text-[11px] text-ink focus:border-brand focus:outline-none"
           />
           <select
             value={row.type}
@@ -1904,7 +1913,7 @@ function PropertyRowsEditor({
               next[i] = { ...row, type: e.target.value as PropertyType };
               onChange(next);
             }}
-            className="rounded border border-gray-200 bg-gray-50 px-1 py-1 text-[11px] text-gray-800 focus:border-gray-400 focus:outline-none"
+            className="rounded border border-line bg-white px-1 py-1 text-[11px] text-ink focus:border-brand focus:outline-none"
           >
             {PROPERTY_TYPES.map((t) => (
               <option key={t} value={t}>
@@ -1915,7 +1924,7 @@ function PropertyRowsEditor({
           <button
             type="button"
             onClick={() => onChange(rows.filter((_, j) => j !== i))}
-            className="rounded px-1 text-gray-400 hover:text-rose-600"
+            className="rounded px-1 text-ink-faint hover:text-rose-600"
             aria-label="Remove property"
           >
             ×
@@ -1925,7 +1934,7 @@ function PropertyRowsEditor({
       <button
         type="button"
         onClick={() => onChange([...rows, { key: "", type: "string" }])}
-        className="self-start rounded border border-gray-200 px-2 py-1 text-[11px] text-gray-600 hover:border-gray-400"
+        className="self-start rounded border border-line px-2 py-1 text-[11px] text-ink-muted hover:border-brand"
       >
         + Property
       </button>
@@ -1987,7 +1996,7 @@ function TypeEditorPanel({
   }
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-l border-gray-200 bg-white">
+    <aside className="flex w-80 shrink-0 flex-col border-l border-line bg-white">
       <PanelHeader
         title={mode === "create" ? "New object type" : `Edit ${initial?.name}`}
         onClose={onClose}
@@ -1999,7 +2008,7 @@ function TypeEditorPanel({
             onChange={(e) => setName(e.target.value)}
             disabled={mode === "edit"}
             placeholder="e.g. Specimen"
-            className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none disabled:text-gray-400"
+            className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-xs text-ink focus:border-brand focus:outline-none disabled:text-ink-faint"
           />
         </Labelled>
         <Labelled label="Description">
@@ -2007,14 +2016,14 @@ function TypeEditorPanel({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={2}
-            className="w-full resize-none rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none"
+            className="w-full resize-none rounded-md border border-line bg-white px-2.5 py-2 text-xs text-ink focus:border-brand focus:outline-none"
           />
         </Labelled>
         <Labelled label="Nature">
           <select
             value={nature}
             onChange={(e) => setNature(e.target.value as ObjectNature | "")}
-            className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none"
+            className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-xs text-ink focus:border-brand focus:outline-none"
           >
             <option value="">Unspecified</option>
             <option value="physical">Physical — real-world extent, twin anchor (lat/lng)</option>
@@ -2025,12 +2034,12 @@ function TypeEditorPanel({
           <PropertyRowsEditor rows={rows} onChange={setRows} />
         </Labelled>
       </div>
-      <div className="flex items-center gap-2 border-t border-gray-200 p-3">
+      <div className="flex items-center gap-2 border-t border-line p-3">
         <button
           type="button"
           onClick={save}
           disabled={busy}
-          className="flex-1 rounded-md bg-gray-900 px-3 py-2 text-xs text-white hover:bg-gray-700 disabled:bg-gray-300"
+          className="flex-1 rounded-md bg-brand px-3 py-2 text-xs text-white hover:bg-brand-deep disabled:bg-ink-ghost"
         >
           {mode === "create" ? "Create type" : "Save changes"}
         </button>
@@ -2110,7 +2119,7 @@ function LinkTypeEditorPanel({
   }
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-l border-gray-200 bg-white">
+    <aside className="flex w-80 shrink-0 flex-col border-l border-line bg-white">
       <PanelHeader title="New relationship" onClose={onClose} />
       <div className="flex-1 overflow-y-auto p-4">
         <Labelled label="Name">
@@ -2118,14 +2127,14 @@ function LinkTypeEditorPanel({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. collected_from"
-            className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none"
+            className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-xs text-ink focus:border-brand focus:outline-none"
           />
         </Labelled>
         <Labelled label="From type">
           <select
             value={fromType}
             onChange={(e) => setFromType(e.target.value)}
-            className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none"
+            className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-xs text-ink focus:border-brand focus:outline-none"
           >
             {types.map((t) => (
               <option key={t.id} value={t.name}>
@@ -2138,7 +2147,7 @@ function LinkTypeEditorPanel({
           <select
             value={toType}
             onChange={(e) => setToType(e.target.value)}
-            className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none"
+            className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-xs text-ink focus:border-brand focus:outline-none"
           >
             {types.map((t) => (
               <option key={t.id} value={t.name}>
@@ -2151,7 +2160,7 @@ function LinkTypeEditorPanel({
           <select
             value={cardinality}
             onChange={(e) => setCardinality(e.target.value as LinkCardinality)}
-            className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none"
+            className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-xs text-ink focus:border-brand focus:outline-none"
           >
             {CARDINALITIES.map((c) => (
               <option key={c} value={c}>
@@ -2161,12 +2170,12 @@ function LinkTypeEditorPanel({
           </select>
         </Labelled>
       </div>
-      <div className="border-t border-gray-200 p-3">
+      <div className="border-t border-line p-3">
         <button
           type="button"
           onClick={save}
           disabled={busy}
-          className="w-full rounded-md bg-gray-900 px-3 py-2 text-xs text-white hover:bg-gray-700 disabled:bg-gray-300"
+          className="w-full rounded-md bg-brand px-3 py-2 text-xs text-white hover:bg-brand-deep disabled:bg-ink-ghost"
         >
           Create relationship
         </button>
@@ -2238,14 +2247,14 @@ function InstanceEditorPanel({
   }
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-l border-gray-200 bg-white">
+    <aside className="flex w-80 shrink-0 flex-col border-l border-line bg-white">
       <PanelHeader
         title={initial ? `Edit ${typeDef.name}` : `New ${typeDef.name}`}
         onClose={onClose}
       />
       <div className="flex-1 overflow-y-auto p-4">
         {typeDef.propertySchema.length === 0 ? (
-          <p className="text-[11px] text-gray-400">
+          <p className="text-[11px] text-ink-faint">
             This type has no properties. Add some in the type editor first.
           </p>
         ) : (
@@ -2255,7 +2264,7 @@ function InstanceEditorPanel({
                 <select
                   value={values[p.key] ?? ""}
                   onChange={(e) => setValues((v) => ({ ...v, [p.key]: e.target.value }))}
-                  className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none"
+                  className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-xs text-ink focus:border-brand focus:outline-none"
                 >
                   <option value="">—</option>
                   <option value="true">true</option>
@@ -2267,19 +2276,19 @@ function InstanceEditorPanel({
                   value={values[p.key] ?? ""}
                   onChange={(e) => setValues((v) => ({ ...v, [p.key]: e.target.value }))}
                   placeholder={p.type === "object" || p.type === "array" ? "JSON" : ""}
-                  className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none"
+                  className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-xs text-ink focus:border-brand focus:outline-none"
                 />
               )}
             </Labelled>
           ))
         )}
       </div>
-      <div className="border-t border-gray-200 p-3">
+      <div className="border-t border-line p-3">
         <button
           type="button"
           onClick={save}
           disabled={busy}
-          className="w-full rounded-md bg-gray-900 px-3 py-2 text-xs text-white hover:bg-gray-700 disabled:bg-gray-300"
+          className="w-full rounded-md bg-brand px-3 py-2 text-xs text-white hover:bg-brand-deep disabled:bg-ink-ghost"
         >
           {initial ? "Save changes" : "Create instance"}
         </button>
@@ -2349,15 +2358,15 @@ function InstanceDetailPanel({
   }
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-l border-gray-200 bg-white">
+    <aside className="flex w-80 shrink-0 flex-col border-l border-line bg-white">
       <PanelHeader title={instanceLabel(object)} onClose={onClose} />
       <div className="flex-1 overflow-y-auto p-4">
         <SectionLabel>Properties</SectionLabel>
         <dl className="mb-4 space-y-1">
           {Object.entries(object.properties).map(([k, v]) => (
             <div key={k} className="flex justify-between gap-2 text-[11px]">
-              <dt className="text-gray-400">{k}</dt>
-              <dd className="max-w-[60%] truncate text-right font-medium text-gray-700">
+              <dt className="text-ink-faint">{k}</dt>
+              <dd className="max-w-[60%] truncate text-right font-medium text-ink-body">
                 {v == null ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v)}
               </dd>
             </div>
@@ -2370,22 +2379,22 @@ function InstanceDetailPanel({
             type="button"
             onClick={() => setLinking(true)}
             disabled={linkTypes.length === 0}
-            className="rounded border border-gray-200 px-1.5 py-0.5 text-[11px] text-gray-600 hover:border-gray-400 disabled:text-gray-300"
+            className="rounded border border-line px-1.5 py-0.5 text-[11px] text-ink-muted hover:border-brand disabled:text-ink-ghost"
           >
             + Link
           </button>
         </div>
         {links.length === 0 ? (
-          <p className="text-[11px] text-gray-400">No links.</p>
+          <p className="text-[11px] text-ink-faint">No links.</p>
         ) : (
           <ul className="space-y-1.5">
             {links.map((l) => (
               <li
                 key={l.id}
-                className="rounded-md border border-gray-200 px-2.5 py-1.5 text-[11px]"
+                className="rounded-md border border-line px-2.5 py-1.5 text-[11px]"
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-medium text-gray-800">
+                  <span className="font-medium text-ink">
                     {(l.otherProperties.span as string) ||
                       (l.otherProperties.label as string) ||
                       l.otherType}
@@ -2400,12 +2409,12 @@ function InstanceDetailPanel({
                         onError((err as Error).message);
                       }
                     }}
-                    className="text-[10px] text-gray-400 hover:text-rose-600"
+                    className="text-[10px] text-ink-faint hover:text-rose-600"
                   >
                     unlink
                   </button>
                 </div>
-                <div className="mt-0.5 text-[10px] uppercase tracking-wide text-gray-400">
+                <div className="mt-0.5 text-[10px] uppercase tracking-wide text-ink-faint">
                   {l.direction === "out" ? "→" : "←"} {l.linkType} · {l.otherType}
                 </div>
               </li>
@@ -2413,12 +2422,12 @@ function InstanceDetailPanel({
           </ul>
         )}
       </div>
-      <div className="flex items-center gap-2 border-t border-gray-200 p-3">
+      <div className="flex items-center gap-2 border-t border-line p-3">
         <button
           type="button"
           onClick={() => setEditing(true)}
           disabled={!typeDef}
-          className="flex-1 rounded-md bg-gray-900 px-3 py-2 text-xs text-white hover:bg-gray-700 disabled:bg-gray-300"
+          className="flex-1 rounded-md bg-brand px-3 py-2 text-xs text-white hover:bg-brand-deep disabled:bg-ink-ghost"
         >
           Edit
         </button>
@@ -2502,7 +2511,7 @@ function LinkInstancePanel({
   }
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-l border-gray-200 bg-white">
+    <aside className="flex w-80 shrink-0 flex-col border-l border-line bg-white">
       <PanelHeader title="Create link" onClose={onClose} />
       <div className="flex-1 overflow-y-auto p-4">
         <Labelled label="Relationship">
@@ -2512,7 +2521,7 @@ function LinkInstancePanel({
               setLinkType(e.target.value);
               setTargetId("");
             }}
-            className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none"
+            className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-xs text-ink focus:border-brand focus:outline-none"
           >
             {linkTypes.map((lt) => (
               <option key={lt.id} value={lt.name}>
@@ -2525,7 +2534,7 @@ function LinkInstancePanel({
           <select
             value={targetId}
             onChange={(e) => setTargetId(e.target.value)}
-            className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none"
+            className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-xs text-ink focus:border-brand focus:outline-none"
           >
             <option value="">Select…</option>
             {candidates.map((c) => (
@@ -2536,12 +2545,12 @@ function LinkInstancePanel({
           </select>
         </Labelled>
       </div>
-      <div className="border-t border-gray-200 p-3">
+      <div className="border-t border-line p-3">
         <button
           type="button"
           onClick={save}
           disabled={busy}
-          className="w-full rounded-md bg-gray-900 px-3 py-2 text-xs text-white hover:bg-gray-700 disabled:bg-gray-300"
+          className="w-full rounded-md bg-brand px-3 py-2 text-xs text-white hover:bg-brand-deep disabled:bg-ink-ghost"
         >
           Create link
         </button>
@@ -2556,13 +2565,13 @@ function LinkInstancePanel({
 
 function PanelHeader({ title, onClose }: { title: string; onClose: () => void }) {
   return (
-    <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-      <span className="truncate text-sm font-medium text-gray-800">{title}</span>
+    <div className="flex items-center justify-between border-b border-line px-4 py-3">
+      <span className="truncate text-sm font-medium text-ink">{title}</span>
       <button
         type="button"
         onClick={onClose}
         aria-label="Close"
-        className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+        className="rounded-md p-1 text-ink-faint hover:bg-canvas-raised hover:text-ink-body"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
           <path d="M18 6 6 18M6 6l12 12" />
@@ -2575,7 +2584,7 @@ function PanelHeader({ title, onClose }: { title: string; onClose: () => void })
 function Labelled({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="mb-3 block">
-      <span className="mb-1 block font-mono text-[9px] uppercase tracking-[0.18em] text-gray-400">
+      <span className="mb-1 block font-mono text-[9px] uppercase tracking-[0.18em] text-ink-faint">
         {label}
       </span>
       {children}
@@ -2585,7 +2594,7 @@ function Labelled({ label, children }: { label: string; children: React.ReactNod
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="block font-mono text-[9px] uppercase tracking-[0.18em] text-gray-400">
+    <span className="block font-mono text-[9px] uppercase tracking-[0.18em] text-ink-faint">
       {children}
     </span>
   );

@@ -1,7 +1,9 @@
 /**
- * Shared graph geometry for the Studio canvas. Used by both the pipeline
- * editor (StudioEditor) and the ontology SCHEMA view (StudioOntologyMode) so
- * the two render with the same curves, sizing, and accents.
+ * Shared graph geometry for the Studio canvas: curves, sizing and accents.
+ *
+ * Written for the pipeline editor and an ontology schema view that no longer
+ * exists; StudioEditor is now its only consumer, and it goes when the channels
+ * do.
  */
 
 export const NODE_W = 216;
