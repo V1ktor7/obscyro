@@ -45,6 +45,8 @@ export interface SignalType {
   defaultSeverity: Severity;
   description: string | null;
   active: boolean;
+  /** Twin-alert metric this type consumes. Null = not fed by alerts. */
+  alertMetric: string | null;
 }
 
 export interface Signal {
@@ -198,9 +200,10 @@ export async function listSignalTypes(db: DbClient, organizationId: string): Pro
     default_severity: Severity;
     description: string | null;
     active: boolean;
+    alert_metric: string | null;
   }>(
     `SELECT id, organization_id, key, name, domain, workflow_id, default_severity,
-            description, active
+            description, active, alert_metric
        FROM app.signal_type WHERE organization_id = $1 ORDER BY domain ASC, name ASC`,
     [organizationId],
   );
@@ -214,6 +217,7 @@ export async function listSignalTypes(db: DbClient, organizationId: string): Pro
     defaultSeverity: r.default_severity,
     description: r.description,
     active: r.active,
+    alertMetric: r.alert_metric,
   }));
 }
 
@@ -227,15 +231,18 @@ export async function createSignalType(
     workflowId: string;
     defaultSeverity?: Severity;
     description?: string | null;
+    alertMetric?: string | null;
   },
 ): Promise<SignalType> {
   const { rows } = await db.query<{ id: string }>(
     `INSERT INTO app.signal_type
-            (organization_id, key, name, domain, workflow_id, default_severity, description)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+            (organization_id, key, name, domain, workflow_id, default_severity,
+             description, alert_metric)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      ON CONFLICT (organization_id, key) DO UPDATE
         SET name = EXCLUDED.name, domain = EXCLUDED.domain,
-            workflow_id = EXCLUDED.workflow_id, updated_at = NOW()
+            workflow_id = EXCLUDED.workflow_id,
+            alert_metric = EXCLUDED.alert_metric, updated_at = NOW()
      RETURNING id`,
     [
       input.organizationId,
@@ -245,6 +252,7 @@ export async function createSignalType(
       input.workflowId,
       input.defaultSeverity ?? "warn",
       input.description ?? null,
+      input.alertMetric ?? null,
     ],
   );
   const types = await listSignalTypes(db, input.organizationId);

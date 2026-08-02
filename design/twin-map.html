@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>Obscyro — Carte du jumeau (maquette)</title>
+<style>
+  :root{--bg:#f6f7f9;--line:#d3d8de;--soft:#e5e8eb;--ink:#1c2127;--ink2:#404854;--ink3:#5f6b7c;--ink4:#8f99a8;
+    --acc:#2d72d2;--accd:#215db0;--accs:#e7f2fd;--ok:#1d9e75;--okbg:#e8f6f0;--warn:#d9822b;--warnbg:#fdf6ec;
+    --warnln:#f0d9b5;--crit:#c23030;--critbg:#fdf1f1;--scen:#5b4a86;--scenbg:#f0edf7;}
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.45 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+  .micro{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.045em;color:var(--ink4)}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+  select,input{height:26px;border:1px solid var(--line);border-radius:4px;background:#fff;padding:0 7px;font-size:11.5px;font-family:inherit;color:var(--ink)}
+  .btn{height:26px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border-radius:4px;font-size:11.5px;
+    cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink2);font-family:inherit}
+  .btn-p{background:var(--acc);border-color:var(--accd);color:#fff}
+
+  .bar{display:flex;align-items:center;gap:8px;padding:7px 12px;background:#fff;border-bottom:1px solid var(--line);flex:none}
+  .sep{width:1px;height:20px;background:var(--soft)}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden;height:26px}
+  .seg button{border:0;background:transparent;padding:0 11px;font:inherit;font-size:10px;font-weight:500;
+    text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);cursor:pointer}
+  .seg button.on{background:var(--accs);color:var(--accd)}
+
+  .shell{display:grid;grid-template-columns:236px minmax(0,1fr) 316px;flex:1;min-height:0}
+  .col{background:#fff;overflow:auto;min-height:0}
+  .col.l{border-right:1px solid var(--line)}
+  .col.r{border-left:1px solid var(--line)}
+
+  /* onglets gauche */
+  .tabs{display:flex;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;z-index:2}
+  .tab{flex:1;padding:8px 4px;text-align:center;font-size:10.5px;font-weight:500;color:var(--ink3);cursor:pointer;
+    border-bottom:2px solid transparent}
+  .tab.on{color:var(--accd);border-bottom-color:var(--acc)}
+
+  /* arbre de couches */
+  .grp{padding:3px 0}
+  .gh{display:flex;align-items:center;gap:6px;padding:5px 9px;cursor:pointer}
+  .gh:hover{background:#f8f9fa}
+  .gh .car{width:10px;font-size:9px;color:var(--ink4)}
+  .gh .nm{flex:1;font-size:11px;font-weight:600;color:var(--ink2)}
+  .lay{display:flex;align-items:center;gap:7px;padding:4px 9px 4px 24px;cursor:pointer}
+  .lay:hover{background:#f8f9fa}
+  .lay input{margin:0;width:12px;height:12px;accent-color:var(--acc)}
+  .lay .sw{width:9px;height:9px;border-radius:2px;flex:none}
+  .lay .nm{flex:1;font-size:11px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lay .c{font-size:9.5px;color:var(--ink4)}
+  .lay.off .nm{color:var(--ink4)}
+
+  /* outils */
+  .tool{display:flex;align-items:flex-start;gap:8px;margin:0 8px 4px;padding:7px 8px;border:1px solid var(--line);
+    border-radius:5px;cursor:pointer;background:#fff}
+  .tool:hover{border-color:var(--acc);background:var(--accs)}
+  .tool.na{opacity:.55;cursor:not-allowed}
+  .tool.na:hover{border-color:var(--line);background:#fff}
+  .tool .ic{width:22px;height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:12px;flex:none}
+  .tool .t{font-size:11.5px;font-weight:500;line-height:1.25}
+  .tool .d{font-size:9.5px;color:var(--ink4);line-height:1.35}
+  .sect{padding:7px 9px 3px}
+
+  /* sources */
+  .src{display:flex;align-items:center;gap:8px;padding:6px 9px;border-bottom:1px solid #f4f6f7}
+  .src .dot{width:7px;height:7px;border-radius:50%;flex:none}
+  .src .nm{flex:1;font-size:11px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .src .ago{font-size:9.5px;color:var(--ink4)}
+
+  /* carte */
+  .map{position:relative;background:#eef2f5;overflow:hidden}
+  .maptools{position:absolute;left:10px;bottom:10px;display:flex;gap:5px;background:#fff;border:1px solid var(--line);
+    border-radius:5px;padding:4px}
+  .maptools button{border:0;background:transparent;width:24px;height:22px;border-radius:3px;cursor:pointer;color:var(--ink3);font-size:12px}
+  .maptools button:hover{background:#f1f3f5}
+  .maptools button.on{background:var(--accs);color:var(--accd)}
+  .legend{position:absolute;right:10px;bottom:10px;background:#fff;border:1px solid var(--line);border-radius:5px;
+    padding:7px 9px;font-size:10px;color:var(--ink3);line-height:1.7}
+  .legend i{display:inline-block;width:14px;height:2px;vertical-align:middle;margin-right:5px}
+  .editbadge{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:var(--scen);color:#fff;
+    border-radius:4px;padding:3px 10px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+
+  /* panneau objet */
+  .ph{display:flex;align-items:center;gap:8px;padding:8px 11px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;z-index:2}
+  .pbody{padding:0 0 14px}
+  .pblock{padding:9px 11px;border-bottom:1px solid var(--soft)}
+  .acc{display:flex;align-items:center;gap:7px;padding:8px 11px;border-bottom:1px solid var(--soft);cursor:pointer}
+  .acc:hover{background:#f8f9fa}
+  .acc .nm{flex:1;font-size:11.5px;font-weight:500}
+  .acc .car{font-size:9px;color:var(--ink4)}
+  .kv{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .kv div{background:#f8f9fa;border-radius:4px;padding:5px 7px}
+  .kv .n{font-size:14px;font-weight:600}
+  .row{display:flex;justify-content:space-between;font-size:11px;padding:2.5px 0;color:var(--ink2)}
+  .row b{font-weight:600}
+  .sig{display:flex;align-items:center;gap:7px;padding:5px 0;font-size:11px}
+  .sig .s{width:7px;height:7px;border-radius:50%;flex:none}
+  .sig .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .warnbox{background:var(--warnbg);border:1px solid var(--warnln);border-radius:4px;padding:7px 8px;
+    font-size:10.5px;line-height:1.5;color:#8a5a12;margin-top:7px}
+  .menu{position:absolute;right:11px;top:76px;background:#fff;border:1px solid var(--line);border-radius:5px;
+    box-shadow:0 4px 14px rgba(16,22,26,.14);width:250px;display:none;z-index:5}
+  .menu.on{display:block}
+  .mi{padding:7px 10px;font-size:11.5px;cursor:pointer;border-bottom:1px solid #f4f6f7}
+  .mi:last-child{border-bottom:0}
+  .mi:hover{background:var(--accs)}
+  .mi.na{opacity:.5;cursor:not-allowed}
+  .mi.na:hover{background:#fff}
+  .mi small{display:block;font-size:9.5px;color:var(--ink4);margin-top:1px}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <b style="font-size:12.5px">chum-operations</b>
+  <span class="micro">4 sites · 29 unités</span>
+  <div class="sep"></div>
+  <div class="seg"><button class="on">Carte</button><button>Réponse</button></div>
+  <div class="sep"></div>
+  <div class="seg" id="mode"><button class="on" data-m="read">Lecture</button><button data-m="edit">Édition</button></div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
+    <select style="width:145px"><option>Réalité</option><option>test_scenarion</option></select>
+    <button class="btn">Chronologie</button>
+  </div>
+</div>
+
+<div class="shell">
+  <!-- ============ GAUCHE : couches / sources / outils ============ -->
+  <div class="col l">
+    <div class="tabs" id="tabs">
+      <div class="tab on" data-t="layers">Couches</div>
+      <div class="tab" data-t="sources">Sources</div>
+      <div class="tab" data-t="tools">Outils</div>
+    </div>
+    <div id="left"></div>
+  </div>
+
+  <!-- ============ CARTE ============ -->
+  <div class="map" id="map">
+    <svg width="100%" height="100%" viewBox="0 0 900 640" preserveAspectRatio="xMidYMid slice" id="svg"></svg>
+    <div class="editbadge" id="editBadge" style="display:none">Mode édition — rien n'est écrit dans la réalité</div>
+    <div class="maptools">
+      <button title="Recentrer">⌖</button><button title="Zoom +">+</button>
+      <button title="Zoom −">−</button><button title="Mesurer">⇹</button>
+    </div>
+    <div class="legend" id="legend"></div>
+  </div>
+
+  <!-- ============ PANNEAU OBJET ============ -->
+  <div class="col r" style="position:relative">
+    <div class="ph">
+      <span class="micro">Sélection</span>
+      <span class="micro" id="selKind" style="margin-left:auto"></span>
+    </div>
+    <div class="pbody" id="panel"></div>
+    <div class="menu" id="menu"></div>
+  </div>
+</div>
+
+<script>
+/* ================= données ================= */
+const LAYER_GROUPS = [
+  {n:'Établissements', open:true, layers:[
+    {k:'sites', n:'Sites', sw:'#2d72d2', c:4, on:true},
+    {k:'units', n:'Unités', sw:'#5b4a86', c:29, on:false},
+  ]},
+  {n:'Flux', open:true, layers:[
+    {k:'f_pat', n:'Transferts patients', sw:'#c23030', c:6, on:true},
+    {k:'f_sup', n:'Approvisionnement', sw:'#1d9e75', c:3, on:false},
+    {k:'f_data',n:'Flux de données', sw:'#d9822b', c:5, on:true},
+  ]},
+  {n:'Signaux', open:true, layers:[
+    {k:'sig', n:'Signaux ouverts', sw:'#c23030', c:7, on:true},
+  ]},
+  {n:'Territoire', open:false, layers:[
+    {k:'zones', n:'Zones tracées', sw:'#5b4a86', c:1, on:true},
+    {k:'rls', n:'Territoires RLS', sw:'#8f99a8', c:0, on:false},
+  ]},
+];
+
+const SOURCES = [
+  {n:'patient_intake', site:'Notre-Dame', state:'crit', ago:'267 h'},
+  {n:'ADT Saint-Luc', site:'Saint-Luc', state:'ok', ago:'40 s'},
+  {n:'Labo HND', site:'Notre-Dame', state:'ok', ago:'2 min'},
+  {n:'inspq_covid', site:'—', state:'warn', ago:'6 j'},
+  {n:'Pharmacie HSL', site:'Saint-Luc', state:'ok', ago:'11 min'},
+];
+
+const TOOLS = [
+  {g:'Objets', items:[
+    {n:'Placer un site', d:'une instance avec lat/lng', ic:'📍', bg:'#e7f2fd', ok:true},
+    {n:'Placer une unité', d:'rattachée à un site', ic:'🏥', bg:'#e7f2fd', ok:true},
+  ]},
+  {g:'Territoire', items:[
+    {n:'Tracer une zone', d:'périmètre, secteur à risque', ic:'⬡', bg:'#f0edf7', ok:false},
+    {n:'Importer une frontière', d:'RLS, aire de diffusion', ic:'⤓', bg:'#f0edf7', ok:false},
+    {n:'Rayon de desserte', d:'cercle autour d’un site', ic:'◎', bg:'#f0edf7', ok:false},
+  ]},
+  {g:'Mouvement', items:[
+    {n:'Tracer une route', d:'trajet de transfert', ic:'↝', bg:'#e8f6f0', ok:false},
+    {n:'Modéliser un flux', d:'volume dans le temps', ic:'⇉', bg:'#e8f6f0', ok:false},
+  ]},
+];
+
+const SITES = [
+  {id:'hnd', n:'Hôpital Notre-Dame', x:300, y:230, occ:81, beds:36, pat:30, sev:'crit'},
+  {id:'hsl', n:'Hôpital Saint-Luc', x:520, y:310, occ:88, beds:52, pat:46, sev:'crit'},
+  {id:'hcs', n:'Sacré-Cœur', x:250, y:430, occ:72, beds:64, pat:46, sev:'warn'},
+  {id:'gmf', n:'GMF Centre-Sud', x:600, y:180, occ:null, beds:0, pat:0, sev:'ok'},
+];
+const FLOWS = [
+  {a:'hnd', b:'hsl', kind:'f_pat', w:3},
+  {a:'hsl', b:'hcs', kind:'f_pat', w:2},
+  {a:'hnd', b:'hcs', kind:'f_data', w:1.5},
+  {a:'gmf', b:'hnd', kind:'f_data', w:1.5},
+];
+const SIGNALS = {
+  hnd:[{t:'Flux arrêté — 267 h', s:'crit'},{t:'Occupation ≥ 95 % · 6 Ouest', s:'crit'}],
+  hsl:[{t:'Effectif sous seuil · ICU', s:'crit'},{t:'Rupture — vancomycine', s:'crit'}],
+  hcs:[{t:'Occupation ≥ 80 %', s:'warn'}],
+  gmf:[],
+};
+
+let tab = 'layers', mode = 'read', sel = 'hnd';
+const on = new Set(LAYER_GROUPS.flatMap(g=>g.layers).filter(l=>l.on).map(l=>l.k));
+const openGroups = new Set(LAYER_GROUPS.filter(g=>g.open).map(g=>g.n));
+
+/* ================= panneau gauche ================= */
+function renderLeft(){
+  const el = document.getElementById('left');
+  if(tab==='layers'){
+    el.innerHTML = LAYER_GROUPS.map(g=>`
+      <div class="grp">
+        <div class="gh" data-g="${g.n}"><span class="car">${openGroups.has(g.n)?'▾':'▸'}</span>
+          <span class="nm">${g.n}</span></div>
+        ${openGroups.has(g.n)?g.layers.map(l=>`
+          <label class="lay ${on.has(l.k)?'':'off'}" data-l="${l.k}">
+            <input type="checkbox" ${on.has(l.k)?'checked':''}/>
+            <span class="sw" style="background:${l.sw}"></span>
+            <span class="nm">${l.n}</span>
+            <span class="c">${l.c || ''}</span>
+          </label>`).join(''):''}
+      </div>`).join('')
+      + `<div style="padding:9px 10px;font-size:10.5px;line-height:1.5;color:var(--ink4);border-top:1px solid var(--soft)">
+           Une couche est une requête sur l'ontologie plus une façon de la dessiner. Elles se définissent
+           par établissement — rien ici n'est codé.</div>`;
+    document.querySelectorAll('.gh').forEach(e=>e.onclick=()=>{
+      const g=e.dataset.g; openGroups.has(g)?openGroups.delete(g):openGroups.add(g); renderLeft(); });
+    document.querySelectorAll('.lay').forEach(e=>e.onclick=(ev)=>{
+      ev.preventDefault(); const k=e.dataset.l; on.has(k)?on.delete(k):on.add(k); renderLeft(); renderMap(); });
+  }
+  else if(tab==='sources'){
+    el.innerHTML = `<div class="sect micro">Ce qui alimente le jumeau</div>`
+      + SOURCES.map(s=>`<div class="src">
+          <span class="dot" style="background:${s.state==='crit'?'var(--crit)':s.state==='warn'?'var(--warn)':'var(--ok)'}"></span>
+          <span class="nm">${s.n}<br /><span class="ago">${s.site}</span></span>
+          <span class="ago" style="color:${s.state==='crit'?'var(--crit)':'var(--ink4)'}">${s.ago}</span>
+        </div>`).join('')
+      + `<div style="padding:9px 10px;font-size:10.5px;line-height:1.5;color:var(--ink4)">
+           Une source rattachée à un site devient un arc sur la carte. Celle qui est morte se voit
+           sur l'établissement qu'elle décrit, pas dans un tableau ailleurs.</div>`;
+  }
+  else {
+    el.innerHTML = TOOLS.map(g=>`
+      <div class="sect micro">${g.g}</div>
+      ${g.items.map(i=>`<div class="tool ${i.ok?'':'na'}">
+        <span class="ic" style="background:${i.bg}">${i.ic}</span>
+        <span><span class="t">${i.n}</span><br /><span class="d">${i.ok?i.d:'pas encore dans le moteur'}</span></span>
+      </div>`).join('')}`).join('')
+      + `<div style="padding:9px 10px;font-size:10.5px;line-height:1.5;color:var(--ink4);border-top:1px solid var(--soft)">
+           Placer un objet marche aujourd'hui : c'est une instance avec des coordonnées. Tracer une zone
+           demande de la géométrie dans l'ontologie — sans ça on dessine sans pouvoir interroger.
+           Un mouvement demande le temps.</div>`;
+  }
+}
+
+/* ================= carte ================= */
+function siteById(id){ return SITES.find(s=>s.id===id); }
+const sevColor = s => s==='crit'?'#c23030':s==='warn'?'#d9822b':'#1d9e75';
+
+function renderMap(){
+  let h = `<rect width="900" height="640" fill="#eef2f5"/>
+    <path d="M80,160 C160,90 330,60 500,80 C680,100 810,150 840,250
+             C866,340 800,470 640,530 C470,592 250,570 150,470 C70,390 40,230 80,160 Z"
+          fill="#e3e9ee" stroke="#d3dbe2"/>`;
+
+  if(on.has('zones')){
+    h += `<path d="M420,240 L610,220 L650,360 L470,400 Z" fill="#5b4a86" fill-opacity=".10"
+             stroke="#5b4a86" stroke-width="1.5" stroke-dasharray="5 3"/>
+          <text x="535" y="300" text-anchor="middle" font-size="11" fill="#5b4a86" font-weight="600">Zone de confinement</text>`;
+  }
+
+  for(const f of FLOWS){
+    if(!on.has(f.kind)) continue;
+    const a=siteById(f.a), b=siteById(f.b);
+    const mx=(a.x+b.x)/2, my=(a.y+b.y)/2 - 55;
+    const col = f.kind==='f_pat' ? '#c23030' : f.kind==='f_data' ? '#d9822b' : '#1d9e75';
+    h += `<path d="M${a.x},${a.y} Q${mx},${my} ${b.x},${b.y}" fill="none" stroke="${col}"
+             stroke-width="${f.w}" stroke-opacity=".65"
+             ${f.kind==='f_data'?'stroke-dasharray="5 3"':''}/>`;
+  }
+
+  if(on.has('sites')){
+    for(const s of SITES){
+      const r = s.beds ? 12 + s.beds/6 : 10;
+      const sigs = (SIGNALS[s.id]||[]).length;
+      h += `<circle cx="${s.x}" cy="${s.y}" r="${r}" fill="#fff" stroke="${sevColor(s.sev)}" stroke-width="2.5"
+               style="cursor:pointer" data-site="${s.id}"/>`;
+      if(sel===s.id) h += `<circle cx="${s.x}" cy="${s.y}" r="${r+7}" fill="none" stroke="#1c2127"
+               stroke-width="1.2" stroke-dasharray="3 2"/>`;
+      if(on.has('sig') && sigs>0){
+        h += `<circle cx="${s.x+r-2}" cy="${s.y-r+2}" r="8" fill="#c23030"/>
+              <text x="${s.x+r-2}" y="${s.y-r+5}" text-anchor="middle" font-size="9.5" fill="#fff"
+                font-weight="700">${sigs}</text>`;
+      }
+      h += `<text x="${s.x}" y="${s.y+r+14}" text-anchor="middle" font-size="11" fill="#404854">${s.n}</text>`;
+      if(s.occ!=null) h += `<text x="${s.x}" y="${s.y+4}" text-anchor="middle" font-size="10.5"
+        fill="${sevColor(s.sev)}" font-weight="700" class="mono">${s.occ}%</text>`;
+    }
+  }
+
+  document.getElementById('svg').innerHTML = h;
+  document.querySelectorAll('[data-site]').forEach(e=>e.onclick=()=>{ sel=e.dataset.site; renderMap(); renderPanel(); });
+
+  document.getElementById('legend').innerHTML =
+    [on.has('f_pat')?`<i style="background:#c23030"></i>transferts patients`:'',
+     on.has('f_data')?`<i style="background:#d9822b"></i>flux de données`:'',
+     on.has('f_sup')?`<i style="background:#1d9e75"></i>approvisionnement`:'',
+     `<span style="color:var(--ink4)">taille = capacité</span>`].filter(Boolean).join('<br />');
+}
+
+/* ================= panneau ================= */
+function renderPanel(){
+  const s = siteById(sel);
+  const sigs = SIGNALS[sel] || [];
+  document.getElementById('selKind').textContent = s.beds ? 'hôpital' : 'clinique';
+  document.getElementById('panel').innerHTML = `
+    <div class="pblock">
+      <div style="font-size:13.5px;font-weight:600">${s.n}</div>
+      <div style="font-size:10.5px;color:var(--ink4)">OrgUnit · mis à jour il y a 29 s</div>
+      <button class="btn btn-p" id="actBtn" style="width:100%;margin-top:9px;justify-content:center">
+        Actions ▾</button>
+    </div>
+
+    <div class="pblock">
+      <div class="micro" style="margin-bottom:6px">Statistiques</div>
+      <div class="kv">
+        <div><div class="micro">Occupation</div><div class="n mono" style="color:${sevColor(s.sev)}">${s.occ==null?'—':s.occ+'%'}</div></div>
+        <div><div class="micro">Lits</div><div class="n mono">${s.beds||'—'}</div></div>
+        <div><div class="micro">Patients</div><div class="n mono">${s.pat||'—'}</div></div>
+        <div><div class="micro">Signaux</div><div class="n mono" style="color:${sigs.length?'var(--crit)':'var(--ink)'}">${sigs.length}</div></div>
+      </div>
+    </div>
+
+    <div class="pblock">
+      <div class="micro" style="margin-bottom:4px">Signaux ouverts</div>
+      ${sigs.length===0 ? '<div style="font-size:11px;color:var(--ink4)">Aucun — nominal.</div>'
+        : sigs.map(x=>`<div class="sig"><span class="s" style="background:${sevColor(x.s)}"></span>
+            <span class="t">${x.t}</span><span class="micro">→</span></div>`).join('')}
+    </div>
+
+    <div class="acc"><span class="nm">Propriétés</span><span class="car">▸</span></div>
+    <div class="acc"><span class="nm">Liens</span><span class="car">▸</span></div>
+
+    <div class="pblock">
+      <div class="micro" style="margin-bottom:4px">Sources de données</div>
+      ${SOURCES.filter(x=>x.site===s.n.replace('Hôpital ','')).map(x=>`
+        <div class="row"><span>${x.n}</span>
+          <b style="color:${x.state==='crit'?'var(--crit)':'var(--ink2)'}">${x.ago}</b></div>`).join('')
+        || '<div style="font-size:11px;color:var(--ink4)">Aucune source rattachée.</div>'}
+      ${sel==='hnd'?`<div class="warnbox"><b>patient_intake est muet depuis 267 h.</b>
+        Tout ce que ce panneau affiche décrit le 21 juillet, pas maintenant.</div>`:''}
+    </div>`;
+
+  document.getElementById('actBtn').onclick = (e)=>{
+    e.stopPropagation();
+    document.getElementById('menu').classList.toggle('on');
+  };
+}
+
+document.getElementById('menu').innerHTML = `
+  <div class="mi">Lever un signal à propos de cet objet<small>choisir un type, il entre dans son flux</small></div>
+  <div class="mi">Ajouter une modification de scénario<small>fermer, ajouter des lits — sans toucher la réalité</small></div>
+  <div class="mi na">Modifier l'objet directement<small>pas encore — passe par un scénario puis sa promotion</small></div>
+  <div class="mi na">Lancer une simulation d'ici<small>service de simulation non déployé</small></div>`;
+document.body.addEventListener('click',()=>document.getElementById('menu').classList.remove('on'));
+
+/* ================= câblage ================= */
+document.querySelectorAll('#tabs .tab').forEach(e=>e.onclick=()=>{
+  document.querySelectorAll('#tabs .tab').forEach(x=>x.classList.remove('on'));
+  e.classList.add('on'); tab=e.dataset.t; renderLeft(); });
+
+document.querySelectorAll('#mode button').forEach(e=>e.onclick=()=>{
+  document.querySelectorAll('#mode button').forEach(x=>x.classList.remove('on'));
+  e.classList.add('on'); mode=e.dataset.m;
+  document.getElementById('editBadge').style.display = mode==='edit'?'':'none';
+  if(mode==='edit'){ tab='tools';
+    document.querySelectorAll('#tabs .tab').forEach(x=>x.classList.toggle('on', x.dataset.t==='tools'));
+    renderLeft(); }
+});
+
+renderLeft(); renderMap(); renderPanel();
+</script>
+</body>
+</html>

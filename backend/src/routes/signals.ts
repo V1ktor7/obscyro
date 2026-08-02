@@ -68,6 +68,7 @@ const signalTypeOut = z.object({
   defaultSeverity: severity,
   description: z.string().nullable(),
   active: z.boolean(),
+  alertMetric: z.string().nullable(),
 });
 
 const signalOut = z.object({
@@ -103,7 +104,7 @@ async function requireUserId(req: {
 /**
  * A starter set of workflows and signal types.
  *
- * Defaults, not defmitions: they are ordinary rows the organization edits or
+ * Defaults, not definitions: they are ordinary rows the organization edits or
  * deletes. An empty command post has no way in — the first signal type cannot
  * be created without a workflow, and neither can be crafted from the board.
  */
@@ -121,7 +122,7 @@ const STARTER = [
       ],
     },
     types: [
-      { key: "occupancy", name: "Occupation élevée", domain: "Flux patient", severity: "critical" },
+      { key: "occupancy", name: "Occupation élevée", domain: "Flux patient", severity: "critical", alertMetric: "occupancyPct" },
       { key: "discharge_delay", name: "Congé retardé", domain: "Flux patient", severity: "info" },
       { key: "diversion", name: "Détournement d'ambulance", domain: "Accès & demande", severity: "critical" },
     ],
@@ -155,7 +156,7 @@ const STARTER = [
       ],
     },
     types: [
-      { key: "feed_stalled", name: "Flux arrêté", domain: "Données & systèmes", severity: "critical" },
+      { key: "feed_stalled", name: "Flux arrêté", domain: "Données & systèmes", severity: "critical", alertMetric: "freshnessSeconds" },
       { key: "data_quality", name: "Qualité dégradée", domain: "Données & systèmes", severity: "warn" },
       { key: "equipment_down", name: "Équipement hors service", domain: "Équipement", severity: "warn" },
     ],
@@ -297,6 +298,9 @@ const signalRoutes: FastifyPluginAsync = async (fastify) => {
           workflowId: z.string().uuid(),
           defaultSeverity: severity.optional(),
           description: z.string().optional(),
+          // Wiring a twin-alert metric here is what makes signals appear on
+          // their own. Left null, this type is only ever raised by hand.
+          alertMetric: z.string().max(120).nullable().optional(),
         }),
         response: { 201: signalTypeOut, 400: errorEnvelope, 404: errorEnvelope },
       },
@@ -312,6 +316,7 @@ const signalRoutes: FastifyPluginAsync = async (fastify) => {
         workflowId: req.body.workflowId,
         defaultSeverity: req.body.defaultSeverity,
         description: req.body.description ?? null,
+        alertMetric: req.body.alertMetric ?? null,
       });
       await recordAudit(req.db, {
         projectId: env.id,
@@ -366,6 +371,7 @@ const signalRoutes: FastifyPluginAsync = async (fastify) => {
             domain: t.domain,
             workflowId: wf.id,
             defaultSeverity: t.severity,
+            alertMetric: "alertMetric" in t ? t.alertMetric : null,
           });
           types++;
         }
