@@ -741,14 +741,27 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
 
   const coords = new Map<string, { latitude: number | null; longitude: number | null }>();
   const propsById = new Map<string, Record<string, unknown>>();
+  // The object type each site is an instance of. `kind` cannot stand in for it:
+  // for a twin-tree node it is the instance's `kind` *property* ("hospital",
+  // "ward"), and only the physical fallback puts a type name there. Anything
+  // deciding which link types may connect two sites needs the real type.
+  const typeById = new Map<string, string>();
   if (siteIds.length > 0) {
-    const { rows } = await db.query<{ id: string; properties: Record<string, unknown> }>(
-      `SELECT id, properties FROM app.ontology_object_instances WHERE id = ANY($1::uuid[])`,
+    const { rows } = await db.query<{
+      id: string;
+      properties: Record<string, unknown>;
+      type_name: string;
+    }>(
+      `SELECT oi.id, oi.properties, t.name AS type_name
+         FROM app.ontology_object_instances oi
+         JOIN app.ontology_object_types t ON t.id = oi.object_type_id
+        WHERE oi.id = ANY($1::uuid[])`,
       [siteIds],
     );
     for (const r of rows) {
       const p = r.properties ?? {};
       propsById.set(r.id, p);
+      typeById.set(r.id, r.type_name);
       const num = (...keys: string[]): number | null => {
         for (const k of keys) {
           const v = Number(p[k]);
@@ -786,6 +799,7 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
     };
     return {
       ...base,
+      objectType: typeById.get(id) ?? null,
       latitude: coords.get(id)?.latitude ?? null,
       longitude: coords.get(id)?.longitude ?? null,
     };

@@ -32,19 +32,24 @@ import {
   RefreshCw,
   Satellite,
   Save,
+  Spline,
   X,
 } from "lucide-react";
 
 import { cn } from "@/lib/cn";
 import {
+  createEnvLink,
+  createEnvLinkType,
   createEnvObject,
   createEnvType,
   fetchTwinNetwork,
   getEnvObject,
+  listEnvTypes,
   listIngestEvents,
   listTwinAlerts,
   updateEnvObject,
   updateEnvType,
+  type EnvLinkType,
   type TwinAlert,
   type TwinNetworkSite,
   type TwinNetworkSnapshot,
@@ -250,6 +255,34 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   const [savingSite, setSavingSite] = useState(false);
   const mapClickRef = useRef<((lng: number, lat: number) => void) | null>(null);
 
+  // Flow drawing — click a site, click another, pick the relationship. The
+  // result is an ordinary link instance in the ontology, not a decoration on
+  // the map: the map draws it afterwards because it exists.
+  const [drawing, setDrawing] = useState<null | { fromId: string | null }>(null);
+  const [pendingFlow, setPendingFlow] = useState<{ fromId: string; toId: string } | null>(null);
+  const [linkTypes, setLinkTypes] = useState<EnvLinkType[]>([]);
+  const [savingFlow, setSavingFlow] = useState(false);
+  // Marker handlers are built once per snapshot, so they read current state
+  // through a ref rather than a stale closure.
+  const siteClickRef = useRef<((siteId: string) => void) | null>(null);
+
+  siteClickRef.current = (siteId: string) => {
+    if (!drawing) {
+      setSelectedId(siteId);
+      return;
+    }
+    if (drawing.fromId === null) {
+      setDrawing({ fromId: siteId });
+      return;
+    }
+    if (drawing.fromId === siteId) {
+      setDrawing({ fromId: null });
+      return;
+    }
+    setPendingFlow({ fromId: drawing.fromId, toId: siteId });
+    setDrawing(null);
+  };
+
   mapClickRef.current = (lng: number, lat: number) => {
     if (!placing) return;
     if (placing.mode === "add") {
@@ -275,8 +308,8 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
 
   useEffect(() => {
     const canvas = mapRef.current?.getCanvas();
-    if (canvas) canvas.style.cursor = placing ? "crosshair" : "";
-  }, [placing]);
+    if (canvas) canvas.style.cursor = placing || drawing ? "crosshair" : "";
+  }, [placing, drawing]);
 
   async function createSite() {
     if (!env || !pendingPos || savingSite) return;
@@ -333,12 +366,14 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     }
     setLoading(true);
     try {
-      const [net, al, ev] = await Promise.all([
+      const [net, al, ev, schema] = await Promise.all([
         fetchTwinNetwork(env),
         listTwinAlerts(env, { limit: 100 }).catch(() => ({ alerts: [] as TwinAlert[] })),
         listIngestEvents().catch(() => ({ events: [] })),
+        listEnvTypes(env).catch(() => ({ linkTypes: [] as EnvLinkType[] })),
       ]);
       setNetwork(net);
+      setLinkTypes(schema.linkTypes);
       setAlerts(al.alerts);
       setFeedEvents(ev.events.map((e) => ({ id: e.id, receivedAt: e.receivedAt })));
       setError(null);
@@ -481,7 +516,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
           </div>`;
         el.addEventListener("click", (e) => {
           e.stopPropagation();
-          setSelectedId(site.id);
+          siteClickRef.current?.(site.id);
           mapRef.current?.flyTo({ center: pos, zoom: Math.max(mapRef.current.getZoom(), 11) });
         });
         const marker = new mapboxgl.Marker({ element: el, anchor: "bottom" })
@@ -532,6 +567,48 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   }, [network, mapReady, layers, positions, styleMode, flowLayers, styles]);
 
   // --- toolbar actions -----------------------------------------------------------
+
+  /**
+   * Write the flow to the ontology.
+   *
+   * `relationship` is either an existing link type's name, or a new one to
+   * define. Defining one is a schema change and the panel asks separately for
+   * it: an instance is a fact you can delete, a type is a rule the whole
+   * organization inherits.
+   */
+  async function saveFlow(relationship: string, createType: boolean) {
+    if (!env || !pendingFlow) return;
+    const from = network?.sites.find((s) => s.id === pendingFlow.fromId);
+    const to = network?.sites.find((s) => s.id === pendingFlow.toId);
+    setSavingFlow(true);
+    setError(null);
+    try {
+      if (createType) {
+        if (!from?.objectType || !to?.objectType) {
+          throw new Error(
+            "These sites have no object type on record — reload the map and try again.",
+          );
+        }
+        await createEnvLinkType(env, {
+          name: relationship,
+          fromType: from.objectType,
+          toType: to.objectType,
+        });
+      }
+      await createEnvLink(env, {
+        linkType: relationship,
+        fromId: pendingFlow.fromId,
+        toId: pendingFlow.toId,
+        provenance: { source: "network-map" },
+      });
+      setPendingFlow(null);
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSavingFlow(false);
+    }
+  }
 
   function toggleProjection() {
     const next = projection === "globe" ? "mercator" : "globe";
@@ -619,6 +696,11 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
 
   const missingCoords = network?.sites.filter((s) => s.latitude === null).length ?? 0;
 
+  const nameOfSite = useCallback(
+    (id: string) => network?.sites.find((s) => s.id === id)?.name ?? "site",
+    [network],
+  );
+
   if (!hasKey) {
     return (
       <div className="flex flex-1 items-center justify-center bg-white">
@@ -663,6 +745,17 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
             </button>
           </span>
         ) : null}
+        {drawing ? (
+          <span className="flex items-center gap-1.5 rounded bg-[#e7f2fd] px-2 py-0.5 text-[11px] font-medium text-[#215db0]">
+            <Spline className="h-3 w-3" />
+            {drawing.fromId === null
+              ? "click the site the flow starts from"
+              : `from ${nameOfSite(drawing.fromId)} — click the site it goes to`}
+            <button type="button" onClick={() => setDrawing(null)} aria-label="Cancel flow">
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ) : null}
         <span className="flex-1" />
         <button
           type="button"
@@ -685,6 +778,28 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         >
           <Plus className="h-3.5 w-3.5" />
           Add site
+        </button>
+        <button
+          type="button"
+          disabled={!env || !MAPBOX_TOKEN || (network?.sites.length ?? 0) < 2}
+          title={
+            (network?.sites.length ?? 0) < 2
+              ? "A flow needs two sites — add another first"
+              : "Draw a flow between two sites"
+          }
+          onClick={() => {
+            setPlacing(null);
+            setDrawing(drawing ? null : { fromId: null });
+          }}
+          className={cn(
+            "flex items-center gap-1 rounded px-2.5 py-1.5 text-xs font-medium",
+            drawing
+              ? "bg-[#e7f2fd] text-[#215db0]"
+              : "border border-[#d3d8de] bg-white text-[#404854] hover:border-[#2d72d2] disabled:text-[#c5cbd3]",
+          )}
+        >
+          <Spline className="h-3.5 w-3.5" />
+          Draw flow
         </button>
       </div>
 
@@ -857,6 +972,21 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                     </button>
                   </div>
                 </div>
+              ) : null}
+
+              {pendingFlow ? (
+                <FlowPanel
+                  fromName={nameOfSite(pendingFlow.fromId)}
+                  toName={nameOfSite(pendingFlow.toId)}
+                  fromType={
+                    network?.sites.find((s) => s.id === pendingFlow.fromId)?.objectType ?? null
+                  }
+                  toType={network?.sites.find((s) => s.id === pendingFlow.toId)?.objectType ?? null}
+                  linkTypes={linkTypes}
+                  busy={savingFlow}
+                  onCancel={() => setPendingFlow(null)}
+                  onSave={(name, createType) => void saveFlow(name, createType)}
+                />
               ) : null}
               <div className="absolute bottom-2 left-2 flex gap-3 rounded border border-[#d3d8de] bg-white/90 px-2.5 py-1 text-[10px] text-[#5f6b7c]">
                 <span className="flex items-center gap-1">
@@ -1123,6 +1253,136 @@ function EventTimeline({
           </rect>
         ))}
       </svg>
+    </div>
+  );
+}
+
+/**
+ * Confirm a flow between two sites.
+ *
+ * The relationship list is filtered to link types whose declared from/to match
+ * the two sites' object types — the server does not check that today, so the
+ * tool has to. Defining a new relationship is separated behind its own control
+ * because it edits the schema: an instance is a fact you can delete, a link
+ * type is a rule every environment in the organization inherits.
+ */
+function FlowPanel({
+  fromName,
+  toName,
+  fromType,
+  toType,
+  linkTypes,
+  busy,
+  onCancel,
+  onSave,
+}: {
+  fromName: string;
+  toName: string;
+  fromType: string | null;
+  toType: string | null;
+  linkTypes: EnvLinkType[];
+  busy: boolean;
+  onCancel: () => void;
+  onSave: (relationship: string, createType: boolean) => void;
+}) {
+  const usable = linkTypes.filter(
+    (lt) => lt.fromType === fromType && lt.toType === toType,
+  );
+  const [defining, setDefining] = useState(usable.length === 0);
+  const [existing, setExisting] = useState(usable[0]?.name ?? "");
+  const [fresh, setFresh] = useState("");
+
+  const relationship = defining ? fresh.trim() : existing;
+  const duplicate =
+    defining && linkTypes.some((lt) => lt.name === fresh.trim());
+  const ready =
+    relationship !== "" && !busy && !duplicate && (!defining || (!!fromType && !!toType));
+
+  const field =
+    "w-full rounded border border-[#d3d8de] bg-[#f6f7f9] px-2 py-1.5 text-xs text-[#1c2127] focus:border-[#2d72d2] focus:outline-none";
+
+  return (
+    <div className="absolute left-1/2 top-6 z-20 w-80 -translate-x-1/2 rounded-md border border-[#d3d8de] bg-white p-3 shadow-lg">
+      <p className="text-xs font-semibold text-[#1c2127]">New flow</p>
+      <p className="mb-2 mt-0.5 text-[11px] leading-snug text-[#5f6b7c]">
+        {fromName} → {toName}
+      </p>
+
+      {!defining ? (
+        <>
+          <select
+            value={existing}
+            onChange={(e) => setExisting(e.target.value)}
+            className={cn(field, "mb-2")}
+          >
+            {usable.map((lt) => (
+              <option key={lt.id} value={lt.name}>
+                {lt.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => setDefining(true)}
+            className="mb-2 text-[11px] text-[#2d72d2] hover:underline"
+          >
+            define a new relationship
+          </button>
+        </>
+      ) : (
+        <>
+          <input
+            value={fresh}
+            onChange={(e) => setFresh(e.target.value)}
+            placeholder="e.g. transfers_to"
+            autoFocus
+            className={cn(field, "mb-1.5")}
+          />
+          {fromType && toType ? (
+            <p className="mb-2 rounded bg-[#fdf6ec] px-2 py-1.5 text-[10.5px] leading-snug text-[#935610]">
+              This adds <b className="font-semibold">{fromType} → {toType}</b> to the ontology
+              schema. Every environment in your organization gets it.
+            </p>
+          ) : (
+            <p className="mb-2 rounded bg-[#fdf1f1] px-2 py-1.5 text-[10.5px] leading-snug text-[#a82255]">
+              One of these sites has no object type on record, so a new relationship cannot be
+              defined from here.
+            </p>
+          )}
+          {duplicate ? (
+            <p className="mb-2 text-[10.5px] text-[#a82255]">
+              A link type already goes by that name.
+            </p>
+          ) : null}
+          {usable.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setDefining(false)}
+              className="mb-2 text-[11px] text-[#2d72d2] hover:underline"
+            >
+              use an existing relationship
+            </button>
+          ) : null}
+        </>
+      )}
+
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded border border-[#d3d8de] px-2.5 py-1 text-xs text-[#404854]"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          disabled={!ready}
+          onClick={() => onSave(relationship, defining)}
+          className="rounded bg-[#2d72d2] px-2.5 py-1 text-xs font-medium text-white hover:bg-[#215db0] disabled:bg-[#c5cbd3]"
+        >
+          {busy ? "Saving…" : defining ? "Define & draw" : "Draw flow"}
+        </button>
+      </div>
     </div>
   );
 }

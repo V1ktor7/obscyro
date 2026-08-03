@@ -938,6 +938,14 @@ export async function fetchTwinTree(env: string): Promise<TwinTreeSnapshot> {
 }
 
 export interface TwinNetworkSite extends TwinUnitNode {
+  /**
+   * The object type this site is an instance of.
+   *
+   * Distinct from `kind`, which is the instance's own `kind` property
+   * ("hospital", "ward"). Deciding which link types may connect two sites
+   * needs the type, not the property.
+   */
+  objectType: string | null;
   latitude: number | null;
   longitude: number | null;
 }
