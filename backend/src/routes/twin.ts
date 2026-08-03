@@ -6,6 +6,12 @@ import { config } from "../lib/config.js";
 import type { DbClient } from "../lib/db.js";
 import { AppError, NotFound } from "../lib/errors.js";
 import { startSseStream } from "../lib/sse.js";
+import { recordAudit } from "../services/audit.js";
+import {
+  deactivateTwinMetric,
+  metricsForRollup,
+  upsertTwinMetric,
+} from "../services/twin-metrics.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
 import { resolveEnvironment } from "../services/ontology.js";
 import {
@@ -161,6 +167,119 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
         intervalMs: config.twinSseIntervalMs,
         produce: () => getTwinTreeSnapshot(req.db, env.id, lens),
       });
+    },
+  );
+
+  // --- metric definitions ----------------------------------------------------
+  //
+  // What the twin displays, and what an alert rule can threshold on, is an
+  // organization's own list rather than a fixed one. Occupancy is a seeded row
+  // like any other: rename the type it counts, change the status it looks for,
+  // or redefine it as admitted patients over beds, and the map, the alerts and
+  // the scenarios all follow.
+
+  const metricSelector = z.object({
+    ofType: z.string().max(200).nullable().optional(),
+    where: z
+      .array(z.object({ property: z.string().min(1).max(200), equals: z.string().max(500) }))
+      .optional(),
+    agg: z.enum(["count", "sum", "mean", "min", "max"]),
+    property: z.string().max(200).nullable().optional(),
+  });
+
+  const metricOut = z.object({
+    id: z.string(),
+    organizationId: z.string(),
+    key: z.string(),
+    label: z.string(),
+    objectType: z.string(),
+    unit: z.enum(["percent", "ratio", "count", "number"]),
+    numerator: metricSelector,
+    denominator: metricSelector.nullish(),
+    active: z.boolean(),
+  });
+
+  app.get(
+    "/ontology/:env/twin/metrics",
+    {
+      schema: {
+        summary: "Metric definitions this organization displays on the twin",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1) }),
+        response: { 200: z.object({ metrics: z.array(metricOut) }), 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      return { metrics: await metricsForRollup(req.db, env.organizationId) };
+    },
+  );
+
+  app.put(
+    "/ontology/:env/twin/metrics/:key",
+    {
+      schema: {
+        summary: "Define or redefine a twin metric",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1), key: z.string().min(1).max(64) }),
+        body: z.object({
+          label: z.string().min(1).max(200),
+          objectType: z.string().min(1).max(200).default("OrgUnit"),
+          unit: z.enum(["percent", "ratio", "count", "number"]),
+          numerator: metricSelector,
+          denominator: metricSelector.nullable().optional(),
+        }),
+        response: { 200: metricOut, 400: errorEnvelope, 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const metric = await upsertTwinMetric(req.db, env.organizationId, {
+        key: req.params.key,
+        label: req.body.label,
+        objectType: req.body.objectType,
+        unit: req.body.unit,
+        numerator: req.body.numerator,
+        denominator: req.body.denominator ?? null,
+      });
+      await recordAudit(req.db, {
+        projectId: env.id,
+        actorUserId: userId,
+        action: "twin_metric.upsert",
+        resourceType: "twin_metric",
+        resourceId: metric.id,
+        metadata: { key: metric.key, unit: metric.unit },
+      });
+      return metric;
+    },
+  );
+
+  app.delete(
+    "/ontology/:env/twin/metrics/:key",
+    {
+      schema: {
+        summary: "Retire a twin metric",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1), key: z.string().min(1).max(64) }),
+        response: { 200: z.object({ ok: z.literal(true) }), 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const gone = await deactivateTwinMetric(req.db, env.organizationId, req.params.key);
+      if (!gone) throw NotFound("METRIC_NOT_FOUND", "No active metric by that key.");
+      await recordAudit(req.db, {
+        projectId: env.id,
+        actorUserId: userId,
+        action: "twin_metric.retire",
+        resourceType: "twin_metric",
+        resourceId: req.params.key,
+        metadata: { key: req.params.key },
+      });
+      return { ok: true as const };
     },
   );
 

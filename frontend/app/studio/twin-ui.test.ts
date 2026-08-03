@@ -10,6 +10,7 @@ describe("twin-ui", () => {
   const metrics = {
     unitId: "u1",
     instanceCountByType: { Patient: 3, Bed: 10 },
+    values: { occupancy: 75.5, staff_available: 4, wait_minutes: 12.34 },
     occupancyPct: 75.5,
     numericMeans: { spo2: 94.2 },
     freshnessSeconds: 125,
@@ -28,10 +29,21 @@ describe("twin-ui", () => {
     expect(formatTwinMetric(metrics, "freshnessSeconds")).toBe("2m");
   });
 
-  it("severityDotClass maps severities", () => {
-    expect(severityDotClass("critical")).toContain("rose");
-    expect(severityDotClass("warn")).toContain("amber");
-    expect(severityDotClass(null)).toContain("emerald");
+  it("formatTwinMetric renders a user-defined metric with its declared unit", () => {
+    // The engine no longer knows what a metric means, so the unit decides the
+    // rendering: the same 12.34 is "12" as a count and "12.3" as a number.
+    expect(formatTwinMetric(metrics, "occupancy", "percent")).toBe("76%");
+    expect(formatTwinMetric(metrics, "staff_available", "count")).toBe("4");
+    expect(formatTwinMetric(metrics, "wait_minutes", "number")).toBe("12.3");
+    expect(formatTwinMetric(metrics, "wait_minutes", "count")).toBe("12");
+  });
+
+  it("severityDotClass maps severities to palette tokens", () => {
+    // Tailwind's rose/amber/emerald were replaced by the Studio's severity
+    // tokens; the dots have to keep meaning the same thing.
+    expect(severityDotClass("critical")).toBe("bg-danger");
+    expect(severityDotClass("warn")).toBe("bg-warn");
+    expect(severityDotClass(null)).toBe("bg-ok");
   });
 
   it("kindIconName maps kinds", () => {

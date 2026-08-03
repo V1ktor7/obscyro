@@ -7,14 +7,16 @@ describe("LAYER_META", () => {
     expect(LAYER_META).toHaveLength(6);
   });
 
-  it("marks layer 6 ML anomaly as disabled", () => {
+  it("layer 6 ML anomaly is live", () => {
+    // It shipped disabled and was turned on in 6fafc27; this assertion was
+    // still checking for the flag, which is how it stayed red unnoticed.
     const ml = LAYER_META.find((l) => l.layer === 6);
     expect(ml?.label).toContain("ML");
-    expect(ml?.disabled).toBe(true);
+    expect(ml?.disabled).toBeFalsy();
   });
 
-  it("has active layers 1 through 5 without disabled flag", () => {
-    for (const layer of LAYER_META.filter((l) => l.layer <= 5)) {
+  it("every layer is active and labelled", () => {
+    for (const layer of LAYER_META) {
       expect(layer.disabled).toBeFalsy();
       expect(layer.label.length).toBeGreaterThan(0);
     }

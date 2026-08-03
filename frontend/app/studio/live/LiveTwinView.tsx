@@ -8,8 +8,10 @@ import {
   ackTwinAlert,
   fetchTwinTree,
   fetchTwinUnit,
+  listTwinMetrics,
   seedTwinDemo,
   subscribeTwinStream,
+  type TwinMetric,
   type TwinTreeSnapshot,
   type TwinUnitDetail,
 } from "@/lib/platform-api";
@@ -55,6 +57,7 @@ export default function LiveTwinView() {
   const [seeding, setSeeding] = useState(false);
 
   const [displayMetric, setDisplayMetric] = useState("occupancyPct");
+  const [metricDefs, setMetricDefs] = useState<TwinMetric[]>([]);
   const [kindFilter, setKindFilter] = useState<string | null>(null);
   const [positions, setPositions] = useState<Map<string, { x: number; y: number }>>(
     () => new Map(),
@@ -71,6 +74,31 @@ export default function LiveTwinView() {
     setDisplayMetric(prefs.displayMetric);
     setKindFilter(prefs.kindFilter);
   }, [env]);
+
+  // The metric list is the organization's, not a constant: what the twin can
+  // display is whatever it has defined.
+  useEffect(() => {
+    if (!env || !hasKey) return;
+    let cancelled = false;
+    void listTwinMetrics(env)
+      .then(({ metrics }) => { if (!cancelled) setMetricDefs(metrics); })
+      .catch(() => { if (!cancelled) setMetricDefs([]); });
+    return () => { cancelled = true; };
+  }, [env, hasKey]);
+
+  const metricOptions = useMemo(
+    () => [
+      ...metricDefs.map((m) => ({ key: m.key, label: m.label, unit: m.unit })),
+      ...DISPLAY_METRIC_OPTIONS.filter((o) => o.key !== "occupancyPct").map((o) => ({
+        key: o.key,
+        label: o.label,
+        unit: undefined,
+      })),
+    ],
+    [metricDefs],
+  );
+
+  const displayUnit = metricDefs.find((m) => m.key === displayMetric)?.unit;
 
   const applySnapshot = useCallback(
     (snap: TwinTreeSnapshot) => {
@@ -268,7 +296,7 @@ export default function LiveTwinView() {
             onChange={(e) => handleMetricChange(e.target.value)}
             className="rounded border border-line px-2 py-1 text-[11px] focus:border-brand focus:outline-none"
           >
-            {DISPLAY_METRIC_OPTIONS.map((o) => (
+            {metricOptions.map((o) => (
               <option key={o.key} value={o.key}>
                 {o.label}
               </option>
@@ -320,6 +348,7 @@ export default function LiveTwinView() {
               snapshot={snapshot}
               selectedUnitId={selectedUnitId}
               displayMetric={displayMetric}
+              displayUnit={displayUnit}
               kindFilter={kindFilter}
               positions={positions}
               onSelectUnit={setSelectedUnitId}

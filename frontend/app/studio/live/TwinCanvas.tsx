@@ -34,6 +34,7 @@ type TwinCanvasProps = {
   snapshot: TwinTreeSnapshot | null;
   selectedUnitId: string | null;
   displayMetric: string;
+  displayUnit?: "percent" | "ratio" | "count" | "number";
   kindFilter: string | null;
   positions: Map<string, { x: number; y: number }>;
   readOnly?: boolean;
@@ -45,6 +46,7 @@ export default function TwinCanvas({
   snapshot,
   selectedUnitId,
   displayMetric,
+  displayUnit,
   kindFilter,
   positions,
   readOnly = false,
@@ -165,7 +167,7 @@ export default function TwinCanvas({
           if (hidden) return null;
 
           const Icon = KIND_ICONS[kindIconName(node.kind)];
-          const metricVal = formatTwinMetric(node.metrics, displayMetric);
+          const metricVal = formatTwinMetric(node.metrics, displayMetric, displayUnit);
           const isSelected = selectedUnitId === node.id;
 
           return (

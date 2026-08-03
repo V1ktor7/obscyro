@@ -50,11 +50,34 @@ export function kindIconName(kind: string): TwinKindIcon {
   return "Building2";
 }
 
+/**
+ * Format a value against the unit its definition declares.
+ *
+ * The twin no longer knows what its metrics mean — a percentage, a count and a
+ * mean waiting time all arrive as bare numbers in `values`, so the definition
+ * has to say how to render them.
+ */
+export function formatMetricValue(
+  value: number | null | undefined,
+  unit: "percent" | "ratio" | "count" | "number",
+): string {
+  if (value == null) return EMPTY;
+  if (unit === "percent") return `${Math.round(value)}%`;
+  if (unit === "ratio") return value.toFixed(2);
+  if (unit === "count") return String(Math.round(value));
+  return value.toFixed(1);
+}
+
 export function formatTwinMetric(
   metrics: TwinUnitMetrics | undefined,
   key: string,
+  unit?: "percent" | "ratio" | "count" | "number",
 ): string {
   if (!metrics) return EMPTY;
+  // A user-defined metric wins, and is rendered with the unit it declares.
+  if (metrics.values && key in metrics.values) {
+    return formatMetricValue(metrics.values[key], unit ?? "number");
+  }
   if (key === "occupancyPct") {
     return metrics.occupancyPct != null
       ? String(Math.round(metrics.occupancyPct)) + "%"

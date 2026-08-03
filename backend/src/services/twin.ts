@@ -2,6 +2,7 @@ import { clampLimit, clampOffset, config } from "../lib/config.js";
 import type { DbClient } from "../lib/db.js";
 import { NotFound } from "../lib/errors.js";
 import type { ReadLens } from "./ontology-lens.js";
+import { evaluateMetric, metricsForRollup } from "./twin-metrics.js";
 import {
   getOrCreateLinkType,
   getOrCreateObjectType,
@@ -50,6 +51,9 @@ export interface TwinTreeEdge {
 export interface UnitMetrics {
   unitId: string;
   instanceCountByType: Record<string, number>;
+  /** Every metric the organization has defined, by key. */
+  values: Record<string, number | null>;
+  /** Kept for callers that name it directly; it is `values.occupancy`. */
   occupancyPct: number | null;
   numericMeans: Record<string, number>;
   freshnessSeconds: number | null;
@@ -222,6 +226,7 @@ function emptyMetrics(unitId: string): UnitMetrics {
   return {
     unitId,
     instanceCountByType: {},
+    values: {},
     occupancyPct: null,
     numericMeans: {},
     freshnessSeconds: null,
@@ -229,35 +234,6 @@ function emptyMetrics(unitId: string): UnitMetrics {
   };
 }
 
-function mergeChildMetrics(parent: UnitMetrics, child: UnitMetrics): void {
-  for (const [type, count] of Object.entries(child.instanceCountByType)) {
-    parent.instanceCountByType[type] = (parent.instanceCountByType[type] ?? 0) + count;
-  }
-  parent.linkedInstanceCount += child.linkedInstanceCount;
-
-  if (child.freshnessSeconds != null) {
-    parent.freshnessSeconds =
-      parent.freshnessSeconds == null
-        ? child.freshnessSeconds
-        : Math.min(parent.freshnessSeconds, child.freshnessSeconds);
-  }
-
-  for (const [key, val] of Object.entries(child.numericMeans)) {
-    if (parent.numericMeans[key] == null) {
-      parent.numericMeans[key] = val;
-    } else {
-      parent.numericMeans[key] = (parent.numericMeans[key]! + val) / 2;
-    }
-  }
-
-  if (child.occupancyPct != null) {
-    if (parent.occupancyPct == null) {
-      parent.occupancyPct = child.occupancyPct;
-    } else {
-      parent.occupancyPct = (parent.occupancyPct + child.occupancyPct) / 2;
-    }
-  }
-}
 
 export async function rollupAllUnits(
   db: DbClient,
@@ -274,6 +250,14 @@ export async function rollupAllUnits(
   });
   const links = await listLinksForEnv(db, environmentId, lens);
   const now = Date.now();
+
+  const { rows: orgRows } = await db.query<{ organization_id: string }>(
+    `SELECT organization_id FROM app.project WHERE id = $1`,
+    [environmentId],
+  );
+  const metricDefs = orgRows[0]?.organization_id
+    ? await metricsForRollup(db, orgRows[0].organization_id)
+    : [];
 
   const instanceById = new Map(allInstances.map((i) => [i.id, i]));
 
@@ -301,20 +285,12 @@ export async function rollupAllUnits(
     const m = emptyMetrics(unitId);
     m.linkedInstanceCount = linked.length;
 
-    let bedTotal = 0;
-    let bedOccupied = 0;
     let newest: Date | null = null;
     const numericAcc = new Map<string, { sum: number; count: number }>();
 
     for (const inst of linked) {
       m.instanceCountByType[inst.typeName] =
         (m.instanceCountByType[inst.typeName] ?? 0) + 1;
-
-      if (inst.typeName === "Bed") {
-        bedTotal++;
-        const status = String(inst.properties.status ?? "").toLowerCase();
-        if (status === "occupied") bedOccupied++;
-      }
 
       if (!newest || inst.updatedAt > newest) newest = inst.updatedAt;
 
@@ -329,25 +305,20 @@ export async function rollupAllUnits(
       }
     }
 
-    if (bedTotal > 0) m.occupancyPct = (bedOccupied / bedTotal) * 100;
+    // Every metric is evaluated over the unit's whole subtree, which is what
+    // `linked` already holds — so a hospital's occupancy is its wards' occupied
+    // beds over its wards' total beds. No second pass, and nothing to average.
+    for (const def of metricDefs) {
+      m.values[def.key] = evaluateMetric(def, linked);
+    }
+    m.occupancyPct = m.values.occupancy ?? null;
+
     if (newest) m.freshnessSeconds = Math.round((now - newest.getTime()) / 1000);
     for (const [key, acc] of numericAcc) {
       m.numericMeans[key] = acc.sum / acc.count;
     }
 
     metricsByUnit.set(unitId, m);
-  }
-
-  const parentByChild = new Map<string, string>();
-  for (const e of edges) {
-    if (!parentByChild.has(e.toId)) parentByChild.set(e.toId, e.fromId);
-  }
-  for (const unitId of unitIds) {
-    const parentId = parentByChild.get(unitId);
-    if (!parentId) continue;
-    const parent = metricsByUnit.get(parentId);
-    const child = metricsByUnit.get(unitId);
-    if (parent && child) mergeChildMetrics(parent, child);
   }
 
   return metricsByUnit;
@@ -365,6 +336,10 @@ export async function rollupUnit(
 }
 
 function metricValue(metrics: UnitMetrics, metric: string): number | null {
+  // A user-defined metric wins: an alert rule that names `occupancy` should
+  // follow the definition the institution edited, not a built-in of the same
+  // name.
+  if (metric in metrics.values) return metrics.values[metric] ?? null;
   if (metric === "occupancyPct") return metrics.occupancyPct;
   if (metric === "linkedInstanceCount") return metrics.linkedInstanceCount;
   if (metric === "freshnessSeconds") return metrics.freshnessSeconds;

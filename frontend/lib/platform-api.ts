@@ -782,10 +782,68 @@ export type TwinAlertSeverity = "info" | "warn" | "critical";
 export interface TwinUnitMetrics {
   unitId: string;
   instanceCountByType: Record<string, number>;
+  /** Every metric the organization has defined, by key. */
+  values: Record<string, number | null>;
+  /** `values.occupancy`, kept for callers that name it directly. */
   occupancyPct: number | null;
   numericMeans: Record<string, number>;
   freshnessSeconds: number | null;
   linkedInstanceCount: number;
+}
+
+export type TwinMetricUnit = "percent" | "ratio" | "count" | "number";
+
+export interface TwinMetricSelector {
+  ofType?: string | null;
+  where?: { property: string; equals: string }[];
+  agg: "count" | "sum" | "mean" | "min" | "max";
+  property?: string | null;
+}
+
+/**
+ * What the twin displays, defined by the institution rather than the engine.
+ *
+ * Occupancy is a seeded row like any other: rename the type it counts, change
+ * the status it looks for, or redefine it as admitted patients over beds, and
+ * the map, the alert rules and the scenarios all follow.
+ */
+export interface TwinMetric {
+  id: string;
+  organizationId: string;
+  key: string;
+  label: string;
+  objectType: string;
+  unit: TwinMetricUnit;
+  numerator: TwinMetricSelector;
+  denominator?: TwinMetricSelector | null;
+  active: boolean;
+}
+
+export async function listTwinMetrics(env: string): Promise<{ metrics: TwinMetric[] }> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/metrics`);
+}
+
+export async function saveTwinMetric(
+  env: string,
+  key: string,
+  body: {
+    label: string;
+    objectType?: string;
+    unit: TwinMetricUnit;
+    numerator: TwinMetricSelector;
+    denominator?: TwinMetricSelector | null;
+  },
+): Promise<TwinMetric> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/metrics/${encodeURIComponent(key)}`, {
+    method: "PUT",
+    body,
+  });
+}
+
+export async function retireTwinMetric(env: string, key: string): Promise<{ ok: true }> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/metrics/${encodeURIComponent(key)}`, {
+    method: "DELETE",
+  });
 }
 
 export interface TwinUnitNode {
