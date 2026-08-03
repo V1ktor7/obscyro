@@ -258,7 +258,7 @@ async function siteNames(db: DbClient, environmentId: string): Promise<string[]>
     `SELECT oi.properties
        FROM app.ontology_object_instances oi
        JOIN app.ontology_object_types t ON t.id = oi.object_type_id
-      WHERE t.project_id = $1 AND t.nature = 'physical'
+      WHERE t.organization_id = (SELECT organization_id FROM app.project WHERE id = $1) AND t.nature = 'physical'
       LIMIT 20`,
     [environmentId],
   );

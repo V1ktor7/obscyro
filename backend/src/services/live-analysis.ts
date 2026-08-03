@@ -68,6 +68,17 @@ function buildWhereFragment(
  * 10k in-memory cap. Output shape is identical to the previous implementation:
  * per-type counts/freshness plus status occupancy buckets.
  */
+/**
+ * Instance counts for an environment.
+ *
+ * Scoped by organization, not by project. Migration 031 split the two: a type's
+ * `project_id` is where it is *filed* — who edits it, what exports together —
+ * while `organization_id` is where it *resolves*, one flat ontology in which
+ * `Patient` means one thing. Counting instances is a resolution question, and
+ * asking it with the filing column returned 0 for an environment whose types
+ * happened to be filed elsewhere — while the twin, correctly org-scoped,
+ * showed 33 linked instances in the panel beside it.
+ */
 export async function computeMetrics(
   db: DbClient,
   environmentId: string,
@@ -85,7 +96,7 @@ export async function computeMetrics(
             MAX(oi.updated_at) AS newest
        FROM app.ontology_object_instances oi
        JOIN app.ontology_object_types t ON t.id = oi.object_type_id
-      WHERE t.project_id = $1${where.sql}
+      WHERE t.organization_id = (SELECT organization_id FROM app.project WHERE id = $1)${where.sql}
       GROUP BY t.name
       ORDER BY COUNT(*) DESC`,
     [environmentId, ...where.params],
@@ -115,7 +126,7 @@ export async function computeMetrics(
             COUNT(*)::text AS count
        FROM app.ontology_object_instances oi
        JOIN app.ontology_object_types t ON t.id = oi.object_type_id
-      WHERE t.project_id = $1${where.sql}
+      WHERE t.organization_id = (SELECT organization_id FROM app.project WHERE id = $1)${where.sql}
         AND COALESCE(oi.properties ->> 'status', oi.properties ->> 'occupancy_status') IS NOT NULL
       GROUP BY t.name, value
       ORDER BY t.name, value`,
@@ -159,11 +170,11 @@ export async function scoreInstance(
     `SELECT oi.id, t.name AS type_name, oi.properties
        FROM app.ontology_object_instances oi
        JOIN app.ontology_object_types t ON t.id = oi.object_type_id
-      WHERE t.project_id = $1 AND oi.id = $2`,
+      WHERE t.organization_id = (SELECT organization_id FROM app.project WHERE id = $1) AND oi.id = $2`,
     [environmentId, instanceId],
   );
   const row = rows[0];
-  if (!row) throw NotFound("OBJECT_NOT_FOUND", "Instance not found in this environment.");
+  if (!row) throw NotFound("OBJECT_NOT_FOUND", "Instance not found in this organization.");
 
   const breakdown: Record<string, number> = {};
   let total = 0;

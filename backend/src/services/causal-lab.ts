@@ -153,7 +153,7 @@ export async function buildSeries(
           `SELECT date_trunc('hour', oi.created_at) AS h, COUNT(*) AS v
              FROM app.ontology_object_instances oi
              JOIN app.ontology_object_types t ON t.id = oi.object_type_id
-            WHERE t.project_id = $1 AND t.name = $2
+            WHERE t.organization_id = (SELECT organization_id FROM app.project WHERE id = $1) AND t.name = $2
               AND oi.created_at >= NOW() - make_interval(hours => $3)
             GROUP BY 1`,
           [environmentId, typeName, windowHours],
@@ -165,7 +165,7 @@ export async function buildSeries(
                   AVG((oi.properties->>$4)::numeric) AS v
              FROM app.ontology_object_instances oi
              JOIN app.ontology_object_types t ON t.id = oi.object_type_id
-            WHERE t.project_id = $1 AND t.name = $2
+            WHERE t.organization_id = (SELECT organization_id FROM app.project WHERE id = $1) AND t.name = $2
               AND oi.created_at >= NOW() - make_interval(hours => $3)
               AND oi.properties->>$4 ~ '^-?[0-9]+(\\.[0-9]+)?$'
             GROUP BY 1`,
