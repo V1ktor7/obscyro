@@ -52,7 +52,12 @@ import {
 import { useStudio } from "../StudioShell";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
-const STYLE_STANDARD = "mapbox://styles/mapbox/standard";
+
+// Obscyro's own Standard basemap: land and water desaturated to the app's
+// canvas so the flow arcs and site markers are the only saturated things on
+// screen. Edited in Mapbox Studio, not here — publishing a new version there
+// reaches this map without a redeploy. Owned by the same account as the token.
+const STYLE_STANDARD = "mapbox://styles/victormorency7/cmsddjrmc002c01s99df7adnp";
 const STYLE_SATELLITE = "mapbox://styles/mapbox/satellite-streets-v12";
 const MONTREAL: [number, number] = [-73.5673, 45.5017];
 
