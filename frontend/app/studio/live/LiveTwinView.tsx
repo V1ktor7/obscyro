@@ -1,5 +1,6 @@
 "use client";
 
+import { SlidersHorizontal } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
@@ -35,6 +36,7 @@ import {
   severityBadgeTone,
 } from "../twin-ui";
 import LiveMetricsPanel from "./LiveMetricsPanel";
+import MetricEditor from "./MetricEditor";
 import TwinAlertToasts from "./TwinAlertToasts";
 import TwinCanvas from "./TwinCanvas";
 
@@ -58,6 +60,8 @@ export default function LiveTwinView() {
 
   const [displayMetric, setDisplayMetric] = useState("occupancyPct");
   const [metricDefs, setMetricDefs] = useState<TwinMetric[]>([]);
+  const [editingMetrics, setEditingMetrics] = useState(false);
+  const [metricsVersion, setMetricsVersion] = useState(0);
   const [kindFilter, setKindFilter] = useState<string | null>(null);
   const [positions, setPositions] = useState<Map<string, { x: number; y: number }>>(
     () => new Map(),
@@ -84,7 +88,7 @@ export default function LiveTwinView() {
       .then(({ metrics }) => { if (!cancelled) setMetricDefs(metrics); })
       .catch(() => { if (!cancelled) setMetricDefs([]); });
     return () => { cancelled = true; };
-  }, [env, hasKey]);
+  }, [env, hasKey, metricsVersion]);
 
   const metricOptions = useMemo(
     () => [
@@ -302,6 +306,14 @@ export default function LiveTwinView() {
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            onClick={() => setEditingMetrics(true)}
+            title="Define what the twin displays"
+            className="rounded border border-line p-1 text-ink-faint hover:border-brand hover:text-brand"
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+          </button>
           <select
             value={kindFilter ?? ""}
             onChange={(e) =>
@@ -379,6 +391,14 @@ export default function LiveTwinView() {
         alerts={toastAlerts}
         onDismiss={(id) => setToastAlerts((cur) => cur.filter((a) => a.id !== id))}
       />
+
+      {editingMetrics && env ? (
+        <MetricEditor
+          env={env}
+          onClose={() => setEditingMetrics(false)}
+          onSaved={() => setMetricsVersion((v) => v + 1)}
+        />
+      ) : null}
     </div>
   );
 }
