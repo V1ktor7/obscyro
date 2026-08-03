@@ -937,8 +937,6 @@ export async function fetchTwinTree(env: string): Promise<TwinTreeSnapshot> {
   return apiFetch(`/v1/ontology/${encEnv(env)}/twin/tree`);
 }
 
-export type TwinFlowKind = "patient" | "supply" | "data" | "other";
-
 export interface TwinNetworkSite extends TwinUnitNode {
   latitude: number | null;
   longitude: number | null;
@@ -947,15 +945,21 @@ export interface TwinNetworkSite extends TwinUnitNode {
 export interface TwinNetworkFlow {
   id: string;
   linkType: string;
-  kind: TwinFlowKind;
   fromId: string;
   toId: string;
+}
+
+/** One map layer per ontology link type that runs between two sites. */
+export interface TwinNetworkLayer {
+  linkType: string;
+  count: number;
 }
 
 export interface TwinNetworkSnapshot {
   computedAt: string;
   sites: TwinNetworkSite[];
   flows: TwinNetworkFlow[];
+  layers: TwinNetworkLayer[];
 }
 
 export async function fetchTwinNetwork(env: string): Promise<TwinNetworkSnapshot> {

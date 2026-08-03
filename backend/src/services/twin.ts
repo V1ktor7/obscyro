@@ -704,20 +704,19 @@ export async function getTwinTreeSnapshot(db: DbClient, environmentId: string, l
   };
 }
 
-/** Classify an inter-site link type into a flow lane for the network map. */
-function flowKind(linkType: string): "patient" | "supply" | "data" | "other" {
-  const n = linkType.toLowerCase();
-  if (/transfer|refer|patient|admit/.test(n)) return "patient";
-  if (/suppl|ship|deliver|stock|resource|order/.test(n)) return "supply";
-  if (/feed|data|hl7|fhir|report|sync/.test(n)) return "data";
-  return "other";
-}
-
 /**
  * Network-level twin. Sites are instances of object types tagged
  * nature='physical' (the principled selection), plus the twin tree's root
  * units as a fallback so environments without nature tags keep working.
- * Flows are ontology link instances connecting two sites, typed by link name.
+ *
+ * Flows are ontology link instances connecting two sites. A flow's lane *is*
+ * its link type — there is no classification step. There used to be one: a
+ * regex sorted link names into patient / supply / data / other, which meant a
+ * network modelling "transfert inter-établissement" got a lane only because
+ * the word "transfer" happened to be in the pattern, and one modelling
+ * "corridor de services" got "other". The map's layers are whatever the
+ * institution put in its ontology, and `layers` reports them so the client
+ * does not have to infer the list from the flows it happens to have received.
  */
 export async function getTwinNetwork(db: DbClient, environmentId: string) {
   const snapshot = await getTwinTreeSnapshot(db, environmentId);
@@ -795,7 +794,6 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
   let flows: {
     id: string;
     linkType: string;
-    kind: "patient" | "supply" | "data" | "other";
     fromId: string;
     toId: string;
   }[] = [];
@@ -819,13 +817,18 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
     flows = rows.map((r) => ({
       id: r.id,
       linkType: r.link_type,
-      kind: flowKind(r.link_type),
       fromId: r.from_instance_id,
       toId: r.to_instance_id,
     }));
   }
 
-  return { computedAt: snapshot.computedAt, sites, flows };
+  const counts = new Map<string, number>();
+  for (const f of flows) counts.set(f.linkType, (counts.get(f.linkType) ?? 0) + 1);
+  const layers = Array.from(counts, ([linkType, count]) => ({ linkType, count })).sort(
+    (a, b) => a.linkType.localeCompare(b.linkType),
+  );
+
+  return { computedAt: snapshot.computedAt, sites, flows, layers };
 }
 
 export async function seedTwinDemo(

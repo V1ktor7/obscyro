@@ -4,10 +4,11 @@
  * Live twin · network — Mapbox globe of the healthcare network.
  *
  * Root twin units render as geolocated sites (occupancy badge, alert ring);
- * ontology links between sites render as typed flow arcs (patient / supply /
- * data). Layers panel with saved views, globe ↔ flat toggle, 3D standard ↔
- * satellite styles, an inspector with drill-in to the unit command canvas,
- * and a multi-lane event timeline (alerts + feed activity).
+ * ontology links between sites render as flow arcs, one layer per link type —
+ * the map's legend is the institution's ontology, not a fixed list. Layers
+ * panel with saved views, globe ↔ flat toggle, 3D standard ↔ satellite styles,
+ * an inspector with drill-in to the unit command canvas, and a multi-lane
+ * event timeline (alerts + feed activity).
  *
  * Requires NEXT_PUBLIC_MAPBOX_TOKEN; without it the view renders setup steps.
  */
@@ -45,7 +46,6 @@ import {
   updateEnvObject,
   updateEnvType,
   type TwinAlert,
-  type TwinFlowKind,
   type TwinNetworkSite,
   type TwinNetworkSnapshot,
 } from "@/lib/platform-api";
@@ -56,18 +56,103 @@ const STYLE_STANDARD = "mapbox://styles/mapbox/standard";
 const STYLE_SATELLITE = "mapbox://styles/mapbox/satellite-streets-v12";
 const MONTREAL: [number, number] = [-73.5673, 45.5017];
 
-const FLOW_STYLE: Record<TwinFlowKind, { color: string; width: number; dash?: number[] }> = {
-  patient: { color: "#2d72d2", width: 3 },
-  supply: { color: "#d97706", width: 2.5, dash: [1.5, 1.5] },
-  data: { color: "#6b3fa0", width: 1.6, dash: [0.8, 2.2] },
-  other: { color: "#64748b", width: 1.4, dash: [2, 2] },
-};
+/**
+ * Layer styling.
+ *
+ * A lane used to be one of four names the server matched by regex, each with a
+ * hand-picked colour. Lanes are now whatever link types the institution
+ * modelled, so the styles are a categorical palette assigned by name — the same
+ * reasoning as TYPE_TINTS in the ontology manager: the fifth style is red
+ * because it is fifth, not because that flow is dangerous.
+ *
+ * Each style pairs a colour with a dash so the lanes stay distinguishable
+ * without relying on colour alone.
+ */
+const LAYER_STYLES: { color: string; width: number; dash?: number[] }[] = [
+  { color: "#2d72d2", width: 3 },
+  { color: "#d9822b", width: 2.5, dash: [1.5, 1.5] },
+  { color: "#5b4a86", width: 1.8, dash: [0.8, 2.2] },
+  { color: "#1d9e75", width: 2.2, dash: [3, 1.5] },
+  { color: "#c23030", width: 2, dash: [2, 2] },
+  { color: "#8a94a0", width: 1.6, dash: [1, 3] },
+];
 
-interface LayerToggles {
-  patient: boolean;
-  supply: boolean;
-  data: boolean;
-  other: boolean;
+function stylesKey(env: string): string {
+  return `obs_twin_layer_styles_v1:${env}`;
+}
+
+/**
+ * Style per link type, stable for as long as the browser remembers.
+ *
+ * The assignment is *recorded*, not computed. Deriving it from the current
+ * layer set — by hash, or by index into the sorted list — looks stable and
+ * isn't: with six styles and three lanes, adding a fourth link type changes the
+ * colour of an existing one about 31% of the time, because the newcomer can
+ * sort ahead of it and take its slot. A map whose legend reshuffles when
+ * someone edits the ontology is worse than one with a repeated colour.
+ *
+ * So known types keep their slot, newcomers take the lowest free one, and past
+ * six lanes the styles start repeating — visible, and better than churn.
+ */
+function assignLayerStyles(
+  env: string,
+  linkTypes: string[],
+): Map<string, (typeof LAYER_STYLES)[number]> {
+  let saved: Record<string, number> = {};
+  if (typeof window !== "undefined") {
+    try {
+      const raw = localStorage.getItem(stylesKey(env));
+      if (raw) {
+        const parsed: unknown = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") saved = parsed as Record<string, number>;
+      }
+    } catch {
+      /* unreadable or private mode — fall through to a fresh assignment */
+    }
+  }
+
+  const slots = new Map<string, number>();
+  const taken = new Set<number>();
+  for (const name of linkTypes) {
+    const s = saved[name];
+    if (typeof s === "number" && s >= 0 && s < LAYER_STYLES.length && !taken.has(s)) {
+      slots.set(name, s);
+      taken.add(s);
+    }
+  }
+  for (const name of [...linkTypes].sort((a, b) => a.localeCompare(b))) {
+    if (slots.has(name)) continue;
+    let slot = 0;
+    while (slot < LAYER_STYLES.length && taken.has(slot)) slot++;
+    if (slot >= LAYER_STYLES.length) slot = slots.size % LAYER_STYLES.length;
+    slots.set(name, slot);
+    taken.add(slot);
+  }
+
+  if (typeof window !== "undefined" && linkTypes.length > 0) {
+    try {
+      localStorage.setItem(
+        stylesKey(env),
+        JSON.stringify({ ...saved, ...Object.fromEntries(slots) }),
+      );
+    } catch {
+      /* quota */
+    }
+  }
+
+  return new Map(
+    Array.from(slots, ([name, slot]) => [name, LAYER_STYLES[slot]!] as const),
+  );
+}
+
+/** Visibility per link type. Anything absent is visible. */
+type LayerToggles = Record<string, boolean>;
+
+/** Mapbox layer ids must be stable and safe; link type names are neither. */
+function layerId(linkType: string): string {
+  let h = 0;
+  for (let i = 0; i < linkType.length; i++) h = (h * 31 + linkType.charCodeAt(i)) >>> 0;
+  return `twin-flow-${h.toString(36)}`;
 }
 
 // Minimal GeoJSON shape for the flow sources (avoids depending on the
@@ -90,7 +175,9 @@ interface SavedView {
 }
 
 function viewsKey(env: string): string {
-  return `obs_twin_views_v1:${env}`;
+  // v2: `layers` is keyed by link type now, so a v1 view's patient/supply/data
+  // keys describe lanes that no longer exist.
+  return `obs_twin_views_v2:${env}`;
 }
 
 /** Position for a site: real coordinates, else a ring around Montréal. */
@@ -131,12 +218,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   const [alerts, setAlerts] = useState<TwinAlert[]>([]);
   const [feedEvents, setFeedEvents] = useState<{ id: string; receivedAt: string }[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [layers, setLayers] = useState<LayerToggles>({
-    patient: true,
-    supply: true,
-    data: true,
-    other: true,
-  });
+  const [layers, setLayers] = useState<LayerToggles>({});
   const [projection, setProjection] = useState<"globe" | "mercator">("globe");
   const [styleMode, setStyleMode] = useState<"standard" | "satellite">("standard");
   const [savedViews, setSavedViews] = useState<SavedView[]>([]);
@@ -149,6 +231,8 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   const mapRef = useRef<MapboxMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
   const fittedRef = useRef(false);
+  /** Mapbox layer ids currently on the map, so dropped link types get cleaned up. */
+  const drawnLayersRef = useRef<Set<string>>(new Set());
 
   // Site placement (add / move) — click handler lives in a ref so the map's
   // single click listener always sees current state.
@@ -317,9 +401,18 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /** Layer list and styling, straight from the ontology's link types. */
+  const flowLayers = useMemo(() => network?.layers ?? [], [network]);
+  const styles = useMemo(
+    () => assignLayerStyles(env ?? "", flowLayers.map((l) => l.linkType)),
+    [env, flowLayers],
+  );
+
   function ensureFlowLayers(map: MapboxMap) {
-    for (const kind of Object.keys(FLOW_STYLE) as TwinFlowKind[]) {
-      const id = `twin-flow-${kind}`;
+    const wanted = new Set<string>();
+    for (const { linkType } of flowLayers) {
+      const id = layerId(linkType);
+      wanted.add(id);
       if (!map.getSource(id)) {
         map.addSource(id, {
           type: "geojson",
@@ -327,7 +420,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         });
       }
       if (!map.getLayer(id)) {
-        const style = FLOW_STYLE[kind];
+        const style = styles.get(linkType) ?? LAYER_STYLES[0]!;
         map.addLayer({
           id,
           type: "line",
@@ -341,6 +434,13 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         });
       }
     }
+    // A link type deleted from the ontology leaves its arcs behind otherwise.
+    for (const id of Array.from(drawnLayersRef.current)) {
+      if (wanted.has(id)) continue;
+      if (map.getLayer(id)) map.removeLayer(id);
+      if (map.getSource(id)) map.removeSource(id);
+    }
+    drawnLayersRef.current = wanted;
   }
 
   const positions = useMemo(() => {
@@ -401,14 +501,14 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     const map = mapRef.current;
     if (!map || !mapReady || !network) return;
     ensureFlowLayers(map);
-    for (const kind of Object.keys(FLOW_STYLE) as TwinFlowKind[]) {
-      const source = map.getSource(`twin-flow-${kind}`) as
+    for (const { linkType } of flowLayers) {
+      const source = map.getSource(layerId(linkType)) as
         | { setData: (d: FlowFeatureCollection) => void }
         | undefined;
       if (!source) continue;
-      const features = layers[kind]
+      const features = layers[linkType] !== false
         ? network.flows
-            .filter((f) => f.kind === kind)
+            .filter((f) => f.linkType === linkType)
             .map((f) => {
               const a = positions.get(f.fromId);
               const b = positions.get(f.toId);
@@ -423,7 +523,8 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         : [];
       source.setData({ type: "FeatureCollection", features });
     }
-  }, [network, mapReady, layers, positions, styleMode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [network, mapReady, layers, positions, styleMode, flowLayers, styles]);
 
   // --- toolbar actions -----------------------------------------------------------
 
@@ -498,13 +599,17 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     () => alerts.filter((a) => a.unitInstanceId === selectedId),
     [alerts, selectedId],
   );
+  /** Flows touching the selected site, one row per link type it actually uses. */
   const selectedFlows = useMemo(() => {
-    if (!network || !selectedId) return { patient: 0, supply: 0, data: 0, other: 0 };
-    const counts = { patient: 0, supply: 0, data: 0, other: 0 };
+    if (!network || !selectedId) return [];
+    const counts = new Map<string, number>();
     for (const f of network.flows) {
-      if (f.fromId === selectedId || f.toId === selectedId) counts[f.kind]++;
+      if (f.fromId !== selectedId && f.toId !== selectedId) continue;
+      counts.set(f.linkType, (counts.get(f.linkType) ?? 0) + 1);
     }
-    return counts;
+    return Array.from(counts, ([linkType, count]) => ({ linkType, count })).sort((a, b) =>
+      a.linkType.localeCompare(b.linkType),
+    );
   }, [network, selectedId]);
 
   const missingCoords = network?.sites.filter((s) => s.latitude === null).length ?? 0;
@@ -590,34 +695,38 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
       <div className="flex min-h-[440px] flex-1">
         {/* Layers rail */}
         <aside className="flex w-44 shrink-0 flex-col overflow-y-auto border-r border-[#d3d8de] bg-white p-2">
-          <p className="px-2 pb-1 pt-1 text-[10px] font-medium uppercase tracking-[0.12em] text-[#8f99a8]">
+          <p className="px-2 pb-1 pt-1 text-[10px] font-medium uppercase tracking-wide text-ink-faint">
             Layers
           </p>
-          {(
-            [
-              ["patient", "Patient flows", "#2d72d2"],
-              ["supply", "Supply shipments", "#d97706"],
-              ["data", "Data feeds", "#6b3fa0"],
-              ["other", "Other links", "#64748b"],
-            ] as const
-          ).map(([key, label, color]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setLayers((cur) => ({ ...cur, [key]: !cur[key] }))}
-              className={cn(
-                "flex items-center gap-2 rounded px-2 py-1.5 text-left text-xs",
-                layers[key] ? "text-[#1c2127]" : "text-[#8f99a8]",
-                "hover:bg-[#f6f7f9]",
-              )}
-            >
-              <span
-                className="h-[3px] w-4 shrink-0 rounded"
-                style={{ background: layers[key] ? color : "#d3d8de" }}
-              />
-              {label}
-            </button>
-          ))}
+          {flowLayers.length === 0 ? (
+            <p className="px-2 py-1 text-[10.5px] leading-snug text-ink-faint">
+              No link runs between two sites yet. Every link type that does becomes a layer here.
+            </p>
+          ) : (
+            flowLayers.map(({ linkType, count }) => {
+              const on = layers[linkType] !== false;
+              const style = styles.get(linkType) ?? LAYER_STYLES[0]!;
+              return (
+                <button
+                  key={linkType}
+                  type="button"
+                  title={`${linkType} · ${count} link${count === 1 ? "" : "s"}`}
+                  onClick={() => setLayers((cur) => ({ ...cur, [linkType]: !on }))}
+                  className={cn(
+                    "flex items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-canvas",
+                    on ? "text-ink" : "text-ink-faint",
+                  )}
+                >
+                  <span
+                    className="h-[3px] w-4 shrink-0 rounded"
+                    style={{ background: on ? style.color : "#d3d8de" }}
+                  />
+                  <span className="min-w-0 flex-1 truncate">{linkType}</span>
+                  <span className="shrink-0 text-[10px] tabular-nums text-ink-faint">{count}</span>
+                </button>
+              );
+            })
+          )}
           <p className="px-2 pb-1 pt-3 text-[10px] font-medium uppercase tracking-[0.12em] text-[#8f99a8]">
             Saved views
           </p>
@@ -808,9 +917,18 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                   : "—"
               }
             />
-            <MetricRow label="Patient flows" value={String(selectedFlows.patient)} />
-            <MetricRow label="Supply flows" value={String(selectedFlows.supply)} />
-            <MetricRow label="Data flows" value={String(selectedFlows.data)} last />
+            {selectedFlows.length === 0 ? (
+              <MetricRow label="Flows" value="none" last />
+            ) : (
+              selectedFlows.map((f, i) => (
+                <MetricRow
+                  key={f.linkType}
+                  label={f.linkType}
+                  value={String(f.count)}
+                  last={i === selectedFlows.length - 1}
+                />
+              ))
+            )}
 
             <p className="mb-1 mt-3 text-[10px] font-medium uppercase tracking-[0.12em] text-[#8f99a8]">
               Open alerts · {selectedAlerts.length}
