@@ -634,7 +634,7 @@ function ConnectDialog({
                     const rule = mapping.find((m) => m.from === c);
                     return (
                       <div key={c} className="flex items-center gap-1.5">
-                        <code className="w-[42%] truncate rounded bg-[#f6f7f9] px-1.5 py-1 font-mono text-[10.5px]">
+                        <code className="w-[42%] truncate rounded bg-[#f6f7f9] px-1.5 py-1 text-[10.5px]">
                           {c}
                         </code>
                         <span className="text-[#8f99a8]">→</span>

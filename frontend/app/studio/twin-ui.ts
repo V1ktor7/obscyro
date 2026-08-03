@@ -27,18 +27,18 @@ export const DISPLAY_METRIC_OPTIONS = [
 const EMPTY = "-";
 
 export function severityDotClass(severity: TwinAlertSeverity | null): string {
-  if (severity === "critical") return "bg-rose-500";
-  if (severity === "warn") return "bg-amber-500";
-  if (severity === "info") return "bg-sky-500";
-  return "bg-emerald-500";
+  if (severity === "critical") return "bg-danger";
+  if (severity === "warn") return "bg-warn";
+  if (severity === "info") return "bg-brand";
+  return "bg-ok";
 }
 
 export function severityBadgeTone(
   severity: TwinAlertSeverity,
-): "danger" | "warning" | "default" {
+): "danger" | "warn" | "neutral" {
   if (severity === "critical") return "danger";
-  if (severity === "warn") return "warning";
-  return "default";
+  if (severity === "warn") return "warn";
+  return "neutral";
 }
 
 export function kindIconName(kind: string): TwinKindIcon {

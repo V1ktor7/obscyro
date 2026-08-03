@@ -10,10 +10,10 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
 
-import { cn } from "@/lib/cn";
 import type { TwinTreeSnapshot } from "@/lib/platform-api";
 
-import { EDGE_HEX, pathD, pointGeom } from "../studio-graph";
+import { GRAPH_EDGE, GraphNode } from "../GraphNode";
+import { pathD, pointGeom } from "../studio-graph";
 import { TWIN_NODE_H, TWIN_NODE_W } from "../twin-layout-persist";
 import {
   formatTwinMetric,
@@ -108,7 +108,7 @@ export default function TwinCanvas({
   if (!snapshot || snapshot.nodes.length === 0) {
     return (
       <div className="flex min-h-[240px] flex-1 items-center justify-center p-6">
-        <p className="text-sm text-gray-400">
+        <p className="text-sm text-ink-faint">
           No OrgUnits in this environment. Seed the CHUM demo to get started.
         </p>
       </div>
@@ -150,8 +150,8 @@ export default function TwinCanvas({
                 key={`${e.fromId}-${e.toId}`}
                 d={pathD(g)}
                 fill="none"
-                stroke={EDGE_HEX}
-                strokeWidth={1.5}
+                stroke={GRAPH_EDGE}
+                strokeWidth={1.4}
               />
             );
           })}
@@ -169,63 +169,37 @@ export default function TwinCanvas({
           const isSelected = selectedUnitId === node.id;
 
           return (
-            <div
+            <GraphNode
               key={node.id}
-              className={cn(
-                "absolute rounded-lg border bg-white shadow-sm transition-opacity",
-                isSelected ? "border-indigo-400 ring-2 ring-indigo-100" : "border-gray-300",
-                dimmed && "opacity-40",
-                readOnly ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
-              )}
-              style={{
-                left: pos.x,
-                top: pos.y,
-                width: TWIN_NODE_W,
-                minHeight: TWIN_NODE_H,
-              }}
-              onPointerDown={(e) => startDrag(e, node.id)}
+              name={node.name}
+              icon={Icon}
+              dot={severityDotClass(node.worstAlertSeverity)}
+              dotTitle={node.worstAlertSeverity ?? "ok"}
+              x={pos.x}
+              y={pos.y}
+              width={TWIN_NODE_W}
+              minHeight={TWIN_NODE_H}
+              selected={isSelected}
+              dimmed={dimmed}
+              meta={node.kind}
+              metaRight={
+                <motion.span
+                  key={metricVal}
+                  initial={{ opacity: 0.5, y: 1 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="text-ink-body"
+                >
+                  {metricVal}
+                </motion.span>
+              }
+              badge={node.openAlertCount > 0 ? node.openAlertCount : undefined}
+              onNodePointerDown={readOnly ? undefined : (e) => startDrag(e, node.id)}
               onClick={() => {
                 if (movedRef.current) return;
                 onSelectUnit(node.id);
               }}
-            >
-              <div className="flex items-start gap-2 px-2.5 py-2">
-                <Icon className="mt-0.5 h-4 w-4 shrink-0 text-indigo-500" strokeWidth={1.5} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className={cn(
-                        "h-2 w-2 shrink-0 rounded-full",
-                        severityDotClass(node.worstAlertSeverity),
-                      )}
-                      title={node.worstAlertSeverity ?? "ok"}
-                    />
-                    <span className="truncate text-xs font-medium text-gray-800">
-                      {node.name}
-                    </span>
-                  </div>
-                  <div className="mt-0.5 flex items-baseline justify-between gap-1">
-                    <span className="font-mono text-[9px] uppercase text-gray-400">
-                      {node.kind}
-                    </span>
-                    <motion.span
-                      key={metricVal}
-                      initial={{ opacity: 0.5, y: 1 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="font-mono text-[10px] text-gray-600"
-                    >
-                      {metricVal}
-                    </motion.span>
-                  </div>
-                </div>
-              </div>
-              {node.openAlertCount > 0 ? (
-                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-medium text-white">
-                  {node.openAlertCount}
-                </span>
-              ) : null}
-            </div>
+            />
           );
         })}
       </div>

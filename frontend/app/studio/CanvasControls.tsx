@@ -31,7 +31,7 @@ export default function CanvasControls({
         type="button"
         onClick={onResetZoom}
         title="Reset zoom to 100%"
-        className="rounded px-2 py-1 font-mono text-[10px] text-gray-500 hover:bg-gray-100"
+        className="rounded px-2 py-1 text-[10px] text-gray-500 hover:bg-gray-100"
       >
         {Math.round(zoom * 100)}%
       </button>
@@ -48,7 +48,7 @@ export default function CanvasControls({
         onClick={onFit}
         title="Fit to content"
         className={cn(
-          "rounded border-t border-gray-100 px-2 py-1.5 font-mono text-[9px] uppercase tracking-wide text-gray-500 hover:bg-gray-100",
+          "rounded border-t border-gray-100 px-2 py-1.5 text-[9px] uppercase tracking-wide text-gray-500 hover:bg-gray-100",
         )}
       >
         Fit

@@ -1,20 +1,23 @@
 "use client";
 
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, Pencil, Plus, RefreshCw, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { cn } from "@/lib/cn";
 
 import {
+  createSignalType,
   dismissSignal,
   getCommandBoard,
   getSignalDetail,
   moveSignal,
+  renameSignalDomain,
   seedSignalConfig,
   type BoardSignal,
   type CommandBoard,
   type Severity,
   type SignalEvent,
+  type Workflow,
   type WorkflowStage,
 } from "../signals-api";
 import { useStudio } from "../StudioShell";
@@ -71,6 +74,8 @@ export default function ResponseView() {
   } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [creatingDomain, setCreatingDomain] = useState(false);
 
   const load = useCallback(async () => {
     if (!selectedEnv) return;
@@ -144,6 +149,14 @@ export default function ResponseView() {
     }
   }
 
+  async function commitRename(from: string, raw: string) {
+    const to = raw.trim();
+    setRenaming(null);
+    if (!to || to === from || !selectedEnv) return;
+    setDomain((cur) => (cur === from ? to : cur));
+    await act(() => renameSignalDomain(selectedEnv, from, to), "rename");
+  }
+
   // --- empty states ---------------------------------------------------------
 
   if (board && board.workflows.length === 0) {
@@ -196,43 +209,80 @@ export default function ResponseView() {
         </button>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[210px_minmax(0,1fr)_320px]">
+      <div className="flex min-h-0 flex-1">
         {/* domaines */}
-        <aside className="overflow-y-auto border-r border-line bg-white">
-          <p className="px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-ink-faint">
-            Domaines
-          </p>
-          {(board?.domains ?? []).map((d) => (
+        <aside className="flex w-[190px] shrink-0 flex-col overflow-y-auto border-r border-line bg-white">
+          <div className="flex items-center gap-1 px-3 py-2">
+            <p className="flex-1 text-[10px] font-medium uppercase tracking-wide text-ink-faint">
+              Domaines
+            </p>
             <button
-              key={d.domain}
               type="button"
-              onClick={() => {
-                setDomain(d.domain);
-                setSel(null);
-              }}
-              className={cn(
-                "flex w-full items-center gap-2 border-l-[3px] px-3 py-1.5 text-left",
-                domain === d.domain
-                  ? "border-l-brand bg-brand-soft"
-                  : "border-l-transparent hover:bg-canvas-raised",
-              )}
+              title="Nouveau domaine"
+              onClick={() => setCreatingDomain(true)}
+              className="rounded p-0.5 text-ink-faint hover:bg-canvas-raised hover:text-brand"
             >
-              <span className="min-w-0 flex-1 truncate text-[11.5px] font-medium text-ink">
-                {d.domain}
-              </span>
-              {d.critical > 0 ? (
-                <span className="text-[10px] font-bold text-danger">{d.critical}!</span>
-              ) : null}
-              <span className="text-[10px] tabular-nums text-ink-faint">{d.open}</span>
+              <Plus className="h-3.5 w-3.5" />
             </button>
-          ))}
-          <p className="border-t border-line-soft px-3 py-2 text-[10.5px] leading-snug text-ink-faint">
-            Chaque domaine suit son propre flux. Les étapes viennent de la base, pas du code.
+          </div>
+          {(board?.domains ?? []).map((d) =>
+            renaming === d.domain ? (
+              <input
+                key={d.domain}
+                autoFocus
+                defaultValue={d.domain}
+                onBlur={(e) => void commitRename(d.domain, e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void commitRename(d.domain, e.currentTarget.value);
+                  if (e.key === "Escape") setRenaming(null);
+                }}
+                className="mx-2 my-0.5 rounded border border-brand px-2 py-1 text-[11.5px] focus:outline-none"
+              />
+            ) : (
+              <div
+                key={d.domain}
+                className={cn(
+                  "group flex items-center gap-1 border-l-[3px] pr-1.5",
+                  domain === d.domain
+                    ? "border-l-brand bg-brand-soft"
+                    : "border-l-transparent hover:bg-canvas-raised",
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDomain(d.domain);
+                    setSel(null);
+                  }}
+                  className="min-w-0 flex-1 py-1.5 pl-3 text-left"
+                >
+                  <span className="block truncate text-[11.5px] font-medium text-ink">
+                    {d.domain}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  title="Renommer"
+                  onClick={() => setRenaming(d.domain)}
+                  className="shrink-0 rounded p-0.5 text-ink-faint opacity-0 hover:text-brand group-hover:opacity-100"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+                {d.critical > 0 ? (
+                  <span className="shrink-0 text-[10px] font-bold text-danger">{d.critical}!</span>
+                ) : null}
+                <span className="shrink-0 text-[10px] tabular-nums text-ink-faint">{d.open}</span>
+              </div>
+            ),
+          )}
+          <p className="mt-auto border-t border-line-soft px-3 py-2 text-[10.5px] leading-snug text-ink-faint">
+            Un domaine est le nom que ses types de signaux partagent. Le renommer les déplace tous;
+            un domaine sans type cesse d&apos;exister.
           </p>
         </aside>
 
         {/* tableau */}
-        <section className="min-w-0 overflow-auto bg-canvas p-3">
+        <section className="min-w-0 flex-1 overflow-auto bg-canvas p-3">
           {workflowsHere.length > 1 ? (
             <div className="mb-2 flex items-center gap-1.5">
               <span className="text-[10px] uppercase tracking-wide text-ink-faint">Flux</span>
@@ -256,8 +306,12 @@ export default function ResponseView() {
 
           {workflow ? (
             <div
-              className="grid gap-2"
-              style={{ gridTemplateColumns: `repeat(${workflow.stages.length}, minmax(0,1fr))` }}
+              className="grid gap-2.5"
+              style={{
+                // A column narrower than this stops being readable, so a long
+                // workflow scrolls instead of crushing every card.
+                gridTemplateColumns: `repeat(${workflow.stages.length}, minmax(190px,1fr))`,
+              }}
             >
               {workflow.stages.map((st) => {
                 const cards = signalsHere.filter((s) => s.stageId === st.id);
@@ -300,20 +354,169 @@ export default function ResponseView() {
           )}
         </section>
 
-        {/* détail */}
-        <aside className="overflow-y-auto border-l border-line bg-white">
-          <Detail
-            signal={selected}
-            detail={detail}
-            busy={busy}
-            onMove={(dir) =>
-              selected && void act(() => moveSignal(selected.id, { direction: dir }), dir)
+        {/* détail — seulement quand un signal est choisi, sinon le tableau étouffe */}
+        {selected ? (
+          <aside className="w-[310px] shrink-0 overflow-y-auto border-l border-line bg-white">
+            <Detail
+              signal={selected}
+              detail={detail}
+              busy={busy}
+              onClose={() => setSel(null)}
+              onMove={(dir) =>
+                void act(() => moveSignal(selected.id, { direction: dir }), dir)
+              }
+              onDismiss={(reason) =>
+                void act(() => dismissSignal(selected.id, reason), "dismiss")
+              }
+            />
+          </aside>
+        ) : null}
+      </div>
+
+      {creatingDomain && board ? (
+        <NewDomainDialog
+          workflows={board.workflows}
+          busy={busy === "newDomain"}
+          onCancel={() => setCreatingDomain(false)}
+          onCreate={async (input) => {
+            if (!selectedEnv) return;
+            await act(() => createSignalType(selectedEnv, input), "newDomain");
+            setDomain(input.domain);
+            setSel(null);
+            setCreatingDomain(false);
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * A domain has no row of its own — it is the string its signal types share. So
+ * creating one means defining the first type that lives in it, and the dialog
+ * says so rather than pretending there is a domains table.
+ */
+function NewDomainDialog({
+  workflows,
+  busy,
+  onCancel,
+  onCreate,
+}: {
+  workflows: Workflow[];
+  busy: boolean;
+  onCancel: () => void;
+  onCreate: (input: {
+    key: string;
+    name: string;
+    domain: string;
+    workflowId: string;
+    defaultSeverity: Severity;
+  }) => Promise<void>;
+}) {
+  const [domain, setDomainName] = useState("");
+  const [name, setName] = useState("");
+  const [workflowId, setWorkflowId] = useState(workflows[0]?.id ?? "");
+  const [severity, setSeverity] = useState<Severity>("warn");
+
+  const key = name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // combining marks left by NFD
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "")
+    .slice(0, 64);
+  const ready = domain.trim() !== "" && key !== "" && workflowId !== "" && !busy;
+
+  const field =
+    "mt-1 w-full rounded border border-line px-2 py-1.5 text-[11.5px] focus:border-brand focus:outline-none";
+  const label = "text-[10px] font-medium uppercase tracking-wide text-ink-faint";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/20 pt-[12vh]">
+      <div className="w-[380px] rounded-md border border-line bg-white shadow-lg">
+        <div className="border-b border-line-soft px-4 py-2.5">
+          <p className="text-xs font-medium text-ink">Nouveau domaine</p>
+          <p className="mt-1 text-[10.5px] leading-snug text-ink-faint">
+            Un domaine est le nom que ses types de signaux partagent. Définis le premier type et le
+            domaine existe.
+          </p>
+        </div>
+        <div className="space-y-2.5 px-4 py-3">
+          <div>
+            <span className={label}>Domaine</span>
+            <input
+              autoFocus
+              value={domain}
+              onChange={(e) => setDomainName(e.target.value)}
+              placeholder="Bloc opératoire"
+              className={field}
+            />
+          </div>
+          <div>
+            <span className={label}>Premier type de signal</span>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Salle non libérée"
+              className={field}
+            />
+            {key ? <p className="mt-1 text-[10px] text-ink-faint">clé · {key}</p> : null}
+          </div>
+          <div className="flex gap-2">
+            <div className="min-w-0 flex-1">
+              <span className={label}>Flux</span>
+              <select
+                value={workflowId}
+                onChange={(e) => setWorkflowId(e.target.value)}
+                className={field}
+              >
+                {workflows.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="w-[110px] shrink-0">
+              <span className={label}>Gravité</span>
+              <select
+                value={severity}
+                onChange={(e) => setSeverity(e.target.value as Severity)}
+                className={field}
+              >
+                <option value="info">information</option>
+                <option value="warn">avertissement</option>
+                <option value="critical">critique</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-line-soft px-4 py-2.5">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded border border-line px-3 py-1.5 text-[11px] text-ink-body"
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            disabled={!ready}
+            onClick={() =>
+              void onCreate({
+                key,
+                name: name.trim(),
+                domain: domain.trim(),
+                workflowId,
+                defaultSeverity: severity,
+              })
             }
-            onDismiss={(reason) =>
-              selected && void act(() => dismissSignal(selected.id, reason), "dismiss")
-            }
-          />
-        </aside>
+            className="inline-flex items-center gap-1.5 rounded border border-brand-deep bg-brand px-3 py-1.5 text-[11px] font-medium text-white disabled:opacity-40"
+          >
+            {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+            Créer
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -356,24 +559,17 @@ function Detail({
   signal,
   detail,
   busy,
+  onClose,
   onMove,
   onDismiss,
 }: {
-  signal: BoardSignal | null;
+  signal: BoardSignal;
   detail: { stages: WorkflowStage[]; events: SignalEvent[] } | null;
   busy: string | null;
+  onClose: () => void;
   onMove: (d: "forward" | "back") => void;
   onDismiss: (reason: string) => void;
 }) {
-  if (!signal) {
-    return (
-      <p className="p-6 text-center text-[11.5px] leading-relaxed text-ink-faint">
-        Choisis un signal pour voir son étape,
-        <br />
-        ses options et son journal de décision.
-      </p>
-    );
-  }
   const sv = SEV[signal.severity];
   const stages = detail?.stages ?? [];
   const idx = stages.findIndex((s) => s.id === signal.stageId);
@@ -392,6 +588,17 @@ function Detail({
               levé automatiquement
             </span>
           ) : null}
+          <button
+            type="button"
+            onClick={onClose}
+            title="Fermer"
+            className={cn(
+              "shrink-0 rounded p-0.5 text-ink-faint hover:bg-canvas-raised hover:text-ink-body",
+              signal.originKind === "twin_alert" ? "" : "ml-auto",
+            )}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
         <p className="mt-1 text-[13px] font-semibold leading-snug text-ink">{signal.title}</p>
         <p className="mt-0.5 text-[10.5px] text-ink-faint">

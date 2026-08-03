@@ -1145,7 +1145,7 @@ function Palette({
   const items = PALETTE.filter((item) => item.variants.includes(variant));
   return (
     <aside className="w-48 shrink-0 border-r border-gray-200 bg-white p-3">
-      <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400">
+      <div className="mb-2 text-[10px] uppercase tracking-wide text-gray-400">
         Nodes
       </div>
       <div className="flex flex-col gap-1.5">
@@ -2119,7 +2119,7 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
     <div className="flex min-h-0 flex-1 flex-col bg-white text-gray-900">
       {/* Editor toolbar — Reset / Run for the current graph */}
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-gray-200 px-4">
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400">
+        <span className="text-[10px] uppercase tracking-wide text-gray-400">
           {variant === "parser" ? "Ontology Parser" : "Data Studio"}
         </span>
         <div className="flex items-center gap-3">
@@ -2587,7 +2587,7 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
                             className="rounded-md border border-gray-200 bg-gray-50 p-2"
                           >
                             <div className="mb-1 flex items-center justify-between gap-2">
-                              <code className="font-mono text-[11px] text-gray-900">
+                              <code className="text-[11px] text-gray-900">
                                 {r.code}
                               </code>
                               <DecisionBadge decision={r.decision} />
@@ -2605,7 +2605,7 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
                       </div>
                     ) : webhookPayload ? (
                       <div>
-                        <span className="mb-1 block font-mono text-[9px] uppercase tracking-wide text-sky-600">
+                        <span className="mb-1 block text-[9px] uppercase tracking-wide text-sky-600">
                           Received
                         </span>
                         <pre className="max-h-24 overflow-auto rounded border border-gray-200 bg-gray-50 p-1.5 font-mono text-[9px] leading-snug text-gray-700">
@@ -2614,10 +2614,10 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
                       </div>
                     ) : formatDetected ? (
                       <div>
-                        <span className="mb-1 block font-mono text-[9px] uppercase tracking-wide text-amber-600">
+                        <span className="mb-1 block text-[9px] uppercase tracking-wide text-amber-600">
                           Detected
                         </span>
-                        <span className="inline-flex items-center rounded border border-amber-300 bg-amber-50 px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wide text-amber-800">
+                        <span className="inline-flex items-center rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800">
                           {formatDetected}
                         </span>
                       </div>
@@ -2637,7 +2637,7 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
                         {FORMAT_BRANCHES.map((branch) => (
                           <li
                             key={branch}
-                            className="flex items-center justify-between font-mono text-[9px] uppercase tracking-wide text-gray-400"
+                            className="flex items-center justify-between text-[9px] uppercase tracking-wide text-gray-400"
                           >
                             <span>{branch}</span>
                             <span className="text-gray-300">→</span>
@@ -2649,22 +2649,22 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
                         {nodeErrors.get(node.id)}
                       </span>
                     ) : node.type === "transform" && nodeOut?.records?.length ? (
-                      <span className="font-mono text-[10px] text-cyan-700">
+                      <span className="text-[10px] text-cyan-700">
                         {nodeOut.records.length} record{nodeOut.records.length === 1 ? "" : "s"}
                       </span>
                     ) : node.type === "mapping" && nodeOut?.instances?.length ? (
-                      <span className="font-mono text-[10px] text-indigo-700">
+                      <span className="text-[10px] text-indigo-700">
                         {nodeOut.instances.length} → {node.config.objectType || "type"}
                       </span>
                     ) : node.type === "validation" && nodeOut?.validationReport ? (
-                      <span className="font-mono text-[10px] text-amber-700">
+                      <span className="text-[10px] text-amber-700">
                         {nodeOut.validationReport.valid} valid
                         {nodeOut.validationReport.invalid > 0
                           ? ` · ${nodeOut.validationReport.invalid} invalid`
                           : ""}
                       </span>
                     ) : (
-                      <span className="font-mono text-[10px] uppercase tracking-wide text-gray-400">
+                      <span className="text-[10px] uppercase tracking-wide text-gray-400">
                         {node.type}
                       </span>
                     )}
@@ -2843,7 +2843,7 @@ function Inspector({
             type="button"
             onClick={() => setIoTab(tab)}
             className={cn(
-              "flex-1 py-2 text-center font-mono text-[10px] uppercase tracking-[0.12em] transition-colors",
+              "flex-1 py-2 text-center text-[10px] uppercase tracking-[0.12em] transition-colors",
               ioTab === tab
                 ? "border-b-2 border-gray-900 text-gray-900"
                 : "text-gray-400 hover:text-gray-600",
@@ -2874,7 +2874,7 @@ function Inspector({
                   className={cn(
                     "flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
                     mode === m
-                      ? "bg-gray-900 text-white"
+                      ? "bg-brand text-white"
                       : "bg-gray-100 text-gray-600 hover:bg-gray-200",
                   )}
                 >
@@ -2906,7 +2906,7 @@ function Inspector({
                   value={node.code}
                   onChange={(e) => onCode(e.target.value)}
                   spellCheck={false}
-                  className="h-72 w-full resize-none rounded-md border border-gray-200 bg-gray-50 p-3 font-mono text-[12px] leading-relaxed text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+                  className="h-72 w-full resize-none rounded-md border border-gray-200 bg-gray-50 p-3 text-[12px] leading-relaxed text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
                 />
               </div>
             )}
@@ -3022,7 +3022,7 @@ function DatasetNodeConfig({
           onChange={(e) => onConfig({ csvText: e.target.value })}
           rows={5}
           placeholder={"mrn,ward,occupancy\n48-2210,ED,42"}
-          className="w-full resize-none rounded-md border border-gray-200 bg-gray-50 p-2.5 font-mono text-[11px] text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+          className="w-full resize-none rounded-md border border-gray-200 bg-gray-50 p-2.5 text-[11px] text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
         />
       </Field>
     </>
@@ -3154,7 +3154,7 @@ function LowCodeForm({
               value={node.config.payloadJson ?? ""}
               onChange={(e) => onConfig({ payloadJson: e.target.value })}
               rows={8}
-              className="w-full resize-none rounded-md border border-gray-200 bg-gray-50 p-2.5 font-mono text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+              className="w-full resize-none rounded-md border border-gray-200 bg-gray-50 p-2.5 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
             />
           </Field>
           <button
@@ -3324,7 +3324,7 @@ function LowCodeForm({
                   setNewTrigger("");
                 }
               }}
-              className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-700"
+              className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-deep"
             >
               Add
             </button>
@@ -3570,7 +3570,7 @@ function LowCodeForm({
                   className="rounded-md border border-gray-200 bg-gray-50 p-2.5"
                 >
                   <div className="mb-1 flex items-center justify-between gap-2">
-                    <code className="font-mono text-xs text-gray-900">
+                    <code className="text-xs text-gray-900">
                       {r.code}
                     </code>
                     <DecisionBadge decision={r.decision} />
@@ -3579,7 +3579,7 @@ function LowCodeForm({
                     {r.display} · &ldquo;{r.span}&rdquo;
                   </div>
                   {r.translation ? (
-                    <div className="mb-1.5 font-mono text-[10px] text-gray-600">
+                    <div className="mb-1.5 text-[10px] text-gray-600">
                       → {r.translation}
                     </div>
                   ) : null}

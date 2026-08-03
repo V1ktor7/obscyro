@@ -1,10 +1,18 @@
 "use client";
 
+import { Box } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/cn";
 import type { EnvLinkType, EnvObjectType } from "@/lib/platform-api";
-import { EDGE_HEX, NODE_W, pathD, pointGeom } from "../studio-graph";
+import {
+  GRAPH_EDGE,
+  GRAPH_NODE_W,
+  GraphArrowhead,
+  GraphNode,
+  GraphPort,
+} from "../GraphNode";
+import { pathD, pointGeom } from "../studio-graph";
 import { SCHEMA_BOX_H } from "../manager-layout-persist";
 
 type SchemaGraphCanvasProps = {
@@ -125,7 +133,7 @@ export default function SchemaGraphCanvas({
     connectingRef.current = { fromType };
     setPendingEdge({
       fromType,
-      cursor: { x: pos.x + NODE_W, y: pos.y + SCHEMA_BOX_H / 2 },
+      cursor: { x: pos.x + GRAPH_NODE_W, y: pos.y + SCHEMA_BOX_H / 2 },
     });
   }
 
@@ -167,7 +175,7 @@ export default function SchemaGraphCanvas({
             if (pt) onCanvasDoubleClick(pt);
           }}
         >
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-ink-faint">
             No schema yet. Double-click to add a type, or use + New in the sidebar.
           </p>
         </div>
@@ -183,22 +191,33 @@ export default function SchemaGraphCanvas({
             width={5000}
             height={3000}
           >
+            <GraphArrowhead id="schema-arrow" />
             {linkTypes.map((lt) => {
               const from = positions.get(lt.fromType);
               const to = positions.get(lt.toType);
               if (!from || !to) return null;
-              const a = { x: from.x + NODE_W, y: from.y + SCHEMA_BOX_H / 2 };
+              const a = { x: from.x + GRAPH_NODE_W, y: from.y + SCHEMA_BOX_H / 2 };
               const b = { x: to.x, y: to.y + SCHEMA_BOX_H / 2 };
               const g = pointGeom(a, b);
               return (
                 <g key={lt.id}>
-                  <path d={pathD(g)} fill="none" stroke={EDGE_HEX} strokeWidth={1.5} />
+                  <path
+                    d={pathD(g)}
+                    fill="none"
+                    stroke={GRAPH_EDGE}
+                    strokeWidth={1.4}
+                    markerEnd="url(#schema-arrow)"
+                  />
+                  {/* Painted stroke-first so the label sits on the line legibly. */}
                   <text
                     x={(a.x + b.x) / 2}
                     y={(a.y + b.y) / 2 - 6}
                     textAnchor="middle"
-                    className="fill-gray-400"
-                    fontSize={10}
+                    className="fill-ink-muted"
+                    fontSize={9.5}
+                    stroke="#ffffff"
+                    strokeWidth={3}
+                    paintOrder="stroke"
                   >
                     {lt.name}
                   </text>
@@ -209,7 +228,7 @@ export default function SchemaGraphCanvas({
               const from = positions.get(pendingEdge.fromType);
               if (!from) return null;
               const a = {
-                x: from.x + NODE_W,
+                x: from.x + GRAPH_NODE_W,
                 y: from.y + SCHEMA_BOX_H / 2,
               };
               const g = pointGeom(a, pendingEdge.cursor);
@@ -217,7 +236,7 @@ export default function SchemaGraphCanvas({
                 <path
                   d={pathD(g)}
                   fill="none"
-                  stroke="#6366f1"
+                  stroke="#2d72d2"
                   strokeWidth={1.5}
                   strokeDasharray="6 4"
                 />
@@ -229,54 +248,43 @@ export default function SchemaGraphCanvas({
             const pos = positions.get(t.name);
             if (!pos) return null;
             const isSelected = selectedType === t.name;
+            const propCount = t.propertySchema.length;
             return (
-              <div
+              <GraphNode
                 key={t.id}
-                className={cn(
-                  "absolute overflow-visible rounded-lg border bg-white text-left shadow-sm transition-colors",
-                  isSelected ? "border-indigo-400" : "border-gray-300",
-                  connectHover === t.name && "ring-2 ring-indigo-300",
-                )}
-                style={{
-                  left: pos.x,
-                  top: pos.y,
-                  width: NODE_W,
-                  minHeight: SCHEMA_BOX_H,
+                name={t.name}
+                icon={Box}
+                x={pos.x}
+                y={pos.y}
+                minHeight={SCHEMA_BOX_H}
+                selected={isSelected}
+                targeted={connectHover === t.name}
+                meta={`${propCount} propert${propCount === 1 ? "y" : "ies"}`}
+                onHeaderPointerDown={(e) => startDrag(e, t.name)}
+                onClick={() => {
+                  if (movedRef.current) return;
+                  onSelectType(t.name);
                 }}
               >
-                <span
-                  data-schema-input
+                <GraphPort
+                  side="in"
+                  active={pendingEdge !== null}
+                  data-schema-input=""
                   data-type-name={t.name}
                   onPointerEnter={() => {
                     if (connectingRef.current) setConnectHover(t.name);
                   }}
                   onPointerLeave={() => setConnectHover(null)}
-                  className="absolute -left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 cursor-crosshair rounded-full border-2 border-indigo-400 bg-white"
-                  title="Drop connection here"
+                  className="cursor-crosshair"
+                  title="Drop a link here"
                 />
-                <span
+                <GraphPort
+                  side="out"
                   onPointerDown={(e) => startConnect(e, t.name)}
-                  className="absolute -right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 cursor-crosshair rounded-full border-2 border-indigo-400 bg-white"
-                  title="Drag to connect"
+                  className="cursor-crosshair"
+                  title="Drag to link this type to another"
                 />
-                <div
-                  onPointerDown={(e) => startDrag(e, t.name)}
-                  className="cursor-grab border-b border-gray-100 px-3 py-2 text-xs font-medium text-gray-800 active:cursor-grabbing"
-                >
-                  {t.name}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (movedRef.current) return;
-                    onSelectType(t.name);
-                  }}
-                  className="w-full px-3 py-1.5 text-left text-[10px] text-gray-500 hover:bg-gray-50"
-                >
-                  {t.propertySchema.length} propert
-                  {t.propertySchema.length === 1 ? "y" : "ies"}
-                </button>
-              </div>
+              </GraphNode>
             );
           })}
         </div>

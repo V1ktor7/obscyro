@@ -538,7 +538,7 @@ export default function SourceNodeForm({
         type="button"
         disabled={busy || !request.url.trim()}
         onClick={testFetch}
-        className="w-full rounded-md bg-gray-900 px-3 py-2 text-xs text-white hover:bg-gray-700 disabled:opacity-40"
+        className="w-full rounded-md bg-brand px-3 py-2 text-xs text-white hover:bg-brand-deep disabled:opacity-40"
       >
         {busy ? "Fetching…" : "Test fetch"}
       </button>

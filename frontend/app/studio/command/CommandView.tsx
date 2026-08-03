@@ -954,7 +954,7 @@ function InspectorPanel({
                 {node?.name ?? "Unit"}
               </p>
               <p className="mt-0.5 text-[10px] text-[#8f99a8]">
-                <span className="font-mono">{unitId.slice(0, 8)}…</span>
+                <span className="tabular-nums">{unitId.slice(0, 8)}…</span>
                 {node?.kind ? ` · ${node.kind}` : ""}
               </p>
             </div>

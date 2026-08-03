@@ -3,10 +3,9 @@
 import { motion } from "framer-motion";
 import { useCallback, useEffect, useState } from "react";
 
-import { Badge } from "@/components/ui/Badge";
+import { StatusChip } from "../StatusChip";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { cn } from "@/lib/cn";
 
 import {
   fetchInstanceScore,
@@ -89,9 +88,9 @@ export default function LiveMetricsPanel({ env, hasKey }: LiveMetricsPanelProps)
   }, [env, scoreInstanceId]);
 
   return (
-    <div className="flex min-h-0 flex-col border-t border-gray-200 lg:border-l lg:border-t-0">
-      <div className="border-b border-gray-100 px-3 py-2">
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400">
+    <div className="flex min-h-0 flex-col border-t border-line lg:border-l lg:border-t-0">
+      <div className="border-b border-line-faint px-3 py-2">
+        <span className="text-[10px] uppercase tracking-wide text-ink-faint">
           Live metrics
         </span>
       </div>
@@ -101,36 +100,24 @@ export default function LiveMetricsPanel({ env, hasKey }: LiveMetricsPanelProps)
             value={whereInput}
             onChange={(e) => setWhereInput(e.target.value)}
             placeholder="where: key=value"
-            className="min-w-0 flex-1 rounded border border-gray-200 px-2 py-1 text-[11px] focus:border-gray-400 focus:outline-none"
+            className="min-w-0 flex-1 rounded border border-line px-2 py-1 text-[11px] focus:border-brand focus:outline-none"
           />
-          <span
-            className={cn(
-              "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[9px]",
-              mode === "stream"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                : mode === "poll"
-                  ? "border-amber-200 bg-amber-50 text-amber-700"
-                  : "border-gray-200 text-gray-400",
-            )}
+          <StatusChip
+            tone={mode === "stream" ? "ok" : mode === "poll" ? "warn" : "neutral"}
+            dot={mode === "stream" ? "bg-ok" : mode === "poll" ? "bg-warn" : "bg-ink-ghost"}
           >
-            <span
-              className={cn(
-                "h-1.5 w-1.5 rounded-full",
-                mode === "stream" ? "bg-emerald-500" : mode === "poll" ? "bg-amber-500" : "bg-gray-300",
-              )}
-            />
-            {mode === "stream" ? "metrics stream" : mode === "poll" ? "polling" : "…"}
-          </span>
+            {mode === "stream" ? "Live stream" : mode === "poll" ? "Polling" : "Connecting"}
+          </StatusChip>
         </div>
 
         {error ? (
-          <p className="mb-2 rounded border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] text-rose-700">
+          <p className="mb-2 rounded border border-danger/40 bg-danger-soft px-2 py-1 text-[11px] text-danger-ink">
             {error}
           </p>
         ) : null}
 
         {!metrics ? (
-          <p className="text-[11px] text-gray-400">Waiting for metrics…</p>
+          <p className="text-[11px] text-ink-faint">Waiting for metrics…</p>
         ) : (
           <>
             <div className="mb-3 grid grid-cols-2 gap-2">
@@ -147,7 +134,7 @@ export default function LiveMetricsPanel({ env, hasKey }: LiveMetricsPanelProps)
             {metrics.occupancy.length > 0 ? (
               <table className="mb-3 w-full text-left text-[10px]">
                 <thead>
-                  <tr className="text-gray-400">
+                  <tr className="text-ink-faint">
                     <th className="py-1">Type</th>
                     <th>Status</th>
                     <th>Count</th>
@@ -155,7 +142,7 @@ export default function LiveMetricsPanel({ env, hasKey }: LiveMetricsPanelProps)
                 </thead>
                 <tbody>
                   {metrics.occupancy.slice(0, 6).map((o, i) => (
-                    <tr key={i} className="border-t border-gray-50 text-gray-600">
+                    <tr key={i} className="border-t border-line-faint text-ink-muted">
                       <td className="py-1">{o.typeName}</td>
                       <td>{o.value}</td>
                       <td>{o.count}</td>
@@ -167,27 +154,27 @@ export default function LiveMetricsPanel({ env, hasKey }: LiveMetricsPanelProps)
           </>
         )}
 
-        <div className="mt-4 border-t border-gray-100 pt-3">
-          <p className="mb-2 font-mono text-[9px] uppercase tracking-wide text-gray-400">
+        <div className="mt-4 border-t border-line-faint pt-3">
+          <p className="mb-2 text-[9px] uppercase tracking-wide text-ink-faint">
             Instance score
           </p>
           <input
             value={scoreInstanceId}
             onChange={(e) => setScoreInstanceId(e.target.value)}
             placeholder="Instance UUID"
-            className="mb-2 w-full rounded border border-gray-200 px-2 py-1 text-[11px] focus:border-gray-400 focus:outline-none"
+            className="mb-2 w-full rounded border border-line px-2 py-1 text-[11px] focus:border-brand focus:outline-none"
           />
           <Button size="sm" className="w-full" onClick={() => void handleScore()} disabled={scoring}>
             {scoring ? "Scoring…" : "Score"}
           </Button>
           {score ? (
             <div className="mt-2">
-              <p className="text-lg font-semibold text-gray-900">{score.total}</p>
+              <p className="text-lg font-semibold text-ink">{score.total}</p>
               <div className="mt-1 flex flex-wrap gap-1">
                 {Object.entries(score.breakdown).map(([k, v]) => (
-                  <Badge key={k} tone="default">
+                  <StatusChip key={k} tone="neutral">
                     {k}: {v}
-                  </Badge>
+                  </StatusChip>
                 ))}
               </div>
             </div>
@@ -209,16 +196,16 @@ function MetricCard({
 }) {
   return (
     <Card className="p-2">
-      <p className="text-[9px] uppercase tracking-wide text-gray-400">{label}</p>
+      <p className="text-[9px] uppercase tracking-wide text-ink-faint">{label}</p>
       <motion.p
         key={value}
         initial={{ opacity: 0.6 }}
         animate={{ opacity: 1 }}
-        className="text-base font-semibold text-gray-900"
+        className="text-base font-semibold text-ink"
       >
         {value}
       </motion.p>
-      {sub ? <p className="text-[9px] text-gray-400">{sub}</p> : null}
+      {sub ? <p className="text-[9px] text-ink-faint">{sub}</p> : null}
     </Card>
   );
 }

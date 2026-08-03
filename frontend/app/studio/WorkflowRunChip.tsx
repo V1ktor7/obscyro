@@ -37,7 +37,7 @@ export default function WorkflowRunChip({
         className={cn("h-2 w-2 shrink-0 rounded-full", STATE_DOT[state])}
         title={state}
       />
-      <span className="font-mono text-[10px] text-gray-600">
+      <span className="text-[10px] text-gray-600">
         Workflow {index + 1}
       </span>
       <button

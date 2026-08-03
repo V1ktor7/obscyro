@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -22,6 +22,7 @@ import {
   type TwinTreeSnapshot,
 } from "@/lib/platform-api";
 
+import { StatusChip } from "../StatusChip";
 import { useStudio } from "../StudioShell";
 import {
   loadTwinLayout,
@@ -292,7 +293,7 @@ export default function SimulationView() {
   if (!hasKey) {
     return (
       <div className="flex flex-1 items-center justify-center bg-white">
-        <p className="max-w-sm text-center text-sm text-gray-500">
+        <p className="max-w-sm text-center text-sm text-ink-muted">
           Sign in and create an API key to run twin-clone simulations.
         </p>
       </div>
@@ -302,19 +303,19 @@ export default function SimulationView() {
   if (!env) {
     return (
       <div className="flex flex-1 items-center justify-center bg-white">
-        <p className="text-sm text-gray-500">Select an environment in the header.</p>
+        <p className="text-sm text-ink-muted">Select an environment in the header.</p>
       </div>
     );
   }
 
   return (
     <div className="flex min-h-0 flex-1">
-      <aside className="flex w-56 shrink-0 flex-col overflow-y-auto border-r border-gray-200 bg-white p-3">
-        <span className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400">
+      <aside className="flex w-56 shrink-0 flex-col overflow-y-auto border-r border-line bg-white p-3">
+        <span className="mb-2 text-[10px] uppercase tracking-wide text-ink-faint">
           Past clones
         </span>
         {scenarios.length === 0 ? (
-          <p className="text-[11px] text-gray-400">No scenarios yet.</p>
+          <p className="text-[11px] text-ink-faint">No scenarios yet.</p>
         ) : (
           scenarios.map((s) => (
             <button
@@ -324,8 +325,8 @@ export default function SimulationView() {
               className={cn(
                 "mb-1 rounded border px-2 py-1.5 text-left text-[11px]",
                 scenarioId === s.id
-                  ? "border-indigo-300 bg-indigo-50 text-indigo-700"
-                  : "border-gray-200 text-gray-600 hover:bg-gray-50",
+                  ? "border-brand bg-brand-soft text-brand-deep"
+                  : "border-line text-ink-muted hover:bg-canvas-raised",
               )}
             >
               {s.name}
@@ -333,8 +334,8 @@ export default function SimulationView() {
           ))
         )}
         {scenarioDetail && scenarioDetail.runs.length > 0 ? (
-          <div className="mt-4 border-t border-gray-100 pt-3">
-            <span className="mb-1 block font-mono text-[9px] uppercase text-gray-400">
+          <div className="mt-4 border-t border-line-faint pt-3">
+            <span className="mb-1 block text-[9px] uppercase text-ink-faint">
               Runs
             </span>
             {scenarioDetail.runs.map((r) => (
@@ -342,7 +343,7 @@ export default function SimulationView() {
                 key={r.id}
                 type="button"
                 onClick={() => void handleSelectRun(r.id)}
-                className="mb-1 block w-full text-left text-[10px] text-gray-500 hover:text-indigo-600"
+                className="mb-1 block w-full text-left text-[10px] text-ink-muted hover:text-brand"
               >
                 {r.status} · {r.createdAt.slice(0, 10)}
               </button>
@@ -355,7 +356,7 @@ export default function SimulationView() {
         <StepIndicator current={step} />
 
         {error ? (
-          <p className="mb-3 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+          <p className="mb-3 rounded border border-danger/40 bg-danger-soft px-3 py-2 text-xs text-danger-ink">
             {error}
           </p>
         ) : null}
@@ -363,13 +364,13 @@ export default function SimulationView() {
         {step === 1 ? (
           <section className="space-y-4">
             <div>
-              <h2 className="mb-1 text-sm font-medium text-gray-800">1. Clone a unit</h2>
-              <p className="text-[11px] text-gray-500">
+              <h2 className="mb-1 text-sm font-medium text-ink">1. Clone a unit</h2>
+              <p className="text-[11px] text-ink-muted">
                 Pick an OrgUnit from the live twin. Cloning creates an isolated scenario copy —
                 the live twin is never modified.
               </p>
             </div>
-            <div className="h-64 overflow-hidden rounded border border-gray-200">
+            <div className="h-64 overflow-hidden rounded border border-line">
               <TwinCanvas
                 snapshot={tree}
                 selectedUnitId={selectedUnitId}
@@ -386,7 +387,7 @@ export default function SimulationView() {
                 value={cloneName}
                 onChange={(e) => setCloneName(e.target.value)}
                 placeholder="Scenario name"
-                className="rounded border border-gray-200 px-2 py-1 text-xs focus:border-gray-400 focus:outline-none"
+                className="rounded border border-line px-2 py-1 text-xs focus:border-brand focus:outline-none"
               />
               <Button
                 onClick={() => void handleClone()}
@@ -399,7 +400,7 @@ export default function SimulationView() {
         ) : null}
 
         {step >= 2 && scenarioDetail ? (
-          <div className="mb-4 rounded border border-indigo-100 bg-indigo-50/50 px-3 py-2 text-[11px] text-indigo-800">
+          <div className="mb-4 rounded border border-brand/30 bg-brand-soft/50 px-3 py-2 text-[11px] text-brand-deep">
             Isolated copy · {scenarioDetail.instanceCount} instances ·{" "}
             {scenarioDetail.linkCount} links
             {scenarioDetail.rootUnitInstanceId
@@ -411,8 +412,8 @@ export default function SimulationView() {
         {step === 2 ? (
           <section className="space-y-4">
             <div>
-              <h2 className="mb-1 text-sm font-medium text-gray-800">2. Inject index case</h2>
-              <p className="text-[11px] text-gray-500">
+              <h2 className="mb-1 text-sm font-medium text-ink">2. Inject index case</h2>
+              <p className="text-[11px] text-ink-muted">
                 Add a patient to the scenario copy and set simulation parameters.
               </p>
             </div>
@@ -471,15 +472,15 @@ export default function SimulationView() {
         {step === 3 ? (
           <section className="space-y-4">
             <div>
-              <h2 className="mb-1 text-sm font-medium text-gray-800">3. Run simulation</h2>
-              <p className="text-[11px] text-gray-500">
+              <h2 className="mb-1 text-sm font-medium text-ink">3. Run simulation</h2>
+              <p className="text-[11px] text-ink-muted">
                 Runs on the scenario copy only. Index node:{" "}
                 {indexNodeId ? indexNodeId.slice(0, 8) + "…" : "—"}
               </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex rounded border border-gray-200 p-0.5">
+              <div className="inline-flex rounded border border-line p-0.5">
                 <ModeTab
                   active={runMode === "mechanistic"}
                   label="Mechanistic"
@@ -498,7 +499,7 @@ export default function SimulationView() {
                     onChange={(e) =>
                       setInterventionKind(e.target.value as MlIntervention["kind"])
                     }
-                    className="rounded border border-gray-200 px-2 py-1 text-[11px] focus:border-gray-400 focus:outline-none"
+                    className="rounded border border-line px-2 py-1 text-[11px] focus:border-brand focus:outline-none"
                   >
                     <option value="none">No intervention</option>
                     <option value="close_unit">Close / cohort root unit</option>
@@ -510,7 +511,7 @@ export default function SimulationView() {
                       step={1}
                       value={interventionBeds}
                       onChange={(e) => setInterventionBeds(e.target.value)}
-                      className="w-20 rounded border border-gray-200 px-2 py-1 text-[11px] focus:border-gray-400 focus:outline-none"
+                      className="w-20 rounded border border-line px-2 py-1 text-[11px] focus:border-brand focus:outline-none"
                       aria-label="Isolation beds to add"
                     />
                   ) : null}
@@ -551,21 +552,17 @@ function StepIndicator({ current }: { current: Step }) {
     { n: 3 as const, label: "Run" },
   ];
   return (
-    <div className="mb-4 flex gap-2">
-      {steps.map((s) => (
-        <span
-          key={s.n}
-          className={cn(
-            "rounded-full border px-2.5 py-0.5 font-mono text-[10px]",
-            current === s.n
-              ? "border-indigo-400 bg-indigo-50 text-indigo-700"
-              : current > s.n
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                : "border-gray-200 text-gray-400",
-          )}
-        >
-          {s.n}. {s.label}
-        </span>
+    <div className="mb-4 flex items-center gap-1.5">
+      {steps.map((s, i) => (
+        <div key={s.n} className="flex items-center gap-1.5">
+          {i > 0 ? <span className="h-px w-4 bg-line" /> : null}
+          <StatusChip
+            tone={current === s.n ? "brand" : current > s.n ? "ok" : "neutral"}
+          >
+            <span className="tabular-nums">{s.n}</span>
+            {s.label}
+          </StatusChip>
+        </div>
       ))}
     </div>
   );
@@ -588,7 +585,7 @@ function ParamField({
 }) {
   return (
     <div>
-      <label className="mb-1 block text-[10px] uppercase tracking-wide text-gray-400">
+      <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink-faint">
         {label}
       </label>
       <input
@@ -603,9 +600,9 @@ function ParamField({
               raw === "" ? undefined : int ? parseInt(raw, 10) : parseFloat(raw),
             );
         }}
-        className="w-full rounded border border-gray-200 px-2 py-1 text-xs focus:border-gray-400 focus:outline-none"
+        className="w-full rounded border border-line px-2 py-1 text-xs focus:border-brand focus:outline-none"
       />
-      {hint ? <p className="mt-0.5 text-[10px] text-gray-400">{hint}</p> : null}
+      {hint ? <p className="mt-0.5 text-[10px] text-ink-faint">{hint}</p> : null}
     </div>
   );
 }
@@ -629,7 +626,7 @@ function ResultsPanel({
 }) {
   const { summary, trajectories, alertTimeline } = result;
   return (
-    <section className="space-y-4 border-t border-gray-100 pt-4">
+    <section className="space-y-4 border-t border-line-faint pt-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetricCard label="Peak infected" value={String(Math.round(summary.peakInfected))} />
         <MetricCard
@@ -645,13 +642,13 @@ function ResultsPanel({
         />
       </div>
       <Card className="p-4">
-        <p className="mb-2 text-xs font-medium text-gray-700">
+        <p className="mb-2 text-xs font-medium text-ink-body">
           Infected trajectory (p50, p5–p95 band)
         </p>
         <TrajectoryChart p5={trajectories.p5} p50={trajectories.p50} p95={trajectories.p95} />
       </Card>
       <Card className="p-4">
-        <p className="mb-2 text-xs font-medium text-gray-700">
+        <p className="mb-2 text-xs font-medium text-ink-body">
           Alerts that would fire on the live twin
         </p>
         <AlertTimelinePanel events={alertTimeline} unitNames={unitNames} />
@@ -663,8 +660,8 @@ function ResultsPanel({
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
     <Card className="p-3">
-      <p className="text-[10px] uppercase tracking-wide text-gray-400">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-gray-900">{value}</p>
+      <p className="text-[10px] uppercase tracking-wide text-ink-faint">{label}</p>
+      <p className="mt-1 text-lg font-semibold text-ink">{value}</p>
     </Card>
   );
 }
@@ -684,7 +681,7 @@ function ModeTab({
       onClick={onClick}
       className={cn(
         "rounded px-2.5 py-1 text-[11px] font-medium transition-colors",
-        active ? "bg-indigo-600 text-white" : "text-gray-500 hover:text-gray-700",
+        active ? "bg-brand text-white" : "text-ink-muted hover:text-ink-body",
       )}
     >
       {label}
@@ -695,20 +692,20 @@ function ModeTab({
 function MlResultsPanel({ result }: { result: MlSimResult }) {
   const { summary, quantiles, model, mlBaselineError, featureImportances } = result;
   return (
-    <section className="space-y-4 border-t border-gray-100 pt-4">
+    <section className="space-y-4 border-t border-line-faint pt-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge tone={model.fallback ? "amber" : "emerald"}>
+        <StatusChip tone={model.fallback ? "warn" : "ok"}>
           {model.fallback ? "Mechanistic fallback" : "ML model"}
-        </Badge>
-        <Badge tone="slate">{model.type}</Badge>
-        {model.version ? <Badge tone="slate">v{model.version}</Badge> : null}
-        <Badge tone="slate">seed {result.seed}</Badge>
+        </StatusChip>
+        <StatusChip>{model.type}</StatusChip>
+        {model.version ? <StatusChip>v{model.version}</StatusChip> : null}
+        <StatusChip>seed {result.seed}</StatusChip>
         {result.usedFallback ? (
-          <Badge tone="amber">service offline → in-process baseline</Badge>
+          <StatusChip tone="warn">service offline → in-process baseline</StatusChip>
         ) : null}
       </div>
       {model.fallback && model.fallback_reason ? (
-        <p className="text-[11px] text-amber-700">{model.fallback_reason}</p>
+        <p className="text-[11px] text-warn-ink">{model.fallback_reason}</p>
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -725,7 +722,7 @@ function MlResultsPanel({ result }: { result: MlSimResult }) {
       </div>
 
       <Card className="p-4">
-        <p className="mb-2 text-xs font-medium text-gray-700">
+        <p className="mb-2 text-xs font-medium text-ink-body">
           ML forecast — infected (p50, p10–p90 band)
         </p>
         <TrajectoryChart p5={quantiles.p10} p50={quantiles.p50} p95={quantiles.p90} />
@@ -733,34 +730,34 @@ function MlResultsPanel({ result }: { result: MlSimResult }) {
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Card className="p-4">
-          <p className="mb-2 text-xs font-medium text-gray-700">ML vs mechanistic baseline</p>
-          <dl className="space-y-1 text-[11px] text-gray-600">
+          <p className="mb-2 text-xs font-medium text-ink-body">ML vs mechanistic baseline</p>
+          <dl className="space-y-1 text-[11px] text-ink-muted">
             <ErrRow label="RMSE (infected)" value={mlBaselineError.rmse} />
             <ErrRow label="MAE (infected)" value={mlBaselineError.mae} />
             <ErrRow label="Peak abs error" value={mlBaselineError.peakAbsError} />
           </dl>
-          <p className="mt-2 text-[10px] text-gray-400">
+          <p className="mt-2 text-[10px] text-ink-faint">
             Lower = ML output closer to the mechanistic SEIR baseline (0 at cold-start).
           </p>
         </Card>
         <Card className="p-4">
-          <p className="mb-2 text-xs font-medium text-gray-700">Feature importances</p>
+          <p className="mb-2 text-xs font-medium text-ink-body">Feature importances</p>
           {featureImportances.length === 0 ? (
-            <p className="text-[11px] text-gray-400">No importances reported.</p>
+            <p className="text-[11px] text-ink-faint">No importances reported.</p>
           ) : (
             <ul className="space-y-1.5">
               {featureImportances.map((fi) => (
                 <li key={fi.feature} className="flex items-center gap-2">
-                  <span className="w-28 shrink-0 truncate text-[11px] text-gray-600">
+                  <span className="w-28 shrink-0 truncate text-[11px] text-ink-muted">
                     {fi.feature}
                   </span>
-                  <span className="h-2 flex-1 overflow-hidden rounded bg-gray-100">
+                  <span className="h-2 flex-1 overflow-hidden rounded bg-canvas">
                     <span
-                      className="block h-full rounded bg-indigo-500"
+                      className="block h-full rounded bg-brand"
                       style={{ width: `${Math.round(fi.importance * 100)}%` }}
                     />
                   </span>
-                  <span className="w-10 shrink-0 text-right font-mono text-[10px] text-gray-500">
+                  <span className="w-10 shrink-0 text-right text-[10px] text-ink-muted">
                     {(fi.importance * 100).toFixed(0)}%
                   </span>
                 </li>
@@ -770,7 +767,7 @@ function MlResultsPanel({ result }: { result: MlSimResult }) {
         </Card>
       </div>
 
-      <p className="text-[10px] text-gray-400">
+      <p className="text-[10px] text-ink-faint">
         {result.predictedWritten} predicted unit propert
         {result.predictedWritten === 1 ? "y" : "ies"} written to the scenario branch with
         provenance · DAG: {result.graphTrace.map((t) => t.node).join(" → ")}
@@ -783,31 +780,8 @@ function ErrRow({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex justify-between">
       <dt>{label}</dt>
-      <dd className="font-mono text-gray-800">{value.toFixed(2)}</dd>
+      <dd className="text-ink">{value.toFixed(2)}</dd>
     </div>
   );
 }
 
-function Badge({
-  children,
-  tone,
-}: {
-  children: ReactNode;
-  tone: "emerald" | "amber" | "slate";
-}) {
-  const tones: Record<string, string> = {
-    emerald: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    amber: "border-amber-200 bg-amber-50 text-amber-700",
-    slate: "border-gray-200 bg-gray-50 text-gray-600",
-  };
-  return (
-    <span
-      className={cn(
-        "rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide",
-        tones[tone],
-      )}
-    >
-      {children}
-    </span>
-  );
-}

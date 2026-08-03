@@ -3,10 +3,9 @@
 import { motion } from "framer-motion";
 import { useCallback, useEffect, useState } from "react";
 
-import { Badge } from "@/components/ui/Badge";
+import { StatusChip } from "../StatusChip";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { cn } from "@/lib/cn";
 
 import {
   fetchInstanceScore,
@@ -96,7 +95,7 @@ export default function LiveView() {
   if (!hasKey) {
     return (
       <div className="flex flex-1 items-center justify-center bg-white">
-        <p className="max-w-sm text-center text-sm text-gray-500">
+        <p className="max-w-sm text-center text-sm text-ink-muted">
           Sign in and create an API key to view live metrics.
         </p>
       </div>
@@ -106,7 +105,7 @@ export default function LiveView() {
   if (!env) {
     return (
       <div className="flex flex-1 items-center justify-center bg-white">
-        <p className="text-sm text-gray-500">Select an environment in the header.</p>
+        <p className="text-sm text-ink-muted">Select an environment in the header.</p>
       </div>
     );
   }
@@ -116,44 +115,32 @@ export default function LiveView() {
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <label className="flex flex-1 items-center gap-2 min-w-[200px]">
-            <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.18em] text-gray-400">
+            <span className="shrink-0 text-[10px] uppercase tracking-wide text-ink-faint">
               where
             </span>
             <input
               value={whereInput}
               onChange={(e) => setWhereInput(e.target.value)}
               placeholder="key=value, key2=value2"
-              className="flex-1 rounded-md border border-gray-200 px-2 py-1 text-xs focus:border-gray-400 focus:outline-none"
+              className="flex-1 rounded-md border border-line px-2 py-1 text-xs focus:border-brand focus:outline-none"
             />
           </label>
-          <span
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[10px]",
-              mode === "stream"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                : mode === "poll"
-                  ? "border-amber-200 bg-amber-50 text-amber-700"
-                  : "border-gray-200 bg-gray-50 text-gray-400",
-            )}
+          <StatusChip
+            tone={mode === "stream" ? "ok" : mode === "poll" ? "warn" : "neutral"}
+            dot={mode === "stream" ? "bg-ok" : mode === "poll" ? "bg-warn" : "bg-ink-ghost"}
           >
-            <span
-              className={cn(
-                "h-1.5 w-1.5 rounded-full",
-                mode === "stream" ? "bg-emerald-500" : mode === "poll" ? "bg-amber-500" : "bg-gray-300",
-              )}
-            />
-            {mode === "stream" ? "Live (stream)" : mode === "poll" ? "Polling (fallback)" : "Connecting…"}
-          </span>
+            {mode === "stream" ? "Live stream" : mode === "poll" ? "Polling" : "Connecting"}
+          </StatusChip>
         </div>
 
         {error ? (
-          <p className="mb-3 rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+          <p className="mb-3 rounded border border-danger/40 bg-danger-soft px-3 py-2 text-xs text-danger-ink">
             {error}
           </p>
         ) : null}
 
         {!metrics ? (
-          <p className="text-sm text-gray-400">Waiting for metrics…</p>
+          <p className="text-sm text-ink-faint">Waiting for metrics…</p>
         ) : (
           <>
             <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -173,12 +160,12 @@ export default function LiveView() {
 
             {metrics.occupancy.length > 0 ? (
               <section>
-                <h2 className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400">
+                <h2 className="mb-2 text-[10px] uppercase tracking-wide text-ink-faint">
                   Occupancy
                 </h2>
                 <table className="w-full max-w-lg border-collapse text-left text-xs">
                   <thead>
-                    <tr className="border-b border-gray-200 text-[10px] uppercase tracking-wide text-gray-400">
+                    <tr className="border-b border-line text-[10px] uppercase tracking-wide text-ink-faint">
                       <th className="px-2 py-1.5 font-medium">Type</th>
                       <th className="px-2 py-1.5 font-medium">Status</th>
                       <th className="px-2 py-1.5 font-medium">Count</th>
@@ -186,10 +173,10 @@ export default function LiveView() {
                   </thead>
                   <tbody>
                     {metrics.occupancy.map((o, i) => (
-                      <tr key={i} className="border-b border-gray-100">
-                        <td className="px-2 py-1.5 text-gray-700">{o.typeName}</td>
-                        <td className="px-2 py-1.5 text-gray-500">{o.value}</td>
-                        <td className="px-2 py-1.5 text-gray-700">{o.count}</td>
+                      <tr key={i} className="border-b border-line-faint">
+                        <td className="px-2 py-1.5 text-ink-body">{o.typeName}</td>
+                        <td className="px-2 py-1.5 text-ink-muted">{o.value}</td>
+                        <td className="px-2 py-1.5 text-ink-body">{o.count}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -200,8 +187,8 @@ export default function LiveView() {
         )}
       </div>
 
-      <aside className="w-full shrink-0 border-t border-gray-200 bg-white p-4 lg:w-72 lg:border-l lg:border-t-0">
-        <h2 className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400">
+      <aside className="w-full shrink-0 border-t border-line bg-white p-4 lg:w-72 lg:border-l lg:border-t-0">
+        <h2 className="mb-3 text-[10px] uppercase tracking-wide text-ink-faint">
           Instance score
         </h2>
         <div className="flex flex-col gap-2">
@@ -209,7 +196,7 @@ export default function LiveView() {
             value={scoreInstanceId}
             onChange={(e) => setScoreInstanceId(e.target.value)}
             placeholder="Instance UUID"
-            className="rounded border border-gray-200 px-2 py-1.5 text-xs focus:border-gray-400 focus:outline-none"
+            className="rounded border border-line px-2 py-1.5 text-xs focus:border-brand focus:outline-none"
           />
           <Button size="sm" onClick={() => void handleScore()} disabled={scoring || !scoreInstanceId.trim()}>
             {scoring ? "Scoring…" : "Score"}
@@ -217,13 +204,13 @@ export default function LiveView() {
         </div>
         {score ? (
           <div className="mt-4 space-y-2">
-            <p className="text-xs text-gray-500">{score.typeName}</p>
-            <p className="text-2xl font-semibold text-gray-900">{score.total}</p>
+            <p className="text-xs text-ink-muted">{score.typeName}</p>
+            <p className="text-2xl font-semibold text-ink">{score.total}</p>
             <div className="flex flex-wrap gap-1.5">
               {Object.entries(score.breakdown).map(([key, pts]) => (
-                <Badge key={key} tone="default">
+                <StatusChip key={key} tone="neutral">
                   {key}: {pts}
-                </Badge>
+                </StatusChip>
               ))}
             </div>
           </div>
@@ -244,17 +231,17 @@ function MetricCard({
 }) {
   return (
     <Card className="p-3">
-      <p className="text-[10px] uppercase tracking-wide text-gray-400">{label}</p>
+      <p className="text-[10px] uppercase tracking-wide text-ink-faint">{label}</p>
       <motion.p
         key={value}
         initial={{ opacity: 0.6, y: 2 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2 }}
-        className="mt-1 text-xl font-semibold text-gray-900"
+        className="mt-1 text-xl font-semibold text-ink"
       >
         {value}
       </motion.p>
-      {sub ? <p className="mt-0.5 text-[10px] text-gray-400">{sub}</p> : null}
+      {sub ? <p className="mt-0.5 text-[10px] text-ink-faint">{sub}</p> : null}
     </Card>
   );
 }

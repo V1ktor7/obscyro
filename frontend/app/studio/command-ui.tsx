@@ -256,7 +256,7 @@ export function GaugeArc({
         x={size / 2}
         y={size / 2 + 4}
         textAnchor="middle"
-        className="fill-[#1c2127] font-mono text-[13px] font-semibold"
+        className="fill-[#1c2127] text-[13px] font-semibold"
       >
         {pct == null ? "—" : `${Math.round(clamped)}%`}
       </text>

@@ -761,7 +761,7 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                               {item.span}
                             </span>
                             {item.code ? (
-                              <span className="shrink-0 rounded bg-[#e7f2fd] px-1 py-0.5 font-mono text-[9px] text-[#215db0]">
+                              <span className="shrink-0 rounded bg-[#e7f2fd] px-1 py-0.5 text-[9px] text-[#215db0]">
                                 {item.code}
                               </span>
                             ) : null}
@@ -916,7 +916,7 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                             <td className="border-b border-[#e5e8eb] px-2 py-1.5 font-medium text-[#1c2127]">
                               {r.span}
                             </td>
-                            <td className="border-b border-[#e5e8eb] px-2 py-1.5 font-mono text-[10px]">
+                            <td className="border-b border-[#e5e8eb] px-2 py-1.5 text-[10px]">
                               {r.code ?? "—"}
                             </td>
                             <td className="border-b border-[#e5e8eb] px-2 py-1.5">
@@ -1161,7 +1161,7 @@ function StepCard({
               {step.enabled ? "on" : "off"}
             </button>
           </span>
-          <span className="block truncate font-mono text-[10px] text-[#8f99a8]">
+          <span className="block truncate text-[10px] text-[#8f99a8]">
             {stepSummary(step)}
           </span>
         </span>
@@ -1286,7 +1286,10 @@ function StepConfigForm({
                 <WebhookUrlRow url={intake.webhookUrl} />
                 <p className="text-[10px] text-[#8f99a8]">
                   Payloads run this channel server-side while it is live. Send{" "}
-                  <span className="font-mono">{'{ "text": "…" }'}</span> or set a JSON field
+                  <span className="rounded bg-canvas-raised px-1 ring-1 ring-line-soft">
+                    {'{ "text": "…" }'}
+                  </span>{" "}
+                  or set a JSON field
                   path in the transform step.
                 </p>
               </div>

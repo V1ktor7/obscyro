@@ -187,11 +187,11 @@ export default function GovernView() {
                 <tbody>
                   {events.map((e) => (
                     <tr key={e.id} className="border-t border-[#e5e8eb]">
-                      <td className="whitespace-nowrap px-3 py-1.5 font-mono text-[11px] text-[#5f6b7c]">
+                      <td className="whitespace-nowrap px-3 py-1.5 text-[11px] text-[#5f6b7c]">
                         {new Date(e.createdAt).toLocaleString("en-CA", { hour12: false })}
                       </td>
                       <td className="px-3 py-1.5 text-[#1c2127]">{e.actorEmail ?? "—"}</td>
-                      <td className="px-3 py-1.5 font-mono text-[11px] text-[#215db0]">{e.action}</td>
+                      <td className="px-3 py-1.5 text-[11px] text-[#215db0]">{e.action}</td>
                       <td className="px-3 py-1.5 text-[#5f6b7c]">
                         {e.resourceType ?? "—"}
                       </td>

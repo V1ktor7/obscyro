@@ -89,7 +89,7 @@ export default function SchemaMappingPanel({
 
       {sourcePaths.length > 0 ? (
         <div>
-          <span className="mb-1 block font-mono text-[9px] uppercase tracking-[0.18em] text-gray-400">
+          <span className="mb-1 block text-[9px] uppercase tracking-wide text-gray-400">
             Source fields
           </span>
           <div className="flex flex-wrap gap-1">
@@ -101,7 +101,7 @@ export default function SchemaMappingPanel({
                   e.dataTransfer.setData(FIELD_PATH_MIME, path);
                   e.dataTransfer.effectAllowed = "copy";
                 }}
-                className="cursor-grab rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 font-mono text-[10px] text-sky-800 active:cursor-grabbing"
+                className="cursor-grab rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] text-sky-800 active:cursor-grabbing"
               >
                 {path}
               </span>
@@ -118,7 +118,7 @@ export default function SchemaMappingPanel({
       {selectedType ? (
         <>
           <div className="flex items-center justify-between">
-            <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-gray-400">
+            <span className="text-[9px] uppercase tracking-wide text-gray-400">
               Ontology properties
             </span>
             <button
@@ -207,7 +207,7 @@ function PropertyDropRow({
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <span className="text-xs font-medium text-gray-800">{propertyKey}</span>
-          <span className="ml-1.5 font-mono text-[9px] text-gray-400">{propertyType}</span>
+          <span className="ml-1.5 text-[9px] text-gray-400">{propertyType}</span>
           {label ? (
             <span className="ml-1 text-[10px] text-gray-500">· {label}</span>
           ) : null}
@@ -222,7 +222,7 @@ function PropertyDropRow({
           </button>
         ) : null}
       </div>
-      <div className="mt-0.5 font-mono text-[10px] text-gray-600">
+      <div className="mt-0.5 text-[10px] text-gray-600">
         {source ? (
           <span className="text-emerald-700">← {source}</span>
         ) : (

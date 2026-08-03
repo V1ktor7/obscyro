@@ -308,7 +308,7 @@ export default function HomeView() {
                   >
                     <Box className="h-3.5 w-3.5 shrink-0 self-center text-[#215db0]" />
                     <span className="min-w-0 flex-1 truncate">
-                      <span className="font-mono text-[11px] text-[#215db0]">{a.action}</span>
+                      <span className="text-[11px] text-[#215db0]">{a.action}</span>
                       {a.resourceType ? (
                         <span className="text-[#8f99a8]"> · {a.resourceType}</span>
                       ) : null}

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { Badge } from "@/components/ui/Badge";
+import { StatusChip, type ChipTone } from "../StatusChip";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 
@@ -16,10 +16,10 @@ import {
 } from "../quality-api";
 import { useStudio } from "../StudioShell";
 
-function severityTone(severity: QualityFlag["severity"]): "danger" | "warning" | "default" {
+function severityTone(severity: QualityFlag["severity"]): ChipTone {
   if (severity === "error") return "danger";
-  if (severity === "warn") return "warning";
-  return "default";
+  if (severity === "warn") return "warn";
+  return "neutral";
 }
 
 export default function QualityView() {
@@ -110,7 +110,7 @@ export default function QualityView() {
       <div className="mx-auto max-w-4xl space-y-6">
         <div className="flex flex-wrap items-center gap-3">
           <label className="flex flex-1 items-center gap-2 min-w-[200px]">
-            <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.18em] text-gray-400">
+            <span className="shrink-0 text-[10px] uppercase tracking-wide text-gray-400">
               where
             </span>
             <input
@@ -121,7 +121,7 @@ export default function QualityView() {
             />
           </label>
           <label className="flex items-center gap-2">
-            <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.18em] text-gray-400">
+            <span className="shrink-0 text-[10px] uppercase tracking-wide text-gray-400">
               severity
             </span>
             <select
@@ -147,7 +147,7 @@ export default function QualityView() {
         ) : null}
 
         <section>
-          <h2 className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400">
+          <h2 className="mb-3 text-[10px] uppercase tracking-wide text-gray-400">
             Quality layers
           </h2>
           <div className="space-y-2">
@@ -165,7 +165,7 @@ export default function QualityView() {
                         : "border-gray-200 bg-white",
                   )}
                 >
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-900 font-mono text-[10px] text-white">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand text-[10px] text-white">
                     {layer.layer}
                   </span>
                   <div className="min-w-0 flex-1">
@@ -173,9 +173,9 @@ export default function QualityView() {
                     <p className="text-[10px] text-gray-400">{layer.description}</p>
                   </div>
                   {layer.disabled ? (
-                    <Badge tone="default">disabled</Badge>
+                    <StatusChip tone="neutral">disabled</StatusChip>
                   ) : (
-                    <span className="font-mono text-sm font-semibold text-gray-700">{count}</span>
+                    <span className="text-sm font-semibold text-gray-700">{count}</span>
                   )}
                 </div>
               );
@@ -194,7 +194,7 @@ export default function QualityView() {
         </section>
 
         <section>
-          <h2 className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-gray-400">
+          <h2 className="mb-2 text-[10px] uppercase tracking-wide text-gray-400">
             Open flags
           </h2>
           {loadingFlags ? (
@@ -217,12 +217,12 @@ export default function QualityView() {
                 <tbody>
                   {flags.map((f) => (
                     <tr key={f.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="px-2 py-1.5 font-mono text-[10px] text-gray-600">
+                      <td className="px-2 py-1.5 text-[10px] text-gray-600">
                         {f.instanceId.slice(0, 8)}…
                       </td>
                       <td className="px-2 py-1.5 text-gray-500">L{f.layer}</td>
                       <td className="px-2 py-1.5">
-                        <Badge tone={severityTone(f.severity)}>{f.severity}</Badge>
+                        <StatusChip tone={severityTone(f.severity)}>{f.severity}</StatusChip>
                       </td>
                       <td className="max-w-[200px] truncate px-2 py-1.5 text-gray-700">
                         {f.message}

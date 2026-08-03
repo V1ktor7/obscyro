@@ -239,7 +239,7 @@ export default function WebhookNodeForm({
           type="button"
           disabled={busy}
           onClick={() => createSource(false)}
-          className="w-full rounded-md bg-gray-900 px-3 py-2 text-xs text-white hover:bg-gray-700 disabled:opacity-40"
+          className="w-full rounded-md bg-brand px-3 py-2 text-xs text-white hover:bg-brand-deep disabled:opacity-40"
         >
           {busy ? "Creating…" : "Create webhook"}
         </button>
@@ -256,7 +256,7 @@ export default function WebhookNodeForm({
         <input
           readOnly
           value={config.webhookUrl ?? ""}
-          className="min-w-0 flex-1 rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 font-mono text-[10px] text-gray-700"
+          className="min-w-0 flex-1 rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-[10px] text-gray-700"
         />
         <button
           type="button"
@@ -458,7 +458,7 @@ export default function WebhookNodeForm({
           type="button"
           disabled={busy}
           onClick={save}
-          className="flex-1 rounded-md bg-gray-900 px-3 py-2 text-xs text-white hover:bg-gray-700 disabled:opacity-40"
+          className="flex-1 rounded-md bg-brand px-3 py-2 text-xs text-white hover:bg-brand-deep disabled:opacity-40"
         >
           {busy ? "Saving…" : "Save"}
         </button>
@@ -484,7 +484,7 @@ export default function WebhookNodeForm({
 
       {config.lastEventPayload != null && (
         <div className="mt-3">
-          <span className="mb-1 block font-mono text-[9px] uppercase tracking-wide text-sky-600">
+          <span className="mb-1 block text-[9px] uppercase tracking-wide text-sky-600">
             Latest received payload
           </span>
           <pre className="max-h-40 overflow-auto rounded-md border border-gray-200 bg-gray-50 p-2 font-mono text-[10px] leading-snug text-gray-700">

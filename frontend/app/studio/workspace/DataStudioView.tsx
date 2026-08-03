@@ -756,7 +756,7 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
                 Not run yet — Preview executes the flow without writing anywhere.
               </p>
             ) : selectedResult.rows && selectedResult.rows.length > 0 ? (
-              <table className="w-full border-collapse text-left font-mono text-[10.5px]">
+              <table className="w-full border-collapse text-left text-[10.5px]">
                 <thead>
                   <tr>
                     {Object.keys(selectedResult.rows[0])
@@ -1638,7 +1638,7 @@ function NodeInspector({
                 value={node.config.expression}
                 onChange={(e) => onPatchConfig("expression", e.target.value)}
                 rows={3}
-                className={cn(FIELD, "resize-y font-mono text-[11px]")}
+                className={cn(FIELD, "resize-y text-[11px]")}
               />
             </label>
           </>
@@ -1661,7 +1661,7 @@ function NodeInspector({
                 value={node.config.metrics}
                 onChange={(e) => onPatchConfig("metrics", e.target.value)}
                 placeholder="sum:value, avg:confidence"
-                className={cn(FIELD, "font-mono text-[11px]")}
+                className={cn(FIELD, "text-[11px]")}
               />
             </label>
             <p className="mt-2 text-[10.5px] leading-relaxed text-[#8f99a8]">
@@ -1767,7 +1767,7 @@ function NodeInspector({
                   value={node.config.url}
                   onChange={(e) => onPatchConfig("url", e.target.value)}
                   placeholder="https://api.example.com/import"
-                  className={cn(FIELD, "font-mono text-[11px]")}
+                  className={cn(FIELD, "text-[11px]")}
                 />
               </label>
             </div>
@@ -1789,7 +1789,7 @@ function NodeInspector({
                 onChange={(e) => onPatchConfig("headersJson", e.target.value)}
                 rows={3}
                 placeholder='{"Authorization": "Bearer …"}'
-                className={cn(FIELD, "resize-y font-mono text-[11px]")}
+                className={cn(FIELD, "resize-y text-[11px]")}
               />
             </label>
             <p className="mt-2 text-[10.5px] leading-relaxed text-[#8f99a8]">

@@ -163,7 +163,7 @@ export default function AdminView() {
                         ))}
                       </select>
                     </td>
-                    <td className="px-3 py-1.5 font-mono text-[11px] text-[#8f99a8]">
+                    <td className="px-3 py-1.5 text-[11px] text-[#8f99a8]">
                       {m.lastLoginAt
                         ? new Date(m.lastLoginAt).toLocaleDateString("en-CA")
                         : "never"}
@@ -182,7 +182,7 @@ export default function AdminView() {
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-xs font-medium text-[#1c2127]">{e.name}</p>
-                  <p className="truncate font-mono text-[11px] text-[#8f99a8]">{e.slug}</p>
+                  <p className="truncate text-[11px] text-[#8f99a8]">{e.slug}</p>
                 </div>
                 <span className="rounded border border-[#d3d8de] px-2 py-0.5 text-[10.5px] text-[#5f6b7c]">
                   {e.type}

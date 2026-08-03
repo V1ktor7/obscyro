@@ -132,7 +132,7 @@ export default function TrajectoryChart({ p5, p50, p95 }: TrajectoryChartProps) 
               x={scales.padLeft - 6}
               y={yScale(scales, tick) + 3}
               textAnchor="end"
-              className="fill-gray-400 text-[10px] font-mono"
+              className="fill-ink-faint text-[10px]"
             >
               {tick}
             </text>
@@ -142,14 +142,14 @@ export default function TrajectoryChart({ p5, p50, p95 }: TrajectoryChartProps) 
           x={scales.width / 2}
           y={scales.height - 4}
           textAnchor="middle"
-          className="fill-gray-400 text-[10px] font-mono"
+          className="fill-ink-faint text-[10px]"
         >
           day
         </text>
         <text
           x={8}
           y={scales.padTop + 8}
-          className="fill-gray-400 text-[10px] font-mono"
+          className="fill-ink-faint text-[10px]"
         >
           infected
         </text>

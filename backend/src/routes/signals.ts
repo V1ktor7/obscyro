@@ -18,6 +18,7 @@ import {
   listWorkflows,
   moveSignal,
   raiseSignal,
+  renameSignalDomain,
   stagesForSignal,
 } from "../services/signals.js";
 
@@ -327,6 +328,44 @@ const signalRoutes: FastifyPluginAsync = async (fastify) => {
         metadata: { key: t.key, domain: t.domain },
       });
       return reply.code(201).send(t);
+    },
+  );
+
+  app.patch(
+    "/ontology/:env/signal-domains/:domain",
+    {
+      schema: {
+        summary: "Rename a domain across the signal types that carry it",
+        tags: ["signals"],
+        params: z.object({ env: z.string().min(1), domain: z.string().min(1) }),
+        body: z.object({ name: z.string().min(1).max(120) }),
+        response: {
+          200: z.object({ domain: z.string(), signalTypes: z.number() }),
+          404: errorEnvelope,
+        },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const moved = await renameSignalDomain(
+        req.db,
+        env.organizationId,
+        req.params.domain,
+        req.body.name,
+      );
+      if (moved === 0) {
+        throw NotFound("DOMAIN_NOT_FOUND", "No signal type uses that domain.");
+      }
+      await recordAudit(req.db, {
+        projectId: env.id,
+        actorUserId: userId,
+        action: "signal_domain.rename",
+        resourceType: "organization",
+        resourceId: env.organizationId,
+        metadata: { from: req.params.domain, to: req.body.name, signalTypes: moved },
+      });
+      return { domain: req.body.name, signalTypes: moved };
     },
   );
 

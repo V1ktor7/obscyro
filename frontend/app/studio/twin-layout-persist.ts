@@ -9,7 +9,7 @@ export type TwinLayout = Record<string, { x: number; y: number }>;
 const PREFIX = "obs_twin_layout_v1:";
 
 export const TWIN_NODE_W = 168;
-export const TWIN_NODE_H = 72;
+export const TWIN_NODE_H = 54;
 export const TWIN_COL_GAP = 220;
 export const TWIN_ROW_GAP = 120;
 export const TWIN_ORIGIN = { x: 64, y: 64 };

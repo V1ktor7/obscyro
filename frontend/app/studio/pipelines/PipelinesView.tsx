@@ -1392,7 +1392,7 @@ function Inspector({
                         value={r.linkType ?? ""}
                         onChange={(e) => patch({ linkType: e.target.value })}
                         placeholder="located_in"
-                        className="min-w-0 flex-1 rounded border border-[#d3d8de] px-1.5 py-1 font-mono text-[11px]"
+                        className="min-w-0 flex-1 rounded border border-[#d3d8de] px-1.5 py-1 text-[11px]"
                       />
                     </div>
                   </div>

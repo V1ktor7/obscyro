@@ -109,6 +109,36 @@ export async function seedSignalConfig(
   return apiFetch(`/v1/ontology/${enc(env)}/signal-config/seed`, { method: "POST", body: {} });
 }
 
+/**
+ * Define a signal type. Naming a domain that does not exist yet creates it —
+ * a domain is only ever the string its types agree on.
+ */
+export async function createSignalType(
+  env: string,
+  body: {
+    key: string;
+    name: string;
+    domain: string;
+    workflowId: string;
+    defaultSeverity?: Severity;
+    description?: string;
+    alertMetric?: string | null;
+  },
+): Promise<SignalType> {
+  return apiFetch(`/v1/ontology/${enc(env)}/signal-types`, { method: "POST", body });
+}
+
+export async function renameSignalDomain(
+  env: string,
+  domain: string,
+  name: string,
+): Promise<{ domain: string; signalTypes: number }> {
+  return apiFetch(`/v1/ontology/${enc(env)}/signal-domains/${enc(domain)}`, {
+    method: "PATCH",
+    body: { name },
+  });
+}
+
 export async function getSignalDetail(
   id: string,
 ): Promise<{ signal: Signal; stages: WorkflowStage[]; events: SignalEvent[] }> {

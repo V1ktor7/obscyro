@@ -51,7 +51,7 @@ export default function FormatDetectNodeForm({
       <label className={labelCls}>Last detected format</label>
       <div className="mb-3 rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2">
         {lastDetectedFormat ? (
-          <span className="inline-flex items-center rounded border border-amber-300 bg-amber-50 px-2 py-0.5 font-mono text-[11px] font-medium uppercase tracking-wide text-amber-800">
+          <span className="inline-flex items-center rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-amber-800">
             {lastDetectedFormat}
           </span>
         ) : (
@@ -78,7 +78,7 @@ export default function FormatDetectNodeForm({
             key={branch}
             className="mb-1.5 flex items-start gap-2 text-[11px] last:mb-0"
           >
-            <span className="shrink-0 font-mono font-medium uppercase text-amber-700">
+            <span className="shrink-0 font-medium uppercase text-amber-700">
               {branch}
             </span>
             <span className="text-gray-500">{BRANCH_HINTS[branch]}</span>

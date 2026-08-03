@@ -135,7 +135,7 @@ export default function CrisisLaneChart({
               {factor.name}
             </span>
             <span
-              className="font-mono text-[10px] tabular-nums"
+              className="text-[10px] tabular-nums"
               style={{ color: factor.color }}
             >
               {factor.fmt(factor.base)}
@@ -143,7 +143,7 @@ export default function CrisisLaneChart({
             {dataSource && (
               <span
                 className={cn(
-                  "rounded px-1 py-0.5 font-mono text-[8px] uppercase tracking-wide",
+                  "rounded px-1 py-0.5 text-[8px] uppercase tracking-wide",
                   dataSource === "backend"
                     ? "bg-emerald-50 text-emerald-700"
                     : "bg-amber-50 text-amber-700",
@@ -154,7 +154,7 @@ export default function CrisisLaneChart({
             )}
           </div>
         </div>
-        <div className="flex shrink-0 gap-3 font-mono text-[9px] text-gray-400">
+        <div className="flex shrink-0 gap-3 text-[9px] text-gray-400">
           <span>warn {factor.fmt(factor.warn)}</span>
           <span>crit {factor.fmt(factor.crit)}</span>
         </div>

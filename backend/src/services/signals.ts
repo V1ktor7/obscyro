@@ -259,6 +259,29 @@ export async function createSignalType(
   return types.find((t) => t.id === rows[0]!.id)!;
 }
 
+/**
+ * Rename a domain across every signal type that carries it.
+ *
+ * A domain is not a row anywhere — it is whatever string the signal types in it
+ * agree on. So renaming one is an update across those types, and a domain with
+ * no types simply stops existing. That is the point of leaving it free text:
+ * an institution that organises itself around "Bloc opératoire" should not have
+ * to wait for us to add an enum value.
+ */
+export async function renameSignalDomain(
+  db: DbClient,
+  organizationId: string,
+  from: string,
+  to: string,
+): Promise<number> {
+  const { rowCount } = await db.query(
+    `UPDATE app.signal_type SET domain = $3, updated_at = NOW()
+      WHERE organization_id = $1 AND domain = $2`,
+    [organizationId, from, to],
+  );
+  return rowCount ?? 0;
+}
+
 // --- signals ------------------------------------------------------------------
 
 const S_SELECT = `

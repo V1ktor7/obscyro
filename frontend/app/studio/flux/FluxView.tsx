@@ -282,7 +282,7 @@ export default function FluxView() {
                   <div className="mt-0.5 text-[9px] text-gray-400">
                     {s.type}/{s.method}
                   </div>
-                  <div className="mt-0.5 font-mono text-[9px] text-gray-500">
+                  <div className="mt-0.5 text-[9px] text-gray-500">
                     Last{" "}
                     {st?.lastEventAt ? timeAgo(st.lastEventAt) : "—"} ·{" "}
                     {st?.eventsPerMin != null
@@ -303,7 +303,7 @@ export default function FluxView() {
           </div>
           <div className="max-h-36 overflow-y-auto rounded-lg border border-gray-200 bg-white p-2">
             <PanelHead title={<MicroLabel>Ingest log</MicroLabel>} />
-            <div className="space-y-0.5 font-mono text-[9px]">
+            <div className="space-y-0.5 text-[9px]">
               {logLines.map((l, i) => (
                 <div
                   key={i}
@@ -424,7 +424,7 @@ function DetectionCard({
           <div className="text-[9px] text-gray-500">{d.detail}</div>
           <span
             className={cn(
-              "mt-1 inline-block rounded px-1 font-mono text-[8px] uppercase",
+              "mt-1 inline-block rounded px-1 text-[8px] uppercase",
               d.tier === "real"
                 ? "bg-emerald-50 text-emerald-700"
                 : d.tier === "heuristic"
@@ -438,7 +438,7 @@ function DetectionCard({
       </div>
       {triage ? (
         <div className="mt-2 rounded bg-gray-50 p-1.5 text-[9px] text-gray-600">
-          <span className="font-mono text-[8px] text-violet-600">LLM · preview</span>
+          <span className="text-[8px] text-violet-600">LLM · preview</span>
           <p>{triage.text}</p>
           <span className="text-gray-400">
             confidence {(triage.confidence * 100).toFixed(0)}%

@@ -262,7 +262,21 @@ export default function StudioShell({ children }: { children: ReactNode }) {
 
   return (
     <StudioContext.Provider value={value}>
-      <div className="flex h-screen flex-col bg-white text-[#1c2127]">
+      {/*
+        `--accent` is #111111 globally — the marketing site's black, and what
+        `Button variant="primary"` paints with. Inside the Studio the primary
+        action colour is brand blue; scoping the variable here turns every black
+        button in the product blue at once, without touching the public pages.
+      */}
+      <div
+        className="flex h-screen flex-col bg-white text-ink"
+        style={
+          {
+            "--accent": "#2d72d2",
+            "--accent-fg": "#ffffff",
+          } as React.CSSProperties
+        }
+      >
         <header className="flex h-11 shrink-0 items-center gap-3 border-b border-[#d3d8de] bg-[#f6f7f9] px-3">
           <Link href="/studio/home" className="flex items-baseline gap-1.5">
             <span className="text-sm font-medium lowercase tracking-tight">obscyro</span>

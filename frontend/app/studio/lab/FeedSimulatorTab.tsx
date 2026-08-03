@@ -450,7 +450,7 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
                   value={draft.url}
                   onChange={(e) => patchDraft({ url: e.target.value })}
                   placeholder="https://api.obscyro.com/v1/webhooks/…"
-                  className={cn(FIELD, "w-full font-mono text-[11px]")}
+                  className={cn(FIELD, "w-full text-[11px]")}
                 />
               )}
             </div>
@@ -512,7 +512,7 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
                       value={draft.template}
                       onChange={(e) => patchDraft({ template: e.target.value })}
                       rows={7}
-                      className={cn(FIELD, "w-full resize-y font-mono text-[11px]")}
+                      className={cn(FIELD, "w-full resize-y text-[11px]")}
                     />
                     <div>
                       <span className={LABEL}>Preview (sample values)</span>
@@ -702,7 +702,7 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
               </div>
               {sends.length > 0 ? (
                 sends.map((s) => (
-                  <p key={s.id} className="m-0 font-mono text-[10.5px] leading-relaxed text-[#5f6b7c]">
+                  <p key={s.id} className="m-0 text-[10.5px] leading-relaxed text-[#5f6b7c]">
                     {new Date(s.createdAt).toLocaleTimeString()} ·{" "}
                     {summarizePayload(s.payload)}
                     {s.statusCode !== null ? (

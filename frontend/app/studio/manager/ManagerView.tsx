@@ -37,7 +37,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/Badge";
+import { StatusChip } from "../StatusChip";
 import { cn } from "@/lib/cn";
 import {
   createEnvironment,
@@ -499,8 +499,8 @@ export default function ManagerView() {
   );
 
   const positions = useMemo(
-    () => mergeLayoutPositions(types.map((t) => t.name), savedLayout),
-    [types, savedLayout],
+    () => mergeLayoutPositions(types.map((t) => t.name), linkTypes, savedLayout),
+    [types, linkTypes, savedLayout],
   );
 
   if (!hasKey) {
@@ -624,7 +624,7 @@ export default function ManagerView() {
                   if (e.key === "Enter") void loadObjects();
                 }}
                 placeholder="where: assertion:affirmed,subject:patient"
-                className="w-72 rounded-md border border-line bg-white px-2.5 py-1.5 font-mono text-[11px] text-ink focus:border-brand focus:outline-none"
+                className="w-72 rounded-md border border-line bg-white px-2.5 py-1.5 text-[11px] text-ink focus:border-brand focus:outline-none"
               />
               <button
                 type="button"
@@ -743,7 +743,7 @@ export default function ManagerView() {
                         <span className="inline-flex items-center gap-1.5">
                           {instanceLabel(o)}
                           {(flagCounts.get(o.id) ?? 0) > 0 ? (
-                            <Badge tone="warning">{flagCounts.get(o.id)}</Badge>
+                            <StatusChip tone="warn">{flagCounts.get(o.id)}</StatusChip>
                           ) : null}
                         </span>
                       </td>
@@ -1427,7 +1427,7 @@ function ResourcePages({
                       <span className="ml-1.5 font-normal text-ink-faint">({r.key})</span>
                     ) : null}
                   </td>
-                  <td className={cn(RESOURCE_TD, "font-mono text-[11px]")}>{r.kind}</td>
+                  <td className={cn(RESOURCE_TD, "text-[11px]")}>{r.kind}</td>
                   <td className={RESOURCE_TD}>{r.type}</td>
                 </tr>
               ))}
@@ -1475,7 +1475,7 @@ function ResourcePages({
                   <td className={cn(RESOURCE_TD, "font-medium text-ink")}>{lt.name}</td>
                   <td className={RESOURCE_TD}>{lt.fromType}</td>
                   <td className={RESOURCE_TD}>{lt.toType}</td>
-                  <td className={cn(RESOURCE_TD, "font-mono text-[11px]")}>{lt.cardinality}</td>
+                  <td className={cn(RESOURCE_TD, "text-[11px]")}>{lt.cardinality}</td>
                   <td className={cn(RESOURCE_TD, "text-right")}>
                     <button
                       type="button"
@@ -1579,7 +1579,7 @@ function ResourcePages({
                       {f.severity}
                     </span>
                   </td>
-                  <td className={cn(RESOURCE_TD, "font-mono text-[11px]")}>{f.code}</td>
+                  <td className={cn(RESOURCE_TD, "text-[11px]")}>{f.code}</td>
                   <td className={cn(RESOURCE_TD, "max-w-sm truncate")}>{f.message}</td>
                   <td className={RESOURCE_TD}>{f.layer}</td>
                   <td className={cn(RESOURCE_TD, "text-ink-faint")}>
@@ -1719,7 +1719,7 @@ function ResourcePages({
                   </tr>
                   <tr>
                     <td className="py-0.5 text-ink-faint">Slug</td>
-                    <td className="py-0.5 text-right font-mono text-[11px]">{envInfo.slug}</td>
+                    <td className="py-0.5 text-right text-[11px]">{envInfo.slug}</td>
                   </tr>
                   <tr>
                     <td className="py-0.5 text-ink-faint">Type</td>
@@ -1845,7 +1845,7 @@ function EnvironmentCreator({
 
   return (
     <div className="border-b border-line-faint p-3">
-      <div className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+      <div className="mb-1.5 text-[10px] uppercase tracking-wide text-ink-faint">
         New environment
       </div>
       <div className="flex flex-col gap-1.5">
@@ -2584,7 +2584,7 @@ function PanelHeader({ title, onClose }: { title: string; onClose: () => void })
 function Labelled({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="mb-3 block">
-      <span className="mb-1 block font-mono text-[9px] uppercase tracking-[0.18em] text-ink-faint">
+      <span className="mb-1 block text-[9px] uppercase tracking-wide text-ink-faint">
         {label}
       </span>
       {children}
@@ -2594,7 +2594,7 @@ function Labelled({ label, children }: { label: string; children: React.ReactNod
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="block font-mono text-[9px] uppercase tracking-[0.18em] text-ink-faint">
+    <span className="block text-[9px] uppercase tracking-wide text-ink-faint">
       {children}
     </span>
   );

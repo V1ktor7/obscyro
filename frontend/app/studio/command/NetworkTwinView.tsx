@@ -721,7 +721,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                       <option value="supplier">Supplier</option>
                       <option value="other">Other</option>
                     </select>
-                    <span className="font-mono text-[10px] text-[#8f99a8]">
+                    <span className="text-[10px] text-[#8f99a8]">
                       {pendingPos[1].toFixed(4)}, {pendingPos[0].toFixed(4)}
                     </span>
                   </div>

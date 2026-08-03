@@ -218,7 +218,7 @@ export default function SourcesView() {
                   </div>
                   {s.webhookUrl ? (
                     <div className="mt-2 flex items-center gap-2">
-                      <code className="min-w-0 flex-1 truncate rounded bg-[#f6f7f9] px-2 py-1 font-mono text-[10.5px] text-[#1c2127]">
+                      <code className="min-w-0 flex-1 truncate rounded bg-[#f6f7f9] px-2 py-1 text-[10.5px] text-[#1c2127]">
                         {s.webhookUrl}
                       </code>
                       <button
@@ -330,7 +330,7 @@ export default function SourcesView() {
                           <tbody>
                             {(runs[y.id] ?? []).map((r) => (
                               <tr key={r.id} className="border-t border-[#e5e8eb]">
-                                <td className="py-1 font-mono text-[10.5px] text-[#5f6b7c]">
+                                <td className="py-1 text-[10.5px] text-[#5f6b7c]">
                                   {ago(r.startedAt)}
                                 </td>
                                 <td className="py-1">
@@ -455,7 +455,7 @@ function Dialog({
 const FIELD =
   "mt-1 w-full rounded border border-[#d3d8de] px-2.5 py-1.5 text-xs focus:border-[#2d72d2] focus:outline-none";
 const MONO =
-  "mt-1 w-full rounded border border-[#d3d8de] px-2.5 py-1.5 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none";
+  "mt-1 w-full rounded border border-[#d3d8de] px-2.5 py-1.5 text-[11px] focus:border-[#2d72d2] focus:outline-none";
 const LBL = "mt-3 block text-[11px] font-medium text-[#5f6b7c]";
 const HINT = "mt-1 text-[10.5px] leading-snug text-[#8f99a8]";
 
@@ -483,7 +483,7 @@ function PairRows({
               onChange(next);
             }}
             placeholder={keyPlaceholder}
-            className="w-2/5 rounded border border-[#d3d8de] px-2 py-1 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
+            className="w-2/5 rounded border border-[#d3d8de] px-2 py-1 text-[11px] focus:border-[#2d72d2] focus:outline-none"
           />
           <input
             value={v}
@@ -493,7 +493,7 @@ function PairRows({
               onChange(next);
             }}
             placeholder={valuePlaceholder}
-            className="min-w-0 flex-1 rounded border border-[#d3d8de] px-2 py-1 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
+            className="min-w-0 flex-1 rounded border border-[#d3d8de] px-2 py-1 text-[11px] focus:border-[#2d72d2] focus:outline-none"
           />
           <button
             type="button"
@@ -650,7 +650,7 @@ function NewSourceDialog({
               <select
                 value={method}
                 onChange={(e) => setMethod(e.target.value as "GET" | "POST")}
-                className="rounded border border-[#d3d8de] px-1.5 py-1.5 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
+                className="rounded border border-[#d3d8de] px-1.5 py-1.5 text-[11px] focus:border-[#2d72d2] focus:outline-none"
               >
                 <option>GET</option>
                 <option>POST</option>
@@ -660,7 +660,7 @@ function NewSourceDialog({
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://example.org/api/records"
-              className="min-w-0 flex-1 rounded border border-[#d3d8de] px-2.5 py-1.5 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
+              className="min-w-0 flex-1 rounded border border-[#d3d8de] px-2.5 py-1.5 text-[11px] focus:border-[#2d72d2] focus:outline-none"
             />
           </div>
 
@@ -702,7 +702,7 @@ function NewSourceDialog({
                       value={authName}
                       onChange={(e) => setAuthName(e.target.value)}
                       placeholder={authKind === "header" ? "X-Api-Key" : "key"}
-                      className="w-2/5 rounded border border-[#d3d8de] px-2 py-1 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
+                      className="w-2/5 rounded border border-[#d3d8de] px-2 py-1 text-[11px] focus:border-[#2d72d2] focus:outline-none"
                     />
                   ) : null}
                   <input
@@ -710,7 +710,7 @@ function NewSourceDialog({
                     onChange={(e) => setAuthToken(e.target.value)}
                     type="password"
                     placeholder="token"
-                    className="min-w-0 flex-1 rounded border border-[#d3d8de] px-2 py-1 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
+                    className="min-w-0 flex-1 rounded border border-[#d3d8de] px-2 py-1 text-[11px] focus:border-[#2d72d2] focus:outline-none"
                   />
                 </div>
               ) : null}
@@ -758,19 +758,19 @@ function NewSourceDialog({
                     value={pagParam}
                     onChange={(e) => setPagParam(e.target.value)}
                     placeholder={pagKind === "page" ? "page" : "offset"}
-                    className="w-1/3 rounded border border-[#d3d8de] px-2 py-1 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
+                    className="w-1/3 rounded border border-[#d3d8de] px-2 py-1 text-[11px] focus:border-[#2d72d2] focus:outline-none"
                   />
                   <input
                     value={pagSizeParam}
                     onChange={(e) => setPagSizeParam(e.target.value)}
                     placeholder="per_page"
-                    className="w-1/3 rounded border border-[#d3d8de] px-2 py-1 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
+                    className="w-1/3 rounded border border-[#d3d8de] px-2 py-1 text-[11px] focus:border-[#2d72d2] focus:outline-none"
                   />
                   <input
                     value={pagSize}
                     onChange={(e) => setPagSize(Number(e.target.value) || 100)}
                     type="number"
-                    className="w-1/4 rounded border border-[#d3d8de] px-2 py-1 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
+                    className="w-1/4 rounded border border-[#d3d8de] px-2 py-1 text-[11px] focus:border-[#2d72d2] focus:outline-none"
                   />
                 </div>
               ) : null}
@@ -780,13 +780,13 @@ function NewSourceDialog({
                     value={cursorPath}
                     onChange={(e) => setCursorPath(e.target.value)}
                     placeholder="next_page_token"
-                    className="min-w-0 flex-1 rounded border border-[#d3d8de] px-2 py-1 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
+                    className="min-w-0 flex-1 rounded border border-[#d3d8de] px-2 py-1 text-[11px] focus:border-[#2d72d2] focus:outline-none"
                   />
                   <input
                     value={cursorParam}
                     onChange={(e) => setCursorParam(e.target.value)}
                     placeholder="pagetoken"
-                    className="min-w-0 flex-1 rounded border border-[#d3d8de] px-2 py-1 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
+                    className="min-w-0 flex-1 rounded border border-[#d3d8de] px-2 py-1 text-[11px] focus:border-[#2d72d2] focus:outline-none"
                   />
                 </div>
               ) : null}
@@ -843,7 +843,7 @@ function NewSourceDialog({
                 ) : null}
                 {test?.ok ? (
                   <>
-                    <p className="mt-1.5 font-mono text-[10px] leading-relaxed text-[#5f6b7c]">
+                    <p className="mt-1.5 text-[10px] leading-relaxed text-[#5f6b7c]">
                       {test.columns.slice(0, 12).join(" · ")}
                       {test.columns.length > 12 ? ` +${test.columns.length - 12}` : ""}
                     </p>
@@ -1024,7 +1024,7 @@ function NewSyncDialog({
             value={incCol}
             onChange={(e) => setIncCol(e.target.value)}
             placeholder="updated_at"
-            className="mt-1 w-full rounded border border-[#d3d8de] px-2.5 py-1.5 font-mono text-[11px] focus:border-[#2d72d2] focus:outline-none"
+            className="mt-1 w-full rounded border border-[#d3d8de] px-2.5 py-1.5 text-[11px] focus:border-[#2d72d2] focus:outline-none"
           />
           <p className="mt-1 text-[10.5px] leading-snug text-[#8f99a8]">
             Each run keeps only rows whose value is greater than the last seen, then advances

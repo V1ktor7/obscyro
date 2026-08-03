@@ -217,7 +217,7 @@ export default function CrisisView() {
             { value: "split", label: "Split" },
           ]}
         />
-        <label className="flex items-center gap-1 font-mono text-[10px] text-gray-500">
+        <label className="flex items-center gap-1 text-[10px] text-gray-500">
           Horizon
           <input
             type="number"
@@ -229,7 +229,7 @@ export default function CrisisView() {
           />
           h
         </label>
-        <label className="flex items-center gap-1 font-mono text-[10px] text-gray-500">
+        <label className="flex items-center gap-1 text-[10px] text-gray-500">
           Runs
           <input
             type="number"
@@ -240,7 +240,7 @@ export default function CrisisView() {
             className="w-12 rounded border border-gray-200 px-1 py-0.5 text-gray-800"
           />
         </label>
-        <label className="flex items-center gap-1 font-mono text-[10px] text-gray-500">
+        <label className="flex items-center gap-1 text-[10px] text-gray-500">
           Seed
           <input
             type="text"
@@ -263,7 +263,7 @@ export default function CrisisView() {
         </Button>
         <Link
           href="/studio/command"
-          className="ml-auto font-mono text-[10px] text-indigo-600 hover:underline"
+          className="ml-auto text-[10px] text-indigo-600 hover:underline"
         >
           ← Live Twin
         </Link>
@@ -296,7 +296,7 @@ export default function CrisisView() {
                     {c.description}
                   </div>
                   {c.backendKind && (
-                    <span className="mt-0.5 inline-block rounded bg-emerald-50 px-1 font-mono text-[8px] text-emerald-700">
+                    <span className="mt-0.5 inline-block rounded bg-emerald-50 px-1 text-[8px] text-emerald-700">
                       backend
                     </span>
                   )}
@@ -380,7 +380,7 @@ export default function CrisisView() {
                   {f.scope} · {f.name}
                 </span>
                 <span
-                  className="ml-auto font-mono text-[9px] tabular-nums"
+                  className="ml-auto text-[9px] tabular-nums"
                   style={{ color: f.color }}
                 >
                   {f.fmt(f.base)}
@@ -454,7 +454,7 @@ export default function CrisisView() {
                 {projection.events.slice(0, 6).map((evt, i) => (
                   <span
                     key={i}
-                    className="rounded bg-gray-50 px-1.5 py-0.5 font-mono text-[9px] text-gray-600"
+                    className="rounded bg-gray-50 px-1.5 py-0.5 text-[9px] text-gray-600"
                   >
                     T+{evt.t}h · {evt.message}
                     {evt.source === "projection" && " · projection"}

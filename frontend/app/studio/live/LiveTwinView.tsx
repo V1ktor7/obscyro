@@ -2,10 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { cn } from "@/lib/cn";
 import {
   ackTwinAlert,
   fetchTwinTree,
@@ -16,6 +14,7 @@ import {
   type TwinUnitDetail,
 } from "@/lib/platform-api";
 
+import { StatusChip } from "../StatusChip";
 import { useStudio } from "../StudioShell";
 import {
   loadTwinLayout,
@@ -226,7 +225,7 @@ export default function LiveTwinView() {
   if (!hasKey) {
     return (
       <div className="flex flex-1 items-center justify-center bg-white">
-        <p className="max-w-sm text-center text-sm text-gray-500">
+        <p className="max-w-sm text-center text-sm text-ink-muted">
           Sign in and create an API key to view the live digital twin.
         </p>
       </div>
@@ -236,7 +235,7 @@ export default function LiveTwinView() {
   if (!env) {
     return (
       <div className="flex flex-1 items-center justify-center bg-white">
-        <p className="text-sm text-gray-500">Select an environment in the header.</p>
+        <p className="text-sm text-ink-muted">Select an environment in the header.</p>
       </div>
     );
   }
@@ -245,7 +244,7 @@ export default function LiveTwinView() {
     return (
       <div className="flex flex-1 items-center justify-center bg-white p-6">
         <Card className="max-w-md p-6 text-center">
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-ink-muted">
             Live Twin requires an <strong>operations</strong> environment. Switch env type in
             Ontology Manager, or seed a demo skeleton here.
           </p>
@@ -253,7 +252,7 @@ export default function LiveTwinView() {
             {seeding ? "Seeding…" : "Seed CHUM demo"}
           </Button>
           {error ? (
-            <p className="mt-2 text-xs text-rose-600">{error}</p>
+            <p className="mt-2 text-xs text-danger">{error}</p>
           ) : null}
         </Card>
       </div>
@@ -263,11 +262,11 @@ export default function LiveTwinView() {
   return (
     <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2 border-b border-line-faint px-3 py-2">
           <select
             value={displayMetric}
             onChange={(e) => handleMetricChange(e.target.value)}
-            className="rounded border border-gray-200 px-2 py-1 text-[11px] focus:border-gray-400 focus:outline-none"
+            className="rounded border border-line px-2 py-1 text-[11px] focus:border-brand focus:outline-none"
           >
             {DISPLAY_METRIC_OPTIONS.map((o) => (
               <option key={o.key} value={o.key}>
@@ -280,7 +279,7 @@ export default function LiveTwinView() {
             onChange={(e) =>
               handleKindFilterChange(e.target.value === "" ? null : e.target.value)
             }
-            className="rounded border border-gray-200 px-2 py-1 text-[11px] focus:border-gray-400 focus:outline-none"
+            className="rounded border border-line px-2 py-1 text-[11px] focus:border-brand focus:outline-none"
           >
             {KIND_FILTER_OPTIONS.map((o) => (
               <option key={o.label} value={o.value ?? ""}>
@@ -288,25 +287,29 @@ export default function LiveTwinView() {
               </option>
             ))}
           </select>
-          <span
-            className={cn(
-              "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[9px]",
+          <StatusChip
+            tone={streamMode === "stream" ? "ok" : streamMode === "poll" ? "warn" : "neutral"}
+            dot={
               streamMode === "stream"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                ? "bg-ok"
                 : streamMode === "poll"
-                  ? "border-amber-200 bg-amber-50 text-amber-700"
-                  : "border-gray-200 text-gray-400",
-            )}
+                  ? "bg-warn"
+                  : "bg-ink-ghost"
+            }
           >
-            twin {streamMode === "stream" ? "stream" : streamMode === "poll" ? "polling" : "…"}
-          </span>
+            {streamMode === "stream"
+              ? "Live stream"
+              : streamMode === "poll"
+                ? "Polling"
+                : "Connecting"}
+          </StatusChip>
           <Button size="sm" variant="secondary" onClick={() => void handleSeedDemo()} disabled={seeding}>
             {seeding ? "Seeding…" : "Seed demo"}
           </Button>
         </div>
 
         {error ? (
-          <p className="mx-3 mt-2 rounded border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-700">
+          <p className="mx-3 mt-2 rounded border border-danger/40 bg-danger-soft px-2 py-1 text-xs text-danger-ink">
             {error}
           </p>
         ) : null}
@@ -325,7 +328,7 @@ export default function LiveTwinView() {
           </div>
 
           {selectedUnitId ? (
-            <aside className="w-72 shrink-0 overflow-y-auto border-l border-gray-200 bg-white p-3">
+            <aside className="w-72 shrink-0 overflow-y-auto border-l border-line bg-white p-3">
               <UnitDetailPanel
                 unitId={selectedUnitId}
                 nodeName={snapshot?.nodes.find((n) => n.id === selectedUnitId)?.name}
@@ -370,37 +373,37 @@ function UnitDetailPanel({
     <div>
       <div className="mb-3 flex items-start justify-between gap-2">
         <div>
-          <p className="text-xs font-medium text-gray-900">{nodeName ?? "Unit"}</p>
-          <p className="font-mono text-[9px] text-gray-400">{unitId.slice(0, 12)}…</p>
+          <p className="text-xs font-medium text-ink">{nodeName ?? "Unit"}</p>
+          <p className="text-[9px] text-ink-faint">{unitId.slice(0, 12)}…</p>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="text-[10px] text-gray-400 hover:text-gray-600"
+          className="text-[10px] text-ink-faint hover:text-ink-muted"
         >
           Close
         </button>
       </div>
 
       {loading || !detail ? (
-        <p className="text-[11px] text-gray-400">Loading…</p>
+        <p className="text-[11px] text-ink-faint">Loading…</p>
       ) : (
         <>
           <div className="mb-3 grid grid-cols-2 gap-2">
             <Card className="p-2">
-              <p className="text-[9px] uppercase text-gray-400">Occupancy</p>
+              <p className="text-[9px] uppercase text-ink-faint">Occupancy</p>
               <p className="text-sm font-semibold">
                 {formatTwinMetric(detail.metrics, "occupancyPct")}
               </p>
             </Card>
             <Card className="p-2">
-              <p className="text-[9px] uppercase text-gray-400">Linked</p>
+              <p className="text-[9px] uppercase text-ink-faint">Linked</p>
               <p className="text-sm font-semibold">
                 {detail.metrics.linkedInstanceCount}
               </p>
             </Card>
             <Card className="p-2 col-span-2">
-              <p className="text-[9px] uppercase text-gray-400">Freshness</p>
+              <p className="text-[9px] uppercase text-ink-faint">Freshness</p>
               <p className="text-sm font-semibold">
                 {formatFreshness(detail.metrics.freshnessSeconds)}
               </p>
@@ -409,9 +412,9 @@ function UnitDetailPanel({
 
           {Object.keys(detail.metrics.instanceCountByType).length > 0 ? (
             <div className="mb-3">
-              <p className="mb-1 font-mono text-[9px] uppercase text-gray-400">By type</p>
+              <p className="mb-1 text-[9px] uppercase text-ink-faint">By type</p>
               {Object.entries(detail.metrics.instanceCountByType).map(([t, c]) => (
-                <p key={t} className="text-[11px] text-gray-600">
+                <p key={t} className="text-[11px] text-ink-muted">
                   {t}: {c}
                 </p>
               ))}
@@ -419,14 +422,14 @@ function UnitDetailPanel({
           ) : null}
 
           <div className="mb-3">
-            <p className="mb-1 font-mono text-[9px] uppercase text-gray-400">Open alerts</p>
+            <p className="mb-1 text-[9px] uppercase text-ink-faint">Open alerts</p>
             {detail.alerts.length === 0 ? (
-              <p className="text-[11px] text-gray-400">None</p>
+              <p className="text-[11px] text-ink-faint">None</p>
             ) : (
               detail.alerts.map((a) => (
-                <div key={a.id} className="mb-2 rounded border border-gray-100 p-2">
-                  <Badge tone={severityBadgeTone(a.severity)}>{a.severity}</Badge>
-                  <p className="mt-1 text-[11px] text-gray-700">{a.message}</p>
+                <div key={a.id} className="mb-2 rounded-md border border-line p-2">
+                  <StatusChip tone={severityBadgeTone(a.severity)}>{a.severity}</StatusChip>
+                  <p className="mt-1 text-[11px] text-ink-body">{a.message}</p>
                   <Button
                     size="sm"
                     variant="secondary"
@@ -442,8 +445,8 @@ function UnitDetailPanel({
 
           {detail.recommendations.length > 0 ? (
             <div>
-              <p className="mb-1 font-mono text-[9px] uppercase text-gray-400">Recommendations</p>
-              <ul className="list-inside list-disc text-[11px] text-gray-600">
+              <p className="mb-1 text-[9px] uppercase text-ink-faint">Recommendations</p>
+              <ul className="list-inside list-disc text-[11px] text-ink-muted">
                 {detail.recommendations.map((r, i) => (
                   <li key={i}>{r}</li>
                 ))}
