@@ -70,6 +70,9 @@ export interface NodeStat {
   linked?: number;
   /** Rows whose link target could not be found. */
   unresolved?: number;
+  /** Link keys that matched several instances; the oldest was taken. */
+  ambiguous?: number;
+  ambiguousKeys?: string[];
   error?: string;
 }
 

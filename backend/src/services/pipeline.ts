@@ -11,6 +11,7 @@ import {
 import { addReference, loadTableVersion, previewRows } from "./datasets.js";
 import {
   findInstanceIdByKey,
+  type KeyLookup,
   getOrCreateLinkType,
   insertLinkInstance,
   upsertInstanceByIdentity,
@@ -93,6 +94,17 @@ export interface NodeStat {
   linked?: number;
   /** Rows whose link target could not be found — reported, never silent. */
   unresolved?: number;
+  /**
+   * Link keys that matched more than one instance, counted once per key.
+   *
+   * The oldest match wins, which is arbitrary. Two OrgUnits named
+   * `HND Emergency` — one under a hospital, one under a regional tree — meant
+   * an import attached every bed to whichever was created first, and the run
+   * reported complete success. Counting the misses and not the collisions made
+   * a mis-linked import indistinguishable from a clean one.
+   */
+  ambiguous?: number;
+  ambiguousKeys?: string[];
   error?: string;
 }
 
@@ -852,7 +864,12 @@ export async function execute(
       const inRows = ins.flatMap((e) => produced.get(e.from) ?? []);
       let out: Row[] = [];
       let dropped = 0;
-      let linkCounts: { linked: number; unresolved: number } | null = null;
+      let linkCounts: {
+        linked: number;
+        unresolved: number;
+        ambiguous: number;
+        ambiguousKeys: string[];
+      } | null = null;
 
       switch (node.kind) {
         case "dataset_input": {
@@ -919,7 +936,12 @@ export async function execute(
           out = inRows;
           dropped = r.skipped;
           rowsOut += r.written;
-          linkCounts = { linked: r.linked, unresolved: r.unresolved };
+          linkCounts = {
+            linked: r.linked,
+            unresolved: r.unresolved,
+            ambiguous: r.ambiguous,
+            ambiguousKeys: r.ambiguousKeys,
+          };
           break;
         }
       }
@@ -951,7 +973,15 @@ async function writeObjects(
   node: PipelineNode,
   rows: Row[],
   preview: boolean,
-): Promise<{ written: number; skipped: number; linked: number; unresolved: number }> {
+): Promise<{
+  written: number;
+  skipped: number;
+  linked: number;
+  unresolved: number;
+  /** Link keys that matched more than one instance; the oldest was taken. */
+  ambiguous: number;
+  ambiguousKeys: string[];
+}> {
   const typeName = String(node.config.objectTypeName ?? "");
   const identity = (node.config.identityProperties ?? []) as string[];
   const mapping = (node.config.columnMapping ?? []) as MappingRule[];
@@ -959,7 +989,14 @@ async function writeObjects(
     (r) => r?.linkType && r.targetType && r.fromColumn && r.targetProperty,
   );
   if (!typeName || identity.length === 0) {
-    return { written: 0, skipped: rows.length, linked: 0, unresolved: 0 };
+    return {
+      written: 0,
+      skipped: rows.length,
+      linked: 0,
+      unresolved: 0,
+      ambiguous: 0,
+      ambiguousKeys: [],
+    };
   }
 
   const t = await db.query<{ id: string; property_schema: PropertyDef[] }>(
@@ -981,7 +1018,7 @@ async function writeObjects(
     rule: LinkRule;
     targetTypeId: string;
     linkTypeId: string;
-    cache: Map<string, string | null>;
+    cache: Map<string, KeyLookup>;
   }[] = [];
   for (const rule of linkRules) {
     const tt = await db.query<{ id: string }>(
@@ -1003,13 +1040,15 @@ async function writeObjects(
       out ? targetTypeId : objectTypeId,
       "many_to_one",
     );
-    resolved.push({ rule, targetTypeId, linkTypeId, cache: new Map() });
+    resolved.push({ rule, targetTypeId, linkTypeId, cache: new Map<string, KeyLookup>() });
   }
 
   let written = 0;
   let skipped = 0;
   let linked = 0;
   let unresolved = 0;
+  let ambiguous = 0;
+  const ambiguousKeys = new Set<string>();
 
   for (const row of rows) {
     const { properties, issues, missingRequired } = buildMapProperties(row, rules, schema);
@@ -1037,11 +1076,18 @@ async function writeObjects(
       }
       const key = String(raw).trim();
 
-      let targetId = r.cache.get(key);
-      if (targetId === undefined) {
-        targetId = await findInstanceIdByKey(db, r.targetTypeId, r.rule.targetProperty, key);
-        r.cache.set(key, targetId);
+      let hit = r.cache.get(key);
+      if (hit === undefined) {
+        hit = await findInstanceIdByKey(db, r.targetTypeId, r.rule.targetProperty, key);
+        r.cache.set(key, hit);
+        // Counted once per distinct key, not once per row: a column of 24 beds
+        // all naming the same duplicated ward is one modelling problem, not 24.
+        if (hit.ambiguous) {
+          ambiguous++;
+          ambiguousKeys.add(`${r.rule.targetType}.${r.rule.targetProperty}=${key}`);
+        }
       }
+      const targetId = hit.id;
       // A patient on a ward the ontology has never heard of is a real finding,
       // not a row to drop. The instance stands; the miss is counted.
       if (!targetId) {
@@ -1061,7 +1107,7 @@ async function writeObjects(
       linked++;
     }
   }
-  return { written, skipped, linked, unresolved };
+  return { written, skipped, linked, unresolved, ambiguous, ambiguousKeys: Array.from(ambiguousKeys) };
 }
 
 async function finishRun(

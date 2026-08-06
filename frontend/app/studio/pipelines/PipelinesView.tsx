@@ -1480,6 +1480,27 @@ function Inspector({
               twin will not count them.
             </p>
           ) : null}
+          {/*
+            A miss is loud, a collision was silent. Two OrgUnits of the same
+            name meant every row attached to whichever was created first, and
+            the run still reported success.
+          */}
+          {(stat.ambiguous ?? 0) > 0 ? (
+            <p className="mt-1.5 rounded bg-danger-soft px-2 py-1.5 text-[10.5px] leading-snug text-danger-ink">
+              {stat.ambiguous} key{stat.ambiguous === 1 ? "" : "s"} matched more than one instance.
+              The oldest was linked, which is arbitrary — the rows may be attached to the wrong
+              one.
+              {stat.ambiguousKeys?.length ? (
+                <span className="mt-1 block text-danger-ink/80">
+                  {stat.ambiguousKeys.slice(0, 4).join(" · ")}
+                  {stat.ambiguousKeys.length > 4 ? " …" : ""}
+                </span>
+              ) : null}
+              <span className="mt-1 block">
+                Match on a property that is unique, or resolve the duplicates first.
+              </span>
+            </p>
+          ) : null}
         </div>
       ) : null}
 

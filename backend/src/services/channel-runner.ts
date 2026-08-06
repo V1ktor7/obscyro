@@ -456,7 +456,7 @@ async function runMapPath(
       );
       const targetTypeId = targetTypeRes.rows[0]?.id;
       if (!targetTypeId) continue;
-      let targetId = await findInstanceIdByKey(db, targetTypeId, link.targetKey!, keyVal);
+      let targetId = (await findInstanceIdByKey(db, targetTypeId, link.targetKey!, keyVal)).id;
       if (!targetId && link.createMissing) {
         targetId = await insertObjectInstance(
           db,

@@ -225,21 +225,36 @@ export async function insertObjectInstance(
   return rows[0]!.id;
 }
 
-/** Find one instance of a type whose property equals a value (text compare). */
+export interface KeyLookup {
+  id: string | null;
+  /** True when the key matched more than one instance and the oldest was taken. */
+  ambiguous: boolean;
+}
+
+/**
+ * Find one instance of a type whose property equals a value (text compare).
+ *
+ * The oldest match wins, which is arbitrary but deterministic. What matters is
+ * that the caller is told when it happened: a network with two `HND Emergency`
+ * units — one modelled under CHUM, one under a regional tree — silently
+ * attached every imported bed to whichever was created first, and the run
+ * reported complete success. Counting the misses and not the collisions made a
+ * mis-linked import indistinguishable from a clean one.
+ */
 export async function findInstanceIdByKey(
   db: DbClient,
   objectTypeId: string,
   keyProp: string,
   keyValue: string,
-): Promise<string | null> {
+): Promise<KeyLookup> {
   const { rows } = await db.query<{ id: string }>(
     `SELECT id FROM app.ontology_object_instances
       WHERE object_type_id = $1 AND properties ->> $2 = $3
       ORDER BY created_at ASC
-      LIMIT 1`,
+      LIMIT 2`,
     [objectTypeId, keyProp, keyValue],
   );
-  return rows[0]?.id ?? null;
+  return { id: rows[0]?.id ?? null, ambiguous: rows.length > 1 };
 }
 
 /**
