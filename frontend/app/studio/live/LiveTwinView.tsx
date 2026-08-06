@@ -41,7 +41,7 @@ import TwinAlertToasts from "./TwinAlertToasts";
 import TwinCanvas from "./TwinCanvas";
 
 export default function LiveTwinView() {
-  const { hasKey, selectedEnv, environments, bumpOntology } = useStudio();
+  const { hasKey, selectedEnv, environments, bumpOntology, setSelectedEnv } = useStudio();
   const env = selectedEnv;
 
   const envMeta = useMemo(
@@ -49,6 +49,11 @@ export default function LiveTwinView() {
     [environments, env],
   );
   const isOperations = envMeta?.type === "operations";
+
+  const operationsEnvs = useMemo(
+    () => environments.filter((e) => e.type === "operations"),
+    [environments],
+  );
 
   const [snapshot, setSnapshot] = useState<TwinTreeSnapshot | null>(null);
   const [streamMode, setStreamMode] = useState<"stream" | "poll" | "idle">("idle");
@@ -276,10 +281,40 @@ export default function LiveTwinView() {
     return (
       <div className="flex flex-1 items-center justify-center bg-white p-6">
         <Card className="max-w-md p-6 text-center">
+          {/*
+            This used to read "Switch env type in Ontology Manager", which sent
+            you to convert *this* environment into an operations one — when the
+            thing you almost always want is to select a different environment.
+            Name the ones that would work, so the instruction matches the fix.
+          */}
           <p className="text-sm text-ink-muted">
-            Live Twin requires an <strong>operations</strong> environment. Switch env type in
-            Ontology Manager, or seed a demo skeleton here.
+            The live twin runs on an <strong>operations</strong> environment.{" "}
+            <span className="text-ink-body">{envMeta?.name ?? env}</span> is a{" "}
+            {envMeta?.type ?? "non-operations"} environment.
           </p>
+          {operationsEnvs.length > 0 ? (
+            <p className="mt-3 text-xs text-ink-muted">
+              Switch to{" "}
+              {operationsEnvs.map((e, i) => (
+                <span key={e.slug}>
+                  {i > 0 ? ", " : ""}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedEnv(e.slug)}
+                    className="font-medium text-brand-deep hover:underline"
+                  >
+                    {e.name}
+                  </button>
+                </span>
+              ))}{" "}
+              using the picker in the header, or seed a demo skeleton here.
+            </p>
+          ) : (
+            <p className="mt-3 text-xs text-ink-muted">
+              No operations environment exists yet. Seed a demo skeleton here, or change this
+              environment&apos;s type in Ontology Manager.
+            </p>
+          )}
           <Button className="mt-4" onClick={() => void handleSeedDemo()} disabled={seeding}>
             {seeding ? "Seeding…" : "Seed CHUM demo"}
           </Button>

@@ -25,7 +25,15 @@ import { apiFetch, clearSession, clearStoredKey, getSession, getStoredKey } from
 import { cn } from "@/lib/cn";
 import { Suspense } from "react";
 
-import { AlertTriangle, Building2, Search } from "lucide-react";
+import {
+  ENV_PARAM,
+  readStoredEnv,
+  resolveEnv,
+  urlWithEnv,
+  writeStoredEnv,
+} from "./env-persist";
+
+import { AlertTriangle, Building2, ChevronDown, Search } from "lucide-react";
 
 import {
   getHealth,
@@ -98,7 +106,24 @@ export default function StudioShell({ children }: { children: ReactNode }) {
   const [hasKey, setHasKey] = useState(false);
   const [health, setHealth] = useState<HealthStatus | "checking">("checking");
   const [environments, setEnvironments] = useState<EnvironmentSummary[]>([]);
-  const [selectedEnv, setSelectedEnv] = useState<string | null>(null);
+  const [selectedEnv, setSelectedEnvState] = useState<string | null>(null);
+
+  /**
+   * Selecting an environment writes it to the URL and to storage.
+   *
+   * The URL so the page can be shared, bookmarked and reloaded; storage so the
+   * next visit opens where you left off. Replacing rather than pushing keeps
+   * the back button meaning "the previous page", not "the previous
+   * environment".
+   */
+  const setSelectedEnv = useCallback((slug: string | null) => {
+    setSelectedEnvState(slug);
+    writeStoredEnv(slug);
+    if (slug && typeof window !== "undefined") {
+      const { pathname, search } = window.location;
+      router.replace(urlWithEnv(pathname, search, slug), { scroll: false });
+    }
+  }, [router]);
   const [envTypes, setEnvTypes] = useState<EnvObjectType[]>([]);
   const [ontologyVersion, setOntologyVersion] = useState(0);
   const [identity, setIdentity] = useState<Identity | null>(null);
@@ -199,11 +224,28 @@ export default function StudioShell({ children }: { children: ReactNode }) {
     try {
       const { environments: envs } = await listEnvironments();
       setEnvironments(envs);
-      setSelectedEnv((cur) => cur ?? envs[0]?.slug ?? null);
+      setSelectedEnvState((cur) => {
+        if (cur && envs.some((e) => e.slug === cur)) return cur;
+        // First resolution of the session: the URL wins, then what this browser
+        // remembers, then the API's first environment as a last resort.
+        const fromUrl =
+          typeof window === "undefined"
+            ? null
+            : new URLSearchParams(window.location.search).get(ENV_PARAM);
+        const resolved = resolveEnv(fromUrl, readStoredEnv(), envs);
+        if (resolved) {
+          writeStoredEnv(resolved);
+          if (typeof window !== "undefined" && fromUrl !== resolved) {
+            const { pathname, search } = window.location;
+            router.replace(urlWithEnv(pathname, search, resolved), { scroll: false });
+          }
+        }
+        return resolved;
+      });
     } catch {
       setEnvironments([]);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     if (ready) void refreshEnvironments();
@@ -305,14 +347,18 @@ export default function StudioShell({ children }: { children: ReactNode }) {
             <EnvBadge env={currentEnv} />
             {currentEnv ? (
               <span className="hidden items-center gap-1.5 text-[11.5px] sm:flex">
-                <Link href="/studio/home" className="text-[#5f6b7c] hover:text-[#1c2127]">
+                <Link href="/studio/home" className="text-ink-muted hover:text-ink">
                   Home
                 </Link>
-                <span className="text-[#8f99a8]">/</span>
-                <span className="font-medium text-[#1c2127]">{currentEnv.name}</span>
+                <span className="text-ink-faint">/</span>
+                <EnvSwitcher
+                  environments={environments}
+                  current={currentEnv}
+                  onSelect={setSelectedEnv}
+                />
               </span>
             ) : (
-              <Link href="/studio/home" className="text-[11.5px] text-[#215db0] hover:underline">
+              <Link href="/studio/home" className="text-[11.5px] text-brand-deep hover:underline">
                 Choose a project
               </Link>
             )}
@@ -357,6 +403,44 @@ export default function StudioShell({ children }: { children: ReactNode }) {
  * Persistent environment badge (spec §3.1: "non-negotiable"). Colour-coded so
  * a destructive operation in the wrong environment is hard to do by accident.
  */
+/**
+ * The environment name, as a control rather than a label.
+ *
+ * It was plain text, and the command palette was the only way to change
+ * environments — which nobody discovers. A native select is deliberate here:
+ * it is keyboard-reachable, it works on a phone, and it shows the type beside
+ * each name so switching from a reference environment to a production one is a
+ * decision rather than an accident.
+ */
+function EnvSwitcher({
+  environments,
+  current,
+  onSelect,
+}: {
+  environments: EnvironmentSummary[];
+  current: EnvironmentSummary;
+  onSelect: (slug: string) => void;
+}) {
+  return (
+    <span className="relative inline-flex items-center">
+      <select
+        value={current.slug}
+        onChange={(e) => onSelect(e.target.value)}
+        aria-label="Environment"
+        title="Switch environment"
+        className="cursor-pointer appearance-none rounded border border-transparent bg-transparent py-0.5 pl-1 pr-5 text-[11.5px] font-medium text-ink hover:border-line hover:bg-white focus:border-brand focus:outline-none"
+      >
+        {environments.map((e) => (
+          <option key={e.slug} value={e.slug}>
+            {e.name} · {e.type}
+          </option>
+        ))}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-1 h-3 w-3 text-ink-faint" />
+    </span>
+  );
+}
+
 function EnvBadge({ env }: { env: EnvironmentSummary | undefined }) {
   if (!env) return null;
   const tone =
