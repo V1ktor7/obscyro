@@ -88,6 +88,30 @@ export interface CommandBoard {
   signals: BoardSignal[];
 }
 
+/**
+ * Does an alert on this metric reach anyone?
+ *
+ * The bridge that turns a twin alert into a signal is an inner join:
+ *
+ *   JOIN signal_type st ON st.alert_metric = a.metric AND st.active
+ *
+ * So a rule whose metric no active signal type claims raises an alert that
+ * reaches nobody — no error, no log, no row. The rule looks configured, the
+ * twin turns red, and the response board stays empty.
+ *
+ * This is that join's other half, in the client, and the two have to keep
+ * agreeing: both conditions are here on purpose, including `active`.
+ */
+export function signalTypeForMetric(
+  signalTypes: readonly SignalType[],
+  metricKey: string,
+): SignalType | null {
+  if (!metricKey) return null;
+  return (
+    signalTypes.find((st) => st.active && st.alertMetric === metricKey) ?? null
+  );
+}
+
 function enc(s: string): string {
   return encodeURIComponent(s);
 }

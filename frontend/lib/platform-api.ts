@@ -819,6 +819,62 @@ export interface TwinMetric {
   active: boolean;
 }
 
+export type TwinAlertOp = "<" | ">" | ">=" | "<=" | "==";
+
+/**
+ * A threshold on a metric.
+ *
+ * `metric` is a metric definition's **key**, not its label — an alert rule and
+ * the twin have to be naming the same thing for either to mean anything.
+ */
+export interface TwinAlertRule {
+  id: string;
+  environmentId: string;
+  unitKind: string | null;
+  metric: string;
+  op: TwinAlertOp;
+  threshold: number;
+  severity: TwinAlertSeverity;
+  messageTemplate: string;
+  recommendationTemplate: string;
+}
+
+export interface TwinAlertRuleInput {
+  unitKind?: string | null;
+  metric: string;
+  op: TwinAlertOp;
+  threshold: number;
+  severity: TwinAlertSeverity;
+  messageTemplate: string;
+  recommendationTemplate?: string;
+}
+
+export async function listTwinAlertRules(env: string): Promise<{ rules: TwinAlertRule[] }> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/alert-rules`);
+}
+
+export async function createTwinAlertRule(
+  env: string,
+  body: TwinAlertRuleInput,
+): Promise<TwinAlertRule> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/alert-rules`, { method: "POST", body });
+}
+
+export async function updateTwinAlertRule(
+  env: string,
+  id: string,
+  body: Partial<TwinAlertRuleInput>,
+): Promise<TwinAlertRule> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/alert-rules/${id}`, {
+    method: "PATCH",
+    body,
+  });
+}
+
+export async function deleteTwinAlertRule(env: string, id: string): Promise<{ ok: true }> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/alert-rules/${id}`, { method: "DELETE" });
+}
+
 export async function listTwinMetrics(env: string): Promise<{ metrics: TwinMetric[] }> {
   return apiFetch(`/v1/ontology/${encEnv(env)}/twin/metrics`);
 }
