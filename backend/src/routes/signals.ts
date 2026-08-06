@@ -123,7 +123,11 @@ const STARTER = [
       ],
     },
     types: [
-      { key: "occupancy", name: "Occupation élevée", domain: "Flux patient", severity: "critical", alertMetric: "occupancyPct" },
+      // `occupancy` is the seeded metric definition's key. It used to read
+      // `occupancyPct`, the name of the hard-coded field that preceded the
+      // metric table — which meant an alert on the metric found no signal type
+      // and reached nobody, silently.
+      { key: "occupancy", name: "Occupation élevée", domain: "Flux patient", severity: "critical", alertMetric: "occupancy" },
       { key: "discharge_delay", name: "Congé retardé", domain: "Flux patient", severity: "info" },
       { key: "diversion", name: "Détournement d'ambulance", domain: "Accès & demande", severity: "critical" },
     ],
