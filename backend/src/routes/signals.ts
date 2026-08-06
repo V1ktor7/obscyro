@@ -19,6 +19,7 @@ import {
   moveSignal,
   raiseSignal,
   renameSignalDomain,
+  setSignalTypeAlertMetric,
   stagesForSignal,
 } from "../services/signals.js";
 
@@ -332,6 +333,42 @@ const signalRoutes: FastifyPluginAsync = async (fastify) => {
         metadata: { key: t.key, domain: t.domain },
       });
       return reply.code(201).send(t);
+    },
+  );
+
+  app.patch(
+    "/ontology/:env/signal-types/:key/alert-metric",
+    {
+      schema: {
+        summary: "Point a signal type at a twin metric, or unhook it",
+        description:
+          "This is the join the alert bridge makes. A threshold defined on a " +
+          "metric no signal type claims raises an alert that reaches nobody — " +
+          "silently. Null unhooks the type, leaving it raised only by hand.",
+        tags: ["signals"],
+        params: z.object({ env: z.string().min(1), key: z.string().min(1).max(64) }),
+        body: z.object({ alertMetric: z.string().max(120).nullable() }),
+        response: { 200: signalTypeOut, 404: errorEnvelope, 409: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const t = await setSignalTypeAlertMetric(
+        req.db,
+        env.organizationId,
+        req.params.key,
+        req.body.alertMetric,
+      );
+      await recordAudit(req.db, {
+        projectId: env.id,
+        actorUserId: userId,
+        action: "signal_type.set_alert_metric",
+        resourceType: "signal_type",
+        resourceId: t.id,
+        metadata: { key: t.key, alertMetric: t.alertMetric },
+      });
+      return t;
     },
   );
 

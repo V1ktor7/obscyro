@@ -15,7 +15,12 @@ import {
   type TwinAlertSeverity,
   type TwinMetric,
 } from "@/lib/platform-api";
-import { getCommandBoard, signalTypeForMetric, type SignalType } from "../signals-api";
+import {
+  getCommandBoard,
+  setSignalTypeAlertMetric,
+  signalTypeForMetric,
+  type SignalType,
+} from "../signals-api";
 
 // ---------------------------------------------------------------------------
 // When the twin shouts.
@@ -68,6 +73,7 @@ export default function AlertRuleEditor({
   const [editing, setEditing] = useState<TwinAlertRule | "new" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [wireTo, setWireTo] = useState("");
 
   // draft
   const [metric, setMetric] = useState("");
@@ -168,6 +174,22 @@ export default function AlertRuleEditor({
       await deleteTwinAlertRule(env, r.id);
       await reload();
       if (editing !== "new" && editing?.id === r.id) setEditing(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Point an existing signal type at this metric, so the alert reaches Response. */
+  async function wire() {
+    if (!wireTo || !metric) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await setSignalTypeAlertMetric(env, wireTo, metric);
+      await reload();
+      setWireTo("");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -383,15 +405,44 @@ export default function AlertRuleEditor({
                     <b className="font-semibold">{draftSignal.domain}</b>.
                   </p>
                 ) : (
-                  <p className="rounded border border-warn-line bg-warn-soft px-2 py-1.5 text-[10.5px] leading-snug text-warn-ink">
-                    <b className="font-semibold">This alert will reach nobody.</b> No signal type
-                    claims <span className="font-medium">{metric || "this metric"}</span>, so the
-                    alert opens on the unit and the response board stays empty — silently.
-                    <span className="mt-1 block">
-                      Fix it in Response: define a signal type whose alert metric is{" "}
-                      <span className="font-medium">{metric || "this key"}</span>.
-                    </span>
-                  </p>
+                  <div className="rounded border border-warn-line bg-warn-soft px-2 py-1.5 text-[10.5px] leading-snug text-warn-ink">
+                    <p>
+                      <b className="font-semibold">This alert will reach nobody.</b> No signal type
+                      claims <span className="font-medium">{metric || "this metric"}</span>, so the
+                      alert opens on the unit and the response board stays empty — silently.
+                    </p>
+                    {/*
+                      Fixable here rather than "go and fix it in Response": this
+                      is where you find out, and the wiring is one field.
+                    */}
+                    {metric && signalTypes.length > 0 ? (
+                      <div className="mt-1.5 flex items-center gap-1.5">
+                        <select
+                          value={wireTo}
+                          onChange={(e) => setWireTo(e.target.value)}
+                          className="min-w-0 flex-1 rounded border border-warn-line bg-white px-1.5 py-1 text-[10.5px] text-ink focus:border-brand focus:outline-none"
+                        >
+                          <option value="">raise it as…</option>
+                          {signalTypes
+                            .filter((st) => st.active)
+                            .map((st) => (
+                              <option key={st.key} value={st.key}>
+                                {st.name} · {st.domain}
+                                {st.alertMetric ? ` (now ${st.alertMetric})` : ""}
+                              </option>
+                            ))}
+                        </select>
+                        <button
+                          type="button"
+                          disabled={!wireTo || busy}
+                          onClick={() => void wire()}
+                          className="shrink-0 rounded border border-warn-line bg-white px-2 py-1 text-[10.5px] font-medium text-warn-ink disabled:opacity-40"
+                        >
+                          Wire it
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                 )}
               </div>
 

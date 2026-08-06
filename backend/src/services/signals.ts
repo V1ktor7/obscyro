@@ -260,6 +260,50 @@ export async function createSignalType(
 }
 
 /**
+ * Point a signal type at a twin metric, or unhook it.
+ *
+ * This is the join the alert bridge makes — `st.alert_metric = a.metric` — and
+ * until now nothing in the product could set it. A threshold could be defined
+ * on a metric no signal type claimed, and the alert reached nobody in silence:
+ * the rule looked configured, the twin turned red, the board stayed empty.
+ *
+ * Only one active type may claim a metric, so a collision is a real decision —
+ * which of the two should carry it — and comes back as a conflict rather than
+ * quietly stealing the wiring from the other.
+ */
+export async function setSignalTypeAlertMetric(
+  db: DbClient,
+  organizationId: string,
+  key: string,
+  alertMetric: string | null,
+): Promise<SignalType> {
+  let rows: { id: string }[];
+  try {
+    ({ rows } = await db.query<{ id: string }>(
+      `UPDATE app.signal_type SET alert_metric = $3, updated_at = NOW()
+        WHERE organization_id = $1 AND key = $2 AND active
+        RETURNING id`,
+      [organizationId, key, alertMetric],
+    ));
+  } catch (err: unknown) {
+    if ((err as { code?: string }).code !== "23505") throw err;
+    const taken = (await listSignalTypes(db, organizationId)).find(
+      (t) => t.active && t.alertMetric === alertMetric,
+    );
+    throw Conflict(
+      "ALERT_METRIC_TAKEN",
+      `"${taken?.name ?? "Another signal type"}" already carries ${alertMetric}. ` +
+        "Unhook it first — a metric can only raise one kind of signal.",
+    );
+  }
+  if (rows.length === 0) {
+    throw NotFound("SIGNAL_TYPE_NOT_FOUND", `No active signal type with key "${key}".`);
+  }
+  const types = await listSignalTypes(db, organizationId);
+  return types.find((t) => t.id === rows[0]!.id)!;
+}
+
+/**
  * Rename a domain across every signal type that carries it.
  *
  * A domain is not a row anywhere — it is whatever string the signal types in it

@@ -152,6 +152,24 @@ export async function createSignalType(
   return apiFetch(`/v1/ontology/${enc(env)}/signal-types`, { method: "POST", body });
 }
 
+/**
+ * Point a signal type at a twin metric, or unhook it with null.
+ *
+ * Until this existed, the join the alert bridge makes could only be set by the
+ * seeder — so a threshold on a metric nothing claimed raised alerts that
+ * reached nobody, and there was no way to fix it from the product.
+ */
+export async function setSignalTypeAlertMetric(
+  env: string,
+  key: string,
+  alertMetric: string | null,
+): Promise<SignalType> {
+  return apiFetch(`/v1/ontology/${enc(env)}/signal-types/${enc(key)}/alert-metric`, {
+    method: "PATCH",
+    body: { alertMetric },
+  });
+}
+
 export async function renameSignalDomain(
   env: string,
   domain: string,
