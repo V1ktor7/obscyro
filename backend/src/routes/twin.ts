@@ -55,15 +55,26 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
     {
       schema: {
         summary: "OrgUnit tree with rollup metrics and alert severity",
+        description:
+          "With a scenario, the tree is what the network would be under that " +
+          "scenario's edits — the same shape reality has, so the two can be " +
+          "read side by side.",
         tags: ["twin"],
         params: z.object({ env: z.string().min(1) }),
+        querystring: z.object({
+          scenarioId: z.string().uuid().optional(),
+          atOffsetHours: z.coerce.number().int().min(0).optional(),
+        }),
         response: { 200: z.record(z.unknown()), 404: errorEnvelope },
       },
     },
     async (req) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
-      return getTwinTreeSnapshot(req.db, env.id);
+      const lens = req.query.scenarioId
+        ? { scenarioId: req.query.scenarioId, atOffsetHours: req.query.atOffsetHours ?? 0 }
+        : undefined;
+      return getTwinTreeSnapshot(req.db, env.id, lens);
     },
   );
 

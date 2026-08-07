@@ -1063,8 +1063,21 @@ function encEnv(env: string): string {
   return encodeURIComponent(env);
 }
 
-export async function fetchTwinTree(env: string): Promise<TwinTreeSnapshot> {
-  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/tree`);
+/**
+ * The twin's tree, optionally as it would be under a scenario.
+ *
+ * The same shape either way, which is the point: reality and a proposal can be
+ * read side by side and subtracted.
+ */
+export async function fetchTwinTree(
+  env: string,
+  lens?: { scenarioId?: string; atOffsetHours?: number },
+): Promise<TwinTreeSnapshot> {
+  const qs = new URLSearchParams();
+  if (lens?.scenarioId) qs.set("scenarioId", lens.scenarioId);
+  if (lens?.atOffsetHours) qs.set("atOffsetHours", String(lens.atOffsetHours));
+  const q = qs.toString();
+  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/tree${q ? `?${q}` : ""}`);
 }
 
 export interface TwinNetworkSite extends TwinUnitNode {
