@@ -163,10 +163,12 @@ export async function setSignalTypeAlertMetric(
   env: string,
   key: string,
   alertMetric: string | null,
+  /** Take the metric from whichever type holds it, rather than conflicting. */
+  reassign = false,
 ): Promise<SignalType> {
   return apiFetch(`/v1/ontology/${enc(env)}/signal-types/${enc(key)}/alert-metric`, {
     method: "PATCH",
-    body: { alertMetric },
+    body: { alertMetric, reassign },
   });
 }
 

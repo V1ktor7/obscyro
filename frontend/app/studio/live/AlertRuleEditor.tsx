@@ -74,6 +74,7 @@ export default function AlertRuleEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [wireTo, setWireTo] = useState("");
+  const [rewiring, setRewiring] = useState(false);
 
   // draft
   const [metric, setMetric] = useState("");
@@ -187,9 +188,10 @@ export default function AlertRuleEditor({
     setBusy(true);
     setError(null);
     try {
-      await setSignalTypeAlertMetric(env, wireTo, metric);
+      await setSignalTypeAlertMetric(env, wireTo, metric, rewiring);
       await reload();
       setWireTo("");
+      setRewiring(false);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -412,11 +414,53 @@ export default function AlertRuleEditor({
 
                 {/* the wiring, which is otherwise invisible */}
                 {draftSignal ? (
-                  <p className="rounded border border-ok/40 bg-ok-soft px-2 py-1.5 text-[10.5px] leading-snug text-ok-ink">
-                    Reaches Response as{" "}
-                    <b className="font-semibold">{draftSignal.name}</b> in{" "}
-                    <b className="font-semibold">{draftSignal.domain}</b>.
-                  </p>
+                  <div className="rounded border border-ok/40 bg-ok-soft px-2 py-1.5 text-[10.5px] leading-snug text-ok-ink">
+                    <p>
+                      Reaches Response as <b className="font-semibold">{draftSignal.name}</b> in{" "}
+                      <b className="font-semibold">{draftSignal.domain}</b>.
+                    </p>
+                    {/*
+                      Rewiring has to be reachable from the wired state too. The
+                      first version of this panel only offered the control when
+                      nothing claimed the metric, so an occupancy alert pointed
+                      at a staffing signal type — green, and wrong — had no way
+                      back. Being wired is not the same as being wired correctly.
+                    */}
+                    {rewiring ? (
+                      <div className="mt-1.5 flex items-center gap-1.5">
+                        <select
+                          value={wireTo}
+                          onChange={(e) => setWireTo(e.target.value)}
+                          className="min-w-0 flex-1 rounded border border-ok/40 bg-white px-1.5 py-1 text-[10.5px] text-ink focus:border-brand focus:outline-none"
+                        >
+                          <option value="">raise it as…</option>
+                          {signalTypes
+                            .filter((st) => st.active)
+                            .map((st) => (
+                              <option key={st.key} value={st.key}>
+                                {st.name} · {st.domain}
+                              </option>
+                            ))}
+                        </select>
+                        <button
+                          type="button"
+                          disabled={!wireTo || busy}
+                          onClick={() => void wire()}
+                          className="shrink-0 rounded border border-ok/40 bg-white px-2 py-1 text-[10.5px] font-medium text-ok-ink disabled:opacity-40"
+                        >
+                          Rewire
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setRewiring(true)}
+                        className="mt-1 underline underline-offset-2"
+                      >
+                        raise it as something else
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   <div className="rounded border border-warn-line bg-warn-soft px-2 py-1.5 text-[10.5px] leading-snug text-warn-ink">
                     <p>

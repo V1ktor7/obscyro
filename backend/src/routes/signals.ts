@@ -347,7 +347,11 @@ const signalRoutes: FastifyPluginAsync = async (fastify) => {
           "silently. Null unhooks the type, leaving it raised only by hand.",
         tags: ["signals"],
         params: z.object({ env: z.string().min(1), key: z.string().min(1).max(64) }),
-        body: z.object({ alertMetric: z.string().max(120).nullable() }),
+        body: z.object({
+          alertMetric: z.string().max(120).nullable(),
+          /** Take the metric from whichever type holds it. */
+          reassign: z.boolean().optional(),
+        }),
         response: { 200: signalTypeOut, 404: errorEnvelope, 409: errorEnvelope },
       },
     },

@@ -276,7 +276,23 @@ export async function setSignalTypeAlertMetric(
   organizationId: string,
   key: string,
   alertMetric: string | null,
+  /**
+   * Take the metric from whichever type holds it.
+   *
+   * Off by default, so wiring blind comes back as a conflict naming the holder.
+   * The alert-rule panel sets it when the user is looking at that name on
+   * screen and asks to raise it as something else: stealing is fine when you
+   * can see what you are stealing from.
+   */
+  reassign = false,
 ): Promise<SignalType> {
+  if (reassign && alertMetric) {
+    await db.query(
+      `UPDATE app.signal_type SET alert_metric = NULL, updated_at = NOW()
+        WHERE organization_id = $1 AND alert_metric = $2 AND key <> $3 AND active`,
+      [organizationId, alertMetric, key],
+    );
+  }
   let rows: { id: string }[];
   try {
     ({ rows } = await db.query<{ id: string }>(
