@@ -88,12 +88,9 @@ export default function LiveMetricsPanel({ env, hasKey }: LiveMetricsPanelProps)
   }, [env, scoreInstanceId]);
 
   return (
-    <div className="flex min-h-0 flex-col border-t border-line lg:border-l lg:border-t-0">
-      <div className="border-b border-line-faint px-3 py-2">
-        <span className="text-[10px] uppercase tracking-wide text-ink-faint">
-          Live metrics
-        </span>
-      </div>
+    // The border and the title used to belong here, when this was a column
+    // welded to the right of the twin. Its dialog provides both now.
+    <div className="flex min-h-0 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <input

@@ -1,6 +1,6 @@
 "use client";
 
-import { BellRing, SlidersHorizontal } from "lucide-react";
+import { Activity, BellRing, SlidersHorizontal } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
@@ -29,17 +29,13 @@ import {
   loadTwinPreferences,
   saveTwinPreferences,
 } from "../twin-preferences";
-import {
-  DISPLAY_METRIC_OPTIONS,
-  formatFreshness,
-  formatTwinMetric,
-  severityBadgeTone,
-} from "../twin-ui";
-import LiveMetricsPanel from "./LiveMetricsPanel";
+import { DISPLAY_METRIC_OPTIONS } from "../twin-ui";
+import LiveMetricsDialog from "./LiveMetricsDialog";
 import AlertRuleEditor from "./AlertRuleEditor";
 import MetricEditor from "./MetricEditor";
 import TwinAlertToasts from "./TwinAlertToasts";
 import TwinCanvas from "./TwinCanvas";
+import UnitDetailDialog from "./UnitDetailDialog";
 
 export default function LiveTwinView() {
   const { hasKey, selectedEnv, environments, bumpOntology, setSelectedEnv } = useStudio();
@@ -68,6 +64,8 @@ export default function LiveTwinView() {
   const [metricDefs, setMetricDefs] = useState<TwinMetric[]>([]);
   const [editingMetrics, setEditingMetrics] = useState(false);
   const [editingRules, setEditingRules] = useState(false);
+  const [showDetail, setShowDetail] = useState(false);
+  const [showMetrics, setShowMetrics] = useState(false);
   const [metricsVersion, setMetricsVersion] = useState(0);
   const [kindFilter, setKindFilter] = useState<string | null>(null);
   const [positions, setPositions] = useState<Map<string, { x: number; y: number }>>(
@@ -388,6 +386,19 @@ export default function LiveTwinView() {
                 ? "Polling"
                 : "Connecting"}
           </StatusChip>
+          {/*
+            Details open from here rather than on selection: clicking around a
+            network to compare sites should not throw a modal each time.
+          */}
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={!selectedUnitId}
+            title={selectedUnitId ? undefined : "Select a site on the map first"}
+            onClick={() => setShowDetail(true)}
+          >
+            Details
+          </Button>
           <Button size="sm" variant="secondary" onClick={() => void handleSeedDemo()} disabled={seeding}>
             {seeding ? "Seeding…" : "Seed demo"}
           </Button>
@@ -399,7 +410,7 @@ export default function LiveTwinView() {
           </p>
         ) : null}
 
-        <div className="flex min-h-0 flex-1">
+        <div className="relative flex min-h-0 flex-1">
           <div className="relative min-h-0 min-w-0 flex-1">
             <TwinCanvas
               snapshot={snapshot}
@@ -413,29 +424,41 @@ export default function LiveTwinView() {
             />
           </div>
 
-          {selectedUnitId ? (
-            <aside className="w-72 shrink-0 overflow-y-auto border-l border-line bg-white p-3">
-              <UnitDetailPanel
-                unitId={selectedUnitId}
-                nodeName={snapshot?.nodes.find((n) => n.id === selectedUnitId)?.name}
-                detail={unitDetail}
-                loading={detailLoading}
-                onAck={(id) => void handleAck(id)}
-                onClose={() => setSelectedUnitId(null)}
-              />
-            </aside>
-          ) : null}
+          {/* A map control rather than a column: the twin gets its width back. */}
+          <button
+            type="button"
+            onClick={() => setShowMetrics(true)}
+            title="Live metrics"
+            className="absolute right-3 top-3 rounded-md border border-line bg-white p-1.5 text-ink-muted shadow-sm hover:border-brand hover:text-brand"
+          >
+            <Activity className="h-4 w-4" />
+          </button>
         </div>
-      </div>
-
-      <div className="w-full shrink-0 lg:w-72">
-        <LiveMetricsPanel env={env} hasKey={hasKey} />
       </div>
 
       <TwinAlertToasts
         alerts={toastAlerts}
         onDismiss={(id) => setToastAlerts((cur) => cur.filter((a) => a.id !== id))}
       />
+
+      {showDetail && selectedUnitId ? (
+        <UnitDetailDialog
+          unitId={selectedUnitId}
+          nodeName={snapshot?.nodes.find((n) => n.id === selectedUnitId)?.name}
+          detail={unitDetail}
+          loading={detailLoading}
+          onAck={(id) => void handleAck(id)}
+          onClose={() => setShowDetail(false)}
+        />
+      ) : null}
+
+      {showMetrics && env ? (
+        <LiveMetricsDialog
+          env={env}
+          hasKey={hasKey}
+          onClose={() => setShowMetrics(false)}
+        />
+      ) : null}
 
       {editingRules && env ? (
         <AlertRuleEditor env={env} onClose={() => setEditingRules(false)} />
@@ -451,108 +474,4 @@ export default function LiveTwinView() {
     </div>
   );
 }
-
-function UnitDetailPanel({
-  unitId,
-  nodeName,
-  detail,
-  loading,
-  onAck,
-  onClose,
-}: {
-  unitId: string;
-  nodeName?: string;
-  detail: TwinUnitDetail | null;
-  loading: boolean;
-  onAck: (alertId: string) => void;
-  onClose: () => void;
-}) {
-  return (
-    <div>
-      <div className="mb-3 flex items-start justify-between gap-2">
-        <div>
-          <p className="text-xs font-medium text-ink">{nodeName ?? "Unit"}</p>
-          <p className="text-[9px] text-ink-faint">{unitId.slice(0, 12)}…</p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-[10px] text-ink-faint hover:text-ink-muted"
-        >
-          Close
-        </button>
-      </div>
-
-      {loading || !detail ? (
-        <p className="text-[11px] text-ink-faint">Loading…</p>
-      ) : (
-        <>
-          <div className="mb-3 grid grid-cols-2 gap-2">
-            <Card className="p-2">
-              <p className="text-[9px] uppercase text-ink-faint">Occupancy</p>
-              <p className="text-sm font-semibold">
-                {formatTwinMetric(detail.metrics, "occupancyPct")}
-              </p>
-            </Card>
-            <Card className="p-2">
-              <p className="text-[9px] uppercase text-ink-faint">Linked</p>
-              <p className="text-sm font-semibold">
-                {detail.metrics.linkedInstanceCount}
-              </p>
-            </Card>
-            <Card className="p-2 col-span-2">
-              <p className="text-[9px] uppercase text-ink-faint">Freshness</p>
-              <p className="text-sm font-semibold">
-                {formatFreshness(detail.metrics.freshnessSeconds)}
-              </p>
-            </Card>
-          </div>
-
-          {Object.keys(detail.metrics.instanceCountByType).length > 0 ? (
-            <div className="mb-3">
-              <p className="mb-1 text-[9px] uppercase text-ink-faint">By type</p>
-              {Object.entries(detail.metrics.instanceCountByType).map(([t, c]) => (
-                <p key={t} className="text-[11px] text-ink-muted">
-                  {t}: {c}
-                </p>
-              ))}
-            </div>
-          ) : null}
-
-          <div className="mb-3">
-            <p className="mb-1 text-[9px] uppercase text-ink-faint">Open alerts</p>
-            {detail.alerts.length === 0 ? (
-              <p className="text-[11px] text-ink-faint">None</p>
-            ) : (
-              detail.alerts.map((a) => (
-                <div key={a.id} className="mb-2 rounded-md border border-line p-2">
-                  <StatusChip tone={severityBadgeTone(a.severity)}>{a.severity}</StatusChip>
-                  <p className="mt-1 text-[11px] text-ink-body">{a.message}</p>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="mt-1"
-                    onClick={() => onAck(a.id)}
-                  >
-                    Ack
-                  </Button>
-                </div>
-              ))
-            )}
-          </div>
-
-          {detail.recommendations.length > 0 ? (
-            <div>
-              <p className="mb-1 text-[9px] uppercase text-ink-faint">Recommendations</p>
-              <ul className="list-inside list-disc text-[11px] text-ink-muted">
-                {detail.recommendations.map((r, i) => (
-                  <li key={i}>{r}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </>
-      )}
-    </div>
-  );
-}
+
