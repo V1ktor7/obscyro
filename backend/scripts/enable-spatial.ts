@@ -54,6 +54,49 @@ const DDL = [
      ON app.instance_geometry (kind)`,
 ];
 
+/**
+ * Can this database do spatial, without changing anything?
+ *
+ * `pg_available_extensions` lists what the server *could* install, which is the
+ * question worth asking before touching a production database: an image without
+ * PostGIS is not a permissions problem to work around, it is a different image.
+ */
+async function check(client: Client): Promise<void> {
+  const { rows: avail } = await client.query<{ name: string; default_version: string }>(
+    `SELECT name, default_version FROM pg_available_extensions
+      WHERE name LIKE 'postgis%' ORDER BY name`,
+  );
+  const { rows: installed } = await client.query<{ extname: string; extversion: string }>(
+    `SELECT extname, extversion FROM pg_extension WHERE extname LIKE 'postgis%'`,
+  );
+  const { rows: who } = await client.query<{ usr: string; superuser: boolean }>(
+    `SELECT current_user AS usr,
+            (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) AS superuser`,
+  );
+
+  console.log(`role      ${who[0]?.usr} (superuser: ${who[0]?.superuser ? "yes" : "no"})`);
+
+  if (installed.length > 0) {
+    console.log(`installed ${installed.map((r) => `${r.extname} ${r.extversion}`).join(", ")}`);
+    console.log("\nAlready enabled. `npm run enable-spatial` will create the tables.");
+    return;
+  }
+
+  if (avail.length === 0) {
+    console.log("available (none)");
+    console.log(
+      "\nThis Postgres image does not ship PostGIS, so no privilege will help —\n" +
+        "it is a different image, not a permission. Moving an existing database to\n" +
+        "one is a data migration, not a setting. Everything else in the product\n" +
+        "keeps working: the geo routes report the capability as unavailable.",
+    );
+    return;
+  }
+
+  console.log(`available ${avail.map((r) => `${r.name} ${r.default_version}`).join(", ")}`);
+  console.log("\nPostGIS can be installed here. Run `npm run enable-spatial` to do it.");
+}
+
 async function main(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
@@ -61,10 +104,15 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  const readOnly = process.argv.includes("--check");
   const client = new Client({ connectionString: databaseUrl });
   await client.connect();
 
   try {
+    if (readOnly) {
+      await check(client);
+      return;
+    }
     for (const sql of DDL) {
       const label = sql.trim().split("\n")[0]!.slice(0, 60);
       try {
@@ -99,7 +147,27 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
+main().catch((err: unknown) => {
+  const e = err as { code?: string; message?: string };
+  // A stack trace for "the database did not answer" tells you nothing you can
+  // act on, and this script exists to be run against a database you may have
+  // named wrongly.
+  if (e.code === "ECONNREFUSED" || e.code === "ENOTFOUND" || e.code === "ETIMEDOUT") {
+    let target = "the configured DATABASE_URL";
+    try {
+      const u = new URL(process.env.DATABASE_URL ?? "");
+      target = `${u.hostname}:${u.port || 5432}`;
+    } catch {
+      /* leave the generic wording */
+    }
+    console.error(
+      `Could not reach ${target}.\n\n` +
+        "Point DATABASE_URL at the database you mean — the one in backend/.env is\n" +
+        "usually a local dev instance. For Railway, copy the connection string from\n" +
+        "the Postgres service's Variables tab, or run this through `railway run`.",
+    );
+    process.exit(1);
+  }
+  console.error(e.message ?? err);
   process.exit(1);
 });
