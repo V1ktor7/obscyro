@@ -174,11 +174,13 @@ describe("twin integration (test-twin)", () => {
 
     const unitKinds = new Map(tree.nodes.map((n) => [n.id, n.kind]));
     const metricsMap = new Map([[ward, wardMetrics]]);
+    const unitNames = new Map([[ward, "Test ward"]]);
     const alerts = await evaluateAlerts(
       db,
       ctx.environmentId,
       metricsMap,
       unitKinds,
+      unitNames,
       [rule],
     );
     assert.ok(alerts.length >= 1);
@@ -188,7 +190,7 @@ describe("twin integration (test-twin)", () => {
     // Idempotency: re-evaluating must refresh the same open alert, not spam a
     // new row every SSE/poll tick.
     const before = await listOpenAlerts(db, ctx.environmentId, ward);
-    const reEval = await evaluateAlerts(db, ctx.environmentId, metricsMap, unitKinds, [rule]);
+    const reEval = await evaluateAlerts(db, ctx.environmentId, metricsMap, unitKinds, unitNames, [rule]);
     assert.equal(reEval[0]!.id, alerts[0]!.id);
     assert.equal(reEval[0]!.isNew, false);
     const after = await listOpenAlerts(db, ctx.environmentId, ward);

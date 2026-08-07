@@ -371,10 +371,35 @@ function compareOp(op: TwinAlertOp, value: number, threshold: number): boolean {
   }
 }
 
-function fillTemplate(tpl: string, value: number, threshold: number): string {
-  return tpl
-    .replace(/\{\{value\}\}/g, String(Math.round(value * 100) / 100))
-    .replace(/\{\{threshold\}\}/g, String(threshold));
+export interface TemplateContext {
+  unit: string;
+  value: number;
+  threshold: number;
+}
+
+/**
+ * Fill an alert message.
+ *
+ * Both brace styles are accepted on purpose. The engine shipped reading
+ * `{{value}}`; the alert-rule panel documents and pre-fills `{value}`. Rules
+ * exist in both forms, and a message that renders its own placeholder to a
+ * clinician — "Occupation critique à {unit} — {value}%" — is worse than one
+ * that never mentioned the unit at all.
+ *
+ * `{unit}` is new. It was documented before it existed: fillTemplate only ever
+ * received the value and the threshold, so the unit's name had nowhere to come
+ * from.
+ *
+ * An unknown key is left as written rather than blanked, so a typo is visible
+ * instead of silently producing a gap in a sentence.
+ */
+export function fillTemplate(tpl: string, ctx: TemplateContext): string {
+  const subs: Record<string, string> = {
+    unit: ctx.unit,
+    value: String(Math.round(ctx.value * 100) / 100),
+    threshold: String(ctx.threshold),
+  };
+  return tpl.replace(/\{\{?(\w+)\}?\}/g, (whole, key: string) => subs[key] ?? whole);
 }
 
 export async function listAlertRules(
@@ -417,6 +442,7 @@ export async function evaluateAlerts(
   environmentId: string,
   metricsByUnit: Map<string, UnitMetrics>,
   unitKinds: Map<string, string>,
+  unitNames: Map<string, string>,
   rules?: TwinAlertRuleRow[],
 ): Promise<TwinAlertRow[]> {
   const activeRules = rules ?? (await listAlertRules(db, environmentId));
@@ -430,8 +456,13 @@ export async function evaluateAlerts(
       if (val == null) continue;
       if (!compareOp(rule.op, val, rule.threshold)) continue;
 
-      const message = fillTemplate(rule.messageTemplate, val, rule.threshold);
-      const recommendation = fillTemplate(rule.recommendationTemplate, val, rule.threshold);
+      const ctx = {
+        unit: unitNames.get(unitId) ?? "this unit",
+        value: val,
+        threshold: rule.threshold,
+      };
+      const message = fillTemplate(rule.messageTemplate, ctx);
+      const recommendation = fillTemplate(rule.recommendationTemplate, ctx);
 
       // Idempotent: at most one OPEN alert per (env, unit, rule). The 5s SSE/poll
       // loop refreshes the existing row instead of inserting a duplicate every
@@ -655,7 +686,8 @@ export async function getTwinTreeSnapshot(db: DbClient, environmentId: string, l
   const tree = await getUnitTree(db, environmentId, lens);
   const metricsByUnit = await rollupAllUnits(db, environmentId, lens);
   const unitKinds = new Map(tree.nodes.map((n) => [n.id, n.kind]));
-  await evaluateAlerts(db, environmentId, metricsByUnit, unitKinds);
+  const unitNames = new Map(tree.nodes.map((n) => [n.id, n.name]));
+  await evaluateAlerts(db, environmentId, metricsByUnit, unitKinds, unitNames);
   const openAlerts = await listOpenAlerts(db, environmentId, undefined, {
     limit: config.listMaxLimit,
   });

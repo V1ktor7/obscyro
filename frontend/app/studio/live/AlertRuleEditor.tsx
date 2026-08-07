@@ -376,15 +376,28 @@ export default function AlertRuleEditor({
                     className={cn(FIELD, "mt-1")}
                   />
                   <p className="mt-1 text-[10px] text-ink-faint">
-                    <span className="rounded bg-canvas-raised px-1 ring-1 ring-line-soft">
-                      {"{unit}"}
-                    </span>{" "}
-                    and{" "}
-                    <span className="rounded bg-canvas-raised px-1 ring-1 ring-line-soft">
-                      {"{value}"}
-                    </span>{" "}
-                    are replaced when the alert fires.
+                    {["{unit}", "{value}", "{threshold}"].map((p, i) => (
+                      <span key={p}>
+                        {i > 0 ? " · " : ""}
+                        <span className="rounded bg-canvas-raised px-1 ring-1 ring-line-soft">
+                          {p}
+                        </span>
+                      </span>
+                    ))}{" "}
+                    are replaced when the alert fires. Anything else is left as written, so a
+                    typo shows rather than leaving a gap in the sentence.
                   </p>
+                  {message && /\{\{?(\w+)\}?\}/.test(message) ? (
+                    <p className="mt-1 text-[10px] text-ink-muted">
+                      preview ·{" "}
+                      <span className="text-ink-body">
+                        {message
+                          .replace(/\{\{?unit\}?\}/g, "HND Emergency")
+                          .replace(/\{\{?value\}?\}/g, "96.67")
+                          .replace(/\{\{?threshold\}?\}/g, threshold || "90")}
+                      </span>
+                    </p>
+                  ) : null}
                 </div>
 
                 <div>
