@@ -24,6 +24,7 @@ import {
   listOpenAlerts,
   rollupUnit,
   seedTwinDemo,
+  unitExchanges,
   updateAlertRule,
   type TwinAlertRuleRow,
 } from "../services/twin.js";
@@ -104,7 +105,13 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
       const alerts = await listOpenAlerts(req.db, env.id, req.params.id, {
         limit: config.listMaxLimit,
       });
-      return { metrics, alerts, recommendations: alerts.map((a) => a.recommendation).filter(Boolean) };
+      const exchanges = await unitExchanges(req.db, env.id, req.params.id);
+      return {
+        metrics,
+        alerts,
+        exchanges,
+        recommendations: alerts.map((a) => a.recommendation).filter(Boolean),
+      };
     },
   );
 

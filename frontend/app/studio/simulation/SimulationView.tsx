@@ -24,10 +24,6 @@ import {
 
 import { StatusChip } from "../StatusChip";
 import { useStudio } from "../StudioShell";
-import {
-  loadTwinLayout,
-  mergeTwinPositions,
-} from "../twin-layout-persist";
 import TwinCanvas from "../live/TwinCanvas";
 import { type ScenarioRunSummary } from "../sim-api";
 import AlertTimelinePanel from "./AlertTimelinePanel";
@@ -50,9 +46,6 @@ export default function SimulationView() {
 
   const [step, setStep] = useState<Step>(1);
   const [tree, setTree] = useState<TwinTreeSnapshot | null>(null);
-  const [positions, setPositions] = useState<Map<string, { x: number; y: number }>>(
-    () => new Map(),
-  );
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
   const [cloneName, setCloneName] = useState("");
   const [cloning, setCloning] = useState(false);
@@ -88,10 +81,6 @@ export default function SimulationView() {
     try {
       const snap = await fetchTwinTree(env);
       setTree(snap);
-      const ids = snap.nodes.map((n) => n.id);
-      setPositions(
-        mergeTwinPositions(ids, snap.edges, snap.roots, loadTwinLayout(env)),
-      );
     } catch {
       setTree(null);
     }
@@ -376,10 +365,7 @@ export default function SimulationView() {
                 selectedUnitId={selectedUnitId}
                 displayMetric="occupancyPct"
                 kindFilter={null}
-                positions={positions}
-                readOnly
                 onSelectUnit={setSelectedUnitId}
-                onPositionChange={() => {}}
               />
             </div>
             <div className="flex flex-wrap gap-2">

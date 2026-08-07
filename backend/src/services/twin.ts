@@ -324,6 +324,65 @@ export async function rollupAllUnits(
   return metricsByUnit;
 }
 
+export interface UnitExchange {
+  linkType: string;
+  direction: "out" | "in";
+  otherUnitId: string;
+  otherUnitName: string;
+  count: number;
+}
+
+/**
+ * What a unit exchanges with other units, and by which link.
+ *
+ * The tree draws `contains` and nothing else, so every other link between two
+ * units — a transfer route, a supply line, a data feed — is invisible on it.
+ * Overlaying them would turn a hierarchy into a hairball; naming them on the
+ * unit you are reading answers the same question without that cost.
+ *
+ * Counted per (link type, direction, other unit): a route used forty times is
+ * one relationship, not forty.
+ */
+export async function unitExchanges(
+  db: DbClient,
+  environmentId: string,
+  unitId: string,
+): Promise<UnitExchange[]> {
+  const { nodes } = await getUnitTree(db, environmentId);
+  const nameById = new Map(nodes.map((n) => [n.id, n.name]));
+  const links = await listLinksForEnv(db, environmentId);
+
+  const seen = new Map<string, UnitExchange>();
+  for (const l of links) {
+    if (l.linkTypeName === CONTAINS_LINK) continue;
+    const isOut = l.fromInstanceId === unitId;
+    const isIn = l.toInstanceId === unitId;
+    if (!isOut && !isIn) continue;
+    const otherId = isOut ? l.toInstanceId : l.fromInstanceId;
+    // Only unit-to-unit: a bed pointing at its ward is the hierarchy again,
+    // seen from below, and the metrics panel already counts those.
+    if (!nameById.has(otherId)) continue;
+
+    const key = `${l.linkTypeName}|${isOut ? "out" : "in"}|${otherId}`;
+    const found = seen.get(key);
+    if (found) found.count++;
+    else {
+      seen.set(key, {
+        linkType: l.linkTypeName,
+        direction: isOut ? "out" : "in",
+        otherUnitId: otherId,
+        otherUnitName: nameById.get(otherId) ?? "unit",
+        count: 1,
+      });
+    }
+  }
+
+  return Array.from(seen.values()).sort(
+    (a, b) =>
+      a.linkType.localeCompare(b.linkType) || a.otherUnitName.localeCompare(b.otherUnitName),
+  );
+}
+
 export async function rollupUnit(
   db: DbClient,
   environmentId: string,

@@ -20,11 +20,6 @@ import {
 import { StatusChip } from "../StatusChip";
 import { useStudio } from "../StudioShell";
 import {
-  loadTwinLayout,
-  mergeTwinPositions,
-  saveTwinLayout,
-} from "../twin-layout-persist";
-import {
   KIND_FILTER_OPTIONS,
   loadTwinPreferences,
   saveTwinPreferences,
@@ -68,9 +63,6 @@ export default function LiveTwinView() {
   const [showMetrics, setShowMetrics] = useState(false);
   const [metricsVersion, setMetricsVersion] = useState(0);
   const [kindFilter, setKindFilter] = useState<string | null>(null);
-  const [positions, setPositions] = useState<Map<string, { x: number; y: number }>>(
-    () => new Map(),
-  );
 
   const [toastAlerts, setToastAlerts] = useState<
     Array<{ id: string; severity: "info" | "warn" | "critical"; message: string; unitInstanceId: string }>
@@ -109,15 +101,11 @@ export default function LiveTwinView() {
 
   const displayUnit = metricDefs.find((m) => m.key === displayMetric)?.unit;
 
-  const applySnapshot = useCallback(
-    (snap: TwinTreeSnapshot) => {
-      setSnapshot(snap);
-      if (!env) return;
-      const ids = snap.nodes.map((n) => n.id);
-      setPositions(mergeTwinPositions(ids, snap.edges, snap.roots, loadTwinLayout(env)));
-    },
-    [env],
-  );
+  // The tree lays itself out from the `contains` links, so a snapshot is the
+  // only state it needs.
+  const applySnapshot = useCallback((snap: TwinTreeSnapshot) => {
+    setSnapshot(snap);
+  }, []);
 
   const collectNewAlerts = useCallback(async (snap: TwinTreeSnapshot) => {
     if (!env) return;
@@ -202,21 +190,6 @@ export default function LiveTwinView() {
       .catch((err) => setError((err as Error).message))
       .finally(() => setDetailLoading(false));
   }, [env, selectedUnitId, isOperations, snapshot?.computedAt]);
-
-  const handlePositionChange = useCallback(
-    (unitId: string, pos: { x: number; y: number }) => {
-      setPositions((cur) => {
-        const next = new Map(cur);
-        next.set(unitId, pos);
-        if (env) {
-          const layout = Object.fromEntries(next);
-          saveTwinLayout(env, layout);
-        }
-        return next;
-      });
-    },
-    [env],
-  );
 
   const handleMetricChange = (key: string) => {
     setDisplayMetric(key);
@@ -418,9 +391,8 @@ export default function LiveTwinView() {
               displayMetric={displayMetric}
               displayUnit={displayUnit}
               kindFilter={kindFilter}
-              positions={positions}
               onSelectUnit={setSelectedUnitId}
-              onPositionChange={handlePositionChange}
+              onOpenUnit={() => setShowDetail(true)}
             />
           </div>
 

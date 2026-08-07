@@ -122,6 +122,40 @@ export default function UnitDetailDialog({
                 ))
               )}
 
+              {/*
+                What the tree cannot show. Its lines are the `contains`
+                hierarchy; a transfer route or a data feed between two units has
+                no line on it, so it is named here.
+              */}
+              <p className="mb-1.5 mt-3 text-[10px] font-medium uppercase tracking-wide text-ink-faint">
+                Exchanges with other units
+              </p>
+              {(detail.exchanges ?? []).length === 0 ? (
+                <p className="text-[11px] leading-snug text-ink-faint">
+                  None. This unit is only connected by the hierarchy.
+                </p>
+              ) : (
+                <table className="w-full text-left text-[11px]">
+                  <tbody>
+                    {detail.exchanges.map((x) => (
+                      <tr
+                        key={`${x.linkType}-${x.direction}-${x.otherUnitId}`}
+                        className="border-b border-line-faint last:border-0"
+                      >
+                        <td className="w-4 py-1 text-ink-faint" title={x.direction === "out" ? "outgoing" : "incoming"}>
+                          {x.direction === "out" ? "→" : "←"}
+                        </td>
+                        <td className="py-1 text-ink-body">{x.otherUnitName}</td>
+                        <td className="py-1 text-right text-ink-muted">{x.linkType}</td>
+                        <td className="w-8 py-1 text-right tabular-nums text-ink-faint">
+                          {x.count}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
               {detail.recommendations.length > 0 ? (
                 <>
                   <p className="mb-1.5 mt-3 text-[10px] font-medium uppercase tracking-wide text-ink-faint">

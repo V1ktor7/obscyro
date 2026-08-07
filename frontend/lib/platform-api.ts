@@ -940,9 +940,25 @@ export interface TwinAlert {
   ackedAt?: string | null;
 }
 
+/**
+ * A link this unit has with another unit, other than the hierarchy.
+ *
+ * The tree draws `contains` and nothing else, so a transfer route or a data
+ * feed between two units has no line on it. They are named here instead:
+ * overlaying them would turn a readable hierarchy into a hairball.
+ */
+export interface TwinUnitExchange {
+  linkType: string;
+  direction: "out" | "in";
+  otherUnitId: string;
+  otherUnitName: string;
+  count: number;
+}
+
 export interface TwinUnitDetail {
   metrics: TwinUnitMetrics;
   alerts: TwinAlert[];
+  exchanges: TwinUnitExchange[];
   recommendations: string[];
 }
 
