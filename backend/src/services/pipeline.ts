@@ -136,6 +136,15 @@ export interface RunResult {
   nodeStats: Record<string, NodeStat>;
   /** Sample rows per node, populated in preview mode only. */
   samples: Record<string, Row[]>;
+  /**
+   * What would stop a run, reported by preview too.
+   *
+   * Validation used to happen only on a run, so a pipeline could preview
+   * perfectly — rows in, rows out, links made — and then refuse to execute.
+   * The preview is where people decide the thing works; it has to say the same
+   * thing the run will.
+   */
+  issues: ValidationIssue[];
   error: string | null;
 }
 
@@ -960,11 +969,11 @@ export async function execute(
   } catch (err) {
     const message = (err as Error).message;
     if (runId) await finishRun(db, runId, pipeline.id, "failed", rowsIn, rowsOut, nodeStats, message);
-    return { runId, status: "failed", rowsIn, rowsOut, nodeStats, samples, error: message };
+    return { runId, status: "failed", rowsIn, rowsOut, nodeStats, samples, issues, error: message };
   }
 
   if (runId) await finishRun(db, runId, pipeline.id, "succeeded", rowsIn, rowsOut, nodeStats, null);
-  return { runId, status: "succeeded", rowsIn, rowsOut, nodeStats, samples, error: null };
+  return { runId, status: "succeeded", rowsIn, rowsOut, nodeStats, samples, issues, error: null };
 }
 
 async function writeObjects(
@@ -1032,14 +1041,50 @@ async function writeObjects(
       throw NotFound("TYPE_NOT_FOUND", `Link target type "${rule.targetType}" not found.`);
     }
     const out = (rule.direction ?? "out") === "out";
+    const wantFrom = out ? objectTypeId : targetTypeId;
+    const wantTo = out ? targetTypeId : objectTypeId;
     const linkTypeId = await getOrCreateLinkType(
       db,
       pipeline.projectId,
       rule.linkType,
-      out ? objectTypeId : targetTypeId,
-      out ? targetTypeId : objectTypeId,
+      wantFrom,
+      wantTo,
       "many_to_one",
     );
+
+    // getOrCreateLinkType returns an existing type by name without checking its
+    // endpoints, so a rule naming `located_in` — declared Patient → OrgUnit —
+    // while writing Beds got a link type it could not use. The insert then
+    // failed on a database constraint, and the message the user read was
+    // "from_instance object_type_id … does not match link_type from_type_id …".
+    // Say what is wrong and what to do instead.
+    const { rows: ltRows } = await db.query<{
+      from_name: string;
+      to_name: string;
+    }>(
+      `SELECT ft.name AS from_name, tt.name AS to_name
+         FROM app.ontology_link_types lt
+         JOIN app.ontology_object_types ft ON ft.id = lt.from_type_id
+         JOIN app.ontology_object_types tt ON tt.id = lt.to_type_id
+        WHERE lt.id = $1`,
+      [linkTypeId],
+    );
+    const declared = ltRows[0];
+    const { rows: wantRows } = await db.query<{ id: string; name: string }>(
+      `SELECT id, name FROM app.ontology_object_types WHERE id = ANY($1::uuid[])`,
+      [[wantFrom, wantTo]],
+    );
+    const nameOf = new Map(wantRows.map((r) => [r.id, r.name]));
+    const wantFromName = nameOf.get(wantFrom) ?? "?";
+    const wantToName = nameOf.get(wantTo) ?? "?";
+    if (declared && (declared.from_name !== wantFromName || declared.to_name !== wantToName)) {
+      throw BadRequest(
+        "LINK_TYPE_MISMATCH",
+        `Link type "${rule.linkType}" connects ${declared.from_name} → ${declared.to_name}, ` +
+          `but this rule links ${wantFromName} → ${wantToName}. ` +
+          `Use a link type declared for ${wantFromName} → ${wantToName}, or name a new one and it will be created.`,
+      );
+    }
     resolved.push({ rule, targetTypeId, linkTypeId, cache: new Map<string, KeyLookup>() });
   }
 

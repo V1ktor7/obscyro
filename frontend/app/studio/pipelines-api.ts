@@ -92,6 +92,13 @@ export interface RunResult {
   rowsOut: number;
   nodeStats: Record<string, NodeStat>;
   samples: Record<string, Record<string, unknown>[]>;
+  /**
+   * What would stop a run. A preview reports these too, without failing.
+   *
+   * Validation used to happen only on execute, so a pipeline could preview
+   * perfectly — rows in, rows out, links made — and then refuse to run.
+   */
+  issues: ValidationIssue[];
   error: string | null;
 }
 

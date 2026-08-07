@@ -569,6 +569,7 @@ const Canvas = function Canvas({
       {nodes.map((n) => {
         const Icon = ICON[n.kind];
         const stat = run?.nodeStats[n.id];
+        const nodeIssues = (run?.issues ?? []).filter((i) => i.nodeId === n.id);
         const isJoin = n.kind === "join";
         const isInput = n.kind === "dataset_input";
         const isOutput = n.kind === "object_output" || n.kind === "dataset_output";
@@ -605,6 +606,15 @@ const Canvas = function Canvas({
               ) : (
                 <span>not previewed</span>
               )}
+              {/* A node that would stop the run says so where it stands. */}
+              {nodeIssues.length > 0 ? (
+                <span
+                  className="ml-auto font-medium text-[#935610]"
+                  title={nodeIssues.map((i) => i.message).join("\n")}
+                >
+                  ⚠ {nodeIssues.length}
+                </span>
+              ) : null}
             </div>
 
             {/* input ports */}
@@ -731,9 +741,26 @@ function Inspector({
     ? Object.entries(run.samples).find(([id]) => id !== node.id && columns.length > 0)?.[1]?.[0]
     : undefined;
 
+  /**
+   * A column picker.
+   *
+   * The options are the last preview's output columns, so a saved pipeline
+   * reopened cold used to render every picker empty — the configuration was
+   * intact on the server and looked lost. The configured value is always an
+   * option, and says so when the last preview did not produce it: a column that
+   * upstream stopped emitting is worth seeing, not silently blanking.
+   */
   const colSelect = (value: string, onChange: (v: string) => void, placeholder = "column") => (
     <select value={value} onChange={(e) => onChange(e.target.value)} className={F}>
-      <option value="">{columns.length === 0 ? "preview first" : placeholder}</option>
+      <option value="">
+        {columns.length === 0 ? "preview to list the columns" : placeholder}
+      </option>
+      {value && !columns.includes(value) ? (
+        <option value={value}>
+          {value}
+          {columns.length > 0 ? " — not in the last preview" : ""}
+        </option>
+      ) : null}
       {columns.map((c) => (
         <option key={c} value={c}>
           {c}
@@ -1225,12 +1252,17 @@ function Inspector({
             />
             <label className={L}>Identity — the key rows upsert on</label>
             <div className="mt-1 max-h-32 space-y-0.5 overflow-y-auto rounded border border-[#e5e8eb] p-1.5">
-              {columns.length === 0 ? (
-                <p className="text-[10.5px] text-[#8f99a8]">Preview to see the columns.</p>
-              ) : (
-                columns.map((c) => {
-                  const ident = (cfg.identityProperties as string[] | undefined) ?? [];
-                  return (
+              {(() => {
+                const ident = (cfg.identityProperties as string[] | undefined) ?? [];
+                // Same reason as the column pickers: a saved key has to stay
+                // visible and checked before any preview has run.
+                const listed = [...columns, ...ident.filter((c) => !columns.includes(c))];
+                return listed.length === 0 ? (
+                  <p className="text-[10.5px] text-[#8f99a8]">
+                    Preview to list the columns, then pick the key.
+                  </p>
+                ) : (
+                  listed.map((c) => (
                     <label key={c} className="flex items-center gap-1.5 text-[11px]">
                       <input
                         type="checkbox"
@@ -1245,10 +1277,13 @@ function Inspector({
                         className="h-3 w-3 accent-[#2d72d2]"
                       />
                       <span className="truncate">{c}</span>
+                      {!columns.includes(c) && columns.length > 0 ? (
+                        <span className="shrink-0 text-[9.5px] text-[#935610]">not produced</span>
+                      ) : null}
                     </label>
-                  );
-                })
-              )}
+                  ))
+                );
+              })()}
             </div>
             <p className="mt-1 rounded bg-[#fdf6ec] px-2 py-1.5 text-[10.5px] leading-snug text-[#8a5a12]">
               The key has to be unique per row. Pick too few columns and every run overwrites the

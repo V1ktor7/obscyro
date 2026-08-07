@@ -285,6 +285,10 @@ export default function StudioShell({ children }: { children: ReactNode }) {
       health,
       environments,
       selectedEnv,
+      // Was the raw useState setter, which React treats as stable and exempt.
+      // It writes the URL and storage now, so it is a useCallback and belongs
+      // here: without it, consumers would keep a stale one if router changed.
+      setSelectedEnv,
       refreshEnvironments,
       envTypes,
       refreshTypes,
