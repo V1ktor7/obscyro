@@ -54,6 +54,46 @@ npm run enable-spatial
 Tant qu'elle n'a pas été lancée, `spatialAvailable()` rend faux, les routes
 `/geo/*` le disent honnêtement, et le reste du produit ne s'en aperçoit pas.
 
+## Ce que dit la base de production (mesuré le 7 août 2026)
+
+Interrogée par la console Railway, sans rien modifier :
+
+| | |
+|---|---|
+| version | PostgreSQL 18.4 (Debian) |
+| rôle | `postgres`, **superutilisateur** |
+| extensions disponibles | 47, **`postgis` n'en fait pas partie** |
+| extensions installées | `btree_gin`, `pg_trgm`, `pgcrypto`, `plpgsql`, `vector` |
+
+Le rôle est superutilisateur : ce n'est donc **pas une question de droit**. Et
+`pg_available_extensions` trouve bien `pgcrypto`, donc la vue fonctionne — le
+vide sur `postgis` est un vrai vide, pas un artefact de la requête. L'image ne
+contient pas PostGIS, point.
+
+`npm run enable-spatial` échouerait ici, et c'est précisément pourquoi ce n'est
+pas une migration : une migration qui échoue empêche l'API de démarrer.
+
+### Le poids réel d'un déménagement
+
+| schéma | taille | tables |
+|---|---|---|
+| `snomed` | 3048 Mo | 9 |
+| `app` | 433 Mo | 53 |
+
+Les 3,6 Go de la base sont à **85 % la terminologie SNOMED**, qui se recharge
+depuis la source. Ce qui doit vraiment traverser, c'est `app` — 433 Mo, dont
+400 Mo de `ingest_events` (825 207 lignes de journal d'ingestion). Le produit
+lui-même pèse quelques dizaines de mégaoctets.
+
+### Le piège
+
+`snomed.description_embeddings` porte une colonne de type `vector`. Toute image
+de remplacement doit donc fournir **pgvector *et* PostGIS**. L'image
+`postgis/postgis` ne fournit que la seconde : basculer dessus sans vérifier
+casserait la recherche sémantique SNOMED, qui, elle, sert déjà.
+
+C'est le genre de chose qui ne se découvre pas pendant la bascule.
+
 ## Ce qui est fait
 
 | | |

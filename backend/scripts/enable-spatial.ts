@@ -87,8 +87,10 @@ async function check(client: Client): Promise<void> {
     console.log(
       "\nThis Postgres image does not ship PostGIS, so no privilege will help —\n" +
         "it is a different image, not a permission. Moving an existing database to\n" +
-        "one is a data migration, not a setting. Everything else in the product\n" +
-        "keeps working: the geo routes report the capability as unavailable.",
+        "one is a data migration, not a setting, and the replacement must also ship\n" +
+        "pgvector: snomed.description_embeddings depends on it. Everything else in\n" +
+        "the product keeps working: the geo routes report the capability as\n" +
+        "unavailable.",
     );
     return;
   }
@@ -123,10 +125,12 @@ async function main(): Promise<void> {
         console.error(`      ${(err as Error).message}`);
         if (/extension "postgis" is not available/i.test((err as Error).message)) {
           console.error(
-            "\nThis Postgres build does not ship PostGIS. On Railway, use a Postgres\n" +
-              "image that includes it (postgis/postgis), or add the extension to the\n" +
-              "existing one. Nothing else in the product is affected — the geo routes\n" +
-              "report the capability as unavailable and every other feature works.",
+            "\nThis Postgres build does not ship PostGIS, so this is an image, not a\n" +
+              "permission — no privilege will help. Moving to one that has it is a data\n" +
+              "migration, and the replacement must also ship pgvector: snomed.\n" +
+              "description_embeddings depends on it, and SNOMED search already works.\n" +
+              "Nothing else in the product is affected — the geo routes report the\n" +
+              "capability as unavailable and every other feature works.",
           );
         }
         if (/permission denied|must be superuser/i.test((err as Error).message)) {
