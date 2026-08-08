@@ -233,6 +233,21 @@ if (process.argv[1]?.includes("preflight-migration")) {
       );
       process.exit(1);
     }
+    // node-postgres does not negotiate TLS unless the URL asks for it, and a
+    // managed Postgres reached over the public internet generally insists.
+    // The raw message ("no pg_hba.conf entry … SSL off") names a file nobody
+    // running this script has access to, so it explains nothing.
+    if (/\bssl\b|self[- ]signed|certificate/i.test(e.message ?? "")) {
+      console.error(
+        `TLS: ${e.message}\n\n` +
+          "Append ?sslmode=require to the connection string — both of them if you\n" +
+          "are reaching either database over the public internet. Railway's public\n" +
+          "endpoints use a certificate that does not chain to a public root, so\n" +
+          "sslmode=verify-full will not work; require is what encrypts the traffic\n" +
+          "without asserting the identity of the far end.",
+      );
+      process.exit(1);
+    }
     console.error(e.message ?? err);
     process.exit(1);
   });

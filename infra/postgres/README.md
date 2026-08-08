@@ -148,8 +148,35 @@ deux côtés ; aucune des deux URL n'est imprimée.
 
 Tant qu'il rapporte un blocage, il n'y a pas de migration à commencer.
 
-**4. Une sauvegarde que tu as déjà restaurée une fois.** Une sauvegarde jamais
-restaurée est une hypothèse.
+**4. Une sauvegarde.** Une sauvegarde jamais restaurée est une hypothèse, et
+celle-ci mérite qu'on regarde de près ce qu'elle vaut.
+
+État constaté le 8 août 2026 sur le service `Postgres` : **PITR désactivé,
+aucune planification**, et une seule sauvegarde de volume datant de deux mois —
+477 Mo, prise quand la base en pesait autant. Autrement dit : rien d'utilisable.
+
+Une sauvegarde de volume a été prise le 8 août (5,08 Go, service resté en
+ligne). Elle vaut mieux que rien, avec deux réserves :
+
+- c'est un instantané d'un Postgres **en marche**, donc cohérent au sens d'un
+  crash, pas d'un arrêt propre. Postgres rejouerait son WAL au démarrage. C'est
+  normal et ça fonctionne, mais ce n'est pas une restauration vérifiée ;
+- **la restaurer passe par un redéploiement du service**, et les
+  redéploiements de ce service sont bloqués par la région `sfo`. Le filet
+  existe, mais la corde passe par une poulie coincée.
+
+D'où le vrai filet pour cette migration : **le dump de l'étape 5 lui-même**.
+C'est un fichier que tu tiens, indépendant de Railway, restaurable n'importe
+où. Les étapes 4 et 5 partagent donc le même artefact — prends le dump,
+vérifie-le, garde-le, puis restaure-le.
+
+```bash
+pg_restore --list obscyro.dump | head -40
+```
+
+Si la table des matières liste tes schémas et tes tables, le fichier est lisible.
+Ça ne prouve pas la restauration, mais ça élimine le cas où on découvre au pire
+moment qu'on a sauvegardé zéro octet.
 
 **5. La bascule.** C'est la seule étape irréversible, et elle demande une
 fenêtre d'arrêt.
