@@ -121,11 +121,42 @@ plus petit des deux : une clinique entièrement dans le territoire d'un hôpital
 est couverte à 100 %, tandis que l'hôpital n'est presque pas affecté. Une seule
 proportion aurait effacé la différence.
 
+## L'interface
+
+La carte du réseau (`Twin › Network`) dessine et interroge.
+
+**Dessiner** — sélectionner un site, « Draw area », cliquer les coins. Cliquer
+un site accroche le sommet dessus : c'est comme ça qu'un corridor entre deux
+bâtiments se trace sans chercher le centre. Retour arrière défait le dernier
+coin, Entrée enregistre, Échap abandonne — un outil de dessin qu'on ne peut
+quitter qu'à la souris est un piège dès que le curseur est parti sur la carte.
+
+L'aire part dans l'ontologie, sur l'instance, exactement comme un flux tracé
+devient un lien.
+
+**Interroger** — la fenêtre « Coverage » pose les trois questions : ce qui est
+dessiné, où les aires se recoupent, qui ne tombe dans aucune.
+
+Deux choix de conception :
+
+**Écrit à la main plutôt que Mapbox Draw.** La carte change de fond de plan à
+chaud, et `setStyle` jette toutes les sources et couches. Une bibliothèque de
+dessin devrait alors être démontée et reconstruite sur `style.load` — c'est-à-dire
+exactement la couture que cette vue gère déjà pour ses arcs. Un mécanisme vaut
+mieux que deux.
+
+**Les aires sont le fond, les flux la figure.** Un territoire de desserte est du
+contexte qu'on lit *à travers* : lavis neutre, sous les arcs. Lui donner une des
+couleurs catégorielles en aurait fait une voie de plus.
+
 ## Ce qui reste
 
-- **Dessiner sur la carte.** Aujourd'hui une forme s'attache par l'API. Le
-  polygone se trace à la main dans Mapbox Draw, et la carte doit le rendre —
-  elle n'affiche pour l'instant que des points et des arcs.
+- **Personne ne peut encore s'en servir.** La base de production n'a pas
+  PostGIS, donc le bouton reste désactivé et la fenêtre affiche le bandeau
+  d'indisponibilité. L'outil de dessin est écrit et déployé ; il attend une base
+  qui puisse recevoir ce qu'il produit. La construction du polygone est
+  couverte par des tests, l'interaction avec la carte ne l'est pas — elle n'a
+  jamais tourné contre une vraie base.
 - **Le temps de trajet.** C'est la vraie question pour une ambulance, et ce
   n'est pas de la géométrie : il faut un service de routage externe. La distance
   à vol d'oiseau que rend `nearest` n'est pas une réponse clinique.
@@ -133,7 +164,6 @@ proportion aurait effacé la différence.
   instances que l'ontologie connaît. « Quelle population n'est couverte par
   personne » demande une couche de population — un découpage de recensement —
   que l'ontologie ne porte pas.
-- **Rien ne consomme ces requêtes.** Elles existent et aucune vue ne les appelle.
 
 ## Le mouvement spatio-temporel
 
