@@ -32,15 +32,25 @@ Mesuré sur la base de production le 7 août 2026, en lecture seule :
 | `postgis` | absent de `pg_available_extensions` (47 extensions, aucune postgis) |
 | taille | 3659 Mo — `snomed` 3048 Mo (9 tables), `app` 433 Mo (53 tables) |
 
-**Pas mesuré : la version exacte de pgvector.** La console Data de Railway a
-cessé de se connecter avant que je puisse la lire. C'est précisément ce que
-`npm run preflight` compare, et le comparer automatiquement juste avant la
-bascule vaut mieux que l'avoir lu une fois sur une capture d'écran.
+Le service tire de `ghcr.io/railwayapp-templates/postgres-ssl:18` — lu dans ses
+réglages. Le tag flottant, donc : la base passera en 18.5 le jour où Railway en
+publiera une, sans que personne l'ait décidé.
 
-Cela dit, l'épinglage règle la question par construction : l'image cible est
-`postgres-ssl:18.4` **plus PostGIS**, donc son pgvector est le même binaire,
-issu du même paquet, que celui qui tourne. Le contrôle le vérifie quand même —
-une garantie structurelle qu'on n'a jamais mesurée reste une hypothèse.
+**Pas mesuré : la version exacte de pgvector en production.** La console Data de
+Railway a cessé de se connecter avant que je puisse la lire.
+
+Ce que la CI mesure, elle, c'est le contenu de l'image construite :
+
+```
+postgis  3.6.4
+vector   0.8.6
+postgres 18.4-1.pgdg13+1
+```
+
+Comme `:18` et `:18.4` sont le même digest, le pgvector de la production est
+selon toute vraisemblance ce 0.8.6 — même image de base, même paquet. C'est une
+déduction, pas une lecture, et c'est exactement ce que `npm run preflight`
+vérifie avant qu'on touche à quoi que ce soit.
 
 ## Le tag, vérifié au registre
 
