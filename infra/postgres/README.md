@@ -84,22 +84,51 @@ await fetch(`https://ghcr.io/v2/${repo}/tags/list?n=1000`,
 
 À lancer depuis une page `ghcr.io` — sinon le navigateur refuse la requête.
 
+## Où on en est
+
+Les étapes 1 et 2 sont faites. La base de production n'a pas été touchée.
+
+| | |
+|---|---|
+| image | `ghcr.io/v1ktor7/obscyro-postgres:sha-bff7a14` (aussi `:18.4`) |
+| digest | `sha256:396a0d75279a…` — 233 Mo, 23 couches |
+| service | `Postgres-PostGIS`, volume `postgres-volume-r8mS`, base vide |
+
+Vérifié sur la nouvelle base, par sa console :
+
+```
+postgis  3.6.4   disponible
+vector   0.8.6   disponible
+postgres PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1)
+```
+
+Même version de Postgres que la production, aux deux extensions près. Ce qui
+règle au passage la version de pgvector que la console de l'ancienne base
+refusait de me donner : 0.8.6 vient de l'image de base, donc c'est aussi ce qui
+tourne aujourd'hui.
+
+Reste les étapes 3 à 7.
+
 ## Le mode opératoire
 
 Rien ici ne touche à la base existante avant l'étape 5.
 
-**1. Construire et publier l'image.**
+**1. Construire et publier l'image.** Fait par
+`.github/workflows/postgres-image.yml`, à chaque modification de `infra/postgres`.
 
-```bash
-docker build -t ghcr.io/<toi>/obscyro-postgres:18 infra/postgres
-```
+La construction échoue si `postgis.control` ou `vector.control` manque, et la
+publication n'a lieu qu'après ce contrôle. Une image qui démarre bien et ne
+révèle le trou qu'au moment où une restauration atteint `CREATE EXTENSION` est
+pire qu'une qui n'a jamais été construite.
 
-La construction échoue si `postgis.control` ou `vector.control` manque. Une
-image qui démarre bien et ne révèle le trou qu'au moment où une restauration
-atteint `CREATE EXTENSION` est pire qu'une qui n'a jamais été construite.
+**2. Déployer un *nouveau* service Postgres sur cette image.** Créé par le
+modèle Postgres de Railway — donc variables, volume, `PGDATA` et l'onglet
+Backups tels que Railway les fait — puis l'image seule remplacée. Nouveau
+volume, base vide. L'ancien continue de servir la production sans rien
+remarquer.
 
-**2. Déployer un *nouveau* service Postgres sur cette image.** Nouveau volume,
-base vide. L'ancien continue de servir la production sans rien remarquer.
+Épinglé sur le tag `sha-…`, pas sur `18.4`, et surtout pas sur un tag flottant
+comme celui de l'ancien service.
 
 **3. Le contrôle préalable.**
 
