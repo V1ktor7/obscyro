@@ -133,17 +133,44 @@ pg_restore --no-owner --no-privileges --dbname "<cible>" obscyro.dump
 Puis pointer `DATABASE_URL` du service `obscyro` sur la nouvelle base et
 redéployer.
 
-**Les 3 Go de SNOMED n'ont pas besoin de traverser.** Ils se rechargent depuis
-la source avec `npm run import:snomed`. Exclure le schéma fait passer le dump de
-3,6 Go à 433 Mo, et la fenêtre d'arrêt de dizaines de minutes à quelques-unes :
+Tout traverse, y compris les 3 Go de SNOMED. C'est plus lent et c'est le point :
+la base d'arrivée est alors la même que celle de départ, à PostGIS près, et il
+n'y a rien à se rappeler de rallumer.
+
+### L'option d'alléger, et ce qu'elle coûte
+
+`--exclude-schema=snomed` fait passer le dump de 3,6 Go à 433 Mo et la fenêtre
+d'arrêt de dizaines de minutes à quelques-unes. Le schéma se recharge ensuite
+avec `npm run import:snomed`.
+
+C'est tentant et ce n'est pas gratuit. Voilà ce qui reste éteint entre les deux
+— rien de tout ça ne se voit depuis le Studio, qui continue de fonctionner
+normalement.
+
+| | |
+|---|---|
+| `/v1/translate` | la correspondance SNOMED → ICD-10, annoncée sur la page d'accueil |
+| `/v1/concepts`, `/v1/hierarchy`, `/v1/synonyms` | lecture de la terminologie |
+| `/v1/normalize`, `/v1/batch`, `/v1/disambiguate` | passent par `lib/normalize` → `snomed.concepts` et `snomed.descriptions` |
+| la recherche sémantique | `snomed.description_embeddings`, le seul usage de pgvector |
+| la vue Quality | `snomedExists()` interroge `snomed.concepts` **sans `try/catch`** |
+
+Le dernier point mérite une nuance : la règle ne se déclenche que sur une
+instance portant une propriété de code SNOMED. Une ontologie de sites, d'unités
+et de lits n'en a aucune, donc la vue tient — jusqu'au jour où quelqu'un importe
+un jeu de données qui en contient, et là c'est le contrôle entier qui lève.
+C'est une casse latente, déclenchée par les données et pas par l'ouverture de la
+vue.
+
+Ce qui **ne** dépend pas de SNOMED : l'ontologie, le jumeau, la carte, les
+pipelines, les signaux, les scénarios, les jeux de données, la traçabilité.
+Tout ça vit dans `app`.
+
+Le rechargement :
 
 ```bash
-pg_dump --format=custom --no-owner --no-privileges --exclude-schema=snomed "<source>"
+DATABASE_URL="<la nouvelle>" npm run import:snomed
 ```
-
-C'est un compromis, pas une évidence : la recherche sémantique reste muette tant
-que le rechargement n'est pas fini. À décider selon ce qui coûte le plus cher ce
-jour-là.
 
 **6. Activer le spatial.**
 

@@ -7,9 +7,20 @@ name: postgres image
 # tag being pulled, months from now and silently. A build that only ever runs
 # when someone remembers to run it does not catch that.
 #
-# Build only, no push. Publishing the image is a separate decision — a package
-# under a public repository is a public artifact, and that is the owner's call
-# to make, not a side effect of merging a Dockerfile.
+# Pushes to ghcr.io on main, builds only on pull requests. Railway has to be
+# able to pull it, and the alternative — a private package plus registry
+# credentials — would mean a token living in Railway's settings for an image
+# that contains nothing but stock Postgres and PostGIS.
+#
+# Two tags, and the difference matters:
+#
+#   :18.4      moves, but only when somebody edits infra/postgres on purpose
+#   :sha-…     never moves
+#
+# Railway points at the sha tag. A database whose image can change underneath it
+# is the thing this whole exercise started by complaining about — the running
+# service is on `postgres-ssl:18`, a floating tag that will become 18.5 on
+# somebody else's schedule.
 
 on:
   push:
@@ -26,10 +37,26 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
       - uses: docker/setup-buildx-action@v3
+
+      # ghcr rejects an uppercase path, and the owner is "V1ktor7".
+      - name: Image name
+        id: name
+        run: echo "image=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/obscyro-postgres" >> "$GITHUB_OUTPUT"
+
+      - name: Sign in to ghcr
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       # linux/amd64 only: that is what Railway runs. Cross-building arm64 would
       # need QEMU and roughly triple the time to produce a layer nothing pulls.
@@ -58,3 +85,26 @@ jobs:
             done
             echo "postgres $PG_VERSION"
           '
+
+      # Pushed after the check, never before. An image that failed verification
+      # should not exist in the registry at all — a broken tag someone can pull
+      # is worse than a red build, because the red build is loud.
+      - name: Publish
+        if: github.event_name != 'pull_request'
+        env:
+          IMAGE: ${{ steps.name.outputs.image }}
+        run: |
+          set -eu
+          SHA="sha-$(git rev-parse --short HEAD)"
+          docker tag obscyro-postgres:ci "$IMAGE:18.4"
+          docker tag obscyro-postgres:ci "$IMAGE:$SHA"
+          docker push "$IMAGE:18.4"
+          docker push "$IMAGE:$SHA"
+          {
+            echo "### Image published"
+            echo
+            echo '```'
+            echo "$IMAGE:$SHA      ← pin Railway here; this tag never moves"
+            echo "$IMAGE:18.4"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
