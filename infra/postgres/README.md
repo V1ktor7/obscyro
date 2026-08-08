@@ -210,13 +210,57 @@ moment qu'on a sauvegardé zéro octet.
 **5. La bascule.** C'est la seule étape irréversible, et elle demande une
 fenêtre d'arrêt.
 
+Tout se fait **depuis la console du service `Postgres-PostGIS`**, pas depuis un
+poste. Trois raisons, et aucune n'est le confort :
+
+- le `pg_dump` du conteneur est le 18.4 de l'image, donc jamais plus vieux que
+  le serveur qu'il lit — un `pg_dump` antérieur refuse de tourner, et c'est la
+  panne classique de cette manœuvre ;
+- les deux bases se parlent par le réseau privé de Railway : 3,6 Go ne font pas
+  l'aller-retour par l'internet public ;
+- la source est jointe par la variable `SOURCE_URL`, qui référence
+  `${{Postgres.DATABASE_URL}}`. Railway la résout à l'exécution : le mot de
+  passe n'apparaît ni dans une commande, ni dans un historique, ni ici.
+
+La référence a été ajoutée au service cible et non à la source — ajouter une
+variable à la source demanderait *son* redéploiement, que la région `sfo`
+bloque.
+
+Répétition faite le 8 août, en lecture seule :
+
 ```bash
-pg_dump --format=custom --no-owner --no-privileges "<source>" > obscyro.dump
-pg_restore --no-owner --no-privileges --dbname "<cible>" obscyro.dump
+psql "$SOURCE_URL" -P pager=off -tAc "SELECT current_database(), count(*) FROM app.ontology_object_instances"
+# railway | 1206
 ```
 
-Puis pointer `DATABASE_URL` du service `obscyro` sur la nouvelle base et
-redéployer.
+Le chemin est donc prouvé avant d'être emprunté. Ensuite :
+
+```bash
+pg_dump "$SOURCE_URL" -Fc --no-owner --no-privileges \
+        -f /var/lib/postgresql/data/obscyro.dump
+
+ls -lh /var/lib/postgresql/data/obscyro.dump
+pg_restore --list /var/lib/postgresql/data/obscyro.dump | head -30
+
+pg_restore --no-owner --no-privileges -U postgres -d railway \
+           /var/lib/postgresql/data/obscyro.dump
+```
+
+Le `--list` entre les deux n'est pas une formalité : il distingue « le dump a
+échoué » de « le dump a réussi et pèse zéro octet », et ces deux-là se
+ressemblent beaucoup à deux heures du matin.
+
+Vérifier avant de basculer :
+
+```bash
+psql -U postgres -d railway -P pager=off -tAc "SELECT (SELECT count(*) FROM information_schema.tables WHERE table_schema='app'), (SELECT count(*) FROM app.ontology_object_instances), pg_size_pretty(pg_database_size(current_database()))"
+```
+
+Attendu : **53 | 1206 | ~3,6 Go**. Un chiffre qui ne colle pas, on s'arrête —
+rien n'est engagé tant que `DATABASE_URL` n'a pas bougé.
+
+Puis, et seulement alors, pointer `DATABASE_URL` du service `obscyro` sur
+`${{Postgres-PostGIS.DATABASE_URL}}` et redéployer.
 
 Tout traverse, y compris les 3 Go de SNOMED. C'est plus lent et c'est le point :
 la base d'arrivée est alors la même que celle de départ, à PostGIS près, et il
