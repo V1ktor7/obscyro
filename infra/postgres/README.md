@@ -37,18 +37,42 @@ cessé de se connecter avant que je puisse la lire. C'est précisément ce que
 `npm run preflight` compare, et le comparer automatiquement juste avant la
 bascule vaut mieux que l'avoir lu une fois sur une capture d'écran.
 
-**Pas vérifié non plus : que le tag `:18` soit publié.** Le listing public des
-paquets s'arrêtait à 17 quand ceci a été écrit, alors que la base tourne en
-18.4 — donc Railway construit bien une 18 quelque part. À confirmer avant de
-construire :
+Cela dit, l'épinglage règle la question par construction : l'image cible est
+`postgres-ssl:18.4` **plus PostGIS**, donc son pgvector est le même binaire,
+issu du même paquet, que celui qui tourne. Le contrôle le vérifie quand même —
+une garantie structurelle qu'on n'a jamais mesurée reste une hypothèse.
 
-```bash
-docker manifest inspect ghcr.io/railwayapp-templates/postgres-ssl:18
+## Le tag, vérifié au registre
+
+La page publique des paquets GitHub s'arrêtait à 17, ce qui m'a fait écrire que
+le tag 18 restait à confirmer. La page mentait par omission. Interrogé
+directement, le registre en rapporte 27, dont :
+
+| tag | digest | plateformes |
+|---|---|---|
+| `18` | `sha256:268850e5d26b…` | linux/amd64, linux/arm64 |
+| `18.4` | `sha256:268850e5d26b…` | linux/amd64, linux/arm64 |
+| `18.3` | `sha256:1e3613f98b80…` | linux/amd64, linux/arm64 |
+
+`18` et `18.4` sont **le même digest** : `18` *est* 18.4 aujourd'hui — et
+deviendra 18.5 en silence dès que Railway en publiera une.
+
+D'où l'épinglage sur `18.4` dans le Dockerfile. Un tag flottant sous une base de
+données est le mauvais genre de surprise ; le passage au minor suivant devrait
+être un commit que quelqu'un a fait exprès, un jour qu'il a choisi. Et 18.4 est
+exactement ce que la production rapporte, ce qui fait de la bascule un
+changement d'image et rien d'autre.
+
+Refaire le contrôle, sans Docker, depuis n'importe quel navigateur :
+
+```js
+const repo = "railwayapp-templates/postgres-ssl";
+const t = await fetch(`https://ghcr.io/token?service=ghcr.io&scope=repository:${repo}:pull`).then(r => r.json());
+await fetch(`https://ghcr.io/v2/${repo}/tags/list?n=1000`,
+  { headers: { Authorization: `Bearer ${t.token}` } }).then(r => r.json());
 ```
 
-S'il n'existe pas, épingler le minor exact que le service rapporte. **Ne pas se
-rabattre sur `postgres:18`** : ça perd SSL et pgbackrest en silence, et la
-panne se manifesterait comme une erreur de certificat des jours plus tard.
+À lancer depuis une page `ghcr.io` — sinon le navigateur refuse la requête.
 
 ## Le mode opératoire
 

@@ -17,16 +17,20 @@
 # Rebuilding those from `postgres:18` would mean owning them. Adding a layer
 # means not owning them.
 #
-# Verify the base tag before building — the public package listing showed tags
-# only up to 17 when this was written, while the running database is 18.4:
+# Pinned to 18.4, not 18, and the registry says why: on 7 August 2026 the tags
+# `18` and `18.4` resolved to the same digest (sha256:268850e5d26b…, linux/amd64
+# and linux/arm64 both published). So `18` *is* 18.4 today — and will silently
+# become 18.5 the moment Railway publishes one.
 #
-#     docker manifest inspect ghcr.io/railwayapp-templates/postgres-ssl:18
+# A floating tag under a database is the wrong kind of surprise. The minor bump
+# should be a commit somebody made on purpose, on a day they chose.
 #
-# If it is not published, pin the exact minor the service reports instead. Do
-# not fall back to `postgres:18`: that loses SSL and pgbackrest silently, and
-# the failure would show up as a certificate error days later.
+# 18.4 is also exactly what production reports, which makes the move an image
+# change and nothing else. Do not substitute `postgres:18` if a tag ever goes
+# missing: that loses SSL and pgbackrest silently, and the failure would surface
+# as a certificate error days later.
 
-ARG POSTGRES_SSL_TAG=18
+ARG POSTGRES_SSL_TAG=18.4
 FROM ghcr.io/railwayapp-templates/postgres-ssl:${POSTGRES_SSL_TAG}
 
 # PostGIS from PGDG, the same repository the base image takes pgvector from.
