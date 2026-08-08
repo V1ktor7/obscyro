@@ -207,8 +207,33 @@ Si la table des matières liste tes schémas et tes tables, le fichier est lisib
 Ça ne prouve pas la restauration, mais ça élimine le cas où on découvre au pire
 moment qu'on a sauvegardé zéro octet.
 
-**5. La bascule.** C'est la seule étape irréversible, et elle demande une
-fenêtre d'arrêt.
+**5. La bascule.** Elle demande une fenêtre d'arrêt.
+
+### Qui écrit dans cette base
+
+**Deux services, pas un.** `obscyro` (l'API) et `shimmering-communication` (le
+service NLP — ses variables `EMBEDDING_MODEL`, `TOP_K_CANDIDATES`,
+`PG_SEARCH_LIMIT` le trahissent) ont chacun un `DATABASE_URL`. Les deux doivent
+être arrêtés pendant le dump, et les deux doivent être repointés après. En
+oublier un, c'est laisser un service écrire dans une base que plus personne ne
+lit.
+
+Railway n'a pas de bouton « pause ». Sur le déploiement actif, le menu `⋮`
+offre **Remove** — ça retire le *déploiement*, pas le service : les variables,
+la source et les réglages restent. **Redeploy** le remonte.
+
+Et un piège qui n'a rien à voir avec Postgres : `obscyro` se redéploie
+**automatiquement à chaque push sur `main`**. Pousser un commit pendant la
+fenêtre le rallume au milieu du dump. Ne rien pousser tant que ce n'est pas
+fini.
+
+### Ce que la fenêtre coûte
+
+Pendant l'arrêt : le Studio ne charge plus rien (Vercel sert toujours les
+pages, mais chaque appel API échoue), `/v1/*` est indisponible, rien n'est
+ingéré, et le moteur d'alertes ne lève aucun signal. Une condition d'alerte
+franchie pendant l'arrêt sera rattrapée au redémarrage si elle est toujours
+vraie — le moteur évalue l'état courant, pas un historique.
 
 Tout se fait **depuis la console du service `Postgres-PostGIS`**, pas depuis un
 poste. Trois raisons, et aucune n'est le confort :
@@ -259,8 +284,9 @@ psql -U postgres -d railway -P pager=off -tAc "SELECT (SELECT count(*) FROM info
 Attendu : **53 | 1206 | ~3,6 Go**. Un chiffre qui ne colle pas, on s'arrête —
 rien n'est engagé tant que `DATABASE_URL` n'a pas bougé.
 
-Puis, et seulement alors, pointer `DATABASE_URL` du service `obscyro` sur
-`${{Postgres-PostGIS.DATABASE_URL}}` et redéployer.
+Puis, et seulement alors, pointer `DATABASE_URL` sur
+`${{Postgres-PostGIS.DATABASE_URL}}` — **sur les deux services**, `obscyro` et
+`shimmering-communication` — et les redéployer.
 
 Tout traverse, y compris les 3 Go de SNOMED. C'est plus lent et c'est le point :
 la base d'arrivée est alors la même que celle de départ, à PostGIS près, et il
