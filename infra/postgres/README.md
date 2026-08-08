@@ -33,24 +33,53 @@ Mesuré sur la base de production le 7 août 2026, en lecture seule :
 | taille | 3659 Mo — `snomed` 3048 Mo (9 tables), `app` 433 Mo (53 tables) |
 
 Le service tire de `ghcr.io/railwayapp-templates/postgres-ssl:18` — lu dans ses
-réglages. Le tag flottant, donc : la base passera en 18.5 le jour où Railway en
-publiera une, sans que personne l'ait décidé.
+réglages. Le tag flottant.
 
-**Pas mesuré : la version exacte de pgvector en production.** La console Data de
-Railway a cessé de se connecter avant que je puisse la lire.
+### La déduction qui était fausse
 
-Ce que la CI mesure, elle, c'est le contenu de l'image construite :
+J'avais écrit ceci : puisque `:18` et `:18.4` sont le même digest, le pgvector
+de la production doit être le 0.8.6 que contient l'image. Lecture faite dans le
+conteneur, le 8 août :
 
 ```
-postgis  3.6.4
-vector   0.8.6
-postgres 18.4-1.pgdg13+1
+vector | 0.8.2
 ```
 
-Comme `:18` et `:18.4` sont le même digest, le pgvector de la production est
-selon toute vraisemblance ce 0.8.6 — même image de base, même paquet. C'est une
-déduction, pas une lecture, et c'est exactement ce que `npm run preflight`
-vérifie avant qu'on touche à quoi que ce soit.
+**0.8.2, pas 0.8.6.** Un tag flottant ne flotte que pour celui qui le tire :
+Railway a épinglé le digest au moment du déploiement, et le conteneur tourne
+depuis sur cette image-là. `:18` a avancé, la production non.
+
+C'est le même piège que je dénonçais, vu de l'autre côté — je surveillais le
+risque que la base saute en 18.5 toute seule, alors qu'elle était en réalité
+gelée sur une image vieillissante. Et c'est la meilleure justification qu'on
+puisse donner au contrôle préalable : je m'étais persuadé d'un chiffre par
+raisonnement, et il était faux.
+
+### Le contrôle préalable, fait le 8 août 2026
+
+Par les consoles Railway des deux services, en lecture seule — aucun mot de
+passe manipulé.
+
+| | source | cible | |
+|---|---|---|---|
+| Postgres | 18.4 (180004) | 18.4 (180004) | identique |
+| `btree_gin` | 1.3 | 1.3 | |
+| `pg_trgm` | 1.6 | 1.6 | |
+| `pgcrypto` | 1.4 | 1.4 | |
+| `plpgsql` | 1.0 | 1.0 | |
+| `vector` | **0.8.2** | **0.8.6** | montée de version |
+| `postgis` | absent | **3.6.4** | ce qu'on venait chercher |
+| tables dans `app` | 53 | 0 | la cible est vide |
+| taille | 3667 Mo | — | |
+
+**Aucun blocage.** Une extension plus récente à l'arrivée est le sens permis :
+`pg_dump` n'épingle pas la version dans le `CREATE EXTENSION`, donc la
+restauration prendra le 0.8.6 de la cible. L'inverse aurait bloqué.
+
+À noter quand même : la bascule est donc aussi une montée de pgvector 0.8.2 →
+0.8.6. Rien dans les notes de version de pgvector ne casse le type `vector`
+entre ces deux-là, mais c'est un changement de plus que « la même chose avec
+PostGIS », et il mérite d'être dit plutôt que découvert.
 
 ## Le tag, vérifié au registre
 
