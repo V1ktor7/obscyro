@@ -24,6 +24,7 @@ import {
   Eye,
   Globe2,
   HeartPulse,
+  Hexagon,
   Loader2,
   Map as MapIcon,
   MapPin,
@@ -32,6 +33,7 @@ import {
   RefreshCw,
   Satellite,
   Save,
+  Shapes,
   Spline,
   X,
 } from "lucide-react";
@@ -42,19 +44,33 @@ import {
   createEnvLinkType,
   createEnvObject,
   createEnvType,
+  fetchGeoCapability,
   fetchTwinNetwork,
   getEnvObject,
   listEnvTypes,
+  listGeoShapes,
   listIngestEvents,
   listTwinAlerts,
+  saveGeoShape,
   updateEnvObject,
   updateEnvType,
   type EnvLinkType,
+  type GeoCapability,
+  type InstanceShape,
   type TwinAlert,
   type TwinNetworkSite,
   type TwinNetworkSnapshot,
 } from "@/lib/platform-api";
 import { useStudio } from "../StudioShell";
+
+import CoverageDialog from "./CoverageDialog";
+import {
+  flattenCoordinates,
+  formatArea,
+  pointsStillNeeded,
+  polygonFrom,
+  ringBounds,
+} from "./polygon-draw";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 
@@ -155,6 +171,23 @@ function assignLayerStyles(
   );
 }
 
+/**
+ * Shape layers.
+ *
+ * Areas are ground, flows are figure. A catchment is context you read the map
+ * *through*, so it gets a neutral wash and sits beneath the arcs; giving it one
+ * of the categorical flow colours would make it look like another lane. The
+ * shape being drawn right now is the exception — it is the active thing, so it
+ * takes the brand blue.
+ */
+const SHAPES_SRC = "twin-shapes";
+const SHAPES_FILL = "twin-shapes-fill";
+const SHAPES_LINE = "twin-shapes-line";
+const DRAW_SRC = "twin-draw";
+const DRAW_FILL = "twin-draw-fill";
+const DRAW_LINE = "twin-draw-line";
+const DRAW_PTS = "twin-draw-points";
+
 /** Visibility per link type. Anything absent is visible. */
 type LayerToggles = Record<string, boolean>;
 
@@ -175,6 +208,18 @@ interface FlowFeatureCollection {
     geometry: { type: "LineString"; coordinates: [number, number][] };
   }[];
 }
+
+/** The same, for shape sources, whose geometries are whatever PostGIS returns. */
+interface GeoFeatureCollection {
+  type: "FeatureCollection";
+  features: {
+    type: "Feature";
+    properties: Record<string, string | number>;
+    geometry: { type: string; coordinates?: unknown };
+  }[];
+}
+
+type GeoSource = { setData: (d: GeoFeatureCollection) => void } | undefined;
 
 interface SavedView {
   name: string;
@@ -266,7 +311,29 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   // through a ref rather than a stale closure.
   const siteClickRef = useRef<((siteId: string) => void) | null>(null);
 
+  // Shapes — the areas a site covers, and the PostGIS questions they answer.
+  // The capability check comes first: this deployment does not have the
+  // extension, so "unavailable" is the ordinary state, not an error path.
+  const [capability, setCapability] = useState<GeoCapability | null>(null);
+  const [shapes, setShapes] = useState<InstanceShape[]>([]);
+  const [drawArea, setDrawArea] = useState<null | {
+    instanceId: string;
+    instanceName: string;
+    kind: string;
+    points: [number, number][];
+  }>(null);
+  const [savingShape, setSavingShape] = useState(false);
+  const [showCoverage, setShowCoverage] = useState(false);
+  const spatial = capability?.available === true;
+
   siteClickRef.current = (siteId: string) => {
+    // Drawing an area over a site snaps the vertex to it, which is how a
+    // corridor between buildings gets traced without hunting for the centre.
+    if (drawArea) {
+      const pos = positions.get(siteId);
+      if (pos) addVertex(pos[0], pos[1]);
+      return;
+    }
     if (!drawing) {
       setSelectedId(siteId);
       return;
@@ -283,7 +350,15 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     setDrawing(null);
   };
 
+  function addVertex(lng: number, lat: number) {
+    setDrawArea((cur) => (cur ? { ...cur, points: [...cur.points, [lng, lat]] } : cur));
+  }
+
   mapClickRef.current = (lng: number, lat: number) => {
+    if (drawArea) {
+      addVertex(lng, lat);
+      return;
+    }
     if (!placing) return;
     if (placing.mode === "add") {
       setPendingPos([lng, lat]);
@@ -308,8 +383,55 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
 
   useEffect(() => {
     const canvas = mapRef.current?.getCanvas();
-    if (canvas) canvas.style.cursor = placing || drawing ? "crosshair" : "";
-  }, [placing, drawing]);
+    if (canvas) canvas.style.cursor = placing || drawing || drawArea ? "crosshair" : "";
+  }, [placing, drawing, drawArea]);
+
+  /**
+   * Write the drawn ring to the instance.
+   *
+   * Same reasoning as the flow tool: the map is an editor for the ontology, not
+   * a place decorations live. The shape belongs to the instance afterwards, and
+   * every other view can ask about it.
+   */
+  async function saveArea() {
+    if (!env || !drawArea || savingShape) return;
+    const geometry = polygonFrom(drawArea.points);
+    if (!geometry) {
+      setError("An area needs at least three corners.");
+      return;
+    }
+    setSavingShape(true);
+    setError(null);
+    try {
+      await saveGeoShape(env, drawArea.instanceId, { kind: drawArea.kind, geometry });
+      setDrawArea(null);
+      await loadShapes();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSavingShape(false);
+    }
+  }
+
+  // Enter finishes the ring, Escape abandons it. A drawing tool that can only
+  // be left with the mouse is a trap once the pointer is out over the map.
+  useEffect(() => {
+    if (!drawArea) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setDrawArea(null);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        void saveArea();
+      } else if ((e.key === "Backspace" || e.key === "Delete") && drawArea.points.length > 0) {
+        e.preventDefault();
+        setDrawArea((cur) => (cur ? { ...cur, points: cur.points.slice(0, -1) } : cur));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawArea, env, savingShape]);
 
   async function createSite() {
     if (!env || !pendingPos || savingSite) return;
@@ -391,6 +513,48 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     return () => clearInterval(handle);
   }, [load]);
 
+  const loadShapes = useCallback(async () => {
+    if (!env) {
+      setShapes([]);
+      return;
+    }
+    try {
+      const { shapes: got } = await listGeoShapes(env);
+      setShapes(got);
+    } catch {
+      // A database without PostGIS answers this honestly rather than failing,
+      // so a throw here is a real fault — but an empty map is still the right
+      // thing to show, and the capability banner already explains why.
+      setShapes([]);
+    }
+  }, [env]);
+
+  // Asked once per environment: whether the extension is installed changes when
+  // someone runs a command against the database, not while the map is open.
+  useEffect(() => {
+    if (!env) {
+      setCapability(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const cap = await fetchGeoCapability(env);
+        if (!cancelled) setCapability(cap);
+      } catch {
+        if (!cancelled) setCapability({ available: false, reason: null });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [env]);
+
+  useEffect(() => {
+    if (spatial) void loadShapes();
+    else setShapes([]);
+  }, [spatial, loadShapes]);
+
   useEffect(() => {
     if (!env) return;
     try {
@@ -424,6 +588,9 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         setMapReady(true);
       });
       map.on("style.load", () => {
+        // Shapes first so the arcs land on top of them: `setStyle` drops every
+        // source and layer, and insertion order is what decides who covers whom.
+        ensureShapeLayers(map);
         ensureFlowLayers(map);
       });
       map.on("click", (e) => {
@@ -483,11 +650,136 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     drawnLayersRef.current = wanted;
   }
 
+  /**
+   * Sources and layers for saved shapes and for the one being drawn.
+   *
+   * Idempotent, and called again on every `style.load`, because switching
+   * basemaps tears the whole style down. The saved shapes go beneath the flow
+   * arcs — `beforeId` on the first flow layer if one is already there.
+   */
+  function ensureShapeLayers(map: MapboxMap) {
+    const empty = { type: "FeatureCollection" as const, features: [] };
+    const firstFlow = Array.from(drawnLayersRef.current).find((id) => map.getLayer(id));
+
+    if (!map.getSource(SHAPES_SRC)) map.addSource(SHAPES_SRC, { type: "geojson", data: empty });
+    if (!map.getLayer(SHAPES_FILL)) {
+      map.addLayer(
+        {
+          id: SHAPES_FILL,
+          type: "fill",
+          source: SHAPES_SRC,
+          paint: { "fill-color": "#5f6b7c", "fill-opacity": 0.1 },
+        },
+        firstFlow,
+      );
+    }
+    if (!map.getLayer(SHAPES_LINE)) {
+      map.addLayer(
+        {
+          id: SHAPES_LINE,
+          type: "line",
+          source: SHAPES_SRC,
+          paint: { "line-color": "#404854", "line-width": 1.2, "line-opacity": 0.55 },
+        },
+        firstFlow,
+      );
+    }
+
+    // The ring in progress sits above everything: it is what the hand is doing.
+    if (!map.getSource(DRAW_SRC)) map.addSource(DRAW_SRC, { type: "geojson", data: empty });
+    if (!map.getLayer(DRAW_FILL)) {
+      map.addLayer({
+        id: DRAW_FILL,
+        type: "fill",
+        source: DRAW_SRC,
+        filter: ["==", ["geometry-type"], "Polygon"],
+        paint: { "fill-color": "#2d72d2", "fill-opacity": 0.14 },
+      });
+    }
+    if (!map.getLayer(DRAW_LINE)) {
+      map.addLayer({
+        id: DRAW_LINE,
+        type: "line",
+        source: DRAW_SRC,
+        filter: ["!=", ["geometry-type"], "Point"],
+        paint: {
+          "line-color": "#2d72d2",
+          "line-width": 2,
+          "line-dasharray": [2, 1.5],
+        },
+      });
+    }
+    if (!map.getLayer(DRAW_PTS)) {
+      map.addLayer({
+        id: DRAW_PTS,
+        type: "circle",
+        source: DRAW_SRC,
+        filter: ["==", ["geometry-type"], "Point"],
+        paint: {
+          "circle-radius": 4,
+          "circle-color": "#ffffff",
+          "circle-stroke-color": "#2d72d2",
+          "circle-stroke-width": 2,
+        },
+      });
+    }
+  }
+
   const positions = useMemo(() => {
     const m = new Map<string, [number, number]>();
     network?.sites.forEach((s, i) => m.set(s.id, sitePosition(s, i)));
     return m;
   }, [network]);
+
+  // Saved shapes onto the map.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    ensureShapeLayers(map);
+    (map.getSource(SHAPES_SRC) as GeoSource)?.setData({
+      type: "FeatureCollection",
+      features: shapes.map((s) => ({
+        type: "Feature" as const,
+        properties: { instanceId: s.instanceId, kind: s.kind },
+        geometry: s.geometry,
+      })),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shapes, mapReady, styleMode]);
+
+  // The ring being drawn: the closed polygon once it is one, the open line
+  // before that, plus a dot on every corner so a misplaced click is visible.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    ensureShapeLayers(map);
+    const source = map.getSource(DRAW_SRC) as GeoSource;
+    if (!source) return;
+    const pts = drawArea?.points ?? [];
+    const polygon = drawArea ? polygonFrom(pts) : null;
+    source.setData({
+      type: "FeatureCollection",
+      features: [
+        ...(polygon
+          ? [{ type: "Feature" as const, properties: {}, geometry: polygon }]
+          : pts.length > 1
+            ? [
+                {
+                  type: "Feature" as const,
+                  properties: {},
+                  geometry: { type: "LineString", coordinates: pts },
+                },
+              ]
+            : []),
+        ...pts.map((p, i) => ({
+          type: "Feature" as const,
+          properties: { index: i },
+          geometry: { type: "Point", coordinates: p },
+        })),
+      ],
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawArea, mapReady, styleMode]);
 
   // Markers: rebuild when sites change.
   useEffect(() => {
@@ -674,9 +966,35 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     }
   }
 
+  /**
+   * Frame a saved shape.
+   *
+   * The bounds come from the geometry's own positions rather than a stored
+   * bounding box, so it works for whatever PostGIS hands back — polygon,
+   * multipolygon, line.
+   */
+  function flyToShape(shape: InstanceShape) {
+    const map = mapRef.current;
+    if (!map) return;
+    const box = ringBounds(flattenCoordinates(shape.geometry.coordinates));
+    if (!box) return;
+    setShowCoverage(false);
+    map.fitBounds(
+      [
+        [box.west, box.south],
+        [box.east, box.north],
+      ],
+      { padding: 80, maxZoom: 14 },
+    );
+  }
+
   // --- derived -------------------------------------------------------------------
 
   const selected = network?.sites.find((s) => s.id === selectedId) ?? null;
+  const selectedShape = useMemo(
+    () => shapes.find((s) => s.instanceId === selectedId) ?? null,
+    [shapes, selectedId],
+  );
   const selectedAlerts = useMemo(
     () => alerts.filter((a) => a.unitInstanceId === selectedId),
     [alerts, selectedId],
@@ -756,6 +1074,19 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
             </button>
           </span>
         ) : null}
+        {drawArea ? (
+          <span className="flex items-center gap-1.5 rounded bg-brand-soft px-2 py-0.5 text-[11px] font-medium text-brand-deep">
+            <Hexagon className="h-3 w-3" />
+            {pointsStillNeeded(drawArea.points) > 0
+              ? `${drawArea.instanceName} — ${pointsStillNeeded(drawArea.points)} more corner${
+                  pointsStillNeeded(drawArea.points) === 1 ? "" : "s"
+                }`
+              : `${drawArea.instanceName} — ${drawArea.points.length} corners · Enter to save`}
+            <button type="button" onClick={() => setDrawArea(null)} aria-label="Cancel area">
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ) : null}
         <span className="flex-1" />
         <button
           type="button"
@@ -800,6 +1131,56 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         >
           <Spline className="h-3.5 w-3.5" />
           Draw flow
+        </button>
+        <button
+          type="button"
+          disabled={!env || !MAPBOX_TOKEN || !spatial || !selected}
+          title={
+            !spatial
+              ? capability?.reason ?? "Spatial queries are not available on this database"
+              : !selected
+                ? "Select a site first — an area belongs to something"
+                : `Draw the area covered by ${selected.name}`
+          }
+          onClick={() => {
+            if (!selected) return;
+            setPlacing(null);
+            setDrawing(null);
+            setDrawArea(
+              drawArea
+                ? null
+                : {
+                    instanceId: selected.id,
+                    instanceName: selected.name,
+                    kind: "catchment",
+                    points: [],
+                  },
+            );
+          }}
+          className={cn(
+            "flex items-center gap-1 rounded px-2.5 py-1.5 text-xs font-medium",
+            drawArea
+              ? "bg-brand-soft text-brand-deep"
+              : "border border-line bg-white text-ink-body hover:border-brand disabled:text-ink-ghost",
+          )}
+        >
+          <Hexagon className="h-3.5 w-3.5" />
+          Draw area
+        </button>
+        <button
+          type="button"
+          disabled={!env || !MAPBOX_TOKEN}
+          onClick={() => setShowCoverage(true)}
+          title="Overlaps between areas, and sites covered by none"
+          className="flex items-center gap-1 rounded border border-line bg-white px-2.5 py-1.5 text-xs font-medium text-ink-body hover:border-brand disabled:text-ink-ghost"
+        >
+          <Shapes className="h-3.5 w-3.5" />
+          Coverage
+          {shapes.length > 0 ? (
+            <span className="rounded bg-canvas px-1 text-[10px] tabular-nums text-ink-muted">
+              {shapes.length}
+            </span>
+          ) : null}
         </button>
       </div>
 
@@ -974,6 +1355,58 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                 </div>
               ) : null}
 
+              {drawArea ? (
+                <div className="absolute left-1/2 top-6 z-20 w-80 -translate-x-1/2 rounded-md border border-line bg-white p-3 shadow-lg">
+                  <p className="mb-1 text-xs font-semibold text-ink">
+                    Area for {drawArea.instanceName}
+                  </p>
+                  <p className="mb-2 text-[10.5px] leading-relaxed text-ink-faint">
+                    Click the map to place corners — clicking a site snaps to it. Backspace undoes
+                    the last one.
+                  </p>
+                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-[0.12em] text-ink-faint">
+                    What this area means
+                  </label>
+                  <input
+                    value={drawArea.kind}
+                    onChange={(e) =>
+                      setDrawArea((cur) => (cur ? { ...cur, kind: e.target.value } : cur))
+                    }
+                    placeholder="catchment"
+                    className="mb-1 w-full rounded border border-line bg-canvas px-2 py-1.5 text-xs text-ink focus:border-brand focus:outline-none"
+                  />
+                  <p className="mb-2 text-[10px] leading-relaxed text-ink-faint">
+                    Free text, like a signal&apos;s domain — &ldquo;catchment&rdquo;, &ldquo;exclusion
+                    zone&rdquo;, &ldquo;corridor&rdquo;. Coverage reports can filter on it.
+                  </p>
+                  <div className="mb-2 flex items-center justify-between text-[10.5px] text-ink-muted">
+                    <span>{drawArea.points.length} corners</span>
+                    <span>
+                      {pointsStillNeeded(drawArea.points) > 0
+                        ? `${pointsStillNeeded(drawArea.points)} more needed`
+                        : "ready"}
+                    </span>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDrawArea(null)}
+                      className="rounded border border-line px-2.5 py-1 text-xs text-ink-body"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={savingShape || pointsStillNeeded(drawArea.points) > 0}
+                      onClick={() => void saveArea()}
+                      className="rounded bg-brand px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-deep disabled:bg-ink-ghost"
+                    >
+                      {savingShape ? "Saving…" : "Save area"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
               {pendingFlow ? (
                 <FlowPanel
                   fromName={nameOfSite(pendingFlow.fromId)}
@@ -988,19 +1421,26 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                   onSave={(name, createType) => void saveFlow(name, createType)}
                 />
               ) : null}
-              <div className="absolute bottom-2 left-2 flex gap-3 rounded border border-[#d3d8de] bg-white/90 px-2.5 py-1 text-[10px] text-[#5f6b7c]">
+              {/* The legend used to name patients / supplies / data — the three
+                  lanes the server once matched by regex. Lanes are the
+                  ontology's link types now, and they are listed in the rail
+                  with their own colours, so naming three fixed ones here was
+                  simply wrong. */}
+              <div className="absolute bottom-2 left-2 flex gap-3 rounded border border-line bg-white/90 px-2.5 py-1 text-[10px] text-ink-muted">
                 <span className="flex items-center gap-1">
-                  <span className="h-[3px] w-3 rounded bg-[#2d72d2]" />
-                  patients
+                  <span className="h-2.5 w-2.5 rounded-full border-2 border-ok" />
+                  site
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="h-[3px] w-3 rounded bg-[#d97706]" />
-                  supplies
+                  <span className="h-[3px] w-3 rounded bg-ink-faint" />
+                  flow · see rail
                 </span>
-                <span className="flex items-center gap-1">
-                  <span className="h-[3px] w-3 rounded bg-[#6b3fa0]" />
-                  data
-                </span>
+                {shapes.length > 0 ? (
+                  <span className="flex items-center gap-1">
+                    <span className="h-2.5 w-3 rounded-sm border border-ink-body bg-ink-muted/10" />
+                    area
+                  </span>
+                ) : null}
               </div>
             </>
           )}
@@ -1052,6 +1492,12 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                   : "—"
               }
             />
+            {selectedShape ? (
+              <MetricRow
+                label={selectedShape.kind}
+                value={formatArea(selectedShape.areaM2)}
+              />
+            ) : null}
             {selectedFlows.length === 0 ? (
               <MetricRow label="Flows" value="none" last />
             ) : (
@@ -1120,6 +1566,17 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
           </aside>
         ) : null}
       </div>
+
+      {showCoverage && env ? (
+        <CoverageDialog
+          env={env}
+          capability={capability}
+          shapes={shapes}
+          onFlyTo={flyToShape}
+          onDeleted={() => void loadShapes()}
+          onClose={() => setShowCoverage(false)}
+        />
+      ) : null}
 
       {/* Event timeline */}
       <EventTimeline

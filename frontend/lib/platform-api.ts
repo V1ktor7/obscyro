@@ -1450,4 +1450,116 @@ export function subscribeTwinStream(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Shapes
+//
+// A polygon fits in an ordinary JSONB property already. What does not fit is
+// "which of these catchment areas overlap", "what is nearest to here", "who is
+// covered by nobody" — those are queries, and they need PostGIS.
+//
+// Every one of these degrades rather than throws when the extension is absent:
+// `capability` says so, and the lists come back empty. The deployment this was
+// written against does not have PostGIS, so that path is the normal one, not
+// the edge case.
+// ---------------------------------------------------------------------------
+
+/** Loosely typed on purpose: PostGIS validates shapes far better than we can. */
+export interface GeoJsonGeometry {
+  type: string;
+  coordinates?: unknown;
+}
+
+export interface GeoCapability {
+  available: boolean;
+  reason: string | null;
+}
+
+export interface InstanceShape {
+  instanceId: string;
+  instanceName: string;
+  objectType: string;
+  kind: string;
+  geometry: GeoJsonGeometry;
+  /** Square metres. Zero for points and lines. */
+  areaM2: number;
+}
+
+export interface ShapeOverlap {
+  aId: string;
+  aName: string;
+  bId: string;
+  bName: string;
+  sharedM2: number;
+  /** Share of the *smaller* of the two, 0–1 — the asymmetry is the point. */
+  sharedOfSmaller: number;
+}
+
+export interface NearestShape {
+  instanceId: string;
+  name: string;
+  objectType: string;
+  metres: number;
+}
+
+export interface UncoveredSite {
+  instanceId: string;
+  name: string;
+  objectType: string;
+}
+
+export async function fetchGeoCapability(env: string): Promise<GeoCapability> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/geo/capability`);
+}
+
+export async function listGeoShapes(env: string): Promise<{ shapes: InstanceShape[] }> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/geo/shapes`);
+}
+
+export async function saveGeoShape(
+  env: string,
+  instanceId: string,
+  body: { kind: string; geometry: GeoJsonGeometry },
+): Promise<InstanceShape> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/geo/shapes/${instanceId}`, {
+    method: "PUT",
+    body,
+  });
+}
+
+export async function deleteGeoShape(
+  env: string,
+  instanceId: string,
+): Promise<{ deleted: boolean }> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/geo/shapes/${instanceId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function listGeoOverlaps(
+  env: string,
+  kind?: string,
+): Promise<{ overlaps: ShapeOverlap[] }> {
+  const q = kind ? `?kind=${encodeURIComponent(kind)}` : "";
+  return apiFetch(`/v1/ontology/${encEnv(env)}/geo/overlaps${q}`);
+}
+
+export async function fetchGeoNearest(
+  env: string,
+  longitude: number,
+  latitude: number,
+  limit?: number,
+): Promise<{ nearest: NearestShape[] }> {
+  const qs = new URLSearchParams({ lng: String(longitude), lat: String(latitude) });
+  if (limit) qs.set("limit", String(limit));
+  return apiFetch(`/v1/ontology/${encEnv(env)}/geo/nearest?${qs.toString()}`);
+}
+
+export async function listGeoUncovered(
+  env: string,
+  kind?: string,
+): Promise<{ uncovered: UncoveredSite[] }> {
+  const q = kind ? `?kind=${encodeURIComponent(kind)}` : "";
+  return apiFetch(`/v1/ontology/${encEnv(env)}/geo/uncovered${q}`);
+}
+
 export type { MeResult };
