@@ -19,7 +19,8 @@
     "test": "tsx --test src/**/*.integration.test.ts",
     "test:unit": "tsx --test src/**/*.unit.test.ts",
     "test:integration": "tsx --test src/services/persist-extract.integration.test.ts",
-    "enable-spatial": "tsx scripts/enable-spatial.ts"
+    "enable-spatial": "tsx scripts/enable-spatial.ts",
+    "preflight": "tsx scripts/preflight-migration.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.2",
