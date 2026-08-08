@@ -1,0 +1,60 @@
+name: postgres image
+
+# Builds infra/postgres/Dockerfile — Railway's Postgres image with PostGIS added.
+#
+# It builds here rather than on a laptop because the interesting failure is not
+# a typo: it is `postgresql-18-postgis-3` disappearing from PGDG, or the base
+# tag being pulled, months from now and silently. A build that only ever runs
+# when someone remembers to run it does not catch that.
+#
+# Build only, no push. Publishing the image is a separate decision — a package
+# under a public repository is a public artifact, and that is the owner's call
+# to make, not a side effect of merging a Dockerfile.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/postgres/**"
+      - ".github/workflows/postgres-image.yml"
+  pull_request:
+    paths:
+      - "infra/postgres/**"
+      - ".github/workflows/postgres-image.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # linux/amd64 only: that is what Railway runs. Cross-building arm64 would
+      # need QEMU and roughly triple the time to produce a layer nothing pulls.
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: infra/postgres
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: obscyro-postgres:ci
+
+      # The Dockerfile already fails the build when an extension is missing.
+      # This runs the same check against the finished image, because a RUN layer
+      # can be served from cache while the image it produced is not the one that
+      # layer was tested against.
+      - name: Both extensions are present
+        run: |
+          docker run --rm --entrypoint sh obscyro-postgres:ci -c '
+            set -eu
+            for ext in postgis vector; do
+              f="/usr/share/postgresql/$PG_MAJOR/extension/$ext.control"
+              test -f "$f" || { echo "missing: $ext"; exit 1; }
+              printf "%-8s %s\n" "$ext" \
+                "$(sed -n "s/^default_version *= *//p" "$f" | tr -d "'\''")"
+            done
+            echo "postgres $PG_VERSION"
+          '
