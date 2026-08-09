@@ -159,12 +159,52 @@ aire, faute d'aire dessinée.
 
 Voir `infra/postgres/README.md` pour le déroulé de la bascule.
 
-## Ce qui reste
+## Le dessin, exercé pour de vrai
 
-- **Le dessin lui-même n'a toujours pas été exercé.** La capacité est là et les
-  requêtes répondent, mais personne n'a encore tracé un polygone et vérifié
-  qu'il revient de la base tel qu'il est parti. La construction du polygone est
-  couverte par des tests ; l'aller-retour carte → API → PostGIS ne l'est pas.
+Deux aires tracées à la main sur la carte de production, le 8 août au soir. Le
+cycle complet tient :
+
+| | |
+|---|---|
+| créer | polygone à 4 coins → `PUT /geo/shapes/:id` → `app.instance_geometry` |
+| mesurer | `ST_Area` sur la géographie — 42,64 km² et 33,40 km², en mètres carrés vrais |
+| recouper | `ST_Intersection` trouve 2,5 ha communs entre les deux |
+| supprimer | la corbeille de la fenêtre Coverage, le compte retombe |
+
+Vérifié en base et pas seulement à l'écran : `sommets=5` pour un quadrilatère,
+c'est-à-dire quatre coins plus le point de fermeture que `polygonFrom` ajoute.
+
+## Ce qui reste, et deux défauts trouvés en le faisant
+
+**Une aire a été créée sans que je la dessine.** Entre mes deux tracés, une
+troisième forme est apparue — `GMF Centre-Sud`, six coins, sur un site que je
+n'avais jamais sélectionné. Les horodatages la placent pendant que je fermais
+une fenêtre et cliquais un marqueur : le mode dessin a capté des clics destinés
+à autre chose. Je n'ai pas su reconstruire quelle séquence exacte l'a produite,
+et c'est précisément ce qui la rend gênante — **rien à l'écran ne disait qu'un
+dessin était en cours**. Le bandeau du haut annonce l'état, mais il se lit mal
+quand on regarde ailleurs.
+
+À corriger : sortir du mode dessin dès qu'une autre interaction commence, ou
+rendre l'état bien plus visible que ce chip.
+
+**« Covered by nobody » ne bouge pas quand on dessine.** Les trois sites que
+j'ai touchés n'ont **aucune coordonnée** en propriété — ils font partie des 21
+que la carte place sur un anneau de repli autour de Montréal. Or `uncovered`
+ne considère que les instances dont `latitude`/`longitude` passent le filtre
+numérique. Dessiner autour de leur position *affichée* ne pouvait donc rien
+changer, et c'est le comportement correct.
+
+Mais leurs **noms** figurent dans la liste des non couverts. Donc il existe deux
+instances « GMF Centre-Sud », deux « Hôpital Notre-Dame » : une avec
+coordonnées, une sans. C'est le problème d'identité déjà connu — les types
+d'objet n'ont pas de propriété d'identité et rien n'empêche les doublons — et
+il se manifeste ici en rendant la couverture illisible.
+
+**Reste aussi :** le recouvrement s'affiche « 0% of the smaller » pour 2,5 ha
+sur 33,4 km². C'est juste, et inutile : sous le demi-pour-cent, la barre est
+vide et le chiffre ne dit rien. Une part minuscule mérite un « < 1 % » plutôt
+qu'un zéro.
 - **Le temps de trajet.** C'est la vraie question pour une ambulance, et ce
   n'est pas de la géométrie : il faut un service de routage externe. La distance
   à vol d'oiseau que rend `nearest` n'est pas une réponse clinique.
