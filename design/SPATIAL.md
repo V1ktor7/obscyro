@@ -149,14 +149,22 @@ mieux que deux.
 contexte qu'on lit *à travers* : lavis neutre, sous les arcs. Lui donner une des
 couleurs catégorielles en aurait fait une voie de plus.
 
+## C'est actif — 8 août 2026
+
+La production tourne sur `Postgres-PostGIS` : **PostGIS 3.6.4**, table
+`app.instance_geometry` créée avec son index GiST. La fenêtre « Coverage » ne
+montre plus le bandeau d'indisponibilité — elle exécute `ST_Covers` sur les
+instances géolocalisées et rapporte les neuf sites qui ne tombent dans aucune
+aire, faute d'aire dessinée.
+
+Voir `infra/postgres/README.md` pour le déroulé de la bascule.
+
 ## Ce qui reste
 
-- **Personne ne peut encore s'en servir.** La base de production n'a pas
-  PostGIS, donc le bouton reste désactivé et la fenêtre affiche le bandeau
-  d'indisponibilité. L'outil de dessin est écrit et déployé ; il attend une base
-  qui puisse recevoir ce qu'il produit. La construction du polygone est
-  couverte par des tests, l'interaction avec la carte ne l'est pas — elle n'a
-  jamais tourné contre une vraie base.
+- **Le dessin lui-même n'a toujours pas été exercé.** La capacité est là et les
+  requêtes répondent, mais personne n'a encore tracé un polygone et vérifié
+  qu'il revient de la base tel qu'il est parti. La construction du polygone est
+  couverte par des tests ; l'aller-retour carte → API → PostGIS ne l'est pas.
 - **Le temps de trajet.** C'est la vraie question pour une ambulance, et ce
   n'est pas de la géométrie : il faut un service de routage externe. La distance
   à vol d'oiseau que rend `nearest` n'est pas une réponse clinique.

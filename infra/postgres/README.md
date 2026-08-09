@@ -113,9 +113,77 @@ await fetch(`https://ghcr.io/v2/${repo}/tags/list?n=1000`,
 
 À lancer depuis une page `ghcr.io` — sinon le navigateur refuse la requête.
 
-## Où on en est
+## C'est fait — 8 août 2026
 
-Les étapes 1 et 2 sont faites. La base de production n'a pas été touchée.
+La bascule a eu lieu. `obscyro` et `shimmering-communication` tournent sur
+`Postgres-PostGIS`, PostGIS est actif, la carte dessine.
+
+| | |
+|---|---|
+| dump | 90 s, 277 Mo compressés depuis 3,7 Go |
+| restauration | ~8 min, index compris |
+| arrêt de service | environ 25 minutes, dont 15 de diagnostic |
+| vérification | 982 objets des deux côtés, **aucune différence** |
+| compteurs | 1206 instances · 189 liens · 529 392 concepts · 50 000 embeddings · 864 929 événements — identiques |
+
+Les sauvegardes locales sont dans `C:\Users\victo\Downloads\obscyro-migration\`.
+Elles ne dépendent de Railway pour rien.
+
+### Deux pièges, tous deux silencieux
+
+**L'index HNSW de pgvector n'a pas pu se construire.** `pg_restore` a rendu la
+main avec « errors ignored on restore: 1 », et cette unique erreur était :
+
+```
+CREATE INDEX description_embeddings_hnsw_idx
+  ON snomed.description_embeddings USING hnsw (embedding vector_cosine_ops);
+ERROR: could not resize shared memory segment ... No space left on device
+```
+
+C'est `/dev/shm` du conteneur, épuisé par les **workers parallèles** de la
+construction d'index — pas `maintenance_work_mem`. Tout le reste était passé,
+tous les compteurs corrects, l'application aurait démarré normalement, et la
+recherche sémantique serait tombée en balayage séquentiel sur 50 000 vecteurs
+sans que rien ne le signale.
+
+La correction tient en une ligne, et prend 15 secondes :
+
+```sql
+SET max_parallel_maintenance_workers = 0;
+CREATE INDEX description_embeddings_hnsw_idx
+  ON snomed.description_embeddings USING hnsw (embedding public.vector_cosine_ops);
+```
+
+C'est pour ça qu'on ne compare pas seulement les lignes. Comparer la **liste
+complète des objets** — index, contraintes, tables, séquences, vues — est ce qui
+a attrapé celui-là : 982 contre 981.
+
+**`railway redeploy` reconstruit le dernier déploiement, pas `main`.** Après un
+`railway down`, « le dernier » devient une entrée d'historique. Il a reconstruit
+un commit d'il y a des semaines, d'avant `1a0c46c` qui corrigeait une collision
+de route `/v1/me` — l'API a planté au démarrage sur une erreur qui n'avait rien
+à voir avec la base. Le signe qui a tranché : les migrations du conteneur
+s'arrêtaient à `028` alors que le dépôt va jusqu'à `042`.
+
+Pour déployer la tête de `main`, pousser un commit (même vide) plutôt que
+`redeploy`.
+
+### Ce qu'il reste à faire
+
+- **Garder l'ancien service quelques jours**, puis le supprimer. C'est le seul
+  retour en arrière qui existe, et il coûte deux bases en parallèle.
+- **Retirer la variable `SOURCE_URL`** du service `Postgres-PostGIS` : elle n'a
+  servi qu'à la migration et pointe encore sur l'ancienne base.
+- **Révoquer le jeton du CLI Railway** dans les réglages du compte. Il porte
+  `workspace:admin` — facturation et suppression de projet comprises — et
+  `offline_access`. Il n'a pas de raison de survivre à l'opération. La clé SSH
+  `claude-migration-obscyro` non plus.
+- **La région `sfo`** ne bloque plus rien d'important : le nouveau service se
+  déploie normalement. Elle reste sur l'ancien, qui va disparaître.
+
+## Ce qui a précédé
+
+Les étapes 1 et 2 ont été faites sans toucher à la base de production.
 
 | | |
 |---|---|
