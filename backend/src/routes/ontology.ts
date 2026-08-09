@@ -5,6 +5,12 @@ import { z } from "zod";
 import type { DbClient } from "../lib/db.js";
 import { AppError, BadRequest, Conflict, NotFound } from "../lib/errors.js";
 import { parseWhere } from "../lib/where-filter.js";
+import { recordAudit } from "../services/audit.js";
+import {
+  clearIdentityProperties,
+  identityReadiness,
+  setIdentityProperties,
+} from "../services/identity.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
 import { ensureUserOrganization, resolveOrganizationsForUser } from "../services/organization.js";
 import {
@@ -414,6 +420,8 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
     description: z.string().nullable(),
     nature: natureEnum.nullable(),
     propertySchema: z.array(propertyDef),
+    /** Empty means nothing identifies an instance of this type — see migration 043. */
+    identityProperties: z.array(z.string()).default([]),
     createdAt: z.string(),
   });
 
@@ -450,9 +458,10 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         description: string | null;
         nature: "physical" | "conceptual" | null;
         property_schema: unknown;
+        identity_properties: string[] | null;
         created_at: Date;
       }>(
-        `SELECT id, name, description, nature, property_schema, created_at
+        `SELECT id, name, description, nature, property_schema, identity_properties, created_at
            FROM app.ontology_object_types
           WHERE organization_id = (SELECT organization_id FROM app.project WHERE id = $1)
           ORDER BY name ASC`,
@@ -480,6 +489,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
           description: r.description,
           nature: r.nature,
           propertySchema: r.property_schema as z.infer<typeof propertyDef>[],
+        identityProperties: r.identity_properties ?? [],
           createdAt: r.created_at.toISOString(),
         })),
         linkTypes: links.rows.map((r) => ({
@@ -651,9 +661,10 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         description: string | null;
         nature: "physical" | "conceptual" | null;
         property_schema: unknown;
+        identity_properties: string[] | null;
         created_at: Date;
       }>(
-        `SELECT id, name, description, nature, property_schema, created_at
+        `SELECT id, name, description, nature, property_schema, identity_properties, created_at
            FROM app.ontology_object_types
           WHERE organization_id = (SELECT organization_id FROM app.project WHERE id = $1) AND name = $2`,
         [env.id, req.params.name],
@@ -666,6 +677,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         description: r.description,
         nature: r.nature,
         propertySchema: r.property_schema as z.infer<typeof propertyDef>[],
+        identityProperties: r.identity_properties ?? [],
         createdAt: r.created_at.toISOString(),
       };
     },
@@ -1002,9 +1014,10 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         description: string | null;
         nature: "physical" | "conceptual" | null;
         property_schema: unknown;
+        identity_properties: string[] | null;
         created_at: Date;
       }>(
-        `SELECT id, name, description, nature, property_schema, created_at
+        `SELECT id, name, description, nature, property_schema, identity_properties, created_at
            FROM app.ontology_object_types WHERE id = $1`,
         [typeId],
       );
@@ -1015,6 +1028,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         description: r.description,
         nature: r.nature,
         propertySchema: r.property_schema as z.infer<typeof propertyDef>[],
+        identityProperties: r.identity_properties ?? [],
         createdAt: r.created_at.toISOString(),
       });
     },
@@ -1044,6 +1058,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         description: string | null;
         nature: "physical" | "conceptual" | null;
         property_schema: unknown;
+        identity_properties: string[] | null;
         created_at: Date;
       }>(
         `UPDATE app.ontology_object_types
@@ -1051,7 +1066,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
                 property_schema = COALESCE($4::jsonb, property_schema),
                 nature = CASE WHEN $5::boolean THEN $6 ELSE nature END
           WHERE project_id = $1 AND name = $2
-          RETURNING id, name, description, nature, property_schema, created_at`,
+          RETURNING id, name, description, nature, property_schema, identity_properties, created_at`,
         [
           env.id,
           req.params.name,
@@ -1069,8 +1084,134 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         description: r.description,
         nature: r.nature,
         propertySchema: r.property_schema as z.infer<typeof propertyDef>[],
+        identityProperties: r.identity_properties ?? [],
         createdAt: r.created_at.toISOString(),
       };
+    },
+  );
+
+  // --- identity ------------------------------------------------------------
+  //
+  // Which properties say "this is the same thing". Three routes rather than a
+  // field on PATCH, because declaring an identity is not editing a description:
+  // it can be refused by data that already exists, and the refusal has to be
+  // readable before anyone commits to it.
+
+  const identityBody = z.object({
+    properties: z.array(z.string().trim().min(1)).min(1).max(5),
+  });
+
+  const readinessOut = z.object({
+    ready: z.boolean(),
+    total: z.number(),
+    missing: z.number(),
+    unknownProperties: z.array(z.string()),
+    duplicates: z.array(
+      z.object({
+        values: z.array(z.string()),
+        count: z.number(),
+        instanceIds: z.array(z.string()),
+      }),
+    ),
+  });
+
+  async function typeIdByName(
+    db: DbClient,
+    projectId: string,
+    name: string,
+  ): Promise<string> {
+    const { rows } = await db.query<{ id: string }>(
+      `SELECT id FROM app.ontology_object_types WHERE project_id = $1 AND name = $2`,
+      [projectId, name],
+    );
+    const id = rows[0]?.id;
+    if (!id) throw NotFound("TYPE_NOT_FOUND", `Object type "${name}" not found.`);
+    return id;
+  }
+
+  app.post(
+    "/ontology/:env/types/:name/identity/check",
+    {
+      schema: {
+        summary: "What stands between this type and this identity",
+        description:
+          "Read-only. Returns the groups of instances that already share these " +
+          "values, and how many are missing them. Call before offering the change.",
+        tags: ["ontology"],
+        params: z.object({ env: z.string().min(1), name: z.string().min(1) }),
+        body: identityBody,
+        response: { 200: readinessOut, 400: errorEnvelope, 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const typeId = await typeIdByName(req.db, env.id, req.params.name);
+      const r = await identityReadiness(req.db, typeId, req.body.properties);
+      return { ...r, ready: r.duplicates.length === 0 && r.missing === 0 };
+    },
+  );
+
+  app.put(
+    "/ontology/:env/types/:name/identity",
+    {
+      schema: {
+        summary: "Declare which properties identify an instance of this type",
+        description:
+          "Refused if instances already collide on these values, or if any lack " +
+          "them. The database enforces it afterwards, on every write path.",
+        tags: ["ontology"],
+        params: z.object({ env: z.string().min(1), name: z.string().min(1) }),
+        body: identityBody,
+        response: {
+          200: z.object({ identityProperties: z.array(z.string()), indexed: z.number() }),
+          400: errorEnvelope,
+          404: errorEnvelope,
+          409: errorEnvelope,
+        },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const typeId = await typeIdByName(req.db, env.id, req.params.name);
+      const result = await setIdentityProperties(req.db, typeId, req.body.properties);
+      await recordAudit(req.db, {
+        projectId: env.id,
+        actorUserId: userId,
+        action: "ontology.set_identity",
+        resourceType: "object_type",
+        resourceId: typeId,
+        metadata: { type: req.params.name, properties: result.identityProperties },
+      });
+      return result;
+    },
+  );
+
+  app.delete(
+    "/ontology/:env/types/:name/identity",
+    {
+      schema: {
+        summary: "Stop identifying instances of this type",
+        tags: ["ontology"],
+        params: z.object({ env: z.string().min(1), name: z.string().min(1) }),
+        response: { 200: z.object({ ok: z.literal(true) }), 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const typeId = await typeIdByName(req.db, env.id, req.params.name);
+      await clearIdentityProperties(req.db, typeId);
+      await recordAudit(req.db, {
+        projectId: env.id,
+        actorUserId: userId,
+        action: "ontology.clear_identity",
+        resourceType: "object_type",
+        resourceId: typeId,
+        metadata: { type: req.params.name },
+      });
+      return { ok: true as const };
     },
   );
 

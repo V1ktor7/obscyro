@@ -1,6 +1,7 @@
 import type { DbClient } from "../lib/db.js";
 
-import { NotFound } from "../lib/errors.js";
+import { BadRequest, NotFound } from "../lib/errors.js";
+import { identityKeyOf } from "./identity.js";
 import { assertLensSupported, type ReadLens } from "./ontology-lens.js";
 import { applyOverridesToInstances, applyOverridesToLinks } from "./scenario-apply.js";
 import { resolveOverrides } from "./scenario-overrides.js";
@@ -271,6 +272,58 @@ export async function upsertInstanceByIdentity(
   properties: Record<string, unknown>,
   provenance: Record<string, unknown>,
 ): Promise<{ id: string; created: boolean }> {
+  // The type's own declaration wins over the caller's.
+  //
+  // `identityKeys` comes from whichever channel mapping or pipeline is running,
+  // which is how the ontology ended up with two objects for one bed: two
+  // pipelines, two opinions about what a bed is called. When the type says what
+  // identifies it, that is the answer for every writer — and it is the same
+  // rule the database enforces, so agreeing with it here is what turns a
+  // constraint violation into an ordinary update.
+  const { rows: typeRows } = await db.query<{ identity_properties: string[] | null }>(
+    `SELECT identity_properties FROM app.ontology_object_types WHERE id = $1`,
+    [objectTypeId],
+  );
+  const declared = typeRows[0]?.identity_properties ?? [];
+
+  if (declared.length > 0) {
+    // Look the instance up through `instance_identity` rather than by matching
+    // properties. The trigger writes that table with `lower(btrim(...))`, so a
+    // raw comparison here would miss "HND-01" against "hnd-01 " — and then try
+    // to insert, and be refused by the very constraint this is meant to honour.
+    // Reading the same index the constraint uses makes the two agree by
+    // construction instead of by care.
+    const key = identityKeyOf(properties, declared);
+    if (key === null) {
+      throw BadRequest(
+        "IDENTITY_INCOMPLETE",
+        `This type is identified by ${declared.join(", ")}, and the incoming record ` +
+          `is missing at least one of them.`,
+      );
+    }
+    const { rows } = await db.query<{ instance_id: string }>(
+      `SELECT instance_id FROM app.instance_identity
+        WHERE object_type_id = $1 AND identity_key = $2`,
+      [objectTypeId, key],
+    );
+    const found = rows[0]?.instance_id;
+    if (found) {
+      await db.query(
+        `UPDATE app.ontology_object_instances
+            SET properties = properties || $2::jsonb,
+                provenance = provenance || $3::jsonb,
+                updated_at = now()
+          WHERE id = $1`,
+        [found, JSON.stringify(properties), JSON.stringify(provenance)],
+      );
+      return { id: found, created: false };
+    }
+    const id = await insertObjectInstance(db, objectTypeId, properties, provenance);
+    return { id, created: true };
+  }
+
+  // No declared identity: the caller's keys, as before. Types keep working
+  // exactly as they did until someone declares an identity for them.
   const usableKeys = identityKeys.filter(
     (k) => properties[k] !== undefined && properties[k] !== null && properties[k] !== "",
   );
