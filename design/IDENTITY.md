@@ -75,6 +75,55 @@ refusée. Il faut d'abord leur donner un code, ou choisir une autre propriété.
 Le reste porte de vrais doublons, à fusionner avant de pouvoir déclarer quoi que
 ce soit.
 
+## La fusion du 10 août 2026
+
+`OrgUnit` portait **huit codes en double** : pour chacun, une copie câblée dans
+l'arbre `contains` et une copie orpheline à la racine. Quatre d'entre elles
+portaient des liens **des deux côtés** — les lits d'une même salle étaient
+répartis entre deux exemplaires, et l'occupation se calculait sur une moitié de
+salle sans que rien ne le signale.
+
+Vérifié avant d'écrire : aucune collision de lien, aucune alerte, aucun drapeau
+qualité, aucune géométrie et aucun scénario n'était rattaché aux orphelines. La
+seule différence de propriété était un nom — « HND Emergency » contre
+« Hopital Notre Dame Emergency », même code, sans accent ni tiret.
+
+Fait dans une transaction, avec les 77 lignes touchées copiées d'abord dans
+`app.merge_backup_20260810` :
+
+| | |
+|---|---|
+| liens repointés | 69 |
+| orphelines supprimées | 8 |
+| identité `OrgUnit` → `code` | déclarée, 21 instances indexées |
+| codes en double après | **0** |
+| lits rattachés | 150, aucun perdu |
+
+Les chiffres redeviennent vrais :
+
+| unité | lits | occupés |
+|---|---|---|
+| HND Emergency | 48 | 45 |
+| HSL Ward 2B | 30 | 25 |
+| HSL ICU | 18 | 14 |
+| HND Ward 3A | 30 | 19 |
+| HCS Med-Surg A | 24 | 10 |
+
+**Garder la sauvegarde** tant que rien n'a été vérifié à l'usage. Elle contient
+l'état exact d'avant, instances et liens.
+
+### Un effet de bord qui n'est pas un bug
+
+La couche `tranfer_to` a disparu de la carte. Le lien allait de CISSS de Laval
+vers la copie orpheline de HSL ICU ; repointé vers la copie conservée, il existe
+toujours — mais HSL ICU a maintenant un parent, donc ce n'est plus une racine,
+donc la carte ne le compte plus comme un site, donc le flux n'a plus deux sites
+à relier.
+
+C'est la même confusion qui remonte : **un transfert entre unités
+organisationnelles n'est pas un flux entre lieux.** Le dessiner demande de
+savoir *où se trouve* chaque unité — c'est-à-dire `located_at`.
+
 ## Ce que l'identité sur les types ne corrige pas
 
 J'avais attribué à ce défaut les « deux Hôpital Notre-Dame » vus sur la carte.
