@@ -142,6 +142,19 @@ export function applyOverridesToLinks(
       live.set(key, {
         id: syntheticId(scenarioId, key),
         linkTypeName: linkType,
+        // A link a scenario invents inherits the meaning of the link type it
+        // names — taken from a live link of that type, since the overlay never
+        // reads the type table. Null when the scenario is the first to use it:
+        // a proposed link of a brand-new type is not structural until someone
+        // says what it means.
+        ...(() => {
+          const seen = [...live.values()].find((l) => l.linkTypeName === linkType);
+          return {
+            aggregates: seen?.aggregates ?? null,
+            aggregateToward: seen?.aggregateToward ?? null,
+            transitive: seen?.transitive ?? false,
+          };
+        })(),
         fromInstanceId: fromId,
         toInstanceId: toId,
         fromTypeName: typeNameById.get(fromId) ?? "",

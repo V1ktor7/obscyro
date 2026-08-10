@@ -20,6 +20,14 @@ export interface EnvInstanceRow {
 export interface EnvLinkRow {
   id: string;
   linkTypeName: string;
+  /**
+   * What the link type declares it does — see migration 044. The engine reads
+   * this and never the name: an institution may call its hierarchy whatever it
+   * likes.
+   */
+  aggregates: "metrics" | null;
+  aggregateToward: "source" | "target" | null;
+  transitive: boolean;
   fromInstanceId: string;
   toInstanceId: string;
   fromTypeName: string;
@@ -186,6 +194,19 @@ export async function getOrCreateObjectType(
   return id;
 }
 
+/**
+ * What a link type declares it does, as an argument.
+ *
+ * Three orthogonal settings rather than a closed list of meanings: the engine
+ * implements traversal and accumulation, and everything it can do is a
+ * combination of "does anything flow", "which way", and "does it chain".
+ */
+export interface LinkBehaviourInput {
+  aggregates?: "metrics" | null;
+  aggregateToward?: "source" | "target" | null;
+  transitive?: boolean;
+}
+
 export async function getOrCreateLinkType(
   db: DbClient,
   environmentId: string,
@@ -193,16 +214,32 @@ export async function getOrCreateLinkType(
   fromTypeId: string,
   toTypeId: string,
   cardinality: string,
+  /**
+   * What the link does, when it is structural. Only applied on creation — an
+   * existing type keeps what it declares, because changing how a relation
+   * aggregates silently would move every number that depends on it.
+   */
+  behaviour: LinkBehaviourInput = {},
 ): Promise<string> {
   const { rows } = await db.query<{ id: string }>(
     `INSERT INTO app.ontology_link_types
-            (project_id, organization_id, name, from_type_id, to_type_id, cardinality)
-     SELECT $1, e.organization_id, $2, $3, $4, $5
+            (project_id, organization_id, name, from_type_id, to_type_id,
+             cardinality, aggregates, aggregate_toward, transitive)
+     SELECT $1, e.organization_id, $2, $3, $4, $5, $6, $7, COALESCE($8, false)
        FROM app.project e
       WHERE e.id = $1
      ON CONFLICT (organization_id, name) DO UPDATE SET name = EXCLUDED.name
      RETURNING id`,
-    [environmentId, name, fromTypeId, toTypeId, cardinality],
+    [
+      environmentId,
+      name,
+      fromTypeId,
+      toTypeId,
+      cardinality,
+      behaviour.aggregates ?? null,
+      behaviour.aggregateToward ?? null,
+      behaviour.transitive ?? false,
+    ],
   );
   const id = rows[0]?.id;
   if (!id) {
@@ -524,12 +561,16 @@ export async function listLinksForEnv(
   const { rows } = await db.query<{
     id: string;
     link_type_name: string;
+    aggregates: "metrics" | null;
+    aggregate_toward: "source" | "target" | null;
+    transitive: boolean;
     from_instance_id: string;
     to_instance_id: string;
     from_type_name: string;
     to_type_name: string;
   }>(
     `SELECT li.id, lt.name AS link_type_name,
+            lt.aggregates, lt.aggregate_toward, lt.transitive,
             li.from_instance_id, li.to_instance_id,
             ft.name AS from_type_name, tt.name AS to_type_name
        FROM app.ontology_link_instances li
@@ -546,6 +587,9 @@ export async function listLinksForEnv(
   const liveLinks: EnvLinkRow[] = rows.map((r) => ({
     id: r.id,
     linkTypeName: r.link_type_name,
+    aggregates: r.aggregates,
+    aggregateToward: r.aggregate_toward,
+    transitive: r.transitive,
     fromInstanceId: r.from_instance_id,
     toInstanceId: r.to_instance_id,
     fromTypeName: r.from_type_name,

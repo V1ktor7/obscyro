@@ -169,6 +169,9 @@ const LINKS: EnvLinkRow[] = [
   {
     id: "l1",
     linkTypeName: "located_in",
+    aggregates: null,
+    aggregateToward: null,
+    transitive: false,
     fromInstanceId: "p1",
     toInstanceId: "u1",
     fromTypeName: "Patient",

@@ -20,6 +20,56 @@ export const LOCATED_IN_BED_LINK = "located_in_bed";
 
 export const LOCATED_IN_LINK_NAMES = [LOCATED_IN_LINK, LOCATED_IN_BED_LINK] as const;
 
+/**
+ * What a link means to the engine, read from the link type rather than its name.
+ *
+ * The names above are what this codebase happens to seed. They are not what the
+ * engine matches on: an institution modelling « se trouve dans » or « rattache a »
+ * used to get no roll-up at all, silently, because three strings were written
+ * into the code. Migration 044 moved the meaning onto the link type, where the
+ * institution can attach it to whatever it calls the relation.
+ */
+export interface LinkBehaviour {
+  aggregates: "metrics" | null;
+  aggregateToward: "source" | "target" | null;
+  transitive: boolean;
+}
+
+/**
+ * A link that carries a hierarchy: something flows along it, and it chains.
+ * `CHUM contains Notre-Dame contains Emergency` — the beds two levels down have
+ * to reach the top, or the parent reads zero.
+ */
+export function buildsHierarchy(l: LinkBehaviour): boolean {
+  return l.aggregates === "metrics" && l.transitive;
+}
+
+/**
+ * A link that attaches one thing to another without chaining. A bed is in a
+ * ward; there is no bed inside a bed, so the chain has no second link to make.
+ */
+export function attaches(l: LinkBehaviour): boolean {
+  return l.aggregates === "metrics" && !l.transitive;
+}
+
+/**
+ * Which end the numbers flow to.
+ *
+ * `A contains B` and `B part_of A` describe the same tree with the arrow
+ * reversed. Without this, a naming convention turns the hierarchy upside down
+ * and the top of the org reads as a leaf.
+ */
+export function aggregationEnds(l: LinkBehaviour & { fromInstanceId: string; toInstanceId: string }): {
+  /** The end that receives — parent, or the node an instance attaches to. */
+  receiver: string;
+  /** The end that gives. */
+  giver: string;
+} {
+  return l.aggregateToward === "source"
+    ? { receiver: l.fromInstanceId, giver: l.toInstanceId }
+    : { receiver: l.toInstanceId, giver: l.fromInstanceId };
+}
+
 export const ORG_UNIT_SCHEMA: PropertyDef[] = [
   { key: "name", type: "string", label: "Name" },
   { key: "kind", type: "string", label: "Kind" },
@@ -130,6 +180,9 @@ export async function seedTwinSchema(
     orgUnitTypeId,
     orgUnitTypeId,
     "many_to_many",
+    // The hierarchy: numbers flow to the containing unit, and it chains, so a
+    // bed two levels down still counts at the top.
+    { aggregates: "metrics", aggregateToward: "source", transitive: true },
   );
   const locatedInLinkTypeId = await getOrCreateLinkType(
     db,
@@ -138,6 +191,9 @@ export async function seedTwinSchema(
     patientTypeId,
     orgUnitTypeId,
     "many_to_many",
+    // A patient attaches to a unit. Nothing to chain: there is no patient
+    // inside a patient.
+    { aggregates: "metrics", aggregateToward: "target", transitive: false },
   );
   const locatedInBedLinkTypeId = await getOrCreateLinkType(
     db,
@@ -146,6 +202,7 @@ export async function seedTwinSchema(
     bedTypeId,
     orgUnitTypeId,
     "many_to_many",
+    { aggregates: "metrics", aggregateToward: "target", transitive: false },
   );
   return {
     orgUnitTypeId,
@@ -173,13 +230,16 @@ export async function getUnitTree(
   const edges: TwinTreeEdge[] = [];
   const parentByChild = new Map<string, string>();
   for (const link of links) {
-    if (link.linkTypeName !== CONTAINS_LINK) continue;
+    if (!buildsHierarchy(link)) continue;
     if (!unitIds.has(link.fromInstanceId) || !unitIds.has(link.toInstanceId)) continue;
-    edges.push({ fromId: link.fromInstanceId, toId: link.toInstanceId });
-    // First contains-parent wins; the tree is a forest, multiple parents are
-    // ignored deterministically by insertion order.
-    if (!parentByChild.has(link.toInstanceId)) {
-      parentByChild.set(link.toInstanceId, link.fromInstanceId);
+    // The parent is whichever end the type says receives — so `A contains B`
+    // and `B part_of A` build the same tree.
+    const { receiver: parent, giver: child } = aggregationEnds(link);
+    edges.push({ fromId: parent, toId: child });
+    // First parent wins; the tree is a forest, multiple parents are ignored
+    // deterministically by insertion order.
+    if (!parentByChild.has(child)) {
+      parentByChild.set(child, parent);
     }
   }
 
@@ -263,10 +323,11 @@ export async function rollupAllUnits(
 
   const locatedInByUnit = new Map<string, typeof allInstances>();
   for (const link of links) {
-    if (!LOCATED_IN_LINK_NAMES.includes(link.linkTypeName as (typeof LOCATED_IN_LINK_NAMES)[number])) continue;
-    const unitId = link.toInstanceId;
+    if (!attaches(link)) continue;
+    // The unit is the receiving end; the instance is the one that gives.
+    const { receiver: unitId, giver: instanceId } = aggregationEnds(link);
     if (!unitIds.has(unitId)) continue;
-    const inst = instanceById.get(link.fromInstanceId);
+    const inst = instanceById.get(instanceId);
     if (!inst) continue;
     const list = locatedInByUnit.get(unitId) ?? [];
     list.push(inst);
@@ -354,7 +415,8 @@ export async function unitExchanges(
 
   const seen = new Map<string, UnitExchange>();
   for (const l of links) {
-    if (l.linkTypeName === CONTAINS_LINK) continue;
+    // The hierarchy is not an exchange between units; it is what makes them one.
+    if (buildsHierarchy(l)) continue;
     const isOut = l.fromInstanceId === unitId;
     const isIn = l.toInstanceId === unitId;
     if (!isOut && !isIn) continue;
