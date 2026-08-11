@@ -82,6 +82,7 @@ import {
   type SchemaLayout,
 } from "../manager-layout-persist";
 import { listQualityFlags, type QualityFlag } from "../quality-api";
+import LinkBehaviourDialog from "./LinkBehaviourDialog";
 import SchemaGraphCanvas from "./SchemaGraphCanvas";
 import { useStudio } from "../StudioShell";
 
@@ -147,6 +148,18 @@ interface TypeGroup {
   name: string;
   members: string[];
   links: EnvLinkType[];
+}
+
+/**
+ * A relationship's behaviour, in four words for a table cell.
+ *
+ * Most relationships do nothing to the numbers, and the cell should say so
+ * plainly rather than leave a blank that reads as "not configured yet".
+ */
+function describeBehaviour(lt: EnvLinkType): string {
+  if (!lt.aggregates) return "nothing";
+  const receiver = lt.aggregateToward === "source" ? lt.fromType : lt.toType;
+  return `metrics → ${receiver}${lt.transitive ? " (chains)" : ""}`;
 }
 
 function computeTypeGroups(
@@ -785,6 +798,13 @@ export default function ManagerView() {
                 setError((err as Error).message);
               }
             }}
+            onLinkTypeChanged={(updated) => {
+              // Replace in place rather than refetch: the twin's numbers move
+              // when this changes, and a full reload would make the table blink
+              // for a one-row edit.
+              setLinkTypes((cur) => cur.map((l) => (l.id === updated.id ? updated : l)));
+              notifyChanged();
+            }}
             onEnvCreated={async (slug) => {
               await refreshEnvironments();
               setSelectedEnv(slug);
@@ -1296,6 +1316,7 @@ function ResourcePages({
   onOpenInstance,
   onNewLinkType,
   onDeleteLinkType,
+  onLinkTypeChanged,
   onEnvCreated,
   onImported,
   onError,
@@ -1314,6 +1335,7 @@ function ResourcePages({
   onOpenInstance: (id: string) => void;
   onNewLinkType: () => void;
   onDeleteLinkType: (name: string) => Promise<void>;
+  onLinkTypeChanged: (updated: EnvLinkType) => void;
   onEnvCreated: (slug: string) => Promise<void>;
   onImported: () => void;
   onError: (msg: string) => void;
@@ -1321,6 +1343,7 @@ function ResourcePages({
   const [importFrom, setImportFrom] = useState("");
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
+  const [behaviourOf, setBehaviourOf] = useState<EnvLinkType | null>(null);
 
   async function handleImport() {
     if (!env || !importFrom || importing) return;
@@ -1466,6 +1489,7 @@ function ResourcePages({
                 <th className={RESOURCE_TH}>From</th>
                 <th className={RESOURCE_TH}>To</th>
                 <th className={RESOURCE_TH}>Cardinality</th>
+                <th className={RESOURCE_TH}>Does</th>
                 <th className={RESOURCE_TH}></th>
               </tr>
             </thead>
@@ -1476,6 +1500,21 @@ function ResourcePages({
                   <td className={RESOURCE_TD}>{lt.fromType}</td>
                   <td className={RESOURCE_TD}>{lt.toType}</td>
                   <td className={cn(RESOURCE_TD, "text-[11px]")}>{lt.cardinality}</td>
+                  <td className={cn(RESOURCE_TD, "text-[11px]")}>
+                    <button
+                      type="button"
+                      onClick={() => setBehaviourOf(lt)}
+                      className={cn(
+                        "rounded px-1.5 py-0.5 text-left hover:underline",
+                        lt.aggregates
+                          ? "bg-brand-soft text-brand-deep"
+                          : "text-ink-faint hover:text-brand",
+                      )}
+                      title="What this relationship does to the numbers"
+                    >
+                      {describeBehaviour(lt)}
+                    </button>
+                  </td>
                   <td className={cn(RESOURCE_TD, "text-right")}>
                     <button
                       type="button"
@@ -1489,7 +1528,7 @@ function ResourcePages({
               ))}
               {linkTypes.length === 0 ? (
                 <tr>
-                  <td className={cn(RESOURCE_TD, "text-ink-faint")} colSpan={5}>
+                  <td className={cn(RESOURCE_TD, "text-ink-faint")} colSpan={6}>
                     No link types yet.
                   </td>
                 </tr>
@@ -1497,6 +1536,14 @@ function ResourcePages({
             </tbody>
           </table>
         </div>
+        {behaviourOf && env ? (
+          <LinkBehaviourDialog
+            env={env}
+            linkType={behaviourOf}
+            onSaved={onLinkTypeChanged}
+            onClose={() => setBehaviourOf(null)}
+          />
+        ) : null}
       </PageShell>
     );
   }

@@ -425,13 +425,50 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
     createdAt: z.string(),
   });
 
+  /**
+   * What a relationship does, declared rather than inferred from its name.
+   *
+   * `transitive` is only meaningful when both ends are the same type — a bed is
+   * in a ward and the chain has no second link to make — so the server refuses
+   * it otherwise rather than accepting a setting that could never fire.
+   */
+  const linkBehaviour = z.object({
+    aggregates: z.enum(["metrics"]).nullable().default(null),
+    aggregateToward: z.enum(["source", "target"]).nullable().default(null),
+    transitive: z.boolean().default(false),
+  });
+
   const linkTypeOut = z.object({
     id: z.string().uuid(),
     name: z.string(),
     fromType: z.string(),
     toType: z.string(),
     cardinality: z.string(),
+    aggregates: z.enum(["metrics"]).nullable().default(null),
+    aggregateToward: z.enum(["source", "target"]).nullable().default(null),
+    transitive: z.boolean().default(false),
   });
+
+  /** Shared by create and update: the rules a declaration has to satisfy. */
+  function checkBehaviour(
+    b: z.infer<typeof linkBehaviour>,
+    fromType: string,
+    toType: string,
+  ): void {
+    if (b.aggregates && !b.aggregateToward) {
+      throw BadRequest(
+        "AGGREGATE_NEEDS_DIRECTION",
+        "A relationship that aggregates has to say which end receives.",
+      );
+    }
+    if (b.transitive && fromType !== toType) {
+      throw BadRequest(
+        "TRANSITIVE_NEEDS_SAME_TYPE",
+        `A relationship can only chain with itself when both ends are the same type. ` +
+          `This one runs ${fromType} → ${toType}, so there is no second link to follow.`,
+      );
+    }
+  }
 
   app.get(
     "/ontology/:env/types",
@@ -473,8 +510,12 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         from_type: string;
         to_type: string;
         cardinality: string;
+        aggregates: "metrics" | null;
+        aggregate_toward: "source" | "target" | null;
+        transitive: boolean;
       }>(
-        `SELECT lt.id, lt.name, ft.name AS from_type, tt.name AS to_type, lt.cardinality
+        `SELECT lt.id, lt.name, ft.name AS from_type, tt.name AS to_type, lt.cardinality,
+                lt.aggregates, lt.aggregate_toward, lt.transitive
            FROM app.ontology_link_types lt
            JOIN app.ontology_object_types ft ON ft.id = lt.from_type_id
            JOIN app.ontology_object_types tt ON tt.id = lt.to_type_id
@@ -498,6 +539,9 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
           fromType: r.from_type,
           toType: r.to_type,
           cardinality: r.cardinality,
+          aggregates: r.aggregates,
+          aggregateToward: r.aggregate_toward,
+          transitive: r.transitive,
         })),
       };
     },
@@ -1253,8 +1297,14 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
           cardinality: z
             .enum(["one_to_one", "one_to_many", "many_to_one", "many_to_many"])
             .default("many_to_many"),
+          behaviour: linkBehaviour.optional(),
         }),
-        response: { 201: linkTypeOut, 404: errorEnvelope, 409: errorEnvelope },
+        response: {
+          201: linkTypeOut,
+          400: errorEnvelope,
+          404: errorEnvelope,
+          409: errorEnvelope,
+        },
       },
     },
     async (req, reply) => {
@@ -1281,6 +1331,13 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         throw Conflict("LINK_TYPE_EXISTS", `Link type "${req.body.name}" already exists.`);
       }
 
+      const behaviour = req.body.behaviour ?? {
+        aggregates: null,
+        aggregateToward: null,
+        transitive: false,
+      };
+      checkBehaviour(behaviour, req.body.fromType, req.body.toType);
+
       const linkTypeId = await getOrCreateLinkType(
         req.db,
         env.id,
@@ -1288,6 +1345,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         fromId,
         toId,
         req.body.cardinality,
+        behaviour,
       );
       return reply.code(201).send({
         id: linkTypeId,
@@ -1295,7 +1353,73 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         fromType: req.body.fromType,
         toType: req.body.toType,
         cardinality: req.body.cardinality,
+        ...behaviour,
       });
+    },
+  );
+
+  app.patch(
+    "/ontology/:env/link-types/:name",
+    {
+      schema: {
+        summary: "Change what a relationship does",
+        description:
+          "Declaring that a relationship aggregates moves every number that " +
+          "depends on it, so this is its own route rather than a field on " +
+          "creation — and it records an audit entry.",
+        tags: ["ontology"],
+        params: z.object({ env: z.string().min(1), name: z.string().min(1) }),
+        body: linkBehaviour,
+        response: { 200: linkTypeOut, 400: errorEnvelope, 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+
+      const { rows: found } = await req.db.query<{
+        id: string;
+        cardinality: string;
+        from_type: string;
+        to_type: string;
+      }>(
+        `SELECT lt.id, lt.cardinality, ft.name AS from_type, tt.name AS to_type
+           FROM app.ontology_link_types lt
+           JOIN app.ontology_object_types ft ON ft.id = lt.from_type_id
+           JOIN app.ontology_object_types tt ON tt.id = lt.to_type_id
+          WHERE lt.organization_id = (SELECT organization_id FROM app.project WHERE id = $1)
+            AND lt.name = $2`,
+        [env.id, req.params.name],
+      );
+      const row = found[0];
+      if (!row) {
+        throw NotFound("LINK_TYPE_NOT_FOUND", `Link type "${req.params.name}" not found.`);
+      }
+      checkBehaviour(req.body, row.from_type, row.to_type);
+
+      await req.db.query(
+        `UPDATE app.ontology_link_types
+            SET aggregates = $2, aggregate_toward = $3, transitive = $4
+          WHERE id = $1`,
+        [row.id, req.body.aggregates, req.body.aggregateToward, req.body.transitive],
+      );
+      await recordAudit(req.db, {
+        projectId: env.id,
+        actorUserId: userId,
+        action: "ontology.set_link_behaviour",
+        resourceType: "link_type",
+        resourceId: row.id,
+        metadata: { linkType: req.params.name, ...req.body },
+      });
+
+      return {
+        id: row.id,
+        name: req.params.name,
+        fromType: row.from_type,
+        toType: row.to_type,
+        cardinality: row.cardinality,
+        ...req.body,
+      };
     },
   );
 

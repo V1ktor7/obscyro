@@ -453,7 +453,23 @@ export interface EnvObjectType {
   createdAt: string;
 }
 
-export interface EnvLinkType {
+/**
+ * What a relationship does, as opposed to what it is called.
+ *
+ * The twin engine used to recognise three names written into the code. An
+ * institution modelling « chapeaute » got an empty tree and zeroes, silently.
+ * These three settings are what it reads instead.
+ */
+export interface LinkBehaviour {
+  /** What flows along the link. `null` — the common case — is nothing. */
+  aggregates: "metrics" | null;
+  /** Which end receives. `A contains B` and `B part_of A` differ only here. */
+  aggregateToward: "source" | "target" | null;
+  /** Does the relation chain with itself. Only possible between equal types. */
+  transitive: boolean;
+}
+
+export interface EnvLinkType extends LinkBehaviour {
   id: string;
   name: string;
   fromType: string;
@@ -622,9 +638,27 @@ export async function createEnvLinkType(
     fromType: string;
     toType: string;
     cardinality?: LinkCardinality;
+    behaviour?: LinkBehaviour;
   },
 ): Promise<EnvLinkType> {
   return apiFetch(`/v1/ontology/${encodeURIComponent(env)}/link-types`, { method: "POST", body });
+}
+
+/**
+ * Change what an existing relationship does.
+ *
+ * Its own call rather than part of an edit form: declaring that a relationship
+ * aggregates moves every number that depends on it, and it is recorded.
+ */
+export async function setLinkTypeBehaviour(
+  env: string,
+  name: string,
+  behaviour: LinkBehaviour,
+): Promise<EnvLinkType> {
+  return apiFetch(
+    `/v1/ontology/${encodeURIComponent(env)}/link-types/${encodeURIComponent(name)}`,
+    { method: "PATCH", body: behaviour },
+  );
 }
 
 export async function deleteEnvLinkType(env: string, name: string): Promise<{ ok: true }> {
