@@ -3,8 +3,17 @@
 fastapi==0.111.0
 uvicorn[standard]==0.30.1
 pydantic==2.7.1
-# Core, not an ML extra: the crisis layer's network backend needs it. It is
-# imported lazily inside NetworkxBackend, so leaving it out builds a healthy
-# image whose /health passes and whose first simulation raises ModuleNotFound —
-# a deploy that looks successful until somebody uses it.
+# Core, not ML extras. The crisis layer needs both, and the ML install is
+# deliberately allowed to fail (`|| echo "ml extras skipped"`), so anything the
+# engine imports must live here or it is one broken pin away from vanishing.
+# That is not hypothetical: `pytorch-forecasting==1.0.0` does not exist for
+# Python 3.11, so the whole ML block has been skipping silently — which is how
+# numpy went missing.
+#
+# networkx is imported lazily inside NetworkxBackend, so leaving it out builds a
+# healthy image whose /health passes and whose first simulation raises
+# ModuleNotFound: a deploy that looks successful until somebody uses it.
 networkx==3.5
+# Pinned to the same range requirements-ml.txt asks for, so installing the ML
+# stack later does not resolve a second, different numpy underneath it.
+numpy>=1.26,<2.0

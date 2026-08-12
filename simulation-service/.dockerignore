@@ -1,0 +1,12 @@
+# Keep the build context to what the image actually needs.
+#
+# `railway up` uploads this directory verbatim, so a stale __pycache__ from a
+# different Python version ships with the image and can shadow a source file
+# that was since edited — a class of bug that only appears in the deployed copy.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.env
+artifacts/
