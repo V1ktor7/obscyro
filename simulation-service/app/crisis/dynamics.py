@@ -94,6 +94,24 @@ def register_action(kind: str) -> Callable[[ActionHandler], ActionHandler]:
     return deco
 
 
+def _most_urgent(state: SystemState, waiting: dict[str, float]) -> str | None:
+    """The queued acuity with the highest mortality when left unserved.
+
+    Ties break on the name so a run does not change its answer when a scenario
+    file is reordered.
+    """
+    queued = [a for a, n in waiting.items() if n > 0]
+    if not queued:
+        return None
+    return min(
+        queued,
+        key=lambda a: (
+            -(state.care_model[a].mortality_per_unmet if a in state.care_model else 0.0),
+            a,
+        ),
+    )
+
+
 @register_action("transfer")
 def _transfer(state: SystemState, a: Action, engine: "Engine") -> float:
     """Move waiting patients along a transfer edge, capped by its throughput.
@@ -105,7 +123,13 @@ def _transfer(state: SystemState, a: Action, engine: "Engine") -> float:
     if edge is None:
         return 0.0
     waiting = state.backlog.get(a.source or "", {})
-    acuity = a.acuity or (max(waiting, key=waiting.get) if waiting else None)
+    # Sickest first, matching how `_deliver_care` triages. Defaulting to the
+    # longest queue instead — which this did — sends routine cases down the only
+    # road out, they take the beds at the far end, and the critical patients
+    # they displace there die. The policy then scores *worse* than doing
+    # nothing while appearing to work: the rule fires, patients move, and the
+    # trace looks correct.
+    acuity = a.acuity or _most_urgent(state, waiting)
     if acuity is None:
         return 0.0
     movable = min(waiting.get(acuity, 0.0), edge.throughput, a.amount or float("inf"))
@@ -355,7 +379,17 @@ class Engine:
                 left = waiting[acuity]
                 if left > 0:
                     rec.unmet[acuity] = rec.unmet.get(acuity, 0.0) + left
-                    rec.deaths += left * req.mortality_per_unmet
+                    # The dead leave the queue. Without this line they are
+                    # counted again every tick for the rest of the run: one
+                    # unserved critical patient produces 0.15 deaths a tick
+                    # forever, the toll is bounded by nothing, and the backlog
+                    # becomes a permanent debt no policy can pay down. Every
+                    # response then scores within a rounding error of doing
+                    # nothing — which is exactly what the first run against a
+                    # real twin showed.
+                    died = left * req.mortality_per_unmet
+                    rec.deaths += died
+                    waiting[acuity] = left - died
 
         for fid in self.state.facilities:
             rec.occupancy[fid] = self.state.occupancy_ratio(fid, SPACE)

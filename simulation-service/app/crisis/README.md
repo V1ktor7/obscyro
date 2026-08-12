@@ -117,6 +117,68 @@ pols = [PO["null"](), PO["load-balance"](), PO["surge-and-balance"]()]
 print(format_table(compare(toy_system(), SC["flood"](), pols, obj)))
 ```
 
+## Branché sur l'ontologie
+
+`examples/system.py` invente trois établissements. Le vrai monde de référence
+vient maintenant du jumeau :
+
+```
+GET  /v1/ontology/:env/twin/crisis-export     le jumeau, tel que le moteur le lit
+POST /v1/ontology/:env/twin/crisis-compare    lance, renvoie une ligne par réponse
+POST /crisis/compare                          le même, côté Python
+```
+
+Le backend fait la traduction, parce que c'est lui qui possède déjà les règles.
+**Rien n'est reconnu par son nom** : ce qui devient une capacité, un patient ou
+une route se lit sur les déclarations — `crisis_role` sur le type d'objet
+(migration 045), `aggregates`/`transitive` sur le type de lien (migration 044).
+Un hôpital qui appelle ses unités *pavillons* et son placement `héberge`
+s'exporte à l'identique.
+
+Ce qui traverse est une charge utile, pas une connexion. Le moteur reste une
+fonction pure de son entrée, et les deux moitiés se testent séparément.
+
+### Ce que l'ontologie ne peut pas fournir
+
+| manquant | pourquoi | où ça se règle |
+|---|---|---|
+| population desservie | aucune aire de desserte dans le jumeau | sur le lancement |
+| débit d'une route | un lien ne porte pas de capacité | sur le lancement |
+| modèle de soins | ce qu'une admission consomme, et qui meurt quand on la refuse | dans la crise |
+
+Les trois sont **refusés plutôt que devinés** (`UnrunnableExport`). Chacun
+produit sinon un résultat parfaitement lisible et faux : un réseau sans capacité
+ne refuse personne, ne tue personne, et classe toutes les réponses à égalité.
+
+### Les scénarios s'adaptent au système
+
+Un vrai jumeau nomme ses unités avec des UUID, donc `examples/scenarios.py` ne
+peut pas être pointé dessus. `templates.py` prend un `SystemState` et rend un
+`Scenario` ou une `Policy` ajustés aux identifiants réellement présents —
+volume calibré sur la capacité totale, une règle de transfert par route
+existante, un renfort par ressource. Le moteur n'est pas touché : ce qui sort
+est la même donnée pure qu'avant.
+
+## Trois défauts trouvés au premier branchement sur un vrai jumeau
+
+**Les morts ne quittaient pas la file.** Un patient non pris en charge mourait
+0,15 fois par tick et restait dans la file — donc remourait au tick suivant,
+indéfiniment. Le bilan n'était borné que par l'horizon, la file devenait une
+dette qu'aucune réponse ne pouvait rembourser, et **les trois politiques
+tombaient à 0,1 % les unes des autres**. Les chiffres publiés avant ce correctif
+(965 morts en pandémie, etc.) étaient gonflés.
+
+**Le transfert prenait la file la plus longue, pas la plus grave.** Il envoyait
+donc des cas de routine sur la seule route disponible ; ils prenaient les lits à
+l'arrivée, et les cas critiques qu'ils déplaçaient mouraient. La politique
+notait *moins bien* que ne rien faire, pendant que sa trace montrait une règle
+qui se déclenche et des patients qui bougent.
+
+**Le renfort visait la contrainte du premier jour.** Une unité à court
+d'infirmières qui devenait à court de lits continuait d'embaucher : 1,2 M
+dépensé, aucun patient de plus, cinquante-cinq déclenchements dans une trace
+d'apparence saine. Chaque ressource surveille maintenant sa propre rareté.
+
 ## Ce qui n'est pas fait
 
 - **Aucun optimiseur.** `evaluate(system, scenario, policy, objective, seed)` est
@@ -124,7 +186,11 @@ print(format_table(compare(toy_system(), SC["flood"](), pols, obj)))
 - **Aucune persistance, aucune interface.** Tout en mémoire, comme spécifié.
 - **Le mode de validation historique** — rejouer un événement réel et comparer à
   des données de terrain — reste à écrire.
-- **Rien ne lit l'ontologie.** Le monde de référence est construit à la main dans
-  `examples/system.py`. Le pont vers le jumeau réel (Institution, OrgUnit, Bed,
-  et les métriques déjà calculées) est le raccordement évident, et il n'existe
-  pas encore.
+- **Le service n'est pas déployé.** Le pont existe des deux côtés, mais tant que
+  `SIM_SERVICE_URL` ne pointe pas sur une instance de ce service,
+  `/twin/crisis-compare` répond 503. L'export, lui, marche sans lui.
+- **Un seul modèle de soins pour tout le réseau.** Une exigence globale ne peut
+  demander que ce que *chaque* établissement possède, sinon celui qui n'a pas
+  d'infirmière déclarée ne peut soigner personne. Tant que le modèle n'est pas
+  par établissement, un réseau hétérogène est décrit par son plus petit
+  dénominateur — et un manque de soins intensifs reste sous-évalué.

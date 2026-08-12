@@ -7,6 +7,8 @@ import type { DbClient } from "../lib/db.js";
 import { AppError, NotFound } from "../lib/errors.js";
 import { startSseStream } from "../lib/sse.js";
 import { recordAudit } from "../services/audit.js";
+import { buildCrisisExport } from "../services/crisis-export.js";
+import { proxyToSimService } from "../services/ml-simulation.js";
 import {
   deactivateTwinMetric,
   metricsForRollup,
@@ -98,6 +100,67 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
       return getTwinNetwork(req.db, env.id);
+    },
+  );
+
+  app.get(
+    "/ontology/:env/twin/crisis-export",
+    {
+      schema: {
+        summary: "The twin as the crisis engine reads it",
+        description:
+          "Units become facilities, whatever is attached to them becomes capacity or " +
+          "census according to the type's declared crisis role, and non-structural " +
+          "relationships become routes. Nothing is matched on a name. `gaps` lists " +
+          "what the ontology could not answer — routes with no throughput, " +
+          "populations with no size, types with no role — so a result is never " +
+          "read as if the model knew more than it does.",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1) }),
+        response: { 200: z.record(z.unknown()), 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      return { ...(await buildCrisisExport(req.db, env.id, req.params.env)) };
+    },
+  );
+
+  app.post(
+    "/ontology/:env/twin/crisis-compare",
+    {
+      schema: {
+        summary: "Run named policies against a named crisis on the live twin",
+        description:
+          "The system comes from the ontology; the crisis and the policies are named " +
+          "from the engine's catalogue. Returns one row per policy, worst last, so " +
+          "'doing nothing' can be read against the alternatives.",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1) }),
+        body: z.object({
+          scenario: z.string().min(1),
+          policies: z.array(z.string().min(1)).min(1),
+          seed: z.number().int().optional(),
+          /** Sizes the ontology cannot supply. Empty runs a hollow model. */
+          populationSizes: z.record(z.number().nonnegative()).default({}),
+          routeCapacity: z.number().nonnegative().default(0),
+        }),
+        response: { 200: z.record(z.unknown()), 404: errorEnvelope, 503: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const system = await buildCrisisExport(req.db, env.id, req.params.env);
+      return proxyToSimService("/crisis/compare", {
+        system,
+        scenario: req.body.scenario,
+        policies: req.body.policies,
+        seed: req.body.seed ?? null,
+        population_sizes: req.body.populationSizes,
+        route_capacity: req.body.routeCapacity,
+      });
     },
   );
 

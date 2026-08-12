@@ -444,11 +444,23 @@ export type LinkCardinality =
 
 export type ObjectNature = "physical" | "conceptual";
 
+/**
+ * What a type constrains when a crisis hits — the four S's, plus the demand
+ * that runs through them.
+ *
+ * Not derivable from : a ventilator and a patient record are both
+ * physical, and a cyberattack ruins one while leaving the other alone. A type
+ * with no role sits out of the simulation, which is the right answer for most
+ * of an ontology.
+ */
+export type CrisisRole = "space" | "staff" | "stuff" | "systems" | "demand";
+
 export interface EnvObjectType {
   id: string;
   name: string;
   description: string | null;
   nature: ObjectNature | null;
+  crisisRole: CrisisRole | null;
   propertySchema: { key: string; type: string; label?: string }[];
   createdAt: string;
 }
@@ -604,6 +616,7 @@ export async function createEnvType(
     name: string;
     description?: string;
     nature?: ObjectNature | null;
+    crisisRole?: CrisisRole | null;
     propertySchema?: PropertyDefinition[];
   },
 ): Promise<EnvObjectType> {
@@ -616,6 +629,7 @@ export async function updateEnvType(
   body: {
     description?: string | null;
     nature?: ObjectNature | null;
+    crisisRole?: CrisisRole | null;
     propertySchema?: PropertyDefinition[];
   },
 ): Promise<EnvObjectType> {
@@ -1600,6 +1614,75 @@ export async function listGeoUncovered(
 ): Promise<{ uncovered: UncoveredSite[] }> {
   const q = kind ? `?kind=${encodeURIComponent(kind)}` : "";
   return apiFetch(`/v1/ontology/${encEnv(env)}/geo/uncovered${q}`);
+}
+
+// --- Crisis simulation ------------------------------------------------------
+
+/** A fact the ontology could not supply, and what the export did instead. */
+export interface CrisisGap {
+  code:
+    | "TYPE_WITHOUT_ROLE"
+    | "NO_CARE_MODEL"
+    | "ROUTE_WITHOUT_CAPACITY"
+    | "POPULATION_WITHOUT_SIZE"
+    | "FACILITY_WITHOUT_RESOURCES";
+  message: string;
+  subjects: string[];
+}
+
+export interface CrisisExportResource {
+  id: string;
+  category: CrisisRole;
+  quantity: number;
+  capacity: number;
+  enables: string[];
+}
+
+export interface CrisisExportFacility {
+  id: string;
+  name: string;
+  location: [number, number] | null;
+  resources: Record<string, CrisisExportResource>;
+  census: Record<string, number>;
+}
+
+export interface CrisisExport {
+  environment: string;
+  generated_at: string;
+  facilities: CrisisExportFacility[];
+  populations: { id: string; name: string; size: number; served_by: string[] }[];
+  edges: { source: string; target: string; kind: string; capacity: number; via: string }[];
+  gaps: CrisisGap[];
+}
+
+export interface CrisisComparison {
+  scenario: { id: string; name: string; description: string; perturbations: string[] };
+  rows: Array<Record<string, string | number>>;
+  facilities: number;
+  horizon: number;
+  activities: string[];
+  weights: Record<string, number>;
+}
+
+/** The twin exactly as the engine reads it, gaps included. */
+export async function fetchCrisisExport(env: string): Promise<CrisisExport> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/crisis-export`);
+}
+
+export async function runCrisisComparison(
+  env: string,
+  body: {
+    scenario: string;
+    policies: string[];
+    seed?: number;
+    populationSizes?: Record<string, number>;
+    routeCapacity?: number;
+  },
+): Promise<CrisisComparison> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/crisis-compare`, {
+    method: "POST",
+    body,
+  });
 }
 
 export type { MeResult };

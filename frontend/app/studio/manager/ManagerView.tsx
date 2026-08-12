@@ -63,6 +63,7 @@ import {
   type EnvironmentType,
   type EnvTypeSummary,
   type LinkCardinality,
+  type CrisisRole,
   type ObjectNature,
   type OntologySummary,
   type PropertyDefinition,
@@ -824,9 +825,15 @@ export default function ManagerView() {
             setPanel("none");
             setPendingTypePos(null);
           }}
-          onSubmit={async (name, description, schema, nature) => {
+          onSubmit={async (name, description, schema, nature, crisisRole) => {
             if (!env) return;
-            await createEnvType(env, { name, description, nature, propertySchema: schema });
+            await createEnvType(env, {
+              name,
+              description,
+              nature,
+              crisisRole,
+              propertySchema: schema,
+            });
             if (pendingTypePos) {
               const next = { ...savedLayout, [name]: pendingTypePos };
               setSavedLayout(next);
@@ -898,11 +905,12 @@ export default function ManagerView() {
           mode="edit"
           initial={selectedTypeDef}
           onClose={() => setSelectedType(null)}
-          onSubmit={async (_name, description, schema, nature) => {
+          onSubmit={async (_name, description, schema, nature, crisisRole) => {
             if (!env) return;
             await updateEnvType(env, selectedTypeDef.name, {
               description,
               nature,
+              crisisRole,
               propertySchema: schema,
             });
             await loadTypes();
@@ -1993,6 +2001,23 @@ function PropertyRowsEditor({
 // Object-type editor panel (create + edit)
 // ---------------------------------------------------------------------------
 
+/**
+ * What each role changes, said in terms of consequences rather than definitions.
+ *
+ * The choice decides which perturbation reaches this type — a cyberattack hits
+ * `systems` and leaves `stuff` alone — so the hint names the crisis that would
+ * touch it. A definition ("staff means people") tells you nothing you could get
+ * wrong; a consequence does.
+ */
+const CRISIS_ROLE_HINT: Record<CrisisRole | "", string> = {
+  "": "Ce type n'entre pas dans la simulation. C'est la bonne réponse pour la plus grande partie d'une ontologie.",
+  space: "Compté comme capacité d'accueil. Une inondation le met à zéro ; un patient en occupe une unité.",
+  staff: "Compté comme main-d'œuvre. Une pandémie le fait baisser progressivement, une grève d'un coup.",
+  stuff: "Compté comme fournitures. Une rupture d'approvisionnement le réduit ; une cyberattaque ne le touche pas.",
+  systems: "Compté comme infrastructure. C'est ce qu'une cyberattaque dégrade, et rien d'autre.",
+  demand: "Compté comme des personnes à soigner, pas comme de la capacité. Ne consomme pas de lit en tant que ressource : il en occupe un.",
+};
+
 function TypeEditorPanel({
   mode,
   initial,
@@ -2009,6 +2034,7 @@ function TypeEditorPanel({
     description: string,
     schema: PropertyDefinition[],
     nature: ObjectNature | null,
+    crisisRole: CrisisRole | null,
   ) => Promise<void>;
   onDelete?: () => Promise<void>;
   onError: (msg: string) => void;
@@ -2016,6 +2042,7 @@ function TypeEditorPanel({
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [nature, setNature] = useState<ObjectNature | "">(initial?.nature ?? "");
+  const [crisisRole, setCrisisRole] = useState<CrisisRole | "">(initial?.crisisRole ?? "");
   const [rows, setRows] = useState<PropertyDefinition[]>(
     (initial?.propertySchema as PropertyDefinition[]) ?? [],
   );
@@ -2034,6 +2061,7 @@ function TypeEditorPanel({
         description.trim(),
         rows.filter((r) => r.key.trim()).map((r) => ({ ...r, key: r.key.trim() })),
         nature === "" ? null : nature,
+        crisisRole === "" ? null : crisisRole,
       );
     } catch (err) {
       onError((err as Error).message);
@@ -2076,6 +2104,23 @@ function TypeEditorPanel({
             <option value="physical">Physical — real-world extent, twin anchor (lat/lng)</option>
             <option value="conceptual">Conceptual — grouping/classifier, no footprint</option>
           </select>
+        </Labelled>
+        <Labelled label="Rôle en situation de crise">
+          <select
+            value={crisisRole}
+            onChange={(e) => setCrisisRole(e.target.value as CrisisRole | "")}
+            className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-xs text-ink focus:border-brand focus:outline-none"
+          >
+            <option value="">Hors simulation</option>
+            <option value="space">Espace — lits, salles, places</option>
+            <option value="staff">Personnel — soignants, techniciens</option>
+            <option value="stuff">Matériel — ventilateurs, oxygène, sang</option>
+            <option value="systems">Systèmes — dossier patient, réseau, courant</option>
+            <option value="demand">Demande — patients, cas</option>
+          </select>
+          <p className="mt-1.5 text-[11px] leading-snug text-ink-faint">
+            {CRISIS_ROLE_HINT[crisisRole]}
+          </p>
         </Labelled>
         <Labelled label="Properties">
           <PropertyRowsEditor rows={rows} onChange={setRows} />
