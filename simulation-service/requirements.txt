@@ -3,3 +3,8 @@
 fastapi==0.111.0
 uvicorn[standard]==0.30.1
 pydantic==2.7.1
+# Core, not an ML extra: the crisis layer's network backend needs it. It is
+# imported lazily inside NetworkxBackend, so leaving it out builds a healthy
+# image whose /health passes and whose first simulation raises ModuleNotFound —
+# a deploy that looks successful until somebody uses it.
+networkx==3.5
