@@ -653,7 +653,7 @@ export async function createEnvLinkType(
 export async function setLinkTypeBehaviour(
   env: string,
   name: string,
-  behaviour: LinkBehaviour,
+  behaviour: LinkBehaviour & { cardinality?: LinkCardinality },
 ): Promise<EnvLinkType> {
   return apiFetch(
     `/v1/ontology/${encodeURIComponent(env)}/link-types/${encodeURIComponent(name)}`,
@@ -1125,6 +1125,12 @@ export interface TwinNetworkSite extends TwinUnitNode {
   objectType: string | null;
   latitude: number | null;
   longitude: number | null;
+  /**
+   * The units this site's numbers are made of — only the topmost ones, since a
+   * ward inside a hospital placed at the same site is already in its subtree.
+   * Present so a figure can be traced instead of trusted.
+   */
+  contributingUnits: { id: string; name: string }[];
 }
 
 export interface TwinNetworkFlow {

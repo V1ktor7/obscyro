@@ -1369,7 +1369,14 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
           "creation — and it records an audit entry.",
         tags: ["ontology"],
         params: z.object({ env: z.string().min(1), name: z.string().min(1) }),
-        body: linkBehaviour,
+        body: linkBehaviour.extend({
+          // Documentary today — nothing enforces it — which is exactly why a
+          // wrong one is worth being able to correct. `sited_at` shipped as
+          // one_to_one while five units sat at the same building.
+          cardinality: z
+            .enum(["one_to_one", "one_to_many", "many_to_one", "many_to_many"])
+            .optional(),
+        }),
         response: { 200: linkTypeOut, 400: errorEnvelope, 404: errorEnvelope },
       },
     },
@@ -1397,11 +1404,18 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
       }
       checkBehaviour(req.body, row.from_type, row.to_type);
 
+      const cardinality = req.body.cardinality ?? row.cardinality;
       await req.db.query(
         `UPDATE app.ontology_link_types
-            SET aggregates = $2, aggregate_toward = $3, transitive = $4
+            SET aggregates = $2, aggregate_toward = $3, transitive = $4, cardinality = $5
           WHERE id = $1`,
-        [row.id, req.body.aggregates, req.body.aggregateToward, req.body.transitive],
+        [
+          row.id,
+          req.body.aggregates,
+          req.body.aggregateToward,
+          req.body.transitive,
+          cardinality,
+        ],
       );
       await recordAudit(req.db, {
         projectId: env.id,
@@ -1409,7 +1423,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         action: "ontology.set_link_behaviour",
         resourceType: "link_type",
         resourceId: row.id,
-        metadata: { linkType: req.params.name, ...req.body },
+        metadata: { linkType: req.params.name, ...req.body, cardinality },
       });
 
       return {
@@ -1417,8 +1431,8 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         name: req.params.name,
         fromType: row.from_type,
         toType: row.to_type,
-        cardinality: row.cardinality,
         ...req.body,
+        cardinality,
       };
     },
   );

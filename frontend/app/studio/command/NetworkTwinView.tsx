@@ -1498,6 +1498,31 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                 value={formatArea(selectedShape.areaM2)}
               />
             ) : null}
+
+            {/* Where the numbers above come from.
+                A site's figures are the sum of the units placed in it, and only
+                the topmost ones — a ward inside a hospital at the same address
+                is already counted through the hospital. Showing the list is how
+                you tell a real 82% from a plausible one. */}
+            {selected.contributingUnits.length > 0 ? (
+              <>
+                <p className="mb-1 mt-3 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-faint">
+                  Counted from · {selected.contributingUnits.length}
+                </p>
+                {selected.contributingUnits.map((u) => (
+                  <div
+                    key={u.id}
+                    className="flex items-center gap-1.5 border-b border-line-faint py-1 last:border-0 text-[11px] text-ink-body"
+                  >
+                    <span className="h-1 w-1 shrink-0 rounded-full bg-ink-ghost" />
+                    <span className="min-w-0 truncate">{u.name}</span>
+                  </div>
+                ))}
+                <p className="mt-1 text-[10px] leading-relaxed text-ink-faint">
+                  Units placed here. Anything inside one of them is already included.
+                </p>
+              </>
+            ) : null}
             {selectedFlows.length === 0 ? (
               <MetricRow label="Flows" value="none" last />
             ) : (

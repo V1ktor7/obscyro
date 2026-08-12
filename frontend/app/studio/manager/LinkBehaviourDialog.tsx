@@ -4,7 +4,19 @@ import { useState } from "react";
 import { Loader2, X } from "lucide-react";
 
 import { cn } from "@/lib/cn";
-import { setLinkTypeBehaviour, type EnvLinkType, type LinkBehaviour } from "@/lib/platform-api";
+import {
+  setLinkTypeBehaviour,
+  type EnvLinkType,
+  type LinkBehaviour,
+  type LinkCardinality,
+} from "@/lib/platform-api";
+
+const CARDINALITIES: { value: LinkCardinality; label: (from: string, to: string) => string }[] = [
+  { value: "many_to_one", label: (f, t) => `many ${f} → one ${t}` },
+  { value: "one_to_many", label: (f, t) => `one ${f} → many ${t}` },
+  { value: "one_to_one", label: (f, t) => `one ${f} → one ${t}` },
+  { value: "many_to_many", label: (f, t) => `many ${f} → many ${t}` },
+];
 
 // ---------------------------------------------------------------------------
 // What a relationship does.
@@ -36,6 +48,7 @@ export default function LinkBehaviourDialog({
     linkType.aggregateToward ?? "target",
   );
   const [transitive, setTransitive] = useState(linkType.transitive);
+  const [cardinality, setCardinality] = useState(linkType.cardinality);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,7 +68,12 @@ export default function LinkBehaviourDialog({
       transitive: aggregates ? transitive && chainable : false,
     };
     try {
-      onSaved(await setLinkTypeBehaviour(env, linkType.name, behaviour));
+      onSaved(
+        await setLinkTypeBehaviour(env, linkType.name, {
+          ...behaviour,
+          cardinality: cardinality as LinkCardinality,
+        }),
+      );
       onClose();
     } catch (err) {
       setError((err as Error).message);
@@ -92,6 +110,25 @@ export default function LinkBehaviourDialog({
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
           <p className="mb-3 text-[11px] text-ink-faint">
             {linkType.fromType} → {linkType.toType}
+          </p>
+
+          <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-faint">
+            How many on each side
+          </p>
+          <select
+            value={cardinality}
+            onChange={(e) => setCardinality(e.target.value)}
+            className="mb-1 w-full rounded border border-line bg-canvas px-2 py-1.5 text-xs text-ink focus:border-brand focus:outline-none"
+          >
+            {CARDINALITIES.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label(linkType.fromType, linkType.toType)}
+              </option>
+            ))}
+          </select>
+          <p className="mb-4 text-[10px] leading-relaxed text-ink-faint">
+            Nothing enforces this yet — it documents the intent. Which is why a wrong
+            one is worth fixing before something starts relying on it.
           </p>
 
           <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-faint">
