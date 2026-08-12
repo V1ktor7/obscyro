@@ -28,9 +28,56 @@ const readiness = z.object({
     thresholds: z.record(z.number()).optional(),
     error: z.string().optional(),
   }),
+  /**
+   * The simulation service, over the private network.
+   *
+   * Worth probing rather than assuming: the backend reaches it by an internal
+   * hostname that resolves only from inside Railway, so a wrong name or port is
+   * invisible from a developer's machine and from every test. The first symptom
+   * would otherwise be a 503 the moment somebody runs a crisis comparison.
+   * `crises` lists what the engine can run, which also proves the reply came
+   * from a service that has the crisis layer rather than an older image.
+   */
+  simulation: z.object({
+    configured: z.boolean(),
+    ok: z.boolean(),
+    latencyMs: z.number().optional(),
+    crises: z.array(z.string()).optional(),
+    error: z.string().optional(),
+  }),
 });
 
 const NLP_PROBE_TIMEOUT_MS = 3_000;
+
+type SimHealth = z.infer<typeof readiness>["simulation"];
+
+/** Probe the simulation service's crisis catalogue. Never throws. */
+async function probeSimulation(): Promise<SimHealth> {
+  const base = process.env.SIM_SERVICE_URL?.replace(/\/$/, "");
+  if (!base) return { configured: false, ok: false, error: "SIM_SERVICE_URL is not set." };
+
+  const start = process.hrtime.bigint();
+  try {
+    const res = await fetch(`${base}/crisis/catalogue`, {
+      signal: AbortSignal.timeout(NLP_PROBE_TIMEOUT_MS),
+    });
+    const latencyMs = Number(
+      (Number(process.hrtime.bigint() - start) / 1_000_000).toFixed(2),
+    );
+    if (!res.ok) {
+      return {
+        configured: true,
+        ok: false,
+        latencyMs,
+        error: `Simulation service returned HTTP ${res.status}.`,
+      };
+    }
+    const body = (await res.json().catch(() => ({}))) as { scenarios?: string[] };
+    return { configured: true, ok: true, latencyMs, crises: body.scenarios ?? [] };
+  } catch {
+    return { configured: true, ok: false, error: "Simulation service is unreachable." };
+  }
+}
 
 type NlpHealth = z.infer<typeof readiness>["nlp"];
 
@@ -122,17 +169,23 @@ const healthRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (req, reply) => {
       const nlpPromise = probeNlp();
+      const simPromise = probeSimulation();
       const start = process.hrtime.bigint();
       try {
         await req.db.query("SELECT 1");
         const latencyMs = Number(process.hrtime.bigint() - start) / 1_000_000;
-        const nlp = await nlpPromise;
+        const [nlp, simulation] = await Promise.all([nlpPromise, simPromise]);
         return reply.send({
-          // NLP down degrades extraction (jobs queue and retry) but the API
-          // itself is fine, so this stays a 200.
-          status: nlp.configured && !nlp.ok ? ("degraded" as const) : ("ok" as const),
+          // A configured-but-unreachable dependency degrades a feature, not the
+          // API: extraction jobs queue and retry, and a crisis comparison
+          // returns 503 while everything else keeps serving.
+          status:
+            (nlp.configured && !nlp.ok) || (simulation.configured && !simulation.ok)
+              ? ("degraded" as const)
+              : ("ok" as const),
           database: { ok: true, latencyMs: Number(latencyMs.toFixed(2)) },
           nlp,
+          simulation,
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -140,6 +193,7 @@ const healthRoutes: FastifyPluginAsync = async (fastify) => {
           status: "degraded" as const,
           database: { ok: false, error: message },
           nlp: await nlpPromise,
+          simulation: await simPromise,
         });
       }
     },
