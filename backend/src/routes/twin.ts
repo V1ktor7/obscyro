@@ -82,11 +82,13 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
     "/ontology/:env/twin/network",
     {
       schema: {
-        summary: "Network-level twin: geolocated root sites + typed inter-site flows",
+        summary: "Network-level twin: places, what is in them, and the flows between",
         description:
-          "Root units with metrics, alert rollups, and latitude/longitude read from " +
-          "instance properties (null when unset), plus flows — link instances that " +
-          "connect two sites, classified as patient / supply / data / other.",
+          "Sites are instances of types the institution tagged physical — the tree's " +
+          "roots only when nothing is tagged. Each carries the metrics of the units " +
+          "placed in it, and `contributingUnits` says which ones, so a number can be " +
+          "traced. Flows are link instances between two sites; a flow's lane is its " +
+          "link type, with no classification step.",
         tags: ["twin"],
         params: z.object({ env: z.string().min(1) }),
         response: { 200: z.record(z.unknown()), 404: errorEnvelope },

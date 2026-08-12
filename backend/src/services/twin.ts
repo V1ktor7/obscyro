@@ -382,7 +382,187 @@ export async function rollupAllUnits(
     metricsByUnit.set(unitId, m);
   }
 
+
   return metricsByUnit;
+}
+
+/**
+ * Which placed units a site should actually count.
+ *
+ * The whole point of this function is not to count a ward twice. Notre-Dame the
+ * building holds five units: the hospital, its emergency, a ward, a lab and a
+ * pharmacy. But the emergency is *inside* the hospital, so the hospital's
+ * subtree already contains its 48 beds — adding the emergency separately would
+ * report 96.
+ *
+ * So a unit is counted only when no ancestor of it sits at the same place. Kept
+ * pure and apart from the query because this is exactly the arithmetic that was
+ * wrong in the roll-up removed in 84601a5, and it deserves to be checkable
+ * without a database.
+ */
+export function topmostPlacements(
+  placedAt: ReadonlyMap<string, string>,
+  parentOf: ReadonlyMap<string, string>,
+): Map<string, string[]> {
+  const byPlace = new Map<string, string[]>();
+  for (const [unitId, placeId] of placedAt) {
+    // The `seen` set is not defensive programming: `contains` is transitive and
+    // a mis-ingested cycle would otherwise spin here forever.
+    const seen = new Set<string>([unitId]);
+    let covered = false;
+    let cur = parentOf.get(unitId);
+    while (cur && !seen.has(cur)) {
+      if (placedAt.get(cur) === placeId) {
+        covered = true;
+        break;
+      }
+      seen.add(cur);
+      cur = parentOf.get(cur);
+    }
+    if (covered) continue;
+    const list = byPlace.get(placeId) ?? [];
+    list.push(unitId);
+    byPlace.set(placeId, list);
+  }
+  return byPlace;
+}
+
+/** What a place's numbers are made of, so the number can explain itself. */
+export interface PlaceRollup {
+  metrics: UnitMetrics;
+  /**
+   * The units counted, and only the topmost ones. A ward placed at a site whose
+   * hospital is placed at the same site is already inside that hospital's
+   * subtree — listing both would double its beds.
+   */
+  contributingUnits: { id: string; name: string }[];
+}
+
+/**
+ * The place axis.
+ *
+ * The same beds answer two different questions. « How many beds does the CHUM
+ * run » follows the organisation, through `contains`. « How many beds are in
+ * this building » follows the placement, through whatever the institution
+ * declared — `sited_at` here. An institute affiliated with the CHUM but housed
+ * elsewhere counts in the first and not the second, and three labs in one
+ * building are three rows in the hierarchy and one dot on the map.
+ *
+ * Metrics are **recomputed** over the union of instances rather than combined
+ * from the units' own numbers. Occupancy is occupied over total; averaging two
+ * wards' percentages would weight a four-bed room like a forty-bed one. That
+ * mistake shipped once already, in the roll-up pass removed in 84601a5.
+ *
+ * Costs one more read of instances and links than the tree does. Kept separate
+ * and obvious rather than threaded through `rollupAllUnits`, because the two
+ * axes have to stay independently checkable.
+ */
+export async function rollupPlaces(
+  db: DbClient,
+  environmentId: string,
+  lens?: ReadLens,
+): Promise<Map<string, PlaceRollup>> {
+  const { nodes, edges } = await getUnitTree(db, environmentId, lens);
+  const unitIds = new Set(nodes.map((n) => n.id));
+  const nameById = new Map(nodes.map((n) => [n.id, n.name]));
+  const descendants = buildDescendantMap(unitIds, edges);
+  const parentOf = new Map(edges.map((e) => [e.toId, e.fromId]));
+
+  const allInstances = await listInstancesForEnv(db, environmentId, {
+    limit: config.rollupInstanceCap,
+    ...lens,
+  });
+  const links = await listLinksForEnv(db, environmentId, lens);
+  const instanceById = new Map(allInstances.map((i) => [i.id, i]));
+
+  // A place is an instance of a type the institution called physical. Nature is
+  // the same notion the map already uses to decide what is a site, so the two
+  // cannot disagree.
+  const { rows: physicalTypes } = await db.query<{ name: string }>(
+    `SELECT name FROM app.ontology_object_types
+      WHERE organization_id = (SELECT organization_id FROM app.project WHERE id = $1)
+        AND nature = 'physical'`,
+    [environmentId],
+  );
+  const physicalTypeNames = new Set(physicalTypes.map((r) => r.name));
+
+  // unit -> place, from any link that attaches and lands on a physical thing.
+  const placedAt = new Map<string, string>();
+  for (const link of links) {
+    if (!attaches(link)) continue;
+    const { receiver: placeId, giver: unitId } = aggregationEnds(link);
+    if (!unitIds.has(unitId)) continue;
+    const place = instanceById.get(placeId);
+    if (!place || !physicalTypeNames.has(place.typeName)) continue;
+    // First placement wins, deterministically: a unit sits in one building.
+    if (!placedAt.has(unitId)) placedAt.set(unitId, placeId);
+  }
+
+  const topmostByPlace = topmostPlacements(placedAt, parentOf);
+
+  // Instances hanging off each unit, by the same rule the tree uses.
+  const attachedToUnit = new Map<string, typeof allInstances>();
+  for (const link of links) {
+    if (!attaches(link)) continue;
+    const { receiver: unitId, giver: instanceId } = aggregationEnds(link);
+    if (!unitIds.has(unitId)) continue;
+    const inst = instanceById.get(instanceId);
+    if (!inst) continue;
+    const list = attachedToUnit.get(unitId) ?? [];
+    list.push(inst);
+    attachedToUnit.set(unitId, list);
+  }
+
+  const { rows: orgRows } = await db.query<{ organization_id: string }>(
+    `SELECT organization_id FROM app.project WHERE id = $1`,
+    [environmentId],
+  );
+  const metricDefs = orgRows[0]?.organization_id
+    ? await metricsForRollup(db, orgRows[0].organization_id)
+    : [];
+
+  const now = Date.now();
+  const out = new Map<string, PlaceRollup>();
+
+  for (const [placeId, units] of topmostByPlace) {
+    const linked: typeof allInstances = [];
+    for (const unitId of units) {
+      for (const d of descendants.get(unitId) ?? new Set([unitId])) {
+        linked.push(...(attachedToUnit.get(d) ?? []));
+      }
+    }
+
+    const m = emptyMetrics(placeId);
+    m.linkedInstanceCount = linked.length;
+
+    let newest: Date | null = null;
+    const numericAcc = new Map<string, { sum: number; count: number }>();
+    for (const inst of linked) {
+      m.instanceCountByType[inst.typeName] = (m.instanceCountByType[inst.typeName] ?? 0) + 1;
+      if (!newest || inst.updatedAt > newest) newest = inst.updatedAt;
+      for (const prop of inst.propertySchema) {
+        if (prop.type !== "number") continue;
+        const val = inst.properties[prop.key];
+        if (typeof val !== "number" || !Number.isFinite(val)) continue;
+        const acc = numericAcc.get(prop.key) ?? { sum: 0, count: 0 };
+        acc.sum += val;
+        acc.count++;
+        numericAcc.set(prop.key, acc);
+      }
+    }
+
+    for (const def of metricDefs) m.values[def.key] = evaluateMetric(def, linked);
+    m.occupancyPct = m.values.occupancy ?? null;
+    if (newest) m.freshnessSeconds = Math.round((now - newest.getTime()) / 1000);
+    for (const [key, acc] of numericAcc) m.numericMeans[key] = acc.sum / acc.count;
+
+    out.set(placeId, {
+      metrics: m,
+      contributingUnits: units.map((id) => ({ id, name: nameById.get(id) ?? id })),
+    });
+  }
+
+  return out;
 }
 
 export interface UnitExchange {
@@ -865,7 +1045,23 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
   );
   const physicalById = new Map(physical.rows.map((r) => [r.id, r]));
 
-  const siteIds = Array.from(new Set([...physicalById.keys(), ...snapshot.roots]));
+  // A fallback, and now actually one.
+  //
+  // This used to be a union: physical instances *plus* the tree's roots. So an
+  // environment that tagged its natures got both, and the same hospital
+  // appeared twice — once as a geolocated building with no metrics, once as an
+  // org unit with metrics and no coordinates. That is where "22 sites" and
+  // "13 sites without coordinates" came from: the second list is organisational
+  // units, which have no reason to hold a latitude.
+  //
+  // Roots are used only when nothing is tagged physical, which is what the
+  // fallback was always for.
+  const siteIds =
+    physicalById.size > 0 ? Array.from(physicalById.keys()) : Array.from(snapshot.roots);
+
+  // Numbers on the place axis: what is *in* this building, however many
+  // organisational units that spans.
+  const places = await rollupPlaces(db, environmentId);
 
   const coords = new Map<string, { latitude: number | null; longitude: number | null }>();
   const propsById = new Map<string, Record<string, unknown>>();
@@ -915,13 +1111,16 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
   const sites = siteIds.map((id) => {
     const node = nodeById.get(id);
     const phys = physicalById.get(id);
+    const place = places.get(id);
     const base = node ?? {
       id,
       name: siteName(id),
       kind: phys?.type_name ?? "site",
       code: "",
       parentId: null,
-      metrics: emptyMetrics(id),
+      // A building's own numbers come from what is placed in it, not from a
+      // tree it does not belong to.
+      metrics: place?.metrics ?? emptyMetrics(id),
       worstAlertSeverity: null,
       openAlertCount: 0,
     };
@@ -930,6 +1129,10 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
       objectType: typeById.get(id) ?? null,
       latitude: coords.get(id)?.latitude ?? null,
       longitude: coords.get(id)?.longitude ?? null,
+      // Where the number came from. A configurable aggregation that cannot show
+      // its working is a machine for producing plausible wrong answers, and
+      // this map has produced two of those already.
+      contributingUnits: place?.contributingUnits ?? [],
     };
   });
 
