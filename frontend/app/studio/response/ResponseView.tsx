@@ -163,11 +163,11 @@ export default function ResponseView() {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <div className="max-w-md text-center">
-          <p className="text-sm font-medium text-ink">Aucun flux de travail défini</p>
+          <p className="text-sm font-medium text-ink">No workflows defined</p>
           <p className="mt-2 text-xs leading-relaxed text-ink-muted">
-            Un signal ne peut exister sans un flux à traverser. Installe le jeu de départ pour
-            commencer — ce sont des lignes ordinaires que tu renommes ou supprimes ensuite, rien
-            dans le moteur n&apos;en dépend.
+            A signal cannot exist without a workflow to travel through. Install the starter set
+            to begin — they are ordinary rows you can rename or delete afterwards, and nothing in
+            the engine depends on them.
           </p>
           <button
             type="button"
@@ -349,7 +349,7 @@ export default function ResponseView() {
             </div>
           ) : (
             <p className="p-6 text-center text-xs text-ink-faint">
-              Aucun type de signal dans ce domaine.
+              No signal types in this domain.
             </p>
           )}
         </section>
@@ -637,12 +637,12 @@ function Detail({
         ) : null}
       </div>
 
-      {/* options — honnêtement vide */}
+      {/* options — honestly empty */}
       <div className="border-b border-line-soft px-3 py-2.5">
         <p className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">Options</p>
         <p className="mt-1 text-[10.5px] leading-snug text-ink-faint">
-          Aucune règle de réponse n&apos;est implémentée. La table existe, le moteur ne calcule
-          encore aucun candidat — mieux vaut le dire que d&apos;inventer des options.
+          No response rules are implemented. The table exists, but the engine computes no
+          candidates yet — better to say so than to invent options.
         </p>
       </div>
 

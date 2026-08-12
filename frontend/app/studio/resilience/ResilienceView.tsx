@@ -1,15 +1,19 @@
 "use client";
 
 /**
- * The crisis layer, pointed at the real twin.
+ * Stress-testing the twin against an event.
  *
- * The screen is deliberately ordered against the temptation it creates. A
- * comparison table that says one response saves four hundred lives is the most
- * quotable object this platform produces, and it is computed from an ontology
- * that does not know how many people a hospital serves or how many patients a
- * road can carry. So the reading comes first, the holes come second, and the
- * run button is only offered once the holes that would silently decide the
- * answer have been filled.
+ * The screen is deliberately ordered against the temptation it creates. A table
+ * saying one response saves four hundred lives is the most quotable object this
+ * platform produces, and it is computed from an ontology that does not know how
+ * many people a hospital serves or how many patients a road can carry. So the
+ * reading comes first, the holes come second, and the run button is only
+ * offered once the holes that would silently decide the answer are filled.
+ *
+ * The copy says "event", not "crisis". Nothing in the engine tests whether a
+ * change is bad: a capacity multiplier above 1 is a wing opening, not a wing
+ * lost. Calling every input a crisis would tell someone modelling a merger that
+ * this screen is not for them.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -24,23 +28,47 @@ import {
 import { useStudio } from "../StudioShell";
 
 const ROLE_LABEL: Record<string, string> = {
-  space: "Espace",
-  staff: "Personnel",
-  stuff: "Matériel",
-  systems: "Systèmes",
-  demand: "Demande",
+  space: "Space",
+  staff: "Staff",
+  stuff: "Supplies",
+  systems: "Systems",
+  demand: "Demand",
 };
 
-const SCENARIOS = [
-  { id: "pandemic", label: "Pandémie", hint: "Vague respiratoire, personnel qui tombe malade derrière." },
-  { id: "flood", label: "Inondation", hint: "Un site noyé, ses routes coupées, afflux de traumatismes." },
-  { id: "cyberattack", label: "Cyberattaque", hint: "Systèmes dégradés. Rien d'autre n'est touché." },
+const EVENTS = [
+  {
+    id: "pandemic",
+    label: "Pandemic wave",
+    hint: "Respiratory cases surge across every population, with staff falling sick behind the curve.",
+  },
+  {
+    id: "flood",
+    label: "Flood",
+    hint: "One site loses all capacity and its routes are cut, while trauma arrives everywhere.",
+  },
+  {
+    id: "cyberattack",
+    label: "Cyberattack",
+    hint: "Systems degrade network-wide. Nothing else is touched — whatever follows travels through the cascade.",
+  },
 ];
 
-const POLICIES = [
-  { id: "null", label: "Ne rien faire", hint: "La référence. Sans elle, un classement dit quelle option est la moins mauvaise, pas si l'une a aidé." },
-  { id: "load-balance", label: "Transférer", hint: "Déplacer les plus graves vers qui a de la place." },
-  { id: "surge-and-balance", label: "Renforcer puis transférer", hint: "Acheter de la capacité là où elle manque. Arrive avec trois pas de retard." },
+const RESPONSES = [
+  {
+    id: "null",
+    label: "Do nothing",
+    hint: "The baseline. Without it a ranking tells you which option is least bad, not whether any of them helped.",
+  },
+  {
+    id: "load-balance",
+    label: "Transfer patients",
+    hint: "Move the most urgent cases to whoever still has room. Cheap, immediate, limited by the routes.",
+  },
+  {
+    id: "surge-and-balance",
+    label: "Add capacity, then transfer",
+    hint: "Buy whatever is short at each site. Arrives three steps late and costs real money.",
+  },
 ];
 
 /** Gaps that make a result meaningless rather than merely narrower. */
@@ -52,8 +80,12 @@ export default function ResilienceView() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [scenario, setScenario] = useState("pandemic");
-  const [policies, setPolicies] = useState<string[]>(["null", "load-balance", "surge-and-balance"]);
+  const [event, setEvent] = useState("pandemic");
+  const [responses, setResponses] = useState<string[]>([
+    "null",
+    "load-balance",
+    "surge-and-balance",
+  ]);
   const [sizes, setSizes] = useState<Record<string, string>>({});
   const [routeCapacity, setRouteCapacity] = useState("10");
   const [result, setResult] = useState<CrisisComparison | null>(null);
@@ -90,17 +122,17 @@ export default function ResilienceView() {
 
   const blocking = (snapshot?.gaps ?? []).filter((g) => BLOCKING.includes(g.code));
   const advisory = (snapshot?.gaps ?? []).filter((g) => !BLOCKING.includes(g.code));
+  const noCapacity = Object.keys(totals.byRole).length === 0;
 
-  const sizedPopulations = (snapshot?.populations ?? []).filter(
-    (p) => Number(sizes[p.id] ?? "0") > 0,
-  );
-  // Both holes have to be filled by hand, so the button says which one is still
+  const sized = (snapshot?.populations ?? []).filter((p) => Number(sizes[p.id] ?? "0") > 0);
+  // Each hole has to be filled by hand, so the button says which one is still
   // open rather than sitting greyed out with no explanation.
-  const blockedBecause =
-    sizedPopulations.length === 0
-      ? "Renseigne au moins une population desservie."
+  const blockedBecause = noCapacity
+    ? "No object type carries capacity yet — set a resilience role on your types first."
+    : sized.length === 0
+      ? "Enter how many people at least one site serves."
       : snapshot && snapshot.edges.length > 0 && Number(routeCapacity) <= 0
-        ? "Renseigne le débit des routes, sinon aucun transfert ne peut aboutir."
+        ? "Enter how many patients a route can carry, or no transfer can complete."
         : null;
 
   async function run() {
@@ -115,8 +147,8 @@ export default function ResilienceView() {
       }
       setResult(
         await runCrisisComparison(env, {
-          scenario,
-          policies,
+          scenario: event,
+          policies: responses,
           populationSizes,
           routeCapacity: Number(routeCapacity) || 0,
         }),
@@ -132,12 +164,11 @@ export default function ResilienceView() {
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-canvas">
       <header className="border-b border-line bg-white px-6 py-4">
-        <h1 className="text-sm font-medium text-ink">Résilience</h1>
+        <h1 className="text-sm font-medium text-ink">Resilience</h1>
         <p className="mt-1 max-w-3xl text-xs leading-relaxed text-ink-faint">
-          Ton ontologie, envoyée telle quelle au moteur de crise. Les
-          établissements, leurs capacités et les routes viennent du jumeau ; ce
-          qu&apos;une admission consomme et ce qui arrive quand elle est refusée
-          vient de la crise, parce qu&apos;aucune ontologie ne le contient.
+          Put your network through an event that has not happened, and find out
+          which response comes out ahead. Same question every time: if this hits,
+          what does it cost, and does acting beat standing still?
         </p>
       </header>
 
@@ -148,41 +179,56 @@ export default function ResilienceView() {
       ) : null}
 
       {loading ? (
-        <p className="px-6 py-6 text-xs text-ink-faint">Lecture du jumeau…</p>
+        <p className="px-6 py-6 text-xs text-ink-faint">Reading your twin…</p>
       ) : !snapshot ? null : (
         <div className="grid gap-4 p-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="flex flex-col gap-4">
-            <Card title="Ce que le moteur voit">
+            {result ? null : <HowItWorks />}
+
+            <Card title="What the engine reads from your twin">
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <Stat label="Établissements" value={snapshot.facilities.length} />
-                <Stat label="Routes" value={snapshot.edges.length} />
-                <Stat label="Populations" value={snapshot.populations.length} />
-                <Stat label="Patients présents" value={Math.round(totals.census)} />
+                <Stat label="Facilities" value={snapshot.facilities.length} />
+                <Stat label="Routes between them" value={snapshot.edges.length} />
+                <Stat label="Catchments" value={snapshot.populations.length} />
+                <Stat label="Patients already in" value={Math.round(totals.census)} />
               </div>
-              {Object.keys(totals.byRole).length === 0 ? (
+              {noCapacity ? (
                 <p className="mt-4 rounded-md border border-warn/30 bg-warn/5 px-3 py-2 text-xs leading-relaxed text-ink">
-                  Aucun type d&apos;objet ne déclare de rôle de crise, donc rien
-                  ne porte de capacité. Une simulation lancée ainsi ne refuserait
-                  personne, ne tuerait personne, et classerait toutes les
-                  réponses à égalité. Le rôle se règle sur le type, dans
-                  Ontologie → Manager.
+                  No object type declares a resilience role, so nothing in your
+                  twin carries capacity. A run like this would turn nobody away,
+                  kill nobody, and rank every response as a tie — a clean table
+                  that means nothing. Open{" "}
+                  <strong className="font-medium">Ontology → Manager</strong>,
+                  edit the type that represents your beds, and set its role to
+                  Space.
                 </p>
               ) : (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {Object.entries(totals.byRole).map(([role, cap]) => (
-                    <span
-                      key={role}
-                      className="rounded-md border border-line bg-canvas px-2 py-1 text-[11px] text-ink"
-                    >
-                      {ROLE_LABEL[role] ?? role} · {Math.round(cap)}
-                    </span>
-                  ))}
-                </div>
+                <>
+                  <p className="mt-4 text-[11px] leading-relaxed text-ink-faint">
+                    Capacity by role, totalled across every facility. These come
+                    from the roles you set on your object types — not from any
+                    name the engine recognises.
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {Object.entries(totals.byRole).map(([role, cap]) => (
+                      <span
+                        key={role}
+                        className="rounded-md border border-line bg-canvas px-2 py-1 text-[11px] text-ink"
+                      >
+                        {ROLE_LABEL[role] ?? role} · {Math.round(cap)}
+                      </span>
+                    ))}
+                  </div>
+                </>
               )}
             </Card>
 
             {advisory.length > 0 ? (
-              <Card title="Ce que l'ontologie ne dit pas">
+              <Card title="What your ontology does not say">
+                <p className="mb-3 text-[11px] leading-relaxed text-ink-faint">
+                  Listed rather than guessed. A twin records what exists; these
+                  are the things it has no way to know.
+                </p>
                 <ul className="flex flex-col gap-3">
                   {advisory.map((g) => (
                     <li key={g.code} className="text-xs leading-relaxed text-ink-faint">
@@ -190,7 +236,7 @@ export default function ResilienceView() {
                       {g.subjects.length > 0 ? (
                         <span className="mt-1 block text-[11px] text-ink-ghost">
                           {g.subjects.slice(0, 8).join(", ")}
-                          {g.subjects.length > 8 ? ` +${g.subjects.length - 8}` : ""}
+                          {g.subjects.length > 8 ? ` +${g.subjects.length - 8} more` : ""}
                         </span>
                       ) : null}
                     </li>
@@ -203,21 +249,21 @@ export default function ResilienceView() {
           </div>
 
           <div className="flex flex-col gap-4">
-            <Card title="Crise">
+            <Card title="1 · Pick an event">
               <div className="flex flex-col gap-2">
-                {SCENARIOS.map((s) => (
-                  <label key={s.id} className="flex cursor-pointer gap-2">
+                {EVENTS.map((e) => (
+                  <label key={e.id} className="flex cursor-pointer gap-2">
                     <input
                       type="radio"
-                      name="scenario"
-                      checked={scenario === s.id}
-                      onChange={() => setScenario(s.id)}
+                      name="event"
+                      checked={event === e.id}
+                      onChange={() => setEvent(e.id)}
                       className="mt-0.5"
                     />
                     <span>
-                      <span className="block text-xs text-ink">{s.label}</span>
+                      <span className="block text-xs text-ink">{e.label}</span>
                       <span className="block text-[11px] leading-snug text-ink-faint">
-                        {s.hint}
+                        {e.hint}
                       </span>
                     </span>
                   </label>
@@ -225,16 +271,16 @@ export default function ResilienceView() {
               </div>
             </Card>
 
-            <Card title="Réponses à comparer">
+            <Card title="2 · Pick the responses to compare">
               <div className="flex flex-col gap-2">
-                {POLICIES.map((p) => (
+                {RESPONSES.map((p) => (
                   <label key={p.id} className="flex cursor-pointer gap-2">
                     <input
                       type="checkbox"
-                      checked={policies.includes(p.id)}
-                      onChange={(e) =>
-                        setPolicies((prev) =>
-                          e.target.checked
+                      checked={responses.includes(p.id)}
+                      onChange={(ev) =>
+                        setResponses((prev) =>
+                          ev.target.checked
                             ? [...prev, p.id]
                             : prev.filter((x) => x !== p.id),
                         )
@@ -252,17 +298,16 @@ export default function ResilienceView() {
               </div>
             </Card>
 
-            {blocking.length > 0 ? (
-              <Card title="À renseigner">
+            {blocking.length > 0 && !noCapacity ? (
+              <Card title="3 · Fill in what the twin cannot know">
                 <p className="mb-3 text-[11px] leading-relaxed text-ink-faint">
-                  Deux chiffres que le jumeau ne porte pas et qui décident du
-                  résultat. Laissés à zéro, la simulation tourne et ne veut rien
-                  dire.
+                  Two numbers that decide the result and that no ontology holds.
+                  Left at zero the run still completes and tells you nothing.
                 </p>
                 {snapshot.populations.length > 0 ? (
                   <div className="mb-3 flex flex-col gap-2">
                     <span className="text-[11px] font-medium text-ink">
-                      Population desservie
+                      People each site serves
                     </span>
                     {snapshot.populations.map((p) => (
                       <label key={p.id} className="flex items-center gap-2">
@@ -285,7 +330,7 @@ export default function ResilienceView() {
                 {snapshot.edges.length > 0 ? (
                   <label className="flex items-center gap-2">
                     <span className="flex-1 text-[11px] text-ink-faint">
-                      Patients transférables par pas de temps, par route
+                      Patients one route can carry per step
                     </span>
                     <input
                       inputMode="numeric"
@@ -301,10 +346,10 @@ export default function ResilienceView() {
             <button
               type="button"
               onClick={run}
-              disabled={running || !!blockedBecause || policies.length === 0}
+              disabled={running || !!blockedBecause || responses.length === 0}
               className="rounded-md bg-brand px-3 py-2 text-xs text-white hover:bg-brand-deep disabled:bg-ink-ghost"
             >
-              {running ? "Simulation…" : "Comparer les réponses"}
+              {running ? "Running…" : "Compare responses"}
             </button>
             {blockedBecause ? (
               <p className="-mt-2 text-[11px] leading-snug text-ink-faint">
@@ -318,32 +363,75 @@ export default function ResilienceView() {
   );
 }
 
+/**
+ * Shown until the first result, then it gets out of the way.
+ *
+ * Present because the screen is not self-evident: nothing else in the platform
+ * asks you to choose a disaster, and without this the three panels on the right
+ * read as unrelated settings.
+ */
+function HowItWorks() {
+  const steps = [
+    {
+      title: "Your twin becomes a network",
+      body: "Every unit turns into a facility, and whatever is attached to it becomes capacity — beds, staff, equipment — according to the resilience role you set on each object type. Relationships that are not structural become the routes between facilities.",
+    },
+    {
+      title: "An event perturbs it",
+      body: "Not modelled by what it is called, but by what it does: demand rises somewhere, a resource falls somewhere, a connection breaks somewhere. A pandemic and a flood are the same three verbs with different numbers, which is why one engine handles both.",
+    },
+    {
+      title: "Each response is scored against doing nothing",
+      body: "A response is a set of rules — transfer when full, add capacity when short. The engine runs the event forward step by step, applies the rules, and counts what it cost: lives, care not delivered, money. Doing nothing is always in the table so you can see whether acting helped at all.",
+    },
+  ];
+  return (
+    <Card title="What this screen does">
+      <ol className="flex flex-col gap-3">
+        {steps.map((s, i) => (
+          <li key={s.title} className="flex gap-3">
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-line text-[11px] tabular-nums text-ink-faint">
+              {i + 1}
+            </span>
+            <span>
+              <span className="block text-xs text-ink">{s.title}</span>
+              <span className="block text-[11px] leading-relaxed text-ink-faint">
+                {s.body}
+              </span>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </Card>
+  );
+}
+
 function Results({ result }: { result: CrisisComparison }) {
   const columns = ["excess_deaths", "unmet_care", "response_cost"] as const;
   const label: Record<string, string> = {
-    excess_deaths: "Morts",
-    unmet_care: "Soins non rendus",
-    response_cost: "Coût",
+    excess_deaths: "Deaths",
+    unmet_care: "Care not delivered",
+    response_cost: "Cost",
   };
   const baseline = result.rows.find((r) => r.policy === "null");
 
   return (
-    <Card title={`Résultat — ${result.scenario.name}`}>
+    <Card title={`Result — ${result.scenario.name}`}>
       <p className="mb-3 text-[11px] leading-relaxed text-ink-faint">
-        {result.scenario.description} Horizon {result.horizon} pas,{" "}
-        {result.facilities} établissements.
+        {result.scenario.description} Run over {result.horizon} steps across{" "}
+        {result.facilities} facilities.
       </p>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-line text-left text-[11px] text-ink-faint">
-              <th className="py-1.5 pr-3 font-medium">Réponse</th>
+              <th className="py-1.5 pr-3 font-medium">Response</th>
               {columns.map((c) => (
                 <th key={c} className="py-1.5 pr-3 text-right font-medium">
                   {label[c]}
                 </th>
               ))}
-              <th className="py-1.5 text-right font-medium">vs rien</th>
+              <th className="py-1.5 text-right font-medium">vs doing nothing</th>
             </tr>
           </thead>
           <tbody>
@@ -357,13 +445,13 @@ function Results({ result }: { result: CrisisComparison }) {
                     {String(row.name || row.policy)}
                     {i === 0 && result.rows.length > 1 ? (
                       <span className="ml-2 rounded bg-ok/10 px-1.5 py-0.5 text-[10px] text-ok">
-                        meilleure
+                        best
                       </span>
                     ) : null}
                   </td>
                   {columns.map((c) => (
                     <td key={c} className="py-1.5 pr-3 text-right tabular-nums text-ink">
-                      {Math.round(Number(row[c] ?? 0)).toLocaleString("fr-CA")}
+                      {Math.round(Number(row[c] ?? 0)).toLocaleString("en-CA")}
                     </td>
                   ))}
                   <td className="py-1.5 text-right tabular-nums">
@@ -372,7 +460,7 @@ function Results({ result }: { result: CrisisComparison }) {
                     ) : (
                       <span className={delta < 0 ? "text-ok" : "text-danger"}>
                         {delta > 0 ? "+" : ""}
-                        {Math.round(delta * 100)} %
+                        {Math.round(delta * 100)}%
                       </span>
                     )}
                   </td>
@@ -383,10 +471,10 @@ function Results({ result }: { result: CrisisComparison }) {
         </table>
       </div>
       <p className="mt-3 text-[11px] leading-relaxed text-ink-faint">
-        Le score pèse une mort contre{" "}
-        {Math.round(1 / (result.weights.response_cost || 1)).toLocaleString("fr-CA")} $
-        de dépense. C&apos;est un arbitrage, pas un fait : change-le et le
-        classement peut changer.
+        Ranked by a score that weighs one death against{" "}
+        {Math.round(1 / (result.weights.response_cost || 1)).toLocaleString("en-CA")}{" "}
+        dollars of spending. That is a judgement, not a fact — change it and the
+        ranking can change with it.
       </p>
     </Card>
   );
@@ -404,7 +492,7 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-md border border-line bg-canvas px-3 py-2">
-      <div className="text-lg tabular-nums text-ink">{value.toLocaleString("fr-CA")}</div>
+      <div className="text-lg tabular-nums text-ink">{value.toLocaleString("en-CA")}</div>
       <div className="text-[11px] text-ink-faint">{label}</div>
     </div>
   );

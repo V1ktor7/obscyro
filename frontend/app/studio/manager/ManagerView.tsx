@@ -2002,20 +2002,20 @@ function PropertyRowsEditor({
 // ---------------------------------------------------------------------------
 
 /**
- * What each role changes, said in terms of consequences rather than definitions.
+ * What each role changes, said as a consequence rather than a definition.
  *
  * The choice decides which perturbation reaches this type — a cyberattack hits
- * `systems` and leaves `stuff` alone — so the hint names the crisis that would
- * touch it. A definition ("staff means people") tells you nothing you could get
- * wrong; a consequence does.
+ * `systems` and leaves `stuff` alone — so each hint names an event that would
+ * touch it. "Staff means people" tells you nothing you could get wrong; "a
+ * strike takes it away all at once" does.
  */
 const CRISIS_ROLE_HINT: Record<CrisisRole | "", string> = {
-  "": "Ce type n'entre pas dans la simulation. C'est la bonne réponse pour la plus grande partie d'une ontologie.",
-  space: "Compté comme capacité d'accueil. Une inondation le met à zéro ; un patient en occupe une unité.",
-  staff: "Compté comme main-d'œuvre. Une pandémie le fait baisser progressivement, une grève d'un coup.",
-  stuff: "Compté comme fournitures. Une rupture d'approvisionnement le réduit ; une cyberattaque ne le touche pas.",
-  systems: "Compté comme infrastructure. C'est ce qu'une cyberattaque dégrade, et rien d'autre.",
-  demand: "Compté comme des personnes à soigner, pas comme de la capacité. Ne consomme pas de lit en tant que ressource : il en occupe un.",
+  "": "This type stays out of the simulation. That is the right answer for most of an ontology.",
+  space: "Counted as room to admit people. A flood sets it to zero; each patient occupies one unit of it.",
+  staff: "Counted as workforce. A pandemic erodes it gradually, a strike removes it all at once.",
+  stuff: "Counted as supplies. A shortage reduces it; a cyberattack leaves it alone.",
+  systems: "Counted as infrastructure. This is what a cyberattack degrades, and nothing else is.",
+  demand: "Counted as people needing care, not as capacity. It does not provide a bed — it takes one.",
 };
 
 function TypeEditorPanel({
@@ -2105,18 +2105,18 @@ function TypeEditorPanel({
             <option value="conceptual">Conceptual — grouping/classifier, no footprint</option>
           </select>
         </Labelled>
-        <Labelled label="Rôle en situation de crise">
+        <Labelled label="Resilience role">
           <select
             value={crisisRole}
             onChange={(e) => setCrisisRole(e.target.value as CrisisRole | "")}
             className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-xs text-ink focus:border-brand focus:outline-none"
           >
-            <option value="">Hors simulation</option>
-            <option value="space">Espace — lits, salles, places</option>
-            <option value="staff">Personnel — soignants, techniciens</option>
-            <option value="stuff">Matériel — ventilateurs, oxygène, sang</option>
-            <option value="systems">Systèmes — dossier patient, réseau, courant</option>
-            <option value="demand">Demande — patients, cas</option>
+            <option value="">Not simulated</option>
+            <option value="space">Space — beds, rooms, places</option>
+            <option value="staff">Staff — clinicians, technicians</option>
+            <option value="stuff">Supplies — ventilators, oxygen, blood</option>
+            <option value="systems">Systems — records, network, power</option>
+            <option value="demand">Demand — patients, cases</option>
           </select>
           <p className="mt-1.5 text-[11px] leading-snug text-ink-faint">
             {CRISIS_ROLE_HINT[crisisRole]}
