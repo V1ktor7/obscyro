@@ -213,7 +213,6 @@ export function sectionForPath(pathname: string): NavSection | null {
     "/studio/response": "twin",
     "/studio/command": "twin",
     "/studio/live": "twin",
-    "/studio/crisis": "twin",
     "/studio/events": "twin",
     "/studio/simulation": "twin",
     "/studio/flux": "health",
