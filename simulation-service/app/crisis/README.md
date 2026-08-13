@@ -150,6 +150,36 @@ Les trois sont **refusés plutôt que devinés** (`UnrunnableExport`). Chacun
 produit sinon un résultat parfaitement lisible et faux : un réseau sans capacité
 ne refuse personne, ne tue personne, et classe toutes les réponses à égalité.
 
+### Composer un événement
+
+Trois crises en conserve, c'est une démonstration. `POST /crisis/compare` accepte
+désormais **soit** `scenario` (un nom de gabarit) **soit** `event` (un événement
+écrit à la main), et exactement l'un des deux — les envoyer tous les deux
+laisserait à l'endpoint le soin de deviner. Les événements composés sont
+persistés côté plateforme (`app.crisis_event`, migration 046) et se rédigent
+dans l'écran Résilience.
+
+Deux corrections rendaient cela possible :
+
+**La demande peut baisser.** `volume` était un `NonNegativeFloat`, donc les
+seuls événements exprimables étaient ceux qui aggravent. Une campagne de
+vaccination, un dépistage, un déclin démographique n'avaient nulle part où
+s'écrire — sinon déguisés en *politique*, ce qu'ils ne sont pas : ce sont des
+faits sur le monde, et ils apparaissaient alors dans le coût de réponse. Le net
+par (population, gravité) est borné à zéro : on ne peut pas prévenir plus de cas
+qu'il n'en serait arrivé, et aucune file ne devient négative.
+
+**Les effets sont discriminés sur `kind`.** Les trois partagent assez de champs
+pour qu'un effet composé à la main arrive sur le mauvais modèle. Un effet de
+capacité lu comme de la connectivité ne s'applique à rien du tout, et la
+simulation a simplement l'air paisible.
+
+Et un garde-fou : un effet qui vise un établissement, une population ou une
+route absente du jumeau est **refusé** (422). C'est la sortie la plus dangereuse
+que ce service puisse produire, parce qu'un effet inerte est indiscernable de la
+résilience. Les gabarits ne peuvent pas déclencher ce refus — ils génèrent leurs
+cibles depuis l'état.
+
 ### Les scénarios s'adaptent au système
 
 Un vrai jumeau nomme ses unités avec des UUID, donc `examples/scenarios.py` ne
@@ -183,6 +213,15 @@ d'apparence saine. Chaque ressource surveille maintenant sa propre rareté.
 
 - **Aucun optimiseur.** `evaluate(system, scenario, policy, objective, seed)` est
   la signature qu'il appellera ; la boucle de recherche viendra après.
+- **Les réponses ne se composent pas.** Un événement s'écrit maintenant depuis
+  l'application ; une politique reste trois gabarits Python. Le registre
+  d'actions du moteur — `transfer`, `surge_resource`, `reallocate`,
+  `modify_demand` — n'a par ailleurs aucun rapport avec la plateforme, donc une
+  politique validée en simulation ne peut pas être exécutée pour de vrai.
+- **Aucun objectif ne mesure un gain.** Morts, soins non rendus, pénurie de
+  pointe, coût. Le registre est ouvert, mais rien de livré ne compte les
+  personnes soignées — ce qui rend l'outil myope à l'ouverture d'une aile, que
+  les effets savent pourtant décrire.
 - **Aucune persistance, aucune interface.** Tout en mémoire, comme spécifié.
 - **Le mode de validation historique** — rejouer un événement réel et comparer à
   des données de terrain — reste à écrire.

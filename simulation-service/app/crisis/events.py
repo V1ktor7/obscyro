@@ -15,7 +15,7 @@ this module. If it needs a new `if` in the executive, something has gone wrong.
 from __future__ import annotations
 
 import math
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, NonNegativeFloat
 
@@ -60,11 +60,18 @@ class TemporalProfile(BaseModel):
 
 
 class DemandPerturbation(BaseModel):
-    """New care demand appearing in a population.
+    """Care demand appearing in — or removed from — a population.
 
-    `acuity_mix` is the whole clinical content of a crisis as far as the engine
+    `acuity_mix` is the whole clinical content of an event as far as the engine
     is concerned: a flood sends trauma, a pandemic sends respiratory cases, and
     the difference is which acuities the mix names and in what proportion.
+
+    `volume` may be negative. That is not a curiosity: without it the only
+    events expressible are ones that make things worse, so a vaccination
+    programme, a screening campaign or a shrinking population has nowhere to be
+    written except as a *response*, which it is not — it is a fact about the
+    world. The engine never tests whether a change is good, and this is the one
+    field that used to decide otherwise on its behalf.
     """
 
     id: str
@@ -72,13 +79,13 @@ class DemandPerturbation(BaseModel):
     targets: list[str]  # population ids
     acuity_mix: dict[str, float]  # acuity -> share, normalised on use
     profile: TemporalProfile
-    # Patients per tick at peak, before the mix is applied.
-    volume: NonNegativeFloat = 0.0
+    # Patients per tick at peak, before the mix is applied. Negative removes.
+    volume: float = 0.0
 
     def emit(self, tick: int) -> dict[tuple[str, str], float]:
         """(population, acuity) -> patients arriving this tick."""
         m = self.profile.magnitude_at(tick)
-        if m <= 0 or self.volume <= 0:
+        if m <= 0 or self.volume == 0:
             return {}
         total_share = sum(self.acuity_mix.values()) or 1.0
         out: dict[tuple[str, str], float] = {}
@@ -139,7 +146,14 @@ class ConnectivityPerturbation(BaseModel):
         return 1.0 - (1.0 - self.multiplier) * min(1.0, m)
 
 
-Perturbation = DemandPerturbation | CapacityPerturbation | ConnectivityPerturbation
+# Discriminated on `kind` rather than left to pydantic's smart union. The three
+# share enough fields that a hand-composed event arriving over HTTP could parse
+# as the wrong one — a capacity effect read as connectivity would apply to
+# nothing at all and the run would simply look uneventful.
+Perturbation = Annotated[
+    DemandPerturbation | CapacityPerturbation | ConnectivityPerturbation,
+    Field(discriminator="kind"),
+]
 
 
 class Scenario(BaseModel):
@@ -156,12 +170,20 @@ class Scenario(BaseModel):
     perturbations: list[Perturbation] = Field(default_factory=list)
 
     def demand(self, tick: int) -> dict[tuple[str, str], float]:
+        """Net arrivals per (population, acuity), never below zero.
+
+        Perturbations sum, so a vaccination campaign written as negative volume
+        cancels part of the wave it sits under. Clamping the *net* — rather than
+        each term — is what makes that composable while keeping the obvious
+        guarantee: you cannot prevent more cases than would have arrived, and no
+        facility ends up with a negative queue that later swallows real patients.
+        """
         out: dict[tuple[str, str], float] = {}
         for p in self.perturbations:
             if isinstance(p, DemandPerturbation):
                 for key, v in p.emit(tick).items():
                     out[key] = out.get(key, 0.0) + v
-        return out
+        return {k: v for k, v in out.items() if v > 0}
 
     def capacity_effects(self, tick: int) -> list[CapacityPerturbation]:
         return [

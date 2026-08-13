@@ -19,15 +19,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
+  deleteCrisisEvent,
   fetchCrisisExport,
+  listCrisisEvents,
   listScenarios,
   runCrisisComparison,
+  saveCrisisEvent,
   type CrisisComparison,
+  type CrisisEventDef,
   type CrisisExport,
   type CrisisGap,
   type ScenarioSummary,
 } from "@/lib/platform-api";
 import { useStudio } from "../StudioShell";
+import EventComposer from "./EventComposer";
 
 /** Sentinel for "no scenario" so the select has a real value to hold. */
 const LIVE = "";
@@ -97,6 +102,8 @@ export default function ResilienceView() {
   const [running, setRunning] = useState(false);
   const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
   const [twinScenarioId, setTwinScenarioId] = useState<string>(LIVE);
+  const [composed, setComposed] = useState<CrisisEventDef[]>([]);
+  const [composing, setComposing] = useState<CrisisEventDef | "new" | null>(null);
 
   const load = useCallback(async () => {
     if (!env) return;
@@ -124,6 +131,19 @@ export default function ResilienceView() {
       .catch(() => setScenarios([]));
   }, [env]);
 
+  const loadEvents = useCallback(async () => {
+    if (!env) return;
+    try {
+      setComposed((await listCrisisEvents(env)).events);
+    } catch {
+      setComposed([]);
+    }
+  }, [env]);
+
+  useEffect(() => {
+    void loadEvents();
+  }, [loadEvents]);
+
   // The reading and the result belong to one world. Leaving a stale table on
   // screen after switching would invite reading a flood against the new wing
   // when it was run against today's network.
@@ -142,6 +162,14 @@ export default function ResilienceView() {
     }
     return { byRole, census };
   }, [snapshot]);
+
+  // An event's effects name instances by id, so one written against a scenario
+  // means nothing on the live twin. Splitting them here rather than letting the
+  // server refuse keeps the unusable ones out of the radio group instead of
+  // offering a choice that always fails.
+  const world = twinScenarioId || null;
+  const ownEvents = composed.filter((e) => (e.twinScenarioId ?? null) === world);
+  const otherWorldEvents = composed.filter((e) => (e.twinScenarioId ?? null) !== world);
 
   const blocking = (snapshot?.gaps ?? []).filter((g) => BLOCKING.includes(g.code));
   const advisory = (snapshot?.gaps ?? []).filter((g) => !BLOCKING.includes(g.code));
@@ -168,9 +196,12 @@ export default function ResilienceView() {
         const n = Number(v);
         if (n > 0) populationSizes[k] = n;
       }
+      // A composed event is picked as `event:<uuid>`; anything else is one of
+      // the shipped template names.
+      const composedId = event.startsWith("event:") ? event.slice(6) : null;
       setResult(
         await runCrisisComparison(env, {
-          scenario: event,
+          ...(composedId ? { eventId: composedId } : { scenario: event }),
           policies: responses,
           populationSizes,
           routeCapacity: Number(routeCapacity) || 0,
@@ -207,7 +238,36 @@ export default function ResilienceView() {
       ) : !snapshot ? null : (
         <div className="grid gap-4 p-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="flex flex-col gap-4">
-            {result ? null : <HowItWorks />}
+            {composing ? (
+              <EventComposer
+                snapshot={snapshot}
+                initial={composing === "new" ? null : composing}
+                twinScenarioId={world}
+                onSave={async (body) => {
+                  const saved = await saveCrisisEvent(
+                    env!,
+                    body,
+                    composing === "new" ? undefined : composing.id,
+                  );
+                  await loadEvents();
+                  setEvent(`event:${saved.id}`);
+                  setComposing(null);
+                }}
+                onDelete={
+                  composing === "new"
+                    ? null
+                    : async () => {
+                        await deleteCrisisEvent(env!, composing.id);
+                        await loadEvents();
+                        if (event === `event:${composing.id}`) setEvent("pandemic");
+                        setComposing(null);
+                      }
+                }
+                onClose={() => setComposing(null)}
+              />
+            ) : null}
+
+            {result || composing ? null : <HowItWorks />}
 
             <Card title="What the engine reads from your twin">
               {/* Echoed from the payload, not from the picker: the point is to
@@ -327,6 +387,56 @@ export default function ResilienceView() {
                     </span>
                   </label>
                 ))}
+              </div>
+
+              <div className="mt-3 border-t border-line pt-3">
+                <p className="mb-2 text-[11px] text-ink-faint">
+                  {ownEvents.length > 0
+                    ? "Your own events"
+                    : "The three above are generic — they aim themselves at whatever network they are given. Compose one to say something specific about yours."}
+                </p>
+                <div className="flex flex-col gap-2">
+                  {ownEvents.map((e) => (
+                    <div key={e.id} className="flex items-start gap-2">
+                      <input
+                        type="radio"
+                        name="event"
+                        checked={event === `event:${e.id}`}
+                        onChange={() => setEvent(`event:${e.id}`)}
+                        className="mt-0.5"
+                      />
+                      <span className="flex-1">
+                        <span className="block text-xs text-ink">{e.name}</span>
+                        <span className="block text-[11px] leading-snug text-ink-faint">
+                          {e.description ||
+                            `${e.effects.length} effect${e.effects.length === 1 ? "" : "s"} over ${e.horizon} steps`}
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setComposing(e)}
+                        className="text-[11px] text-ink-faint hover:text-brand"
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setComposing("new")}
+                    className="self-start rounded-md border border-line px-2.5 py-1 text-[11px] text-ink hover:border-brand hover:text-brand"
+                  >
+                    Compose an event
+                  </button>
+                </div>
+                {otherWorldEvents.length > 0 ? (
+                  <p className="mt-2 text-[11px] leading-relaxed text-ink-faint">
+                    {otherWorldEvents.length} other event
+                    {otherWorldEvents.length === 1 ? " was" : "s were"} composed against a
+                    different world and cannot run here — their effects name instances
+                    that only exist there.
+                  </p>
+                ) : null}
               </div>
             </Card>
 

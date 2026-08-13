@@ -4,9 +4,17 @@ import { z } from "zod";
 
 import { config } from "../lib/config.js";
 import type { DbClient } from "../lib/db.js";
-import { AppError, NotFound } from "../lib/errors.js";
+import { AppError, BadRequest, NotFound } from "../lib/errors.js";
 import { startSseStream } from "../lib/sse.js";
 import { recordAudit } from "../services/audit.js";
+import {
+  assertEventMatchesWorld,
+  createCrisisEvent,
+  deleteCrisisEvent,
+  getCrisisEvent,
+  listCrisisEvents,
+  updateCrisisEvent,
+} from "../services/crisis-events.js";
 import { buildCrisisExport } from "../services/crisis-export.js";
 import { proxyToSimService } from "../services/ml-simulation.js";
 import {
@@ -136,6 +144,140 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
+  /**
+   * `effects` is passed through unvalidated on purpose.
+   *
+   * The shape belongs to the engine, which already checks it with pydantic and
+   * refuses effects aimed at facilities, populations or routes the twin does
+   * not contain. Restating that here in zod would create a second definition to
+   * keep in agreement, and the copy is always the one that falls behind — a
+   * fourth effect kind would then be rejected by the API that knows least
+   * about it.
+   */
+  const crisisEventBody = z.object({
+    name: z.string().trim().min(1).max(120),
+    description: z.string().trim().max(1000).default(""),
+    horizon: z.number().int().min(1).max(1000).default(60),
+    effects: z.array(z.record(z.unknown())).default([]),
+    twinScenarioId: z.string().uuid().nullable().default(null),
+  });
+
+  const crisisEventOut = z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    description: z.string(),
+    horizon: z.number(),
+    effects: z.array(z.record(z.unknown())),
+    twinScenarioId: z.string().uuid().nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  });
+
+  app.get(
+    "/ontology/:env/crisis-events",
+    {
+      schema: {
+        summary: "Events composed for this organisation",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1) }),
+        response: {
+          200: z.object({ events: z.array(crisisEventOut) }),
+          404: errorEnvelope,
+        },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      return { events: await listCrisisEvents(req.db, env.id) };
+    },
+  );
+
+  app.post(
+    "/ontology/:env/crisis-events",
+    {
+      schema: {
+        summary: "Compose an event",
+        description:
+          "An event is a list of effects: demand changes somewhere, a resource " +
+          "changes somewhere, a connection changes somewhere. Nothing tests whether " +
+          "a change is bad — a capacity multiplier above 1 is a wing opening, and a " +
+          "negative demand volume is a vaccination programme.",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1) }),
+        body: crisisEventBody,
+        response: { 201: crisisEventOut, 400: errorEnvelope, 409: errorEnvelope },
+      },
+    },
+    async (req, reply) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const created = await createCrisisEvent(req.db, env.id, userId, req.body);
+      await recordAudit(req.db, {
+        actorUserId: userId,
+        projectId: env.id,
+        action: "crisis.event.create",
+        resourceType: "crisis_event",
+        resourceId: created.id,
+        metadata: { name: created.name, effects: created.effects.length },
+      });
+      return reply.code(201).send(created);
+    },
+  );
+
+  app.put(
+    "/ontology/:env/crisis-events/:id",
+    {
+      schema: {
+        summary: "Replace a composed event",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1), id: z.string().uuid() }),
+        body: crisisEventBody,
+        response: { 200: crisisEventOut, 400: errorEnvelope, 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const updated = await updateCrisisEvent(req.db, env.id, req.params.id, req.body);
+      await recordAudit(req.db, {
+        actorUserId: userId,
+        projectId: env.id,
+        action: "crisis.event.update",
+        resourceType: "crisis_event",
+        resourceId: updated.id,
+        metadata: { name: updated.name, effects: updated.effects.length },
+      });
+      return updated;
+    },
+  );
+
+  app.delete(
+    "/ontology/:env/crisis-events/:id",
+    {
+      schema: {
+        summary: "Delete a composed event",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1), id: z.string().uuid() }),
+        response: { 200: z.object({ ok: z.literal(true) }), 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      await deleteCrisisEvent(req.db, env.id, req.params.id);
+      await recordAudit(req.db, {
+        actorUserId: userId,
+        projectId: env.id,
+        action: "crisis.event.delete",
+        resourceType: "crisis_event",
+        resourceId: req.params.id,
+        metadata: {},
+      });
+      return { ok: true as const };
+    },
+  );
+
   app.post(
     "/ontology/:env/twin/crisis-compare",
     {
@@ -148,7 +290,10 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
         tags: ["twin"],
         params: z.object({ env: z.string().min(1) }),
         body: z.object({
-          scenario: z.string().min(1),
+          /** A shipped template. Mutually exclusive with `eventId`. */
+          scenario: z.string().min(1).optional(),
+          /** An event composed here. Mutually exclusive with `scenario`. */
+          eventId: z.string().uuid().optional(),
           policies: z.array(z.string().min(1)).min(1),
           seed: z.number().int().optional(),
           /** Sizes the ontology cannot supply. Empty runs a hollow model. */
@@ -175,10 +320,34 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
             atOffsetHours: req.body.atOffsetHours ?? 0,
           }
         : undefined;
+      if ((req.body.scenario === undefined) === (req.body.eventId === undefined)) {
+        throw BadRequest(
+          "PICK_ONE_EVENT",
+          "Send exactly one of `scenario` (a shipped template) or `eventId` (an event " +
+            "composed here).",
+        );
+      }
+
+      // Resolved before the export so a mismatched event fails on its own terms
+      // rather than as a wall of unknown ids from the engine.
+      let event: Record<string, unknown> | null = null;
+      if (req.body.eventId) {
+        const row = await getCrisisEvent(req.db, env.id, req.body.eventId);
+        assertEventMatchesWorld(row, lens?.scenarioId ?? null);
+        event = {
+          id: row.id,
+          name: row.name,
+          description: row.description,
+          horizon: row.horizon,
+          perturbations: row.effects,
+        };
+      }
+
       const system = await buildCrisisExport(req.db, env.id, req.params.env, lens);
       return proxyToSimService("/crisis/compare", {
         system,
-        scenario: req.body.scenario,
+        scenario: req.body.scenario ?? null,
+        event,
         policies: req.body.policies,
         seed: req.body.seed ?? null,
         population_sizes: req.body.populationSizes,

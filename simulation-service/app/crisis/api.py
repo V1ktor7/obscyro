@@ -19,7 +19,13 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.crisis.domain import CareRequirement
+from app.crisis.domain import CareRequirement, SystemState
+from app.crisis.events import (
+    CapacityPerturbation,
+    ConnectivityPerturbation,
+    DemandPerturbation,
+    Scenario,
+)
 from app.crisis.harness import compare
 from app.crisis.ontology import OntologyExport, UnrunnableExport, load
 from app.crisis.scoring import Objective
@@ -35,7 +41,12 @@ _PROBE = CareRequirement(acuity="_probe", consumes={}, mortality_per_unmet=0.0)
 
 class CompareRequest(BaseModel):
     system: OntologyExport
-    scenario: str
+    # Either a template name, or an event composed by hand. A template is just
+    # a generator that produces the second thing, so accepting both costs one
+    # branch and removes the ceiling: three canned crises is a demo, not a
+    # platform.
+    scenario: str | None = None
+    event: Scenario | None = None
     policies: list[str] = Field(min_length=1)
     seed: int | None = None
     # The two facts the ontology cannot hold. Both default to nothing, and both
@@ -59,6 +70,59 @@ class CompareResponse(BaseModel):
     weights: dict[str, float]
 
 
+def _reject_effects_that_hit_nothing(scenario: Scenario, state: SystemState) -> None:
+    """Refuse an event aimed at things the twin does not contain.
+
+    A hand-composed effect is written against ids a person picked, and a
+    mistyped or stale one is *silently inert*: the run completes, nothing
+    happens, and the event appears to have been survived. That is the most
+    dangerous output this service can produce, because it is indistinguishable
+    from resilience.
+
+    Templates cannot trip this — they generate their targets from the state —
+    so the cost falls entirely on the case that needs it.
+    """
+    known_activities = {
+        a for f in state.facilities.values() for r in f.resources.values() for a in r.enables
+    }
+    known_categories = {
+        r.category for f in state.facilities.values() for r in f.resources.values()
+    }
+    edges = {(e.source, e.target) for e in state.network.all_edges()}
+    problems: list[str] = []
+
+    for p in scenario.perturbations:
+        if isinstance(p, DemandPerturbation):
+            missing = [t for t in p.targets if t not in state.populations]
+            if missing:
+                problems.append(f"{p.id}: no population {', '.join(missing)}")
+            if not p.acuity_mix:
+                problems.append(f"{p.id}: no acuity mix, so it produces no patients")
+        elif isinstance(p, CapacityPerturbation):
+            missing = [f for f in p.facilities if f not in state.facilities]
+            if missing:
+                problems.append(f"{p.id}: no facility {', '.join(missing)}")
+            if p.category and p.category not in known_categories:
+                problems.append(
+                    f"{p.id}: nothing in this twin is {p.category!r} "
+                    f"(has: {', '.join(sorted(known_categories)) or 'nothing'})"
+                )
+            unknown_res = [r for r in p.resources if r not in known_activities]
+            if unknown_res:
+                problems.append(f"{p.id}: no resource {', '.join(unknown_res)}")
+            if p.multiplier is None and p.absolute is None:
+                problems.append(f"{p.id}: sets neither a multiplier nor an absolute value")
+        elif isinstance(p, ConnectivityPerturbation):
+            missing_e = [f"{s}→{t}" for s, t in p.edges if (s, t) not in edges]
+            if missing_e:
+                problems.append(f"{p.id}: no route {', '.join(missing_e)}")
+
+    if not scenario.perturbations:
+        problems.append("the event has no effects, so it is indistinguishable from a normal day")
+    if problems:
+        raise HTTPException(422, "This event would do nothing. " + "; ".join(problems) + ".")
+
+
 @router.get("/catalogue")
 def catalogue() -> dict[str, list[str]]:
     """What can be run, without needing a twin to ask.
@@ -71,9 +135,16 @@ def catalogue() -> dict[str, list[str]]:
 
 @router.post("/compare", response_model=CompareResponse)
 def compare_route(req: CompareRequest) -> CompareResponse:
-    if req.scenario not in SCENARIOS:
+    if (req.scenario is None) == (req.event is None):
         raise HTTPException(
-            422, f"Unknown crisis {req.scenario!r}. Available: {', '.join(sorted(SCENARIOS))}."
+            422,
+            "Send exactly one of `scenario` (a template name) or `event` (a composed "
+            "event). Sending both leaves it to this endpoint to decide which one the "
+            "caller meant.",
+        )
+    if req.scenario is not None and req.scenario not in SCENARIOS:
+        raise HTTPException(
+            422, f"Unknown event {req.scenario!r}. Available: {', '.join(sorted(SCENARIOS))}."
         )
     unknown = [p for p in req.policies if p not in POLICIES]
     if unknown:
@@ -105,7 +176,8 @@ def compare_route(req: CompareRequest) -> CompareResponse:
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 
-    scenario = SCENARIOS[req.scenario](state)
+    scenario = req.event if req.event is not None else SCENARIOS[req.scenario or ""](state)
+    _reject_effects_that_hit_nothing(scenario, state)
     policies = [POLICIES[p](state) for p in req.policies]
 
     # Cost is weighted at roughly two dollars per micro-life so it registers
@@ -131,6 +203,7 @@ def compare_route(req: CompareRequest) -> CompareResponse:
             "name": scenario.name,
             "description": scenario.description,
             "perturbations": [p.id for p in scenario.perturbations],
+            "composed": req.event is not None,
         },
         rows=rows,
         facilities=len(state.facilities),

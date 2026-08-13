@@ -1681,10 +1681,100 @@ export async function fetchCrisisExport(
   return apiFetch(`/v1/ontology/${encEnv(env)}/twin/crisis-export${q}`);
 }
 
+/**
+ * An event, as a list of effects.
+ *
+ * Nothing here says "crisis". A capacity multiplier above 1 opens a wing, and a
+ * negative demand volume is a vaccination programme — the engine never tests
+ * whether a change is good, and neither does this type.
+ */
+export type EffectKind = "demand" | "capacity" | "connectivity";
+export type ProfileShape = "step" | "ramp" | "pulse" | "gaussian";
+
+export interface TemporalProfile {
+  start: number;
+  end: number | null;
+  shape: ProfileShape;
+  peak: number;
+  peak_tick?: number | null;
+}
+
+export interface DemandEffect {
+  id: string;
+  kind: "demand";
+  targets: string[];
+  acuity_mix: Record<string, number>;
+  /** Negative removes demand rather than adding it. */
+  volume: number;
+  profile: TemporalProfile;
+}
+
+export interface CapacityEffect {
+  id: string;
+  kind: "capacity";
+  facilities: string[];
+  category?: string | null;
+  resources?: string[];
+  /** Above 1 grows the resource; `absolute` wins when both are set. */
+  multiplier?: number | null;
+  absolute?: number | null;
+  profile: TemporalProfile;
+}
+
+export interface ConnectivityEffect {
+  id: string;
+  kind: "connectivity";
+  edges: Array<[string, string]>;
+  edge_kind?: string;
+  multiplier: number;
+  profile: TemporalProfile;
+}
+
+export type CrisisEffect = DemandEffect | CapacityEffect | ConnectivityEffect;
+
+export interface CrisisEventDef {
+  id: string;
+  name: string;
+  description: string;
+  horizon: number;
+  effects: CrisisEffect[];
+  twinScenarioId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function listCrisisEvents(
+  env: string,
+): Promise<{ events: CrisisEventDef[] }> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/crisis-events`);
+}
+
+export async function saveCrisisEvent(
+  env: string,
+  body: {
+    name: string;
+    description?: string;
+    horizon: number;
+    effects: CrisisEffect[];
+    twinScenarioId: string | null;
+  },
+  id?: string,
+): Promise<CrisisEventDef> {
+  const path = `/v1/ontology/${encEnv(env)}/crisis-events${id ? `/${id}` : ""}`;
+  return apiFetch(path, { method: id ? "PUT" : "POST", body });
+}
+
+export async function deleteCrisisEvent(env: string, id: string): Promise<{ ok: true }> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/crisis-events/${id}`, { method: "DELETE" });
+}
+
 export async function runCrisisComparison(
   env: string,
   body: {
-    scenario: string;
+    /** A shipped template. Mutually exclusive with `eventId`. */
+    scenario?: string;
+    /** An event composed here. Mutually exclusive with `scenario`. */
+    eventId?: string;
     policies: string[];
     seed?: number;
     populationSizes?: Record<string, number>;

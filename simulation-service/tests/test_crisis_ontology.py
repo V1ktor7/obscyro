@@ -279,6 +279,66 @@ def test_surging_follows_the_constraint_as_it_moves() -> None:
     assert {r.action.resource for r in surging} == {"lit", "infirmiere"}
 
 
+# --- events composed by hand ------------------------------------------------
+
+
+def test_an_event_can_remove_demand_as_well_as_add_it() -> None:
+    """A vaccination campaign is a fact about the world, not a response.
+
+    With demand pinned non-negative the only expressible events are ones that
+    make things worse, and anything protective has to masquerade as a policy —
+    which then shows up in the response cost and gets ranked against the very
+    thing it is not.
+    """
+    from app.crisis.events import DemandPerturbation, Scenario, TemporalProfile
+
+    wave = DemandPerturbation(
+        id="wave", targets=["p"], acuity_mix={"critical": 1.0}, volume=100,
+        profile=TemporalProfile(start=0, end=10, shape="step", peak=1.0),
+    )
+    vaccination = DemandPerturbation(
+        id="vaccination", targets=["p"], acuity_mix={"critical": 1.0}, volume=-40,
+        profile=TemporalProfile(start=0, end=10, shape="step", peak=1.0),
+    )
+    assert Scenario(id="s", perturbations=[wave]).demand(2)[("p", "critical")] == 100
+    net = Scenario(id="s", perturbations=[wave, vaccination]).demand(2)
+    assert net[("p", "critical")] == 60
+
+
+def test_prevention_cannot_go_below_zero_arrivals() -> None:
+    """Otherwise a facility carries a negative queue that later swallows real
+    patients, and the run reports fewer arrivals than actually happened."""
+    from app.crisis.events import DemandPerturbation, Scenario, TemporalProfile
+
+    over = DemandPerturbation(
+        id="over", targets=["p"], acuity_mix={"critical": 1.0}, volume=-500,
+        profile=TemporalProfile(start=0, end=10, shape="step", peak=1.0),
+    )
+    small = DemandPerturbation(
+        id="small", targets=["p"], acuity_mix={"critical": 1.0}, volume=10,
+        profile=TemporalProfile(start=0, end=10, shape="step", peak=1.0),
+    )
+    assert Scenario(id="s", perturbations=[small, over]).demand(2) == {}
+
+
+def test_an_effect_is_parsed_as_the_kind_it_declares() -> None:
+    """The three share enough fields to be confused over the wire.
+
+    A capacity effect read as connectivity would apply to nothing at all, and
+    the run would simply look uneventful.
+    """
+    from app.crisis.events import CapacityPerturbation, Scenario
+
+    s = Scenario.model_validate({
+        "id": "e",
+        "perturbations": [
+            {"id": "c", "kind": "capacity", "facilities": ["unit-a"], "category": SPACE,
+             "multiplier": 0.5, "profile": {"start": 1, "end": 5, "shape": "step", "peak": 1.0}},
+        ],
+    })
+    assert isinstance(s.perturbations[0], CapacityPerturbation)
+
+
 # --- end to end -------------------------------------------------------------
 
 
