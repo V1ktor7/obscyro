@@ -19,16 +19,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
-  deleteCrisisEvent,
-  fetchCrisisExport,
-  listCrisisEvents,
+  deleteSimEvent,
+  fetchSimCatalogue,
+  fetchSimExport,
+  listSimEvents,
   listScenarios,
-  runCrisisComparison,
-  saveCrisisEvent,
-  type CrisisComparison,
-  type CrisisEventDef,
-  type CrisisExport,
-  type CrisisGap,
+  runSimulation,
+  saveSimEvent,
+  type SimComparison,
+  type SimEvent,
+  type SimExport,
+  type SimGap,
+  type SimTarget,
   type ScenarioSummary,
 } from "@/lib/platform-api";
 import { useStudio } from "../StudioShell";
@@ -82,11 +84,11 @@ const RESPONSES = [
 ];
 
 /** Gaps that make a result meaningless rather than merely narrower. */
-const BLOCKING: CrisisGap["code"][] = ["POPULATION_WITHOUT_SIZE", "ROUTE_WITHOUT_CAPACITY"];
+const BLOCKING: SimGap["code"][] = ["POPULATION_WITHOUT_SIZE", "ROUTE_WITHOUT_CAPACITY"];
 
 export default function ResilienceView() {
   const { selectedEnv: env } = useStudio();
-  const [snapshot, setSnapshot] = useState<CrisisExport | null>(null);
+  const [snapshot, setSnapshot] = useState<SimExport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -98,19 +100,20 @@ export default function ResilienceView() {
   ]);
   const [sizes, setSizes] = useState<Record<string, string>>({});
   const [routeCapacity, setRouteCapacity] = useState("10");
-  const [result, setResult] = useState<CrisisComparison | null>(null);
+  const [result, setResult] = useState<SimComparison | null>(null);
   const [running, setRunning] = useState(false);
   const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
   const [twinScenarioId, setTwinScenarioId] = useState<string>(LIVE);
-  const [composed, setComposed] = useState<CrisisEventDef[]>([]);
-  const [composing, setComposing] = useState<CrisisEventDef | "new" | null>(null);
+  const [composed, setComposed] = useState<SimEvent[]>([]);
+  const [targets, setTargets] = useState<SimTarget[]>([]);
+  const [composing, setComposing] = useState<SimEvent | "new" | null>(null);
 
   const load = useCallback(async () => {
     if (!env) return;
     setLoading(true);
     setError(null);
     try {
-      setSnapshot(await fetchCrisisExport(env, twinScenarioId || undefined));
+      setSnapshot(await fetchSimExport(env, twinScenarioId || undefined));
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -134,7 +137,7 @@ export default function ResilienceView() {
   const loadEvents = useCallback(async () => {
     if (!env) return;
     try {
-      setComposed((await listCrisisEvents(env)).events);
+      setComposed((await listSimEvents(env)).events);
     } catch {
       setComposed([]);
     }
@@ -143,6 +146,15 @@ export default function ResilienceView() {
   useEffect(() => {
     void loadEvents();
   }, [loadEvents]);
+
+  useEffect(() => {
+    if (!env) return;
+    // Losing the catalogue costs the composer, not the screen: the shipped
+    // templates still run, so this stays a quiet failure rather than a banner.
+    fetchSimCatalogue(env)
+      .then((c) => setTargets(c.targets))
+      .catch(() => setTargets([]));
+  }, [env]);
 
   // The reading and the result belong to one world. Leaving a stale table on
   // screen after switching would invite reading a flood against the new wing
@@ -200,7 +212,7 @@ export default function ResilienceView() {
       // the shipped template names.
       const composedId = event.startsWith("event:") ? event.slice(6) : null;
       setResult(
-        await runCrisisComparison(env, {
+        await runSimulation(env, {
           ...(composedId ? { eventId: composedId } : { scenario: event }),
           policies: responses,
           populationSizes,
@@ -241,10 +253,11 @@ export default function ResilienceView() {
             {composing ? (
               <EventComposer
                 snapshot={snapshot}
+                targets={targets}
                 initial={composing === "new" ? null : composing}
                 twinScenarioId={world}
                 onSave={async (body) => {
-                  const saved = await saveCrisisEvent(
+                  const saved = await saveSimEvent(
                     env!,
                     body,
                     composing === "new" ? undefined : composing.id,
@@ -257,7 +270,7 @@ export default function ResilienceView() {
                   composing === "new"
                     ? null
                     : async () => {
-                        await deleteCrisisEvent(env!, composing.id);
+                        await deleteSimEvent(env!, composing.id);
                         await loadEvents();
                         if (event === `event:${composing.id}`) setEvent("pandemic");
                         setComposing(null);
@@ -575,7 +588,7 @@ function HowItWorks() {
   );
 }
 
-function Results({ result }: { result: CrisisComparison }) {
+function Results({ result }: { result: SimComparison }) {
   const columns = ["excess_deaths", "unmet_care", "response_cost"] as const;
   const label: Record<string, string> = {
     excess_deaths: "Deaths",

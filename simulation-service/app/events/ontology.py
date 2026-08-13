@@ -22,7 +22,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, NonNegativeFloat
 
-from app.crisis.domain import (
+from app.events.domain import (
     CareRequirement,
     Edge,
     Facility,

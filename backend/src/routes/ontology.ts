@@ -415,21 +415,21 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
   const natureEnum = z.enum(["physical", "conceptual"]);
 
   /**
-   * What this type constrains when a crisis hits.
+   * What this type constrains when an event hits.
    *
    * The four S's plus the demand that runs through them. Not derivable from
    * `nature`: a ventilator and an EHR are both physical, and a cyberattack
    * ruins one while leaving the other alone. Null means the type sits out of
    * the simulation, which is a legitimate answer for most of an ontology.
    */
-  const crisisRoleEnum = z.enum(["space", "staff", "stuff", "systems", "demand"]);
+  const simRoleEnum = z.enum(["space", "staff", "stuff", "systems", "demand"]);
 
   const objectTypeOut = z.object({
     id: z.string().uuid(),
     name: z.string(),
     description: z.string().nullable(),
     nature: natureEnum.nullable(),
-    crisisRole: crisisRoleEnum.nullable().default(null),
+    simRole: simRoleEnum.nullable().default(null),
     propertySchema: z.array(propertyDef),
     /** Empty means nothing identifies an instance of this type — see migration 043. */
     identityProperties: z.array(z.string()).default([]),
@@ -505,12 +505,12 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         name: string;
         description: string | null;
         nature: "physical" | "conceptual" | null;
-        crisis_role: string | null;
+        sim_role: string | null;
         property_schema: unknown;
         identity_properties: string[] | null;
         created_at: Date;
       }>(
-        `SELECT id, name, description, nature, crisis_role, property_schema, identity_properties, created_at
+        `SELECT id, name, description, nature, sim_role, property_schema, identity_properties, created_at
            FROM app.ontology_object_types
           WHERE organization_id = (SELECT organization_id FROM app.project WHERE id = $1)
           ORDER BY name ASC`,
@@ -541,7 +541,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
           name: r.name,
           description: r.description,
           nature: r.nature,
-        crisisRole: (r.crisis_role ?? null) as "space"|"staff"|"stuff"|"systems"|"demand"|null,
+        simRole: (r.sim_role ?? null) as "space"|"staff"|"stuff"|"systems"|"demand"|null,
           propertySchema: r.property_schema as z.infer<typeof propertyDef>[],
         identityProperties: r.identity_properties ?? [],
           createdAt: r.created_at.toISOString(),
@@ -717,12 +717,12 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         name: string;
         description: string | null;
         nature: "physical" | "conceptual" | null;
-        crisis_role: string | null;
+        sim_role: string | null;
         property_schema: unknown;
         identity_properties: string[] | null;
         created_at: Date;
       }>(
-        `SELECT id, name, description, nature, crisis_role, property_schema, identity_properties, created_at
+        `SELECT id, name, description, nature, sim_role, property_schema, identity_properties, created_at
            FROM app.ontology_object_types
           WHERE organization_id = (SELECT organization_id FROM app.project WHERE id = $1) AND name = $2`,
         [env.id, req.params.name],
@@ -734,7 +734,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         name: r.name,
         description: r.description,
         nature: r.nature,
-        crisisRole: (r.crisis_role ?? null) as "space"|"staff"|"stuff"|"systems"|"demand"|null,
+        simRole: (r.sim_role ?? null) as "space"|"staff"|"stuff"|"systems"|"demand"|null,
         propertySchema: r.property_schema as z.infer<typeof propertyDef>[],
         identityProperties: r.identity_properties ?? [],
         createdAt: r.created_at.toISOString(),
@@ -1037,7 +1037,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
           name: z.string().trim().min(1).max(120),
           description: z.string().trim().max(500).optional(),
           nature: natureEnum.nullable().optional(),
-          crisisRole: crisisRoleEnum.nullable().optional(),
+          simRole: simRoleEnum.nullable().optional(),
           propertySchema: z.array(propertyDef).default([]),
         }),
         response: { 201: objectTypeOut, 404: errorEnvelope, 409: errorEnvelope },
@@ -1062,18 +1062,18 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         req.body.description ?? null,
         req.body.propertySchema,
       );
-      if (req.body.nature !== undefined || req.body.crisisRole !== undefined) {
+      if (req.body.nature !== undefined || req.body.simRole !== undefined) {
         await req.db.query(
           `UPDATE app.ontology_object_types
               SET nature      = CASE WHEN $2::boolean THEN $3 ELSE nature END,
-                  crisis_role = CASE WHEN $4::boolean THEN $5 ELSE crisis_role END
+                  sim_role = CASE WHEN $4::boolean THEN $5 ELSE sim_role END
             WHERE id = $1`,
           [
             typeId,
             req.body.nature !== undefined,
             req.body.nature ?? null,
-            req.body.crisisRole !== undefined,
-            req.body.crisisRole ?? null,
+            req.body.simRole !== undefined,
+            req.body.simRole ?? null,
           ],
         );
       }
@@ -1082,12 +1082,12 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         name: string;
         description: string | null;
         nature: "physical" | "conceptual" | null;
-        crisis_role: string | null;
+        sim_role: string | null;
         property_schema: unknown;
         identity_properties: string[] | null;
         created_at: Date;
       }>(
-        `SELECT id, name, description, nature, crisis_role, property_schema, identity_properties, created_at
+        `SELECT id, name, description, nature, sim_role, property_schema, identity_properties, created_at
            FROM app.ontology_object_types WHERE id = $1`,
         [typeId],
       );
@@ -1097,7 +1097,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         name: r.name,
         description: r.description,
         nature: r.nature,
-        crisisRole: (r.crisis_role ?? null) as "space"|"staff"|"stuff"|"systems"|"demand"|null,
+        simRole: (r.sim_role ?? null) as "space"|"staff"|"stuff"|"systems"|"demand"|null,
         propertySchema: r.property_schema as z.infer<typeof propertyDef>[],
         identityProperties: r.identity_properties ?? [],
         createdAt: r.created_at.toISOString(),
@@ -1115,7 +1115,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         body: z.object({
           description: z.string().trim().max(500).nullable().optional(),
           nature: natureEnum.nullable().optional(),
-          crisisRole: crisisRoleEnum.nullable().optional(),
+          simRole: simRoleEnum.nullable().optional(),
           propertySchema: z.array(propertyDef).optional(),
         }),
         response: { 200: objectTypeOut, 404: errorEnvelope },
@@ -1129,7 +1129,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         name: string;
         description: string | null;
         nature: "physical" | "conceptual" | null;
-        crisis_role: string | null;
+        sim_role: string | null;
         property_schema: unknown;
         identity_properties: string[] | null;
         created_at: Date;
@@ -1142,9 +1142,9 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
                 -- role is a decision. COALESCE would make "no role" mean "leave
                 -- it", so a type could never be taken back out of the
                 -- simulation once it was put in.
-                crisis_role = CASE WHEN $7::boolean THEN $8 ELSE crisis_role END
+                sim_role = CASE WHEN $7::boolean THEN $8 ELSE sim_role END
           WHERE project_id = $1 AND name = $2
-          RETURNING id, name, description, nature, crisis_role, property_schema,
+          RETURNING id, name, description, nature, sim_role, property_schema,
                     identity_properties, created_at`,
         [
           env.id,
@@ -1153,8 +1153,8 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
           req.body.propertySchema ? JSON.stringify(req.body.propertySchema) : null,
           req.body.nature !== undefined,
           req.body.nature ?? null,
-          req.body.crisisRole !== undefined,
-          req.body.crisisRole ?? null,
+          req.body.simRole !== undefined,
+          req.body.simRole ?? null,
         ],
       );
       const r = rows[0];
@@ -1164,7 +1164,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         name: r.name,
         description: r.description,
         nature: r.nature,
-        crisisRole: (r.crisis_role ?? null) as "space"|"staff"|"stuff"|"systems"|"demand"|null,
+        simRole: (r.sim_role ?? null) as "space"|"staff"|"stuff"|"systems"|"demand"|null,
         propertySchema: r.property_schema as z.infer<typeof propertyDef>[],
         identityProperties: r.identity_properties ?? [],
         createdAt: r.created_at.toISOString(),

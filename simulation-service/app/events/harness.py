@@ -1,7 +1,7 @@
 """Running one triple, and comparing many.
 
 No optimiser here — deliberately. What is here is the loop an optimiser will
-call, `evaluate(system, scenario, policy, seed) -> Score`, and the replicate
+call, `evaluate(system, event, policy, seed) -> Score`, and the replicate
 machinery that makes the comparison mean something. A search over policies built
 on single stochastic runs would optimise the seed.
 """
@@ -11,18 +11,18 @@ from __future__ import annotations
 import statistics
 from dataclasses import dataclass
 
-from app.crisis.domain import SystemState
-from app.crisis.dynamics import Trajectory, run
-from app.crisis.events import Scenario
-from app.crisis.policy import Policy
-from app.crisis.scoring import Objective, Score
+from app.events.domain import SystemState
+from app.events.dynamics import Trajectory, run
+from app.events.effects import Event
+from app.events.policy import Policy
+from app.events.scoring import Objective, Score
 
 
 def evaluate(
-    system: SystemState, scenario: Scenario, policy: Policy, objective: Objective, seed: int = 0
+    system: SystemState, event: Event, policy: Policy, objective: Objective, seed: int = 0
 ) -> tuple[Trajectory, Score]:
     """The signature to keep stable. An optimiser calls this in a loop."""
-    t = run(system, scenario, policy, seed)
+    t = run(system, event, policy, seed)
     return t, objective.score(t)
 
 
@@ -53,7 +53,7 @@ class Replicated:
 
 def replicate(
     system: SystemState,
-    scenario: Scenario,
+    event: Event,
     policy: Policy,
     objective: Objective,
     n: int = 10,
@@ -62,7 +62,7 @@ def replicate(
     scores: list[float] = []
     parts: dict[str, list[float]] = {}
     for i in range(n):
-        _t, s = evaluate(system, scenario, policy, objective, seed=base_seed + i)
+        _t, s = evaluate(system, event, policy, objective, seed=base_seed + i)
         scores.append(s.scalar)
         for k, v in s.parts.items():
             parts.setdefault(k, []).append(v)
@@ -71,7 +71,7 @@ def replicate(
 
 def compare(
     system: SystemState,
-    scenario: Scenario,
+    event: Event,
     policies: list[Policy],
     objective: Objective,
     replicates: int = 1,
@@ -82,7 +82,7 @@ def compare(
     of them helped."""
     rows: list[dict] = []
     for p in policies:
-        r = replicate(system, scenario, p, objective, n=replicates, base_seed=base_seed)
+        r = replicate(system, event, p, objective, n=replicates, base_seed=base_seed)
         lo, hi = r.interval()
         row = {
             "policy": p.id,

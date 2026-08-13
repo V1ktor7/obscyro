@@ -9,13 +9,13 @@ import { startSseStream } from "../lib/sse.js";
 import { recordAudit } from "../services/audit.js";
 import {
   assertEventMatchesWorld,
-  createCrisisEvent,
-  deleteCrisisEvent,
-  getCrisisEvent,
-  listCrisisEvents,
-  updateCrisisEvent,
-} from "../services/crisis-events.js";
-import { buildCrisisExport } from "../services/crisis-export.js";
+  createSimEvent,
+  deleteSimEvent,
+  getSimEvent,
+  listSimEvents,
+  updateSimEvent,
+} from "../services/sim-events.js";
+import { buildTwinExport } from "../services/twin-export.js";
 import { proxyToSimService } from "../services/ml-simulation.js";
 import {
   deactivateTwinMetric,
@@ -112,13 +112,13 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   app.get(
-    "/ontology/:env/twin/crisis-export",
+    "/ontology/:env/twin/sim-export",
     {
       schema: {
-        summary: "The twin as the crisis engine reads it",
+        summary: "The twin as the simulation engine reads it",
         description:
           "Units become facilities, whatever is attached to them becomes capacity or " +
-          "census according to the type's declared crisis role, and non-structural " +
+          "census according to the type's declared simulation role, and non-structural " +
           "relationships become routes. Nothing is matched on a name. `gaps` lists " +
           "what the ontology could not answer — routes with no throughput, " +
           "populations with no size, types with no role — so a result is never " +
@@ -140,7 +140,7 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
       const lens = req.query.scenarioId
         ? { scenarioId: req.query.scenarioId, atOffsetHours: req.query.atOffsetHours ?? 0 }
         : undefined;
-      return { ...(await buildCrisisExport(req.db, env.id, req.params.env, lens)) };
+      return { ...(await buildTwinExport(req.db, env.id, req.params.env, lens)) };
     },
   );
 
@@ -154,7 +154,7 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
    * fourth effect kind would then be rejected by the API that knows least
    * about it.
    */
-  const crisisEventBody = z.object({
+  const simEventBody = z.object({
     name: z.string().trim().min(1).max(120),
     description: z.string().trim().max(1000).default(""),
     horizon: z.number().int().min(1).max(1000).default(60),
@@ -162,7 +162,7 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
     twinScenarioId: z.string().uuid().nullable().default(null),
   });
 
-  const crisisEventOut = z.object({
+  const simEventOut = z.object({
     id: z.string().uuid(),
     name: z.string(),
     description: z.string(),
@@ -174,14 +174,52 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   app.get(
-    "/ontology/:env/crisis-events",
+    "/ontology/:env/sim-catalogue",
+    {
+      schema: {
+        summary: "What can be run, and what can be perturbed",
+        description:
+          "Proxied straight from the engine. `targets` is the list of addressable " +
+          "quantities — capacity, route throughput, length of stay, mortality, what " +
+          "a patient consumes, arrivals — each with the operations it accepts and " +
+          "the dimensions it can be narrowed by. The composer builds its form from " +
+          "this, so adding something perturbable in the engine makes it appear in " +
+          "the UI with no front-end change.",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1) }),
+        response: { 200: z.record(z.unknown()), 404: errorEnvelope, 503: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      await resolveEnvironment(req.db, userId, req.params.env);
+      const base = config.simServiceUrl;
+      if (!base) {
+        throw new AppError(
+          "SIM_UNAVAILABLE",
+          "Simulation service is not configured. Set `SIM_SERVICE_URL`.",
+          503,
+        );
+      }
+      const res = await fetch(`${base.replace(/\/$/, "")}/events/catalogue`, {
+        signal: AbortSignal.timeout(config.simServiceTimeoutMs),
+      }).catch(() => null);
+      if (!res || !res.ok) {
+        throw new AppError("SIM_UNAVAILABLE", "Simulation service is unreachable.", 503);
+      }
+      return (await res.json()) as Record<string, unknown>;
+    },
+  );
+
+  app.get(
+    "/ontology/:env/sim-events",
     {
       schema: {
         summary: "Events composed for this organisation",
         tags: ["twin"],
         params: z.object({ env: z.string().min(1) }),
         response: {
-          200: z.object({ events: z.array(crisisEventOut) }),
+          200: z.object({ events: z.array(simEventOut) }),
           404: errorEnvelope,
         },
       },
@@ -189,12 +227,12 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
     async (req) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
-      return { events: await listCrisisEvents(req.db, env.id) };
+      return { events: await listSimEvents(req.db, env.id) };
     },
   );
 
   app.post(
-    "/ontology/:env/crisis-events",
+    "/ontology/:env/sim-events",
     {
       schema: {
         summary: "Compose an event",
@@ -205,19 +243,19 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
           "negative demand volume is a vaccination programme.",
         tags: ["twin"],
         params: z.object({ env: z.string().min(1) }),
-        body: crisisEventBody,
-        response: { 201: crisisEventOut, 400: errorEnvelope, 409: errorEnvelope },
+        body: simEventBody,
+        response: { 201: simEventOut, 400: errorEnvelope, 409: errorEnvelope },
       },
     },
     async (req, reply) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
-      const created = await createCrisisEvent(req.db, env.id, userId, req.body);
+      const created = await createSimEvent(req.db, env.id, userId, req.body);
       await recordAudit(req.db, {
         actorUserId: userId,
         projectId: env.id,
-        action: "crisis.event.create",
-        resourceType: "crisis_event",
+        action: "sim.event.create",
+        resourceType: "sim_event",
         resourceId: created.id,
         metadata: { name: created.name, effects: created.effects.length },
       });
@@ -226,25 +264,25 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   app.put(
-    "/ontology/:env/crisis-events/:id",
+    "/ontology/:env/sim-events/:id",
     {
       schema: {
         summary: "Replace a composed event",
         tags: ["twin"],
         params: z.object({ env: z.string().min(1), id: z.string().uuid() }),
-        body: crisisEventBody,
-        response: { 200: crisisEventOut, 400: errorEnvelope, 404: errorEnvelope },
+        body: simEventBody,
+        response: { 200: simEventOut, 400: errorEnvelope, 404: errorEnvelope },
       },
     },
     async (req) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
-      const updated = await updateCrisisEvent(req.db, env.id, req.params.id, req.body);
+      const updated = await updateSimEvent(req.db, env.id, req.params.id, req.body);
       await recordAudit(req.db, {
         actorUserId: userId,
         projectId: env.id,
-        action: "crisis.event.update",
-        resourceType: "crisis_event",
+        action: "sim.event.update",
+        resourceType: "sim_event",
         resourceId: updated.id,
         metadata: { name: updated.name, effects: updated.effects.length },
       });
@@ -253,7 +291,7 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   app.delete(
-    "/ontology/:env/crisis-events/:id",
+    "/ontology/:env/sim-events/:id",
     {
       schema: {
         summary: "Delete a composed event",
@@ -265,12 +303,12 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
     async (req) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
-      await deleteCrisisEvent(req.db, env.id, req.params.id);
+      await deleteSimEvent(req.db, env.id, req.params.id);
       await recordAudit(req.db, {
         actorUserId: userId,
         projectId: env.id,
-        action: "crisis.event.delete",
-        resourceType: "crisis_event",
+        action: "sim.event.delete",
+        resourceType: "sim_event",
         resourceId: req.params.id,
         metadata: {},
       });
@@ -279,19 +317,19 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   app.post(
-    "/ontology/:env/twin/crisis-compare",
+    "/ontology/:env/twin/simulate",
     {
       schema: {
-        summary: "Run named policies against a named crisis on the live twin",
+        summary: "Run responses against an event on the live twin",
         description:
-          "The system comes from the ontology; the crisis and the policies are named " +
+          "The system comes from the ontology; the event is either a shipped template " +
           "from the engine's catalogue. Returns one row per policy, worst last, so " +
           "'doing nothing' can be read against the alternatives.",
         tags: ["twin"],
         params: z.object({ env: z.string().min(1) }),
         body: z.object({
           /** A shipped template. Mutually exclusive with `eventId`. */
-          scenario: z.string().min(1).optional(),
+          template: z.string().min(1).optional(),
           /** An event composed here. Mutually exclusive with `scenario`. */
           eventId: z.string().uuid().optional(),
           policies: z.array(z.string().min(1)).min(1),
@@ -320,10 +358,10 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
             atOffsetHours: req.body.atOffsetHours ?? 0,
           }
         : undefined;
-      if ((req.body.scenario === undefined) === (req.body.eventId === undefined)) {
+      if ((req.body.template === undefined) === (req.body.eventId === undefined)) {
         throw BadRequest(
           "PICK_ONE_EVENT",
-          "Send exactly one of `scenario` (a shipped template) or `eventId` (an event " +
+          "Send exactly one of `template` (a shipped one) or `eventId` (an event " +
             "composed here).",
         );
       }
@@ -332,7 +370,7 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
       // rather than as a wall of unknown ids from the engine.
       let event: Record<string, unknown> | null = null;
       if (req.body.eventId) {
-        const row = await getCrisisEvent(req.db, env.id, req.body.eventId);
+        const row = await getSimEvent(req.db, env.id, req.body.eventId);
         assertEventMatchesWorld(row, lens?.scenarioId ?? null);
         event = {
           id: row.id,
@@ -343,10 +381,10 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
         };
       }
 
-      const system = await buildCrisisExport(req.db, env.id, req.params.env, lens);
-      return proxyToSimService("/crisis/compare", {
+      const system = await buildTwinExport(req.db, env.id, req.params.env, lens);
+      return proxyToSimService("/events/compare", {
         system,
-        scenario: req.body.scenario ?? null,
+        template: req.body.template ?? null,
         event,
         policies: req.body.policies,
         seed: req.body.seed ?? null,

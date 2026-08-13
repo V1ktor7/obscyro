@@ -4,14 +4,14 @@ Order within a tick is a modelling decision, not an implementation detail, so it
 is written once and stated plainly:
 
     1. time advances
-    2. the crisis happens          (perturbations, against the *baseline*)
+    2. the event happens           (effects, applied against the *baseline*)
     3. the response is decided     (rules evaluated on the state as it now is)
     4. care is delivered or not    (demand vs supply, and the cost of "not")
     5. failures spread             (cascades, to a fixpoint)
     6. everything is written down  (the audit trail)
 
 Deciding the response *before* delivering care means a policy reacts to the
-crisis in the tick it lands, not the tick after. Deciding it after would make
+event in the tick it lands, not the tick after. Deciding it after would make
 every policy look one step slower than it is.
 """
 
@@ -23,9 +23,10 @@ from typing import Callable
 import numpy as np
 from pydantic import BaseModel, Field
 
-from app.crisis.domain import STAFF, STUFF, SPACE, SYSTEMS, SystemState
-from app.crisis.events import Scenario
-from app.crisis.policy import Action, Policy, Rule
+from app.events.domain import STAFF, STUFF, SPACE, SYSTEMS, SystemState
+from app.events.effects import Event
+from app.events.policy import Action, Policy, Rule
+from app.events.targets import apply_op, clamp, target
 
 # --- what gets written down -------------------------------------------------
 
@@ -59,7 +60,7 @@ class TickRecord(BaseModel):
 
 
 class Trajectory(BaseModel):
-    scenario_id: str
+    event_id: str
     policy_id: str
     seed: int
     ticks: list[TickRecord] = Field(default_factory=list)
@@ -97,7 +98,7 @@ def register_action(kind: str) -> Callable[[ActionHandler], ActionHandler]:
 def _most_urgent(state: SystemState, waiting: dict[str, float]) -> str | None:
     """The queued acuity with the highest mortality when left unserved.
 
-    Ties break on the name so a run does not change its answer when a scenario
+    Ties break on the name so a run does not change its answer when an event
     file is reordered.
     """
     queued = [a for a, n in waiting.items() if n > 0]
@@ -199,9 +200,9 @@ def _modify_demand(state: SystemState, a: Action, engine: "Engine") -> float:
 
 
 class Engine:
-    def __init__(self, state: SystemState, scenario: Scenario, policy: Policy, seed: int = 0):
+    def __init__(self, state: SystemState, event: Event, policy: Policy, seed: int = 0):
         self.state = state
-        self.scenario = scenario
+        self.event = event
         self.policy = policy
         self.rng = np.random.default_rng(seed)
         self.seed = seed
@@ -216,54 +217,81 @@ class Engine:
         self.baseline_weight: dict[tuple[str, str, str], float] = {
             (e.source, e.target, e.kind): e.weight for e in state.network.all_edges()
         }
+        # The care model is perturbable too — a disease that lingers is a change
+        # to length of stay, which is neither demand nor capacity nor a route.
+        # It needs its own baseline for exactly the same reason capacity does.
+        self.baseline_care = copy.deepcopy(state.care_model)
         self.demand_scale: dict[str, float] = {}
         self.trajectory = Trajectory(
-            scenario_id=scenario.id, policy_id=policy.id, seed=seed
+            event_id=event.id, policy_id=policy.id, seed=seed
         )
 
     # -- step 2 ---------------------------------------------------------------
 
-    def _apply_perturbations(self, tick: int) -> None:
-        factors: dict[tuple[str, str], float] = {}
-        absolutes: dict[tuple[str, str], float] = {}
-        for p in self.scenario.capacity_effects(tick):
-            f = p.factor_at(tick)
-            a = p.absolute_at(tick)
-            for fid in p.facilities:
-                if fid not in self.state.facilities:
-                    continue
-                for rid, r in self.state.facility(fid).resources.items():
-                    if p.resources and rid not in p.resources:
-                        continue
-                    if p.category and r.category != p.category:
-                        continue
-                    if a is not None:
-                        absolutes[(fid, rid)] = a
-                    elif f is not None:
-                        factors[(fid, rid)] = factors.get((fid, rid), 1.0) * f
+    def _resolve(self, tick: int, path: str, base: float, dims: dict[str, str]) -> float:
+        """One baseline quantity, with every effect that names it applied.
 
+        Always from `base`, never from the value the last tick left behind. An
+        effect that multiplied the running value would re-apply every tick:
+        0.5 sixty times over is 8.7e-19, the run finishes, and the report says
+        the network collapsed under a 50% shock. `targets.py` calls this the
+        part that is not negotiable, and this is the line that honours it.
+        """
+        spec = target(path)
+        out = base
+        for e in self.event.active(tick, path):
+            if not all(e.wants(d, v) for d, v in dims.items()):
+                continue
+            v = e.value_at(tick)
+            if v is None:
+                continue
+            # `set` is absolute: it does not stack with a multiplier that also
+            # matched, because "the wing is gone" is not a percentage.
+            out = v if e.op == "set" else apply_op(out, e.op, v)
+        return clamp(spec, out)
+
+    def _apply_perturbations(self, tick: int) -> None:
         for (fid, rid), base in self.baseline_capacity.items():
             r = self.state.facility(fid).resources[rid]
-            if (fid, rid) in absolutes:
-                cap = absolutes[(fid, rid)]
-            else:
-                cap = base * factors.get((fid, rid), 1.0)
+            cap = base
+            for activity in sorted(r.enables) or [r.id]:
+                cap = self._resolve(
+                    tick,
+                    "resource.capacity",
+                    base,
+                    {"facility": fid, "category": r.category, "activity": activity},
+                )
+                if cap != base:
+                    break
             r.capacity = cap
             # Damage takes what is free first and the rest from what is in use —
             # a flooded wing does not politely wait for its beds to empty.
             r.quantity = min(r.quantity, cap)
 
-        conn: dict[tuple[str, str, str], float] = {}
-        for p in self.scenario.connectivity_effects(tick):
-            f = p.factor_at(tick)
-            if f is None:
-                continue
-            for s, t in p.edges:
-                conn[(s, t, p.edge_kind)] = min(conn.get((s, t, p.edge_kind), 1.0), f)
         for key, base in self.baseline_weight.items():
             e = self.state.network.edge(key[0], key[1], key[2])  # type: ignore[arg-type]
             if e is not None:
-                e.weight = base * conn.get(key, 1.0)
+                e.weight = self._resolve(
+                    tick, "edge.weight", base, {"route": f"{key[0]}>{key[1]}"}
+                )
+
+        for acuity, base in self.baseline_care.items():
+            req = self.state.care_model.get(acuity)
+            if req is None:
+                continue
+            req.stay_ticks = int(
+                round(self._resolve(tick, "care.stay_ticks", base.stay_ticks, {"acuity": acuity}))
+            )
+            req.mortality_per_unmet = self._resolve(
+                tick,
+                "care.mortality_per_unmet",
+                base.mortality_per_unmet,
+                {"acuity": acuity},
+            )
+            for activity, per in base.consumes.items():
+                req.consumes[activity] = self._resolve(
+                    tick, "care.consumes", per, {"acuity": acuity, "activity": activity}
+                )
 
     # -- step 3 ---------------------------------------------------------------
 
@@ -318,12 +346,52 @@ class Engine:
 
     # -- step 4 ---------------------------------------------------------------
 
+    def _arrivals(self, tick: int) -> dict[tuple[str, str], float]:
+        """Net patients per (population, severity) this tick, never below zero.
+
+        `demand.volume` accumulates rather than re-deriving: there is no prior
+        value at this address to multiply, which is why the catalogue offers
+        only `add` here. Effects sum, so a vaccination programme written as a
+        negative volume cancels part of the wave it sits under.
+
+        Clamping the *net* rather than each term is what makes prevention
+        composable while keeping the obvious guarantee: you cannot prevent more
+        cases than would have arrived, and no facility inherits a negative queue
+        that later swallows real patients.
+
+
+        The two dimensions are not symmetric, and the asymmetry is deliberate
+        because the alternative is a number that means something different from
+        what its label says:
+
+          population  the volume applies to *each* one. A wave reaching three
+                      catchments sends the stated number from all three.
+          severity    the volume is *split* across them. "40 patients per step"
+                      has to mean forty, not forty of each kind.
+        """
+        out: dict[tuple[str, str], float] = {}
+        acuities = list(self.state.care_model)
+        for e in self.event.active(tick, "demand.volume"):
+            v = e.value_at(tick)
+            if v is None or v == 0:
+                continue
+            hit = [a for a in acuities if e.wants("acuity", a)]
+            if not hit:
+                continue
+            each = v / len(hit)
+            for pop_id in self.state.populations:
+                if not e.wants("population", pop_id):
+                    continue
+                for acuity in hit:
+                    out[(pop_id, acuity)] = out.get((pop_id, acuity), 0.0) + each
+        return {k: v for k, v in out.items() if v > 0}
+
     def _deliver_care(self, tick: int) -> TickRecord:
         rec = TickRecord(tick=tick)
 
         # Arrivals land on the facilities that serve the population. Split
         # evenly: an unmodelled preference is better than an invented one.
-        for (pop_id, acuity), count in self.scenario.demand(tick).items():
+        for (pop_id, acuity), count in self._arrivals(tick).items():
             pop = self.state.populations.get(pop_id)
             if pop is None or not pop.served_by:
                 continue
@@ -454,7 +522,7 @@ class Engine:
     # -- the loop -------------------------------------------------------------
 
     def run(self) -> Trajectory:
-        for tick in range(self.scenario.horizon):
+        for tick in range(self.event.horizon):
             self.state.tick = tick
             self._apply_perturbations(tick)
             fired, suppressed = self._decide(tick)
@@ -469,8 +537,8 @@ class Engine:
         return self.trajectory
 
 
-def run(state: SystemState, scenario: Scenario, policy: Policy, seed: int = 0) -> Trajectory:
+def run(state: SystemState, event: Event, policy: Policy, seed: int = 0) -> Trajectory:
     """The signature an optimiser will call in a loop. Deep-copies the state so
     a caller can run twenty policies against one system without them bleeding
     into each other — the commonest way a comparison harness lies."""
-    return Engine(copy.deepcopy(state), scenario, policy, seed).run()
+    return Engine(copy.deepcopy(state), event, policy, seed).run()

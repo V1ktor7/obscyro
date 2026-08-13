@@ -34,15 +34,15 @@ const readiness = z.object({
    * Worth probing rather than assuming: the backend reaches it by an internal
    * hostname that resolves only from inside Railway, so a wrong name or port is
    * invisible from a developer's machine and from every test. The first symptom
-   * would otherwise be a 503 the moment somebody runs a crisis comparison.
-   * `crises` lists what the engine can run, which also proves the reply came
-   * from a service that has the crisis layer rather than an older image.
+   * would otherwise be a 503 the moment somebody runs a simulation.
+   * `events` lists what the engine can run, which also proves the reply came
+   * from a service carrying the event layer rather than an older image.
    */
   simulation: z.object({
     configured: z.boolean(),
     ok: z.boolean(),
     latencyMs: z.number().optional(),
-    crises: z.array(z.string()).optional(),
+    events: z.array(z.string()).optional(),
     error: z.string().optional(),
   }),
 });
@@ -51,14 +51,14 @@ const NLP_PROBE_TIMEOUT_MS = 3_000;
 
 type SimHealth = z.infer<typeof readiness>["simulation"];
 
-/** Probe the simulation service's crisis catalogue. Never throws. */
+/** Probe the simulation service's event catalogue. Never throws. */
 async function probeSimulation(): Promise<SimHealth> {
   const base = process.env.SIM_SERVICE_URL?.replace(/\/$/, "");
   if (!base) return { configured: false, ok: false, error: "SIM_SERVICE_URL is not set." };
 
   const start = process.hrtime.bigint();
   try {
-    const res = await fetch(`${base}/crisis/catalogue`, {
+    const res = await fetch(`${base}/events/catalogue`, {
       signal: AbortSignal.timeout(NLP_PROBE_TIMEOUT_MS),
     });
     const latencyMs = Number(
@@ -72,8 +72,8 @@ async function probeSimulation(): Promise<SimHealth> {
         error: `Simulation service returned HTTP ${res.status}.`,
       };
     }
-    const body = (await res.json().catch(() => ({}))) as { scenarios?: string[] };
-    return { configured: true, ok: true, latencyMs, crises: body.scenarios ?? [] };
+    const body = (await res.json().catch(() => ({}))) as { templates?: string[] };
+    return { configured: true, ok: true, latencyMs, events: body.templates ?? [] };
   } catch {
     return { configured: true, ok: false, error: "Simulation service is unreachable." };
   }
@@ -177,7 +177,7 @@ const healthRoutes: FastifyPluginAsync = async (fastify) => {
         const [nlp, simulation] = await Promise.all([nlpPromise, simPromise]);
         return reply.send({
           // A configured-but-unreachable dependency degrades a feature, not the
-          // API: extraction jobs queue and retry, and a crisis comparison
+          // API: extraction jobs queue and retry, and a simulation
           // returns 503 while everything else keeps serving.
           status:
             (nlp.configured && !nlp.ok) || (simulation.configured && !simulation.ok)

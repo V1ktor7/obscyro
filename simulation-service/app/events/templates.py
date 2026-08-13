@@ -1,33 +1,30 @@
-"""Crises and responses that fit whatever system they are handed.
+"""Events and responses that fit whatever system they are handed.
 
 `examples/scenarios.py` names `"north"` and `"city"`. A real twin names its
-wards with UUIDs, so those scenarios cannot be pointed at it — and asking a
-health authority to hand-write a perturbation per ward is not a product.
+wards with UUIDs, so those cannot be pointed at it — and asking a health
+authority to hand-write an effect per ward is not a product.
 
-A template takes a `SystemState` and returns a `Scenario` or a `Policy` fitted
-to the ids actually in it. The engine is untouched: what comes out the far end
-is the same plain data as before, and can be edited afterwards like any other.
+A template takes a `SystemState` and returns an `Event` or a `Policy` fitted to
+the ids actually in it. The engine is untouched: what comes out is ordinary
+`Effect` rows, editable in the composer like anything a user wrote by hand.
+That is also the test of whether the catalogue is complete — these three
+templates used to be three bespoke perturbation classes, and if any of them
+still needed one, the generic effect would not have earned its place.
 
-The care model lives here too, for a reason that is not filing convenience. What
-an admission consumes and how many people die when it is refused are properties
-of the *crisis*, not of the building — a flood sends trauma and a pandemic sends
-respiratory failure — and no ontology holds them. Keeping them beside the
-scenario is what stops them being silently defaulted somewhere in the loader.
+The care model lives here too, and not for filing convenience. What an admission
+consumes and how many die when it is refused are properties of the *event*, not
+of the building — a flood sends trauma and a pandemic sends respiratory failure
+— and no ontology holds them. Keeping them beside the event is what stops them
+being silently defaulted somewhere in the loader.
 """
 
 from __future__ import annotations
 
 from typing import Callable
 
-from app.crisis.domain import CareRequirement, SPACE, STAFF, STUFF, SYSTEMS, SystemState
-from app.crisis.events import (
-    CapacityPerturbation,
-    ConnectivityPerturbation,
-    DemandPerturbation,
-    Scenario,
-    TemporalProfile,
-)
-from app.crisis.policy import (
+from app.events.domain import CareRequirement, SPACE, STAFF, STUFF, SYSTEMS, SystemState
+from app.events.effects import Effect, Event, TemporalProfile
+from app.events.policy import (
     Action,
     Comparison,
     Condition,
@@ -159,132 +156,153 @@ def _baseline_volume(state: SystemState) -> float:
     return max(1.0, total * 0.25)
 
 
-def pandemic(state: SystemState, horizon: int = 60) -> Scenario:
+def _wave(eid: str, state: SystemState, mix: dict[str, float], total: float,
+          profile: TemporalProfile) -> list[Effect]:
+    """A severity mix, as one demand effect per severity.
+
+    The old `DemandPerturbation` carried an `acuity_mix` field. The generic
+    effect does not need one: a mix is just several volumes, and expressing it
+    that way means a user can raise the critical share of an event without
+    re-deriving every other proportion.
+    """
+    out: list[Effect] = []
+    share = sum(mix.values()) or 1.0
+    for acuity, w in mix.items():
+        out.append(
+            Effect(
+                id=f"{eid}-{acuity}",
+                target="demand.volume",
+                select={"population": _all_populations(state), "acuity": [acuity]},
+                op="add",
+                value=total * (w / share),
+                profile=profile,
+            )
+        )
+    return out
+
+
+def pandemic(state: SystemState, horizon: int = 60) -> Event:
     """A wave of respiratory cases, with staff falling sick as it peaks.
 
     Demand up, staff down, supplies down. The staff curve trails the demand
     curve because that is what makes the second half worse than the first, and
-    a model where they peak together understates the crisis.
+    a model where they peak together understates the event.
     """
     v = _baseline_volume(state)
-    stuff = activities_of(state, STUFF)
-    perturbations = [
-        DemandPerturbation(
-            id="wave",
-            targets=_all_populations(state),
-            acuity_mix={"critical": 0.15, "urgent": 0.35, "routine": 0.5},
-            volume=v * 2.5,
-            profile=TemporalProfile(start=0, end=horizon, shape="gaussian", peak=1.0,
-                                    peak_tick=horizon // 3),
-        ),
-        CapacityPerturbation(
+    effects = _wave(
+        "wave", state, {"critical": 0.15, "urgent": 0.35, "routine": 0.5}, v * 2.5,
+        TemporalProfile(start=0, end=horizon, shape="gaussian", peak=1.0,
+                        peak_tick=horizon // 3),
+    )
+    effects.append(
+        Effect(
             id="staff-sickness",
-            facilities=_all_facilities(state),
-            category=STAFF,
-            multiplier=0.7,
+            target="resource.capacity",
+            select={"category": [STAFF]},
+            op="multiply",
+            value=0.7,
             profile=TemporalProfile(start=horizon // 6, end=horizon, shape="ramp", peak=1.0),
-        ),
-    ]
-    if stuff:
-        perturbations.append(
-            CapacityPerturbation(
+        )
+    )
+    if activities_of(state, STUFF):
+        effects.append(
+            Effect(
                 id="supply-strain",
-                facilities=_all_facilities(state),
-                category=STUFF,
-                multiplier=0.6,
+                target="resource.capacity",
+                select={"category": [STUFF]},
+                op="multiply",
+                value=0.6,
                 profile=TemporalProfile(start=horizon // 4, end=horizon, shape="step", peak=1.0),
             )
         )
-    return Scenario(
+    return Event(
         id="pandemic",
         name="Pandemic wave",
         description="Respiratory surge over a whole network, with staff attrition behind it.",
         horizon=horizon,
-        perturbations=perturbations,
+        effects=effects,
     )
 
 
-def flood(state: SystemState, horizon: int = 30) -> Scenario:
+def flood(state: SystemState, horizon: int = 30) -> Event:
     """One site under water, its routes cut, trauma arriving everywhere.
 
     The site chosen is the one with the least capacity — the honest worst case
     for a template with no map to consult. Which building floods is a real
-    input, and the UI should let it be chosen; picking the largest by default
+    input, and the composer lets it be chosen; picking the largest by default
     would manufacture a catastrophe and make every policy look heroic.
     """
     facilities = _all_facilities(state)
     if not facilities:
         raise ValueError("no facilities to flood")
     hit = min(facilities, key=lambda fid: (state.capacity_of(fid), fid))
-    cut = [
-        (e.source, e.target)
+    routes = [
+        f"{e.source}>{e.target}"
         for e in state.network.all_edges()
         if hit in (e.source, e.target)
     ]
-    v = _baseline_volume(state)
-    perturbations: list = [
-        CapacityPerturbation(
+    effects = [
+        Effect(
             id="inundation",
-            facilities=[hit],
-            absolute=0.0,
+            target="resource.capacity",
+            select={"facility": [hit]},
+            op="set",
+            value=0.0,
             profile=TemporalProfile(start=2, end=horizon, shape="step", peak=1.0),
-        ),
-        DemandPerturbation(
-            id="trauma",
-            targets=_all_populations(state),
-            acuity_mix={"critical": 0.35, "urgent": 0.45, "routine": 0.2},
-            volume=v * 1.8,
-            profile=TemporalProfile(start=2, end=10, shape="pulse", peak=1.0),
-        ),
+        )
     ]
-    if cut:
-        perturbations.append(
-            ConnectivityPerturbation(
+    effects += _wave(
+        "trauma", state, {"critical": 0.35, "urgent": 0.45, "routine": 0.2},
+        _baseline_volume(state) * 1.8,
+        TemporalProfile(start=2, end=10, shape="pulse", peak=1.0),
+    )
+    if routes:
+        effects.append(
+            Effect(
                 id="roads-cut",
-                edges=cut,
-                multiplier=0.0,
+                target="edge.weight",
+                select={"route": routes},
+                op="set",
+                value=0.0,
                 profile=TemporalProfile(start=2, end=horizon // 2, shape="step", peak=1.0),
             )
         )
-    return Scenario(
+    return Event(
         id="flood",
         name="Flood",
         description=f"{state.facility(hit).name or hit} inundated and cut off; trauma surge.",
         horizon=horizon,
-        perturbations=perturbations,
+        effects=effects,
     )
 
 
-def cyberattack(state: SystemState, horizon: int = 40) -> Scenario:
+def cyberattack(state: SystemState, horizon: int = 40) -> Event:
     """Systems down and nothing else touched.
 
     The purest test of whether the primitives were chosen well: no demand
-    perturbation, no bed destroyed. If a cyberattack still kills people, it is
-    because the cascade carried it there — and if it does not, the model is
-    saying that this twin's care does not depend on its systems, which is a
-    finding about the ontology rather than about the attack.
+    effect beyond an ordinary day, no bed destroyed. If a cyberattack still
+    kills people, it is because the cascade carried it there — and if it does
+    not, the model is saying this twin's care does not depend on its systems,
+    which is a finding about the ontology rather than about the attack.
     """
     systems = activities_of(state, SYSTEMS)
-    perturbations: list = [
-        DemandPerturbation(
-            id="steady-state",
-            targets=_all_populations(state),
-            acuity_mix={"critical": 0.1, "urgent": 0.3, "routine": 0.6},
-            volume=_baseline_volume(state),
-            profile=TemporalProfile(start=0, end=horizon, shape="step", peak=1.0),
-        ),
-    ]
+    effects = _wave(
+        "steady-state", state, {"critical": 0.1, "urgent": 0.3, "routine": 0.6},
+        _baseline_volume(state),
+        TemporalProfile(start=0, end=horizon, shape="step", peak=1.0),
+    )
     if systems:
-        perturbations.append(
-            CapacityPerturbation(
+        effects.append(
+            Effect(
                 id="ransomware",
-                facilities=_all_facilities(state),
-                category=SYSTEMS,
-                multiplier=0.1,
+                target="resource.capacity",
+                select={"category": [SYSTEMS]},
+                op="multiply",
+                value=0.1,
                 profile=TemporalProfile(start=3, end=horizon - 5, shape="step", peak=1.0),
             )
         )
-    return Scenario(
+    return Event(
         id="cyberattack",
         name="Cyberattack",
         description=(
@@ -294,7 +312,7 @@ def cyberattack(state: SystemState, horizon: int = 40) -> Scenario:
             "attack has nothing to degrade and the run will show a normal day."
         ),
         horizon=horizon,
-        perturbations=perturbations,
+        effects=effects,
     )
 
 
@@ -406,7 +424,7 @@ def surge_and_balance(state: SystemState) -> Policy:
     return Policy(id="surge-and-balance", name="Surge what is short, then transfer", rules=rules)
 
 
-SCENARIOS: dict[str, Callable[[SystemState], Scenario]] = {
+EVENTS: dict[str, Callable[[SystemState], Event]] = {
     "pandemic": pandemic,
     "flood": flood,
     "cyberattack": cyberattack,

@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import pytest
 
-from app.crisis.domain import SPACE, STAFF
-from app.crisis.ontology import UnrunnableExport, load
-from app.crisis.templates import POLICIES, SCENARIOS, care_model_for
+from app.events.domain import SPACE, STAFF
+from app.events.ontology import UnrunnableExport, load
+from app.events.templates import POLICIES, EVENTS, care_model_for
 
 
 def export(**over) -> dict:
@@ -67,7 +67,7 @@ def runnable(**over):
 
 
 def _any_model():
-    from app.crisis.domain import CareRequirement
+    from app.events.domain import CareRequirement
 
     return {"_probe": CareRequirement(acuity="_probe", consumes={})}
 
@@ -143,7 +143,7 @@ def test_a_care_model_nothing_provides_is_refused() -> None:
     goes unserved. That is indistinguishable from a real collapse unless
     somebody checks, and nobody checks a number that confirms their fears.
     """
-    from app.crisis.domain import CareRequirement
+    from app.events.domain import CareRequirement
 
     mismatched = {"critical": CareRequirement(acuity="critical", consumes={"icu_bed": 1.0})}
     with pytest.raises(UnrunnableExport, match="naming mismatch"):
@@ -162,21 +162,40 @@ def test_edges_to_nowhere_are_dropped() -> None:
 # --- the templates fit whatever they are given ------------------------------
 
 
-@pytest.mark.parametrize("name", sorted(SCENARIOS))
-def test_every_crisis_template_targets_real_ids(name: str) -> None:
+@pytest.mark.parametrize("name", sorted(EVENTS))
+def test_every_event_template_targets_real_ids(name: str) -> None:
     """Templates exist because a real twin names its wards with UUIDs.
 
-    A perturbation aimed at a facility that is not there is silently inert: the
-    run completes, nothing happens, and the crisis appears to have been survived.
+    An effect aimed at something that is not there is silently inert: the run
+    completes, nothing happens, and the event appears to have been survived.
     """
     s = runnable()
-    scenario = SCENARIOS[name](s)
-    assert scenario.perturbations, f"{name} produced no perturbation"
-    for p in scenario.perturbations:
-        for fid in getattr(p, "facilities", []):
+    event = EVENTS[name](s)
+    assert event.effects, f"{name} produced no effect"
+    routes = {f"{e.source}>{e.target}" for e in s.network.all_edges()}
+    for e in event.effects:
+        for fid in e.select.get("facility", []):
             assert fid in s.facilities
-        for pid in getattr(p, "targets", []):
+        for pid in e.select.get("population", []):
             assert pid in s.populations
+        for acuity in e.select.get("acuity", []):
+            assert acuity in s.care_model
+        for route in e.select.get("route", []):
+            assert route in routes
+
+
+def test_a_template_uses_only_catalogued_targets() -> None:
+    """The templates are the proof the catalogue is complete.
+
+    These three used to be three bespoke perturbation classes. If any of them
+    still needed one, the generic effect would not have earned its place.
+    """
+    from app.events.targets import BY_PATH
+
+    s = runnable()
+    used = {e.target for name in EVENTS for e in EVENTS[name](s).effects}
+    assert used <= set(BY_PATH)
+    assert used >= {"resource.capacity", "demand.volume"}
 
 
 def test_a_policy_template_reads_the_real_network() -> None:
@@ -235,10 +254,10 @@ def test_the_dead_leave_the_queue() -> None:
     policy scores within a rounding error of doing nothing — which is exactly
     what the first run against a real twin produced.
     """
-    from app.crisis.dynamics import run
+    from app.events.dynamics import run
 
     s = runnable()
-    scenario = SCENARIOS["pandemic"](s)
+    scenario = EVENTS["pandemic"](s)
     t = run(s, scenario, POLICIES["null"](s), seed=0)
     arrived = sum(sum(x.arrivals.values()) for x in t.ticks)
     assert 0 < t.deaths <= arrived
@@ -251,8 +270,8 @@ def test_a_transfer_moves_the_sickest_not_the_longest_queue() -> None:
     there die — so the policy scores *worse* than doing nothing while its trace
     shows a rule firing and patients moving, which reads as working.
     """
-    from app.crisis.dynamics import _transfer
-    from app.crisis.policy import Action, Friction
+    from app.events.dynamics import _transfer
+    from app.events.policy import Action, Friction
 
     s = runnable()
     s.backlog["unit-a"] = {"routine": 100.0, "critical": 4.0}
@@ -282,74 +301,157 @@ def test_surging_follows_the_constraint_as_it_moves() -> None:
 # --- events composed by hand ------------------------------------------------
 
 
+def _arrivals(state, effects, tick=2):
+    """Net arrivals at one tick, through the engine that computes them."""
+    from app.events.dynamics import Engine
+    from app.events.effects import Event
+    from app.events.policy import null_policy
+
+    e = Engine(state, Event(id="e", horizon=10, effects=effects), null_policy(), 0)
+    return e._arrivals(tick)
+
+
+def _demand(eid: str, volume: float, acuity: str = "critical"):
+    from app.events.effects import Effect, TemporalProfile
+
+    return Effect(
+        id=eid, target="demand.volume",
+        select={"population": ["pop:site-1"], "acuity": [acuity]},
+        op="add", value=volume,
+        profile=TemporalProfile(start=0, end=10, shape="step", peak=1.0),
+    )
+
+
 def test_an_event_can_remove_demand_as_well_as_add_it() -> None:
-    """A vaccination campaign is a fact about the world, not a response.
+    """A vaccination programme is a fact about the world, not a response.
 
     With demand pinned non-negative the only expressible events are ones that
     make things worse, and anything protective has to masquerade as a policy —
     which then shows up in the response cost and gets ranked against the very
     thing it is not.
     """
-    from app.crisis.events import DemandPerturbation, Scenario, TemporalProfile
-
-    wave = DemandPerturbation(
-        id="wave", targets=["p"], acuity_mix={"critical": 1.0}, volume=100,
-        profile=TemporalProfile(start=0, end=10, shape="step", peak=1.0),
-    )
-    vaccination = DemandPerturbation(
-        id="vaccination", targets=["p"], acuity_mix={"critical": 1.0}, volume=-40,
-        profile=TemporalProfile(start=0, end=10, shape="step", peak=1.0),
-    )
-    assert Scenario(id="s", perturbations=[wave]).demand(2)[("p", "critical")] == 100
-    net = Scenario(id="s", perturbations=[wave, vaccination]).demand(2)
-    assert net[("p", "critical")] == 60
+    s = runnable()
+    assert _arrivals(s, [_demand("wave", 100)])[("pop:site-1", "critical")] == 100
+    net = _arrivals(s, [_demand("wave", 100), _demand("vaccination", -40)])
+    assert net[("pop:site-1", "critical")] == 60
 
 
 def test_prevention_cannot_go_below_zero_arrivals() -> None:
     """Otherwise a facility carries a negative queue that later swallows real
     patients, and the run reports fewer arrivals than actually happened."""
-    from app.crisis.events import DemandPerturbation, Scenario, TemporalProfile
-
-    over = DemandPerturbation(
-        id="over", targets=["p"], acuity_mix={"critical": 1.0}, volume=-500,
-        profile=TemporalProfile(start=0, end=10, shape="step", peak=1.0),
-    )
-    small = DemandPerturbation(
-        id="small", targets=["p"], acuity_mix={"critical": 1.0}, volume=10,
-        profile=TemporalProfile(start=0, end=10, shape="step", peak=1.0),
-    )
-    assert Scenario(id="s", perturbations=[small, over]).demand(2) == {}
+    s = runnable()
+    assert _arrivals(s, [_demand("small", 10), _demand("over", -500)]) == {}
 
 
-def test_an_effect_is_parsed_as_the_kind_it_declares() -> None:
-    """The three share enough fields to be confused over the wire.
+def test_a_severity_mix_splits_rather_than_multiplies() -> None:
+    """Forty patients per step has to mean forty, not forty of each kind.
 
-    A capacity effect read as connectivity would apply to nothing at all, and
-    the run would simply look uneventful.
+    Populations and severities are deliberately asymmetric: a wave reaching
+    three catchments sends the stated number from all three, but one spread
+    across three severities is still one wave.
     """
-    from app.crisis.events import CapacityPerturbation, Scenario
+    from app.events.effects import Effect, TemporalProfile
 
-    s = Scenario.model_validate({
-        "id": "e",
-        "perturbations": [
-            {"id": "c", "kind": "capacity", "facilities": ["unit-a"], "category": SPACE,
-             "multiplier": 0.5, "profile": {"start": 1, "end": 5, "shape": "step", "peak": 1.0}},
+    s = runnable()
+    spread = Effect(
+        id="wave", target="demand.volume", select={"population": ["pop:site-1"]},
+        op="add", value=30,
+        profile=TemporalProfile(start=0, end=10, shape="step", peak=1.0),
+    )
+    got = _arrivals(s, [spread])
+    assert sum(got.values()) == 30
+    assert len(got) == len(s.care_model)
+
+
+def test_an_unknown_target_is_refused_at_parse_time() -> None:
+    """A free-form path would throw away the whole point of the catalogue.
+
+    An effect naming a quantity that does not exist cannot be applied, so it
+    would run and change nothing — the failure mode this design exists to
+    prevent, arriving through the door built to close it.
+    """
+    import pydantic
+
+    from app.events.effects import Effect
+
+    with pytest.raises(pydantic.ValidationError, match="unknown target"):
+        Effect(id="x", target="staff.morale", op="multiply", value=0.5)
+
+
+def test_an_operation_the_quantity_rejects_is_refused() -> None:
+    """A queue has no prior value to multiply.
+
+    Offering it would read as halving the wave and silently do nothing,
+    because there is nothing at that address to halve.
+    """
+    import pydantic
+
+    from app.events.effects import Effect
+
+    with pytest.raises(pydantic.ValidationError, match="cannot be changed by"):
+        Effect(id="x", target="demand.volume", op="multiply", value=0.5)
+
+
+def test_a_filter_the_quantity_does_not_have_is_refused() -> None:
+    """Narrowing length of stay by facility looks reasonable and does nothing:
+    the care model is global, so such a filter matches no dimension and the
+    effect would apply everywhere or nowhere depending on how it was read.
+    """
+    import pydantic
+
+    from app.events.effects import Effect
+
+    with pytest.raises(pydantic.ValidationError, match="cannot be narrowed by"):
+        Effect(
+            id="x", target="care.stay_ticks", select={"facility": ["unit-a"]},
+            op="add", value=2,
+        )
+
+
+def test_length_of_stay_can_be_perturbed() -> None:
+    """The verb that was missing, and the reason the catalogue exists.
+
+    A disease that lingers is neither more demand nor less capacity. Before
+    the catalogue it could only be faked by sending more patients, which is a
+    different illness entirely.
+    """
+    from app.events.dynamics import run
+    from app.events.effects import Effect, Event, TemporalProfile
+    from app.events.policy import null_policy
+
+    s = runnable()
+    base_stay = s.care_model["critical"].stay_ticks
+    longer = Event(
+        id="lingering", horizon=20,
+        effects=[
+            _demand("wave", 30),
+            Effect(
+                id="slower-recovery", target="care.stay_ticks",
+                select={"acuity": ["critical"]}, op="add", value=2,
+                profile=TemporalProfile(start=0, end=20, shape="step", peak=1.0),
+            ),
         ],
-    })
-    assert isinstance(s.perturbations[0], CapacityPerturbation)
+    )
+    normal = Event(id="normal", horizon=20, effects=[_demand("wave", 30)])
+    slow = run(s, longer, null_policy(), seed=0)
+    fast = run(s, normal, null_policy(), seed=0)
+    # Beds are held two steps longer each, so fewer people get one.
+    assert slow.deaths > fast.deaths
+    # And the state it was measured from is untouched.
+    assert s.care_model["critical"].stay_ticks == base_stay
 
 
 # --- end to end -------------------------------------------------------------
 
 
 def test_a_real_twin_runs_and_a_policy_beats_doing_nothing() -> None:
-    from app.crisis.harness import compare
-    from app.crisis.scoring import Objective
+    from app.events.harness import compare
+    from app.events.scoring import Objective
 
     s = runnable()
     rows = compare(
         s,
-        SCENARIOS["pandemic"](s),
+        EVENTS["pandemic"](s),
         [POLICIES["null"](s), POLICIES["load-balance"](s), POLICIES["surge-and-balance"](s)],
         Objective(weights={"excess_deaths": 1.0}),
     )

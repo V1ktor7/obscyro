@@ -1,15 +1,15 @@
-"""HTTP surface for the crisis layer.
+"""HTTP surface for the event layer.
 
 Thin on purpose. The engine is a pure function of its input, so an endpoint here
 should do three things and stop: load the twin, fit the templates to it, and run
 the comparison. Anything cleverer belongs in a module that can be tested without
 a web server.
 
-The one piece of judgement this file does exercise is which failures are a 422
-rather than a 500. A twin with no capacity, no catchment, or an activity nothing
-provides will *run* — it just produces a tidy table of zeroes in which every
-policy ties for first place. Those are the answers most likely to be believed
-and least likely to be true, so they are refused with the reason attached.
+The judgement this file does exercise is which failures are a 422 rather than a
+500. A twin with no capacity, no catchment, or an activity nothing provides will
+*run* — it just produces a tidy table of zeroes in which every response ties for
+first place. Those are the answers most likely to be believed and least likely
+to be true, so they are refused with the reason attached.
 """
 
 from __future__ import annotations
@@ -19,19 +19,15 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.crisis.domain import CareRequirement, SystemState
-from app.crisis.events import (
-    CapacityPerturbation,
-    ConnectivityPerturbation,
-    DemandPerturbation,
-    Scenario,
-)
-from app.crisis.harness import compare
-from app.crisis.ontology import OntologyExport, UnrunnableExport, load
-from app.crisis.scoring import Objective
-from app.crisis.templates import POLICIES, SCENARIOS, care_model_for
+from app.events.domain import CareRequirement, SystemState
+from app.events.effects import Event
+from app.events.harness import compare
+from app.events.ontology import OntologyExport, UnrunnableExport, load
+from app.events.scoring import Objective
+from app.events.targets import CATALOGUE
+from app.events.templates import EVENTS, POLICIES, care_model_for
 
-router = APIRouter(prefix="/crisis", tags=["crisis"])
+router = APIRouter(prefix="/events", tags=["events"])
 
 # A care requirement that consumes nothing. Used only to get the loader past its
 # "no care model" check on the first pass, so the real model can be built
@@ -41,12 +37,11 @@ _PROBE = CareRequirement(acuity="_probe", consumes={}, mortality_per_unmet=0.0)
 
 class CompareRequest(BaseModel):
     system: OntologyExport
-    # Either a template name, or an event composed by hand. A template is just
-    # a generator that produces the second thing, so accepting both costs one
-    # branch and removes the ceiling: three canned crises is a demo, not a
-    # platform.
-    scenario: str | None = None
-    event: Scenario | None = None
+    # Either a template name, or an event composed by hand. A template is just a
+    # generator that produces the second thing, so accepting both costs one
+    # branch and removes the ceiling: three canned events is a demo.
+    template: str | None = None
+    event: Event | None = None
     policies: list[str] = Field(min_length=1)
     seed: int | None = None
     # The two facts the ontology cannot hold. Both default to nothing, and both
@@ -62,7 +57,7 @@ class CompareRequest(BaseModel):
 
 
 class CompareResponse(BaseModel):
-    scenario: dict[str, Any]
+    event: dict[str, Any]
     rows: list[dict[str, Any]]
     facilities: int
     horizon: int
@@ -70,7 +65,24 @@ class CompareResponse(BaseModel):
     weights: dict[str, float]
 
 
-def _reject_effects_that_hit_nothing(scenario: Scenario, state: SystemState) -> None:
+@router.get("/catalogue")
+def catalogue() -> dict[str, Any]:
+    """What can be run and what can be perturbed.
+
+    `targets` is the whole point of the design: the composer builds its form
+    from this list rather than from a hard-coded set of effect kinds, so adding
+    something perturbable makes it appear in the UI with no front-end change.
+    Each entry carries its own composition law, which is the part an author must
+    not be allowed to choose — see `targets.py`.
+    """
+    return {
+        "templates": sorted(EVENTS),
+        "policies": sorted(POLICIES),
+        "targets": [t.model_dump() for t in CATALOGUE],
+    }
+
+
+def _reject_effects_that_hit_nothing(event: Event, state: SystemState) -> None:
     """Refuse an event aimed at things the twin does not contain.
 
     A hand-composed effect is written against ids a person picked, and a
@@ -79,72 +91,63 @@ def _reject_effects_that_hit_nothing(scenario: Scenario, state: SystemState) -> 
     dangerous output this service can produce, because it is indistinguishable
     from resilience.
 
-    Templates cannot trip this — they generate their targets from the state —
+    Templates cannot trip this — they generate their selections from the state —
     so the cost falls entirely on the case that needs it.
     """
-    known_activities = {
-        a for f in state.facilities.values() for r in f.resources.values() for a in r.enables
+    known = {
+        "facility": set(state.facilities),
+        "population": set(state.populations),
+        "acuity": set(state.care_model),
+        "activity": {
+            a for f in state.facilities.values() for r in f.resources.values() for a in r.enables
+        },
+        "category": {r.category for f in state.facilities.values() for r in f.resources.values()},
+        "route": {f"{e.source}>{e.target}" for e in state.network.all_edges()},
     }
-    known_categories = {
-        r.category for f in state.facilities.values() for r in f.resources.values()
-    }
-    edges = {(e.source, e.target) for e in state.network.all_edges()}
     problems: list[str] = []
 
-    for p in scenario.perturbations:
-        if isinstance(p, DemandPerturbation):
-            missing = [t for t in p.targets if t not in state.populations]
-            if missing:
-                problems.append(f"{p.id}: no population {', '.join(missing)}")
-            if not p.acuity_mix:
-                problems.append(f"{p.id}: no acuity mix, so it produces no patients")
-        elif isinstance(p, CapacityPerturbation):
-            missing = [f for f in p.facilities if f not in state.facilities]
-            if missing:
-                problems.append(f"{p.id}: no facility {', '.join(missing)}")
-            if p.category and p.category not in known_categories:
-                problems.append(
-                    f"{p.id}: nothing in this twin is {p.category!r} "
-                    f"(has: {', '.join(sorted(known_categories)) or 'nothing'})"
-                )
-            unknown_res = [r for r in p.resources if r not in known_activities]
-            if unknown_res:
-                problems.append(f"{p.id}: no resource {', '.join(unknown_res)}")
-            if p.multiplier is None and p.absolute is None:
-                problems.append(f"{p.id}: sets neither a multiplier nor an absolute value")
-        elif isinstance(p, ConnectivityPerturbation):
-            missing_e = [f"{s}→{t}" for s, t in p.edges if (s, t) not in edges]
-            if missing_e:
-                problems.append(f"{p.id}: no route {', '.join(missing_e)}")
+    if not event.effects:
+        problems.append("it has no effects, so it is indistinguishable from a normal day")
 
-    if not scenario.perturbations:
-        problems.append("the event has no effects, so it is indistinguishable from a normal day")
+    for e in event.effects:
+        for dimension, chosen in e.select.items():
+            missing = [v for v in chosen if v not in known.get(dimension, set())]
+            if missing:
+                have = known.get(dimension, set())
+                problems.append(
+                    f"{e.id}: no {dimension} {', '.join(missing)} "
+                    f"(has: {', '.join(sorted(have)) if have else 'none'})"
+                )
+        if e.op == "multiply" and e.value == 1:
+            problems.append(f"{e.id}: multiplies by 1, which changes nothing")
+        if e.profile.peak <= 0:
+            problems.append(f"{e.id}: has a peak of zero, so it never bites")
+        if e.profile.end is not None and e.profile.end < e.profile.start:
+            problems.append(
+                f"{e.id}: ends at step {e.profile.end}, before it starts at {e.profile.start}"
+            )
+        if e.profile.start >= event.horizon:
+            problems.append(
+                f"{e.id}: starts at step {e.profile.start}, after the run ends "
+                f"at {event.horizon}"
+            )
+
     if problems:
         raise HTTPException(422, "This event would do nothing. " + "; ".join(problems) + ".")
 
 
-@router.get("/catalogue")
-def catalogue() -> dict[str, list[str]]:
-    """What can be run, without needing a twin to ask.
-
-    Lets the UI populate its menus before any environment is chosen, and keeps
-    the names in one place rather than duplicated into TypeScript.
-    """
-    return {"scenarios": sorted(SCENARIOS), "policies": sorted(POLICIES)}
-
-
 @router.post("/compare", response_model=CompareResponse)
 def compare_route(req: CompareRequest) -> CompareResponse:
-    if (req.scenario is None) == (req.event is None):
+    if (req.template is None) == (req.event is None):
         raise HTTPException(
             422,
-            "Send exactly one of `scenario` (a template name) or `event` (a composed "
+            "Send exactly one of `template` (a shipped name) or `event` (a composed "
             "event). Sending both leaves it to this endpoint to decide which one the "
             "caller meant.",
         )
-    if req.scenario is not None and req.scenario not in SCENARIOS:
+    if req.template is not None and req.template not in EVENTS:
         raise HTTPException(
-            422, f"Unknown event {req.scenario!r}. Available: {', '.join(sorted(SCENARIOS))}."
+            422, f"Unknown template {req.template!r}. Available: {', '.join(sorted(EVENTS))}."
         )
     unknown = [p for p in req.policies if p not in POLICIES]
     if unknown:
@@ -154,8 +157,8 @@ def compare_route(req: CompareRequest) -> CompareResponse:
         )
 
     # The care model needs the loaded state to know which activities exist, and
-    # the loader needs a care model to check against — so load once with an
-    # empty model held back from validation, then build the real one.
+    # the loader needs a care model to check against — so load once with a probe
+    # held back from validation, then build the real one.
     try:
         probe = load(
             req.system,
@@ -176,8 +179,8 @@ def compare_route(req: CompareRequest) -> CompareResponse:
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 
-    scenario = req.event if req.event is not None else SCENARIOS[req.scenario or ""](state)
-    _reject_effects_that_hit_nothing(scenario, state)
+    event = req.event if req.event is not None else EVENTS[req.template or ""](state)
+    _reject_effects_that_hit_nothing(event, state)
     policies = [POLICIES[p](state) for p in req.policies]
 
     # Cost is weighted at roughly two dollars per micro-life so it registers
@@ -187,7 +190,7 @@ def compare_route(req: CompareRequest) -> CompareResponse:
     weights = {"excess_deaths": 1.0, "response_cost": 0.000002}
     rows = compare(
         state,
-        scenario,
+        event,
         policies,
         Objective(weights=weights),
         replicates=max(1, req.replicates),
@@ -198,16 +201,16 @@ def compare_route(req: CompareRequest) -> CompareResponse:
         {a for f in state.facilities.values() for r in f.resources.values() for a in r.enables}
     )
     return CompareResponse(
-        scenario={
-            "id": scenario.id,
-            "name": scenario.name,
-            "description": scenario.description,
-            "perturbations": [p.id for p in scenario.perturbations],
+        event={
+            "id": event.id,
+            "name": event.name,
+            "description": event.description,
+            "effects": [e.id for e in event.effects],
             "composed": req.event is not None,
         },
         rows=rows,
         facilities=len(state.facilities),
-        horizon=scenario.horizon,
+        horizon=event.horizon,
         activities=activities,
         weights=weights,
     )

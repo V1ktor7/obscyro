@@ -63,7 +63,7 @@ import {
   type EnvironmentType,
   type EnvTypeSummary,
   type LinkCardinality,
-  type CrisisRole,
+  type SimRole,
   type ObjectNature,
   type OntologySummary,
   type PropertyDefinition,
@@ -825,13 +825,13 @@ export default function ManagerView() {
             setPanel("none");
             setPendingTypePos(null);
           }}
-          onSubmit={async (name, description, schema, nature, crisisRole) => {
+          onSubmit={async (name, description, schema, nature, simRole) => {
             if (!env) return;
             await createEnvType(env, {
               name,
               description,
               nature,
-              crisisRole,
+              simRole,
               propertySchema: schema,
             });
             if (pendingTypePos) {
@@ -905,12 +905,12 @@ export default function ManagerView() {
           mode="edit"
           initial={selectedTypeDef}
           onClose={() => setSelectedType(null)}
-          onSubmit={async (_name, description, schema, nature, crisisRole) => {
+          onSubmit={async (_name, description, schema, nature, simRole) => {
             if (!env) return;
             await updateEnvType(env, selectedTypeDef.name, {
               description,
               nature,
-              crisisRole,
+              simRole,
               propertySchema: schema,
             });
             await loadTypes();
@@ -2009,7 +2009,7 @@ function PropertyRowsEditor({
  * touch it. "Staff means people" tells you nothing you could get wrong; "a
  * strike takes it away all at once" does.
  */
-const CRISIS_ROLE_HINT: Record<CrisisRole | "", string> = {
+const SIM_ROLE_HINT: Record<SimRole | "", string> = {
   "": "This type stays out of the simulation. That is the right answer for most of an ontology.",
   space: "Counted as room to admit people. A flood sets it to zero; each patient occupies one unit of it.",
   staff: "Counted as workforce. A pandemic erodes it gradually, a strike removes it all at once.",
@@ -2034,7 +2034,7 @@ function TypeEditorPanel({
     description: string,
     schema: PropertyDefinition[],
     nature: ObjectNature | null,
-    crisisRole: CrisisRole | null,
+    simRole: SimRole | null,
   ) => Promise<void>;
   onDelete?: () => Promise<void>;
   onError: (msg: string) => void;
@@ -2042,7 +2042,7 @@ function TypeEditorPanel({
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [nature, setNature] = useState<ObjectNature | "">(initial?.nature ?? "");
-  const [crisisRole, setCrisisRole] = useState<CrisisRole | "">(initial?.crisisRole ?? "");
+  const [simRole, setSimRole] = useState<SimRole | "">(initial?.simRole ?? "");
   const [rows, setRows] = useState<PropertyDefinition[]>(
     (initial?.propertySchema as PropertyDefinition[]) ?? [],
   );
@@ -2061,7 +2061,7 @@ function TypeEditorPanel({
         description.trim(),
         rows.filter((r) => r.key.trim()).map((r) => ({ ...r, key: r.key.trim() })),
         nature === "" ? null : nature,
-        crisisRole === "" ? null : crisisRole,
+        simRole === "" ? null : simRole,
       );
     } catch (err) {
       onError((err as Error).message);
@@ -2107,8 +2107,8 @@ function TypeEditorPanel({
         </Labelled>
         <Labelled label="Resilience role">
           <select
-            value={crisisRole}
-            onChange={(e) => setCrisisRole(e.target.value as CrisisRole | "")}
+            value={simRole}
+            onChange={(e) => setSimRole(e.target.value as SimRole | "")}
             className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-xs text-ink focus:border-brand focus:outline-none"
           >
             <option value="">Not simulated</option>
@@ -2119,7 +2119,7 @@ function TypeEditorPanel({
             <option value="demand">Demand — patients, cases</option>
           </select>
           <p className="mt-1.5 text-[11px] leading-snug text-ink-faint">
-            {CRISIS_ROLE_HINT[crisisRole]}
+            {SIM_ROLE_HINT[simRole]}
           </p>
         </Labelled>
         <Labelled label="Properties">

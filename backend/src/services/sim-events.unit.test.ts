@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { assertEventMatchesWorld, type CrisisEventRow } from "./crisis-events.js";
+import { assertEventMatchesWorld, type SimEventRow } from "./sim-events.js";
 
 // ---------------------------------------------------------------------------
 // An event's effects name instances by id. Run one against the wrong world and
@@ -10,7 +10,7 @@ import { assertEventMatchesWorld, type CrisisEventRow } from "./crisis-events.js
 // These pin the check that turns that into an instruction.
 // ---------------------------------------------------------------------------
 
-function event(twinScenarioId: string | null): CrisisEventRow {
+function event(twinScenarioId: string | null): SimEventRow {
   return {
     id: "e1",
     name: "East wing out",

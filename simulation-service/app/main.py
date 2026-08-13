@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from app.crisis.api import router as crisis_router
+from app.events.api import router as events_router
 from app.registry import list_artifacts, registered_types
 from app.runner import simulate
 from app.schemas import (
@@ -25,7 +25,7 @@ app = FastAPI(
 )
 
 
-app.include_router(crisis_router)
+app.include_router(events_router)
 
 
 @app.get("/health")

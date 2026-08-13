@@ -15,7 +15,7 @@ from typing import Callable
 
 from pydantic import BaseModel, Field
 
-from app.crisis.dynamics import Trajectory
+from app.events.dynamics import Trajectory
 
 ObjectiveFn = Callable[[Trajectory], tuple[float, list[float]]]
 _OBJECTIVES: dict[str, ObjectiveFn] = {}

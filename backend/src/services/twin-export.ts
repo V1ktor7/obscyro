@@ -4,17 +4,17 @@ import { listInstancesForEnv, listLinksForEnv } from "./ontology.js";
 import { aggregationEnds, attaches, buildsHierarchy, getUnitTree } from "./twin.js";
 
 /**
- * The twin, in the shape the crisis engine reads.
+ * The twin, in the shape the simulation engine reads.
  *
  * The engine is Python and the ontology is Postgres, so something has to cross.
  * What crosses is a payload, not a database connection: the ontology's rules —
  * what a placement means, which relationship aggregates, what a type is during
- * a crisis — stay here, where they already live, and the engine stays a pure
+ * an event — stay here, where they already live, and the engine stays a pure
  * function of its input. That is also what lets both halves be tested without
  * the other one running.
  *
  * Nothing in this file matches on a type name or a link name. Everything it
- * needs is declared: `crisis_role` on the object type (migration 045) and
+ * needs is declared: `sim_role` on the object type (migration 045) and
  * `aggregates`/`transitive` on the link type (migration 044). A hospital that
  * calls its wards *pavillons* and its placement `héberge` exports identically.
  *
@@ -25,7 +25,7 @@ import { aggregationEnds, attaches, buildsHierarchy, getUnitTree } from "./twin.
  * decide every result computed from it.
  */
 
-export interface CrisisResource {
+export interface SimResource {
   id: string;
   category: string;
   quantity: number;
@@ -33,16 +33,16 @@ export interface CrisisResource {
   enables: string[];
 }
 
-export interface CrisisFacility {
+export interface SimFacility {
   id: string;
   name: string;
   location: [number, number] | null;
-  resources: Record<string, CrisisResource>;
+  resources: Record<string, SimResource>;
   /** Patients already held, by the type that represents them. */
   census: Record<string, number>;
 }
 
-export interface CrisisEdge {
+export interface SimEdge {
   source: string;
   target: string;
   kind: "transfer" | "supply" | "information";
@@ -50,7 +50,7 @@ export interface CrisisEdge {
   via: string;
 }
 
-export interface CrisisPopulation {
+export interface SimPopulation {
   id: string;
   name: string;
   size: number;
@@ -58,7 +58,7 @@ export interface CrisisPopulation {
 }
 
 /** A fact the export could not establish, and what it did instead. */
-export interface CrisisGap {
+export interface SimGap {
   code:
     | "TYPE_WITHOUT_ROLE"
     | "NO_CARE_MODEL"
@@ -69,19 +69,19 @@ export interface CrisisGap {
   subjects: string[];
 }
 
-export interface CrisisExport {
+export interface SimExport {
   environment: string;
   /** The scenario this was read under, or null for the live twin. */
   scenario_id: string | null;
   generated_at: string;
-  facilities: CrisisFacility[];
-  populations: CrisisPopulation[];
-  edges: CrisisEdge[];
+  facilities: SimFacility[];
+  populations: SimPopulation[];
+  edges: SimEdge[];
   /** What is missing, named. The engine refuses to run on a blocking gap. */
-  gaps: CrisisGap[];
+  gaps: SimGap[];
 }
 
-export type CrisisRole = "space" | "staff" | "stuff" | "systems" | "demand";
+export type SimRole = "space" | "staff" | "stuff" | "systems" | "demand";
 
 /**
  * Property values that mean "this unit of capacity is already spoken for".
@@ -123,7 +123,7 @@ function coordOf(properties: Record<string, unknown>): [number, number] | null {
  *
  * Derived from the type name only as a *label* — the engine treats it as an
  * opaque token, so a wrong one costs nothing but readability, unlike a wrong
- * `crisis_role`, which changes which perturbation reaches it.
+ * `sim_role`, which changes which perturbation reaches it.
  */
 function activityOf(typeName: string): string {
   return typeName.trim().toLowerCase().replace(/\s+/g, "_");
@@ -139,34 +139,34 @@ function activityOf(typeName: string): string {
  * build the wing first*". That second question is the one worth funding, and
  * every read below already accepted a lens; nothing was passing one.
  */
-export async function buildCrisisExport(
+export async function buildTwinExport(
   db: DbClient,
   environmentId: string,
   environmentSlug: string,
   lens?: ReadLens,
-): Promise<CrisisExport> {
+): Promise<SimExport> {
   const [{ nodes }, instances, links, roleRows] = await Promise.all([
     getUnitTree(db, environmentId, lens),
     listInstancesForEnv(db, environmentId, { limit: 20000, ...lens }),
     listLinksForEnv(db, environmentId, lens),
-    db.query<{ name: string; crisis_role: CrisisRole | null }>(
-      `SELECT name, crisis_role FROM app.ontology_object_types
+    db.query<{ name: string; sim_role: SimRole | null }>(
+      `SELECT name, sim_role FROM app.ontology_object_types
         WHERE organization_id = (SELECT organization_id FROM app.project WHERE id = $1)`,
       [environmentId],
     ),
   ]);
 
-  const roleByType = new Map(roleRows.rows.map((r) => [r.name, r.crisis_role]));
+  const roleByType = new Map(roleRows.rows.map((r) => [r.name, r.sim_role]));
   const unitIds = new Set(nodes.map((n) => n.id));
   const instanceById = new Map(instances.map((i) => [i.id, i]));
-  const gaps: CrisisGap[] = [];
+  const gaps: SimGap[] = [];
 
   // What hangs off a unit becomes capacity or census there. Which of the two,
   // and under which of the four constraints, is read from the type's declared
   // role — the engine never learns the word "bed", it learns "48 units of
   // space that enable `bed`".
   interface Accum {
-    role: CrisisRole;
+    role: SimRole;
     total: number;
     used: number;
   }
@@ -207,9 +207,9 @@ export async function buildCrisisExport(
     if (!placeOfUnit.has(unitId)) placeOfUnit.set(unitId, placeId);
   }
 
-  const facilities: CrisisFacility[] = nodes.map((n) => {
+  const facilities: SimFacility[] = nodes.map((n) => {
     const byType = perUnit.get(n.id) ?? new Map<string, Accum>();
-    const resources: Record<string, CrisisResource> = {};
+    const resources: Record<string, SimResource> = {};
     const census: Record<string, number> = {};
     for (const [typeName, acc] of byType) {
       const activity = activityOf(typeName);
@@ -224,7 +224,7 @@ export async function buildCrisisExport(
         category: acc.role,
         capacity: acc.total,
         // Free units, not total: a bed already holding someone is not capacity
-        // the crisis can use. Starting every run with an empty hospital would
+        // the event can use. Starting every run with an empty hospital would
         // flatter every policy at once and rank them wrongly.
         quantity: acc.total - acc.used,
         enables: [activity],
@@ -251,7 +251,7 @@ export async function buildCrisisExport(
   // structural. `contains` builds the hierarchy and is not a road; a placement
   // is not a road either. What remains — a declared `transfer_to` and anything
   // else built like it — is exactly the network.
-  const edges: CrisisEdge[] = [];
+  const edges: SimEdge[] = [];
   const seen = new Set<string>();
   for (const link of links) {
     if (buildsHierarchy(link) || attaches(link)) continue;
@@ -287,7 +287,7 @@ export async function buildCrisisExport(
   for (const [unitId, placeId] of placeOfUnit) {
     unitsByPlace.set(placeId, [...(unitsByPlace.get(placeId) ?? []), unitId]);
   }
-  const populations: CrisisPopulation[] = [...unitsByPlace].map(([placeId, units]) => {
+  const populations: SimPopulation[] = [...unitsByPlace].map(([placeId, units]) => {
     const p = instanceById.get(placeId);
     const name = String(p?.properties.name ?? p?.properties.code ?? placeId.slice(0, 8));
     return {
@@ -315,7 +315,7 @@ export async function buildCrisisExport(
     gaps.push({
       code: "TYPE_WITHOUT_ROLE",
       message:
-        `${typesWithoutRole.size} type(s) are attached to units but declare no crisis ` +
+        `${typesWithoutRole.size} type(s) are attached to units but declare no simulation ` +
         `role, so nothing they represent enters the simulation. Set a role on the ` +
         `object type to include them.`,
       subjects: [...typesWithoutRole].sort(),

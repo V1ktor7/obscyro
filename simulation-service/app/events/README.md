@@ -1,37 +1,83 @@
-# La couche crise
+# La couche événements
 
-Un gouvernement décrit son système de santé, lui envoie une crise, choisit une
-politique de réponse, et obtient une trajectoire notée : morts évitables, soins
-non rendus, ressources épuisées, coût. Puis il change la politique et
-recommence.
+Un réseau de santé se décrit, on lui envoie un événement, on choisit une
+réponse, et on obtient une trajectoire notée : morts évitables, soins non
+rendus, ressources épuisées, coût. Puis on change la réponse et on recommence.
 
 L'exigence qui commande tout : **la même machine doit modéliser une pandémie,
-une inondation, une cyberattaque et une grève** — sans qu'aucune ne soit un cas
-particulier dans le code.
+une inondation, une cyberattaque, une grève et l'ouverture d'une aile** — sans
+qu'aucune ne soit un cas particulier dans le code.
 
 ## Comment la versatilité tient
 
-Une crise n'est pas modélisée par ce qu'elle *est*, mais par ses **effets sur
-trois primitives** :
+Un événement n'est pas modélisé par ce qu'il *est*, mais par les **quantités
+qu'il change**. Il n'y a pas de types d'effet : un effet nomme une quantité du
+catalogue, une sélection, une opération et un calendrier.
 
-| verbe | ce que ça décrit |
-|---|---|
-| `DemandPerturbation` | la demande monte quelque part |
-| `CapacityPerturbation` | une ressource baisse quelque part |
-| `ConnectivityPerturbation` | une liaison se rompt quelque part |
+```json
+{ "id": "souche-plus-severe",
+  "target": "care.stay_ticks",
+  "select": { "acuity": ["critical", "urgent"] },
+  "op": "add", "value": 2,
+  "profile": { "start": 10, "end": 40, "shape": "ramp", "peak": 1 } }
+```
 
-Une pandémie, c'est demande ↑ + personnel ↓ + matériel ↓. Une inondation, c'est
-espace = 0 à un nœud + pic de demande + routes coupées. Une cyberattaque, c'est
-`systems` ↓ et rien d'autre — tout le reste passe par la cascade.
+Le catalogue (`targets.py`, exposé par `GET /events/catalogue`) :
 
-Les trois sont dans `examples/scenarios.py`, en données pures. **Ajouter une
-crise n'exige aucune modification du moteur.**
+| quantité | ce qu'on y change | composition |
+|---|---|---|
+| `resource.capacity` | ce qu'un établissement possède | base |
+| `edge.weight` | le débit d'une route | base |
+| `care.stay_ticks` | la durée d'un séjour | base |
+| `care.mortality_per_unmet` | la létalité d'un refus | base |
+| `care.consumes` | ce qu'un patient consomme | base |
+| `demand.volume` | les arrivées | accumulation |
+
+Une pandémie, c'est `demand.volume` ↑ + `resource.capacity` ↓ sur le personnel.
+Une inondation, c'est `resource.capacity` = 0 à un nœud + un pic de demande +
+`edge.weight` = 0. Une maladie qui traîne, c'est `care.stay_ticks` +2 et rien
+d'autre — le verbe qui manquait, et qui a fait naître le catalogue.
+
+**Rien ne teste si un changement est mauvais.** Un multiplicateur de capacité
+au-dessus de 1, c'est une aile qui ouvre ; un volume de demande négatif, c'est
+une campagne de vaccination. Un agrandissement planifié et une catastrophe sont
+le même objet avec d'autres chiffres.
+
+### La partie qui n'est pas négociable
+
+`compose` est une propriété de la quantité, **pas un choix de l'auteur**, et
+c'est toute la raison d'être du catalogue plutôt que d'un effet libre du genre
+« mets ce nombre à cette valeur ».
+
+Une capacité est reconstruite depuis une ligne de base à chaque pas. Appliquez
+un multiplicateur de 0,5 à la valeur *courante* et il se réapplique à chaque
+pas : 0,5⁶⁰ vaut 8,7 × 10⁻¹⁹. La simulation se termine, chaque règle se
+déclenche de façon plausible, et le rapport annonce que le réseau s'est effondré
+sous un choc de 50 %.
+
+Une file, c'est l'inverse : elle accumule, et la reconstruire depuis une base
+effacerait silencieusement tous ceux qui attendent encore.
+
+Se tromper là-dessus produit des simulations fausses et convaincantes. L'auteur
+choisit donc **quoi** perturber et **de combien** ; le catalogue décide comment
+ça se compose, une fois, à un seul endroit.
+
+### Ajouter une quantité perturbable
+
+Une entrée dans `CATALOGUE`, et un crochet dans `_apply_perturbations` si elle
+n'est pas déjà lue par `_resolve`. Elle apparaît alors dans le composeur **sans
+une ligne de front-end** : le formulaire se construit à partir du catalogue.
+
+Ce que ça ne donne pas : inventer une variable d'état que le modèle ne possède
+pas. « Le moral du personnel », avec son équation d'évolution, ce n'est plus un
+catalogue, c'est un langage de modélisation.
 
 ## Les quatre couches
 
 ```
 domain.py     le monde de référence — établissements, ressources, populations, réseau
-events.py     la crise — un paquet de perturbations typées. N'exécute rien.
+targets.py    ce qui est perturbable, et comment ça se compose. Ne contient aucune donnée.
+effects.py    l'événement — une liste d'effets. N'exécute rien.
 policy.py     la réponse — des règles déclaratives, inspectables. N'exécute rien.
 dynamics.py   l'exécutif — possède l'horloge, applique tout, écrit la trace
 ```
@@ -58,7 +104,8 @@ Resource(id="oxygene", category="stuff", quantity=5, capacity=5,
 Puis un besoin de soin qui la consomme. Aucune ligne de moteur à toucher — c'est
 `test_new_resource_type_needs_no_engine_change`.
 
-**Une crise** — un `Scenario` avec des perturbations. Voir `examples/scenarios.py`.
+**Un événement** — un `Event` avec des `Effect`. Se rédige dans l'écran Events ;
+les trois gabarits de `templates.py` en produisent aussi.
 
 **Une politique** — des `Rule` ordonnées par priorité :
 
@@ -100,17 +147,16 @@ distributions — jamais une trajectoire unique.
 
 ```bash
 cd simulation-service
-PYTHONPATH=. python -m pytest tests/test_crisis.py -q
+PYTHONPATH=. python -m pytest tests/test_events.py -q
 ```
 
 Comparer trois politiques sur les trois crises :
 
 ```python
-from app.crisis.examples.system import toy_system
-from app.crisis.examples.scenarios import ALL as SC
-from app.crisis.examples.policies import ALL as PO
-from app.crisis.harness import compare, format_table
-from app.crisis.scoring import Objective
+from app.events.examples.system import toy_system
+from app.events.templates import EVENTS, POLICIES
+from app.events.harness import compare, format_table
+from app.events.scoring import Objective
 
 obj = Objective(weights={"excess_deaths": 1.0, "response_cost": 0.000002})
 pols = [PO["null"](), PO["load-balance"](), PO["surge-and-balance"]()]
@@ -156,7 +202,7 @@ Trois crises en conserve, c'est une démonstration. `POST /crisis/compare` accep
 désormais **soit** `scenario` (un nom de gabarit) **soit** `event` (un événement
 écrit à la main), et exactement l'un des deux — les envoyer tous les deux
 laisserait à l'endpoint le soin de deviner. Les événements composés sont
-persistés côté plateforme (`app.crisis_event`, migration 046) et se rédigent
+persistés côté plateforme (`app.sim_event`, migration 046) et se rédigent
 dans l'écran Résilience.
 
 Deux corrections rendaient cela possible :
@@ -182,7 +228,7 @@ cibles depuis l'état.
 
 ### Les scénarios s'adaptent au système
 
-Un vrai jumeau nomme ses unités avec des UUID, donc `examples/scenarios.py` ne
+Un vrai jumeau nomme ses unités avec des UUID, donc un événement écrit à la main ne
 peut pas être pointé dessus. `templates.py` prend un `SystemState` et rend un
 `Scenario` ou une `Policy` ajustés aux identifiants réellement présents —
 volume calibré sur la capacité totale, une règle de transfert par route

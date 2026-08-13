@@ -264,7 +264,7 @@ class SystemState(BaseModel):
         a trap the example policies fell into on the first run. Aggregating the
         `space` category mixes ten ICU beds with sixty ward beds: the ICU can be
         at 100% with forty critical patients unserved while the facility reports
-        44%. A rule keyed on the category would never see the crisis, and the
+        44%. A rule keyed on the category would never see the shortage, and the
         number it read would look perfectly reasonable.
 
         Returns 0.0 when there is no capacity at all. That is a real ambiguity —

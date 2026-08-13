@@ -7,7 +7,7 @@ the arithmetic by hand and check the engine. Every resource name here is data â€
 
 from __future__ import annotations
 
-from app.crisis.domain import (
+from app.events.domain import (
     SPACE,
     STAFF,
     STUFF,

@@ -445,7 +445,7 @@ export type LinkCardinality =
 export type ObjectNature = "physical" | "conceptual";
 
 /**
- * What a type constrains when a crisis hits — the four S's, plus the demand
+ * What a type constrains when an event hits — the four S's, plus the demand
  * that runs through them.
  *
  * Not derivable from : a ventilator and a patient record are both
@@ -453,14 +453,14 @@ export type ObjectNature = "physical" | "conceptual";
  * with no role sits out of the simulation, which is the right answer for most
  * of an ontology.
  */
-export type CrisisRole = "space" | "staff" | "stuff" | "systems" | "demand";
+export type SimRole = "space" | "staff" | "stuff" | "systems" | "demand";
 
 export interface EnvObjectType {
   id: string;
   name: string;
   description: string | null;
   nature: ObjectNature | null;
-  crisisRole: CrisisRole | null;
+  simRole: SimRole | null;
   propertySchema: { key: string; type: string; label?: string }[];
   createdAt: string;
 }
@@ -616,7 +616,7 @@ export async function createEnvType(
     name: string;
     description?: string;
     nature?: ObjectNature | null;
-    crisisRole?: CrisisRole | null;
+    simRole?: SimRole | null;
     propertySchema?: PropertyDefinition[];
   },
 ): Promise<EnvObjectType> {
@@ -629,7 +629,7 @@ export async function updateEnvType(
   body: {
     description?: string | null;
     nature?: ObjectNature | null;
-    crisisRole?: CrisisRole | null;
+    simRole?: SimRole | null;
     propertySchema?: PropertyDefinition[];
   },
 ): Promise<EnvObjectType> {
@@ -1616,10 +1616,10 @@ export async function listGeoUncovered(
   return apiFetch(`/v1/ontology/${encEnv(env)}/geo/uncovered${q}`);
 }
 
-// --- Crisis simulation ------------------------------------------------------
+// --- Event simulation -------------------------------------------------------
 
 /** A fact the ontology could not supply, and what the export did instead. */
-export interface CrisisGap {
+export interface SimGap {
   code:
     | "TYPE_WITHOUT_ROLE"
     | "NO_CARE_MODEL"
@@ -1630,34 +1630,34 @@ export interface CrisisGap {
   subjects: string[];
 }
 
-export interface CrisisExportResource {
+export interface SimExportResource {
   id: string;
-  category: CrisisRole;
+  category: SimRole;
   quantity: number;
   capacity: number;
   enables: string[];
 }
 
-export interface CrisisExportFacility {
+export interface SimExportFacility {
   id: string;
   name: string;
   location: [number, number] | null;
-  resources: Record<string, CrisisExportResource>;
+  resources: Record<string, SimExportResource>;
   census: Record<string, number>;
 }
 
-export interface CrisisExport {
+export interface SimExport {
   environment: string;
   /** The twin scenario this was read under, or null for the live twin. */
   scenario_id: string | null;
   generated_at: string;
-  facilities: CrisisExportFacility[];
+  facilities: SimExportFacility[];
   populations: { id: string; name: string; size: number; served_by: string[] }[];
   edges: { source: string; target: string; kind: string; capacity: number; via: string }[];
-  gaps: CrisisGap[];
+  gaps: SimGap[];
 }
 
-export interface CrisisComparison {
+export interface SimComparison {
   scenario: { id: string; name: string; description: string; perturbations: string[] };
   rows: Array<Record<string, string | number>>;
   facilities: number;
@@ -1673,23 +1673,37 @@ export interface CrisisComparison {
  * live twin, which is what lets an event be tested against a plan — build the
  * wing, then flood the district — rather than only against today.
  */
-export async function fetchCrisisExport(
+export async function fetchSimExport(
   env: string,
   twinScenarioId?: string,
-): Promise<CrisisExport> {
+): Promise<SimExport> {
   const q = twinScenarioId ? `?scenarioId=${encodeURIComponent(twinScenarioId)}` : "";
-  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/crisis-export${q}`);
+  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/sim-export${q}`);
 }
 
 /**
  * An event, as a list of effects.
  *
- * Nothing here says "crisis". A capacity multiplier above 1 opens a wing, and a
+ * There are no effect *kinds* here, and that is the design. The engine used to
+ * ship three classes — demand, capacity, connectivity — and a fourth was needed
+ * the moment anyone modelled a disease that lingers rather than one that
+ * spreads. Instead, an effect names a quantity from the engine's catalogue, and
+ * the composer builds its form from that catalogue: adding something
+ * perturbable server-side makes it appear here with no change to this file.
+ *
+ * Nothing says "crisis". A capacity multiplier above 1 opens a wing, and a
  * negative demand volume is a vaccination programme — the engine never tests
  * whether a change is good, and neither does this type.
  */
-export type EffectKind = "demand" | "capacity" | "connectivity";
 export type ProfileShape = "step" | "ramp" | "pulse" | "gaussian";
+export type EffectOp = "multiply" | "add" | "set";
+export type SelectorDimension =
+  | "facility"
+  | "category"
+  | "activity"
+  | "acuity"
+  | "population"
+  | "route";
 
 export interface TemporalProfile {
   start: number;
@@ -1699,80 +1713,86 @@ export interface TemporalProfile {
   peak_tick?: number | null;
 }
 
-export interface DemandEffect {
+/**
+ * One addressable quantity, as the engine describes it.
+ *
+ * `compose` is reported but never offered as a choice: it is a property of what
+ * the quantity is, and letting an author pick it is how a multiplier ends up
+ * compounding every step until the network reads as destroyed.
+ */
+export interface SimTarget {
+  path: string;
+  label: string;
+  help: string;
+  selector: SelectorDimension[];
+  ops: EffectOp[];
+  compose: "baseline" | "accumulate";
+  minimum: number | null;
+  maximum: number | null;
+  unit: string;
+}
+
+export interface SimEffect {
   id: string;
-  kind: "demand";
-  targets: string[];
-  acuity_mix: Record<string, number>;
-  /** Negative removes demand rather than adding it. */
-  volume: number;
+  target: string;
+  /** Dimension -> chosen values. Missing or empty means every value of it. */
+  select: Partial<Record<SelectorDimension, string[]>>;
+  op: EffectOp;
+  value: number;
   profile: TemporalProfile;
 }
 
-export interface CapacityEffect {
-  id: string;
-  kind: "capacity";
-  facilities: string[];
-  category?: string | null;
-  resources?: string[];
-  /** Above 1 grows the resource; `absolute` wins when both are set. */
-  multiplier?: number | null;
-  absolute?: number | null;
-  profile: TemporalProfile;
+export interface SimCatalogue {
+  templates: string[];
+  policies: string[];
+  targets: SimTarget[];
 }
 
-export interface ConnectivityEffect {
-  id: string;
-  kind: "connectivity";
-  edges: Array<[string, string]>;
-  edge_kind?: string;
-  multiplier: number;
-  profile: TemporalProfile;
+export async function fetchSimCatalogue(env: string): Promise<SimCatalogue> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/sim-catalogue`);
 }
 
-export type CrisisEffect = DemandEffect | CapacityEffect | ConnectivityEffect;
-
-export interface CrisisEventDef {
+export interface SimEvent {
   id: string;
   name: string;
   description: string;
   horizon: number;
-  effects: CrisisEffect[];
+  effects: SimEffect[];
   twinScenarioId: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-export async function listCrisisEvents(
+export async function listSimEvents(
   env: string,
-): Promise<{ events: CrisisEventDef[] }> {
-  return apiFetch(`/v1/ontology/${encEnv(env)}/crisis-events`);
+): Promise<{ events: SimEvent[] }> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/sim-events`);
 }
 
-export async function saveCrisisEvent(
+export async function saveSimEvent(
   env: string,
   body: {
     name: string;
     description?: string;
     horizon: number;
-    effects: CrisisEffect[];
+    effects: SimEffect[];
     twinScenarioId: string | null;
   },
   id?: string,
-): Promise<CrisisEventDef> {
-  const path = `/v1/ontology/${encEnv(env)}/crisis-events${id ? `/${id}` : ""}`;
+): Promise<SimEvent> {
+  const path = `/v1/ontology/${encEnv(env)}/sim-events${id ? `/${id}` : ""}`;
   return apiFetch(path, { method: id ? "PUT" : "POST", body });
 }
 
-export async function deleteCrisisEvent(env: string, id: string): Promise<{ ok: true }> {
-  return apiFetch(`/v1/ontology/${encEnv(env)}/crisis-events/${id}`, { method: "DELETE" });
+export async function deleteSimEvent(env: string, id: string): Promise<{ ok: true }> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/sim-events/${id}`, { method: "DELETE" });
 }
 
-export async function runCrisisComparison(
+export async function runSimulation(
   env: string,
   body: {
     /** A shipped template. Mutually exclusive with `eventId`. */
-    scenario?: string;
+    template?: string;
     /** An event composed here. Mutually exclusive with `scenario`. */
     eventId?: string;
     policies: string[];
@@ -1781,8 +1801,8 @@ export async function runCrisisComparison(
     routeCapacity?: number;
     twinScenarioId?: string;
   },
-): Promise<CrisisComparison> {
-  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/crisis-compare`, {
+): Promise<SimComparison> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/simulate`, {
     method: "POST",
     body,
   });

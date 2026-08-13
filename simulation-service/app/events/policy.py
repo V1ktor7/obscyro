@@ -17,7 +17,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.crisis.domain import SystemState
+from app.events.domain import SystemState
 
 # --- reading the world ------------------------------------------------------
 

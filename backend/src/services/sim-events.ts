@@ -21,7 +21,7 @@ import { BadRequest, Conflict, NotFound } from "../lib/errors.js";
 
 export type EffectKind = "demand" | "capacity" | "connectivity";
 
-export interface CrisisEventRow {
+export interface SimEventRow {
   id: string;
   name: string;
   description: string;
@@ -43,7 +43,7 @@ interface Row {
   updated_at: Date;
 }
 
-function toRow(r: Row): CrisisEventRow {
+function toRow(r: Row): SimEventRow {
   return {
     id: r.id,
     name: r.name,
@@ -58,14 +58,14 @@ function toRow(r: Row): CrisisEventRow {
 
 const SELECT = `SELECT id, name, description, horizon, effects, twin_scenario_id,
                        created_at, updated_at
-                  FROM app.crisis_event`;
+                  FROM app.sim_event`;
 
 const ORG = `(SELECT organization_id FROM app.project WHERE id = $1)`;
 
-export async function listCrisisEvents(
+export async function listSimEvents(
   db: DbClient,
   environmentId: string,
-): Promise<CrisisEventRow[]> {
+): Promise<SimEventRow[]> {
   const { rows } = await db.query<Row>(
     `${SELECT} WHERE organization_id = ${ORG} ORDER BY created_at DESC`,
     [environmentId],
@@ -73,11 +73,11 @@ export async function listCrisisEvents(
   return rows.map(toRow);
 }
 
-export async function getCrisisEvent(
+export async function getSimEvent(
   db: DbClient,
   environmentId: string,
   id: string,
-): Promise<CrisisEventRow> {
+): Promise<SimEventRow> {
   const { rows } = await db.query<Row>(
     `${SELECT} WHERE organization_id = ${ORG} AND id = $2`,
     [environmentId, id],
@@ -87,7 +87,7 @@ export async function getCrisisEvent(
   return toRow(r);
 }
 
-export interface CrisisEventInput {
+export interface SimEventInput {
   name: string;
   description?: string;
   horizon: number;
@@ -118,16 +118,16 @@ function assertDistinctIds(effects: Array<Record<string, unknown>>): void {
   }
 }
 
-export async function createCrisisEvent(
+export async function createSimEvent(
   db: DbClient,
   environmentId: string,
   userId: string,
-  input: CrisisEventInput,
-): Promise<CrisisEventRow> {
+  input: SimEventInput,
+): Promise<SimEventRow> {
   assertDistinctIds(input.effects);
   try {
     const { rows } = await db.query<Row>(
-      `INSERT INTO app.crisis_event
+      `INSERT INTO app.sim_event
            (organization_id, name, description, horizon, effects, twin_scenario_id, created_by)
        VALUES (${ORG}, $2, $3, $4, $5::jsonb, $6, $7)
        RETURNING id, name, description, horizon, effects, twin_scenario_id,
@@ -151,16 +151,16 @@ export async function createCrisisEvent(
   }
 }
 
-export async function updateCrisisEvent(
+export async function updateSimEvent(
   db: DbClient,
   environmentId: string,
   id: string,
-  input: CrisisEventInput,
-): Promise<CrisisEventRow> {
+  input: SimEventInput,
+): Promise<SimEventRow> {
   assertDistinctIds(input.effects);
   try {
     const { rows } = await db.query<Row>(
-      `UPDATE app.crisis_event
+      `UPDATE app.sim_event
           SET name = $3, description = $4, horizon = $5, effects = $6::jsonb,
               twin_scenario_id = $7, updated_at = NOW()
         WHERE organization_id = ${ORG} AND id = $2
@@ -187,13 +187,13 @@ export async function updateCrisisEvent(
   }
 }
 
-export async function deleteCrisisEvent(
+export async function deleteSimEvent(
   db: DbClient,
   environmentId: string,
   id: string,
 ): Promise<void> {
   const res = await db.query(
-    `DELETE FROM app.crisis_event WHERE organization_id = ${ORG} AND id = $2`,
+    `DELETE FROM app.sim_event WHERE organization_id = ${ORG} AND id = $2`,
     [environmentId, id],
   );
   if (!res.rowCount) throw NotFound("EVENT_NOT_FOUND", "Event not found.");
@@ -209,7 +209,7 @@ export async function deleteCrisisEvent(
  * between a puzzle and an instruction.
  */
 export function assertEventMatchesWorld(
-  event: CrisisEventRow,
+  event: SimEventRow,
   twinScenarioId: string | null,
 ): void {
   const want = event.twinScenarioId ?? null;

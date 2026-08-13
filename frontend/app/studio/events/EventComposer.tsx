@@ -3,12 +3,16 @@
 /**
  * Writing an event, effect by effect.
  *
- * The failure this form exists to prevent is not an invalid payload — the
- * engine catches those. It is a *valid* event that applies to nothing: a
- * window that closes before it opens, a multiplier of 1, a facility that was
- * renamed away. Those run cleanly, change nothing, and read as a network that
- * shrugged off a disaster.
+ * The form has no idea what an effect *kind* is. It reads the engine's
+ * catalogue of addressable quantities and renders whatever each one declares:
+ * the operations it accepts, the dimensions it can be narrowed by, its unit and
+ * its bounds. Adding something perturbable server-side makes it appear here
+ * with no change to this file — which is the whole reason the catalogue exists.
  *
+ * The failure this form guards against is not an invalid payload; the engine
+ * catches those. It is a *valid* event that applies to nothing: a window that
+ * closes before it opens, a multiplier of 1, a facility renamed away. Those run
+ * cleanly, change nothing, and read as a network that shrugged off a disaster.
  * So every effect carries a sentence derived from the same object the engine
  * receives, and anything inert is named before it can be saved.
  */
@@ -16,13 +20,11 @@
 import { useMemo, useState } from "react";
 
 import type {
-  CapacityEffect,
-  ConnectivityEffect,
-  CrisisEffect,
-  CrisisEventDef,
-  CrisisExport,
-  DemandEffect,
-  EffectKind,
+  SelectorDimension,
+  SimEffect,
+  SimEvent,
+  SimExport,
+  SimTarget,
   ProfileShape,
 } from "@/lib/platform-api";
 import {
@@ -31,13 +33,8 @@ import {
   eventProblems,
   inertReasons,
   type NamedThing,
+  type Vocabulary,
 } from "./event-effects";
-
-const KINDS: Array<{ id: EffectKind; label: string; hint: string }> = [
-  { id: "demand", label: "Demand", hint: "People needing care appear — or stop appearing." },
-  { id: "capacity", label: "Capacity", hint: "A resource shrinks, grows, or is set outright." },
-  { id: "connectivity", label: "Routes", hint: "A connection is cut, throttled, or widened." },
-];
 
 const SHAPES: Array<{ id: ProfileShape; label: string }> = [
   { id: "step", label: "Steady while it lasts" },
@@ -46,15 +43,31 @@ const SHAPES: Array<{ id: ProfileShape; label: string }> = [
   { id: "gaussian", label: "Peaks then fades" },
 ];
 
+const OP_LABEL: Record<SimEffect["op"], string> = {
+  multiply: "Multiply by",
+  add: "Add",
+  set: "Set to",
+};
+
+const DIMENSION_LABEL: Record<SelectorDimension, string> = {
+  facility: "Facilities",
+  category: "Kinds of resource",
+  activity: "Activities",
+  acuity: "Severities",
+  population: "Populations",
+  route: "Routes",
+};
+
 export interface EventComposerProps {
-  snapshot: CrisisExport;
-  initial: CrisisEventDef | null;
+  snapshot: SimExport;
+  targets: SimTarget[];
+  initial: SimEvent | null;
   twinScenarioId: string | null;
   onSave: (body: {
     name: string;
     description: string;
     horizon: number;
-    effects: CrisisEffect[];
+    effects: SimEffect[];
     twinScenarioId: string | null;
   }) => Promise<void>;
   onDelete: (() => Promise<void>) | null;
@@ -63,6 +76,7 @@ export interface EventComposerProps {
 
 export default function EventComposer({
   snapshot,
+  targets,
   initial,
   twinScenarioId,
   onSave,
@@ -72,33 +86,51 @@ export default function EventComposer({
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [horizon, setHorizon] = useState(initial?.horizon ?? 60);
-  const [effects, setEffects] = useState<CrisisEffect[]>(initial?.effects ?? []);
+  const [effects, setEffects] = useState<SimEffect[]>(initial?.effects ?? []);
+  const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const facilities: NamedThing[] = useMemo(
-    () => snapshot.facilities.map((f) => ({ id: f.id, name: f.name })),
-    [snapshot],
-  );
-  const populations: NamedThing[] = useMemo(
-    () => snapshot.populations.map((p) => ({ id: p.id, name: p.name })),
-    [snapshot],
-  );
-  const categories = useMemo(() => {
-    const s = new Set<string>();
+  /**
+   * Everything the twin offers, per dimension.
+   *
+   * Severities are the one dimension the twin does not hold: they come from the
+   * care model the engine builds, which is fixed at three. Naming them here
+   * rather than leaving the picker empty is what lets a length-of-stay effect
+   * be written at all.
+   */
+  const vocab: Vocabulary = useMemo(() => {
+    const categories = new Set<string>();
+    const activities = new Set<string>();
     for (const f of snapshot.facilities) {
-      for (const r of Object.values(f.resources)) s.add(r.category);
+      for (const r of Object.values(f.resources)) {
+        categories.add(r.category);
+        for (const a of r.enables) activities.add(a);
+      }
     }
-    return Array.from(s).sort();
+    return {
+      facility: snapshot.facilities.map((f) => ({ id: f.id, name: f.name })),
+      population: snapshot.populations.map((p) => ({ id: p.id, name: p.name })),
+      category: Array.from(categories).sort().map((c) => ({ id: c, name: c })),
+      activity: Array.from(activities).sort().map((a) => ({ id: a, name: a })),
+      acuity: [
+        { id: "critical", name: "Critical" },
+        { id: "urgent", name: "Urgent" },
+        { id: "routine", name: "Routine" },
+      ],
+      route: snapshot.edges.map((e) => ({
+        id: `${e.source}>${e.target}`,
+        name: `${nameIn(snapshot, e.source)} → ${nameIn(snapshot, e.target)}`,
+      })),
+    };
   }, [snapshot]);
 
-  const problems = eventProblems(effects, horizon);
+  const byPath = useMemo(() => new Map(targets.map((t) => [t.path, t])), [targets]);
+  const problems = eventProblems(effects, targets, horizon);
   const canSave = name.trim().length > 0 && problems.length === 0 && !busy;
 
-  function patch(index: number, next: Partial<CrisisEffect>) {
-    setEffects((prev) =>
-      prev.map((e, i) => (i === index ? ({ ...e, ...next } as CrisisEffect) : e)),
-    );
+  function patch(index: number, next: Partial<SimEffect>) {
+    setEffects((prev) => prev.map((e, i) => (i === index ? { ...e, ...next } : e)));
   }
 
   async function save() {
@@ -137,13 +169,13 @@ export default function EventComposer({
         </div>
 
         <p className="mb-3 text-[11px] leading-relaxed text-ink-faint">
-          An event is a list of effects. Nothing here decides whether a change is
-          bad: growing a resource opens a wing, and negative demand is a
-          vaccination programme. It runs against{" "}
+          An event is a list of changes to quantities in the model. Nothing here
+          decides whether a change is bad: growing a resource opens a wing, and
+          negative arrivals are a vaccination programme. It is written against{" "}
           <strong className="font-medium text-ink">
             {twinScenarioId ? "the selected scenario" : "the live twin"}
           </strong>
-          , because effects name instances by id and those ids only exist there.
+          , because effects name things by id and those ids only exist there.
         </p>
 
         <div className="grid gap-3 sm:grid-cols-[1fr_1fr_120px]">
@@ -179,33 +211,59 @@ export default function EventComposer({
           key={i}
           effect={effect}
           index={i}
+          target={byPath.get(effect.target)}
           horizon={horizon}
-          facilities={facilities}
-          populations={populations}
-          categories={categories}
-          edges={snapshot.edges}
+          vocab={vocab}
           onChange={(next) => patch(i, next)}
           onRemove={() => setEffects((prev) => prev.filter((_, j) => j !== i))}
         />
       ))}
 
       <section className="rounded-lg border border-dashed border-line bg-white p-4">
-        <p className="mb-2 text-[11px] text-ink-faint">Add an effect</p>
-        <div className="flex flex-wrap gap-2">
-          {KINDS.map((k) => (
-            <button
-              key={k.id}
-              type="button"
-              title={k.hint}
-              onClick={() =>
-                setEffects((prev) => [...prev, blankEffect(k.id, horizon, prev.length + 1)])
-              }
-              className="rounded-md border border-line px-3 py-1.5 text-xs text-ink hover:border-brand hover:text-brand"
-            >
-              {k.label}
-            </button>
-          ))}
-        </div>
+        {adding ? (
+          <>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-[11px] text-ink-faint">What should this event change?</p>
+              <button
+                type="button"
+                onClick={() => setAdding(false)}
+                className="text-[11px] text-ink-faint hover:text-ink"
+              >
+                Cancel
+              </button>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {targets.map((t) => (
+                <button
+                  key={t.path}
+                  type="button"
+                  onClick={() => {
+                    setEffects((prev) => [...prev, blankEffect(t, horizon, prev.length + 1)]);
+                    setAdding(false);
+                  }}
+                  className="rounded-md border border-line px-3 py-2 text-left hover:border-brand"
+                >
+                  <span className="block text-xs text-ink">{t.label}</span>
+                  <span className="block text-[11px] leading-snug text-ink-faint">{t.help}</span>
+                </button>
+              ))}
+              {targets.length === 0 ? (
+                <p className="text-[11px] text-ink-faint">
+                  The engine did not return a catalogue, so there is nothing to
+                  perturb. Check that the simulation service is reachable.
+                </p>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="rounded-md border border-line px-3 py-1.5 text-xs text-ink hover:border-brand hover:text-brand"
+          >
+            Add an effect
+          </button>
+        )}
       </section>
 
       {problems.length > 0 ? (
@@ -265,6 +323,10 @@ export default function EventComposer({
   );
 }
 
+function nameIn(snapshot: SimExport, id: string): string {
+  return snapshot.facilities.find((f) => f.id === id)?.name ?? id.slice(0, 8);
+}
+
 const INPUT =
   "w-full rounded-md border border-line bg-white px-2.5 py-1.5 text-xs text-ink focus:border-brand focus:outline-none";
 
@@ -280,37 +342,33 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function EffectCard({
   effect,
   index,
+  target,
   horizon,
-  facilities,
-  populations,
-  categories,
-  edges,
+  vocab,
   onChange,
   onRemove,
 }: {
-  effect: CrisisEffect;
+  effect: SimEffect;
   index: number;
+  target: SimTarget | undefined;
   horizon: number;
-  facilities: NamedThing[];
-  populations: NamedThing[];
-  categories: string[];
-  edges: CrisisExport["edges"];
-  onChange: (next: Partial<CrisisEffect>) => void;
+  vocab: Vocabulary;
+  onChange: (next: Partial<SimEffect>) => void;
   onRemove: () => void;
 }) {
-  const sentence = describeEffect(effect, facilities, populations);
-  const inert = inertReasons(effect, horizon);
+  const sentence = describeEffect(effect, target, vocab);
+  const inert = inertReasons(effect, target, horizon);
   const p = effect.profile;
 
   return (
     <section className="rounded-lg border border-line bg-white p-4">
       <div className="mb-3 flex items-center gap-2">
         <span className="rounded bg-canvas px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-ink-faint">
-          {effect.kind}
+          {target?.label ?? effect.target}
         </span>
         <input
           value={effect.id}
-          onChange={(e) => onChange({ id: e.target.value } as Partial<CrisisEffect>)}
+          onChange={(e) => onChange({ id: e.target.value })}
           className="flex-1 rounded-md border border-transparent px-1 py-0.5 text-xs text-ink hover:border-line focus:border-brand focus:outline-none"
         />
         <button
@@ -322,31 +380,63 @@ function EffectCard({
         </button>
       </div>
 
-      {effect.kind === "demand" ? (
-        <DemandFields effect={effect as DemandEffect} populations={populations} onChange={onChange} />
-      ) : effect.kind === "capacity" ? (
-        <CapacityFields
-          effect={effect as CapacityEffect}
-          facilities={facilities}
-          categories={categories}
-          onChange={onChange}
-        />
+      {target ? (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {target.selector.map((dimension) => (
+              <Picker
+                key={dimension}
+                label={DIMENSION_LABEL[dimension]}
+                options={vocab[dimension] ?? []}
+                selected={effect.select[dimension] ?? []}
+                onToggle={(id) => {
+                  const current = effect.select[dimension] ?? [];
+                  const next = current.includes(id)
+                    ? current.filter((x) => x !== id)
+                    : [...current, id];
+                  onChange({ select: { ...effect.select, [dimension]: next } });
+                }}
+              />
+            ))}
+          </div>
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-[150px_150px]">
+            <Field label="Change">
+              <select
+                value={effect.op}
+                onChange={(e) => onChange({ op: e.target.value as SimEffect["op"] })}
+                className={INPUT}
+              >
+                {target.ops.map((op) => (
+                  <option key={op} value={op}>
+                    {OP_LABEL[op]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label={target.unit || "Value"}>
+              <input
+                inputMode="decimal"
+                value={effect.value}
+                onChange={(e) => onChange({ value: Number(e.target.value) || 0 })}
+                className={INPUT}
+              />
+            </Field>
+          </div>
+        </>
       ) : (
-        <ConnectivityFields
-          effect={effect as ConnectivityEffect}
-          facilities={facilities}
-          edges={edges}
-          onChange={onChange}
-        />
+        <p className="text-[11px] leading-relaxed text-danger">
+          This effect names “{effect.target}”, which the engine does not offer.
+          It was probably written against an older catalogue. Remove it, or add a
+          replacement.
+        </p>
       )}
 
       <div className="mt-3 grid gap-2 sm:grid-cols-4">
         <Field label="Shape">
           <select
             value={p.shape}
-            onChange={(e) =>
-              onChange({ profile: { ...p, shape: e.target.value as ProfileShape } } as Partial<CrisisEffect>)
-            }
+            onChange={(e) => onChange({ profile: { ...p, shape: e.target.value as ProfileShape } })}
             className={INPUT}
           >
             {SHAPES.map((s) => (
@@ -360,9 +450,7 @@ function EffectCard({
           <input
             inputMode="numeric"
             value={p.start}
-            onChange={(e) =>
-              onChange({ profile: { ...p, start: Number(e.target.value) || 0 } } as Partial<CrisisEffect>)
-            }
+            onChange={(e) => onChange({ profile: { ...p, start: Number(e.target.value) || 0 } })}
             className={INPUT}
           />
         </Field>
@@ -374,7 +462,7 @@ function EffectCard({
             onChange={(e) =>
               onChange({
                 profile: { ...p, end: e.target.value === "" ? null : Number(e.target.value) },
-              } as Partial<CrisisEffect>)
+              })
             }
             className={INPUT}
           />
@@ -383,9 +471,7 @@ function EffectCard({
           <input
             inputMode="decimal"
             value={p.peak}
-            onChange={(e) =>
-              onChange({ profile: { ...p, peak: Number(e.target.value) || 0 } } as Partial<CrisisEffect>)
-            }
+            onChange={(e) => onChange({ profile: { ...p, peak: Number(e.target.value) || 0 } })}
             className={INPUT}
           />
         </Field>
@@ -415,7 +501,7 @@ function Picker({
   onToggle: (id: string) => void;
 }) {
   return (
-    <Field label={label}>
+    <Field label={`${label}${selected.length === 0 ? " — all" : ""}`}>
       <div className="max-h-32 overflow-y-auto rounded-md border border-line p-1.5">
         {options.length === 0 ? (
           <p className="px-1 py-0.5 text-[11px] text-ink-faint">Nothing to pick.</p>
@@ -433,166 +519,5 @@ function Picker({
         )}
       </div>
     </Field>
-  );
-}
-
-function toggle(list: string[], id: string): string[] {
-  return list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
-}
-
-function DemandFields({
-  effect,
-  populations,
-  onChange,
-}: {
-  effect: DemandEffect;
-  populations: NamedThing[];
-  onChange: (next: Partial<CrisisEffect>) => void;
-}) {
-  return (
-    <div className="grid gap-3 sm:grid-cols-[1fr_140px]">
-      <Picker
-        label="Populations affected"
-        options={populations}
-        selected={effect.targets}
-        onToggle={(id) =>
-          onChange({ targets: toggle(effect.targets, id) } as Partial<CrisisEffect>)
-        }
-      />
-      <Field label="Patients per step">
-        <input
-          inputMode="decimal"
-          value={effect.volume}
-          onChange={(e) => onChange({ volume: Number(e.target.value) || 0 } as Partial<CrisisEffect>)}
-          className={INPUT}
-        />
-        <span className="text-[10px] leading-snug text-ink-faint">
-          Negative removes demand — a vaccination programme rather than an outbreak.
-        </span>
-      </Field>
-    </div>
-  );
-}
-
-function CapacityFields({
-  effect,
-  facilities,
-  categories,
-  onChange,
-}: {
-  effect: CapacityEffect;
-  facilities: NamedThing[];
-  categories: string[];
-  onChange: (next: Partial<CrisisEffect>) => void;
-}) {
-  const absolute = effect.absolute ?? null;
-  return (
-    <div className="grid gap-3 sm:grid-cols-[1fr_150px_150px]">
-      <Picker
-        label="Facilities affected"
-        options={facilities}
-        selected={effect.facilities}
-        onToggle={(id) =>
-          onChange({ facilities: toggle(effect.facilities, id) } as Partial<CrisisEffect>)
-        }
-      />
-      <Field label="What kind of capacity">
-        <select
-          value={effect.category ?? ""}
-          onChange={(e) =>
-            onChange({ category: e.target.value || null } as Partial<CrisisEffect>)
-          }
-          className={INPUT}
-        >
-          <option value="">Everything</option>
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <Field label={absolute === null ? "Multiply by" : "Set to"}>
-        <input
-          inputMode="decimal"
-          value={absolute === null ? (effect.multiplier ?? 1) : absolute}
-          onChange={(e) =>
-            onChange(
-              (absolute === null
-                ? { multiplier: Number(e.target.value) || 0 }
-                : { absolute: Number(e.target.value) || 0 }) as Partial<CrisisEffect>,
-            )
-          }
-          className={INPUT}
-        />
-        <button
-          type="button"
-          onClick={() =>
-            onChange(
-              (absolute === null
-                ? { absolute: 0, multiplier: null }
-                : { absolute: null, multiplier: 1 }) as Partial<CrisisEffect>,
-            )
-          }
-          className="text-left text-[10px] text-brand hover:underline"
-        >
-          {absolute === null
-            ? "Set an exact value instead"
-            : "Use a multiplier instead"}
-        </button>
-        <span className="text-[10px] leading-snug text-ink-faint">
-          {absolute === null
-            ? "Above 1 grows it — an opening wing, not a losing one."
-            : "0 destroys it outright, whatever it held."}
-        </span>
-      </Field>
-    </div>
-  );
-}
-
-function ConnectivityFields({
-  effect,
-  facilities,
-  edges,
-  onChange,
-}: {
-  effect: ConnectivityEffect;
-  facilities: NamedThing[];
-  edges: CrisisExport["edges"];
-  onChange: (next: Partial<CrisisEffect>) => void;
-}) {
-  const options: NamedThing[] = edges.map((e) => ({
-    id: `${e.source}>${e.target}`,
-    name: `${facilities.find((f) => f.id === e.source)?.name ?? e.source.slice(0, 8)} → ${
-      facilities.find((f) => f.id === e.target)?.name ?? e.target.slice(0, 8)
-    }`,
-  }));
-  const selected = effect.edges.map(([s, t]) => `${s}>${t}`);
-
-  return (
-    <div className="grid gap-3 sm:grid-cols-[1fr_150px]">
-      <Picker
-        label="Routes affected"
-        options={options}
-        selected={selected}
-        onToggle={(key) => {
-          const next = toggle(selected, key).map((k) => k.split(">") as [string, string]);
-          onChange({ edges: next } as Partial<CrisisEffect>);
-        }}
-      />
-      <Field label="Throughput multiplier">
-        <input
-          inputMode="decimal"
-          value={effect.multiplier}
-          onChange={(e) =>
-            onChange({ multiplier: Number(e.target.value) || 0 } as Partial<CrisisEffect>)
-          }
-          className={INPUT}
-        />
-        <span className="text-[10px] leading-snug text-ink-faint">
-          0 severs the route; 0.5 halves it; above 1 widens it.
-        </span>
-      </Field>
-    </div>
   );
 }
