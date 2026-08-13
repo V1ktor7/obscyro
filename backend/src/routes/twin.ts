@@ -114,16 +114,25 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
           "relationships become routes. Nothing is matched on a name. `gaps` lists " +
           "what the ontology could not answer — routes with no throughput, " +
           "populations with no size, types with no role — so a result is never " +
-          "read as if the model knew more than it does.",
+          "read as if the model knew more than it does. With a scenario, this is " +
+          "the network that scenario would produce, so an event can be tested " +
+          "against a plan rather than only against today.",
         tags: ["twin"],
         params: z.object({ env: z.string().min(1) }),
+        querystring: z.object({
+          scenarioId: z.string().uuid().optional(),
+          atOffsetHours: z.coerce.number().int().min(0).optional(),
+        }),
         response: { 200: z.record(z.unknown()), 404: errorEnvelope },
       },
     },
     async (req) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
-      return { ...(await buildCrisisExport(req.db, env.id, req.params.env)) };
+      const lens = req.query.scenarioId
+        ? { scenarioId: req.query.scenarioId, atOffsetHours: req.query.atOffsetHours ?? 0 }
+        : undefined;
+      return { ...(await buildCrisisExport(req.db, env.id, req.params.env, lens)) };
     },
   );
 
@@ -145,6 +154,14 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
           /** Sizes the ontology cannot supply. Empty runs a hollow model. */
           populationSizes: z.record(z.number().nonnegative()).default({}),
           routeCapacity: z.number().nonnegative().default(0),
+          /**
+           * Twin scenario to read the world through. Named `twinScenarioId`
+           * rather than `scenarioId` because `scenario` above already means the
+           * event, and two different things called scenario in one body is how
+           * a caller ends up sending the wrong one.
+           */
+          twinScenarioId: z.string().uuid().optional(),
+          atOffsetHours: z.number().int().min(0).optional(),
         }),
         response: { 200: z.record(z.unknown()), 404: errorEnvelope, 503: errorEnvelope },
       },
@@ -152,7 +169,13 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
     async (req) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
-      const system = await buildCrisisExport(req.db, env.id, req.params.env);
+      const lens = req.body.twinScenarioId
+        ? {
+            scenarioId: req.body.twinScenarioId,
+            atOffsetHours: req.body.atOffsetHours ?? 0,
+          }
+        : undefined;
+      const system = await buildCrisisExport(req.db, env.id, req.params.env, lens);
       return proxyToSimService("/crisis/compare", {
         system,
         scenario: req.body.scenario,

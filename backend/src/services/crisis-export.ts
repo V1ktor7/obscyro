@@ -1,4 +1,5 @@
 import type { DbClient } from "../lib/db.js";
+import type { ReadLens } from "./ontology-lens.js";
 import { listInstancesForEnv, listLinksForEnv } from "./ontology.js";
 import { aggregationEnds, attaches, buildsHierarchy, getUnitTree } from "./twin.js";
 
@@ -70,6 +71,8 @@ export interface CrisisGap {
 
 export interface CrisisExport {
   environment: string;
+  /** The scenario this was read under, or null for the live twin. */
+  scenario_id: string | null;
   generated_at: string;
   facilities: CrisisFacility[];
   populations: CrisisPopulation[];
@@ -126,15 +129,26 @@ function activityOf(typeName: string): string {
   return typeName.trim().toLowerCase().replace(/\s+/g, "_");
 }
 
+/**
+ * `lens` decides *which* world is exported.
+ *
+ * Without it the engine can only ever stress the network as it stands today,
+ * which is the smaller half of the question. A scenario holds proposed edits —
+ * a new wing, a ward closed for renovation, a merger — so reading through it
+ * turns "what does a flood cost us" into "what does a flood cost us *if we
+ * build the wing first*". That second question is the one worth funding, and
+ * every read below already accepted a lens; nothing was passing one.
+ */
 export async function buildCrisisExport(
   db: DbClient,
   environmentId: string,
   environmentSlug: string,
+  lens?: ReadLens,
 ): Promise<CrisisExport> {
   const [{ nodes }, instances, links, roleRows] = await Promise.all([
-    getUnitTree(db, environmentId),
-    listInstancesForEnv(db, environmentId, { limit: 20000 }),
-    listLinksForEnv(db, environmentId),
+    getUnitTree(db, environmentId, lens),
+    listInstancesForEnv(db, environmentId, { limit: 20000, ...lens }),
+    listLinksForEnv(db, environmentId, lens),
     db.query<{ name: string; crisis_role: CrisisRole | null }>(
       `SELECT name, crisis_role FROM app.ontology_object_types
         WHERE organization_id = (SELECT organization_id FROM app.project WHERE id = $1)`,
@@ -318,6 +332,7 @@ export async function buildCrisisExport(
 
   return {
     environment: environmentSlug,
+    scenario_id: lens?.scenarioId ?? null,
     generated_at: new Date().toISOString(),
     facilities,
     populations,

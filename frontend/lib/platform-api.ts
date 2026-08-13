@@ -1648,6 +1648,8 @@ export interface CrisisExportFacility {
 
 export interface CrisisExport {
   environment: string;
+  /** The twin scenario this was read under, or null for the live twin. */
+  scenario_id: string | null;
   generated_at: string;
   facilities: CrisisExportFacility[];
   populations: { id: string; name: string; size: number; served_by: string[] }[];
@@ -1664,9 +1666,19 @@ export interface CrisisComparison {
   weights: Record<string, number>;
 }
 
-/** The twin exactly as the engine reads it, gaps included. */
-export async function fetchCrisisExport(env: string): Promise<CrisisExport> {
-  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/crisis-export`);
+/**
+ * The twin exactly as the engine reads it, gaps included.
+ *
+ * `twinScenarioId` reads through a scenario's proposed edits instead of the
+ * live twin, which is what lets an event be tested against a plan — build the
+ * wing, then flood the district — rather than only against today.
+ */
+export async function fetchCrisisExport(
+  env: string,
+  twinScenarioId?: string,
+): Promise<CrisisExport> {
+  const q = twinScenarioId ? `?scenarioId=${encodeURIComponent(twinScenarioId)}` : "";
+  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/crisis-export${q}`);
 }
 
 export async function runCrisisComparison(
@@ -1677,6 +1689,7 @@ export async function runCrisisComparison(
     seed?: number;
     populationSizes?: Record<string, number>;
     routeCapacity?: number;
+    twinScenarioId?: string;
   },
 ): Promise<CrisisComparison> {
   return apiFetch(`/v1/ontology/${encEnv(env)}/twin/crisis-compare`, {

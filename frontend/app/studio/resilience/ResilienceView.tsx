@@ -20,12 +20,17 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   fetchCrisisExport,
+  listScenarios,
   runCrisisComparison,
   type CrisisComparison,
   type CrisisExport,
   type CrisisGap,
+  type ScenarioSummary,
 } from "@/lib/platform-api";
 import { useStudio } from "../StudioShell";
+
+/** Sentinel for "no scenario" so the select has a real value to hold. */
+const LIVE = "";
 
 const ROLE_LABEL: Record<string, string> = {
   space: "Space",
@@ -90,23 +95,41 @@ export default function ResilienceView() {
   const [routeCapacity, setRouteCapacity] = useState("10");
   const [result, setResult] = useState<CrisisComparison | null>(null);
   const [running, setRunning] = useState(false);
+  const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
+  const [twinScenarioId, setTwinScenarioId] = useState<string>(LIVE);
 
   const load = useCallback(async () => {
     if (!env) return;
     setLoading(true);
     setError(null);
     try {
-      setSnapshot(await fetchCrisisExport(env));
+      setSnapshot(await fetchCrisisExport(env, twinScenarioId || undefined));
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [env]);
+  }, [env, twinScenarioId]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!env) return;
+    // A failure here is not worth an error banner: it costs the scenario
+    // picker, and the live twin still runs.
+    listScenarios(env)
+      .then((r) => setScenarios(r.scenarios))
+      .catch(() => setScenarios([]));
+  }, [env]);
+
+  // The reading and the result belong to one world. Leaving a stale table on
+  // screen after switching would invite reading a flood against the new wing
+  // when it was run against today's network.
+  useEffect(() => {
+    setResult(null);
+  }, [twinScenarioId]);
 
   const totals = useMemo(() => {
     const byRole: Record<string, number> = {};
@@ -151,6 +174,7 @@ export default function ResilienceView() {
           policies: responses,
           populationSizes,
           routeCapacity: Number(routeCapacity) || 0,
+          twinScenarioId: twinScenarioId || undefined,
         }),
       );
     } catch (err) {
@@ -186,6 +210,19 @@ export default function ResilienceView() {
             {result ? null : <HowItWorks />}
 
             <Card title="What the engine reads from your twin">
+              {/* Echoed from the payload, not from the picker: the point is to
+                  show which world the server actually read, so a scenario that
+                  silently fell back to live is visible rather than assumed. */}
+              <p className="mb-3 text-[11px] text-ink-faint">
+                Read from{" "}
+                <strong className="font-medium text-ink">
+                  {snapshot.scenario_id
+                    ? (scenarios.find((s) => s.id === snapshot.scenario_id)?.name ??
+                      "a scenario")
+                    : "the live twin"}
+                </strong>
+                .
+              </p>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <Stat label="Facilities" value={snapshot.facilities.length} />
                 <Stat label="Routes between them" value={snapshot.edges.length} />
@@ -249,7 +286,29 @@ export default function ResilienceView() {
           </div>
 
           <div className="flex flex-col gap-4">
-            <Card title="1 · Pick an event">
+            <Card title="1 · Pick the world to test">
+              <select
+                value={twinScenarioId}
+                onChange={(e) => setTwinScenarioId(e.target.value)}
+                className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-xs text-ink focus:border-brand focus:outline-none"
+              >
+                <option value={LIVE}>Live twin — the network as it stands</option>
+                {scenarios.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-ink-faint">
+                {twinScenarioId === LIVE
+                  ? scenarios.length > 0
+                    ? "Pick a scenario instead to test the event against a plan — build the wing first, then flood the district."
+                    : "You have no scenarios yet. One is a set of proposed edits to the twin, built in Twin → Scenarios; testing an event against it answers whether the plan actually holds."
+                  : "Everything below runs against this scenario's version of the network, not today's."}
+              </p>
+            </Card>
+
+            <Card title="2 · Pick an event">
               <div className="flex flex-col gap-2">
                 {EVENTS.map((e) => (
                   <label key={e.id} className="flex cursor-pointer gap-2">
@@ -271,7 +330,7 @@ export default function ResilienceView() {
               </div>
             </Card>
 
-            <Card title="2 · Pick the responses to compare">
+            <Card title="3 · Pick the responses to compare">
               <div className="flex flex-col gap-2">
                 {RESPONSES.map((p) => (
                   <label key={p.id} className="flex cursor-pointer gap-2">
@@ -299,7 +358,7 @@ export default function ResilienceView() {
             </Card>
 
             {blocking.length > 0 && !noCapacity ? (
-              <Card title="3 · Fill in what the twin cannot know">
+              <Card title="4 · Fill in what the twin cannot know">
                 <p className="mb-3 text-[11px] leading-relaxed text-ink-faint">
                   Two numbers that decide the result and that no ontology holds.
                   Left at zero the run still completes and tells you nothing.
