@@ -139,31 +139,36 @@ def _all_facilities(state: SystemState) -> list[str]:
     return sorted(state.facilities)
 
 
-def _baseline_volume(state: SystemState) -> float:
-    """Peak arrivals per tick, scaled to the system's own size.
-
-    A fixed number would flatten a regional network and barely tickle a national
-    one. Anchoring on total space means a template produces a crisis of
-    comparable severity whatever it is pointed at, which is the only way two
-    twins can be compared at all.
-    """
-    total = sum(
-        r.capacity
-        for f in state.facilities.values()
-        for r in f.resources.values()
-        if r.category == SPACE
-    )
-    return max(1.0, total * 0.25)
+# Admissions per thousand people served, per step, with a step read as a day.
+# Anchored on published orders of magnitude rather than invented: an ordinary
+# day runs around 0.3 hospital admissions per thousand residents, and a severe
+# respiratory wave roughly doubles that at its peak.
+#
+# They are starting points a health authority is expected to argue with, which
+# is why they are named constants in one place rather than multipliers buried
+# inside three templates.
+ORDINARY_DAY = 0.30
+PANDEMIC_PEAK = 0.45
+FLOOD_TRAUMA_PULSE = 0.60
 
 
-def _wave(eid: str, state: SystemState, mix: dict[str, float], total: float,
-          profile: TemporalProfile) -> list[Effect]:
-    """A severity mix, as one demand effect per severity.
+def _rate(
+    eid: str,
+    state: SystemState,
+    mix: dict[str, float],
+    total: float,
+    profile: TemporalProfile,
+) -> list[Effect]:
+    """A severity mix, as one incidence effect per severity.
 
-    The old `DemandPerturbation` carried an `acuity_mix` field. The generic
-    effect does not need one: a mix is just several volumes, and expressing it
-    that way means a user can raise the critical share of an event without
-    re-deriving every other proportion.
+    Rates, not counts. Demand used to be anchored on the network's own bed
+    capacity, which meant doubling a hospital's beds doubled its patients and
+    left occupancy untouched — so building a wing could never help, and the
+    catchment size the loader insisted on was never read.
+
+    The old form carried an `acuity_mix` field; the generic effect needs none.
+    A mix is just several rates, and expressing it that way lets someone raise
+    the critical share of an event without re-deriving every other proportion.
     """
     out: list[Effect] = []
     share = sum(mix.values()) or 1.0
@@ -171,7 +176,7 @@ def _wave(eid: str, state: SystemState, mix: dict[str, float], total: float,
         out.append(
             Effect(
                 id=f"{eid}-{acuity}",
-                target="demand.volume",
+                target="demand.incidence",
                 select={"population": _all_populations(state), "acuity": [acuity]},
                 op="add",
                 value=total * (w / share),
@@ -188,9 +193,8 @@ def pandemic(state: SystemState, horizon: int = 60) -> Event:
     curve because that is what makes the second half worse than the first, and
     a model where they peak together understates the event.
     """
-    v = _baseline_volume(state)
-    effects = _wave(
-        "wave", state, {"critical": 0.15, "urgent": 0.35, "routine": 0.5}, v * 2.5,
+    effects = _rate(
+        "wave", state, {"critical": 0.15, "urgent": 0.35, "routine": 0.5}, PANDEMIC_PEAK,
         TemporalProfile(start=0, end=horizon, shape="gaussian", peak=1.0,
                         peak_tick=horizon // 3),
     )
@@ -251,9 +255,9 @@ def flood(state: SystemState, horizon: int = 30) -> Event:
             profile=TemporalProfile(start=2, end=horizon, shape="step", peak=1.0),
         )
     ]
-    effects += _wave(
+    effects += _rate(
         "trauma", state, {"critical": 0.35, "urgent": 0.45, "routine": 0.2},
-        _baseline_volume(state) * 1.8,
+        FLOOD_TRAUMA_PULSE,
         TemporalProfile(start=2, end=10, shape="pulse", peak=1.0),
     )
     if routes:
@@ -286,9 +290,9 @@ def cyberattack(state: SystemState, horizon: int = 40) -> Event:
     which is a finding about the ontology rather than about the attack.
     """
     systems = activities_of(state, SYSTEMS)
-    effects = _wave(
+    effects = _rate(
         "steady-state", state, {"critical": 0.1, "urgent": 0.3, "routine": 0.6},
-        _baseline_volume(state),
+        ORDINARY_DAY,
         TemporalProfile(start=0, end=horizon, shape="step", peak=1.0),
     )
     if systems:
@@ -340,25 +344,51 @@ def load_balance(state: SystemState) -> Policy:
             Rule(
                 id=f"overflow-{e.source[:8]}-{e.target[:8]}",
                 condition=Condition(
-                    any_of=[
+                    all_of=[
+                        Condition(
+                            any_of=[
+                                Condition(
+                                    compare=Comparison(
+                                        left=Metric(
+                                            fn="occupancy_ratio",
+                                            facility=e.source,
+                                            activity=activity,
+                                        ),
+                                        op=">",
+                                        right=0.9,
+                                    )
+                                ),
+                                # Occupancy alone cannot see a destroyed site: no
+                                # capacity means no fraction, so a flooded ward
+                                # holding a hundred stranded patients reads 0%.
+                                # The queue is what makes it visible.
+                                Condition(
+                                    compare=Comparison(
+                                        left=Metric(fn="backlog", facility=e.source),
+                                        op=">",
+                                        right=5,
+                                    )
+                                ),
+                            ]
+                        ),
+                        # Only send people somewhere that can take them.
+                        #
+                        # Without this the rule reads only the source, and a
+                        # saturated network transfers its sickest into a ward
+                        # with no free bed — where they queue behind that ward's
+                        # own critical patients instead of being served first at
+                        # home, and die. Measured on the toy network once demand
+                        # became realistic, that made load-balancing *worse*
+                        # than doing nothing (30.0 deaths against 26.2) while
+                        # its trace showed rules firing and patients moving.
+                        # No transfer protocol sends to a full hospital.
                         Condition(
                             compare=Comparison(
                                 left=Metric(
-                                    fn="occupancy_ratio", facility=e.source, activity=activity
+                                    fn="available", facility=e.target, activity=activity
                                 ),
                                 op=">",
-                                right=0.9,
-                            )
-                        ),
-                        # Occupancy alone cannot see a destroyed site: no
-                        # capacity means no fraction, so a flooded ward holding
-                        # a hundred stranded patients reads 0%. The queue is
-                        # what makes it visible.
-                        Condition(
-                            compare=Comparison(
-                                left=Metric(fn="backlog", facility=e.source),
-                                op=">",
-                                right=5,
+                                right=0,
                             )
                         ),
                     ]

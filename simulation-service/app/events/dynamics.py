@@ -349,41 +349,54 @@ class Engine:
     def _arrivals(self, tick: int) -> dict[tuple[str, str], float]:
         """Net patients per (population, severity) this tick, never below zero.
 
-        `demand.volume` accumulates rather than re-deriving: there is no prior
-        value at this address to multiply, which is why the catalogue offers
-        only `add` here. Effects sum, so a vaccination programme written as a
-        negative volume cancels part of the wave it sits under.
+        Two forms, and the difference is the whole point of this method.
+        `demand.incidence` is per thousand people served, multiplied by each
+        population's own size; `demand.volume` is a flat count that ignores the
+        catchment. Almost every event wants the first — an epidemic infects a
+        share of a population, not a share of a hospital.
 
-        Clamping the *net* rather than each term is what makes prevention
-        composable while keeping the obvious guarantee: you cannot prevent more
-        cases than would have arrived, and no facility inherits a negative queue
-        that later swallows real patients.
+        The rate form's absence is why this model used to anchor demand on *bed
+        capacity*. Measured on the real twin, that made doubling the network's
+        beds double its deaths (4116 → 8232 → 16465, exactly linear) and made
+        the population served change nothing at all (10k, 100k and 1M gave the
+        same answer to the decimal). Both backwards, and the second silently:
+        the loader demanded a catchment size and then never read it.
 
+        Demand accumulates rather than re-deriving — there is no prior value at
+        this address to multiply, which is why the catalogue offers only `add`.
+        Effects sum, so a vaccination programme written as a negative rate
+        cancels part of the wave it sits under. Clamping the *net* rather than
+        each term keeps prevention composable while keeping the obvious
+        guarantee: you cannot prevent more cases than would have arrived, and no
+        facility inherits a negative queue that later swallows real patients.
 
-        The two dimensions are not symmetric, and the asymmetry is deliberate
-        because the alternative is a number that means something different from
-        what its label says:
+        The two selector dimensions are not symmetric, and that is deliberate,
+        because the alternative is a number meaning something other than what
+        its label says:
 
-          population  the volume applies to *each* one. A wave reaching three
-                      catchments sends the stated number from all three.
-          severity    the volume is *split* across them. "40 patients per step"
+          population  the rate applies to *each* one. A wave reaching three
+                      catchments draws from all three.
+          severity    the rate is *split* across them. "40 patients per step"
                       has to mean forty, not forty of each kind.
         """
         out: dict[tuple[str, str], float] = {}
         acuities = list(self.state.care_model)
-        for e in self.event.active(tick, "demand.volume"):
-            v = e.value_at(tick)
-            if v is None or v == 0:
-                continue
-            hit = [a for a in acuities if e.wants("acuity", a)]
-            if not hit:
-                continue
-            each = v / len(hit)
-            for pop_id in self.state.populations:
-                if not e.wants("population", pop_id):
+        for path in ("demand.incidence", "demand.volume"):
+            per_capita = path == "demand.incidence"
+            for e in self.event.active(tick, path):
+                v = e.value_at(tick)
+                if v is None or v == 0:
                     continue
-                for acuity in hit:
-                    out[(pop_id, acuity)] = out.get((pop_id, acuity), 0.0) + each
+                hit = [a for a in acuities if e.wants("acuity", a)]
+                if not hit:
+                    continue
+                each = v / len(hit)
+                for pop_id, pop in self.state.populations.items():
+                    if not e.wants("population", pop_id):
+                        continue
+                    amount = each * (pop.size / 1000.0) if per_capita else each
+                    for acuity in hit:
+                        out[(pop_id, acuity)] = out.get((pop_id, acuity), 0.0) + amount
         return {k: v for k, v in out.items() if v > 0}
 
     def _deliver_care(self, tick: int) -> TickRecord:

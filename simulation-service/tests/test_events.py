@@ -212,23 +212,39 @@ def test_a_policy_beats_doing_nothing(objective: Objective) -> None:
     assert best.scalar < base.scalar
 
 
-def test_the_best_policy_differs_by_crisis(objective: Objective) -> None:
+def test_the_best_response_differs_by_event(objective: Objective) -> None:
     """The reason the product exists.
 
-    In a flood, evacuating halves the deaths for a few thousand; surging costs a
-    hundred times more for the same result. If one policy won everywhere, a
-    government would not need to simulate anything.
+    In a flood the cheap move wins: evacuate along the routes that still work.
+    In a pandemic it does not, because every neighbour is full too and only
+    buying capacity helps. If one response won everywhere, nobody would need to
+    simulate anything.
     """
-    policies = [null_policy(), POLICIES["load-balance"](toy_system()), POLICIES["surge-and-balance"](toy_system())]
+    policies = [
+        null_policy(),
+        POLICIES["load-balance"](toy_system()),
+        POLICIES["surge-and-balance"](toy_system()),
+    ]
     flood = compare(toy_system(), EVENTS["flood"](toy_system()), policies, objective)
     pandemic = compare(toy_system(), EVENTS["pandemic"](toy_system()), policies, objective)
 
+    assert flood[0]["policy"] == "load-balance"
+    assert pandemic[0]["policy"] == "surge-and-balance"
+
+    # Acting has to beat inaction *somewhere*, or the tool has nothing to say.
+    # It is deliberately not asserted that every response beats inaction in
+    # every event: surging during a flood raises occupancy just enough to stop
+    # the evacuation rule firing, and ends marginally worse than standing
+    # still. That is a real property of a badly matched response, and the old
+    # form of this test — "null must come last" — asserted precisely the belief
+    # this product exists to challenge.
     for rows in (flood, pandemic):
-        assert rows[-1]["policy"] == "null", "doing nothing should never win"
-    # An order of magnitude, not a decimal place. The old form asserted a
-    # factor of exactly ten and passed at 10.2 before the effects rewrite,
-    # failing at 9.93 after — a threshold that measured the toy network's
-    # arithmetic rather than the claim, which is that moving patients is cheap
-    # and buying capacity is not.
+        baseline = next(r["excess_deaths"] for r in rows if r["policy"] == "null")
+        assert rows[0]["excess_deaths"] < baseline
+
+    # An order of magnitude, not a decimal place. An earlier form asserted a
+    # factor of exactly ten and failed at 9.93 — a threshold measuring the toy
+    # network's arithmetic rather than the claim, which is that moving patients
+    # is cheap and buying capacity is not.
     flood_cost = {r["policy"]: r["response_cost"] for r in flood}
     assert flood_cost["load-balance"] * 5 < flood_cost["surge-and-balance"]

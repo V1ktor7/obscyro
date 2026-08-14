@@ -195,7 +195,7 @@ def test_a_template_uses_only_catalogued_targets() -> None:
     s = runnable()
     used = {e.target for name in EVENTS for e in EVENTS[name](s).effects}
     assert used <= set(BY_PATH)
-    assert used >= {"resource.capacity", "demand.volume"}
+    assert used >= {"resource.capacity", "demand.incidence"}
 
 
 def test_a_policy_template_reads_the_real_network() -> None:
@@ -439,6 +439,131 @@ def test_length_of_stay_can_be_perturbed() -> None:
     assert slow.deaths > fast.deaths
     # And the state it was measured from is untouched.
     assert s.care_model["critical"].stay_ticks == base_stay
+
+
+def _scaled(export_dict, *, beds=1.0, population=50_000):
+    """Load the twin with capacity and catchment scaled independently."""
+    import copy
+
+    from app.events.domain import CareRequirement
+    from app.events.templates import care_model_for
+
+    e = copy.deepcopy(export_dict)
+    for f in e["facilities"]:
+        for r in f["resources"].values():
+            r["capacity"] *= beds
+            r["quantity"] *= beds
+    sizes = {p["id"]: population for p in e["populations"]}
+    probe = load(
+        e,
+        care_model={"_p": CareRequirement(acuity="_p", consumes={})},
+        population_sizes=sizes,
+        route_capacity=10,
+    )
+    return load(
+        e, care_model=care_model_for(probe), population_sizes=sizes, route_capacity=10
+    )
+
+
+def test_demand_follows_the_population_not_the_beds() -> None:
+    """The defect that made every capacity plan pointless.
+
+    Demand used to be anchored on the network's own bed capacity. Measured on
+    the real twin, doubling the beds doubled the deaths — exactly linear, 4116
+    to 8232 to 16465 — so occupancy was invariant to capacity and building a
+    wing could never help. Meanwhile the catchment size the loader insisted on
+    was read in exactly one place: the check that refused zero.
+
+    Both directions are asserted, because fixing one and not the other would
+    leave the model wrong in a way that reads as right.
+    """
+    from app.events.dynamics import run
+    from app.events.policy import null_policy
+
+    ex = export()
+
+    small = _scaled(ex, population=25_000)
+    large = _scaled(ex, population=100_000)
+    deaths_small = run(small, EVENTS["pandemic"](small), null_policy(), seed=0).deaths
+    deaths_large = run(large, EVENTS["pandemic"](large), null_policy(), seed=0).deaths
+    assert deaths_large > deaths_small, "a bigger catchment has to produce more demand"
+
+    lean = _scaled(ex, beds=1.0)
+    roomy = _scaled(ex, beds=3.0)
+    deaths_lean = run(lean, EVENTS["pandemic"](lean), null_policy(), seed=0).deaths
+    deaths_roomy = run(roomy, EVENTS["pandemic"](roomy), null_policy(), seed=0).deaths
+    assert deaths_roomy < deaths_lean, "more beds must not summon more patients"
+
+
+def test_a_flat_arrival_ignores_the_catchment() -> None:
+    """A bus crash brings forty people whatever the catchment.
+
+    Both forms exist because both are real, and collapsing them would force
+    every mass-casualty event to be expressed as a rate over a population it has
+    nothing to do with.
+    """
+    from app.events.effects import Effect, Event, TemporalProfile
+    from app.events.dynamics import Engine
+    from app.events.policy import null_policy
+
+    def arrivals(population: int) -> float:
+        state = _scaled(export(), population=population)
+        flat = Effect(
+            id="crash",
+            target="demand.volume",
+            select={"population": ["pop:site-1"], "acuity": ["critical"]},
+            op="add",
+            value=40,
+            profile=TemporalProfile(start=0, end=5, shape="step", peak=1.0),
+        )
+        engine = Engine(state, Event(id="e", horizon=5, effects=[flat]), null_policy(), 0)
+        return sum(engine._arrivals(1).values())
+
+    assert arrivals(25_000) == arrivals(400_000) == 40
+
+
+def test_a_rate_is_read_per_thousand_people() -> None:
+    """The unit is in the label, so it has to be the unit in the arithmetic."""
+    from app.events.effects import Effect, Event, TemporalProfile
+    from app.events.dynamics import Engine
+    from app.events.policy import null_policy
+
+    state = _scaled(export(), population=50_000)
+    rate = Effect(
+        id="wave",
+        target="demand.incidence",
+        select={"population": ["pop:site-1"], "acuity": ["critical"]},
+        op="add",
+        value=0.4,
+        profile=TemporalProfile(start=0, end=5, shape="step", peak=1.0),
+    )
+    engine = Engine(state, Event(id="e", horizon=5, effects=[rate]), null_policy(), 0)
+    # 0.4 per thousand across 50 000 people is twenty patients a step.
+    assert sum(engine._arrivals(1).values()) == pytest.approx(20.0)
+
+
+def test_a_transfer_needs_room_at_the_far_end() -> None:
+    """No protocol sends patients to a full hospital.
+
+    The rule used to read only the source. Under saturation it moved the
+    sickest into a ward with no free bed, where they queued behind that ward's
+    own critical patients instead of being served first at home — and died. On
+    the toy network with realistic demand that made load-balancing *worse* than
+    doing nothing, while its trace showed rules firing and patients moving.
+    """
+    s = runnable()
+    rules = [r for r in POLICIES["load-balance"](s).rules if r.action.kind == "transfer"]
+    assert rules, "expected a transfer rule on a network with a route"
+    for rule in rules:
+        flat = [
+            c.compare
+            for c in (rule.condition.all_of or [])
+            if c.compare is not None
+        ]
+        assert any(
+            c.left.fn == "available" and c.left.facility == rule.action.target
+            for c in flat
+        ), "the destination's free capacity is never consulted"
 
 
 # --- end to end -------------------------------------------------------------

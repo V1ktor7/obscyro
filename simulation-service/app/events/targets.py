@@ -138,11 +138,29 @@ CATALOGUE: list[Target] = [
         minimum=0.0,
     ),
     Target(
+        path="demand.incidence",
+        label="Rate of patients arriving",
+        help=(
+            "Per thousand people served, per step, so each population generates demand "
+            "in proportion to its own size. This is the form almost every event wants: "
+            "an epidemic infects a share of a population, not a share of a hospital. "
+            "Negative removes demand — a vaccination programme is a fact about the "
+            "world, not a response to one."
+        ),
+        selector=["population", "acuity"],
+        # See `demand.volume` below for why only `add`.
+        ops=["add"],
+        compose="accumulate",
+        minimum=None,
+        unit="per 1000/step",
+    ),
+    Target(
         path="demand.volume",
         label="Patients arriving",
         help=(
-            "Per step, before the severity mix is applied. Negative removes demand — a "
-            "vaccination programme is a fact about the world, not a response to one."
+            "A flat count per step at each selected population, ignoring how many "
+            "people it serves. For a bus crash that brings forty people whatever the "
+            "catchment; use the rate above for anything that scales with a population."
         ),
         selector=["population", "acuity"],
         # Only `add`: a queue has no baseline to multiply. Offering `multiply`
