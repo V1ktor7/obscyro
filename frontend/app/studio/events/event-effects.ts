@@ -176,6 +176,62 @@ export function inertReasons(
   return out;
 }
 
+/** Whether two effects' time windows touch at all. */
+function windowsOverlap(a: SimEffect, b: SimEffect): boolean {
+  const endOf = (e: SimEffect) => (e.profile.end === null ? Infinity : e.profile.end);
+  return a.profile.start <= endOf(b) && b.profile.start <= endOf(a);
+}
+
+/**
+ * Whether two effects can land on the same value.
+ *
+ * An empty or missing dimension means "all of them", so it intersects
+ * everything. Two effects miss each other only if some dimension is named by
+ * both and they share nothing in it.
+ */
+function selectionsIntersect(a: SimEffect, b: SimEffect, target: SimTarget): boolean {
+  for (const dimension of target.selector) {
+    const left = a.select[dimension] ?? [];
+    const right = b.select[dimension] ?? [];
+    if (left.length === 0 || right.length === 0) continue;
+    if (!left.some((v) => right.includes(v))) return false;
+  }
+  return true;
+}
+
+/**
+ * Two effects that both *set* the same value at the same time.
+ *
+ * The engine resolves this by effect id, which is deterministic but arbitrary:
+ * it is not a modelling choice, it is an event saying two contradictory things
+ * and one of them being discarded without telling anyone. Nothing downstream
+ * can recover the intent, so it has to be caught here, while the author is
+ * still looking at both.
+ */
+function contradictorySets(effects: SimEffect[], targets: SimTarget[]): string[] {
+  const byPath = new Map(targets.map((t) => [t.path, t]));
+  const out: string[] = [];
+  for (let i = 0; i < effects.length; i += 1) {
+    for (let j = i + 1; j < effects.length; j += 1) {
+      const a = effects[i]!;
+      const b = effects[j]!;
+      if (a.op !== "set" || b.op !== "set") continue;
+      if (a.target !== b.target) continue;
+      if (a.value === b.value) continue;
+      const target = byPath.get(a.target);
+      if (!target) continue;
+      if (!windowsOverlap(a, b)) continue;
+      if (!selectionsIntersect(a, b, target)) continue;
+      out.push(
+        `“${a.id}” and “${b.id}” both set ${target.label.toLowerCase()} for the same ` +
+          `things at the same time, to ${a.value} and ${b.value}. The engine keeps one ` +
+          `of them and discards the other; it cannot tell which you meant.`,
+      );
+    }
+  }
+  return out;
+}
+
 /** Whether the whole event is worth running. */
 export function eventProblems(
   effects: SimEffect[],
@@ -200,5 +256,6 @@ export function eventProblems(
       out.push(`“${e.id}” ${r}.`);
     }
   }
+  out.push(...contradictorySets(effects, targets));
   return out;
 }

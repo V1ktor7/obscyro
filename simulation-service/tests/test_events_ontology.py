@@ -566,6 +566,70 @@ def test_a_transfer_needs_room_at_the_far_end() -> None:
         ), "the destination's free capacity is never consulted"
 
 
+def _capacity_after(effects, facility="unit-a", tick=3):
+    """The capacity the engine resolves for one facility at one tick."""
+    from app.events.dynamics import Engine
+    from app.events.effects import Event
+    from app.events.policy import null_policy
+
+    state = _scaled(export(), population=50_000)
+    engine = Engine(state, Event(id="e", horizon=10, effects=effects), null_policy(), 0)
+    engine._apply_perturbations(tick)
+    return state.facility(facility).resources["lit"].capacity
+
+
+def _cap_effect(eid, op, value):
+    from app.events.effects import Effect, TemporalProfile
+
+    return Effect(
+        id=eid,
+        target="resource.capacity",
+        select={"facility": ["unit-a"]},
+        op=op,
+        value=value,
+        profile=TemporalProfile(start=0, end=10, shape="step", peak=1.0),
+    )
+
+
+def test_the_order_of_the_effects_list_does_not_change_the_result() -> None:
+    """A JSON array's order is not a modelling decision.
+
+    Applied in list order, `[set 10, multiply 0.5]` resolved to 5 and
+    `[multiply 0.5, set 10]` to 10 — the same event, reordered by a save,
+    producing a different network. Nothing in the composer suggests the list is
+    ordered, so nobody would think to look.
+    """
+    forward = [_cap_effect("a-set", "set", 10), _cap_effect("b-mult", "multiply", 0.5)]
+    reverse = list(reversed(forward))
+    assert _capacity_after(forward) == _capacity_after(reverse)
+
+
+def test_set_wins_outright_over_a_multiplier() -> None:
+    """"The wing is gone" is not a percentage.
+
+    This is what the code always claimed in a comment while doing something
+    else whenever the `set` did not happen to come last.
+    """
+    assert _capacity_after(
+        [_cap_effect("a-mult", "multiply", 0.5), _cap_effect("b-set", "set", 10)]
+    ) == 10
+    assert _capacity_after(
+        [_cap_effect("a-set", "set", 0), _cap_effect("b-mult", "multiply", 4)]
+    ) == 0
+
+
+def test_two_overlapping_sets_resolve_by_id_not_by_position() -> None:
+    """Still arbitrary, but no longer sensitive to how the file was written.
+
+    The engine cannot guess which of two contradictory `set` effects was meant.
+    What it can do is stop the answer depending on array order, and leave the
+    composer to warn that the event says two things at once.
+    """
+    first = [_cap_effect("aaa", "set", 5), _cap_effect("zzz", "set", 40)]
+    assert _capacity_after(first) == 40
+    assert _capacity_after(list(reversed(first))) == 40
+
+
 # --- end to end -------------------------------------------------------------
 
 

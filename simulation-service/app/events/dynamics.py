@@ -236,18 +236,40 @@ class Engine:
         0.5 sixty times over is 8.7e-19, the run finishes, and the report says
         the network collapsed under a 50% shock. `targets.py` calls this the
         part that is not negotiable, and this is the line that honours it.
+
+        Application order is fixed here rather than inherited from the effects
+        list, because the list is a JSON array whose order nobody thinks of as
+        meaningful. Written the obvious way this method applied effects as they
+        came, so `[set 10, multiply 0.5]` gave 5 and `[multiply 0.5, set 10]`
+        gave 10 — the same event, reordered by a save, producing a different
+        network. The rule is now:
+
+          1. `add` and `multiply` compose against the baseline, in id order
+          2. `set` is applied last and wins outright
+
+        which is what the code always claimed: "the wing is gone" is not a
+        percentage, so nothing multiplies it afterwards. Two `set` effects that
+        overlap still resolve last-by-id — deterministic, but arbitrary, and an
+        authoring mistake rather than a modelling choice. The composer warns
+        about it; the engine cannot guess which was meant.
         """
         spec = target(path)
+        matching = [
+            e
+            for e in self.event.active(tick, path)
+            if all(e.wants(d, v) for d, v in dims.items())
+            and e.value_at(tick) is not None
+        ]
+        matching.sort(key=lambda e: e.id)
+
         out = base
-        for e in self.event.active(tick, path):
-            if not all(e.wants(d, v) for d, v in dims.items()):
+        for e in matching:
+            if e.op == "set":
                 continue
-            v = e.value_at(tick)
-            if v is None:
-                continue
-            # `set` is absolute: it does not stack with a multiplier that also
-            # matched, because "the wing is gone" is not a percentage.
-            out = v if e.op == "set" else apply_op(out, e.op, v)
+            out = apply_op(out, e.op, e.value_at(tick))
+        for e in matching:
+            if e.op == "set":
+                out = e.value_at(tick)
         return clamp(spec, out)
 
     def _apply_perturbations(self, tick: int) -> None:
