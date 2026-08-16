@@ -87,18 +87,29 @@ def test_the_engine_is_deterministic_and_replicates_are_therefore_vacuous(
     """
     a = run(toy_system(), EVENTS["pandemic"](toy_system()), null_policy(), seed=1)
     b = run(toy_system(), EVENTS["pandemic"](toy_system()), null_policy(), seed=999)
+    # The instruction lives in the assertion messages, not only in the
+    # docstring: what a maintainer sees on a red CI is the message, and a test
+    # that fails without saying what to do next gets deleted rather than
+    # honoured.
+    todo = (
+        "The engine is no longer deterministic, which is good. Do NOT delete or "
+        "weaken this test to get CI green. Instead: (1) replace it with a real "
+        "distribution test — assert non-zero spread and a sensible interval; "
+        "(2) only from that point may the comparison table render a statistical "
+        "range, because until now `interval()` returned a band of zero width and "
+        "showing it would have manufactured false precision."
+    )
+
     # The seed is recorded on the trajectory, so compare what the run produced
     # rather than the label it carries.
-    assert [t.model_dump() for t in a.ticks] == [t.model_dump() for t in b.ticks], (
-        "seeds changed something — see docstring"
-    )
+    assert [t.model_dump() for t in a.ticks] == [t.model_dump() for t in b.ticks], todo
 
     r = replicate(toy_system(), EVENTS["pandemic"](toy_system()), null_policy(), objective, n=8)
     assert len(r.scores) == 8
-    assert len(set(r.scores)) == 1
-    assert r.stdev == 0.0
+    assert len(set(r.scores)) == 1, todo
+    assert r.stdev == 0.0, todo
     lo, hi = r.interval()
-    assert hi - lo == 0.0
+    assert hi - lo == 0.0, todo
 
 
 # --- extensibility: new data, no engine change ------------------------------

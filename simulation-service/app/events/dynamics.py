@@ -237,21 +237,42 @@ class Engine:
         the network collapsed under a 50% shock. `targets.py` calls this the
         part that is not negotiable, and this is the line that honours it.
 
-        Application order is fixed here rather than inherited from the effects
-        list, because the list is a JSON array whose order nobody thinks of as
-        meaningful. Written the obvious way this method applied effects as they
-        came, so `[set 10, multiply 0.5]` gave 5 and `[multiply 0.5, set 10]`
-        gave 10 — the same event, reordered by a save, producing a different
-        network. The rule is now:
+        Application order is fixed by *operation*, never inherited from the
+        effects list, because that list is a JSON array whose order nobody
+        thinks of as meaningful. Written the obvious way, this applied effects
+        as they came: `[set 10, multiply 0.5]` gave 5 and `[multiply 0.5,
+        set 10]` gave 10 — the same event, reordered by a save, producing a
+        different network, with nothing raised anywhere.
 
-          1. `add` and `multiply` compose against the baseline, in id order
-          2. `set` is applied last and wins outright
+        The rule is:
 
-        which is what the code always claimed: "the wing is gone" is not a
-        percentage, so nothing multiplies it afterwards. Two `set` effects that
-        overlap still resolve last-by-id — deterministic, but arbitrary, and an
-        authoring mistake rather than a modelling choice. The composer warns
-        about it; the engine cannot guess which was meant.
+          1. `set` establishes the value, replacing the baseline
+          2. `multiply` composes against whatever step 1 left
+          3. `add` is summed onto that
+
+        `set` goes *first*, not last, and that is a modelling decision rather
+        than a tie-break. `set` asserts a state; `multiply` and `add` are
+        transformations. Read as sentences, "the wing is rebuilt to 40 beds"
+        followed by "staff sickness costs 30% of capacity" plainly means 28 —
+        the second claim is about the world the first one describes. Applying
+        `set` last would compute that multiplier against the old baseline and
+        then throw it away, so the staff shortage would silently not exist at
+        that facility.
+
+        It also makes the case that matters expressible: a site is destroyed
+        (`set 0`) and twenty field beds are put in the car park (`add 20`)
+        gives 20. Under set-last it gives 0, and nothing can ever be stood up
+        at a site an event has flattened.
+
+        Multiplication and addition are each commutative within their own step,
+        so only the precedence between them needed choosing: `multiply` before
+        `add` matches how the two sentences read together — the percentage bites
+        on the ward, the field beds are extra. The result is now independent of
+        both array order and effect id.
+
+        Two `set` effects that overlap still resolve last-by-id — deterministic,
+        but arbitrary, and an authoring mistake rather than a modelling choice.
+        The composer warns; the engine cannot guess which was meant.
         """
         spec = target(path)
         matching = [
@@ -265,11 +286,13 @@ class Engine:
         out = base
         for e in matching:
             if e.op == "set":
-                continue
-            out = apply_op(out, e.op, e.value_at(tick))
-        for e in matching:
-            if e.op == "set":
                 out = e.value_at(tick)
+        for e in matching:
+            if e.op == "multiply":
+                out = apply_op(out, "multiply", e.value_at(tick))
+        for e in matching:
+            if e.op == "add":
+                out = apply_op(out, "add", e.value_at(tick))
         return clamp(spec, out)
 
     def _apply_perturbations(self, tick: int) -> None:

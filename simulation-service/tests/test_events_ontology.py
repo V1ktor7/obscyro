@@ -604,18 +604,48 @@ def test_the_order_of_the_effects_list_does_not_change_the_result() -> None:
     assert _capacity_after(forward) == _capacity_after(reverse)
 
 
-def test_set_wins_outright_over_a_multiplier() -> None:
-    """"The wing is gone" is not a percentage.
+def test_set_establishes_the_value_that_transformations_then_act_on() -> None:
+    """`set` asserts a state; `multiply` and `add` transform one.
 
-    This is what the code always claimed in a comment while doing something
-    else whenever the `set` did not happen to come last.
+    Read as sentences, "the wing is rebuilt to 40 beds" followed by "staff
+    sickness costs 30% of capacity" means 28. Applying `set` last instead would
+    compute that multiplier against the old baseline and discard it, so the
+    staff shortage would silently not exist at that facility — which is what
+    the first version of this did while a comment claimed the opposite.
     """
     assert _capacity_after(
-        [_cap_effect("a-mult", "multiply", 0.5), _cap_effect("b-set", "set", 10)]
-    ) == 10
+        [_cap_effect("a-set", "set", 40), _cap_effect("b-mult", "multiply", 0.7)]
+    ) == pytest.approx(28)
+    # And the same the other way round in the file, because precedence is by
+    # operation, not by position.
     assert _capacity_after(
-        [_cap_effect("a-set", "set", 0), _cap_effect("b-mult", "multiply", 4)]
-    ) == 0
+        [_cap_effect("a-mult", "multiply", 0.7), _cap_effect("b-set", "set", 40)]
+    ) == pytest.approx(28)
+
+
+def test_something_can_be_stood_up_at_a_site_an_event_flattened() -> None:
+    """Destroyed, then twenty field beds in the car park.
+
+    Under set-last this gave zero, and nothing could ever be added at a site an
+    event had wiped out — a whole class of response left inexpressible by a
+    tie-break nobody had argued for.
+    """
+    assert _capacity_after(
+        [_cap_effect("a-flood", "set", 0), _cap_effect("b-field", "add", 20)]
+    ) == 20
+
+
+def test_multiply_bites_before_add() -> None:
+    """The percentage hits the ward; the field beds are extra.
+
+    Mixed addition and multiplication are not commutative, so a precedence had
+    to be chosen or the result would depend on effect ids — deterministic, but
+    changed by a rename.
+    """
+    # 48 beds, minus 30%, plus 20 = 53.6 — not (48 + 20) * 0.7 = 47.6.
+    assert _capacity_after(
+        [_cap_effect("a-add", "add", 20), _cap_effect("b-mult", "multiply", 0.7)]
+    ) == pytest.approx(53.6)
 
 
 def test_two_overlapping_sets_resolve_by_id_not_by_position() -> None:

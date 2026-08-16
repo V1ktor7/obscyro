@@ -29,6 +29,13 @@ would silently erase everyone still waiting.
 Getting this wrong produces runs that are wrong and beautiful. So the author
 picks *what* to perturb and *by how much*; the catalogue decides how that
 composes, once, here.
+
+Precedence between operations on one quantity is fixed in `Engine._resolve` and
+is likewise not the author's to choose: `set` establishes a value, `multiply`
+then composes against it, `add` is summed on last. Written the obvious way —
+applying effects in list order — the order of a JSONB array silently decided the
+simulated network, and a resave that reordered it changed the answer with
+nothing raised anywhere.
 """
 
 from __future__ import annotations
