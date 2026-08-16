@@ -264,11 +264,16 @@ class Engine:
         gives 20. Under set-last it gives 0, and nothing can ever be stood up
         at a site an event has flattened.
 
-        Multiplication and addition are each commutative within their own step,
-        so only the precedence between them needed choosing: `multiply` before
-        `add` matches how the two sentences read together — the percentage bites
-        on the ward, the field beds are extra. The result is now independent of
-        both array order and effect id.
+        Steps 1 and 2 are forced by what the operations mean, and are not open
+        to revision. **Step 3 is a convention.** Multiplication and addition are
+        each commutative within their own step, so the result no longer depends
+        on array order or effect id either way — but mixed, they are not, and
+        something had to go first. `multiply` before `add` was chosen because it
+        matches how the two sentences read together: the percentage bites on the
+        ward, the field beds are extra. Nothing deeper than that. A modeller who
+        wants `(capacity + 20) × 0.7` rather than `capacity × 0.7 + 20` is not
+        wrong about the world, only about this convention, and swapping the last
+        two loops is the whole change.
 
         Two `set` effects that overlap still resolve last-by-id — deterministic,
         but arbitrary, and an authoring mistake rather than a modelling choice.

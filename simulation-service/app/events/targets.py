@@ -36,6 +36,10 @@ then composes against it, `add` is summed on last. Written the obvious way —
 applying effects in list order — the order of a JSONB array silently decided the
 simulated network, and a resave that reordered it changed the answer with
 nothing raised anywhere.
+
+Of those three, the first two follow from what the operations mean. That
+`multiply` runs before `add` is a convention and is marked as such where it is
+implemented.
 """
 
 from __future__ import annotations

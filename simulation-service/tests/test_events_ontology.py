@@ -288,9 +288,11 @@ def test_a_transfer_moves_the_sickest_not_the_longest_queue() -> None:
 def test_surging_follows_the_constraint_as_it_moves() -> None:
     """A ward short of nurses that becomes short of beds must stop hiring nurses.
 
-    Choosing the binding constraint once, when the policy is built, spent 1.2 M
-    on nurses at a facility that had been bed-bound for forty ticks — and the
-    trace looked healthy the whole time.
+    Choosing the binding constraint once, when the policy is built, kept
+    buying nurses for a facility that had been bed-bound for most of the run —
+    a seven-figure spend for no additional patient served, with a healthy-looking
+    trace throughout. The measured figures are not repeated: they predate the
+    correction to the demand model.
     """
     s = runnable()
     surging = [r for r in POLICIES["surge-and-balance"](s).rules
