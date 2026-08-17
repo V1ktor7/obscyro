@@ -1652,6 +1652,16 @@ export interface SimExport {
   scenario_id: string | null;
   generated_at: string;
   facilities: SimExportFacility[];
+  /**
+   * Every instance that plays a role, with its properties intact.
+   *
+   * The `resources` and `census` on each facility are a *view* of these,
+   * computed by the exporter from the same array. An effect that edits a
+   * property is what changes a capacity, so the objects are what the composer
+   * offers to target.
+   */
+  objects: SimObjectInstance[];
+  object_rules: { unavailable_keys: string[]; unavailable_values: string[] };
   populations: { id: string; name: string; size: number; served_by: string[] }[];
   edges: { source: string; target: string; kind: string; capacity: number; via: string }[];
   gaps: SimGap[];
@@ -1703,7 +1713,8 @@ export type SelectorDimension =
   | "activity"
   | "acuity"
   | "population"
-  | "route";
+  | "route"
+  | "object_type";
 
 export interface TemporalProfile {
   start: number;
@@ -1738,8 +1749,26 @@ export interface SimEffect {
   /** Dimension -> chosen values. Missing or empty means every value of it. */
   select: Partial<Record<SelectorDimension, string[]>>;
   op: EffectOp;
-  value: number;
+  /**
+   * Text is allowed on `object.property` only, because that target writes the
+   * ontology's own vocabulary — "contaminated", "sick" — and forcing those
+   * through a number was the limit that made a whole class of event unwritable.
+   */
+  value: number | string;
+  /** Which property to change. `object.property` only. */
+  property_key?: string | null;
+  /** How many matching objects this reaches: all, a fraction, or a count. */
+  reach?: number | null;
   profile: TemporalProfile;
+}
+
+/** One instance from the ontology, as the export now carries it. */
+export interface SimObjectInstance {
+  id: string;
+  type: string;
+  role: SimRole;
+  properties: Record<string, unknown>;
+  at: string | null;
 }
 
 export interface SimCatalogue {

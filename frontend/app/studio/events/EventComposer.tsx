@@ -57,7 +57,11 @@ const DIMENSION_LABEL: Record<SelectorDimension, string> = {
   acuity: "Severities",
   population: "Populations",
   route: "Routes",
+  object_type: "Kinds of object",
 };
+
+/** The one target whose value may be text and which names a property. */
+const OBJECT_TARGET = "object.property";
 
 export interface EventComposerProps {
   snapshot: SimExport;
@@ -127,7 +131,35 @@ export default function EventComposer({
         id: `${e.source}>${e.target}`,
         name: `${nameIn(snapshot, e.source)} → ${nameIn(snapshot, e.target)}`,
       })),
+      object_type: Array.from(new Set<string>((snapshot.objects ?? []).map((o) => o.type)))
+        .sort()
+        .map((t) => ({
+          id: t,
+          name: `${t} (${(snapshot.objects ?? []).filter((o) => o.type === t).length})`,
+        })),
     };
+  }, [snapshot]);
+
+  /**
+   * Which properties the instances of a type actually carry, and what values
+   * they already hold.
+   *
+   * Offered as suggestions rather than a closed list: an event's whole purpose
+   * may be to introduce a value the ontology has never seen — "contaminated"
+   * exists nowhere until the first flood puts it there.
+   */
+  const propertiesByType = useMemo(() => {
+    const out = new Map<string, Map<string, Set<string>>>();
+    for (const o of snapshot.objects ?? []) {
+      const keys = out.get(o.type) ?? new Map<string, Set<string>>();
+      for (const [k, v] of Object.entries(o.properties ?? {})) {
+        const seen = keys.get(k) ?? new Set<string>();
+        if (typeof v === "string" || typeof v === "number") seen.add(String(v));
+        keys.set(k, seen);
+      }
+      out.set(o.type, keys);
+    }
+    return out;
   }, [snapshot]);
 
   const byPath = useMemo(() => new Map(targets.map((t) => [t.path, t])), [targets]);
@@ -228,6 +260,7 @@ export default function EventComposer({
           target={byPath.get(effect.target)}
           horizon={horizon}
           vocab={vocab}
+          propertiesByType={propertiesByType}
           focused={focused === i}
           onFocus={() => setFocused(i)}
           onChange={(next) => patch(i, next)}
@@ -364,6 +397,7 @@ function EffectCard({
   target,
   horizon,
   vocab,
+  propertiesByType,
   focused,
   onFocus,
   onChange,
@@ -374,6 +408,7 @@ function EffectCard({
   target: SimTarget | undefined;
   horizon: number;
   vocab: Vocabulary;
+  propertiesByType: Map<string, Map<string, Set<string>>>;
   focused: boolean;
   onFocus: () => void;
   onChange: (next: Partial<SimEffect>) => void;
@@ -382,6 +417,26 @@ function EffectCard({
   const sentence = describeEffect(effect, target, vocab);
   const inert = inertReasons(effect, target, horizon);
   const p = effect.profile;
+  const isObject = effect.target === OBJECT_TARGET;
+  // `set` is the only operation that can carry text, and only on an object
+  // property. Everywhere else the field is a number and typing a word into it
+  // would produce a payload the engine refuses.
+  const textValued = isObject && effect.op === "set";
+  const chosenTypes = effect.select.object_type ?? [];
+  const propertyChoices = Array.from(
+    new Set(
+      Array.from(propertiesByType.entries())
+        .filter(([type]) => chosenTypes.length === 0 || chosenTypes.includes(type))
+        .flatMap(([, keys]) => Array.from(keys.keys())),
+    ),
+  ).sort();
+  const valueChoices = Array.from(
+    new Set(
+      Array.from(propertiesByType.entries())
+        .filter(([type]) => chosenTypes.length === 0 || chosenTypes.includes(type))
+        .flatMap(([, keys]) => Array.from(keys.get(effect.property_key ?? "") ?? [])),
+    ),
+  ).sort();
 
   return (
     <section
@@ -428,11 +483,31 @@ function EffectCard({
             ))}
           </div>
 
+          {isObject ? (
+            <ObjectFields
+              effect={effect}
+              properties={propertyChoices}
+              values={valueChoices}
+              onChange={onChange}
+            />
+          ) : null}
+
           <div className="mt-3 grid gap-2 sm:grid-cols-[150px_150px]">
             <Field label="Change">
               <select
                 value={effect.op}
-                onChange={(e) => onChange({ op: e.target.value as SimEffect["op"] })}
+                onChange={(e) => {
+                  const op = e.target.value as SimEffect["op"];
+                  // Switching away from `set` on an object property leaves a
+                  // string in a field that now means arithmetic. Reset it
+                  // rather than let the engine refuse a payload the form
+                  // produced.
+                  const value =
+                    isObject && op !== "set" && typeof effect.value === "string"
+                      ? 1
+                      : effect.value;
+                  onChange({ op, value });
+                }}
                 className={INPUT}
               >
                 {target.ops.map((op) => (
@@ -442,13 +517,30 @@ function EffectCard({
                 ))}
               </select>
             </Field>
-            <Field label={target.unit || "Value"}>
-              <input
-                inputMode="decimal"
-                value={effect.value}
-                onChange={(e) => onChange({ value: Number(e.target.value) || 0 })}
-                className={INPUT}
-              />
+            <Field label={textValued ? "New value" : target.unit || "Value"}>
+              {textValued ? (
+                <>
+                  <input
+                    list={`values-${index}`}
+                    value={String(effect.value ?? "")}
+                    onChange={(e) => onChange({ value: e.target.value })}
+                    placeholder="e.g. contaminated"
+                    className={INPUT}
+                  />
+                  <datalist id={`values-${index}`}>
+                    {valueChoices.map((v) => (
+                      <option key={v} value={v} />
+                    ))}
+                  </datalist>
+                </>
+              ) : (
+                <input
+                  inputMode="decimal"
+                  value={effect.value}
+                  onChange={(e) => onChange({ value: Number(e.target.value) || 0 })}
+                  className={INPUT}
+                />
+              )}
             </Field>
           </div>
         </>
@@ -514,6 +606,58 @@ function EffectCard({
         </p>
       ) : null}
     </section>
+  );
+}
+
+function ObjectFields({
+  effect,
+  properties,
+  values,
+  onChange,
+}: {
+  effect: SimEffect;
+  properties: string[];
+  values: string[];
+  onChange: (next: Partial<SimEffect>) => void;
+}) {
+  return (
+    <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_150px]">
+      <Field label="Property to change">
+        <input
+          list="known-properties"
+          value={effect.property_key ?? ""}
+          onChange={(e) => onChange({ property_key: e.target.value || null })}
+          placeholder="e.g. status"
+          className={INPUT}
+        />
+        <datalist id="known-properties">
+          {properties.map((k) => (
+            <option key={k} value={k} />
+          ))}
+        </datalist>
+        <span className="text-[10px] leading-snug text-ink-faint">
+          {properties.length > 0
+            ? `Carried by these objects: ${properties.join(", ")}.`
+            : "None of the selected objects carry any property yet."}
+          {values.length > 0 ? ` Values seen: ${values.join(", ")}.` : ""}
+        </span>
+      </Field>
+      <Field label="How many">
+        <input
+          inputMode="decimal"
+          value={effect.reach ?? ""}
+          placeholder="all"
+          onChange={(e) =>
+            onChange({ reach: e.target.value === "" ? null : Number(e.target.value) })
+          }
+          className={INPUT}
+        />
+        <span className="text-[10px] leading-snug text-ink-faint">
+          Blank is every matching object. Below 1 is a share of them; anything
+          else is a count.
+        </span>
+      </Field>
+    </div>
   );
 }
 

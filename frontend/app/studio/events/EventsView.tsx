@@ -35,6 +35,7 @@ import {
 } from "@/lib/platform-api";
 import { useStudio } from "../StudioShell";
 import EventComposer from "./EventComposer";
+import EventLibrary from "./EventLibrary";
 import EventTimeline from "./EventTimeline";
 
 /** Sentinel for "no scenario" so the select has a real value to hold. */
@@ -48,23 +49,16 @@ const ROLE_LABEL: Record<string, string> = {
   demand: "Demand",
 };
 
-const EVENTS = [
-  {
-    id: "pandemic",
-    label: "Pandemic wave",
-    hint: "Respiratory cases surge across every population, with staff falling sick behind the curve.",
-  },
-  {
-    id: "flood",
-    label: "Flood",
-    hint: "One site loses all capacity and its routes are cut, while trauma arrives everywhere.",
-  },
-  {
-    id: "cyberattack",
-    label: "Cyberattack",
-    hint: "Systems degrade network-wide. Nothing else is touched — whatever follows travels through the cascade.",
-  },
-];
+/**
+ * There is no shipped catalogue of events, and that is the point.
+ *
+ * The page used to open with Pandemic, Flood and Cyberattack pre-selected. A
+ * modelling tool that hands you finished artefacts is telling you what to think
+ * about, and the ones it hands you are always the obvious ones. The engine
+ * still knows how to generate them — `templates.py` — but nothing here offers
+ * them, because an event that came out of a box is not a model of *your*
+ * network.
+ */
 
 const RESPONSES = [
   {
@@ -93,7 +87,10 @@ export default function ResilienceView() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [event, setEvent] = useState("pandemic");
+  // No event is selected until one is picked. There is nothing sensible to
+  // default to now that the shipped three are gone, and defaulting to the first
+  // saved event would silently decide what a run was about.
+  const [event, setEvent] = useState("");
   const [responses, setResponses] = useState<string[]>([
     "null",
     "load-balance",
@@ -199,7 +196,9 @@ export default function ResilienceView() {
   const sized = (snapshot?.populations ?? []).filter((p) => Number(sizes[p.id] ?? "0") > 0);
   // Each hole has to be filled by hand, so the button says which one is still
   // open rather than sitting greyed out with no explanation.
-  const blockedBecause = noCapacity
+  const blockedBecause = !event
+    ? "Pick one of your events, or create one."
+    : noCapacity
     ? "No object type carries capacity yet — set a resilience role on your types first."
     : sized.length === 0
       ? "Enter how many people at least one site serves."
@@ -217,12 +216,13 @@ export default function ResilienceView() {
         const n = Number(v);
         if (n > 0) populationSizes[k] = n;
       }
-      // A composed event is picked as `event:<uuid>`; anything else is one of
-      // the shipped template names.
-      const composedId = event.startsWith("event:") ? event.slice(6) : null;
+      // Only events written here can be run: the shipped templates are gone
+      // from the UI, and the branch that sent one still named the request field
+      // `scenario`, which was renamed to `template` several commits ago — dead
+      // and broken at the same time.
       setResult(
         await runSimulation(env, {
-          ...(composedId ? { eventId: composedId } : { scenario: event }),
+          eventId: event.slice(6),
           policies: responses,
           populationSizes,
           routeCapacity: Number(routeCapacity) || 0,
@@ -281,7 +281,7 @@ export default function ResilienceView() {
                     : async () => {
                         await deleteSimEvent(env!, composing.id);
                         await loadEvents();
-                        if (event === `event:${composing.id}`) setEvent("pandemic");
+                        if (event === `event:${composing.id}`) setEvent("");
                         setComposing(null);
                       }
                 }
@@ -324,13 +324,17 @@ export default function ResilienceView() {
             ) : null}
 
             {!composing && !selectedComposed ? (
-              <Card title="When each effect bites">
-                <p className="text-[11px] leading-relaxed text-ink-faint">
-                  {ownEvents.length === 0
-                    ? "The three shipped events aim themselves at whatever network they are given, so their effects only exist once a run resolves them against your twin — there is nothing to draw yet. Compose an event and its effects appear here on a shared time axis."
-                    : "Select one of your own events to see its effects on a shared time axis. The shipped three are generated against your network at run time, so they have no fixed windows to draw."}
-                </p>
-              </Card>
+              <EventLibrary
+                events={ownEvents}
+                elsewhere={otherWorldEvents}
+                worldLabel={
+                  twinScenarioId
+                    ? (scenarios.find((sc) => sc.id === twinScenarioId)?.name ?? "a scenario")
+                    : "the live twin"
+                }
+                onOpen={(e) => setEvent(`event:${e.id}`)}
+                onCreate={() => setComposing("new")}
+              />
             ) : null}
 
             {result || composing ? null : <HowItWorks />}
@@ -434,34 +438,15 @@ export default function ResilienceView() {
               </p>
             </Card>
 
-            <Card title="2 · Pick an event">
-              <div className="flex flex-col gap-2">
-                {EVENTS.map((e) => (
-                  <label key={e.id} className="flex cursor-pointer gap-2">
-                    <input
-                      type="radio"
-                      name="event"
-                      checked={event === e.id}
-                      onChange={() => setEvent(e.id)}
-                      className="mt-0.5"
-                    />
-                    <span>
-                      <span className="block text-xs text-ink">{e.label}</span>
-                      <span className="block text-[11px] leading-snug text-ink-faint">
-                        {e.hint}
-                      </span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-
-              <div className="mt-3 border-t border-line pt-3">
-                <p className="mb-2 text-[11px] text-ink-faint">
-                  {ownEvents.length > 0
-                    ? "Your own events"
-                    : "The three above are generic — they aim themselves at whatever network they are given. Compose one to say something specific about yours."}
+            <Card title="2 · Pick one of your events">
+              {ownEvents.length === 0 ? (
+                <p className="mb-3 text-[11px] leading-relaxed text-ink-faint">
+                  Nothing to run yet. An event is a set of changes to your
+                  network, placed in time — a wing closes, beds are marked
+                  contaminated, admissions rise, a wing opens.
                 </p>
-                <div className="flex flex-col gap-2">
+              ) : (
+                <div className="mb-3 flex flex-col gap-2">
                   {ownEvents.map((e) => (
                     <div key={e.id} className="flex items-start gap-2">
                       <input
@@ -487,23 +472,23 @@ export default function ResilienceView() {
                       </button>
                     </div>
                   ))}
-                  <button
-                    type="button"
-                    onClick={() => setComposing("new")}
-                    className="self-start rounded-md border border-line px-2.5 py-1 text-[11px] text-ink hover:border-brand hover:text-brand"
-                  >
-                    Compose an event
-                  </button>
                 </div>
-                {otherWorldEvents.length > 0 ? (
-                  <p className="mt-2 text-[11px] leading-relaxed text-ink-faint">
-                    {otherWorldEvents.length} other event
-                    {otherWorldEvents.length === 1 ? " was" : "s were"} composed against a
-                    different world and cannot run here — their effects name instances
-                    that only exist there.
-                  </p>
-                ) : null}
-              </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setComposing("new")}
+                className="rounded-md bg-brand px-3 py-1.5 text-xs text-white hover:bg-brand-deep"
+              >
+                Create an event
+              </button>
+              {otherWorldEvents.length > 0 ? (
+                <p className="mt-2 text-[11px] leading-relaxed text-ink-faint">
+                  {otherWorldEvents.length} other event
+                  {otherWorldEvents.length === 1 ? " was" : "s were"} written against a
+                  different world and cannot run here — their effects name instances
+                  that only exist there.
+                </p>
+              ) : null}
             </Card>
 
             <Card title="3 · Pick the responses to compare">

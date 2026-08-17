@@ -34,6 +34,7 @@ const DIMENSION_NOUN: Record<SelectorDimension, [string, string]> = {
   acuity: ["severity", "severities"],
   population: ["population", "populations"],
   route: ["route", "routes"],
+  object_type: ["kind of object", "kinds of object"],
 };
 
 export function defaultProfile(horizon: number): TemporalProfile {
@@ -118,20 +119,39 @@ export function describeEffect(
   const how = SHAPE_WORDS[effect.profile.shape];
   const unit = target.unit ? ` ${target.unit}` : "";
 
+  // An object effect names the property it writes; every other target *is* the
+  // thing being changed. Saying "Capacity for every facility" where the user
+  // wrote `status` would describe an effect nobody authored.
+  const subject = effect.property_key
+    ? `${effect.property_key} on ${where}`
+    : `${target.label} for ${where}`;
+  const share =
+    effect.reach == null
+      ? ""
+      : effect.reach < 1
+        ? ` (${Math.round(effect.reach * 100)}% of them)`
+        : ` (${effect.reach} of them)`;
+
+  if (typeof effect.value === "string") {
+    if (effect.value.trim() === "") {
+      return `Nothing: no value to set ${effect.property_key ?? "the property"} to.`;
+    }
+    return `${subject}${share} becomes “${effect.value}”, ${when}.`;
+  }
   if (effect.op === "multiply") {
     if (effect.value === 1) {
-      return `Nothing: multiplying by 1 leaves ${target.label.toLowerCase()} untouched.`;
+      return `Nothing: multiplying by 1 leaves ${subject} untouched.`;
     }
-    return `${target.label} for ${where} ${multiplierWords(effect.value)}, ${when}, and the change ${how}.`;
+    return `${subject}${share} ${multiplierWords(effect.value)}, ${when}, and the change ${how}.`;
   }
   if (effect.op === "set") {
-    return `${target.label} for ${where} is set to ${effect.value}${unit}, ${when}.`;
+    return `${subject}${share} is set to ${effect.value}${unit}, ${when}.`;
   }
   if (effect.value === 0) {
-    return `Nothing: adding zero leaves ${target.label.toLowerCase()} untouched.`;
+    return `Nothing: adding zero leaves ${subject} untouched.`;
   }
   const verb = effect.value > 0 ? "rises by" : "falls by";
-  return `${target.label} for ${where} ${verb} ${Math.abs(effect.value)}${unit}, ${when}, and the change ${how}.`;
+  return `${subject}${share} ${verb} ${Math.abs(effect.value)}${unit}, ${when}, and the change ${how}.`;
 }
 
 /**
@@ -164,6 +184,18 @@ export function inertReasons(
   }
   if (effect.op === "add" && effect.value === 0) {
     out.push("adds zero, which changes nothing");
+  }
+  if (typeof effect.value === "string" && effect.value.trim() === "") {
+    out.push("sets the property to nothing at all");
+  }
+  if (target.path === "object.property" && !effect.property_key) {
+    // An object effect with no property named selects real instances, runs
+    // without error, and changes none of them — inert in the most convincing
+    // way available.
+    out.push("names no property, so it changes nothing on the objects it selects");
+  }
+  if (effect.reach != null && effect.reach <= 0) {
+    out.push("reaches no objects; leave it blank to mean all of them");
   }
   if (!target.ops.includes(effect.op)) {
     out.push(`cannot be changed by ${effect.op} — it accepts ${target.ops.join(", ")}`);
