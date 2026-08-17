@@ -172,6 +172,44 @@ describe("inertReasons", () => {
 });
 
 describe("eventProblems", () => {
+  function setCap(id: string, value: number, over: Partial<SimEffect> = {}): SimEffect {
+    return effect({ id, op: "set", value, ...over });
+  }
+
+  it("catches two effects that set the same thing to different values", () => {
+    // The engine resolves this by id — deterministic, but arbitrary. It is an
+    // event saying two contradictory things and one being discarded silently,
+    // which nothing downstream can recover.
+    const problems = eventProblems([setCap("flood", 0), setCap("closure", 12)], TARGETS, 30);
+    expect(problems.join(" ")).toContain("cannot tell which you meant");
+  });
+
+  it("allows two sets that never meet in time", () => {
+    const early = setCap("early", 0, { profile: { start: 0, end: 5, shape: "step", peak: 1 } });
+    const late = setCap("late", 12, { profile: { start: 6, end: 20, shape: "step", peak: 1 } });
+    expect(eventProblems([early, late], TARGETS, 30)).toEqual([]);
+  });
+
+  it("allows two sets aimed at different facilities", () => {
+    const a = setCap("north", 0, { select: { facility: ["u1"] } });
+    const b = setCap("south", 12, { select: { facility: ["u2"] } });
+    expect(eventProblems([a, b], TARGETS, 30)).toEqual([]);
+  });
+
+  it("still warns when one of them targets everything", () => {
+    // An unfiltered effect covers the filtered one, so they do contradict —
+    // and this is the case an author is least likely to spot.
+    const everywhere = setCap("blackout", 0);
+    const oneWard = setCap("ward", 12, { select: { facility: ["u1"] } });
+    expect(eventProblems([everywhere, oneWard], TARGETS, 30).join(" ")).toContain(
+      "cannot tell which you meant",
+    );
+  });
+
+  it("does not warn when both set the same value", () => {
+    expect(eventProblems([setCap("a", 0), setCap("b", 0)], TARGETS, 30)).toEqual([]);
+  });
+
   it("rejects an event with no effects", () => {
     expect(eventProblems([], TARGETS, 30)[0]).toContain("no effects");
   });

@@ -235,20 +235,35 @@ volume calibré sur la capacité totale, une règle de transfert par route
 existante, un renfort par ressource. Le moteur n'est pas touché : ce qui sort
 est la même donnée pure qu'avant.
 
-## Trois défauts trouvés au premier branchement sur un vrai jumeau
+## Défauts trouvés en branchant sur un vrai jumeau
 
 **Les morts ne quittaient pas la file.** Un patient non pris en charge mourait
 0,15 fois par tick et restait dans la file — donc remourait au tick suivant,
 indéfiniment. Le bilan n'était borné que par l'horizon, la file devenait une
 dette qu'aucune réponse ne pouvait rembourser, et **les trois politiques
-tombaient à 0,1 % les unes des autres**. Les chiffres publiés avant ce correctif
-(965 morts en pandémie, etc.) étaient gonflés.
+tombaient à 0,1 % les unes des autres**.
+
+> **Aucun chiffre de ce fichier ne doit être cité.** Tous les bilans mesurés ici
+> l'ont été avant que la demande cesse d'être calibrée sur le nombre de lits, et
+> sont donc faux d'un facteur inconnu. Ils sont conservés pour ce qu'ils
+> montrent — un rapport, une direction, un défaut — jamais pour leur valeur.
 
 **Le transfert prenait la file la plus longue, pas la plus grave.** Il envoyait
 donc des cas de routine sur la seule route disponible ; ils prenaient les lits à
 l'arrivée, et les cas critiques qu'ils déplaçaient mouraient. La politique
 notait *moins bien* que ne rien faire, pendant que sa trace montrait une règle
 qui se déclenche et des patients qui bougent.
+
+**La demande suivait les lits, pas la population.** Doubler les lits doublait
+les morts, exactement linéairement, donc l'occupation était invariante à la
+capacité et construire une aile ne pouvait jamais aider. La taille du bassin
+desservi, exigée par le chargeur, n'était lue que par le contrôle qui refusait
+zéro. Corrigé par `demand.incidence`, par millier de personnes et par pas.
+
+**L'ordre du tableau d'effets décidait du résultat.** Les effets s'appliquaient
+dans l'ordre de la liste, donc `[set 10, multiply 0,5]` donnait 5 et l'ordre
+inverse donnait 10 — le même événement, réordonné par une sauvegarde. La
+précédence est désormais par opération : `set`, puis `multiply`, puis `add`.
 
 **Le renfort visait la contrainte du premier jour.** Une unité à court
 d'infirmières qui devenait à court de lits continuait d'embaucher : 1,2 M

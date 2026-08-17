@@ -377,11 +377,16 @@ def load_balance(state: SystemState) -> Policy:
                         # saturated network transfers its sickest into a ward
                         # with no free bed — where they queue behind that ward's
                         # own critical patients instead of being served first at
-                        # home, and die. Measured on the toy network once demand
-                        # became realistic, that made load-balancing *worse*
-                        # than doing nothing (30.0 deaths against 26.2) while
-                        # its trace showed rules firing and patients moving.
-                        # No transfer protocol sends to a full hospital.
+                        # home, and die. Measured on the toy network once
+                        # demand became realistic, that made load-balancing come
+                        # out *worse* than doing nothing on deaths, while its
+                        # trace showed rules firing and patients moving. No
+                        # transfer protocol sends to a full hospital.
+                        #
+                        # The figures behind that reading are not repeated here
+                        # on purpose: they were taken before the demand model
+                        # was corrected, and a number left in a comment outlives
+                        # every caveat attached to it.
                         Condition(
                             compare=Comparison(
                                 left=Metric(
@@ -414,8 +419,10 @@ def surge_and_balance(state: SystemState) -> Policy:
     binding constraint once, when the policy is built, and surges that thing for
     the rest of the run — so a ward that started short of nurses keeps hiring
     nurses long after beds became the limit. In the first run against a real
-    twin that spent 1.2 M and served no additional patient, while the trace
-    showed a rule firing fifty-five times and looked entirely healthy.
+    twin it spent seven figures on staff and served no additional patient,
+    firing steadily throughout while the trace looked entirely healthy. The
+    exact figures are deliberately not recorded: they predate the correction to
+    the demand model, and a number in a comment outlives its caveats.
 
     Surging arrives three ticks late and costs real money, so it should beat
     load-balancing on deaths and lose on cost. If it wins on both, the friction

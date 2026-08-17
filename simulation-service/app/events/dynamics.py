@@ -236,18 +236,68 @@ class Engine:
         0.5 sixty times over is 8.7e-19, the run finishes, and the report says
         the network collapsed under a 50% shock. `targets.py` calls this the
         part that is not negotiable, and this is the line that honours it.
+
+        Application order is fixed by *operation*, never inherited from the
+        effects list, because that list is a JSON array whose order nobody
+        thinks of as meaningful. Written the obvious way, this applied effects
+        as they came: `[set 10, multiply 0.5]` gave 5 and `[multiply 0.5,
+        set 10]` gave 10 — the same event, reordered by a save, producing a
+        different network, with nothing raised anywhere.
+
+        The rule is:
+
+          1. `set` establishes the value, replacing the baseline
+          2. `multiply` composes against whatever step 1 left
+          3. `add` is summed onto that
+
+        `set` goes *first*, not last, and that is a modelling decision rather
+        than a tie-break. `set` asserts a state; `multiply` and `add` are
+        transformations. Read as sentences, "the wing is rebuilt to 40 beds"
+        followed by "staff sickness costs 30% of capacity" plainly means 28 —
+        the second claim is about the world the first one describes. Applying
+        `set` last would compute that multiplier against the old baseline and
+        then throw it away, so the staff shortage would silently not exist at
+        that facility.
+
+        It also makes the case that matters expressible: a site is destroyed
+        (`set 0`) and twenty field beds are put in the car park (`add 20`)
+        gives 20. Under set-last it gives 0, and nothing can ever be stood up
+        at a site an event has flattened.
+
+        Steps 1 and 2 are forced by what the operations mean, and are not open
+        to revision. **Step 3 is a convention.** Multiplication and addition are
+        each commutative within their own step, so the result no longer depends
+        on array order or effect id either way — but mixed, they are not, and
+        something had to go first. `multiply` before `add` was chosen because it
+        matches how the two sentences read together: the percentage bites on the
+        ward, the field beds are extra. Nothing deeper than that. A modeller who
+        wants `(capacity + 20) × 0.7` rather than `capacity × 0.7 + 20` is not
+        wrong about the world, only about this convention, and swapping the last
+        two loops is the whole change.
+
+        Two `set` effects that overlap still resolve last-by-id — deterministic,
+        but arbitrary, and an authoring mistake rather than a modelling choice.
+        The composer warns; the engine cannot guess which was meant.
         """
         spec = target(path)
+        matching = [
+            e
+            for e in self.event.active(tick, path)
+            if all(e.wants(d, v) for d, v in dims.items())
+            and e.value_at(tick) is not None
+        ]
+        matching.sort(key=lambda e: e.id)
+
         out = base
-        for e in self.event.active(tick, path):
-            if not all(e.wants(d, v) for d, v in dims.items()):
-                continue
-            v = e.value_at(tick)
-            if v is None:
-                continue
-            # `set` is absolute: it does not stack with a multiplier that also
-            # matched, because "the wing is gone" is not a percentage.
-            out = v if e.op == "set" else apply_op(out, e.op, v)
+        for e in matching:
+            if e.op == "set":
+                out = e.value_at(tick)
+        for e in matching:
+            if e.op == "multiply":
+                out = apply_op(out, "multiply", e.value_at(tick))
+        for e in matching:
+            if e.op == "add":
+                out = apply_op(out, "add", e.value_at(tick))
         return clamp(spec, out)
 
     def _apply_perturbations(self, tick: int) -> None:

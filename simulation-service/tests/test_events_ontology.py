@@ -288,9 +288,11 @@ def test_a_transfer_moves_the_sickest_not_the_longest_queue() -> None:
 def test_surging_follows_the_constraint_as_it_moves() -> None:
     """A ward short of nurses that becomes short of beds must stop hiring nurses.
 
-    Choosing the binding constraint once, when the policy is built, spent 1.2 M
-    on nurses at a facility that had been bed-bound for forty ticks — and the
-    trace looked healthy the whole time.
+    Choosing the binding constraint once, when the policy is built, kept
+    buying nurses for a facility that had been bed-bound for most of the run —
+    a seven-figure spend for no additional patient served, with a healthy-looking
+    trace throughout. The measured figures are not repeated: they predate the
+    correction to the demand model.
     """
     s = runnable()
     surging = [r for r in POLICIES["surge-and-balance"](s).rules
@@ -564,6 +566,100 @@ def test_a_transfer_needs_room_at_the_far_end() -> None:
             c.left.fn == "available" and c.left.facility == rule.action.target
             for c in flat
         ), "the destination's free capacity is never consulted"
+
+
+def _capacity_after(effects, facility="unit-a", tick=3):
+    """The capacity the engine resolves for one facility at one tick."""
+    from app.events.dynamics import Engine
+    from app.events.effects import Event
+    from app.events.policy import null_policy
+
+    state = _scaled(export(), population=50_000)
+    engine = Engine(state, Event(id="e", horizon=10, effects=effects), null_policy(), 0)
+    engine._apply_perturbations(tick)
+    return state.facility(facility).resources["lit"].capacity
+
+
+def _cap_effect(eid, op, value):
+    from app.events.effects import Effect, TemporalProfile
+
+    return Effect(
+        id=eid,
+        target="resource.capacity",
+        select={"facility": ["unit-a"]},
+        op=op,
+        value=value,
+        profile=TemporalProfile(start=0, end=10, shape="step", peak=1.0),
+    )
+
+
+def test_the_order_of_the_effects_list_does_not_change_the_result() -> None:
+    """A JSON array's order is not a modelling decision.
+
+    Applied in list order, `[set 10, multiply 0.5]` resolved to 5 and
+    `[multiply 0.5, set 10]` to 10 — the same event, reordered by a save,
+    producing a different network. Nothing in the composer suggests the list is
+    ordered, so nobody would think to look.
+    """
+    forward = [_cap_effect("a-set", "set", 10), _cap_effect("b-mult", "multiply", 0.5)]
+    reverse = list(reversed(forward))
+    assert _capacity_after(forward) == _capacity_after(reverse)
+
+
+def test_set_establishes_the_value_that_transformations_then_act_on() -> None:
+    """`set` asserts a state; `multiply` and `add` transform one.
+
+    Read as sentences, "the wing is rebuilt to 40 beds" followed by "staff
+    sickness costs 30% of capacity" means 28. Applying `set` last instead would
+    compute that multiplier against the old baseline and discard it, so the
+    staff shortage would silently not exist at that facility — which is what
+    the first version of this did while a comment claimed the opposite.
+    """
+    assert _capacity_after(
+        [_cap_effect("a-set", "set", 40), _cap_effect("b-mult", "multiply", 0.7)]
+    ) == pytest.approx(28)
+    # And the same the other way round in the file, because precedence is by
+    # operation, not by position.
+    assert _capacity_after(
+        [_cap_effect("a-mult", "multiply", 0.7), _cap_effect("b-set", "set", 40)]
+    ) == pytest.approx(28)
+
+
+def test_something_can_be_stood_up_at_a_site_an_event_flattened() -> None:
+    """Destroyed, then twenty field beds in the car park.
+
+    Under set-last this gave zero, and nothing could ever be added at a site an
+    event had wiped out — a whole class of response left inexpressible by a
+    tie-break nobody had argued for.
+    """
+    assert _capacity_after(
+        [_cap_effect("a-flood", "set", 0), _cap_effect("b-field", "add", 20)]
+    ) == 20
+
+
+def test_multiply_bites_before_add() -> None:
+    """The percentage hits the ward; the field beds are extra.
+
+    Mixed addition and multiplication are not commutative, so a precedence had
+    to be chosen or the result would depend on effect ids — deterministic, but
+    changed by a rename.
+    """
+    # 48 beds, minus 30%, plus 20 = 53.6 — not (48 + 20) * 0.7 = 47.6.
+    assert _capacity_after(
+        [_cap_effect("a-add", "add", 20), _cap_effect("b-mult", "multiply", 0.7)]
+    ) == pytest.approx(53.6)
+
+
+def test_two_overlapping_sets_resolve_by_id_not_by_position() -> None:
+    """Still arbitrary, but no longer sensitive to how the file was written.
+
+    The engine cannot guess which of two contradictory `set` effects was meant.
+    What it can do is stop the answer depending on array order, and leave the
+    composer to warn that the event says two things at once.
+    """
+    first = [_cap_effect("aaa", "set", 5), _cap_effect("zzz", "set", 40)]
+    assert _capacity_after(first) == 40
+    assert _capacity_after(list(reversed(first))) == 40
 
 
 # --- end to end -------------------------------------------------------------

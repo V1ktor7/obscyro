@@ -64,11 +64,52 @@ def test_runs_do_not_contaminate_each_other() -> None:
 # --- replicates -------------------------------------------------------------
 
 
-def test_replicates_report_a_distribution(objective: Objective) -> None:
-    r = replicate(toy_system(), EVENTS["pandemic"](toy_system()), null_policy(), objective, n=5)
-    assert len(r.scores) == 5
+def test_the_engine_is_deterministic_and_replicates_are_therefore_vacuous(
+    objective: Objective,
+) -> None:
+    """A tripwire, not a feature.
+
+    `Engine` builds `np.random.default_rng(seed)` and never reads it, so nothing
+    in a run is stochastic: different seeds give byte-identical trajectories.
+    Everything downstream inherits that. `replicate(n=8)` runs the same
+    trajectory eight times, `stdev` is 0, and `interval()` returns a band of
+    zero width — measured on the real twin as well as here.
+
+    This replaces a test that asserted `lo <= mean <= hi` and passed trivially
+    on a degenerate interval: it guaranteed nothing while looking like it
+    guaranteed a distribution.
+
+    So the confidence interval the harness computes must not be rendered as
+    one. When real stochasticity arrives — arrivals drawn from a distribution
+    is the obvious first place — this test fails, and that failure is the
+    signal to replace it with a genuine distribution test and to let the
+    comparison table show a statistical range.
+    """
+    a = run(toy_system(), EVENTS["pandemic"](toy_system()), null_policy(), seed=1)
+    b = run(toy_system(), EVENTS["pandemic"](toy_system()), null_policy(), seed=999)
+    # The instruction lives in the assertion messages, not only in the
+    # docstring: what a maintainer sees on a red CI is the message, and a test
+    # that fails without saying what to do next gets deleted rather than
+    # honoured.
+    todo = (
+        "The engine is no longer deterministic, which is good. Do NOT delete or "
+        "weaken this test to get CI green. Instead: (1) replace it with a real "
+        "distribution test — assert non-zero spread and a sensible interval; "
+        "(2) only from that point may the comparison table render a statistical "
+        "range, because until now `interval()` returned a band of zero width and "
+        "showing it would have manufactured false precision."
+    )
+
+    # The seed is recorded on the trajectory, so compare what the run produced
+    # rather than the label it carries.
+    assert [t.model_dump() for t in a.ticks] == [t.model_dump() for t in b.ticks], todo
+
+    r = replicate(toy_system(), EVENTS["pandemic"](toy_system()), null_policy(), objective, n=8)
+    assert len(r.scores) == 8
+    assert len(set(r.scores)) == 1, todo
+    assert r.stdev == 0.0, todo
     lo, hi = r.interval()
-    assert lo <= r.mean <= hi
+    assert hi - lo == 0.0, todo
 
 
 # --- extensibility: new data, no engine change ------------------------------
