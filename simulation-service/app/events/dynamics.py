@@ -246,6 +246,25 @@ class Engine:
 
     # -- step 2 ---------------------------------------------------------------
 
+    def _where(self, dims: dict[str, str]) -> tuple[float, float] | None:
+        """The point on the map a resolution is happening at, if there is one.
+
+        A route is taken at whichever end is nearer the epicentre: a road is cut
+        where the water reaches it, not at the address of its source.
+        """
+        fid = dims.get("facility")
+        if fid and fid in self.state.facilities:
+            return self.state.facility(fid).location
+        route = dims.get("route")
+        if route and ">" in route:
+            ends = [
+                self.state.facility(x).location
+                for x in route.split(">", 1)
+                if x in self.state.facilities and self.state.facility(x).location
+            ]
+            return ends[0] if ends else None
+        return None
+
     def _resolve(self, tick: int, path: str, base: float, dims: dict[str, str]) -> float:
         """One baseline quantity, with every effect that names it applied.
 
@@ -298,24 +317,27 @@ class Engine:
         The composer warns; the engine cannot guess which was meant.
         """
         spec = target(path)
+        here = self._where(dims)
+        # `active` is a cheap filter on the event's own window; an effect with an
+        # epicentre may still be nothing *here*, which only distance can say.
         matching = [
             e
             for e in self.event.active(tick, path)
             if all(e.wants(d, v) for d, v in dims.items())
-            and e.value_at(tick) is not None
+            and e.value_for(tick, here) is not None
         ]
         matching.sort(key=lambda e: e.id)
 
         out = base
         for e in matching:
             if e.op == "set":
-                out = e.value_at(tick)
+                out = e.value_for(tick, here)
         for e in matching:
             if e.op == "multiply":
-                out = apply_op(out, "multiply", e.value_at(tick))
+                out = apply_op(out, "multiply", e.value_for(tick, here))
         for e in matching:
             if e.op == "add":
-                out = apply_op(out, "add", e.value_at(tick))
+                out = apply_op(out, "add", e.value_for(tick, here))
         return clamp(spec, out)
 
     def _apply_objects(self, tick: int) -> None:
@@ -337,6 +359,12 @@ class Engine:
 
         for e in sorted(self.event.active(tick, "object.property"), key=lambda x: x.id):
             for o in matching(objects, e):
+                # Distance is read at the object's own facility, so one effect
+                # can flatten a ward at the epicentre and merely dent one an
+                # hour away.
+                here = self._where({"facility": o.at}) if o.at else None
+                if e.spatial is not None and e.magnitude_for(tick, here) <= 0:
+                    continue
                 apply_property(e, o, self.baseline_properties.get(o.id, {}))
 
         # Every facility any object effect could ever reach, not just the ones

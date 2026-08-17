@@ -22,6 +22,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.events.geo import Spatial, distance_km
 from app.events.targets import BY_PATH, Op, Target, target
 
 Shape = Literal["step", "pulse", "ramp", "gaussian"]
@@ -96,6 +97,10 @@ class Effect(BaseModel):
     # contaminated" is almost never what someone means, and an effect that
     # silently means it produces a catastrophe nobody wrote.
     reach: float | None = None
+    # Where the effect starts on the map, how far it carries and how fast. An
+    # event does not reach every site at once, and this is what says so without
+    # simulating anything travelling.
+    spatial: Spatial | None = None
     profile: TemporalProfile = Field(default_factory=TemporalProfile)
 
     @model_validator(mode="after")
@@ -125,6 +130,18 @@ class Effect(BaseModel):
             raise ValueError(
                 f"effect {self.id!r}: {self.target} has no properties to name"
             )
+        if self.spatial is not None:
+            t = BY_PATH.get(self.target)
+            if t and not ({"facility", "route"} & set(t.selector)):
+                # Geography needs somewhere to measure from. On a target with no
+                # place — arrivals into a population, a care-model parameter —
+                # an epicentre would be accepted, ignored, and read as though it
+                # had constrained the event.
+                raise ValueError(
+                    f"effect {self.id!r}: {t.label} has no location, so an epicentre "
+                    f"cannot narrow it. Spatial reach works on targets that name a "
+                    f"facility or a route."
+                )
         if self.reach is not None and self.reach <= 0:
             raise ValueError(
                 f"effect {self.id!r}: a reach of {self.reach} touches nothing; leave it "
@@ -166,6 +183,33 @@ class Effect(BaseModel):
     def magnitude_at(self, tick: int) -> float:
         return self.profile.magnitude_at(tick)
 
+    def magnitude_for(
+        self, tick: int, location: tuple[float, float] | None
+    ) -> float:
+        """Strength here, this step — the whole spatial model in one function.
+
+        Distance decides three things at once: whether the effect arrives at
+        all, when its window opens, and how much of it survives the journey.
+        Computing them together is what keeps a front from needing anything to
+        move.
+
+        A place with no coordinates is *excluded* rather than assumed to be at
+        the centre. Four of the twenty-one units in the real twin have none, and
+        quietly treating them as ground zero would put the worst of every event
+        exactly where the data is thinnest.
+        """
+        if self.spatial is None:
+            return self.magnitude_at(tick)
+        if location is None:
+            return 0.0
+        d = distance_km(self.spatial.epicentre, location)
+        if not self.spatial.reaches(d):
+            return 0.0
+        shifted = tick - self.spatial.delay_steps(d)
+        if shifted < 0:
+            return 0.0
+        return self.profile.magnitude_at(shifted) * self.spatial.attenuation(d)
+
     def text_at(self, tick: int) -> str | None:
         """The string in force this tick, or None.
 
@@ -176,6 +220,26 @@ class Effect(BaseModel):
         if not isinstance(self.value, str):
             return None
         return self.value if self.magnitude_at(tick) > 0 else None
+
+    def value_for(
+        self, tick: int, location: tuple[float, float] | None
+    ) -> float | None:
+        """`value_at`, but eased by the strength that survives to `location`."""
+        if isinstance(self.value, str):
+            return None
+        m = self.magnitude_for(tick, location)
+        if m <= 0:
+            return None
+        m = min(1.0, m)
+        if self.op == "multiply":
+            return 1.0 - (1.0 - self.value) * m
+        return self.value * m
+
+    def text_for(self, tick: int, location: tuple[float, float] | None) -> str | None:
+        """Text does not ease in, so distance only decides whether it lands."""
+        if not isinstance(self.value, str):
+            return None
+        return self.value if self.magnitude_for(tick, location) > 0 else None
 
     def value_at(self, tick: int) -> float | None:
         """The operand in force this tick, eased in by the profile, or None.
