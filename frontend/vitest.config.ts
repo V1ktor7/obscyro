@@ -7,7 +7,20 @@ export default defineConfig({
       "@": path.resolve(__dirname, "."),
     },
   },
+  // esbuild already transforms .tsx; `automatic` picks up React's modern JSX
+  // runtime so component tests need no import of React. @vitejs/plugin-react
+  // would only add Fast Refresh, which a test run has no use for — and it
+  // conflicts with the Vite that vitest ships.
+  esbuild: { jsx: "automatic" },
   test: {
-    include: ["app/**/*.test.ts"],
+    // `.test.tsx` joins the pattern for component tests. Everything the studio
+    // renders was previously verified by types and a production build only, and
+    // a build proves a component compiles, not that dragging a bar writes the
+    // field it claims to.
+    include: ["app/**/*.test.ts", "app/**/*.test.tsx"],
+    // jsdom only where a test asks for it, via `// @vitest-environment jsdom`.
+    // The pure-logic suites are the majority and run an order of magnitude
+    // faster in node.
+    environment: "node",
   },
 });

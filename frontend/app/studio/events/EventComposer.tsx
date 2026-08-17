@@ -27,6 +27,7 @@ import type {
   SimTarget,
   ProfileShape,
 } from "@/lib/platform-api";
+import EventTimeline from "./EventTimeline";
 import {
   blankEffect,
   describeEffect,
@@ -90,6 +91,10 @@ export default function EventComposer({
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Shared by the timeline and the cards, so focusing a bar highlights its card
+  // and vice versa. Two selections would let them disagree, and the user would
+  // be editing one effect while looking at another.
+  const [focused, setFocused] = useState<number | null>(null);
 
   /**
    * Everything the twin offers, per dimension.
@@ -206,6 +211,15 @@ export default function EventComposer({
         </div>
       </section>
 
+      <EventTimeline
+        effects={effects}
+        targets={targets}
+        horizon={horizon}
+        focused={focused}
+        onFocus={setFocused}
+        onChangeProfile={(i, profile) => patch(i, { profile })}
+      />
+
       {effects.map((effect, i) => (
         <EffectCard
           key={i}
@@ -214,8 +228,13 @@ export default function EventComposer({
           target={byPath.get(effect.target)}
           horizon={horizon}
           vocab={vocab}
+          focused={focused === i}
+          onFocus={() => setFocused(i)}
           onChange={(next) => patch(i, next)}
-          onRemove={() => setEffects((prev) => prev.filter((_, j) => j !== i))}
+          onRemove={() => {
+            setEffects((prev) => prev.filter((_, j) => j !== i));
+            setFocused(null);
+          }}
         />
       ))}
 
@@ -345,6 +364,8 @@ function EffectCard({
   target,
   horizon,
   vocab,
+  focused,
+  onFocus,
   onChange,
   onRemove,
 }: {
@@ -353,6 +374,8 @@ function EffectCard({
   target: SimTarget | undefined;
   horizon: number;
   vocab: Vocabulary;
+  focused: boolean;
+  onFocus: () => void;
   onChange: (next: Partial<SimEffect>) => void;
   onRemove: () => void;
 }) {
@@ -361,7 +384,12 @@ function EffectCard({
   const p = effect.profile;
 
   return (
-    <section className="rounded-lg border border-line bg-white p-4">
+    <section
+      onFocusCapture={onFocus}
+      className={`rounded-lg border bg-white p-4 ${
+        focused ? "border-brand" : "border-line"
+      }`}
+    >
       <div className="mb-3 flex items-center gap-2">
         <span className="rounded bg-canvas px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-ink-faint">
           {target?.label ?? effect.target}
