@@ -12,6 +12,7 @@ import {
   setStoredKey,
   type MeResult,
 } from "./auth";
+import type { PropertyDefinition } from "./property-schema";
 
 export interface LoginUser {
   id: string;
@@ -428,13 +429,16 @@ export interface OrganizationSummary {
   createdAt: string;
 }
 
-export type PropertyType = "string" | "number" | "boolean" | "object" | "array";
-
-export interface PropertyDefinition {
-  key: string;
-  type: PropertyType;
-  label?: string;
-}
+// A property declaration carries what the simulation needs to compose an effect
+// on it — unit, bounds, behaviour — so its shape and the rules that go with it
+// live together in `property-schema.ts`. Re-exported because most callers reach
+// for it through this module.
+export type {
+  PropertyBehaviour,
+  PropertyBounds,
+  PropertyDefinition,
+  PropertyType,
+} from "./property-schema";
 
 export type LinkCardinality =
   | "one_to_one"
@@ -461,7 +465,7 @@ export interface EnvObjectType {
   description: string | null;
   nature: ObjectNature | null;
   simRole: SimRole | null;
-  propertySchema: { key: string; type: string; label?: string }[];
+  propertySchema: PropertyDefinition[];
   createdAt: string;
 }
 

@@ -3,6 +3,7 @@ import type { DbClient } from "../lib/db.js";
 import { BadRequest, NotFound } from "../lib/errors.js";
 import { identityKeyOf } from "./identity.js";
 import { assertLensSupported, type ReadLens } from "./ontology-lens.js";
+import type { PropertyDef } from "./property-schema.js";
 import { applyOverridesToInstances, applyOverridesToLinks } from "./scenario-apply.js";
 import { resolveOverrides } from "./scenario-overrides.js";
 
@@ -49,12 +50,16 @@ export interface EnvironmentRow {
   createdAt: Date;
 }
 
-export interface PropertyDef {
-  key: string;
-  type: "string" | "number" | "boolean" | "object" | "array";
-  label?: string;
-  required?: boolean;
-}
+// A property declaration now carries what the simulation needs to compose an
+// effect on it — unit, bounds, behaviour — so the definition moved somewhere it
+// can be reasoned about on its own. Re-exported here because most of the
+// codebase reaches for it through this module.
+export type {
+  PropertyBehaviour,
+  PropertyBounds,
+  PropertyDef,
+  PropertyType,
+} from "./property-schema.js";
 
 /**
  * Property schema for the canonical ClinicalFinding type: the full ConText
