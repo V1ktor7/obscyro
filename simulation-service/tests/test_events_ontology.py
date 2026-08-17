@@ -782,6 +782,147 @@ def test_people_are_census_and_never_capacity() -> None:
     assert "patient" not in s.facility("unit-a").resources
 
 
+# --- effects on the objects themselves --------------------------------------
+
+
+def _prop(eid, value, **over):
+    from app.events.effects import Effect, TemporalProfile
+
+    kwargs = dict(
+        id=eid,
+        target="object.property",
+        property_key="status",
+        select={"object_type": ["Lit"], "facility": ["unit-a"]},
+        op="set",
+        value=value,
+        profile=TemporalProfile(start=3, end=8, shape="step", peak=1.0),
+    )
+    kwargs.update(over)
+    return Effect(**kwargs)
+
+
+def _free_at(effects, ticks):
+    from app.events.dynamics import Engine
+    from app.events.effects import Event
+    from app.events.policy import null_policy
+
+    s = runnable()
+    engine = Engine(s, Event(id="ev", horizon=12, effects=effects), null_policy(), 0)
+    out = []
+    for t in ticks:
+        engine._apply_perturbations(t)
+        out.append(s.facility("unit-a").resources["lit"].quantity)
+    return out
+
+
+def test_setting_a_text_property_moves_capacity() -> None:
+    """The thing the aggregate model could not say at all.
+
+    Forty-eight beds, twenty-eight already marked occupied by the ontology.
+    Marking the rest takes free capacity to zero — and nothing in the care loop
+    was told that a status and a bed count are related. That connection is the
+    inversion working.
+    """
+    assert _free_at([_prop("shut", "occupied")], [0, 4]) == [20, 0]
+
+
+def test_a_property_change_can_give_capacity_back() -> None:
+    """Reopening a wing has to work, or half the point is missing.
+
+    This failed at first: `rebuild` inferred what the run had drawn from
+    `capacity - quantity`, which also counted the beds the *ontology* called
+    occupied. Those were then held for the whole run, and an event that freed
+    them changed nothing while looking entirely reasonable.
+    """
+    assert _free_at([_prop("reopen", "available")], [0, 4]) == [20, 48]
+
+
+def test_an_effect_lets_go_when_its_window_closes() -> None:
+    """A closed window must undo itself.
+
+    Rebuilding only the facilities touched *this* tick left a finished effect
+    applied for ever: the properties reverted, nothing recomputed the totals
+    from them, and the ward stayed shut long after the flood receded.
+    """
+    assert _free_at([_prop("shut", "occupied")], [4, 9]) == [0, 20]
+
+
+def test_reach_takes_a_share_rather_than_everything() -> None:
+    """"Every bed in the network" is almost never what someone means, and an
+    effect that silently means it produces a catastrophe nobody wrote."""
+    # Half of 48 is 24, and 4 of those were free before.
+    assert _free_at([_prop("half", "occupied", reach=0.5)], [4]) == [18]
+    # Freeing ten gives ten back. Written as a *release* rather than another
+    # occupation on purpose: `reach` takes from the front of the id order, and
+    # the first ten ids here are all already occupied — marking them occupied
+    # again would change nothing and the test would prove nothing while passing
+    # for the wrong reason. Front-taking is deterministic, which a comparison
+    # needs, but it does mean a reach can land entirely on objects an earlier
+    # state had already claimed.
+    assert _free_at([_prop("ten", "available", reach=10)], [4]) == [30]
+
+
+def test_an_effect_stays_inside_the_facility_it_names() -> None:
+    s = runnable()
+    from app.events.dynamics import Engine
+    from app.events.effects import Event
+    from app.events.policy import null_policy
+
+    engine = Engine(
+        s,
+        Event(id="ev", horizon=12, effects=[
+            _prop("elsewhere", "occupied", select={"object_type": ["Lit"], "facility": ["unit-b"]}),
+        ]),
+        null_policy(),
+        0,
+    )
+    engine._apply_perturbations(4)
+    assert s.facility("unit-a").resources["lit"].quantity == 20
+    assert s.facility("unit-b").resources["lit"].quantity == 0
+
+
+def test_arithmetic_on_a_text_property_is_refused_not_coerced() -> None:
+    """Multiplying a status by 0.6 has no meaning.
+
+    Inventing one would corrupt an instance in the ontology's own vocabulary
+    while the run carried on reporting numbers built from it.
+    """
+    import pytest as _pytest
+
+    with _pytest.raises(TypeError, match="needs a number"):
+        _free_at([_prop("nonsense", 0.6, op="multiply")], [4])
+
+
+def test_a_property_effect_does_not_compound_over_time() -> None:
+    """Applied to the running value, a multiplier re-applies every tick and the
+    property decays to nothing while every reading of it looks plausible. The
+    same trap `_resolve` exists to avoid, no less dangerous on a property."""
+    from app.events.dynamics import Engine
+    from app.events.effects import Effect, Event, TemporalProfile
+    from app.events.policy import null_policy
+
+    s = runnable()
+    for o in s.objects.values():
+        if o.type == "Lit":
+            o.properties["beds_in_bay"] = 4.0
+    engine = Engine(
+        s,
+        Event(id="ev", horizon=12, effects=[
+            Effect(
+                id="halve", target="object.property", property_key="beds_in_bay",
+                select={"object_type": ["Lit"]}, op="multiply", value=0.5,
+                profile=TemporalProfile(start=0, end=10, shape="step", peak=1.0),
+            )
+        ]),
+        null_policy(),
+        0,
+    )
+    for t in range(6):
+        engine._apply_perturbations(t)
+    sample = next(o for o in s.objects.values() if o.type == "Lit")
+    assert sample.properties["beds_in_bay"] == 2.0
+
+
 # --- end to end -------------------------------------------------------------
 
 

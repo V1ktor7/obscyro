@@ -123,6 +123,60 @@ def derive_census(objects: list[SimObject], facility_id: str) -> dict[str, float
     return out
 
 
+def matching(objects: list[SimObject], effect) -> list[SimObject]:
+    """The objects an `object.property` effect addresses, in a stable order.
+
+    Sorted by id, and `reach` takes from the front rather than at random. That
+    is deliberately not realistic — a contamination does not pick the
+    lowest-numbered beds — but a run that changes its answer between two
+    identical invocations cannot be compared with anything, and realism here
+    would buy nothing a fixed seed does not already give.
+    """
+    hits = [
+        o
+        for o in objects
+        if effect.wants("object_type", o.type) and effect.wants("facility", o.at or "")
+    ]
+    hits.sort(key=lambda o: o.id)
+    if effect.reach is None:
+        return hits
+    # Below 1 reads as a share of what matched; anything else is a count. A
+    # share of nothing is nothing, and a count larger than the population is the
+    # population — neither needs an error.
+    take = round(len(hits) * effect.reach) if effect.reach < 1 else int(effect.reach)
+    return hits[: max(0, min(take, len(hits)))]
+
+
+def apply_property(effect, obj: SimObject, baseline: dict) -> None:
+    """Write one effect onto one object, against its unperturbed properties.
+
+    Always from `baseline`, never from what the previous tick left: a multiplier
+    applied to the running value re-applies every tick, and the property decays
+    to nothing while every reading of it looks plausible. That is the same trap
+    `Engine._resolve` exists to avoid, and it is no less dangerous for being on
+    a property instead of a total.
+    """
+    key = effect.property_key
+    if not key:
+        return
+    if effect.op == "set":
+        obj.properties[key] = effect.value
+        return
+
+    current = baseline.get(key)
+    if not isinstance(current, (int, float)) or isinstance(current, bool):
+        # Refused rather than coerced. Multiplying a status by 0.6 has no
+        # meaning, and inventing one would corrupt an instance in the
+        # ontology's own vocabulary while the run carried on reporting numbers.
+        raise TypeError(
+            f"effect {effect.id!r}: {effect.op} needs a number, but {key!r} on "
+            f"{obj.type} {obj.id!r} is {current!r}"
+        )
+    obj.properties[key] = (
+        current * float(effect.value) if effect.op == "multiply" else current + float(effect.value)
+    )
+
+
 def rebuild(
     facility: Facility, objects: list[SimObject], rules: ObjectRules
 ) -> None:
@@ -139,9 +193,12 @@ def rebuild(
         if existing is None:
             facility.resources[activity] = resource
             continue
-        drawn = max(0.0, existing.capacity - existing.quantity)
+        # Free = what the objects say is free, minus what the run has admitted.
+        # Inferring the second from `capacity - quantity` instead conflated it
+        # with beds the ontology itself marked occupied, so an event that freed
+        # them changed nothing and reopening a wing was impossible.
         existing.capacity = resource.capacity
-        existing.quantity = max(0.0, min(resource.quantity, resource.capacity - drawn))
+        existing.quantity = max(0.0, resource.quantity - existing.reserved)
     # An activity whose objects have all gone is not merely empty, it is absent;
     # leaving a stale zero-capacity resource behind would keep it in every
     # category total and in the composer's vocabulary.

@@ -103,6 +103,15 @@ def _reject_effects_that_hit_nothing(event: Event, state: SystemState) -> None:
         },
         "category": {r.category for f in state.facilities.values() for r in f.resources.values()},
         "route": {f"{e.source}>{e.target}" for e in state.network.all_edges()},
+        "object_type": {getattr(o, "type", "") for o in state.objects.values()},
+    }
+    # Which properties the instances actually carry. An effect naming one that
+    # exists nowhere is inert in the most convincing way available: it selects
+    # real objects, runs without error, and changes nothing.
+    known_properties = {
+        key
+        for o in state.objects.values()
+        for key in getattr(o, "properties", {})
     }
     problems: list[str] = []
 
@@ -118,6 +127,12 @@ def _reject_effects_that_hit_nothing(event: Event, state: SystemState) -> None:
                     f"{e.id}: no {dimension} {', '.join(missing)} "
                     f"(has: {', '.join(sorted(have)) if have else 'none'})"
                 )
+        prop = getattr(e, "property_key", None)
+        if prop and prop not in known_properties:
+            problems.append(
+                f"{e.id}: no object carries a property called {prop!r} "
+                f"(they carry: {', '.join(sorted(known_properties)) or 'none'})"
+            )
         if e.op == "multiply" and e.value == 1:
             problems.append(f"{e.id}: multiplies by 1, which changes nothing")
         if e.profile.peak <= 0:

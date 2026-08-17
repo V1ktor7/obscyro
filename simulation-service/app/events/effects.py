@@ -76,8 +76,61 @@ class Effect(BaseModel):
     target: str
     select: dict[str, list[str]] = Field(default_factory=dict)
     op: Op = "multiply"
-    value: float = 1.0
+    # Text is allowed because `object.property` writes the ontology's own
+    # vocabulary — "contaminated", "sick", "overflow" — and forcing those
+    # through a float was exactly the limit that made a whole class of event
+    # unwritable.
+    value: float | str = 1.0
+    # Which property to change. Only meaningful for `object.property`; named
+    # explicitly rather than smuggled into `select`, because "what I am
+    # filtering by" and "what I am changing" must not look like the same thing.
+    #
+    # Not called `property`: that shadows the decorator used further down this
+    # very class, and the failure is a TypeError at import time with no mention
+    # of the field that caused it.
+    property_key: str | None = None
+    # How many of the matching objects this reaches. None is all of them; a
+    # value below 1 is a fraction of them; anything else is a count.
+    #
+    # Worth a field of its own because "every bed in the network becomes
+    # contaminated" is almost never what someone means, and an effect that
+    # silently means it produces a catastrophe nobody wrote.
+    reach: float | None = None
     profile: TemporalProfile = Field(default_factory=TemporalProfile)
+
+    @model_validator(mode="after")
+    def _text_only_where_it_means_something(self) -> "Effect":
+        """A string value is only meaningful on an object property.
+
+        Everywhere else the quantity is a number, and accepting text would
+        either raise deep in a tick or be coerced into a nonsense figure that
+        the run would then present as a finding.
+        """
+        if isinstance(self.value, str) and self.target != "object.property":
+            raise ValueError(
+                f"effect {self.id!r}: {self.target} is a number, so it cannot be set to "
+                f"the text {self.value!r}"
+            )
+        if self.target == "object.property":
+            if not self.property_key:
+                raise ValueError(
+                    f"effect {self.id!r}: say which property to change — an object "
+                    f"effect without one applies to nothing"
+                )
+            if self.op != "set" and isinstance(self.value, str):
+                raise ValueError(
+                    f"effect {self.id!r}: {self.op!r} needs a number, not text"
+                )
+        elif self.property_key:
+            raise ValueError(
+                f"effect {self.id!r}: {self.target} has no properties to name"
+            )
+        if self.reach is not None and self.reach <= 0:
+            raise ValueError(
+                f"effect {self.id!r}: a reach of {self.reach} touches nothing; leave it "
+                f"unset to mean every matching object"
+            )
+        return self
 
     @model_validator(mode="after")
     def _known_target_and_op(self) -> "Effect":
@@ -113,6 +166,17 @@ class Effect(BaseModel):
     def magnitude_at(self, tick: int) -> float:
         return self.profile.magnitude_at(tick)
 
+    def text_at(self, tick: int) -> str | None:
+        """The string in force this tick, or None.
+
+        Text does not ease in: a bed is contaminated or it is not, and there is
+        no half of "sick". The profile therefore only decides *whether* it
+        applies, never how much.
+        """
+        if not isinstance(self.value, str):
+            return None
+        return self.value if self.magnitude_at(tick) > 0 else None
+
     def value_at(self, tick: int) -> float | None:
         """The operand in force this tick, eased in by the profile, or None.
 
@@ -121,6 +185,8 @@ class Effect(BaseModel):
         it the naive way makes every ramp start out harsher than its own peak,
         which is exactly backwards and very hard to see in a chart.
         """
+        if isinstance(self.value, str):
+            return None
         m = self.magnitude_at(tick)
         if m <= 0:
             return None

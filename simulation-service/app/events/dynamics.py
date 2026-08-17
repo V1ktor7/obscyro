@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 
 from app.events.domain import STAFF, STUFF, SPACE, SYSTEMS, SystemState
 from app.events.effects import Event
+from app.events.objects import ObjectRules, SimObject, apply_property, matching, rebuild
 from app.events.policy import Action, Policy, Rule
 from app.events.targets import apply_op, clamp, target
 
@@ -221,6 +222,23 @@ class Engine:
         # to length of stay, which is neither demand nor capacity nor a route.
         # It needs its own baseline for exactly the same reason capacity does.
         self.baseline_care = copy.deepcopy(state.care_model)
+        # Objects get a baseline for the same reason everything else does: an
+        # effect that multiplied a property in place would re-apply every tick
+        # and decay it to nothing, with every reading along the way looking
+        # entirely reasonable.
+        self.baseline_properties: dict[str, dict] = {
+            oid: copy.deepcopy(o.properties) for oid, o in state.objects.items()
+        }
+        # Computed once: the facilities any object effect in this event can
+        # touch. Used to decide what to re-derive each tick, including on the
+        # ticks where nothing is active and the properties have just reverted.
+        self.object_scope: set[str] = set()
+        for e in event.effects:
+            if e.target != "object.property":
+                continue
+            for o in matching(list(state.objects.values()), e):
+                if o.at:
+                    self.object_scope.add(o.at)
         self.demand_scale: dict[str, float] = {}
         self.trajectory = Trajectory(
             event_id=event.id, policy_id=policy.id, seed=seed
@@ -300,7 +318,37 @@ class Engine:
                 out = apply_op(out, "add", e.value_at(tick))
         return clamp(spec, out)
 
+    def _apply_objects(self, tick: int) -> None:
+        """Write property effects onto the instances, then re-count the totals.
+
+        This runs before capacity, because capacity is *derived* from what this
+        leaves behind. Setting a bed's status to "contaminated" is what makes the
+        ward smaller; nothing has to know the two are connected.
+        """
+        rules = self.state.object_rules
+        if not isinstance(rules, ObjectRules) or not self.object_scope:
+            return
+
+        objects = list(self.state.objects.values())
+        for o in objects:
+            base = self.baseline_properties.get(o.id)
+            if base is not None:
+                o.properties = copy.deepcopy(base)
+
+        for e in sorted(self.event.active(tick, "object.property"), key=lambda x: x.id):
+            for o in matching(objects, e):
+                apply_property(e, o, self.baseline_properties.get(o.id, {}))
+
+        # Every facility any object effect could ever reach, not just the ones
+        # reached *this* tick. Rebuilding only the latter left a closed window
+        # applied for ever: the properties reverted, nothing recomputed the
+        # totals from them, and the ward stayed shut after the flood receded.
+        for fid in self.object_scope:
+            if fid in self.state.facilities:
+                rebuild(self.state.facility(fid), objects, rules)
+
     def _apply_perturbations(self, tick: int) -> None:
+        self._apply_objects(tick)
         for (fid, rid), base in self.baseline_capacity.items():
             r = self.state.facility(fid).resources[rid]
             cap = base

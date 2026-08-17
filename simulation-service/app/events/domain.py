@@ -47,6 +47,12 @@ class Resource(BaseModel):
     quantity: NonNegativeFloat
     capacity: NonNegativeFloat
     replenishment: Replenishment = Field(default_factory=Replenishment)
+    # How much of this the *run itself* has drawn — patients admitted, not beds
+    # the ontology already called occupied. Tracked explicitly because the two
+    # are otherwise indistinguishable from `capacity - quantity`, and conflating
+    # them makes a bed the ontology frees stay locked for the whole run: an
+    # event that reopens a wing then does nothing at all.
+    reserved: NonNegativeFloat = 0.0
     # Which care activities this resource makes possible. Demand is matched
     # against activities, never against resource ids, so two facilities can name
     # the same capability differently and still be comparable.
@@ -251,6 +257,7 @@ class SystemState(BaseModel):
                 break
             take = min(r.quantity, remaining)
             r.quantity -= take
+            r.reserved += take
             remaining -= take
         return amount - remaining
 
@@ -261,8 +268,9 @@ class SystemState(BaseModel):
             if remaining <= 0:
                 break
             room = r.capacity - r.quantity
-            give = min(room, remaining)
+            give = min(room, remaining, r.reserved)
             r.quantity += give
+            r.reserved -= give
             remaining -= give
 
     def occupancy_ratio(
