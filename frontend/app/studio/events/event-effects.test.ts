@@ -128,6 +128,70 @@ describe("describeEffect", () => {
   });
 });
 
+const OBJECT: SimTarget = {
+  path: "object.property",
+  label: "A property of the objects themselves",
+  help: "",
+  selector: ["object_type", "facility"],
+  ops: ["set", "multiply", "add"],
+  compose: "baseline",
+  minimum: null,
+  maximum: null,
+  unit: "",
+};
+
+describe("object property effects", () => {
+  function prop(over: Partial<SimEffect> = {}): SimEffect {
+    return {
+      id: "contamination",
+      target: OBJECT.path,
+      select: { object_type: ["Lit"], facility: ["u1"] },
+      op: "set",
+      value: "contaminated",
+      property_key: "status",
+      profile: { start: 4, end: 14, shape: "step", peak: 1 },
+      ...over,
+    };
+  }
+
+  it("describes the property being written, not the target's label", () => {
+    // Saying "A property of the objects themselves for Emergency" where the
+    // user wrote `status` would describe an effect nobody authored.
+    const s = describeEffect(prop(), OBJECT, VOCAB);
+    expect(s).toContain("status on");
+    expect(s).toContain("becomes “contaminated”");
+  });
+
+  it("says what share of the objects it reaches", () => {
+    // "Every bed in the network" is almost never what someone means, and the
+    // sentence is where that becomes visible before saving.
+    expect(describeEffect(prop({ reach: 0.5 }), OBJECT, VOCAB)).toContain("50% of them");
+    expect(describeEffect(prop({ reach: 20 }), OBJECT, VOCAB)).toContain("20 of them");
+    expect(describeEffect(prop(), OBJECT, VOCAB)).not.toContain("of them");
+  });
+
+  it("admits when the new value is blank rather than describing it", () => {
+    expect(describeEffect(prop({ value: "  " }), OBJECT, VOCAB)).toMatch(/^Nothing/);
+  });
+
+  it("catches an object effect that names no property", () => {
+    // It selects real instances, runs without error, and changes none of them —
+    // inert in the most convincing way available.
+    const reasons = inertReasons(prop({ property_key: null }), OBJECT, 30).join(" ");
+    expect(reasons).toContain("names no property");
+  });
+
+  it("catches a reach that touches nothing", () => {
+    expect(inertReasons(prop({ reach: 0 }), OBJECT, 30).join(" ")).toContain(
+      "reaches no objects",
+    );
+  });
+
+  it("accepts a well-formed object effect", () => {
+    expect(inertReasons(prop({ reach: 0.5 }), OBJECT, 30)).toEqual([]);
+  });
+});
+
 describe("inertReasons", () => {
   it("catches an effect that starts after the run ends", () => {
     const e = effect({ profile: { start: 40, end: 50, shape: "step", peak: 1 } });

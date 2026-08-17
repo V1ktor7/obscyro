@@ -63,7 +63,9 @@ Compose = Literal["baseline", "accumulate"]
 # Selector dimensions a target can be narrowed by. An omitted or empty dimension
 # means "all of them", which is the common case and should not require typing
 # out every facility in a network.
-Dimension = Literal["facility", "category", "activity", "acuity", "population", "route"]
+Dimension = Literal[
+    "facility", "category", "activity", "acuity", "population", "route", "object_type"
+]
 
 
 class Target(BaseModel):
@@ -82,6 +84,28 @@ class Target(BaseModel):
 
 
 CATALOGUE: list[Target] = [
+    Target(
+        path="object.property",
+        label="A property of the objects themselves",
+        help=(
+            "Changes the instances, not a total. Set a bed's status to "
+            "“contaminated”, a patient's to “sick”, a ward's kind to "
+            "“overflow”. Capacity follows as a consequence, because totals are "
+            "counted from the objects rather than stored beside them — so this is the "
+            "only target whose value may be text."
+        ),
+        selector=["object_type", "facility"],
+        # `set` is the operation this exists for. `multiply` and `add` work on a
+        # numeric property, and are refused at run time on a string rather than
+        # coercing it, because a silent coercion here would corrupt an instance
+        # in the ontology's own vocabulary.
+        ops=["set", "multiply", "add"],
+        compose="baseline",
+        # Bounds belong to the property, not to the target: a status has none,
+        # and a numeric property's range is the ontology's business.
+        minimum=None,
+        maximum=None,
+    ),
     Target(
         path="resource.capacity",
         label="Capacity of a resource",

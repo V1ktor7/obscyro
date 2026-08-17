@@ -35,6 +35,9 @@ import {
 } from "@/lib/platform-api";
 import { useStudio } from "../StudioShell";
 import EventComposer from "./EventComposer";
+import EventLibrary from "./EventLibrary";
+import { downloadCsv } from "./csv";
+import EventTimeline from "./EventTimeline";
 
 /** Sentinel for "no scenario" so the select has a real value to hold. */
 const LIVE = "";
@@ -47,23 +50,16 @@ const ROLE_LABEL: Record<string, string> = {
   demand: "Demand",
 };
 
-const EVENTS = [
-  {
-    id: "pandemic",
-    label: "Pandemic wave",
-    hint: "Respiratory cases surge across every population, with staff falling sick behind the curve.",
-  },
-  {
-    id: "flood",
-    label: "Flood",
-    hint: "One site loses all capacity and its routes are cut, while trauma arrives everywhere.",
-  },
-  {
-    id: "cyberattack",
-    label: "Cyberattack",
-    hint: "Systems degrade network-wide. Nothing else is touched — whatever follows travels through the cascade.",
-  },
-];
+/**
+ * There is no shipped catalogue of events, and that is the point.
+ *
+ * The page used to open with Pandemic, Flood and Cyberattack pre-selected. A
+ * modelling tool that hands you finished artefacts is telling you what to think
+ * about, and the ones it hands you are always the obvious ones. The engine
+ * still knows how to generate them — `templates.py` — but nothing here offers
+ * them, because an event that came out of a box is not a model of *your*
+ * network.
+ */
 
 const RESPONSES = [
   {
@@ -83,6 +79,32 @@ const RESPONSES = [
   },
 ];
 
+/**
+ * What a run can hand back beyond the ranking.
+ *
+ * `decisions` is the one nobody expects to want and everybody asks for
+ * eventually, because "why did the model do that" is the first question after
+ * "what did it say". The reading that tripped each rule was already recorded
+ * and simply never surfaced.
+ */
+const COLLECTABLE: Array<{ id: "steps" | "facilities" | "decisions"; label: string; hint: string }> = [
+  {
+    id: "steps",
+    label: "One row per step",
+    hint: "Arrivals, care delivered, care refused, deaths and spend, for each response.",
+  },
+  {
+    id: "facilities",
+    label: "One row per step and facility",
+    hint: "How full each unit was, with its id so a row joins back to the ontology.",
+  },
+  {
+    id: "decisions",
+    label: "One row per decision",
+    hint: "Every rule that fired, what it did, and the reading that tripped it.",
+  },
+];
+
 /** Gaps that make a result meaningless rather than merely narrower. */
 const BLOCKING: SimGap["code"][] = ["POPULATION_WITHOUT_SIZE", "ROUTE_WITHOUT_CAPACITY"];
 
@@ -92,7 +114,10 @@ export default function ResilienceView() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [event, setEvent] = useState("pandemic");
+  // No event is selected until one is picked. There is nothing sensible to
+  // default to now that the shipped three are gone, and defaulting to the first
+  // saved event would silently decide what a run was about.
+  const [event, setEvent] = useState("");
   const [responses, setResponses] = useState<string[]>([
     "null",
     "load-balance",
@@ -102,6 +127,14 @@ export default function ResilienceView() {
   const [routeCapacity, setRouteCapacity] = useState("10");
   const [result, setResult] = useState<SimComparison | null>(null);
   const [running, setRunning] = useState(false);
+  // Collected by default. The tables are the most detailed thing a run
+  // produces, they were previously computed and discarded, and a checkbox
+  // nobody finds is the same as not having built them.
+  const [collect, setCollect] = useState<Array<"steps" | "facilities" | "decisions">>([
+    "steps",
+    "facilities",
+    "decisions",
+  ]);
   const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
   const [twinScenarioId, setTwinScenarioId] = useState<string>(LIVE);
   const [composed, setComposed] = useState<SimEvent[]>([]);
@@ -183,6 +216,14 @@ export default function ResilienceView() {
   const ownEvents = composed.filter((e) => (e.twinScenarioId ?? null) === world);
   const otherWorldEvents = composed.filter((e) => (e.twinScenarioId ?? null) !== world);
 
+  // The composed event currently picked, if any. Templates are generated
+  // server-side against the twin, so the browser never holds their effects and
+  // cannot draw them.
+  const selectedComposed =
+    event.startsWith("event:")
+      ? (ownEvents.find((e) => `event:${e.id}` === event) ?? null)
+      : null;
+
   const blocking = (snapshot?.gaps ?? []).filter((g) => BLOCKING.includes(g.code));
   const advisory = (snapshot?.gaps ?? []).filter((g) => !BLOCKING.includes(g.code));
   const noCapacity = Object.keys(totals.byRole).length === 0;
@@ -190,7 +231,9 @@ export default function ResilienceView() {
   const sized = (snapshot?.populations ?? []).filter((p) => Number(sizes[p.id] ?? "0") > 0);
   // Each hole has to be filled by hand, so the button says which one is still
   // open rather than sitting greyed out with no explanation.
-  const blockedBecause = noCapacity
+  const blockedBecause = !event
+    ? "Pick one of your events, or create one."
+    : noCapacity
     ? "No object type carries capacity yet — set a resilience role on your types first."
     : sized.length === 0
       ? "Enter how many people at least one site serves."
@@ -208,16 +251,18 @@ export default function ResilienceView() {
         const n = Number(v);
         if (n > 0) populationSizes[k] = n;
       }
-      // A composed event is picked as `event:<uuid>`; anything else is one of
-      // the shipped template names.
-      const composedId = event.startsWith("event:") ? event.slice(6) : null;
+      // Only events written here can be run: the shipped templates are gone
+      // from the UI, and the branch that sent one still named the request field
+      // `scenario`, which was renamed to `template` several commits ago — dead
+      // and broken at the same time.
       setResult(
         await runSimulation(env, {
-          ...(composedId ? { eventId: composedId } : { scenario: event }),
+          eventId: event.slice(6),
           policies: responses,
           populationSizes,
           routeCapacity: Number(routeCapacity) || 0,
           twinScenarioId: twinScenarioId || undefined,
+          collect,
         }),
       );
     } catch (err) {
@@ -272,11 +317,59 @@ export default function ResilienceView() {
                     : async () => {
                         await deleteSimEvent(env!, composing.id);
                         await loadEvents();
-                        if (event === `event:${composing.id}`) setEvent("pandemic");
+                        if (event === `event:${composing.id}`) setEvent("");
                         setComposing(null);
                       }
                 }
                 onClose={() => setComposing(null)}
+              />
+            ) : null}
+
+            {/* The timeline is the page's subject, so it sits above the prose
+                and the statistics rather than behind an Edit button. It used
+                to render only inside the composer, which meant the most
+                informative thing here was invisible until you decided to edit
+                something — and nothing on the page said it existed. */}
+            {!composing && selectedComposed ? (
+              <>
+                <EventTimeline
+                  effects={selectedComposed.effects}
+                  targets={targets}
+                  horizon={selectedComposed.horizon}
+                  focused={null}
+                  onFocus={() => setComposing(selectedComposed)}
+                  onChangeProfile={(i, profile) => {
+                    // Dragging here edits the saved event, so it goes through
+                    // the composer rather than writing behind the user's back.
+                    // Opening it with the change already applied keeps the drag
+                    // from being lost, which is what makes it feel like one
+                    // gesture instead of two.
+                    setComposing({
+                      ...selectedComposed,
+                      effects: selectedComposed.effects.map((e, j) =>
+                        j === i ? { ...e, profile } : e,
+                      ),
+                    });
+                  }}
+                />
+                <p className="-mt-2 text-[11px] text-ink-faint">
+                  Dragging a bar opens “{selectedComposed.name}” for editing with
+                  that change applied.
+                </p>
+              </>
+            ) : null}
+
+            {!composing && !selectedComposed ? (
+              <EventLibrary
+                events={ownEvents}
+                elsewhere={otherWorldEvents}
+                worldLabel={
+                  twinScenarioId
+                    ? (scenarios.find((sc) => sc.id === twinScenarioId)?.name ?? "a scenario")
+                    : "the live twin"
+                }
+                onOpen={(e) => setEvent(`event:${e.id}`)}
+                onCreate={() => setComposing("new")}
               />
             ) : null}
 
@@ -356,6 +449,43 @@ export default function ResilienceView() {
             ) : null}
 
             {result ? <Results result={result} /> : null}
+
+            {result?.datasets?.length ? (
+              <Card title="What the run produced">
+                <p className="mb-3 text-[11px] leading-relaxed text-ink-faint">
+                  Synthetic data from this run, at seed 0. Every row is a step —
+                  nothing is averaged here, so a reader who wants a mean can take
+                  one, and this file cannot have decided which question it is
+                  allowed to answer.
+                </p>
+                <ul className="flex flex-col gap-2">
+                  {result.datasets.map((d) => (
+                    <li key={d.name} className="flex items-start gap-3">
+                      <span className="flex-1">
+                        <span className="block text-xs text-ink">{d.label}</span>
+                        <span className="block text-[11px] leading-snug text-ink-faint">
+                          {d.description}
+                        </span>
+                        <span className="mt-0.5 block text-[10px] text-ink-ghost">
+                          {d.rows.length.toLocaleString("en-CA")} rows ·{" "}
+                          {d.columns.join(", ")}
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        disabled={d.rows.length === 0}
+                        onClick={() =>
+                          downloadCsv(d, ownEvents.find((e) => `event:${e.id}` === event)?.name ?? "event")
+                        }
+                        className="rounded-md border border-line px-2.5 py-1 text-[11px] text-ink hover:border-brand hover:text-brand disabled:text-ink-ghost"
+                      >
+                        {d.rows.length === 0 ? "Nothing to download" : "Download CSV"}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            ) : null}
           </div>
 
           <div className="flex flex-col gap-4">
@@ -381,34 +511,15 @@ export default function ResilienceView() {
               </p>
             </Card>
 
-            <Card title="2 · Pick an event">
-              <div className="flex flex-col gap-2">
-                {EVENTS.map((e) => (
-                  <label key={e.id} className="flex cursor-pointer gap-2">
-                    <input
-                      type="radio"
-                      name="event"
-                      checked={event === e.id}
-                      onChange={() => setEvent(e.id)}
-                      className="mt-0.5"
-                    />
-                    <span>
-                      <span className="block text-xs text-ink">{e.label}</span>
-                      <span className="block text-[11px] leading-snug text-ink-faint">
-                        {e.hint}
-                      </span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-
-              <div className="mt-3 border-t border-line pt-3">
-                <p className="mb-2 text-[11px] text-ink-faint">
-                  {ownEvents.length > 0
-                    ? "Your own events"
-                    : "The three above are generic — they aim themselves at whatever network they are given. Compose one to say something specific about yours."}
+            <Card title="2 · Pick one of your events">
+              {ownEvents.length === 0 ? (
+                <p className="mb-3 text-[11px] leading-relaxed text-ink-faint">
+                  Nothing to run yet. An event is a set of changes to your
+                  network, placed in time — a wing closes, beds are marked
+                  contaminated, admissions rise, a wing opens.
                 </p>
-                <div className="flex flex-col gap-2">
+              ) : (
+                <div className="mb-3 flex flex-col gap-2">
                   {ownEvents.map((e) => (
                     <div key={e.id} className="flex items-start gap-2">
                       <input
@@ -434,22 +545,54 @@ export default function ResilienceView() {
                       </button>
                     </div>
                   ))}
-                  <button
-                    type="button"
-                    onClick={() => setComposing("new")}
-                    className="self-start rounded-md border border-line px-2.5 py-1 text-[11px] text-ink hover:border-brand hover:text-brand"
-                  >
-                    Compose an event
-                  </button>
                 </div>
-                {otherWorldEvents.length > 0 ? (
-                  <p className="mt-2 text-[11px] leading-relaxed text-ink-faint">
-                    {otherWorldEvents.length} other event
-                    {otherWorldEvents.length === 1 ? " was" : "s were"} composed against a
-                    different world and cannot run here — their effects name instances
-                    that only exist there.
-                  </p>
-                ) : null}
+              )}
+              <button
+                type="button"
+                onClick={() => setComposing("new")}
+                className="rounded-md bg-brand px-3 py-1.5 text-xs text-white hover:bg-brand-deep"
+              >
+                Create an event
+              </button>
+              {otherWorldEvents.length > 0 ? (
+                <p className="mt-2 text-[11px] leading-relaxed text-ink-faint">
+                  {otherWorldEvents.length} other event
+                  {otherWorldEvents.length === 1 ? " was" : "s were"} written against a
+                  different world and cannot run here — their effects name instances
+                  that only exist there.
+                </p>
+              ) : null}
+            </Card>
+
+            <Card title="Data to collect from the run">
+              <p className="mb-2 text-[11px] leading-relaxed text-ink-faint">
+                Downloadable as CSV once the run finishes. Untick what you do not
+                need: a trajectory is far larger than the ranking, and every step
+                of it crosses the wire.
+              </p>
+              <div className="flex flex-col gap-2">
+                {COLLECTABLE.map((c) => (
+                  <label key={c.id} className="flex cursor-pointer gap-2">
+                    <input
+                      type="checkbox"
+                      checked={collect.includes(c.id)}
+                      onChange={(ev) =>
+                        setCollect((prev) =>
+                          ev.target.checked
+                            ? [...prev, c.id]
+                            : prev.filter((x) => x !== c.id),
+                        )
+                      }
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <span className="block text-xs text-ink">{c.label}</span>
+                      <span className="block text-[11px] leading-snug text-ink-faint">
+                        {c.hint}
+                      </span>
+                    </span>
+                  </label>
+                ))}
               </div>
             </Card>
 

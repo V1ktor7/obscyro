@@ -47,6 +47,12 @@ class Resource(BaseModel):
     quantity: NonNegativeFloat
     capacity: NonNegativeFloat
     replenishment: Replenishment = Field(default_factory=Replenishment)
+    # How much of this the *run itself* has drawn — patients admitted, not beds
+    # the ontology already called occupied. Tracked explicitly because the two
+    # are otherwise indistinguishable from `capacity - quantity`, and conflating
+    # them makes a bed the ontology frees stay locked for the whole run: an
+    # event that reopens a wing then does nothing at all.
+    reserved: NonNegativeFloat = 0.0
     # Which care activities this resource makes possible. Demand is matched
     # against activities, never against resource ids, so two facilities can name
     # the same capability differently and still be comparable.
@@ -212,6 +218,16 @@ class SystemState(BaseModel):
     # Effects queued by an action with latency: tick -> callables' payloads.
     pending: dict[int, list[dict]] = Field(default_factory=dict)
 
+    # The instances the ontology holds, by id, and the rule for reading
+    # availability off their properties. `Facility.resources` is derived from
+    # these — an effect that edits a property is what changes a capacity, so
+    # both have to be reachable from one place.
+    #
+    # Typed loosely to keep this module free of an import cycle: `objects.py`
+    # imports Facility and Resource from here.
+    objects: dict[str, object] = Field(default_factory=dict)
+    object_rules: object | None = None
+
     def facility(self, fid: str) -> Facility:
         f = self.facilities.get(fid)
         if f is None:
@@ -241,6 +257,7 @@ class SystemState(BaseModel):
                 break
             take = min(r.quantity, remaining)
             r.quantity -= take
+            r.reserved += take
             remaining -= take
         return amount - remaining
 
@@ -251,8 +268,9 @@ class SystemState(BaseModel):
             if remaining <= 0:
                 break
             room = r.capacity - r.quantity
-            give = min(room, remaining)
+            give = min(room, remaining, r.reserved)
             r.quantity += give
+            r.reserved -= give
             remaining -= give
 
     def occupancy_ratio(

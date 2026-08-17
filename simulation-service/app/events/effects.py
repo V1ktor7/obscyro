@@ -22,6 +22,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.events.geo import Spatial, distance_km
 from app.events.targets import BY_PATH, Op, Target, target
 
 Shape = Literal["step", "pulse", "ramp", "gaussian"]
@@ -76,8 +77,77 @@ class Effect(BaseModel):
     target: str
     select: dict[str, list[str]] = Field(default_factory=dict)
     op: Op = "multiply"
-    value: float = 1.0
+    # Text is allowed because `object.property` writes the ontology's own
+    # vocabulary — "contaminated", "sick", "overflow" — and forcing those
+    # through a float was exactly the limit that made a whole class of event
+    # unwritable.
+    value: float | str = 1.0
+    # Which property to change. Only meaningful for `object.property`; named
+    # explicitly rather than smuggled into `select`, because "what I am
+    # filtering by" and "what I am changing" must not look like the same thing.
+    #
+    # Not called `property`: that shadows the decorator used further down this
+    # very class, and the failure is a TypeError at import time with no mention
+    # of the field that caused it.
+    property_key: str | None = None
+    # How many of the matching objects this reaches. None is all of them; a
+    # value below 1 is a fraction of them; anything else is a count.
+    #
+    # Worth a field of its own because "every bed in the network becomes
+    # contaminated" is almost never what someone means, and an effect that
+    # silently means it produces a catastrophe nobody wrote.
+    reach: float | None = None
+    # Where the effect starts on the map, how far it carries and how fast. An
+    # event does not reach every site at once, and this is what says so without
+    # simulating anything travelling.
+    spatial: Spatial | None = None
     profile: TemporalProfile = Field(default_factory=TemporalProfile)
+
+    @model_validator(mode="after")
+    def _text_only_where_it_means_something(self) -> "Effect":
+        """A string value is only meaningful on an object property.
+
+        Everywhere else the quantity is a number, and accepting text would
+        either raise deep in a tick or be coerced into a nonsense figure that
+        the run would then present as a finding.
+        """
+        if isinstance(self.value, str) and self.target != "object.property":
+            raise ValueError(
+                f"effect {self.id!r}: {self.target} is a number, so it cannot be set to "
+                f"the text {self.value!r}"
+            )
+        if self.target == "object.property":
+            if not self.property_key:
+                raise ValueError(
+                    f"effect {self.id!r}: say which property to change — an object "
+                    f"effect without one applies to nothing"
+                )
+            if self.op != "set" and isinstance(self.value, str):
+                raise ValueError(
+                    f"effect {self.id!r}: {self.op!r} needs a number, not text"
+                )
+        elif self.property_key:
+            raise ValueError(
+                f"effect {self.id!r}: {self.target} has no properties to name"
+            )
+        if self.spatial is not None:
+            t = BY_PATH.get(self.target)
+            if t and not ({"facility", "route"} & set(t.selector)):
+                # Geography needs somewhere to measure from. On a target with no
+                # place — arrivals into a population, a care-model parameter —
+                # an epicentre would be accepted, ignored, and read as though it
+                # had constrained the event.
+                raise ValueError(
+                    f"effect {self.id!r}: {t.label} has no location, so an epicentre "
+                    f"cannot narrow it. Spatial reach works on targets that name a "
+                    f"facility or a route."
+                )
+        if self.reach is not None and self.reach <= 0:
+            raise ValueError(
+                f"effect {self.id!r}: a reach of {self.reach} touches nothing; leave it "
+                f"unset to mean every matching object"
+            )
+        return self
 
     @model_validator(mode="after")
     def _known_target_and_op(self) -> "Effect":
@@ -113,6 +183,64 @@ class Effect(BaseModel):
     def magnitude_at(self, tick: int) -> float:
         return self.profile.magnitude_at(tick)
 
+    def magnitude_for(
+        self, tick: int, location: tuple[float, float] | None
+    ) -> float:
+        """Strength here, this step — the whole spatial model in one function.
+
+        Distance decides three things at once: whether the effect arrives at
+        all, when its window opens, and how much of it survives the journey.
+        Computing them together is what keeps a front from needing anything to
+        move.
+
+        A place with no coordinates is *excluded* rather than assumed to be at
+        the centre. Four of the twenty-one units in the real twin have none, and
+        quietly treating them as ground zero would put the worst of every event
+        exactly where the data is thinnest.
+        """
+        if self.spatial is None:
+            return self.magnitude_at(tick)
+        if location is None:
+            return 0.0
+        d = distance_km(self.spatial.epicentre, location)
+        if not self.spatial.reaches(d):
+            return 0.0
+        shifted = tick - self.spatial.delay_steps(d)
+        if shifted < 0:
+            return 0.0
+        return self.profile.magnitude_at(shifted) * self.spatial.attenuation(d)
+
+    def text_at(self, tick: int) -> str | None:
+        """The string in force this tick, or None.
+
+        Text does not ease in: a bed is contaminated or it is not, and there is
+        no half of "sick". The profile therefore only decides *whether* it
+        applies, never how much.
+        """
+        if not isinstance(self.value, str):
+            return None
+        return self.value if self.magnitude_at(tick) > 0 else None
+
+    def value_for(
+        self, tick: int, location: tuple[float, float] | None
+    ) -> float | None:
+        """`value_at`, but eased by the strength that survives to `location`."""
+        if isinstance(self.value, str):
+            return None
+        m = self.magnitude_for(tick, location)
+        if m <= 0:
+            return None
+        m = min(1.0, m)
+        if self.op == "multiply":
+            return 1.0 - (1.0 - self.value) * m
+        return self.value * m
+
+    def text_for(self, tick: int, location: tuple[float, float] | None) -> str | None:
+        """Text does not ease in, so distance only decides whether it lands."""
+        if not isinstance(self.value, str):
+            return None
+        return self.value if self.magnitude_for(tick, location) > 0 else None
+
     def value_at(self, tick: int) -> float | None:
         """The operand in force this tick, eased in by the profile, or None.
 
@@ -121,6 +249,8 @@ class Effect(BaseModel):
         it the naive way makes every ramp start out harsher than its own peak,
         which is exactly backwards and very hard to see in a chart.
         """
+        if isinstance(self.value, str):
+            return None
         m = self.magnitude_at(tick)
         if m <= 0:
             return None
