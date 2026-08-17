@@ -36,6 +36,7 @@ import {
 import { useStudio } from "../StudioShell";
 import EventComposer from "./EventComposer";
 import EventLibrary from "./EventLibrary";
+import { downloadCsv } from "./csv";
 import EventTimeline from "./EventTimeline";
 
 /** Sentinel for "no scenario" so the select has a real value to hold. */
@@ -78,6 +79,32 @@ const RESPONSES = [
   },
 ];
 
+/**
+ * What a run can hand back beyond the ranking.
+ *
+ * `decisions` is the one nobody expects to want and everybody asks for
+ * eventually, because "why did the model do that" is the first question after
+ * "what did it say". The reading that tripped each rule was already recorded
+ * and simply never surfaced.
+ */
+const COLLECTABLE: Array<{ id: "steps" | "facilities" | "decisions"; label: string; hint: string }> = [
+  {
+    id: "steps",
+    label: "One row per step",
+    hint: "Arrivals, care delivered, care refused, deaths and spend, for each response.",
+  },
+  {
+    id: "facilities",
+    label: "One row per step and facility",
+    hint: "How full each unit was, with its id so a row joins back to the ontology.",
+  },
+  {
+    id: "decisions",
+    label: "One row per decision",
+    hint: "Every rule that fired, what it did, and the reading that tripped it.",
+  },
+];
+
 /** Gaps that make a result meaningless rather than merely narrower. */
 const BLOCKING: SimGap["code"][] = ["POPULATION_WITHOUT_SIZE", "ROUTE_WITHOUT_CAPACITY"];
 
@@ -100,6 +127,14 @@ export default function ResilienceView() {
   const [routeCapacity, setRouteCapacity] = useState("10");
   const [result, setResult] = useState<SimComparison | null>(null);
   const [running, setRunning] = useState(false);
+  // Collected by default. The tables are the most detailed thing a run
+  // produces, they were previously computed and discarded, and a checkbox
+  // nobody finds is the same as not having built them.
+  const [collect, setCollect] = useState<Array<"steps" | "facilities" | "decisions">>([
+    "steps",
+    "facilities",
+    "decisions",
+  ]);
   const [scenarios, setScenarios] = useState<ScenarioSummary[]>([]);
   const [twinScenarioId, setTwinScenarioId] = useState<string>(LIVE);
   const [composed, setComposed] = useState<SimEvent[]>([]);
@@ -227,6 +262,7 @@ export default function ResilienceView() {
           populationSizes,
           routeCapacity: Number(routeCapacity) || 0,
           twinScenarioId: twinScenarioId || undefined,
+          collect,
         }),
       );
     } catch (err) {
@@ -413,6 +449,43 @@ export default function ResilienceView() {
             ) : null}
 
             {result ? <Results result={result} /> : null}
+
+            {result?.datasets?.length ? (
+              <Card title="What the run produced">
+                <p className="mb-3 text-[11px] leading-relaxed text-ink-faint">
+                  Synthetic data from this run, at seed 0. Every row is a step —
+                  nothing is averaged here, so a reader who wants a mean can take
+                  one, and this file cannot have decided which question it is
+                  allowed to answer.
+                </p>
+                <ul className="flex flex-col gap-2">
+                  {result.datasets.map((d) => (
+                    <li key={d.name} className="flex items-start gap-3">
+                      <span className="flex-1">
+                        <span className="block text-xs text-ink">{d.label}</span>
+                        <span className="block text-[11px] leading-snug text-ink-faint">
+                          {d.description}
+                        </span>
+                        <span className="mt-0.5 block text-[10px] text-ink-ghost">
+                          {d.rows.length.toLocaleString("en-CA")} rows ·{" "}
+                          {d.columns.join(", ")}
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        disabled={d.rows.length === 0}
+                        onClick={() =>
+                          downloadCsv(d, ownEvents.find((e) => `event:${e.id}` === event)?.name ?? "event")
+                        }
+                        className="rounded-md border border-line px-2.5 py-1 text-[11px] text-ink hover:border-brand hover:text-brand disabled:text-ink-ghost"
+                      >
+                        {d.rows.length === 0 ? "Nothing to download" : "Download CSV"}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            ) : null}
           </div>
 
           <div className="flex flex-col gap-4">
@@ -489,6 +562,38 @@ export default function ResilienceView() {
                   that only exist there.
                 </p>
               ) : null}
+            </Card>
+
+            <Card title="Data to collect from the run">
+              <p className="mb-2 text-[11px] leading-relaxed text-ink-faint">
+                Downloadable as CSV once the run finishes. Untick what you do not
+                need: a trajectory is far larger than the ranking, and every step
+                of it crosses the wire.
+              </p>
+              <div className="flex flex-col gap-2">
+                {COLLECTABLE.map((c) => (
+                  <label key={c.id} className="flex cursor-pointer gap-2">
+                    <input
+                      type="checkbox"
+                      checked={collect.includes(c.id)}
+                      onChange={(ev) =>
+                        setCollect((prev) =>
+                          ev.target.checked
+                            ? [...prev, c.id]
+                            : prev.filter((x) => x !== c.id),
+                        )
+                      }
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <span className="block text-xs text-ink">{c.label}</span>
+                      <span className="block text-[11px] leading-snug text-ink-faint">
+                        {c.hint}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
             </Card>
 
             <Card title="3 · Pick the responses to compare">

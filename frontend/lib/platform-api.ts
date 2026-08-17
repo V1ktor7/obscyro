@@ -1667,6 +1667,15 @@ export interface SimExport {
   gaps: SimGap[];
 }
 
+/** One table of what actually happened during a run. */
+export interface SimDataset {
+  name: string;
+  label: string;
+  description: string;
+  columns: string[];
+  rows: Array<Array<string | number | boolean | null>>;
+}
+
 export interface SimComparison {
   scenario: { id: string; name: string; description: string; perturbations: string[] };
   rows: Array<Record<string, string | number>>;
@@ -1674,6 +1683,8 @@ export interface SimComparison {
   horizon: number;
   activities: string[];
   weights: Record<string, number>;
+  /** Present only when the run was asked to collect them. */
+  datasets?: SimDataset[];
 }
 
 /**
@@ -1829,6 +1840,8 @@ export async function runSimulation(
     populationSizes?: Record<string, number>;
     routeCapacity?: number;
     twinScenarioId?: string;
+    /** Which tables of the run to bring back. Empty means the ranking only. */
+    collect?: Array<"steps" | "facilities" | "decisions">;
   },
 ): Promise<SimComparison> {
   return apiFetch(`/v1/ontology/${encEnv(env)}/twin/simulate`, {

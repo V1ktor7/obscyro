@@ -345,6 +345,14 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
            */
           twinScenarioId: z.string().uuid().optional(),
           atOffsetHours: z.number().int().min(0).optional(),
+          /**
+           * Which tables of the run to hand back alongside the ranking.
+           *
+           * Empty by default: a trajectory is far larger than the summary, and
+           * a caller who only wants to know which response won should not pay
+           * to move every step of it across the wire.
+           */
+          collect: z.array(z.enum(["steps", "facilities", "decisions"])).default([]),
         }),
         response: { 200: z.record(z.unknown()), 404: errorEnvelope, 503: errorEnvelope },
       },
@@ -390,6 +398,7 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
         seed: req.body.seed ?? null,
         population_sizes: req.body.populationSizes,
         route_capacity: req.body.routeCapacity,
+        collect: req.body.collect,
       });
     },
   );

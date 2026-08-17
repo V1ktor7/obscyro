@@ -21,6 +21,8 @@ from pydantic import BaseModel, Field
 
 from app.events.domain import CareRequirement, SystemState
 from app.events.effects import Event
+from app.events.collect import Dataset, collect
+from app.events.dynamics import run
 from app.events.harness import compare
 from app.events.ontology import OntologyExport, UnrunnableExport, load
 from app.events.scoring import Objective
@@ -54,6 +56,10 @@ class CompareRequest(BaseModel):
     mortality: float = 0.15
     census_acuity: str | None = None
     replicates: int = 1
+    # Which tables of the run to hand back. Empty means none, which is the
+    # default because a trajectory is far larger than the summary and most
+    # callers want the ranking.
+    collect: list[str] = Field(default_factory=list)
 
 
 class CompareResponse(BaseModel):
@@ -63,6 +69,10 @@ class CompareResponse(BaseModel):
     horizon: int
     activities: list[str]
     weights: dict[str, float]
+    # Tables of what actually happened, when asked for. Produced from the same
+    # run that produced `rows`, never a second one: a download that re-ran the
+    # simulation could disagree with the summary it sits beneath.
+    datasets: list[Dataset] = Field(default_factory=list)
 
 
 @router.get("/catalogue")
@@ -212,6 +222,20 @@ def compare_route(req: CompareRequest) -> CompareResponse:
         base_seed=req.seed or 0,
     )
 
+    datasets: list[Dataset] = []
+    if req.collect:
+        # Re-run at the base seed rather than threading trajectories out of the
+        # harness. The engine is deterministic, so this is the same trajectory
+        # `compare` scored — and when it stops being deterministic this line has
+        # to change, which is why the seed is named here rather than defaulted.
+        seed = req.seed or 0
+        trajectories = {p.id: run(state, event, p, seed) for p in policies}
+        datasets = collect(
+            trajectories,
+            {fid: f.name for fid, f in state.facilities.items()},
+            req.collect,
+        )
+
     activities = sorted(
         {a for f in state.facilities.values() for r in f.resources.values() for a in r.enables}
     )
@@ -228,4 +252,5 @@ def compare_route(req: CompareRequest) -> CompareResponse:
         horizon=event.horizon,
         activities=activities,
         weights=weights,
+        datasets=datasets,
     )
