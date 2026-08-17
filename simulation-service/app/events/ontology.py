@@ -31,6 +31,7 @@ from app.events.domain import (
     Resource,
     SystemState,
 )
+from app.events.objects import ObjectRules, SimObject, derive_census, derive_resources
 
 # Mirrors the `crisis_role` check constraint in migration 045. Kept as a literal
 # rather than imported from anywhere: the two sides are versioned separately, so
@@ -81,6 +82,12 @@ class OntologyExport(BaseModel):
     environment: str = ""
     generated_at: str = ""
     facilities: list[ExportedFacility] = Field(default_factory=list)
+    # Every instance that plays a role, with its properties intact. The
+    # `resources` and `census` on each facility above are a *view* of these,
+    # computed by the exporter from the same array — kept because the composer
+    # wants them, never read here.
+    objects: list[SimObject] = Field(default_factory=list)
+    object_rules: ObjectRules = Field(default_factory=ObjectRules)
     populations: list[ExportedPopulation] = Field(default_factory=list)
     edges: list[ExportedEdge] = Field(default_factory=list)
     gaps: list[Gap] = Field(default_factory=list)
@@ -125,26 +132,17 @@ def load(
     facilities: dict[str, Facility] = {}
     census: dict[str, dict[str, float]] = {}
     for f in ex.facilities:
+        # Derived from the objects, never read from the payload's aggregates.
+        # Those exist for the composer; taking them here would leave two truths
+        # and no way to tell which one an effect had edited.
         facilities[f.id] = Facility(
             id=f.id,
             name=f.name,
             location=f.location,
-            resources={
-                r_id: Resource(
-                    id=r.id,
-                    category=r.category,
-                    quantity=r.quantity,
-                    capacity=r.capacity,
-                    # An activity nothing consumes is inert but harmless; an
-                    # activity spelled two ways is the bug, and it shows up as
-                    # unmet care rather than silently.
-                    enables=frozenset(r.enables or [r.id]),
-                )
-                for r_id, r in f.resources.items()
-            },
+            resources=derive_resources(ex.objects, ex.object_rules, f.id),
         )
-        if census_acuity and f.census:
-            held = sum(f.census.values())
+        if census_acuity:
+            held = sum(derive_census(ex.objects, f.id).values())
             if held:
                 census[f.id] = {census_acuity: held}
 
@@ -180,6 +178,8 @@ def load(
         care_model=dict(care_model),
         network=network,
         census=census,
+        objects={o.id: o for o in ex.objects},
+        object_rules=ex.object_rules,
     )
     _refuse_if_hollow(state, care_model)
     return state

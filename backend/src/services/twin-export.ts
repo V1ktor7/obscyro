@@ -69,12 +69,49 @@ export interface SimGap {
   subjects: string[];
 }
 
+/**
+ * One instance from the ontology, carried whole.
+ *
+ * The export used to count these and throw them away: forty-eight beds became
+ * "48 units of space" and every property went with them. That made a whole
+ * class of event inexpressible — a bed cannot become contaminated if the engine
+ * has never heard of a bed, only of a number.
+ *
+ * They are shipped intact instead, and the aggregates below are derived from
+ * them rather than the other way round. An effect that writes
+ * `status: "available" → "contaminated"` therefore changes capacity as a
+ * consequence, with nothing needing to know the two are related.
+ */
+export interface SimObject {
+  id: string;
+  type: string;
+  role: SimRole;
+  properties: Record<string, unknown>;
+  /** The unit this instance is attached to, or null if it hangs off nothing. */
+  at: string | null;
+}
+
+/**
+ * How to read availability off an object's own properties.
+ *
+ * Shipped with the data rather than hard-coded on both sides: the engine has to
+ * re-derive availability every time an effect edits a property, and a rule
+ * duplicated in two languages is a rule that will disagree with itself.
+ */
+export interface SimObjectRules {
+  unavailable_keys: string[];
+  unavailable_values: string[];
+}
+
 export interface SimExport {
   environment: string;
   /** The scenario this was read under, or null for the live twin. */
   scenario_id: string | null;
   generated_at: string;
   facilities: SimFacility[];
+  /** Every instance that plays a role, with its properties intact. */
+  objects: SimObject[];
+  object_rules: SimObjectRules;
   populations: SimPopulation[];
   edges: SimEdge[];
   /** What is missing, named. The engine refuses to run on a blocking gap. */
@@ -165,12 +202,10 @@ export async function buildTwinExport(
   // and under which of the four constraints, is read from the type's declared
   // role — the engine never learns the word "bed", it learns "48 units of
   // space that enable `bed`".
-  interface Accum {
-    role: SimRole;
-    total: number;
-    used: number;
-  }
-  const perUnit = new Map<string, Map<string, Accum>>();
+  // The objects themselves, kept. Anything a placement attaches to a unit and
+  // whose type declares a role travels whole — id, type, properties — instead
+  // of being tallied into a counter and discarded.
+  const objects: SimObject[] = [];
   const typesWithoutRole = new Set<string>();
 
   for (const link of links) {
@@ -187,12 +222,38 @@ export async function buildTwinExport(
       typesWithoutRole.add(inst.typeName);
       continue;
     }
-    const byType = perUnit.get(unitId) ?? new Map<string, Accum>();
-    const acc = byType.get(inst.typeName) ?? { role, total: 0, used: 0 };
+    objects.push({
+      id: inst.id,
+      type: inst.typeName,
+      role,
+      properties: inst.properties ?? {},
+      at: unitId,
+    });
+  }
+
+  /**
+   * The aggregates, derived from the objects above.
+   *
+   * Kept in the payload because the composer and the reading panel want them,
+   * but they are a *view*: computed here from the same array that ships beside
+   * them, so the two cannot drift. The engine re-derives them the same way
+   * after every effect, which is what makes changing a bed's status change the
+   * ward's capacity without anything having to know the two are related.
+   */
+  interface Accum {
+    role: SimRole;
+    total: number;
+    used: number;
+  }
+  const perUnit = new Map<string, Map<string, Accum>>();
+  for (const o of objects) {
+    if (!o.at) continue;
+    const byType = perUnit.get(o.at) ?? new Map<string, Accum>();
+    const acc = byType.get(o.type) ?? { role: o.role, total: 0, used: 0 };
     acc.total += 1;
-    if (isInUse(inst.properties)) acc.used += 1;
-    byType.set(inst.typeName, acc);
-    perUnit.set(unitId, byType);
+    if (isInUse(o.properties)) acc.used += 1;
+    byType.set(o.type, acc);
+    perUnit.set(o.at, byType);
   }
 
   // Where each unit physically sits — a placement whose receiving end is not
@@ -335,6 +396,14 @@ export async function buildTwinExport(
     scenario_id: lens?.scenarioId ?? null,
     generated_at: new Date().toISOString(),
     facilities,
+    objects,
+    // The rule travels with the data so the engine can re-read availability
+    // after an effect edits a property, without either side owning a second
+    // copy that could disagree.
+    object_rules: {
+      unavailable_keys: [...STATUS_KEYS],
+      unavailable_values: [...IN_USE_VALUES],
+    },
     populations,
     edges,
     gaps,

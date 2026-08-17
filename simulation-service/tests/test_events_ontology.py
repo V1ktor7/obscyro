@@ -15,35 +15,58 @@ from app.events.ontology import UnrunnableExport, load
 from app.events.templates import POLICIES, EVENTS, care_model_for
 
 
+def _objects(spec) -> list[dict]:
+    """Instances, the way the exporter now ships them.
+
+    Built here rather than hand-listed because the counts are the point: a test
+    that says "48 beds, 28 of them taken" should read that way, and the objects
+    it produces are what the engine derives its totals from.
+    """
+    out: list[dict] = []
+    for facility, type_name, role, total, used in spec:
+        for i in range(total):
+            props: dict = {"label": f"{type_name}-{i}"}
+            if i < used:
+                props["status"] = "occupied"
+            out.append(
+                {
+                    "id": f"{facility}-{type_name}-{i}",
+                    "type": type_name,
+                    "role": role,
+                    "properties": props,
+                    "at": facility,
+                }
+            )
+    return out
+
+
 def export(**over) -> dict:
-    """A two-unit twin shaped exactly like the backend's export."""
+    """A two-unit twin shaped exactly like the backend's export.
+
+    `facilities` no longer carries totals: the engine derives them from
+    `objects`, so putting numbers there too would leave two truths and no way to
+    tell which one an effect had edited.
+    """
     base = {
         "environment": "prod",
         "generated_at": "2026-08-12T00:00:00Z",
         "facilities": [
-            {
-                "id": "unit-a",
-                "name": "Urgence",
-                "location": [45.5, -73.5],
-                "resources": {
-                    "lit": {"id": "lit", "category": SPACE, "quantity": 20,
-                            "capacity": 48, "enables": ["lit"]},
-                    "infirmiere": {"id": "infirmiere", "category": STAFF, "quantity": 12,
-                                   "capacity": 12, "enables": ["infirmiere"]},
-                },
-                "census": {"patient": 28},
-            },
-            {
-                "id": "unit-b",
-                "name": "Médecine",
-                "location": None,
-                "resources": {
-                    "lit": {"id": "lit", "category": SPACE, "quantity": 30,
-                            "capacity": 30, "enables": ["lit"]},
-                },
-                "census": {},
-            },
+            {"id": "unit-a", "name": "Urgence", "location": [45.5, -73.5]},
+            {"id": "unit-b", "name": "Médecine", "location": None},
         ],
+        "objects": _objects(
+            [
+                # 48 beds at Urgence, 28 of them already taken.
+                ("unit-a", "Lit", SPACE, 48, 28),
+                ("unit-a", "Infirmiere", STAFF, 12, 0),
+                ("unit-a", "Patient", "demand", 28, 0),
+                ("unit-b", "Lit", SPACE, 30, 0),
+            ]
+        ),
+        "object_rules": {
+            "unavailable_keys": ["status", "state", "etat"],
+            "unavailable_values": ["occupied", "in_use", "busy", "unavailable"],
+        },
         "populations": [
             {"id": "pop:site-1", "name": "Notre-Dame", "size": 0,
              "served_by": ["unit-a", "unit-b"]},
@@ -124,9 +147,10 @@ def test_a_twin_with_no_capacity_is_refused() -> None:
     be turned away, so nobody dies and every policy scores zero. The table looks
     perfect and means nothing.
     """
-    hollow = export(facilities=[
-        {"id": "unit-a", "name": "Urgence", "location": None, "resources": {}, "census": {}},
-    ])
+    hollow = export(
+        facilities=[{"id": "unit-a", "name": "Urgence", "location": None}],
+        objects=[],
+    )
     with pytest.raises(UnrunnableExport, match="crisis role"):
         load(hollow, care_model=_any_model(), population_sizes={"pop:site-1": 10})
 
@@ -230,10 +254,7 @@ def test_the_care_model_only_requires_what_every_unit_has() -> None:
 
 def test_staff_is_required_once_every_unit_has_some() -> None:
     ex = export()
-    ex["facilities"][1]["resources"]["infirmiere"] = {
-        "id": "infirmiere", "category": STAFF, "quantity": 6,
-        "capacity": 6, "enables": ["infirmiere"],
-    }
+    ex["objects"].extend(_objects([("unit-b", "Infirmiere", STAFF, 6, 0)]))
     probe = load(ex, care_model=_any_model(), population_sizes={"pop:site-1": 50_000})
     assert "infirmiere" in care_model_for(probe)["critical"].consumes
 
@@ -451,10 +472,18 @@ def _scaled(export_dict, *, beds=1.0, population=50_000):
     from app.events.templates import care_model_for
 
     e = copy.deepcopy(export_dict)
-    for f in e["facilities"]:
-        for r in f["resources"].values():
-            r["capacity"] *= beds
-            r["quantity"] *= beds
+    if beds != 1.0:
+        # Capacity is a count of objects now, so scaling it means duplicating
+        # them — which is what a bigger network actually is.
+        extra: list[dict] = []
+        for o in e["objects"]:
+            if o["role"] != SPACE:
+                continue
+            for k in range(1, int(beds)):
+                clone = copy.deepcopy(o)
+                clone["id"] = f"{o['id']}-x{k}"
+                extra.append(clone)
+        e["objects"].extend(extra)
     sizes = {p["id"]: population for p in e["populations"]}
     probe = load(
         e,
@@ -660,6 +689,97 @@ def test_two_overlapping_sets_resolve_by_id_not_by_position() -> None:
     first = [_cap_effect("aaa", "set", 5), _cap_effect("zzz", "set", 40)]
     assert _capacity_after(first) == 40
     assert _capacity_after(list(reversed(first))) == 40
+
+
+# --- the objects are the truth ----------------------------------------------
+
+
+def test_capacity_is_counted_from_objects_not_read_from_the_payload() -> None:
+    """The inversion, stated as a test.
+
+    The export ships aggregates *and* objects, because the composer wants the
+    former. If the loader read them, an effect could edit a bed's property and
+    the ward's capacity would not move — two truths, and no way to tell which
+    one had been changed. So the payload's totals are deliberately absent from
+    the fixture and the numbers below can only have come from counting.
+    """
+    s = runnable()
+    lit = s.facility("unit-a").resources["lit"]
+    assert lit.capacity == 48
+    # 28 of the 48 carry status "occupied", so 20 are free.
+    assert lit.quantity == 20
+    assert s.facility("unit-b").resources["lit"].capacity == 30
+
+
+def test_marking_an_object_unavailable_takes_capacity_away() -> None:
+    """The thing the aggregate model could not express.
+
+    "This bed became contaminated" is a text change on one instance. Capacity
+    falling by one is a consequence nobody had to wire up — which is the whole
+    point of deriving totals rather than shipping them.
+    """
+    from app.events.objects import ObjectRules, SimObject, rebuild
+
+    s = runnable()
+    rules = s.object_rules
+    assert isinstance(rules, ObjectRules)
+    objects = list(s.objects.values())
+    before = s.facility("unit-a").resources["lit"].capacity
+
+    free = next(
+        o
+        for o in objects
+        if isinstance(o, SimObject)
+        and o.at == "unit-a"
+        and o.type == "Lit"
+        and not rules.unavailable(o.properties)
+    )
+    free.properties["status"] = "contaminated"
+    rebuild(s.facility("unit-a"), objects, ObjectRules(
+        unavailable_keys=rules.unavailable_keys,
+        unavailable_values=[*rules.unavailable_values, "contaminated"],
+    ))
+
+    assert s.facility("unit-a").resources["lit"].capacity == before
+    # Capacity is unchanged — the bed still exists — but it is no longer free.
+    assert s.facility("unit-a").resources["lit"].quantity == 19
+
+
+def test_rebuilding_does_not_hand_back_beds_a_patient_is_lying_in() -> None:
+    """Re-deriving must not heal the run.
+
+    Capacity comes from the objects; the drawn-down part comes from the
+    simulation so far. Overwriting quantity outright would return every occupied
+    bed the moment any effect touched the ward, and the network would quietly
+    recover from its own admissions.
+    """
+    from app.events.objects import ObjectRules, rebuild
+
+    s = runnable()
+    s.consume("unit-a", "lit", 15)
+    assert s.facility("unit-a").resources["lit"].quantity == 5
+
+    rebuild(s.facility("unit-a"), list(s.objects.values()), s.object_rules)
+    assert s.facility("unit-a").resources["lit"].quantity == 5
+
+
+def test_an_object_type_that_vanishes_leaves_no_ghost_resource() -> None:
+    """A stale zero-capacity entry would keep counting in category totals and
+    would keep appearing in the composer's vocabulary as something to perturb."""
+    from app.events.objects import rebuild
+
+    s = runnable()
+    assert "infirmiere" in s.facility("unit-a").resources
+    remaining = [o for o in s.objects.values() if o.type != "Infirmiere"]
+    rebuild(s.facility("unit-a"), remaining, s.object_rules)
+    assert "infirmiere" not in s.facility("unit-a").resources
+
+
+def test_people_are_census_and_never_capacity() -> None:
+    """Counting patients as a resource would make a ward look better staffed
+    the fuller it got."""
+    s = runnable()
+    assert "patient" not in s.facility("unit-a").resources
 
 
 # --- end to end -------------------------------------------------------------

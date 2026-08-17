@@ -212,6 +212,16 @@ class SystemState(BaseModel):
     # Effects queued by an action with latency: tick -> callables' payloads.
     pending: dict[int, list[dict]] = Field(default_factory=dict)
 
+    # The instances the ontology holds, by id, and the rule for reading
+    # availability off their properties. `Facility.resources` is derived from
+    # these — an effect that edits a property is what changes a capacity, so
+    # both have to be reachable from one place.
+    #
+    # Typed loosely to keep this module free of an import cycle: `objects.py`
+    # imports Facility and Resource from here.
+    objects: dict[str, object] = Field(default_factory=dict)
+    object_rules: object | None = None
+
     def facility(self, fid: str) -> Facility:
         f = self.facilities.get(fid)
         if f is None:
