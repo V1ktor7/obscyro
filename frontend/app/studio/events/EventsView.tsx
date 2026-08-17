@@ -35,6 +35,7 @@ import {
 } from "@/lib/platform-api";
 import { useStudio } from "../StudioShell";
 import EventComposer from "./EventComposer";
+import EventTimeline from "./EventTimeline";
 
 /** Sentinel for "no scenario" so the select has a real value to hold. */
 const LIVE = "";
@@ -183,6 +184,14 @@ export default function ResilienceView() {
   const ownEvents = composed.filter((e) => (e.twinScenarioId ?? null) === world);
   const otherWorldEvents = composed.filter((e) => (e.twinScenarioId ?? null) !== world);
 
+  // The composed event currently picked, if any. Templates are generated
+  // server-side against the twin, so the browser never holds their effects and
+  // cannot draw them.
+  const selectedComposed =
+    event.startsWith("event:")
+      ? (ownEvents.find((e) => `event:${e.id}` === event) ?? null)
+      : null;
+
   const blocking = (snapshot?.gaps ?? []).filter((g) => BLOCKING.includes(g.code));
   const advisory = (snapshot?.gaps ?? []).filter((g) => !BLOCKING.includes(g.code));
   const noCapacity = Object.keys(totals.byRole).length === 0;
@@ -278,6 +287,50 @@ export default function ResilienceView() {
                 }
                 onClose={() => setComposing(null)}
               />
+            ) : null}
+
+            {/* The timeline is the page's subject, so it sits above the prose
+                and the statistics rather than behind an Edit button. It used
+                to render only inside the composer, which meant the most
+                informative thing here was invisible until you decided to edit
+                something — and nothing on the page said it existed. */}
+            {!composing && selectedComposed ? (
+              <>
+                <EventTimeline
+                  effects={selectedComposed.effects}
+                  targets={targets}
+                  horizon={selectedComposed.horizon}
+                  focused={null}
+                  onFocus={() => setComposing(selectedComposed)}
+                  onChangeProfile={(i, profile) => {
+                    // Dragging here edits the saved event, so it goes through
+                    // the composer rather than writing behind the user's back.
+                    // Opening it with the change already applied keeps the drag
+                    // from being lost, which is what makes it feel like one
+                    // gesture instead of two.
+                    setComposing({
+                      ...selectedComposed,
+                      effects: selectedComposed.effects.map((e, j) =>
+                        j === i ? { ...e, profile } : e,
+                      ),
+                    });
+                  }}
+                />
+                <p className="-mt-2 text-[11px] text-ink-faint">
+                  Dragging a bar opens “{selectedComposed.name}” for editing with
+                  that change applied.
+                </p>
+              </>
+            ) : null}
+
+            {!composing && !selectedComposed ? (
+              <Card title="When each effect bites">
+                <p className="text-[11px] leading-relaxed text-ink-faint">
+                  {ownEvents.length === 0
+                    ? "The three shipped events aim themselves at whatever network they are given, so their effects only exist once a run resolves them against your twin — there is nothing to draw yet. Compose an event and its effects appear here on a shared time axis."
+                    : "Select one of your own events to see its effects on a shared time axis. The shipped three are generated against your network at run time, so they have no fixed windows to draw."}
+                </p>
+              </Card>
             ) : null}
 
             {result || composing ? null : <HowItWorks />}
