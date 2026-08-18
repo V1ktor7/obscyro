@@ -1824,7 +1824,16 @@ export interface SimObjectType {
 export interface SimObjectInstance {
   id: string;
   type: string;
-  role: SimRole;
+  /**
+   * Null for an instance that carries no simulation role but still travels — a
+   * care protocol is not space, staff, stuff or systems, and it crosses because
+   * its properties feed the engine's mechanics.
+   *
+   * This was `SimRole` after the export started emitting nulls, which is a lie
+   * a type erasure lets through: nothing crashes, and `ROLE_LABEL[o.role]`
+   * quietly reads undefined.
+   */
+  role: SimRole | null;
   properties: Record<string, unknown>;
   at: string | null;
 }

@@ -34,7 +34,7 @@ import {
   type ScenarioSummary,
 } from "@/lib/platform-api";
 import { useStudio } from "../StudioShell";
-import EventComposer from "./EventComposer";
+import EventWorkspace from "./EventWorkspace";
 import EventLibrary from "./EventLibrary";
 import { downloadCsv } from "./csv";
 import EventTimeline from "./EventTimeline";
@@ -273,6 +273,46 @@ export default function ResilienceView() {
     }
   }
 
+  /**
+   * Composing takes the whole screen.
+   *
+   * It used to be a card inside the reading column, which meant the workbench
+   * competed for width with a statistics panel while you were trying to build
+   * something. An event is the subject of this page; while you are writing one,
+   * it is the only subject.
+   */
+  if (composing && snapshot) {
+    return (
+      <EventWorkspace
+        snapshot={snapshot}
+        targets={targets}
+        initial={composing === "new" ? null : composing}
+        twinScenarioId={world}
+        onSave={async (body) => {
+          const saved = await saveSimEvent(
+            env!,
+            body,
+            composing === "new" ? undefined : composing.id,
+          );
+          await loadEvents();
+          setEvent(`event:${saved.id}`);
+          setComposing(null);
+        }}
+        onDelete={
+          composing === "new"
+            ? null
+            : async () => {
+                await deleteSimEvent(env!, composing.id);
+                await loadEvents();
+                if (event === `event:${composing.id}`) setEvent("");
+                setComposing(null);
+              }
+        }
+        onClose={() => setComposing(null)}
+      />
+    );
+  }
+
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-canvas">
       <header className="border-b border-line bg-white px-6 py-4">
@@ -295,36 +335,6 @@ export default function ResilienceView() {
       ) : !snapshot ? null : (
         <div className="grid gap-4 p-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="flex flex-col gap-4">
-            {composing ? (
-              <EventComposer
-                snapshot={snapshot}
-                targets={targets}
-                initial={composing === "new" ? null : composing}
-                twinScenarioId={world}
-                onSave={async (body) => {
-                  const saved = await saveSimEvent(
-                    env!,
-                    body,
-                    composing === "new" ? undefined : composing.id,
-                  );
-                  await loadEvents();
-                  setEvent(`event:${saved.id}`);
-                  setComposing(null);
-                }}
-                onDelete={
-                  composing === "new"
-                    ? null
-                    : async () => {
-                        await deleteSimEvent(env!, composing.id);
-                        await loadEvents();
-                        if (event === `event:${composing.id}`) setEvent("");
-                        setComposing(null);
-                      }
-                }
-                onClose={() => setComposing(null)}
-              />
-            ) : null}
-
             {/* The timeline is the page's subject, so it sits above the prose
                 and the statistics rather than behind an Edit button. It used
                 to render only inside the composer, which meant the most
