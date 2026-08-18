@@ -82,6 +82,24 @@ import {
   saveSchemaLayout,
   type SchemaLayout,
 } from "../manager-layout-persist";
+import {
+  BEHAVIOUR_HINT,
+  BEHAVIOUR_LABEL,
+  MECHANICS,
+  MECHANIC_KIND,
+  MECHANIC_LABEL,
+  PROPERTY_TYPES,
+  type Mechanic,
+  // Aliased: this file already has a `behaviourOf` state holding the link type
+  // whose behaviour dialog is open, and the shadowing is silent inside that
+  // component.
+  behaviourOf as propertyBehaviourOf,
+  behavioursFor,
+  describeProperty,
+  retypeProperty,
+  schemaProblems,
+  type PropertyBehaviour,
+} from "@/lib/property-schema";
 import { listQualityFlags, type QualityFlag } from "../quality-api";
 import LinkBehaviourDialog from "./LinkBehaviourDialog";
 import SchemaGraphCanvas from "./SchemaGraphCanvas";
@@ -210,7 +228,6 @@ function computeTypeGroups(
     .sort((a, b) => b.members.length - a.members.length);
 }
 
-const PROPERTY_TYPES: PropertyType[] = ["string", "number", "boolean", "object", "array"];
 const CARDINALITIES: LinkCardinality[] = [
   "one_to_one",
   "one_to_many",
@@ -1432,39 +1449,59 @@ function ResourcePages({
 
   if (view === "properties") {
     const rows = types.flatMap((t) =>
-      t.propertySchema.map((p) => ({ type: t.name, key: p.key, kind: p.type, label: p.label })),
+      t.propertySchema.map((p) => ({ type: t.name, def: p })),
     );
+    // What a property means to the simulation is now the reason to open this
+    // page, so it is a column rather than something you find by editing a type.
+    const undeclared = rows.filter((r) => propertyBehaviourOf(r.def) === null).length;
     return (
       <PageShell title="Properties" count={rows.length}>
+        {undeclared > 0 ? (
+          <p className="mb-2 text-[11px] leading-snug text-ink-faint">
+            {undeclared} numeric {undeclared === 1 ? "property has" : "properties have"} no declared
+            behaviour. Values are stored and read as usual, but no event effect can be composed on
+            them until something says whether they rebuild each step or accumulate.
+          </p>
+        ) : null}
         <div className="overflow-hidden rounded-md border border-line bg-white">
           <table className={RESOURCE_TABLE}>
             <thead>
               <tr>
                 <th className={RESOURCE_TH}>Property</th>
                 <th className={RESOURCE_TH}>Type</th>
+                <th className={RESOURCE_TH}>Behaviour</th>
                 <th className={RESOURCE_TH}>Object type</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r, i) => (
                 <tr
-                  key={`${r.type}.${r.key}.${i}`}
+                  key={`${r.type}.${r.def.key}.${i}`}
                   onClick={() => onOpenType(r.type)}
                   className="cursor-pointer text-ink-body hover:bg-canvas"
                 >
                   <td className={cn(RESOURCE_TD, "font-medium text-ink")}>
-                    {r.label ?? r.key}
-                    {r.label ? (
-                      <span className="ml-1.5 font-normal text-ink-faint">({r.key})</span>
+                    {r.def.label ?? r.def.key}
+                    {r.def.label ? (
+                      <span className="ml-1.5 font-normal text-ink-faint">({r.def.key})</span>
                     ) : null}
                   </td>
-                  <td className={cn(RESOURCE_TD, "text-[11px]")}>{r.kind}</td>
+                  <td className={cn(RESOURCE_TD, "text-[11px]")}>{r.def.type}</td>
+                  <td
+                    className={cn(
+                      RESOURCE_TD,
+                      "text-[11px]",
+                      propertyBehaviourOf(r.def) === null ? "text-amber-700" : "text-ink-muted",
+                    )}
+                  >
+                    {describeProperty(r.def) || "—"}
+                  </td>
                   <td className={RESOURCE_TD}>{r.type}</td>
                 </tr>
               ))}
               {rows.length === 0 ? (
                 <tr>
-                  <td className={cn(RESOURCE_TD, "text-ink-faint")} colSpan={3}>
+                  <td className={cn(RESOURCE_TD, "text-ink-faint")} colSpan={4}>
                     No properties defined yet.
                   </td>
                 </tr>
@@ -1940,55 +1977,240 @@ function EnvironmentCreator({
 // Property rows editor (shared by create/edit object type)
 // ---------------------------------------------------------------------------
 
-function PropertyRowsEditor({
+const CELL =
+  "min-w-0 rounded border border-line bg-white px-1.5 py-1 text-[11px] text-ink focus:border-brand focus:outline-none";
+
+/**
+ * One property, and everything the simulation needs to know about it.
+ *
+ * The row stays two fields wide and the rest lives behind a disclosure, because
+ * a 320px panel cannot hold six controls per row and a schema is read far more
+ * often than it is edited. What the collapsed row *does* show is the summary —
+ * behaviour, unit, range — so the question this page now exists to answer
+ * ("which of these could an event act on?") is answerable without expanding
+ * anything.
+ */
+export function PropertyRowsEditor({
   rows,
   onChange,
 }: {
   rows: PropertyDefinition[];
   onChange: (rows: PropertyDefinition[]) => void;
 }) {
+  const [open, setOpen] = useState<number | null>(null);
+  const problems = schemaProblems(rows);
+
+  function patch(i: number, next: PropertyDefinition) {
+    onChange(rows.map((r, j) => (j === i ? next : r)));
+  }
+
+  function patchBounds(i: number, row: PropertyDefinition, end: "min" | "max", raw: string) {
+    const current = row.bounds ?? { min: null, max: null };
+    // An empty field is "no bound", not zero. Parsing "" as 0 would silently
+    // floor every value at zero and look like a decision somebody made.
+    const value = raw.trim() === "" ? null : Number(raw);
+    if (value !== null && !Number.isFinite(value)) return;
+    const bounds = { ...current, [end]: value };
+    patch(i, {
+      ...row,
+      bounds: bounds.min === null && bounds.max === null ? null : bounds,
+    });
+  }
+
   return (
     <div className="flex flex-col gap-1.5">
-      {rows.map((row, i) => (
-        <div key={i} className="flex items-center gap-1">
-          <input
-            value={row.key}
-            onChange={(e) => {
-              const next = [...rows];
-              next[i] = { ...row, key: e.target.value };
-              onChange(next);
-            }}
-            placeholder="key"
-            className="min-w-0 flex-1 rounded border border-line bg-white px-1.5 py-1 text-[11px] text-ink focus:border-brand focus:outline-none"
-          />
-          <select
-            value={row.type}
-            onChange={(e) => {
-              const next = [...rows];
-              next[i] = { ...row, type: e.target.value as PropertyType };
-              onChange(next);
-            }}
-            className="rounded border border-line bg-white px-1 py-1 text-[11px] text-ink focus:border-brand focus:outline-none"
+      {rows.map((row, i) => {
+        const expanded = open === i;
+        const problem = problems.get(i);
+        const summary = describeProperty(row);
+        const numeric = row.type === "number";
+        return (
+          <div
+            key={i}
+            className={cn(
+              "rounded border",
+              problem ? "border-amber-300 bg-amber-50/40" : "border-line bg-white",
+            )}
           >
-            {PROPERTY_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={() => onChange(rows.filter((_, j) => j !== i))}
-            className="rounded px-1 text-ink-faint hover:text-rose-600"
-            aria-label="Remove property"
-          >
-            ×
-          </button>
-        </div>
-      ))}
+            <div className="flex items-center gap-1 p-1">
+              <input
+                value={row.key}
+                onChange={(e) => patch(i, { ...row, key: e.target.value })}
+                placeholder="key"
+                aria-label={`Property ${i + 1} key`}
+                className={cn(CELL, "flex-1 border-transparent")}
+              />
+              <select
+                value={row.type}
+                onChange={(e) => patch(i, retypeProperty(row, e.target.value as PropertyType))}
+                aria-label={`Property ${i + 1} type`}
+                className={cn(CELL, "border-transparent")}
+              >
+                {PROPERTY_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setOpen(expanded ? null : i)}
+                aria-expanded={expanded}
+                aria-label={`${expanded ? "Hide" : "Show"} what ${row.key || "this property"} means to the simulation`}
+                className="rounded px-1 text-[11px] text-ink-faint hover:text-brand"
+              >
+                {expanded ? "−" : "+"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onChange(rows.filter((_, j) => j !== i));
+                  setOpen(null);
+                }}
+                className="rounded px-1 text-ink-faint hover:text-rose-600"
+                aria-label={`Remove ${row.key || "property"}`}
+              >
+                ×
+              </button>
+            </div>
+
+            {!expanded && summary ? (
+              <p
+                className={cn(
+                  "px-2 pb-1 text-[10px]",
+                  propertyBehaviourOf(row) === null ? "text-amber-700" : "text-ink-faint",
+                )}
+              >
+                {summary}
+              </p>
+            ) : null}
+
+            {expanded ? (
+              <div className="border-t border-line/70 p-2">
+                <label className="mb-0.5 block text-[10px] uppercase tracking-wide text-ink-faint">
+                  Behaviour
+                </label>
+                <select
+                  value={row.behaviour ?? ""}
+                  onChange={(e) =>
+                    patch(i, {
+                      ...row,
+                      behaviour: e.target.value === "" ? undefined : (e.target.value as PropertyBehaviour),
+                    })
+                  }
+                  aria-label={`Behaviour of ${row.key || "this property"}`}
+                  className={cn(CELL, "w-full")}
+                >
+                  <option value="">
+                    {numeric ? "Not declared" : "State — derived, a non-number can only be set"}
+                  </option>
+                  {behavioursFor(row.type).map((b) => (
+                    <option key={b} value={b}>
+                      {BEHAVIOUR_LABEL[b]}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[10px] leading-snug text-ink-faint">
+                  {BEHAVIOUR_HINT[propertyBehaviourOf(row) ?? ""]}
+                </p>
+
+                {numeric ? (
+                  <div className="mt-2 grid grid-cols-3 gap-1">
+                    <div>
+                      <label className="mb-0.5 block text-[10px] uppercase tracking-wide text-ink-faint">
+                        Unit
+                      </label>
+                      <input
+                        value={row.unit ?? ""}
+                        onChange={(e) => patch(i, { ...row, unit: e.target.value })}
+                        placeholder="beds"
+                        aria-label={`Unit of ${row.key || "this property"}`}
+                        className={cn(CELL, "w-full")}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-0.5 block text-[10px] uppercase tracking-wide text-ink-faint">
+                        Min
+                      </label>
+                      <input
+                        value={row.bounds?.min ?? ""}
+                        onChange={(e) => patchBounds(i, row, "min", e.target.value)}
+                        inputMode="decimal"
+                        placeholder="none"
+                        aria-label={`Minimum of ${row.key || "this property"}`}
+                        className={cn(CELL, "w-full")}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-0.5 block text-[10px] uppercase tracking-wide text-ink-faint">
+                        Max
+                      </label>
+                      <input
+                        value={row.bounds?.max ?? ""}
+                        onChange={(e) => patchBounds(i, row, "max", e.target.value)}
+                        inputMode="decimal"
+                        placeholder="none"
+                        aria-label={`Maximum of ${row.key || "this property"}`}
+                        className={cn(CELL, "w-full")}
+                      />
+                    </div>
+                  </div>
+                ) : null}
+
+                <label className="mb-0.5 mt-2 block text-[10px] uppercase tracking-wide text-ink-faint">
+                  Feeds the engine
+                </label>
+                <select
+                  value={row.mechanic ?? ""}
+                  onChange={(e) =>
+                    patch(i, {
+                      ...row,
+                      mechanic: e.target.value === "" ? undefined : (e.target.value as Mechanic),
+                    })
+                  }
+                  aria-label={`What ${row.key || "this property"} feeds the engine`}
+                  className={cn(CELL, "w-full")}
+                >
+                  <option value="">Nothing — it is data, not a model parameter</option>
+                  {MECHANICS.filter((m) =>
+                    numeric ? MECHANIC_KIND[m] === "quantity" : MECHANIC_KIND[m] === "select",
+                  ).map((m) => (
+                    <option key={m} value={m}>
+                      {MECHANIC_LABEL[m]}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[10px] leading-snug text-ink-faint">
+                  Binding these is how the simulation learns your care model instead of
+                  assuming one. Nothing is required, and a type that binds none simply
+                  does not describe care.
+                </p>
+
+                <label className="mt-2 flex items-center gap-1.5 text-[11px] text-ink-body">
+                  <input
+                    type="checkbox"
+                    checked={row.required ?? false}
+                    onChange={(e) => patch(i, { ...row, required: e.target.checked || undefined })}
+                  />
+                  Required — reject an ingested object that is missing it
+                </label>
+              </div>
+            ) : null}
+
+            {problem ? (
+              <p role="alert" className="px-2 pb-1.5 text-[10px] leading-snug text-amber-800">
+                {problem}
+              </p>
+            ) : null}
+          </div>
+        );
+      })}
       <button
         type="button"
-        onClick={() => onChange([...rows, { key: "", type: "string" }])}
+        onClick={() => {
+          onChange([...rows, { key: "", type: "string" }]);
+          setOpen(rows.length);
+        }}
         className="self-start rounded border border-line px-2 py-1 text-[11px] text-ink-muted hover:border-brand"
       >
         + Property
@@ -2054,12 +2276,22 @@ function TypeEditorPanel({
       onError("Object type name is required.");
       return;
     }
+    // Blank rows are a form in progress and are dropped rather than refused, so
+    // validate what is actually about to be sent. The server checks the same
+    // rules and is the authority; this only saves a round trip and keeps the
+    // message next to the field that caused it.
+    const kept = rows.filter((r) => r.key.trim()).map((r) => ({ ...r, key: r.key.trim() }));
+    const problems = schemaProblems(kept);
+    if (problems.size > 0) {
+      onError(problems.values().next().value as string);
+      return;
+    }
     setBusy(true);
     try {
       await onSubmit(
         name.trim(),
         description.trim(),
-        rows.filter((r) => r.key.trim()).map((r) => ({ ...r, key: r.key.trim() })),
+        kept,
         nature === "" ? null : nature,
         simRole === "" ? null : simRole,
       );

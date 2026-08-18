@@ -24,6 +24,7 @@ from app.events.effects import Event
 from app.events.collect import Dataset, collect
 from app.events.dynamics import run
 from app.events.harness import compare
+from app.events.mechanics import ContradictoryCareModel, care_model_from
 from app.events.ontology import OntologyExport, UnrunnableExport, load
 from app.events.scoring import Objective
 from app.events.targets import CATALOGUE
@@ -92,6 +93,58 @@ def catalogue() -> dict[str, Any]:
     }
 
 
+def _arithmetic_problems(effect, prop: str, state: SystemState) -> list[str]:
+    """Why this effect cannot multiply or add to this property.
+
+    Checked here, before the run, rather than left to raise mid-tick. The engine
+    would refuse it eventually — `apply_property` will not do arithmetic on a
+    declared state — but by then a partially-applied trajectory exists and the
+    caller gets a 500 for what is a question about the ontology.
+
+    An *undeclared* number is refused too, and this is the point of the whole
+    change: the engine used to answer this question on the institution's behalf
+    by shipping a catalogue of quantities it had invented. It no longer does, so
+    the honest response to "multiply this by 0.5" when nobody has said whether
+    the value rebuilds or accumulates is to say so and name where to fix it.
+    """
+    schema = state.property_schema
+    # `set` reads no prior value, so composition does not arise. Guarded here
+    # rather than at the call site so the function is safe to call with any
+    # operation and cannot be defeated by a second caller forgetting.
+    if schema is None or effect.op == "set":
+        return []
+
+    # Which types this effect can actually land on, so the message names the one
+    # that is short a declaration rather than the whole ontology.
+    chosen = effect.select.get("object_type") or []
+    hit = {
+        getattr(o, "type", "")
+        for o in state.objects.values()
+        if not chosen or getattr(o, "type", "") in chosen
+    }
+
+    problems: list[str] = []
+    for type_name in sorted(hit):
+        declared = schema.find(type_name, prop)
+        if declared is None:
+            # Nothing declares it at all. Distinct from "declared and ambiguous":
+            # the fix is to add the property, not to classify it.
+            continue
+        if declared.behaviour == "state":
+            problems.append(
+                f"{effect.id}: {prop!r} on {type_name} is declared a state, so it can "
+                f"be set, not {effect.op}"
+            )
+        elif declared.behaviour is None:
+            problems.append(
+                f"{effect.id}: {prop!r} on {type_name} has no declared behaviour, so "
+                f"there is no way to tell whether {effect.op} should compose against a "
+                f"value that rebuilds each step or one that accumulates. Declare it on "
+                f"the object type, or use 'set'"
+            )
+    return problems
+
+
 def _reject_effects_that_hit_nothing(event: Event, state: SystemState) -> None:
     """Refuse an event aimed at things the twin does not contain.
 
@@ -143,6 +196,8 @@ def _reject_effects_that_hit_nothing(event: Event, state: SystemState) -> None:
                 f"{e.id}: no object carries a property called {prop!r} "
                 f"(they carry: {', '.join(sorted(known_properties)) or 'none'})"
             )
+        if prop:
+            problems.extend(_arithmetic_problems(e, prop, state))
         if e.op == "multiply" and e.value == 1:
             problems.append(f"{e.id}: multiplies by 1, which changes nothing")
         if e.profile.peak <= 0:
@@ -191,7 +246,15 @@ def compare_route(req: CompareRequest) -> CompareResponse:
             population_sizes=req.population_sizes,
             route_capacity=req.route_capacity or None,
         )
-        model = care_model_for(probe, mortality=req.mortality)
+        # What the institution declared beats what the engine would invent.
+        # `care_model_for` picks three severities nobody named, stays of six,
+        # three and one step, and a mortality of 0.15 divided by ten and two
+        # hundred for the other bands — one hospital's clinical assumptions,
+        # handed to whoever opens the product. It survives only as the fallback
+        # for a twin that has bound nothing yet.
+        model = care_model_from(list(probe.objects.values()), probe.property_schema)
+        if not model:
+            model = care_model_for(probe, mortality=req.mortality)
         state = load(
             req.system,
             care_model=model,
@@ -199,6 +262,11 @@ def compare_route(req: CompareRequest) -> CompareResponse:
             route_capacity=req.route_capacity or None,
             census_acuity=req.census_acuity,
         )
+    except ContradictoryCareModel as exc:
+        # Listed before the bare ValueError it inherits from, so the message
+        # naming the two disagreeing instances is the one that reaches the
+        # caller rather than being flattened into a generic load failure.
+        raise HTTPException(422, f"The declared care model disagrees with itself: {exc}") from exc
     except UnrunnableExport as exc:
         raise HTTPException(422, str(exc)) from exc
     except ValueError as exc:

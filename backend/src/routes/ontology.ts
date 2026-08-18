@@ -21,11 +21,49 @@ import {
   seedEntityEnvironmentSchema,
   type EnvironmentType,
 } from "../services/ontology.js";
+import {
+  MECHANICS,
+  PROPERTY_BEHAVIOURS,
+  PROPERTY_TYPES,
+  propertyProblem,
+} from "../services/property-schema.js";
 
-const propertyDef = z.object({
+/**
+ * A property declaration, on the wire.
+ *
+ * Two schemas from one field set, and the split matters. The inbound one
+ * refuses combinations that would render a field an author then fills in and
+ * believes — a unit beside a status, a minimum above a maximum. The outbound
+ * one refuses nothing, because a response schema that rejects is a 500 on read:
+ * a declaration that was legal when it was saved must still be readable after
+ * the rules tighten, or an ontology becomes unopenable by a deploy.
+ */
+const propertyDefFields = {
   key: z.string().min(1),
-  type: z.enum(["string", "number", "boolean", "object", "array"]),
+  type: z.enum(PROPERTY_TYPES),
   label: z.string().optional(),
+  // Read by the channel runner to reject an ingested object missing it. It was
+  // absent from this schema, so every save from the type editor silently
+  // dropped it — a round trip through the UI turned a required property into an
+  // optional one with nothing raised.
+  required: z.boolean().optional(),
+  unit: z.string().trim().max(24).optional(),
+  bounds: z
+    .object({
+      min: z.number().finite().nullable().default(null),
+      max: z.number().finite().nullable().default(null),
+    })
+    .nullable()
+    .optional(),
+  behaviour: z.enum(PROPERTY_BEHAVIOURS).optional(),
+  mechanic: z.enum(MECHANICS).optional(),
+};
+
+const propertyDefOut = z.object(propertyDefFields);
+
+const propertyDef = propertyDefOut.superRefine((def, ctx) => {
+  const problem = propertyProblem(def);
+  if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem });
 });
 
 const errorEnvelope = z.object({
@@ -61,7 +99,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
                 id: z.string().uuid(),
                 name: z.string(),
                 description: z.string().nullable(),
-                properties: z.array(propertyDef),
+                properties: z.array(propertyDefOut),
                 createdAt: z.string(),
               }),
             ),
@@ -89,7 +127,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
           id: r.id,
           name: r.name,
           description: r.description,
-          properties: r.properties as z.infer<typeof propertyDef>[],
+          properties: r.properties as z.infer<typeof propertyDefOut>[],
           createdAt: r.created_at.toISOString(),
         })),
       };
@@ -430,7 +468,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
     description: z.string().nullable(),
     nature: natureEnum.nullable(),
     simRole: simRoleEnum.nullable().default(null),
-    propertySchema: z.array(propertyDef),
+    propertySchema: z.array(propertyDefOut),
     /** Empty means nothing identifies an instance of this type — see migration 043. */
     identityProperties: z.array(z.string()).default([]),
     createdAt: z.string(),
@@ -542,7 +580,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
           description: r.description,
           nature: r.nature,
         simRole: (r.sim_role ?? null) as "space"|"staff"|"stuff"|"systems"|"demand"|null,
-          propertySchema: r.property_schema as z.infer<typeof propertyDef>[],
+          propertySchema: r.property_schema as z.infer<typeof propertyDefOut>[],
         identityProperties: r.identity_properties ?? [],
           createdAt: r.created_at.toISOString(),
         })),
@@ -735,7 +773,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         description: r.description,
         nature: r.nature,
         simRole: (r.sim_role ?? null) as "space"|"staff"|"stuff"|"systems"|"demand"|null,
-        propertySchema: r.property_schema as z.infer<typeof propertyDef>[],
+        propertySchema: r.property_schema as z.infer<typeof propertyDefOut>[],
         identityProperties: r.identity_properties ?? [],
         createdAt: r.created_at.toISOString(),
       };
@@ -1098,7 +1136,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         description: r.description,
         nature: r.nature,
         simRole: (r.sim_role ?? null) as "space"|"staff"|"stuff"|"systems"|"demand"|null,
-        propertySchema: r.property_schema as z.infer<typeof propertyDef>[],
+        propertySchema: r.property_schema as z.infer<typeof propertyDefOut>[],
         identityProperties: r.identity_properties ?? [],
         createdAt: r.created_at.toISOString(),
       });
@@ -1165,7 +1203,7 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
         description: r.description,
         nature: r.nature,
         simRole: (r.sim_role ?? null) as "space"|"staff"|"stuff"|"systems"|"demand"|null,
-        propertySchema: r.property_schema as z.infer<typeof propertyDef>[],
+        propertySchema: r.property_schema as z.infer<typeof propertyDefOut>[],
         identityProperties: r.identity_properties ?? [],
         createdAt: r.created_at.toISOString(),
       };

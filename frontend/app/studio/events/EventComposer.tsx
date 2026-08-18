@@ -36,6 +36,16 @@ import {
   type NamedThing,
   type Vocabulary,
 } from "./event-effects";
+import {
+  declaredProperties,
+  describeDeclaration,
+  opsFor,
+  propertyProblem,
+  resolveProperty,
+  valueKind,
+  valueLabel,
+  type ResolvedProperty,
+} from "./object-property";
 
 const SHAPES: Array<{ id: ProfileShape; label: string }> = [
   { id: "step", label: "Steady while it lasts" },
@@ -141,14 +151,16 @@ export default function EventComposer({
   }, [snapshot]);
 
   /**
-   * Which properties the instances of a type actually carry, and what values
-   * they already hold.
+   * The values instances already hold, per type and key.
    *
-   * Offered as suggestions rather than a closed list: an event's whole purpose
-   * may be to introduce a value the ontology has never seen — "contaminated"
-   * exists nowhere until the first flood puts it there.
+   * Still suggestions rather than a closed list — an event's whole purpose may
+   * be to introduce a value the ontology has never seen, and "contaminated"
+   * exists nowhere until the first flood puts it there. The *keys*, by contrast,
+   * are now closed and come from the declared schema: a key nothing declares is
+   * inert in the most convincing way available, because it selects real objects,
+   * runs without error and changes nothing.
    */
-  const propertiesByType = useMemo(() => {
+  const valuesByType = useMemo(() => {
     const out = new Map<string, Map<string, Set<string>>>();
     for (const o of snapshot.objects ?? []) {
       const keys = out.get(o.type) ?? new Map<string, Set<string>>();
@@ -163,7 +175,28 @@ export default function EventComposer({
   }, [snapshot]);
 
   const byPath = useMemo(() => new Map(targets.map((t) => [t.path, t])), [targets]);
-  const problems = eventProblems(effects, targets, horizon);
+
+  /**
+   * Effects the engine would refuse, gathered before the save rather than after.
+   *
+   * A declaration problem is not cosmetic: multiplying a property nobody has
+   * declared a behaviour for is refused at `/events/compare`, so letting it into
+   * the library produces an event that looks saved and cannot run. Shown on the
+   * card *and* counted here, because a warning next to a field is easy to scroll
+   * past.
+   */
+  const declarationProblems = useMemo(
+    () =>
+      effects.flatMap((e, i) => {
+        if (e.target !== OBJECT_TARGET) return [];
+        const resolved = resolveProperty(snapshot, e.select.object_type ?? [], e.property_key);
+        const problem = propertyProblem(resolved, e.op);
+        return problem ? [`Effect ${i + 1} (${e.id}): ${problem}`] : [];
+      }),
+    [effects, snapshot],
+  );
+
+  const problems = [...eventProblems(effects, targets, horizon), ...declarationProblems];
   const canSave = name.trim().length > 0 && problems.length === 0 && !busy;
 
   function patch(index: number, next: Partial<SimEffect>) {
@@ -260,7 +293,8 @@ export default function EventComposer({
           target={byPath.get(effect.target)}
           horizon={horizon}
           vocab={vocab}
-          propertiesByType={propertiesByType}
+          snapshot={snapshot}
+          valuesByType={valuesByType}
           focused={focused === i}
           onFocus={() => setFocused(i)}
           onChange={(next) => patch(i, next)}
@@ -321,7 +355,7 @@ export default function EventComposer({
       {problems.length > 0 ? (
         <section className="rounded-lg border border-warn/30 bg-warn/5 p-4">
           <h3 className="mb-2 text-xs font-medium text-ink">
-            This event would run and change nothing
+            This event is not ready — it would change nothing, or be refused
           </h3>
           <ul className="flex list-disc flex-col gap-1 pl-4">
             {problems.map((p) => (
@@ -397,7 +431,8 @@ function EffectCard({
   target,
   horizon,
   vocab,
-  propertiesByType,
+  snapshot,
+  valuesByType,
   focused,
   onFocus,
   onChange,
@@ -408,7 +443,8 @@ function EffectCard({
   target: SimTarget | undefined;
   horizon: number;
   vocab: Vocabulary;
-  propertiesByType: Map<string, Map<string, Set<string>>>;
+  snapshot: SimExport;
+  valuesByType: Map<string, Map<string, Set<string>>>;
   focused: boolean;
   onFocus: () => void;
   onChange: (next: Partial<SimEffect>) => void;
@@ -418,21 +454,28 @@ function EffectCard({
   const inert = inertReasons(effect, target, horizon);
   const p = effect.profile;
   const isObject = effect.target === OBJECT_TARGET;
-  // `set` is the only operation that can carry text, and only on an object
-  // property. Everywhere else the field is a number and typing a word into it
-  // would produce a payload the engine refuses.
-  const textValued = isObject && effect.op === "set";
   const chosenTypes = effect.select.object_type ?? [];
-  const propertyChoices = Array.from(
-    new Set(
-      Array.from(propertiesByType.entries())
-        .filter(([type]) => chosenTypes.length === 0 || chosenTypes.includes(type))
-        .flatMap(([, keys]) => Array.from(keys.keys())),
-    ),
-  ).sort();
+
+  // Everything about an object effect's fields is read from what the institution
+  // declared, not from the target's fixed opinion: which operations compose,
+  // what the unit is called, what range the value lives in, and whether the
+  // field takes a word or a figure.
+  const declared = useMemo(
+    () => (isObject ? declaredProperties(snapshot, chosenTypes) : []),
+    [isObject, snapshot, chosenTypes],
+  );
+  const resolved = useMemo(
+    () => resolveProperty(snapshot, chosenTypes, effect.property_key),
+    [snapshot, chosenTypes, effect.property_key],
+  );
+  const ops = isObject ? opsFor(resolved.behaviour) : (target?.ops ?? []);
+  const textValued = isObject
+    ? valueKind(resolved, effect.op) === "text"
+    : false;
+  const declarationProblem = isObject ? propertyProblem(resolved, effect.op) : null;
   const valueChoices = Array.from(
     new Set(
-      Array.from(propertiesByType.entries())
+      Array.from(valuesByType.entries())
         .filter(([type]) => chosenTypes.length === 0 || chosenTypes.includes(type))
         .flatMap(([, keys]) => Array.from(keys.get(effect.property_key ?? "") ?? [])),
     ),
@@ -486,8 +529,8 @@ function EffectCard({
           {isObject ? (
             <ObjectFields
               effect={effect}
-              properties={propertyChoices}
-              values={valueChoices}
+              declared={declared}
+              resolved={resolved}
               onChange={onChange}
             />
           ) : null}
@@ -510,14 +553,21 @@ function EffectCard({
                 }}
                 className={INPUT}
               >
-                {target.ops.map((op) => (
+                {ops.map((op) => (
                   <option key={op} value={op}>
                     {OP_LABEL[op]}
                   </option>
                 ))}
               </select>
+              {isObject && ops.length === 1 ? (
+                <span className="text-[10px] leading-snug text-ink-faint">
+                  {resolved.behaviour === "state"
+                    ? "Declared a state, so it is replaced rather than calculated with."
+                    : "Only setting a value is well-defined until the property declares how it composes."}
+                </span>
+              ) : null}
             </Field>
-            <Field label={textValued ? "New value" : target.unit || "Value"}>
+            <Field label={isObject ? valueLabel(resolved, effect.op) : target.unit || "Value"}>
               {textValued ? (
                 <>
                   <input
@@ -543,6 +593,10 @@ function EffectCard({
               )}
             </Field>
           </div>
+
+          {declarationProblem ? (
+            <p className="mt-2 text-[11px] leading-relaxed text-warn">{declarationProblem}</p>
+          ) : null}
         </>
       ) : (
         <p className="text-[11px] leading-relaxed text-danger">
@@ -609,37 +663,53 @@ function EffectCard({
   );
 }
 
+/**
+ * The property to change, chosen from what the ontology declares.
+ *
+ * A closed list, and that is the change. It used to be a free-text box with the
+ * keys instances happened to carry as suggestions, so an effect could name a key
+ * nothing declared — which is inert in the most convincing way available: it
+ * selects real objects, runs without error, and reads as a network that shrugged
+ * off a disaster.
+ */
 function ObjectFields({
   effect,
-  properties,
-  values,
+  declared,
+  resolved,
   onChange,
 }: {
   effect: SimEffect;
-  properties: string[];
-  values: string[];
+  declared: ResolvedProperty[];
+  resolved: ResolvedProperty;
   onChange: (next: Partial<SimEffect>) => void;
 }) {
   return (
     <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_150px]">
       <Field label="Property to change">
-        <input
-          list="known-properties"
+        <select
           value={effect.property_key ?? ""}
           onChange={(e) => onChange({ property_key: e.target.value || null })}
-          placeholder="e.g. status"
           className={INPUT}
-        />
-        <datalist id="known-properties">
-          {properties.map((k) => (
-            <option key={k} value={k} />
+        >
+          <option value="">Pick a property…</option>
+          {declared.map((d) => (
+            <option key={d.key} value={d.key}>
+              {d.key}
+              {d.def?.unit?.trim() ? ` (${d.def.unit.trim()})` : ""}
+            </option>
           ))}
-        </datalist>
+          {/* An effect written before the property was removed from the schema
+              would otherwise silently switch to the first entry in the list, so
+              the stale key stays selectable and is called out below. */}
+          {effect.property_key && resolved.undeclared ? (
+            <option value={effect.property_key}>{effect.property_key} — no longer declared</option>
+          ) : null}
+        </select>
         <span className="text-[10px] leading-snug text-ink-faint">
-          {properties.length > 0
-            ? `Carried by these objects: ${properties.join(", ")}.`
-            : "None of the selected objects carry any property yet."}
-          {values.length > 0 ? ` Values seen: ${values.join(", ")}.` : ""}
+          {declared.length > 0
+            ? describeDeclaration(resolved) ||
+              `${declared.length} propert${declared.length === 1 ? "y" : "ies"} declared on the selected types.`
+            : "The selected object types declare no properties. Add them in the ontology manager — an effect has nothing to change until then."}
         </span>
       </Field>
       <Field label="How many">

@@ -12,6 +12,12 @@ import {
   setStoredKey,
   type MeResult,
 } from "./auth";
+import type {
+  Mechanic,
+  PropertyBehaviour,
+  PropertyDefinition,
+  PropertyType,
+} from "./property-schema";
 
 export interface LoginUser {
   id: string;
@@ -428,13 +434,17 @@ export interface OrganizationSummary {
   createdAt: string;
 }
 
-export type PropertyType = "string" | "number" | "boolean" | "object" | "array";
-
-export interface PropertyDefinition {
-  key: string;
-  type: PropertyType;
-  label?: string;
-}
+// A property declaration carries what the simulation needs to compose an effect
+// on it — unit, bounds, behaviour — so its shape and the rules that go with it
+// live together in `property-schema.ts`. Re-exported because most callers reach
+// for it through this module.
+export type {
+  Mechanic,
+  PropertyBehaviour,
+  PropertyBounds,
+  PropertyDefinition,
+  PropertyType,
+} from "./property-schema";
 
 export type LinkCardinality =
   | "one_to_one"
@@ -461,7 +471,7 @@ export interface EnvObjectType {
   description: string | null;
   nature: ObjectNature | null;
   simRole: SimRole | null;
-  propertySchema: { key: string; type: string; label?: string }[];
+  propertySchema: PropertyDefinition[];
   createdAt: string;
 }
 
@@ -1625,7 +1635,8 @@ export interface SimGap {
     | "NO_CARE_MODEL"
     | "ROUTE_WITHOUT_CAPACITY"
     | "POPULATION_WITHOUT_SIZE"
-    | "FACILITY_WITHOUT_RESOURCES";
+    | "FACILITY_WITHOUT_RESOURCES"
+    | "PROPERTY_WITHOUT_BEHAVIOUR";
   message: string;
   subjects: string[];
 }
@@ -1661,6 +1672,16 @@ export interface SimExport {
    * offers to target.
    */
   objects: SimObjectInstance[];
+  /**
+   * What the institution declared its types carry.
+   *
+   * This is the composer's vocabulary. It replaced a catalogue of quantities the
+   * engine had invented — a length of stay, a mortality rate, an arrival rate —
+   * which were one hospital's concepts shipped to every institution. A type with
+   * no role travels too: "this declares no role, so nothing it represents enters
+   * the simulation" is a better answer than the type being absent.
+   */
+  object_types: SimObjectType[];
   object_rules: { unavailable_keys: string[]; unavailable_values: string[] };
   populations: { id: string; name: string; size: number; served_by: string[] }[];
   edges: { source: string; target: string; kind: string; capacity: number; via: string }[];
@@ -1771,6 +1792,32 @@ export interface SimEffect {
   /** How many matching objects this reaches: all, a fraction, or a count. */
   reach?: number | null;
   profile: TemporalProfile;
+}
+
+/**
+ * One property, as the institution declared it — the shape the export ships.
+ *
+ * Flatter than `PropertyDefinition`: bounds arrive as `min`/`max` rather than a
+ * nested object, because this crosses a language boundary and the Python side
+ * reads it field by field.
+ */
+export interface SimPropertyDef {
+  key: string;
+  type: PropertyType;
+  label: string | null;
+  unit: string | null;
+  min: number | null;
+  max: number | null;
+  /** Null means nobody has said, which the composer reports rather than fills. */
+  behaviour: PropertyBehaviour | null;
+  /** What the engine reads this value as, or null for plain data. */
+  mechanic: Mechanic | null;
+}
+
+export interface SimObjectType {
+  name: string;
+  role: SimRole | null;
+  properties: SimPropertyDef[];
 }
 
 /** One instance from the ontology, as the export now carries it. */

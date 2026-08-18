@@ -17,7 +17,11 @@ export default defineConfig({
     // renders was previously verified by types and a production build only, and
     // a build proves a component compiles, not that dragging a bar writes the
     // field it claims to.
-    include: ["app/**/*.test.ts", "app/**/*.test.tsx"],
+    // `lib/` is in the pattern too: it holds the shared vocabulary the studio
+    // pages agree on, so a rule that is wrong there is wrong on every page at
+    // once. It was outside the glob, which meant a test written for it would
+    // have been collected by nothing and passed by never running.
+    include: ["app/**/*.test.ts", "app/**/*.test.tsx", "lib/**/*.test.ts"],
     // jsdom only where a test asks for it, via `// @vitest-environment jsdom`.
     // The pure-logic suites are the majority and run an order of magnitude
     // faster in node.
