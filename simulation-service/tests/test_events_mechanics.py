@@ -238,6 +238,137 @@ def test_two_institutions_with_different_words_produce_the_same_model() -> None:
     assert theirs["critique"].consumes == mine["critique"].consumes
 
 
+# --- the loop is closed -----------------------------------------------------
+#
+# A declared care model is only a replacement for `care.stay_ticks` if an
+# effect on the protocol reaches the numbers the engine actually reads. If it
+# does not, the effect applies, the run completes, and nothing changes — which
+# is the exact failure this codebase keeps finding.
+
+
+def engine_over(rows: list[SimObject], effects=()):
+    from app.events.domain import Edge, Facility, NetworkxBackend, Population, Resource, SystemState
+    from app.events.dynamics import Engine
+    from app.events.effects import Event
+    from app.events.policy import null_policy
+
+    schema_obj = schema()
+    state = SystemState(
+        facilities={
+            "unit-a": Facility(
+                id="unit-a",
+                name="Urgence",
+                resources={
+                    "lit": Resource(id="lit", category="space", capacity=10, quantity=10,
+                                    enables=frozenset({"lit"}))
+                },
+            )
+        },
+        populations={"pop": Population(id="pop", size=1000, served_by=["unit-a"])},
+        care_model=care_model_from(rows, schema_obj),
+        network=NetworkxBackend(),
+        objects={o.id: o for o in rows},
+        object_rules=__import__("app.events.objects", fromlist=["ObjectRules"]).ObjectRules(),
+        property_schema=schema_obj,
+    )
+    return state, Engine(state, Event(id="ev", horizon=20, effects=list(effects)), null_policy(), 0)
+
+
+def test_perturbing_a_protocol_changes_what_the_engine_reads() -> None:
+    """The replacement for `care.stay_ticks`, in one assertion.
+
+    Writing to the instance is not enough — the model the care loop consults has
+    to be re-derived from it, the way a ward's capacity is re-counted from its
+    beds.
+    """
+    from app.events.effects import Effect, TemporalProfile
+
+    rows = [row("p1", "critique", duree_sejour=6)]
+    longer = Effect(
+        id="ca-traine",
+        target="object.property",
+        property_key="duree_sejour",
+        select={"object_type": ["Protocole"]},
+        op="multiply",
+        value=2.0,
+        profile=TemporalProfile(start=0, end=10, shape="step", peak=1.0),
+    )
+    state, engine = engine_over(rows, [longer])
+    assert state.care_model["critique"].stay_ticks == 6
+    engine._apply_perturbations(1)
+    assert state.care_model["critique"].stay_ticks == 12
+
+
+def test_the_care_model_reverts_when_the_window_closes() -> None:
+    """A disease that turned out worse than expected has to stop being worse.
+
+    The property reverts to its baseline each tick; if the model did not follow
+    it back, the run would carry the perturbation to the end of the horizon.
+    """
+    from app.events.effects import Effect, TemporalProfile
+
+    rows = [row("p1", "critique", duree_sejour=6)]
+    burst = Effect(
+        id="pointe",
+        target="object.property",
+        property_key="duree_sejour",
+        select={"object_type": ["Protocole"]},
+        op="multiply",
+        value=2.0,
+        profile=TemporalProfile(start=0, end=3, shape="step", peak=1.0),
+    )
+    state, engine = engine_over(rows, [burst])
+    engine._apply_perturbations(1)
+    assert state.care_model["critique"].stay_ticks == 12
+    engine._apply_perturbations(9)
+    assert state.care_model["critique"].stay_ticks == 6
+
+
+def test_an_acuity_that_vanishes_keeps_its_baseline_rather_than_stranding_a_queue() -> None:
+    """Effects perturb values. One that renamed a severity would otherwise leave
+    every patient already queued under the old name unserved for ever, and a
+    backlog that quietly stops being served reads as care delivered."""
+    from app.events.effects import Effect, TemporalProfile
+
+    rows = [row("p1", "critique", duree_sejour=6)]
+    renamed = Effect(
+        id="renomme",
+        target="object.property",
+        property_key="gravite",
+        select={"object_type": ["Protocole"]},
+        op="set",
+        value="autre",
+        profile=TemporalProfile(start=0, end=10, shape="step", peak=1.0),
+    )
+    state, engine = engine_over(rows, [renamed])
+    engine._apply_perturbations(1)
+    assert "critique" in state.care_model
+    assert state.care_model["critique"].stay_ticks == 6
+
+
+def test_an_event_touching_only_protocols_is_not_skipped() -> None:
+    """A protocol hangs off no unit, so it contributes nothing to the set of
+    facilities to re-derive. The property pass used to return early when that
+    set was empty, which would have made every care-model effect silently do
+    nothing."""
+    from app.events.effects import Effect, TemporalProfile
+
+    rows = [row("p1", "critique", deces_sans_soin=0.15)]
+    milder = Effect(
+        id="plus-doux",
+        target="object.property",
+        property_key="deces_sans_soin",
+        select={"object_type": ["Protocole"]},
+        op="multiply",
+        value=0.5,
+        profile=TemporalProfile(start=0, end=10, shape="step", peak=1.0),
+    )
+    state, engine = engine_over(rows, [milder])
+    assert engine.object_scope == set()
+    engine._apply_perturbations(1)
+    assert state.care_model["critique"].mortality_per_unmet == 0.075
+
+
 def test_a_mechanic_this_service_does_not_know_is_ignored_not_fatal() -> None:
     """The backend may declare a mechanic before this service is redeployed.
 

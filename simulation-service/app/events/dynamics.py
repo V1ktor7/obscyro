@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 
 from app.events.domain import STAFF, STUFF, SPACE, SYSTEMS, SystemState
 from app.events.effects import Event
+from app.events.mechanics import binds_care_model, care_model_from
 from app.events.objects import (
     ObjectRules,
     PropertySchema,
@@ -246,6 +247,14 @@ class Engine:
             for o in matching(list(state.objects.values()), e):
                 if o.at:
                     self.object_scope.add(o.at)
+        # Whether this twin describes its own care. Computed once: it decides
+        # which of two mutually exclusive paths owns the care model for the
+        # whole run, and letting it flip mid-run would mean the answer depended
+        # on the tick.
+        schema = state.property_schema
+        self.declared_care = binds_care_model(
+            schema if isinstance(schema, PropertySchema) else None
+        )
         self.demand_scale: dict[str, float] = {}
         self.trajectory = Trajectory(
             event_id=event.id, policy_id=policy.id, seed=seed
@@ -355,7 +364,7 @@ class Engine:
         ward smaller; nothing has to know the two are connected.
         """
         rules = self.state.object_rules
-        if not isinstance(rules, ObjectRules) or not self.object_scope:
+        if not isinstance(rules, ObjectRules):
             return
 
         schema = self.state.property_schema
@@ -398,8 +407,40 @@ class Engine:
             if fid in self.state.facilities:
                 rebuild(self.state.facility(fid), objects, rules)
 
+    def _rederive_care(self) -> None:
+        """Rebuild the care model from the protocol instances, after effects.
+
+        The same inversion capacity already went through, one layer up. A ward's
+        capacity is counted from its beds, so writing `status: contaminated`
+        shrinks it without anything knowing the two are related. A care model
+        declared as instances has to work the same way, or an `object.property`
+        effect on a protocol would edit the instance and leave the model the
+        engine actually reads untouched — the effect would apply, the run would
+        complete, and nothing would change. That is the failure this whole file
+        keeps guarding against.
+
+        An acuity that vanishes from the rebuilt model keeps its baseline
+        requirement. Effects perturb *values*; a perturbation that renamed a
+        severity would otherwise strand every patient already queued under the
+        old name, and a backlog that quietly stops being served reads as care
+        delivered.
+        """
+        if not self.declared_care:
+            return
+        rebuilt = care_model_from(
+            list(self.state.objects.values()), self.state.property_schema
+        )
+        if not rebuilt:
+            return
+        for acuity, req in rebuilt.items():
+            self.state.care_model[acuity] = req
+        for acuity, base in self.baseline_care.items():
+            if acuity not in rebuilt:
+                self.state.care_model[acuity] = copy.deepcopy(base)
+
     def _apply_perturbations(self, tick: int) -> None:
         self._apply_objects(tick)
+        self._rederive_care()
         for (fid, rid), base in self.baseline_capacity.items():
             r = self.state.facility(fid).resources[rid]
             cap = base
@@ -424,6 +465,15 @@ class Engine:
                     tick, "edge.weight", base, {"route": f"{key[0]}>{key[1]}"}
                 )
 
+        # The shipped `care.*` targets, and only while nothing is declared.
+        #
+        # With a declared care model these would undo `_rederive_care` on every
+        # tick: they rewrite each requirement from `baseline_care`, which was
+        # captured before any effect touched the protocol instances. An effect
+        # lengthening a stay would apply to the instance, be re-derived into the
+        # model, and then be overwritten from a baseline that never heard of it.
+        if self.declared_care:
+            return
         for acuity, base in self.baseline_care.items():
             req = self.state.care_model.get(acuity)
             if req is None:
