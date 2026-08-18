@@ -227,6 +227,10 @@ class SystemState(BaseModel):
     # imports Facility and Resource from here.
     objects: dict[str, object] = Field(default_factory=dict)
     object_rules: object | None = None
+    # What the institution declared its types carry: unit, bounds, and — the
+    # part the engine cannot do without — whether each value rebuilds from a
+    # baseline every step or accumulates. Same loose typing, same reason.
+    property_schema: object | None = None
 
     def facility(self, fid: str) -> Facility:
         f = self.facilities.get(fid)

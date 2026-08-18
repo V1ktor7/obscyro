@@ -1,6 +1,7 @@
 import type { DbClient } from "../lib/db.js";
 import type { ReadLens } from "./ontology-lens.js";
 import { listInstancesForEnv, listLinksForEnv } from "./ontology.js";
+import { behaviourOf, type PropertyDef } from "./property-schema.js";
 import { aggregationEnds, attaches, buildsHierarchy, getUnitTree } from "./twin.js";
 
 /**
@@ -64,7 +65,8 @@ export interface SimGap {
     | "NO_CARE_MODEL"
     | "ROUTE_WITHOUT_CAPACITY"
     | "POPULATION_WITHOUT_SIZE"
-    | "FACILITY_WITHOUT_RESOURCES";
+    | "FACILITY_WITHOUT_RESOURCES"
+    | "PROPERTY_WITHOUT_BEHAVIOUR";
   message: string;
   subjects: string[];
 }
@@ -103,6 +105,36 @@ export interface SimObjectRules {
   unavailable_values: string[];
 }
 
+/**
+ * One property, as the institution declared it.
+ *
+ * The engine used to carry its own list of perturbable quantities — a length of
+ * stay, a mortality rate, an arrival rate — because no property in the twin held
+ * a number and it needed numbers. That list is one hospital's concepts, and
+ * shipping it to every institution is shipping somebody else's model.
+ *
+ * These cross instead. `behaviour` is the part the engine cannot do without: it
+ * decides whether a value is rebuilt from a baseline each step or accumulates,
+ * and the two differ by orders of magnitude while both complete without
+ * complaint. Null means nobody has said, which the engine reports rather than
+ * guesses.
+ */
+export interface SimPropertyDef {
+  key: string;
+  type: "string" | "number" | "boolean" | "object" | "array";
+  label: string | null;
+  unit: string | null;
+  min: number | null;
+  max: number | null;
+  behaviour: "level" | "rate" | "stock" | "state" | null;
+}
+
+export interface SimObjectType {
+  name: string;
+  role: SimRole | null;
+  properties: SimPropertyDef[];
+}
+
 export interface SimExport {
   environment: string;
   /** The scenario this was read under, or null for the live twin. */
@@ -111,6 +143,12 @@ export interface SimExport {
   facilities: SimFacility[];
   /** Every instance that plays a role, with its properties intact. */
   objects: SimObject[];
+  /**
+   * What the institution declared its types carry. This is the composer's
+   * vocabulary and the engine's composition law, and it replaces both being
+   * shipped as constants.
+   */
+  object_types: SimObjectType[];
   object_rules: SimObjectRules;
   populations: SimPopulation[];
   edges: SimEdge[];
@@ -186,14 +224,38 @@ export async function buildTwinExport(
     getUnitTree(db, environmentId, lens),
     listInstancesForEnv(db, environmentId, { limit: 20000, ...lens }),
     listLinksForEnv(db, environmentId, lens),
-    db.query<{ name: string; sim_role: SimRole | null }>(
-      `SELECT name, sim_role FROM app.ontology_object_types
+    db.query<{ name: string; sim_role: SimRole | null; property_schema: PropertyDef[] | null }>(
+      `SELECT name, sim_role, property_schema FROM app.ontology_object_types
         WHERE organization_id = (SELECT organization_id FROM app.project WHERE id = $1)`,
       [environmentId],
     ),
   ]);
 
   const roleByType = new Map(roleRows.rows.map((r) => [r.name, r.sim_role]));
+
+  /**
+   * The declared schema, crossing whole.
+   *
+   * Every type travels, not only the ones that produced objects. A type with no
+   * role yields no instance and therefore no effect can land on it — but the
+   * engine saying "this type declares no role" is a better answer than the type
+   * being absent, which reads as a typo in the ontology.
+   */
+  const object_types: SimObjectType[] = roleRows.rows
+    .map((r) => ({
+      name: r.name,
+      role: r.sim_role,
+      properties: (r.property_schema ?? []).map((p) => ({
+        key: p.key,
+        type: p.type,
+        label: p.label ?? null,
+        unit: p.unit ?? null,
+        min: p.bounds?.min ?? null,
+        max: p.bounds?.max ?? null,
+        behaviour: behaviourOf(p),
+      })),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
   const unitIds = new Set(nodes.map((n) => n.id));
   const instanceById = new Map(instances.map((i) => [i.id, i]));
   const gaps: SimGap[] = [];
@@ -383,6 +445,30 @@ export async function buildTwinExport(
     });
   }
 
+  /**
+   * Numeric properties nobody has declared a behaviour for.
+   *
+   * Named as a gap rather than defaulted, for the same reason the export refuses
+   * to invent a catchment size: 40 beds, 40 arrivals a day and 40 people waiting
+   * are the same JSON, and a default would be right one time in three and silent
+   * the other two. An effect cannot compose on these until somebody says which
+   * they are, and the composer needs to be able to explain why.
+   */
+  const undeclared = object_types.flatMap((t) =>
+    t.properties.filter((p) => p.behaviour === null).map((p) => `${t.name}.${p.key}`),
+  );
+  if (undeclared.length > 0) {
+    gaps.push({
+      code: "PROPERTY_WITHOUT_BEHAVIOUR",
+      message:
+        `${undeclared.length} numeric propert${undeclared.length === 1 ? "y" : "ies"} ` +
+        `carr${undeclared.length === 1 ? "ies" : "y"} no declared behaviour. Values are ` +
+        `stored and read as usual, but no effect can multiply or add to them until the ` +
+        `object type says whether they rebuild each step or accumulate.`,
+      subjects: undeclared.sort(),
+    });
+  }
+
   gaps.push({
     code: "NO_CARE_MODEL",
     message:
@@ -397,6 +483,7 @@ export async function buildTwinExport(
     generated_at: new Date().toISOString(),
     facilities,
     objects,
+    object_types,
     // The rule travels with the data so the engine can re-read availability
     // after an effect edits a property, without either side owning a second
     // copy that could disagree.

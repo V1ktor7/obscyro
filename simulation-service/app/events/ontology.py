@@ -31,7 +31,14 @@ from app.events.domain import (
     Resource,
     SystemState,
 )
-from app.events.objects import ObjectRules, SimObject, derive_census, derive_resources
+from app.events.objects import (
+    ObjectRules,
+    ObjectTypeDef,
+    PropertySchema,
+    SimObject,
+    derive_census,
+    derive_resources,
+)
 
 # Mirrors the `crisis_role` check constraint in migration 045. Kept as a literal
 # rather than imported from anywhere: the two sides are versioned separately, so
@@ -87,6 +94,11 @@ class OntologyExport(BaseModel):
     # computed by the exporter from the same array — kept because the composer
     # wants them, never read here.
     objects: list[SimObject] = Field(default_factory=list)
+    # What the institution declared each type carries. This is what replaced the
+    # engine's own list of perturbable quantities: the composer reads its
+    # vocabulary here, and the engine reads each value's composition law here,
+    # instead of both being constants shipped with the service.
+    object_types: list[ObjectTypeDef] = Field(default_factory=list)
     object_rules: ObjectRules = Field(default_factory=ObjectRules)
     populations: list[ExportedPopulation] = Field(default_factory=list)
     edges: list[ExportedEdge] = Field(default_factory=list)
@@ -180,6 +192,7 @@ def load(
         census=census,
         objects={o.id: o for o in ex.objects},
         object_rules=ex.object_rules,
+        property_schema=PropertySchema(types=ex.object_types),
     )
     _refuse_if_hollow(state, care_model)
     return state

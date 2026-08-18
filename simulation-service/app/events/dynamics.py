@@ -25,7 +25,14 @@ from pydantic import BaseModel, Field
 
 from app.events.domain import STAFF, STUFF, SPACE, SYSTEMS, SystemState
 from app.events.effects import Event
-from app.events.objects import ObjectRules, SimObject, apply_property, matching, rebuild
+from app.events.objects import (
+    ObjectRules,
+    PropertySchema,
+    SimObject,
+    apply_property,
+    matching,
+    rebuild,
+)
 from app.events.policy import Action, Policy, Rule
 from app.events.targets import apply_op, clamp, target
 
@@ -351,11 +358,27 @@ class Engine:
         if not isinstance(rules, ObjectRules) or not self.object_scope:
             return
 
+        schema = self.state.property_schema
+        if not isinstance(schema, PropertySchema):
+            schema = None
+
         objects = list(self.state.objects.values())
         for o in objects:
             base = self.baseline_properties.get(o.id)
-            if base is not None:
-                o.properties = copy.deepcopy(base)
+            if base is None:
+                continue
+            # A `stock` is the one thing that must survive the reset. Everything
+            # else is rebuilt from its unperturbed value so effects cannot
+            # compound; a running total rebuilt from a baseline would silently
+            # erase everything that had piled up in it, which is the opposite of
+            # what the institution declared it to be.
+            carried = {
+                k: v
+                for k, v in o.properties.items()
+                if schema is not None and schema.behaviour(o.type, k) == "stock"
+            }
+            o.properties = copy.deepcopy(base)
+            o.properties.update(carried)
 
         for e in sorted(self.event.active(tick, "object.property"), key=lambda x: x.id):
             for o in matching(objects, e):
@@ -365,7 +388,7 @@ class Engine:
                 here = self._where({"facility": o.at}) if o.at else None
                 if e.spatial is not None and e.magnitude_for(tick, here) <= 0:
                     continue
-                apply_property(e, o, self.baseline_properties.get(o.id, {}))
+                apply_property(e, o, self.baseline_properties.get(o.id, {}), schema)
 
         # Every facility any object effect could ever reach, not just the ones
         # reached *this* tick. Rebuilding only the latter left a closed window

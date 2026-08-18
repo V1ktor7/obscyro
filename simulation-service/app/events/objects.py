@@ -22,11 +22,85 @@ reasons about, totals, they agree; below it, they are not reconciled.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from app.events.domain import Facility, Resource
 
 Role = str  # space | staff | stuff | systems | demand — validated upstream
+
+# How a declared value composes when an effect lands on it. Mirrors
+# `backend/src/services/property-schema.ts`; the two sides are versioned
+# separately, so a behaviour added on one and not the other has to fail loudly
+# here rather than be silently ignored.
+Behaviour = Literal["level", "rate", "stock", "state"]
+
+
+class PropertyDef(BaseModel):
+    """One property, as the institution declared it.
+
+    The engine's job is to do arithmetic on numbers. Which arithmetic is legal,
+    and against what, is a fact about the number that only the institution
+    knows — so it crosses in the payload rather than being decided here. Nothing
+    in this class knows what a bed is.
+    """
+
+    key: str
+    type: str = "string"
+    label: str | None = None
+    unit: str | None = None
+    min: float | None = None
+    max: float | None = None
+    behaviour: Behaviour | None = None
+
+    def clamp(self, value):
+        """Hold a value inside the range the institution declared.
+
+        Applied after the operation, not before: an author who multiplies a
+        staffing level by zero means zero, and a declared minimum of one is the
+        institution saying that is impossible. Silently allowing the impossible
+        value would let the run answer a question about a world that cannot
+        exist.
+        """
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            return value
+        if self.min is not None:
+            value = max(self.min, value)
+        if self.max is not None:
+            value = min(self.max, value)
+        return value
+
+
+class ObjectTypeDef(BaseModel):
+    name: str
+    role: str | None = None
+    properties: list[PropertyDef] = Field(default_factory=list)
+
+
+class PropertySchema(BaseModel):
+    """The declared schema, indexed for the two questions the engine asks.
+
+    Built once at load. An absent type or an absent key returns None, which the
+    caller reports rather than fills in — the whole point of the exercise is that
+    an undeclared quantity stays undeclared instead of acquiring a default nobody
+    chose.
+    """
+
+    types: list[ObjectTypeDef] = Field(default_factory=list)
+
+    def find(self, type_name: str, key: str) -> PropertyDef | None:
+        for t in self.types:
+            if t.name != type_name:
+                continue
+            for p in t.properties:
+                if p.key == key:
+                    return p
+        return None
+
+    def behaviour(self, type_name: str, key: str) -> Behaviour | None:
+        declared = self.find(type_name, key)
+        return declared.behaviour if declared else None
 
 
 class ObjectRules(BaseModel):
@@ -147,23 +221,49 @@ def matching(objects: list[SimObject], effect) -> list[SimObject]:
     return hits[: max(0, min(take, len(hits)))]
 
 
-def apply_property(effect, obj: SimObject, baseline: dict) -> None:
-    """Write one effect onto one object, against its unperturbed properties.
+def apply_property(
+    effect, obj: SimObject, baseline: dict, schema: PropertySchema | None = None
+) -> None:
+    """Write one effect onto one object, composing the way the property says.
 
-    Always from `baseline`, never from what the previous tick left: a multiplier
-    applied to the running value re-applies every tick, and the property decays
-    to nothing while every reading of it looks plausible. That is the same trap
-    `Engine._resolve` exists to avoid, and it is no less dangerous for being on
-    a property instead of a total.
+    Which value the operation reads is the whole question, and it is answered by
+    the declaration rather than here:
+
+        level, rate     compose from `baseline`. A multiplier applied to the
+                        running value instead re-applies every tick and decays
+                        the property to nothing, with every reading along the way
+                        looking entirely reasonable. Same trap `Engine._resolve`
+                        exists to avoid, no less dangerous on a property.
+        stock           composes from the *running* value, because that is what
+                        accumulating means. Rebuilding it from a baseline would
+                        silently erase everything that had piled up.
+        state           refuses arithmetic outright.
+
+    An undeclared property falls back to baseline composition. That is not a
+    guess about what the number means — `api.py` refuses arithmetic on an
+    undeclared property before the run starts, so the only way to reach here
+    without a declaration is `set`, which reads nothing.
     """
     key = effect.property_key
     if not key:
         return
+    declared = schema.find(obj.type, key) if schema else None
+    behaviour = declared.behaviour if declared else None
+
     if effect.op == "set":
-        obj.properties[key] = effect.value
+        obj.properties[key] = declared.clamp(effect.value) if declared else effect.value
         return
 
-    current = baseline.get(key)
+    if behaviour == "state":
+        # Declared a label, not a quantity. A triage level of 3 is not three of
+        # anything, and halving it is a corrupted record rather than a milder
+        # case.
+        raise TypeError(
+            f"effect {effect.id!r}: {key!r} on {obj.type} is declared a state, "
+            f"which can only be set, not {effect.op}"
+        )
+
+    current = obj.properties.get(key) if behaviour == "stock" else baseline.get(key)
     if not isinstance(current, (int, float)) or isinstance(current, bool):
         # Refused rather than coerced. Multiplying a status by 0.6 has no
         # meaning, and inventing one would corrupt an instance in the
@@ -172,9 +272,10 @@ def apply_property(effect, obj: SimObject, baseline: dict) -> None:
             f"effect {effect.id!r}: {effect.op} needs a number, but {key!r} on "
             f"{obj.type} {obj.id!r} is {current!r}"
         )
-    obj.properties[key] = (
+    out = (
         current * float(effect.value) if effect.op == "multiply" else current + float(effect.value)
     )
+    obj.properties[key] = declared.clamp(out) if declared else out
 
 
 def rebuild(
