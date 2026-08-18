@@ -6,10 +6,32 @@ import { AppError } from "../lib/errors.js";
 import { isPublicPath } from "../lib/public-paths.js";
 import type { Plan } from "../services/auth.js";
 
+/**
+ * Requests per minute, per API key, by plan.
+ *
+ * Env-tunable because the numbers are a commercial decision, not an engineering
+ * one, and changing a price tier should not need a deploy. The defaults are what
+ * they have always been.
+ *
+ * `free` at 100/minute is the one that bites during ontology work: importing a
+ * hospital's stretchers is hundreds of writes, and a modelling session is not
+ * the abuse this limit exists to stop. The real answer to that is bulk
+ * endpoints — see `/ontology/:env/objects/bulk` — and this knob is the release
+ * valve while those spread.
+ */
+function limitEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw === "") return fallback;
+  if (raw === "unlimited") return Number.MAX_SAFE_INTEGER;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+  return Math.trunc(parsed);
+}
+
 export const PLAN_LIMITS: Record<Plan, number> = {
-  free: 100,
-  starter: 1000,
-  pro: 10_000,
+  free: limitEnv("RATE_LIMIT_FREE", 100),
+  starter: limitEnv("RATE_LIMIT_STARTER", 1000),
+  pro: limitEnv("RATE_LIMIT_PRO", 10_000),
   enterprise: Number.MAX_SAFE_INTEGER,
 };
 

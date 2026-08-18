@@ -765,6 +765,134 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
+  /**
+   * Create many instances, and the links between them, in one call.
+   *
+   * Modelling a network is bulk work by nature: sixteen hospitals and their
+   * three hundred stretchers is six hundred writes one at a time, which is
+   * slower than the rate limit allows and fails halfway through leaving an
+   * ontology that is neither the old one nor the new one.
+   *
+   * `localKey` is what makes the links possible without a second round trip:
+   * an object names itself, and a link refers to that name. Nothing has a uuid
+   * until the server assigns one, so a caller building a graph would otherwise
+   * have to create every node, read the ids back, and only then attach them.
+   *
+   * The whole thing is one transaction. A partial import is worse than a
+   * refused one — half a hospital's stretchers is a capacity figure that looks
+   * plausible and is wrong.
+   */
+  app.post(
+    "/ontology/:env/objects/bulk",
+    {
+      schema: {
+        summary: "Create many instances and links in one transaction",
+        tags: ["ontology"],
+        params: z.object({ env: z.string().min(1) }),
+        body: z.object({
+          objects: z
+            .array(
+              z.object({
+                localKey: z.string().min(1).max(120),
+                type: z.string().trim().min(1),
+                properties: z.record(z.unknown()).default({}),
+              }),
+            )
+            .max(5000),
+          links: z
+            .array(
+              z.object({
+                linkType: z.string().trim().min(1),
+                // Either end may name an object created in this same call, or
+                // an existing one by uuid.
+                from: z.string().min(1),
+                to: z.string().min(1),
+              }),
+            )
+            .max(20000)
+            .default([]),
+        }),
+        response: {
+          201: z.object({
+            objects: z.number().int(),
+            links: z.number().int(),
+            ids: z.record(z.string().uuid()),
+          }),
+          400: errorEnvelope,
+          404: errorEnvelope,
+        },
+      },
+    },
+    async (req, reply) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+
+      const duplicate = req.body.objects
+        .map((o) => o.localKey)
+        .find((k, i, all) => all.indexOf(k) !== i);
+      if (duplicate) {
+        throw BadRequest(
+          "DUPLICATE_LOCAL_KEY",
+          `Two objects both call themselves "${duplicate}". A link naming it could not say which one it meant.`,
+        );
+      }
+
+      const ids: Record<string, string> = {};
+      let links = 0;
+
+      await req.db.query("BEGIN");
+      try {
+        for (const o of req.body.objects) {
+          const { rows } = await req.db.query<{ id: string }>(
+            `INSERT INTO app.ontology_object_instances (object_type_id, properties)
+             SELECT t.id, $3::jsonb FROM app.ontology_object_types t
+              WHERE t.project_id = $1 AND t.name = $2
+             RETURNING id`,
+            [env.id, o.type, JSON.stringify(o.properties)],
+          );
+          const id = rows[0]?.id;
+          if (!id) {
+            throw NotFound(
+              "TYPE_NOT_FOUND",
+              `Object type "${o.type}" does not exist in this project, so "${o.localKey}" has nothing to be.`,
+            );
+          }
+          ids[o.localKey] = id;
+        }
+
+        for (const l of req.body.links) {
+          const from = ids[l.from] ?? l.from;
+          const to = ids[l.to] ?? l.to;
+          const { rowCount } = await req.db.query(
+            `INSERT INTO app.ontology_link_instances (link_type_id, from_instance_id, to_instance_id)
+             SELECT lt.id, $3::uuid, $4::uuid FROM app.ontology_link_types lt
+              WHERE lt.project_id = $1 AND lt.name = $2
+             ON CONFLICT DO NOTHING`,
+            [env.id, l.linkType, from, to],
+          );
+          links += rowCount ?? 0;
+        }
+        await req.db.query("COMMIT");
+      } catch (err) {
+        await req.db.query("ROLLBACK");
+        throw err;
+      }
+
+      await recordAudit(req.db, {
+        projectId: env.id,
+        actorUserId: userId,
+        action: "ontology.bulk.create",
+        resourceType: "project",
+        resourceId: env.id,
+        metadata: { objects: req.body.objects.length, links },
+      });
+
+      return reply
+        .code(201)
+        .send({ objects: req.body.objects.length, links, ids });
+    },
+  );
+
   const typeSummaryOut = z.object({
     id: z.string().uuid(),
     name: z.string(),
