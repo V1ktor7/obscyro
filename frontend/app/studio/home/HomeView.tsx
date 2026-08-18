@@ -109,7 +109,8 @@ export default function HomeView() {
   const [naming, setNaming] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{
     project: HomeProject;
-    contents: ProjectContents;
+    contents: ProjectContents | null;
+    countsError: string | null;
   } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -170,14 +171,23 @@ export default function HomeView() {
    */
   async function askDelete(p: HomeProject) {
     setError(null);
+    let contents: ProjectContents | null = null;
+    let countsError: string | null = null;
     try {
-      const c = await apiFetch<ProjectContents>(
+      contents = await apiFetch<ProjectContents>(
         `/v1/ontology/environments/${encodeURIComponent(p.slug)}/contents`,
       );
-      setPendingDelete({ project: p, contents: c });
     } catch (err) {
-      setError((err as Error).message);
+      // The counts are a courtesy; the delete is the function. Swallowing the
+      // failure here meant the trash icon did nothing at all and said nothing
+      // about why — including when the API simply had not deployed the counting
+      // route yet.
+      const e = err as { status?: number; message?: string };
+      countsError = e.status
+        ? `Could not count what this project holds (HTTP ${e.status}: ${e.message ?? "no message"}).`
+        : `Could not count what this project holds (${e.message ?? "unknown error"}).`;
     }
+    setPendingDelete({ project: p, contents, countsError });
   }
 
   async function confirmDelete() {
@@ -186,9 +196,24 @@ export default function HomeView() {
     setDeleting(true);
     setError(null);
     try {
-      await apiFetch(`/v1/ontology/environments/${encodeURIComponent(project.slug)}`, {
-        method: "DELETE",
-      });
+      try {
+        await apiFetch(`/v1/ontology/environments/${encodeURIComponent(project.slug)}`, {
+          method: "DELETE",
+        });
+      } catch (err) {
+        // The status is what tells the two failures apart, and they need
+        // different actions: 404 means the API has not deployed this route yet,
+        // 403 means the project belongs to someone else.
+        const e = err as { status?: number; message?: string };
+        if (e.status === 404) {
+          throw new Error(
+            "The API does not have a delete route (HTTP 404). It is deployed separately from this page — wait for the API deploy to finish, then try again.",
+          );
+        }
+        throw new Error(
+          e.status ? `HTTP ${e.status}: ${e.message ?? "no message"}` : (e.message ?? "unknown error"),
+        );
+      }
       setPendingDelete(null);
       // The shell keeps a selected environment; leaving it pointing at a
       // project that no longer exists makes every downstream page 404 with no
@@ -279,6 +304,7 @@ export default function HomeView() {
         <DeleteProjectDialog
           project={pendingDelete.project}
           contents={pendingDelete.contents}
+          countsError={pendingDelete.countsError}
           busy={deleting}
           onCancel={() => setPendingDelete(null)}
           onConfirm={() => void confirmDelete()}
@@ -488,25 +514,30 @@ function Badge({ children, className }: { children: React.ReactNode; className?:
 export function DeleteProjectDialog({
   project,
   contents,
+  countsError = null,
   busy,
   onCancel,
   onConfirm,
 }: {
   project: HomeProject;
-  contents: ProjectContents;
+  /** Null when the count could not be read. The delete is still offered. */
+  contents: ProjectContents | null;
+  countsError?: string | null;
   busy: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
   const [typed, setTyped] = useState("");
-  const rows: Array<[number, string]> = [
-    [contents.objectTypes, "object type"],
-    [contents.instances, "instance"],
-    [contents.links, "link"],
-    [contents.datasets, "dataset"],
-    [contents.scenarios, "scenario"],
-    [contents.events, "saved event"],
-  ];
+  const rows: Array<[number, string]> = contents
+    ? [
+        [contents.objectTypes, "object type"],
+        [contents.instances, "instance"],
+        [contents.links, "link"],
+        [contents.datasets, "dataset"],
+        [contents.scenarios, "scenario"],
+        [contents.events, "saved event"],
+      ]
+    : [];
   const holds = rows.filter(([n]) => n > 0);
 
   return (
@@ -523,7 +554,12 @@ export function DeleteProjectDialog({
       >
         <h2 className="text-sm font-medium text-[#1c2127]">Delete “{project.name}”?</h2>
 
-        {holds.length === 0 ? (
+        {!contents ? (
+          <p className="mt-2 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs leading-relaxed text-[#7c4a03]">
+            {countsError ?? "Could not read what this project holds."} The delete below still
+            works — it just cannot tell you in advance what goes.
+          </p>
+        ) : holds.length === 0 ? (
           <p className="mt-2 text-xs leading-relaxed text-[#5f6b7c]">
             This project is empty. Nothing is lost.
           </p>

@@ -36,13 +36,18 @@ const CONTENTS = {
   events: 0,
 };
 
-function dialog(contents = CONTENTS, busy = false) {
+function dialog(
+  contents: typeof CONTENTS | null = CONTENTS,
+  busy = false,
+  countsError: string | null = null,
+) {
   const onConfirm = vi.fn();
   const onCancel = vi.fn();
   render(
     <DeleteProjectDialog
       project={PROJECT}
       contents={contents}
+      countsError={countsError}
       busy={busy}
       onConfirm={onConfirm}
       onCancel={onCancel}
@@ -81,6 +86,34 @@ describe("what it says", () => {
   it("says there is no undo, because there is not", () => {
     dialog();
     expect(screen.getByText(/no undo/)).toBeTruthy();
+  });
+});
+
+describe("when the counts could not be read", () => {
+  // The counts are a courtesy; the delete is the function. Making the delete
+  // unavailable because a *count* failed is what turned the trash icon into a
+  // button that did nothing and explained nothing.
+  it("still offers the delete", () => {
+    const { onConfirm } = dialog(null, false, "Could not count (HTTP 404: Not Found).");
+    fireEvent.change(screen.getByLabelText("Type the project name to confirm"), {
+      target: { value: "chum_operations" },
+    });
+    const button = screen.getByRole("button", { name: "Delete permanently" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    fireEvent.click(button);
+    expect(onConfirm).toHaveBeenCalled();
+  });
+
+  it("says why, with the status, rather than staying silent", () => {
+    dialog(null, false, "Could not count (HTTP 404: Not Found).");
+    expect(screen.getByText(/HTTP 404/)).toBeTruthy();
+  });
+
+  it("does not claim the project is empty when it simply could not look", () => {
+    // The dangerous confusion: "nothing is lost" next to a project holding
+    // four thousand instances.
+    dialog(null, false, "boom");
+    expect(screen.queryByText(/This project is empty/)).toBeNull();
   });
 });
 
