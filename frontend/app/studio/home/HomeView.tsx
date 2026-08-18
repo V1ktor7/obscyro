@@ -24,13 +24,27 @@ import {
   Lock,
   Plus,
   Star,
+  Trash2,
   UsersRound,
 } from "lucide-react";
 
 import { apiFetch } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 
+import NameField from "../NameField";
 import { useStudio } from "../StudioShell";
+
+/** What a project holds, asked for before offering to destroy it. */
+interface ProjectContents {
+  name: string;
+  slug: string;
+  objectTypes: number;
+  instances: number;
+  links: number;
+  datasets: number;
+  scenarios: number;
+  events: number;
+}
 
 interface HomeProject {
   id: string;
@@ -85,13 +99,19 @@ function ago(iso: string | null): string {
 }
 
 export default function HomeView() {
-  const { hasKey, setSelectedEnv, refreshEnvironments } = useStudio();
+  const { hasKey, selectedEnv, setSelectedEnv, refreshEnvironments } = useStudio();
   const router = useRouter();
 
   const [data, setData] = useState<HomePayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [naming, setNaming] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{
+    project: HomeProject;
+    contents: ProjectContents;
+  } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     if (!hasKey) {
@@ -117,21 +137,69 @@ export default function HomeView() {
     router.push("/studio/manager?view=discover");
   }
 
-  async function handleNewProject() {
-    const name = window.prompt("Project name");
-    if (!name?.trim()) return;
+  /**
+   * Was a `window.prompt`, which returns null without showing anything wherever
+   * the browser suppresses dialogs — so the button looked dead and explained
+   * nothing. Same fix as the two scenario buttons.
+   */
+  async function handleNewProject(name: string) {
+    if (!name.trim()) return;
     setCreating(true);
     try {
       await apiFetch("/v1/ontology/environments", {
         method: "POST",
         body: { name: name.trim(), type: "sandbox" },
       });
+      setNaming(false);
       await refreshEnvironments();
       await load();
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setCreating(false);
+    }
+  }
+
+  /**
+   * Ask what the project holds before offering to destroy it.
+   *
+   * "Are you sure?" is answered yes by reflex. A sentence naming four thousand
+   * instances is read. The counts come from the server rather than the card,
+   * because the card shows object types and datasets and says nothing about
+   * links, scenarios or saved events — which go too.
+   */
+  async function askDelete(p: HomeProject) {
+    setError(null);
+    try {
+      const c = await apiFetch<ProjectContents>(
+        `/v1/ontology/environments/${encodeURIComponent(p.slug)}/contents`,
+      );
+      setPendingDelete({ project: p, contents: c });
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    const { project } = pendingDelete;
+    setDeleting(true);
+    setError(null);
+    try {
+      await apiFetch(`/v1/ontology/environments/${encodeURIComponent(project.slug)}`, {
+        method: "DELETE",
+      });
+      setPendingDelete(null);
+      // The shell keeps a selected environment; leaving it pointing at a
+      // project that no longer exists makes every downstream page 404 with no
+      // hint about why.
+      if (selectedEnv === project.slug) setSelectedEnv("");
+      await refreshEnvironments();
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -184,16 +252,38 @@ export default function HomeView() {
       <div className="mb-2 flex items-baseline gap-2">
         <h1 className="text-[15px] font-medium">Your projects</h1>
         <span className="text-[11px] text-[#8f99a8]">{data?.projects.length ?? 0}</span>
-        <button
-          type="button"
-          onClick={() => void handleNewProject()}
-          disabled={creating}
-          className="ml-auto flex items-center gap-1 text-[11.5px] text-[#215db0] hover:underline disabled:opacity-50"
-        >
-          {creating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-          New project
-        </button>
+        {naming ? (
+          <span className="ml-auto">
+            <NameField
+              busy={creating}
+              label="Project name"
+              placeholder="Project name"
+              onCancel={() => setNaming(false)}
+              onSubmit={(v) => void handleNewProject(v)}
+            />
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setNaming(true)}
+            disabled={creating}
+            className="ml-auto flex items-center gap-1 text-[11.5px] text-[#215db0] hover:underline disabled:opacity-50"
+          >
+            {creating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+            New project
+          </button>
+        )}
       </div>
+
+      {pendingDelete ? (
+        <DeleteProjectDialog
+          project={pendingDelete.project}
+          contents={pendingDelete.contents}
+          busy={deleting}
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={() => void confirmDelete()}
+        />
+      ) : null}
 
       {data && data.projects.length > 0 ? (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2.5">
@@ -201,12 +291,22 @@ export default function HomeView() {
             const tone = kindTone(p.kind);
             const empty = p.objectTypeCount === 0 && p.datasetCount === 0;
             return (
-              <button
+              // A div, not a button: the card carries a delete control, and a
+              // button inside a button is invalid markup that browsers resolve
+              // by dropping one of them — usually the one you wanted.
+              <div
                 key={p.id}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => open(p)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    open(p);
+                  }
+                }}
                 className={cn(
-                  "rounded-xl border bg-white p-3 text-left transition-colors hover:border-[#2d72d2]",
+                  "cursor-pointer rounded-xl border bg-white p-3 text-left transition-colors hover:border-[#2d72d2]",
                   empty ? "border-dashed border-[#d3d8de]" : "border-[#d3d8de]",
                 )}
               >
@@ -214,8 +314,23 @@ export default function HomeView() {
                   <FolderPlus className="h-[15px] w-[15px] text-[#215db0]" />
                   <span className="truncate font-medium">{p.name}</span>
                   {p.liveChannelCount > 0 ? (
-                    <Star className="ml-auto h-3 w-3 fill-[#d97706] text-[#d97706]" />
+                    <Star className="h-3 w-3 fill-[#d97706] text-[#d97706]" />
                   ) : null}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      // Without this the card's own handler fires too and the
+                      // browser navigates into the project you just asked to
+                      // delete.
+                      e.stopPropagation();
+                      void askDelete(p);
+                    }}
+                    aria-label={`Delete ${p.name}`}
+                    title="Delete project"
+                    className="ml-auto rounded p-0.5 text-[#8f99a8] hover:bg-rose-50 hover:text-rose-600"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
                 <Badge className={cn(tone.bg, tone.text)}>{tone.label}</Badge>
                 {empty ? (
@@ -236,7 +351,7 @@ export default function HomeView() {
                     <p className="mt-1 text-[10.5px] text-[#8f99a8]">{ago(p.lastActivityAt)}</p>
                   </>
                 )}
-              </button>
+              </div>
             );
           })}
         </div>
@@ -359,5 +474,113 @@ function Badge({ children, className }: { children: React.ReactNode; className?:
     >
       {children}
     </span>
+  );
+}
+
+/**
+ * The confirmation for destroying a project.
+ *
+ * It names what goes rather than asking "are you sure?", which is answered yes
+ * by reflex. And it asks for the project's name to be typed: this is the one
+ * action in the product with no undo and no export behind it, and a
+ * misplaced click on a card is otherwise all it takes.
+ */
+export function DeleteProjectDialog({
+  project,
+  contents,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  project: HomeProject;
+  contents: ProjectContents;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const [typed, setTyped] = useState("");
+  const rows: Array<[number, string]> = [
+    [contents.objectTypes, "object type"],
+    [contents.instances, "instance"],
+    [contents.links, "link"],
+    [contents.datasets, "dataset"],
+    [contents.scenarios, "scenario"],
+    [contents.events, "saved event"],
+  ];
+  const holds = rows.filter(([n]) => n > 0);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+      onClick={onCancel}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Delete ${project.name}`}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md rounded-xl border border-[#d3d8de] bg-white p-4 shadow-lg"
+      >
+        <h2 className="text-sm font-medium text-[#1c2127]">Delete “{project.name}”?</h2>
+
+        {holds.length === 0 ? (
+          <p className="mt-2 text-xs leading-relaxed text-[#5f6b7c]">
+            This project is empty. Nothing is lost.
+          </p>
+        ) : (
+          <>
+            <p className="mt-2 text-xs leading-relaxed text-[#5f6b7c]">
+              This deletes the project and everything filed under it:
+            </p>
+            <ul className="mt-2 flex flex-col gap-0.5">
+              {holds.map(([n, noun]) => (
+                <li key={noun} className="text-xs text-[#1c2127]">
+                  <strong className="font-medium tabular-nums">{n.toLocaleString()}</strong>{" "}
+                  {noun}
+                  {n === 1 ? "" : "s"}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+
+        <p className="mt-3 text-xs leading-relaxed text-rose-700">
+          There is no undo, and nothing is exported first.
+        </p>
+
+        <label className="mt-3 block text-[11px] text-[#5f6b7c]">
+          Type <strong className="font-medium text-[#1c2127]">{project.name}</strong> to confirm
+          <input
+            autoFocus
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") onCancel();
+              if (e.key === "Enter" && typed.trim() === project.name) onConfirm();
+            }}
+            aria-label="Type the project name to confirm"
+            className="mt-1 w-full rounded border border-[#d3d8de] px-2 py-1.5 text-xs focus:border-rose-500 focus:outline-none"
+          />
+        </label>
+
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded px-3 py-1.5 text-xs text-[#5f6b7c] hover:text-[#1c2127]"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={busy || typed.trim() !== project.name}
+            className="rounded bg-rose-600 px-3 py-1.5 text-xs text-white hover:bg-rose-700 disabled:bg-[#d3d8de]"
+          >
+            {busy ? "Deleting…" : "Delete permanently"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

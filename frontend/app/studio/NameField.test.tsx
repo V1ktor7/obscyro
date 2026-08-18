@@ -10,18 +10,18 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import ScenarioNameField from "./ScenarioNameField";
+import NameField from "./NameField";
 
 afterEach(cleanup);
 
-function field(props: Partial<React.ComponentProps<typeof ScenarioNameField>> = {}) {
+function field(props: Partial<React.ComponentProps<typeof NameField>> = {}) {
   const onSubmit = vi.fn();
   const onCancel = vi.fn();
-  render(<ScenarioNameField onSubmit={onSubmit} onCancel={onCancel} {...props} />);
+  render(<NameField onSubmit={onSubmit} onCancel={onCancel} {...props} />);
   return { onSubmit, onCancel, input: screen.getByLabelText("Scenario name") };
 }
 
-describe("ScenarioNameField", () => {
+describe("NameField", () => {
   it("is a real field on the page, not a dialog that can be suppressed", () => {
     const { input } = field();
     expect(input).toBeTruthy();

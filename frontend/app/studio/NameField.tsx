@@ -15,16 +15,21 @@
 
 import { useState } from "react";
 
-export default function ScenarioNameField({
+export default function NameField({
   initial = "",
   busy = false,
   action = "Create",
+  label = "Scenario name",
+  placeholder,
   onSubmit,
   onCancel,
 }: {
   initial?: string;
   busy?: boolean;
   action?: string;
+  /** Also the accessible name — the two must not drift apart. */
+  label?: string;
+  placeholder?: string;
   onSubmit: (value: string) => void;
   onCancel: () => void;
 }) {
@@ -41,8 +46,8 @@ export default function ScenarioNameField({
           if (e.key === "Enter") onSubmit(value);
           if (e.key === "Escape") onCancel();
         }}
-        placeholder="Scenario name"
-        aria-label="Scenario name"
+        placeholder={placeholder ?? label}
+        aria-label={label}
         className="w-48 rounded border border-brand px-2 py-1 text-[11.5px] focus:outline-none"
       />
       <button

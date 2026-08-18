@@ -20,7 +20,7 @@ import {
 
 import { Search } from "lucide-react";
 
-import ScenarioNameField from "../ScenarioNameField";
+import NameField from "../NameField";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -412,7 +412,7 @@ export default function CommandView() {
             did nothing and said nothing. The failure was also silent on error —
             `window.alert` is suppressed by the same setting. */}
         {namingScenario ? (
-          <ScenarioNameField
+          <NameField
             busy={creatingScenario}
             onCancel={() => setNamingScenario(false)}
             onSubmit={async (name) => {

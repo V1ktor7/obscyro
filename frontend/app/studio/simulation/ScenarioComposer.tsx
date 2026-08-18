@@ -2,7 +2,7 @@
 
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 
-import ScenarioNameField from "../ScenarioNameField";
+import NameField from "../NameField";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { cn } from "@/lib/cn";
@@ -298,7 +298,7 @@ export default function ScenarioComposer() {
           </>
         ) : null}
         {naming ? (
-          <ScenarioNameField
+          <NameField
             initial={
               naming === "rename"
                 ? (scenarios.find((s) => s.id === scenarioId)?.name ?? "")

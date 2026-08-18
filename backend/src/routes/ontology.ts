@@ -450,6 +450,137 @@ const ontologyRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
+  /**
+   * What deleting a project would take with it.
+   *
+   * Offered separately from the delete so the confirmation can name real
+   * numbers instead of asking "are you sure?", which is answered yes by
+   * reflex. Counting first also means the caller finds out about a project
+   * holding four thousand instances *before* choosing, not after.
+   */
+  app.get(
+    "/ontology/environments/:env/contents",
+    {
+      schema: {
+        summary: "How much a project holds, for a delete confirmation",
+        tags: ["ontology"],
+        params: z.object({ env: z.string().min(1) }),
+        response: {
+          200: z.object({
+            name: z.string(),
+            slug: z.string(),
+            objectTypes: z.number(),
+            instances: z.number(),
+            links: z.number(),
+            datasets: z.number(),
+            scenarios: z.number(),
+            events: z.number(),
+          }),
+          404: errorEnvelope,
+        },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      // One round trip. Counting six tables in six queries is six chances for
+      // the answer to describe six slightly different moments.
+      const { rows } = await req.db.query<{
+        object_types: string;
+        instances: string;
+        links: string;
+        datasets: string;
+        scenarios: string;
+        events: string;
+      }>(
+        `SELECT
+           (SELECT COUNT(*) FROM app.ontology_object_types t
+             WHERE t.project_id = $1)::text AS object_types,
+           (SELECT COUNT(*) FROM app.ontology_object_instances i
+             JOIN app.ontology_object_types t ON t.id = i.object_type_id
+            WHERE t.project_id = $1)::text AS instances,
+           (SELECT COUNT(*) FROM app.ontology_link_instances li
+             JOIN app.ontology_link_types lt ON lt.id = li.link_type_id
+            WHERE lt.project_id = $1)::text AS links,
+           (SELECT COUNT(*) FROM app.dataset d
+             WHERE d.project_id = $1)::text AS datasets,
+           (SELECT COUNT(*) FROM app.scenario s
+             WHERE s.project_id = $1)::text AS scenarios,
+           (SELECT COUNT(*) FROM app.sim_event e
+             WHERE e.organization_id = (SELECT organization_id FROM app.project WHERE id = $1)
+           )::text AS events`,
+        [env.id],
+      );
+      const r = rows[0]!;
+      return {
+        name: env.name,
+        slug: env.slug,
+        objectTypes: Number(r.object_types),
+        instances: Number(r.instances),
+        links: Number(r.links),
+        datasets: Number(r.datasets),
+        scenarios: Number(r.scenarios),
+        events: Number(r.events),
+      };
+    },
+  );
+
+  /**
+   * Delete a project and everything filed under it.
+   *
+   * The cascade is the database's, declared on every foreign key that points at
+   * `app.project`, so this route does not enumerate what goes — a list written
+   * here would fall behind the schema and start lying about what survived.
+   *
+   * Only the owner. A project shared with someone is still somebody's, and a
+   * member deleting the thing they were invited into is not a permission this
+   * grants.
+   */
+  app.delete(
+    "/ontology/environments/:env",
+    {
+      schema: {
+        summary: "Delete a project and everything in it",
+        tags: ["ontology"],
+        params: z.object({ env: z.string().min(1) }),
+        response: {
+          200: z.object({ deleted: z.boolean(), slug: z.string() }),
+          403: errorEnvelope,
+          404: errorEnvelope,
+        },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const { rows } = await req.db.query<{ owner_user_id: string; name: string }>(
+        `SELECT owner_user_id, name FROM app.project WHERE id = $1`,
+        [env.id],
+      );
+      const row = rows[0];
+      if (!row) throw NotFound("ENV_NOT_FOUND", "Project not found.");
+      if (row.owner_user_id !== userId) {
+        throw new AppError(
+          "NOT_PROJECT_OWNER",
+          "Only the project's owner can delete it.",
+          403,
+        );
+      }
+      // Recorded before the row stops existing, so the trail says what was
+      // destroyed rather than only which uuid used to be there.
+      await recordAudit(req.db, {
+        projectId: env.id,
+        actorUserId: userId,
+        action: "project.delete",
+        resourceType: "project",
+        resourceId: env.id,
+        metadata: { name: row.name, slug: env.slug },
+      });
+      await req.db.query(`DELETE FROM app.project WHERE id = $1`, [env.id]);
+      return { deleted: true, slug: env.slug };
+    },
+  );
+
   const natureEnum = z.enum(["physical", "conceptual"]);
 
   /**
