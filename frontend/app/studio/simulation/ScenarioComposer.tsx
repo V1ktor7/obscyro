@@ -1,6 +1,8 @@
 "use client";
 
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+
+import ScenarioNameField from "../ScenarioNameField";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { cn } from "@/lib/cn";
@@ -17,6 +19,8 @@ import TwinCanvas from "../live/TwinCanvas";
 import {
   addScenarioOverride,
   createOverlayScenario,
+  deleteOverlayScenario,
+  updateOverlayScenario,
   deleteScenarioOverride,
   listOverlayScenarios,
   listScenarioOverrides,
@@ -50,6 +54,7 @@ const FIELD =
   "w-full rounded border border-line bg-white px-2 py-1.5 text-[11.5px] text-ink focus:border-brand focus:outline-none";
 const LABEL = "text-[10px] font-medium uppercase tracking-wide text-ink-faint";
 
+
 export default function ScenarioComposer() {
   const { hasKey, selectedEnv } = useStudio();
   const env = selectedEnv;
@@ -67,6 +72,9 @@ export default function ScenarioComposer() {
 
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  // Which naming field is open, if any. One piece of state for both because
+  // creating and renaming are the same field in the same place.
+  const [naming, setNaming] = useState<"new" | "rename" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -148,15 +156,66 @@ export default function ScenarioComposer() {
       .filter((d) => d.before !== null || d.now !== null);
   }, [reality, proposed, metricKey]);
 
-  async function newScenario() {
-    if (!env) return;
-    const name = window.prompt("Scenario name");
-    if (!name?.trim()) return;
+  /**
+   * Create a scenario from the inline field.
+   *
+   * This used to call `window.prompt`. A browser that suppresses dialogs — an
+   * embedded view, a page the user has already told to stop asking — returns
+   * null from it without showing anything, so the button did nothing at all and
+   * said nothing about why. A field that is visibly there cannot fail that way.
+   */
+  async function createNamed(name: string) {
+    if (!env || !name.trim()) return;
     setBusy(true);
+    setError(null);
     try {
       const s = await createOverlayScenario(env, { name: name.trim() });
       await loadScenarios();
       setScenarioId(s.id);
+      setNaming(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function renameCurrent(name: string) {
+    if (!scenarioId || !name.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await updateOverlayScenario(scenarioId, { name: name.trim() });
+      await loadScenarios();
+      setNaming(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Delete, with the count said out loud first.
+   *
+   * "42 edits" is the whole of somebody's afternoon, and the edits go with the
+   * scenario. The confirmation names the number rather than asking the generic
+   * question, because "are you sure?" is answered yes by reflex.
+   */
+  async function deleteCurrent() {
+    if (!scenarioId) return;
+    const current = scenarios.find((s) => s.id === scenarioId);
+    const n = current?.overrideCount ?? 0;
+    const ok = window.confirm(
+      `Delete “${current?.name ?? "this scenario"}” and the ${n} edit${n === 1 ? "" : "s"} it proposes? This cannot be undone.`,
+    );
+    if (!ok) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteOverlayScenario(scenarioId);
+      setScenarioId(null);
+      await loadScenarios();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -206,12 +265,51 @@ export default function ScenarioComposer() {
         </select>
         <button
           type="button"
-          onClick={() => void newScenario()}
+          onClick={() => setNaming(naming === "new" ? null : "new")}
+          aria-label="New scenario"
+          aria-expanded={naming === "new"}
           className="rounded border border-line p-1 text-ink-faint hover:border-brand hover:text-brand"
           title="New scenario"
         >
           <Plus className="h-3.5 w-3.5" />
         </button>
+        {scenarioId ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setNaming(naming === "rename" ? null : "rename")}
+              aria-label="Rename this scenario"
+              aria-expanded={naming === "rename"}
+              className="rounded border border-line p-1 text-ink-faint hover:border-brand hover:text-brand"
+              title="Rename"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => void deleteCurrent()}
+              disabled={busy}
+              aria-label="Delete this scenario"
+              className="rounded border border-line p-1 text-ink-faint hover:border-danger hover:text-danger disabled:opacity-40"
+              title="Delete"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </>
+        ) : null}
+        {naming ? (
+          <ScenarioNameField
+            initial={
+              naming === "rename"
+                ? (scenarios.find((s) => s.id === scenarioId)?.name ?? "")
+                : ""
+            }
+            busy={busy}
+            action={naming === "rename" ? "Rename" : "Create"}
+            onCancel={() => setNaming(null)}
+            onSubmit={(v) => void (naming === "rename" ? renameCurrent(v) : createNamed(v))}
+          />
+        ) : null}
 
         <span className="ml-2 text-[10px] text-ink-faint">at</span>
         <span className="flex items-center gap-1">
@@ -319,6 +417,22 @@ export default function ScenarioComposer() {
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto">
+            {/* Why the + above is inert, said in the panel rather than only in
+                a tooltip. A disabled button with its reason on hover is a dead
+                button to anyone on a trackpad, a touchscreen, or a keyboard —
+                you click it, nothing happens, and nothing explains itself. */}
+            {!scenarioId ? (
+              <p className="border-b border-line-faint px-3 py-2 text-[10.5px] leading-snug text-ink-faint">
+                No scenario selected. Create one with <strong className="text-ink">+</strong> above
+                before adding edits.
+              </p>
+            ) : !selectedUnitId ? (
+              <p className="border-b border-line-faint px-3 py-2 text-[10.5px] leading-snug text-ink-faint">
+                An edit applies to a unit. Pick one on the tree and{" "}
+                <strong className="text-ink">+</strong> becomes available.
+              </p>
+            ) : null}
+
             {overrides.length === 0 ? (
               <p className="px-3 py-2 text-[10.5px] leading-snug text-ink-faint">
                 No edit yet. Pick a unit on the tree, then add one — the comparison above is

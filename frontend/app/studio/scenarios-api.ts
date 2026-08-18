@@ -66,6 +66,30 @@ export async function createOverlayScenario(
   return apiFetch(`/v1/ontology/${enc(env)}/overlay-scenarios`, { method: "POST", body });
 }
 
+/**
+ * Rename a scenario, or move it along its lifecycle.
+ *
+ * The first name a scenario gets is typed before the question is fully formed,
+ * so without this a list of them is a list nobody can read.
+ */
+export async function updateOverlayScenario(
+  id: string,
+  body: {
+    name?: string;
+    description?: string | null;
+    status?: OverlayScenario["status"];
+  },
+): Promise<OverlayScenario> {
+  return apiFetch(`/v1/overlay-scenarios/${id}`, { method: "PATCH", body });
+}
+
+/** Refused with a 409 while another scenario is built on this one. */
+export async function deleteOverlayScenario(
+  id: string,
+): Promise<{ deleted: boolean; overrides: number }> {
+  return apiFetch(`/v1/overlay-scenarios/${id}`, { method: "DELETE" });
+}
+
 export async function listScenarioOverrides(
   id: string,
 ): Promise<{ overrides: ScenarioOverride[]; issues: OverrideIssue[] }> {

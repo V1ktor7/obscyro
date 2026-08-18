@@ -20,6 +20,8 @@ import {
 
 import { Search } from "lucide-react";
 
+import ScenarioNameField from "../ScenarioNameField";
+
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { cn } from "@/lib/cn";
@@ -97,6 +99,8 @@ export default function CommandView() {
   const [scenarios, setScenarios] = useState<OverlayScenario[]>([]);
   const [scenarioId, setScenarioId] = useState<string>("");
   const [showEdits, setShowEdits] = useState(false);
+  const [namingScenario, setNamingScenario] = useState(false);
+  const [creatingScenario, setCreatingScenario] = useState(false);
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
   const [unitDetail, setUnitDetail] = useState<TwinUnitDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -403,27 +407,42 @@ export default function CommandView() {
             ))}
           </select>
         ) : null}
-        <button
-          type="button"
-          onClick={async () => {
-            const name = window.prompt("Scenario name");
-            if (!name?.trim() || !env) return;
-            try {
-              const created = await createOverlayScenario(env, { name: name.trim() });
-              setScenarios((cur) => [
-                ...cur,
-                { ...created, overrideCount: 0 } as OverlayScenario,
-              ]);
-              setScenarioId(created.id);
-              setShowEdits(true);
-            } catch (e) {
-              window.alert((e as Error).message);
-            }
-          }}
-          className="rounded border border-[#d3d8de] bg-white px-2 py-1 text-xs text-[#404854]"
-        >
-          + Scenario
-        </button>
+        {/* Was a `window.prompt`, and dead wherever the browser suppresses
+            dialogs: prompt returns null without showing anything, so the button
+            did nothing and said nothing. The failure was also silent on error —
+            `window.alert` is suppressed by the same setting. */}
+        {namingScenario ? (
+          <ScenarioNameField
+            busy={creatingScenario}
+            onCancel={() => setNamingScenario(false)}
+            onSubmit={async (name) => {
+              if (!name.trim() || !env) return;
+              setCreatingScenario(true);
+              try {
+                const created = await createOverlayScenario(env, { name: name.trim() });
+                setScenarios((cur) => [
+                  ...cur,
+                  { ...created, overrideCount: 0 } as OverlayScenario,
+                ]);
+                setScenarioId(created.id);
+                setShowEdits(true);
+                setNamingScenario(false);
+              } catch (e) {
+                setError((e as Error).message);
+              } finally {
+                setCreatingScenario(false);
+              }
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setNamingScenario(true)}
+            className="rounded border border-[#d3d8de] bg-white px-2 py-1 text-xs text-[#404854]"
+          >
+            + Scenario
+          </button>
+        )}
         {scenarioId ? (
           <>
             {/* A twin showing scenario numbers that look exactly like reality

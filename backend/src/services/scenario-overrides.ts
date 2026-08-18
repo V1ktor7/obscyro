@@ -1,5 +1,5 @@
 import type { DbClient } from "../lib/db.js";
-import { BadRequest, NotFound } from "../lib/errors.js";
+import { AppError, BadRequest, NotFound } from "../lib/errors.js";
 
 // ---------------------------------------------------------------------------
 // Scenarios as an overlay.
@@ -116,6 +116,75 @@ export async function getOverlayScenario(db: DbClient, id: string): Promise<Scen
   const { rows } = await db.query<ScenarioDbRow>(`${S_SELECT} WHERE id = $1`, [id]);
   if (!rows[0]) throw NotFound("SCENARIO_NOT_FOUND", "Scenario not found.");
   return outScenario(rows[0]);
+}
+
+/**
+ * Rename a scenario, or move it along its lifecycle.
+ *
+ * A scenario is a question somebody asked, and the first name it gets is the
+ * one typed before the question was fully formed. Without this, "simulation de
+ * scenario" stays "simulation de scenario" for ever, and a list of six of them
+ * is a list nobody can read.
+ *
+ * Only the fields a person can reasonably change. Not the parent — re-parenting
+ * changes what the scenario inherits and therefore what every one of its edits
+ * resolves to, which is a different operation with a different confirmation.
+ */
+export async function updateOverlayScenario(
+  db: DbClient,
+  id: string,
+  patch: { name?: string; description?: string | null; status?: Scenario["status"] },
+): Promise<Scenario> {
+  const { rows } = await db.query<ScenarioDbRow>(
+    `UPDATE app.scenario
+        SET name        = COALESCE($2, name),
+            description = CASE WHEN $3::boolean THEN $4 ELSE description END,
+            status      = COALESCE($5, status)
+      WHERE id = $1
+      RETURNING *`,
+    [
+      id,
+      patch.name ?? null,
+      patch.description !== undefined,
+      patch.description ?? null,
+      patch.status ?? null,
+    ],
+  );
+  if (!rows[0]) throw NotFound("SCENARIO_NOT_FOUND", "Scenario not found.");
+  return outScenario(rows[0]);
+}
+
+/**
+ * Delete a scenario and everything proposed inside it.
+ *
+ * Refused while anything inherits from it. A child resolves its own edits *on
+ * top of* its parent's, so removing the parent would silently change what every
+ * one of the child's edits means — the child would keep running and answer a
+ * different question, which is the failure this codebase is written against.
+ */
+export async function deleteOverlayScenario(
+  db: DbClient,
+  id: string,
+): Promise<{ deleted: boolean; overrides: number }> {
+  const { rows: children } = await db.query<{ name: string }>(
+    `SELECT name FROM app.scenario WHERE parent_scenario_id = $1 ORDER BY name`,
+    [id],
+  );
+  if (children.length > 0) {
+    throw new AppError(
+      "SCENARIO_HAS_CHILDREN",
+      `This scenario is the basis for ${children.map((c) => `"${c.name}"`).join(", ")}. ` +
+        `Deleting it would change what their edits resolve to. Delete or re-base those first.`,
+      409,
+    );
+  }
+  const { rows: counted } = await db.query<{ n: string }>(
+    `SELECT COUNT(*)::text AS n FROM app.scenario_override WHERE scenario_id = $1`,
+    [id],
+  );
+  const { rowCount } = await db.query(`DELETE FROM app.scenario WHERE id = $1`, [id]);
+  if (!rowCount) throw NotFound("SCENARIO_NOT_FOUND", "Scenario not found.");
+  return { deleted: true, overrides: Number(counted[0]?.n ?? 0) };
 }
 
 /**

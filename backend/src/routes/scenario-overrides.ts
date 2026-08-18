@@ -10,12 +10,14 @@ import { resolveEnvironment } from "../services/ontology.js";
 import {
   addOverride,
   createOverlayScenario,
+  deleteOverlayScenario,
   deleteOverride,
   getOverlayScenario,
   listOverlayScenarios,
   listOverrides,
   resolveOverrides,
   scenarioChain,
+  updateOverlayScenario,
   validateOverrides,
 } from "../services/scenario-overrides.js";
 
@@ -158,6 +160,70 @@ const scenarioOverrideRoutes: FastifyPluginAsync = async (fastify) => {
         scenario: await getOverlayScenario(req.db, req.params.id),
         chain: await scenarioChain(req.db, req.params.id),
       };
+    },
+  );
+
+  app.patch(
+    "/overlay-scenarios/:id",
+    {
+      schema: {
+        summary: "Rename a scenario or move it along its lifecycle",
+        tags: ["scenarios"],
+        params: z.object({ id: z.string().uuid() }),
+        body: z.object({
+          name: z.string().trim().min(1).max(200).optional(),
+          description: z.string().trim().max(2000).nullable().optional(),
+          status: z.enum(["draft", "ready", "submitted", "archived"]).optional(),
+        }),
+        response: { 200: scenarioOut, 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const updated = await updateOverlayScenario(req.db, req.params.id, req.body);
+      await recordAudit(req.db, {
+        projectId: updated.projectId,
+        actorUserId: userId,
+        action: "scenario.update",
+        resourceType: "scenario",
+        resourceId: updated.id,
+        metadata: { ...req.body },
+      });
+      return updated;
+    },
+  );
+
+  app.delete(
+    "/overlay-scenarios/:id",
+    {
+      schema: {
+        summary: "Delete a scenario and the edits it proposes",
+        tags: ["scenarios"],
+        params: z.object({ id: z.string().uuid() }),
+        response: {
+          200: z.object({ deleted: z.boolean(), overrides: z.number() }),
+          404: errorEnvelope,
+          // A scenario something else is built on. See the service for why
+          // this is refused rather than cascaded.
+          409: errorEnvelope,
+        },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      // Read the name before it stops existing, so the audit entry says what
+      // was deleted rather than only which uuid.
+      const doomed = await getOverlayScenario(req.db, req.params.id);
+      const result = await deleteOverlayScenario(req.db, req.params.id);
+      await recordAudit(req.db, {
+        projectId: doomed.projectId,
+        actorUserId: userId,
+        action: "scenario.delete",
+        resourceType: "scenario",
+        resourceId: req.params.id,
+        metadata: { name: doomed.name, overrides: result.overrides },
+      });
+      return result;
     },
   );
 
