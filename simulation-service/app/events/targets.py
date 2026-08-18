@@ -130,71 +130,52 @@ CATALOGUE: list[Target] = [
         compose="baseline",
         unit="×",
     ),
-    Target(
-        path="care.stay_ticks",
-        label="Length of stay",
-        help=(
-            "How long one patient of this severity occupies what they consume. This is "
-            "where a disease that lingers is expressed — the clinical signature of an "
-            "illness, as opposed to how many people catch it. Because discharge is "
-            "recomputed every tick, lengthening it also holds the patients already "
-            "admitted, which is what 'it turned out to be worse than we thought' "
-            "actually looks like."
-        ),
-        selector=["acuity"],
-        ops=["multiply", "add", "set"],
-        compose="baseline",
-        minimum=1.0,
-        unit="steps",
-    ),
-    Target(
-        path="care.mortality_per_unmet",
-        label="Deaths per unserved patient, per step",
-        help=(
-            "The most contestable number in the model and the one a minister will be "
-            "asked to defend. It belongs in an event, where it can be argued with."
-        ),
-        selector=["acuity"],
-        ops=["multiply", "set"],
-        compose="baseline",
-        minimum=0.0,
-        maximum=1.0,
-    ),
-    Target(
-        path="care.consumes",
-        label="What one patient consumes",
-        help=(
-            "Units of an activity per patient per step. Raising it models a case that "
-            "is heavier to treat without any more cases arriving."
-        ),
-        selector=["acuity", "activity"],
-        ops=["multiply", "add", "set"],
-        compose="baseline",
-        minimum=0.0,
-    ),
+    # `care.stay_ticks`, `care.mortality_per_unmet` and `care.consumes` used to
+    # sit here. They were the last quantities the engine invented on the
+    # institution's behalf, and they came with a hospital's values attached —
+    # stays of six, three and one step, one bed and a fraction of a nurse per
+    # patient, mortality at 0.15 divided by ten and two hundred. A transit
+    # authority opening this product was handed them too.
+    #
+    # A care model is now declared as ontology instances whose properties bind
+    # `occupies_for`, `dies_without`, `consumes_activity` and `consumes_amount`
+    # (see `mechanics.py`), and an event changes one the same way it changes
+    # anything else: `object.property` on the protocol. The model is re-derived
+    # from those instances every tick, so the effect reaches what the care loop
+    # actually reads.
+    #
+    # An event saved against the old paths still loads. It names a target this
+    # catalogue no longer offers, which the composer reports as inert and
+    # refuses to save over — deliberately louder than rewriting it, because an
+    # event that quietly models less than it says is the failure this whole file
+    # is written against.
     Target(
         path="demand.incidence",
-        label="Rate of patients arriving",
+        label="Arrival rate, scaled by the population",
         help=(
             "Per thousand people served, per step, so each population generates demand "
             "in proportion to its own size. This is the form almost every event wants: "
-            "an epidemic infects a share of a population, not a share of a hospital. "
-            "Negative removes demand — a vaccination programme is a fact about the "
-            "world, not a response to one."
+            "something spreading through a population reaches a share of it, not a "
+            "share of a facility. Negative removes demand — prevention is a fact about "
+            "the world, not a response to one."
         ),
         selector=["population", "acuity"],
         # See `demand.volume` below for why only `add`.
         ops=["add"],
         compose="accumulate",
         minimum=None,
+        # The divisor is named in the unit rather than hidden in the arithmetic:
+        # it is a rate convention, and an author who can see it can convert. It
+        # is deliberately not changed to per-capita, which would rescale every
+        # saved event by a thousand without a word.
         unit="per 1000/step",
     ),
     Target(
         path="demand.volume",
-        label="Patients arriving",
+        label="Arrivals per step, flat",
         help=(
             "A flat count per step at each selected population, ignoring how many "
-            "people it serves. For a bus crash that brings forty people whatever the "
+            "people it serves. For a coach crash that brings forty people whatever the "
             "catchment; use the rate above for anything that scales with a population."
         ),
         selector=["population", "acuity"],

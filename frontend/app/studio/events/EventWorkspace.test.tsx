@@ -170,6 +170,56 @@ describe("picking a property", () => {
   });
 });
 
+describe("an effect written against a retired quantity", () => {
+  // `care.stay_ticks` and its two siblings were the last quantities the engine
+  // invented. Events saved against them still load, and what happens next
+  // decides whether somebody runs one and believes it.
+  const stale = {
+    id: "e1",
+    name: "Vieille épidémie",
+    description: "",
+    horizon: 60,
+    twinScenarioId: null,
+    effects: [
+      {
+        id: "ca-traine",
+        target: "care.stay_ticks",
+        select: { acuity: ["critical"] },
+        op: "add" as const,
+        value: 2,
+        property_key: null,
+        reach: null,
+        profile: { start: 0, end: 20, shape: "step" as const, peak: 1 },
+      },
+    ],
+  };
+
+  it("says so in the inspector instead of showing an empty form", () => {
+    workbench({ initial: stale as never });
+    expect(screen.getByText(/no longer offers/)).toBeTruthy();
+    // The ordinary controls would offer an empty operation list and a value
+    // field writing into nothing, which reads as merely broken.
+    expect(screen.queryByLabelText("Operation")).toBeNull();
+  });
+
+  it("points at where the replacement lives", () => {
+    workbench({ initial: stale as never });
+    expect(screen.getByText(/declared in your ontology now/)).toBeTruthy();
+  });
+
+  it("names it in the validation bar and blocks the save", () => {
+    workbench({ initial: stale as never });
+    expect(screen.getByText(/does not have/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("offers to remove it, which is the only fix that is not a guess", () => {
+    workbench({ initial: stale as never });
+    fireEvent.click(screen.getByRole("button", { name: "Remove this effect" }));
+    expect(screen.queryByText(/no longer offers/)).toBeNull();
+  });
+});
+
 describe("the validation bar", () => {
   it("is on screen from the first render, so it is never a surprise", () => {
     // And an empty event is already a problem: an event with no effects is
