@@ -1,0 +1,258 @@
+"""The care model, read rather than invented.
+
+`care_model_for` picks three severities nobody named, stays of six, three and
+one step, one bed and a fraction of a nurse per patient, and a mortality of 0.15
+divided by ten and two hundred for the other bands. Those are one hospital's
+clinical assumptions. Every test here is about an institution supplying its own
+and the engine using them without knowing what any of the words mean.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from app.events.mechanics import (
+    ContradictoryCareModel,
+    binds_care_model,
+    care_model_from,
+)
+from app.events.objects import PropertySchema, SimObject
+
+
+def protocol_type(name: str = "Protocole") -> dict:
+    """A type whose properties are bound to mechanics.
+
+    Deliberately named in French with keys that look nothing like the engine's
+    vocabulary: if any of this leaks a property name into the model, these tests
+    are the ones that catch it.
+    """
+    return {
+        "name": name,
+        "role": None,
+        "properties": [
+            {"key": "gravite", "type": "string", "behaviour": "state", "mechanic": "serves_severity"},
+            {"key": "duree_sejour", "type": "number", "behaviour": "level", "mechanic": "occupies_for"},
+            {"key": "deces_sans_soin", "type": "number", "behaviour": "level", "mechanic": "dies_without"},
+            {"key": "ressource", "type": "string", "behaviour": "state", "mechanic": "consumes_activity"},
+            {"key": "quantite", "type": "number", "behaviour": "level", "mechanic": "consumes_amount"},
+        ],
+    }
+
+
+def schema(*types: dict) -> PropertySchema:
+    return PropertySchema(types=list(types) or [protocol_type()])
+
+
+def row(rid: str, gravite: str, **over) -> SimObject:
+    props = {
+        "gravite": gravite,
+        "duree_sejour": 6,
+        "deces_sans_soin": 0.15,
+        "ressource": "lit",
+        "quantite": 1.0,
+    }
+    props.update(over)
+    return SimObject(id=rid, type="Protocole", role=None, properties=props, at=None)
+
+
+# --- reading it ------------------------------------------------------------
+
+
+def test_one_instance_becomes_one_care_requirement() -> None:
+    model = care_model_from([row("p1", "critique")], schema())
+    assert set(model) == {"critique"}
+    req = model["critique"]
+    assert req.acuity == "critique"
+    assert req.stay_ticks == 6
+    assert req.mortality_per_unmet == 0.15
+    assert req.consumes == {"lit": 1.0}
+
+
+def test_two_instances_on_one_severity_merge_what_it_consumes() -> None:
+    """"A critical case needs a bed and half a nurse" — written as two rows,
+    without the engine knowing either word."""
+    model = care_model_from(
+        [
+            row("p1", "critique", ressource="lit", quantite=1.0),
+            row("p2", "critique", ressource="infirmiere", quantite=0.5),
+        ],
+        schema(),
+    )
+    assert model["critique"].consumes == {"lit": 1.0, "infirmiere": 0.5}
+
+
+def test_the_institution_names_its_own_severities() -> None:
+    # Not critical/urgent/routine. Whatever they call them, however many.
+    model = care_model_from(
+        [row("p1", "P1"), row("p2", "P2"), row("p3", "P3"), row("p4", "P4"), row("p5", "P5")],
+        schema(),
+    )
+    assert sorted(model) == ["P1", "P2", "P3", "P4", "P5"]
+
+
+def test_nothing_bound_yields_no_model_rather_than_a_default_one() -> None:
+    # The caller reads an empty dict as "this institution has not described its
+    # care", which is true, instead of being handed somebody else's numbers.
+    bare = PropertySchema(types=[{"name": "Lit", "role": "space", "properties": []}])
+    assert care_model_from([row("p1", "critique")], bare) == {}
+    assert care_model_from([], schema()) == {}
+    assert care_model_from([row("p1", "x")], None) == {}
+
+
+def test_binds_care_model_answers_before_anything_is_loaded() -> None:
+    assert binds_care_model(schema()) is True
+    assert binds_care_model(PropertySchema(types=[{"name": "Lit", "properties": []}])) is False
+    assert binds_care_model(None) is False
+
+
+# --- what an unbound mechanic means ----------------------------------------
+
+
+def test_an_unbound_mortality_is_zero_not_a_shipped_figure() -> None:
+    """Nobody said anyone dies of this, so the model does not claim they do.
+
+    A default here would be the 0.15 all over again, and it is the single number
+    a minister would be asked to defend.
+    """
+    partial = {
+        "name": "Protocole",
+        "role": None,
+        "properties": [
+            {"key": "gravite", "type": "string", "behaviour": "state", "mechanic": "serves_severity"},
+            {"key": "ressource", "type": "string", "behaviour": "state", "mechanic": "consumes_activity"},
+            {"key": "quantite", "type": "number", "behaviour": "level", "mechanic": "consumes_amount"},
+        ],
+    }
+    model = care_model_from([row("p1", "critique")], schema(partial))
+    assert model["critique"].mortality_per_unmet == 0.0
+
+
+def test_an_unbound_stay_is_one_step_because_zero_would_make_capacity_free() -> None:
+    """A unit of demand has to hold what it consumes for at least the step it is
+    served in. At zero, being served costs nothing and no capacity ever binds —
+    every policy would tie at zero deaths."""
+    partial = {
+        "name": "Protocole",
+        "role": None,
+        "properties": [
+            {"key": "gravite", "type": "string", "behaviour": "state", "mechanic": "serves_severity"},
+            {"key": "ressource", "type": "string", "behaviour": "state", "mechanic": "consumes_activity"},
+            {"key": "quantite", "type": "number", "behaviour": "level", "mechanic": "consumes_amount"},
+        ],
+    }
+    assert care_model_from([row("p1", "critique")], schema(partial))["critique"].stay_ticks == 1
+    # Same floor when the value is bound and set below it.
+    assert care_model_from([row("p1", "critique", duree_sejour=0)], schema())["critique"].stay_ticks == 1
+
+
+def test_a_row_naming_no_severity_describes_nothing_and_is_skipped() -> None:
+    # A half-filled row is a form in progress, not a reason to refuse the run.
+    model = care_model_from([row("p1", ""), row("p2", "critique")], schema())
+    assert sorted(model) == ["critique"]
+
+
+# --- the contradictions, named rather than resolved -------------------------
+
+
+def test_two_rows_disagreeing_about_a_stay_are_refused() -> None:
+    """Picking the first, the last or the larger each gives a run that completes
+    and answers a question nobody asked."""
+    with pytest.raises(ContradictoryCareModel, match="occupies_for"):
+        care_model_from(
+            [row("p1", "critique", duree_sejour=6), row("p2", "critique", duree_sejour=9)],
+            schema(),
+        )
+
+
+def test_the_message_names_both_sides() -> None:
+    with pytest.raises(ContradictoryCareModel) as exc:
+        care_model_from(
+            [row("proto-a", "critique", deces_sans_soin=0.1), row("proto-b", "critique", deces_sans_soin=0.2)],
+            schema(),
+        )
+    assert "proto-a" in str(exc.value) and "proto-b" in str(exc.value)
+
+
+def test_two_rows_disagreeing_about_one_consumption_are_refused() -> None:
+    with pytest.raises(ContradictoryCareModel, match="lit"):
+        care_model_from(
+            [
+                row("p1", "critique", ressource="lit", quantite=1.0),
+                row("p2", "critique", ressource="lit", quantite=2.0),
+            ],
+            schema(),
+        )
+
+
+def test_agreeing_rows_are_not_a_contradiction() -> None:
+    # Restating the same stay on two rows of one severity is redundant, not
+    # wrong, and refusing it would make the two-activity case impossible to
+    # write.
+    model = care_model_from(
+        [
+            row("p1", "critique", ressource="lit", quantite=1.0, duree_sejour=6),
+            row("p2", "critique", ressource="infirmiere", quantite=0.5, duree_sejour=6),
+        ],
+        schema(),
+    )
+    assert model["critique"].stay_ticks == 6
+    assert model["critique"].consumes == {"lit": 1.0, "infirmiere": 0.5}
+
+
+def test_severities_do_not_contaminate_each_other() -> None:
+    model = care_model_from(
+        [row("p1", "critique", duree_sejour=6), row("p2", "routine", duree_sejour=1)],
+        schema(),
+    )
+    assert model["critique"].stay_ticks == 6
+    assert model["routine"].stay_ticks == 1
+
+
+# --- the property names never escape ---------------------------------------
+
+
+def test_two_institutions_with_different_words_produce_the_same_model() -> None:
+    """The point of binding by mechanic rather than by name.
+
+    A site that calls its stay `los` and one that calls it `duree_sejour` give
+    the engine identical input, and neither had to adopt the other's vocabulary.
+    """
+    english = {
+        "name": "Protocole",
+        "role": None,
+        "properties": [
+            {"key": "band", "type": "string", "behaviour": "state", "mechanic": "serves_severity"},
+            {"key": "los", "type": "number", "behaviour": "level", "mechanic": "occupies_for"},
+            {"key": "uses", "type": "string", "behaviour": "state", "mechanic": "consumes_activity"},
+            {"key": "qty", "type": "number", "behaviour": "level", "mechanic": "consumes_amount"},
+        ],
+    }
+    other = SimObject(
+        id="p1",
+        type="Protocole",
+        properties={"band": "critique", "los": 6, "uses": "lit", "qty": 1.0},
+    )
+    theirs = care_model_from([other], schema(english))
+    mine = care_model_from([row("p1", "critique")], schema())
+    assert theirs["critique"].stay_ticks == mine["critique"].stay_ticks
+    assert theirs["critique"].consumes == mine["critique"].consumes
+
+
+def test_a_mechanic_this_service_does_not_know_is_ignored_not_fatal() -> None:
+    """The backend may declare a mechanic before this service is redeployed.
+
+    Failing the whole export over an unrecognised string would take the twin
+    offline for a deploy-ordering accident.
+    """
+    future = {
+        "name": "Protocole",
+        "role": None,
+        "properties": [
+            {"key": "gravite", "type": "string", "behaviour": "state", "mechanic": "serves_severity"},
+            {"key": "ressource", "type": "string", "behaviour": "state", "mechanic": "consumes_activity"},
+            {"key": "quantite", "type": "number", "behaviour": "level", "mechanic": "consumes_amount"},
+            {"key": "avenir", "type": "number", "behaviour": "level", "mechanic": "teleports_at"},
+        ],
+    }
+    model = care_model_from([row("p1", "critique", avenir=3)], schema(future))
+    assert model["critique"].consumes == {"lit": 1.0}

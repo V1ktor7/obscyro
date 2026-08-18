@@ -47,6 +47,50 @@ export const PROPERTY_TYPES = ["string", "number", "boolean", "object", "array"]
 
 export type PropertyType = (typeof PROPERTY_TYPES)[number];
 
+/**
+ * What the engine does with a value, when an institution asks it to.
+ *
+ * The last place a preset could hide. `behaviour` tells the engine how to
+ * compose a number; it does not tell it that the number is a length of stay. So
+ * the engine still shipped `care.stay_ticks`, `care.mortality_per_unmet` and
+ * `care.consumes` — a hospital's concepts, with a hospital's default values
+ * (six steps, 0.15, one bed and half a nurse), handed to every customer.
+ *
+ * This is the closed list that lets those go. It is a list of *mechanics the
+ * engine can perform*, not of things that exist in a hospital: the engine can
+ * hold a unit of demand for N steps, draw N units of an activity, and kill at
+ * rate N when it cannot. What those are called, how many there are, and every
+ * value they take belong to the institution.
+ *
+ * A type whose instances carry these becomes the care model. Nothing is
+ * required: bind none of them and the engine simply has no care model of its
+ * own, which is the honest state rather than a fabricated one.
+ */
+export const MECHANICS = [
+  "serves_severity",
+  "occupies_for",
+  "dies_without",
+  "consumes_activity",
+  "consumes_amount",
+] as const;
+
+export type Mechanic = (typeof MECHANICS)[number];
+
+/**
+ * Which kind of value each mechanic needs.
+ *
+ * `select` mechanics name something — a severity band, an activity — and are
+ * text. The rest are quantities. Binding a number to `serves_severity` would
+ * produce a care model keyed by "3", which runs and matches nothing.
+ */
+export const MECHANIC_KIND: Record<Mechanic, "select" | "quantity"> = {
+  serves_severity: "select",
+  occupies_for: "quantity",
+  dies_without: "quantity",
+  consumes_activity: "select",
+  consumes_amount: "quantity",
+};
+
 /** An institution's numeric range for a property. Both ends optional. */
 export interface PropertyBounds {
   min: number | null;
@@ -72,6 +116,12 @@ export interface PropertyDef {
   /** The range the institution says the value lives in, not one we assume. */
   bounds?: PropertyBounds | null;
   behaviour?: PropertyBehaviour;
+  /**
+   * What the engine should do with this value. Unbound is the default and the
+   * common case: a property is data first, and only a handful ever feed a
+   * mechanic.
+   */
+  mechanic?: Mechanic;
 }
 
 /**
@@ -136,6 +186,21 @@ export function propertyProblem(def: PropertyDef): string | null {
     return `"${b}" means the value gets multiplied or added to, and "${key}" holds ${def.type}. A non-numeric property can only be set, which is "state".`;
   }
 
+  if (def.mechanic) {
+    const kind = MECHANIC_KIND[def.mechanic];
+    if (kind === "quantity" && !numeric) {
+      return `"${def.mechanic}" feeds the engine a quantity, and "${key}" holds ${def.type}.`;
+    }
+    if (kind === "select" && numeric) {
+      // A care model keyed by "3" runs and matches nothing — the most
+      // believable failure there is.
+      return `"${def.mechanic}" names something the engine matches on, so it has to be text. "${key}" holds a number.`;
+    }
+    if (kind === "quantity" && behaviourOf(def) === "state") {
+      return `"${key}" is declared a state, so the engine cannot use it as a quantity. Give it a behaviour of level, rate or stock.`;
+    }
+  }
+
   return null;
 }
 
@@ -150,6 +215,7 @@ export function propertyProblem(def: PropertyDef): string | null {
 export function schemaProblems(schema: PropertyDef[]): Map<number, string> {
   const problems = new Map<number, string>();
   const seen = new Map<string, number>();
+  const bound = new Map<Mechanic, string>();
 
   schema.forEach((def, i) => {
     const problem = propertyProblem(def);
@@ -162,6 +228,21 @@ export function schemaProblems(schema: PropertyDef[]): Map<number, string> {
       seen.set(key, i);
     } else if (!problems.has(i)) {
       problems.set(i, `"${key}" is declared twice. One would shadow the other.`);
+    }
+
+    // Two properties feeding one mechanic is the same shadowing problem a rank
+    // lower: the engine reads one value, and which one is decided by array
+    // order rather than by anybody.
+    if (def.mechanic) {
+      const already = bound.get(def.mechanic);
+      if (already === undefined) {
+        bound.set(def.mechanic, key);
+      } else if (!problems.has(i)) {
+        problems.set(
+          i,
+          `"${already}" is already bound to ${def.mechanic}. The engine reads one value, so the second would be ignored without saying so.`,
+        );
+      }
     }
   });
 

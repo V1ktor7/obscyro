@@ -22,6 +22,7 @@ import {
   type EnvironmentType,
 } from "../services/ontology.js";
 import {
+  MECHANICS,
   PROPERTY_BEHAVIOURS,
   PROPERTY_TYPES,
   propertyProblem,
@@ -55,6 +56,7 @@ const propertyDefFields = {
     .nullable()
     .optional(),
   behaviour: z.enum(PROPERTY_BEHAVIOURS).optional(),
+  mechanic: z.enum(MECHANICS).optional(),
 };
 
 const propertyDefOut = z.object(propertyDefFields);

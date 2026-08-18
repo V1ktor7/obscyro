@@ -146,6 +146,64 @@ describe("describeProperty", () => {
   });
 });
 
+describe("mechanics", () => {
+  it("accepts a quantity mechanic on a declared number", () => {
+    expect(
+      propertyProblem(def({ behaviour: "level", mechanic: "occupies_for" })),
+    ).toBeNull();
+  });
+
+  it("accepts a select mechanic on text", () => {
+    expect(
+      propertyProblem(def({ type: "string", behaviour: "state", mechanic: "serves_severity" })),
+    ).toBeNull();
+  });
+
+  it("refuses a quantity mechanic on something that holds no quantity", () => {
+    expect(
+      propertyProblem(def({ type: "string", mechanic: "occupies_for" })) ?? "",
+    ).toMatch(/feeds the engine a quantity/);
+  });
+
+  it("refuses a select mechanic on a number", () => {
+    // A care model keyed by "3" runs and matches nothing — the most believable
+    // failure available.
+    expect(propertyProblem(def({ mechanic: "serves_severity" })) ?? "").toMatch(/has to be text/);
+  });
+
+  it("refuses a quantity mechanic on a number declared a label", () => {
+    expect(
+      propertyProblem(def({ behaviour: "state", mechanic: "dies_without" })) ?? "",
+    ).toMatch(/cannot use it as a quantity/);
+  });
+
+  it("catches one mechanic bound twice, which no single row can see", () => {
+    // The engine reads one value per mechanic; which one would be decided by
+    // array order rather than by anybody.
+    const problems = schemaProblems([
+      def({ key: "duree", behaviour: "level", mechanic: "occupies_for" }),
+      def({ key: "sejour", behaviour: "level", mechanic: "occupies_for" }),
+    ]);
+    expect(problems.get(1)).toMatch(/already bound to occupies_for/);
+    expect(problems.has(0)).toBe(false);
+  });
+
+  it("allows different mechanics side by side", () => {
+    expect(
+      schemaProblems([
+        def({ key: "duree", behaviour: "level", mechanic: "occupies_for" }),
+        def({ key: "deces", behaviour: "level", mechanic: "dies_without" }),
+      ]).size,
+    ).toBe(0);
+  });
+
+  it("shows a binding in the summary, because it is bigger than a unit", () => {
+    expect(describeProperty(def({ behaviour: "level", unit: "h", mechanic: "occupies_for" }))).toBe(
+      "level · h · → occupies_for",
+    );
+  });
+});
+
 describe("retypeProperty", () => {
   it("drops what the new type cannot carry", () => {
     // Otherwise changing number → string leaves a unit behind that only
@@ -173,5 +231,19 @@ describe("retypeProperty", () => {
   it("returns the same object when nothing changed", () => {
     const original = def();
     expect(retypeProperty(original, "number")).toBe(original);
+  });
+
+  it("drops a quantity binding that the new type cannot honour", () => {
+    const retyped = retypeProperty(def({ behaviour: "level", mechanic: "occupies_for" }), "string");
+    expect(retyped.mechanic).toBeUndefined();
+    expect(propertyProblem(retyped)).toBeNull();
+  });
+
+  it("keeps a select binding, which text can still honour", () => {
+    const retyped = retypeProperty(
+      def({ type: "string", behaviour: "state", mechanic: "serves_severity" }),
+      "boolean",
+    );
+    expect(retyped.mechanic).toBe("serves_severity");
   });
 });

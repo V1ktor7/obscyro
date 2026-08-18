@@ -1,7 +1,7 @@
 import type { DbClient } from "../lib/db.js";
 import type { ReadLens } from "./ontology-lens.js";
 import { listInstancesForEnv, listLinksForEnv } from "./ontology.js";
-import { behaviourOf, type PropertyDef } from "./property-schema.js";
+import { behaviourOf, type Mechanic, type PropertyDef } from "./property-schema.js";
 import { aggregationEnds, attaches, buildsHierarchy, getUnitTree } from "./twin.js";
 
 /**
@@ -87,7 +87,13 @@ export interface SimGap {
 export interface SimObject {
   id: string;
   type: string;
-  role: SimRole;
+  /**
+   * Null for an instance that carries no simulation role but is still needed —
+   * a care protocol, say, which is not space, staff, stuff or systems. Those
+   * travel because their properties feed the engine's mechanics and because an
+   * event has to be able to perturb them like anything else.
+   */
+  role: SimRole | null;
   properties: Record<string, unknown>;
   /** The unit this instance is attached to, or null if it hangs off nothing. */
   at: string | null;
@@ -127,6 +133,14 @@ export interface SimPropertyDef {
   min: number | null;
   max: number | null;
   behaviour: "level" | "rate" | "stock" | "state" | null;
+  /**
+   * What the engine should do with this value, or null.
+   *
+   * The last place a preset could hide: `behaviour` says how a number composes,
+   * not that it is a length of stay. Without this the engine still had to ship
+   * `care.stay_ticks` and its own default of six.
+   */
+  mechanic: Mechanic | null;
 }
 
 export interface SimObjectType {
@@ -253,6 +267,7 @@ export async function buildTwinExport(
         min: p.bounds?.min ?? null,
         max: p.bounds?.max ?? null,
         behaviour: behaviourOf(p),
+        mechanic: p.mechanic ?? null,
       })),
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -309,7 +324,10 @@ export async function buildTwinExport(
   }
   const perUnit = new Map<string, Map<string, Accum>>();
   for (const o of objects) {
-    if (!o.at) continue;
+    // A roleless instance is never capacity — it is here because its type binds
+    // a mechanic. Skipped explicitly rather than relying on it also having no
+    // unit, so the two facts stay independent.
+    if (!o.at || !o.role) continue;
     const byType = perUnit.get(o.at) ?? new Map<string, Accum>();
     const acc = byType.get(o.type) ?? { role: o.role, total: 0, used: 0 };
     acc.total += 1;
@@ -431,6 +449,39 @@ export async function buildTwinExport(
         `size 0. The ontology records no catchment, so demand has to be sized in the ` +
         `scenario.`,
       subjects: populations.map((p) => p.name),
+    });
+  }
+
+  /**
+   * Instances whose type binds a mechanic, whether or not anything placed them.
+   *
+   * A care protocol is not space, staff, stuff or systems, and nothing attaches
+   * it to a ward — so the placement walk above, which is how every other object
+   * gets here, misses it entirely. It still has to cross: its properties are
+   * what the engine reads instead of the length of stay it used to ship, and an
+   * event has to be able to perturb it like any other object.
+   *
+   * Appended after the placement walk and de-duplicated, because a type may
+   * legitimately do both — a bed that also declared a mechanic would otherwise
+   * arrive twice and be counted twice.
+   */
+  const bindsMechanic = new Set(
+    object_types.filter((t) => t.properties.some((p) => p.mechanic !== null)).map((t) => t.name),
+  );
+  const alreadyExported = new Set(objects.map((o) => o.id));
+  for (const inst of instances) {
+    if (!bindsMechanic.has(inst.typeName)) continue;
+    if (alreadyExported.has(inst.id)) continue;
+    if (unitIds.has(inst.id)) continue;
+    objects.push({
+      id: inst.id,
+      type: inst.typeName,
+      role: roleByType.get(inst.typeName) ?? null,
+      properties: inst.properties ?? {},
+      // Deliberately null even when a placement exists: this instance is not
+      // capacity anywhere, and giving it a unit would make `derive_resources`
+      // count it as one.
+      at: null,
     });
   }
 

@@ -53,6 +53,11 @@ class PropertyDef(BaseModel):
     min: float | None = None
     max: float | None = None
     behaviour: Behaviour | None = None
+    # What the engine should do with this value — see `mechanics.py`. Plain
+    # `str` rather than a Literal so a mechanic added on the backend before this
+    # service is redeployed arrives intact and is simply not recognised, instead
+    # of failing the whole export to validation.
+    mechanic: str | None = None
 
     def clamp(self, value):
         """Hold a value inside the range the institution declared.
@@ -128,7 +133,10 @@ class SimObject(BaseModel):
 
     id: str
     type: str
-    role: Role
+    # None for an instance that carries no simulation role but is still needed —
+    # a care protocol is not space, staff, stuff or systems, and it travels
+    # because its properties feed the engine's mechanics.
+    role: Role | None = None
     properties: dict = Field(default_factory=dict)
     # The unit it is attached to, or None if it hangs off nothing.
     at: str | None = None
@@ -164,9 +172,16 @@ def derive_resources(
 
     out: dict[str, Resource] = {}
     for activity, (total, used) in totals.items():
-        role = next(
-            (o.role for o in objects if o.at == facility_id and activity_of(o.type) == activity),
-            "stuff",
+        role = (
+            next(
+                (
+                    o.role
+                    for o in objects
+                    if o.at == facility_id and activity_of(o.type) == activity
+                ),
+                None,
+            )
+            or "stuff"
         )
         out[activity] = Resource(
             id=activity,

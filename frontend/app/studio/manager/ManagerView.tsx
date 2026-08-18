@@ -85,7 +85,11 @@ import {
 import {
   BEHAVIOUR_HINT,
   BEHAVIOUR_LABEL,
+  MECHANICS,
+  MECHANIC_KIND,
+  MECHANIC_LABEL,
   PROPERTY_TYPES,
+  type Mechanic,
   // Aliased: this file already has a `behaviourOf` state holding the link type
   // whose behaviour dialog is open, and the shadowing is silent inside that
   // component.
@@ -2152,6 +2156,35 @@ export function PropertyRowsEditor({
                     </div>
                   </div>
                 ) : null}
+
+                <label className="mb-0.5 mt-2 block text-[10px] uppercase tracking-wide text-ink-faint">
+                  Feeds the engine
+                </label>
+                <select
+                  value={row.mechanic ?? ""}
+                  onChange={(e) =>
+                    patch(i, {
+                      ...row,
+                      mechanic: e.target.value === "" ? undefined : (e.target.value as Mechanic),
+                    })
+                  }
+                  aria-label={`What ${row.key || "this property"} feeds the engine`}
+                  className={cn(CELL, "w-full")}
+                >
+                  <option value="">Nothing — it is data, not a model parameter</option>
+                  {MECHANICS.filter((m) =>
+                    numeric ? MECHANIC_KIND[m] === "quantity" : MECHANIC_KIND[m] === "select",
+                  ).map((m) => (
+                    <option key={m} value={m}>
+                      {MECHANIC_LABEL[m]}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[10px] leading-snug text-ink-faint">
+                  Binding these is how the simulation learns your care model instead of
+                  assuming one. Nothing is required, and a type that binds none simply
+                  does not describe care.
+                </p>
 
                 <label className="mt-2 flex items-center gap-1.5 text-[11px] text-ink-body">
                   <input

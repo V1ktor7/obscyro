@@ -51,7 +51,17 @@ function prop(
   key: string,
   over: Partial<SimObjectType["properties"][number]> = {},
 ): SimObjectType["properties"][number] {
-  return { key, type: "number", label: null, unit: null, min: null, max: null, behaviour: null, ...over };
+  return {
+    key,
+    type: "number",
+    label: null,
+    unit: null,
+    min: null,
+    max: null,
+    behaviour: null,
+    mechanic: null,
+    ...over,
+  };
 }
 
 describe("opsFor", () => {

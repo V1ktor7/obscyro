@@ -13,6 +13,7 @@ import {
   type MeResult,
 } from "./auth";
 import type {
+  Mechanic,
   PropertyBehaviour,
   PropertyDefinition,
   PropertyType,
@@ -438,6 +439,7 @@ export interface OrganizationSummary {
 // live together in `property-schema.ts`. Re-exported because most callers reach
 // for it through this module.
 export type {
+  Mechanic,
   PropertyBehaviour,
   PropertyBounds,
   PropertyDefinition,
@@ -1808,6 +1810,8 @@ export interface SimPropertyDef {
   max: number | null;
   /** Null means nobody has said, which the composer reports rather than fills. */
   behaviour: PropertyBehaviour | null;
+  /** What the engine reads this value as, or null for plain data. */
+  mechanic: Mechanic | null;
 }
 
 export interface SimObjectType {

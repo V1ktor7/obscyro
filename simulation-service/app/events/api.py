@@ -24,6 +24,7 @@ from app.events.effects import Event
 from app.events.collect import Dataset, collect
 from app.events.dynamics import run
 from app.events.harness import compare
+from app.events.mechanics import ContradictoryCareModel, care_model_from
 from app.events.ontology import OntologyExport, UnrunnableExport, load
 from app.events.scoring import Objective
 from app.events.targets import CATALOGUE
@@ -245,7 +246,15 @@ def compare_route(req: CompareRequest) -> CompareResponse:
             population_sizes=req.population_sizes,
             route_capacity=req.route_capacity or None,
         )
-        model = care_model_for(probe, mortality=req.mortality)
+        # What the institution declared beats what the engine would invent.
+        # `care_model_for` picks three severities nobody named, stays of six,
+        # three and one step, and a mortality of 0.15 divided by ten and two
+        # hundred for the other bands — one hospital's clinical assumptions,
+        # handed to whoever opens the product. It survives only as the fallback
+        # for a twin that has bound nothing yet.
+        model = care_model_from(list(probe.objects.values()), probe.property_schema)
+        if not model:
+            model = care_model_for(probe, mortality=req.mortality)
         state = load(
             req.system,
             care_model=model,
@@ -253,6 +262,11 @@ def compare_route(req: CompareRequest) -> CompareResponse:
             route_capacity=req.route_capacity or None,
             census_acuity=req.census_acuity,
         )
+    except ContradictoryCareModel as exc:
+        # Listed before the bare ValueError it inherits from, so the message
+        # naming the two disagreeing instances is the one that reaches the
+        # caller rather than being flattened into a generic load failure.
+        raise HTTPException(422, f"The declared care model disagrees with itself: {exc}") from exc
     except UnrunnableExport as exc:
         raise HTTPException(422, str(exc)) from exc
     except ValueError as exc:

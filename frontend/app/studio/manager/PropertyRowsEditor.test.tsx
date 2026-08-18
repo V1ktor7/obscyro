@@ -127,6 +127,58 @@ describe("bounds", () => {
   });
 });
 
+describe("binding a mechanic", () => {
+  it("offers a number only the mechanics that take a quantity", () => {
+    // Offering `serves_severity` here would produce a care model keyed by "3",
+    // which runs and matches nothing.
+    editor([{ key: "duree", type: "number", behaviour: "level" }]);
+    expand("duree");
+    const select = screen.getByLabelText("What duree feeds the engine") as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.value)).toEqual([
+      "",
+      "occupies_for",
+      "dies_without",
+      "consumes_amount",
+    ]);
+  });
+
+  it("offers text only the mechanics the engine matches on", () => {
+    editor([{ key: "gravite", type: "string" }]);
+    expand("gravite");
+    const select = screen.getByLabelText("What gravite feeds the engine") as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.value)).toEqual([
+      "",
+      "serves_severity",
+      "consumes_activity",
+    ]);
+  });
+
+  it("defaults to feeding nothing, because most properties are just data", () => {
+    editor([{ key: "duree", type: "number" }]);
+    expand("duree");
+    expect((screen.getByLabelText("What duree feeds the engine") as HTMLSelectElement).value).toBe(
+      "",
+    );
+  });
+
+  it("writes the binding into the row", () => {
+    const { last } = editor([{ key: "duree", type: "number", behaviour: "level" }]);
+    expand("duree");
+    fireEvent.change(screen.getByLabelText("What duree feeds the engine"), {
+      target: { value: "occupies_for" },
+    });
+    expect(last()?.[0]?.mechanic).toBe("occupies_for");
+  });
+
+  it("names the same mechanic bound twice", () => {
+    editor([
+      { key: "duree", type: "number", behaviour: "level", mechanic: "occupies_for" },
+      { key: "sejour", type: "number", behaviour: "level", mechanic: "occupies_for" },
+    ]);
+    expect(screen.getByRole("alert").textContent).toMatch(/already bound to occupies_for/);
+  });
+});
+
 describe("changing the type", () => {
   it("clears what the new type cannot carry", () => {
     // Otherwise the unit stays behind and only surfaces as a refused save, with

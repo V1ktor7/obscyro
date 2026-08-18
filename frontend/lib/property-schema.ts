@@ -16,6 +16,52 @@ export const PROPERTY_TYPES = ["string", "number", "boolean", "object", "array"]
 
 export type PropertyType = (typeof PROPERTY_TYPES)[number];
 
+/**
+ * What the engine should do with a value — the last place a preset could hide.
+ *
+ * `behaviour` says how a number composes; it does not say the number is a
+ * length of stay. So the engine still shipped `care.stay_ticks`,
+ * `care.mortality_per_unmet` and `care.consumes`, with a hospital's defaults
+ * baked in, handed to every institution that opened the product.
+ *
+ * A type whose instances bind these becomes the care model. Binding nothing is
+ * fine and is the default.
+ */
+export const MECHANICS = [
+  "serves_severity",
+  "occupies_for",
+  "dies_without",
+  "consumes_activity",
+  "consumes_amount",
+] as const;
+
+export type Mechanic = (typeof MECHANICS)[number];
+
+/** Which kind of value each mechanic needs: text it matches on, or a quantity. */
+export const MECHANIC_KIND: Record<Mechanic, "select" | "quantity"> = {
+  serves_severity: "select",
+  occupies_for: "quantity",
+  dies_without: "quantity",
+  consumes_activity: "select",
+  consumes_amount: "quantity",
+};
+
+/**
+ * Said as what the engine will do with the number, not as what it is called.
+ *
+ * "Length of stay" is a definition and assumes a hospital. "Holds what it
+ * consumes for this many steps before releasing it" is the mechanic, and a
+ * transit authority can read it and decide whether anything of theirs behaves
+ * that way.
+ */
+export const MECHANIC_LABEL: Record<Mechanic, string> = {
+  serves_severity: "Names the band this row describes",
+  occupies_for: "How many steps one unit of demand holds what it consumes",
+  dies_without: "Losses per unserved unit, per step",
+  consumes_activity: "Names what it draws on",
+  consumes_amount: "How much of that it draws, per unit per step",
+};
+
 export const PROPERTY_BEHAVIOURS = ["level", "rate", "stock", "state"] as const;
 
 export type PropertyBehaviour = (typeof PROPERTY_BEHAVIOURS)[number];
@@ -33,6 +79,7 @@ export interface PropertyDefinition {
   unit?: string;
   bounds?: PropertyBounds | null;
   behaviour?: PropertyBehaviour;
+  mechanic?: Mechanic;
 }
 
 /**
@@ -104,6 +151,19 @@ export function propertyProblem(def: PropertyDefinition): string | null {
   if (def.behaviour && def.behaviour !== "state" && !numeric) {
     return `"${def.behaviour}" means the value gets multiplied or added to, and "${key}" holds ${def.type}. A non-numeric property can only be set, which is "state".`;
   }
+  if (def.mechanic) {
+    const kind = MECHANIC_KIND[def.mechanic];
+    if (kind === "quantity" && !numeric) {
+      return `"${def.mechanic}" feeds the engine a quantity, and "${key}" holds ${def.type}.`;
+    }
+    if (kind === "select" && numeric) {
+      // A care model keyed by "3" runs and matches nothing.
+      return `"${def.mechanic}" names something the engine matches on, so it has to be text. "${key}" holds a number.`;
+    }
+    if (kind === "quantity" && behaviourOf(def) === "state") {
+      return `"${key}" is declared a state, so the engine cannot use it as a quantity. Give it a behaviour of level, rate or stock.`;
+    }
+  }
   return null;
 }
 
@@ -111,6 +171,7 @@ export function propertyProblem(def: PropertyDefinition): string | null {
 export function schemaProblems(schema: PropertyDefinition[]): Map<number, string> {
   const problems = new Map<number, string>();
   const seen = new Map<string, number>();
+  const bound = new Map<Mechanic, string>();
 
   schema.forEach((def, i) => {
     const problem = propertyProblem(def);
@@ -122,6 +183,20 @@ export function schemaProblems(schema: PropertyDefinition[]): Map<number, string
       seen.set(key, i);
     } else if (!problems.has(i)) {
       problems.set(i, `"${key}" is declared twice. One would shadow the other.`);
+    }
+
+    // The same shadowing a rank lower: the engine reads one value per mechanic,
+    // and which one is decided by array order rather than by anybody.
+    if (def.mechanic) {
+      const already = bound.get(def.mechanic);
+      if (already === undefined) {
+        bound.set(def.mechanic, key);
+      } else if (!problems.has(i)) {
+        problems.set(
+          i,
+          `"${already}" is already bound to ${def.mechanic}. The engine reads one value, so the second would be ignored without saying so.`,
+        );
+      }
     }
   });
 
@@ -156,6 +231,9 @@ export function describeProperty(def: PropertyDefinition): string {
   else if (max !== null) parts.push(`≤ ${max}`);
 
   if (def.required) parts.push("required");
+  // Last, and deliberately spelled out: a bound property is one the engine
+  // reads directly, which is a bigger fact about it than its unit.
+  if (def.mechanic) parts.push(`→ ${def.mechanic}`);
 
   return parts.join(" · ");
 }
@@ -171,5 +249,8 @@ export function retypeProperty(def: PropertyDefinition, type: PropertyType): Pro
   // `state` survives — it is the only behaviour the new type can carry, and
   // dropping it would silently undeclare a property that was declared.
   if (next.behaviour !== "state") delete next.behaviour;
+  // A quantity mechanic cannot survive the move to text. Left behind, it would
+  // only surface as a refused save with the field that caused it now hidden.
+  if (next.mechanic && MECHANIC_KIND[next.mechanic] === "quantity") delete next.mechanic;
   return next;
 }
