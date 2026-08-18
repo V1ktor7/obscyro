@@ -468,7 +468,32 @@ function Inspector({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {isObject ? (
+        {/* An effect saved against a quantity the engine has since retired.
+            Rendering the ordinary form here would offer an empty operation list
+            and a value field that writes into nothing, which reads as a form
+            that is merely broken rather than as an event that cannot run. */}
+        {!target ? (
+          <div className="rounded-md border border-warn/40 bg-warn/5 p-3">
+            <p className="text-[11px] leading-relaxed text-ink">
+              This effect changes “{effect.target}”, which the engine no longer offers.
+              It was written against an older catalogue.
+            </p>
+            <p className="mt-2 text-[11px] leading-relaxed text-ink-faint">
+              {effect.target.startsWith("care.")
+                ? "Care parameters are declared in your ontology now, as a type whose properties bind occupies_for, dies_without and consumes_amount. Affect one of its properties from the left instead."
+                : "Pick a property on the left to say what this event should change instead."}
+            </p>
+            <button
+              type="button"
+              onClick={onRemove}
+              className="mt-3 rounded-md border border-line px-2.5 py-1.5 text-[11px] text-ink hover:border-danger hover:text-danger"
+            >
+              Remove this effect
+            </button>
+          </div>
+        ) : null}
+
+        {!target ? null : isObject ? (
           <>
             <Label>Property</Label>
             <select
@@ -496,6 +521,8 @@ function Inspector({
           </>
         ) : null}
 
+        {!target ? null : (
+        <>
         <div className="mb-3 grid grid-cols-2 gap-2">
           <div>
             <Label>Change</Label>
@@ -609,8 +636,13 @@ function Inspector({
             />
           </div>
         </div>
+        </>
+        )}
 
-        {inert.length > 0 ? (
+        {/* Guarded on `target`: with none, the only inert reason is that the
+            quantity is gone, and the notice above already says it at length.
+            Saying it twice in one panel makes the panel look confused. */}
+        {target && inert.length > 0 ? (
           <p className="mt-3 border-t border-line pt-3 text-[11px] leading-snug text-warn">
             This effect {inert.join("; ")}.
           </p>

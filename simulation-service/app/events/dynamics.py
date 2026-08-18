@@ -465,32 +465,14 @@ class Engine:
                     tick, "edge.weight", base, {"route": f"{key[0]}>{key[1]}"}
                 )
 
-        # The shipped `care.*` targets, and only while nothing is declared.
+        # Nothing more. The `care.*` resolution that used to close this method
+        # went with its targets: a care model is declared as instances now, and
+        # `_rederive_care` above reads it back off them after every effect.
         #
-        # With a declared care model these would undo `_rederive_care` on every
-        # tick: they rewrite each requirement from `baseline_care`, which was
-        # captured before any effect touched the protocol instances. An effect
-        # lengthening a stay would apply to the instance, be re-derived into the
-        # model, and then be overwritten from a baseline that never heard of it.
-        if self.declared_care:
-            return
-        for acuity, base in self.baseline_care.items():
-            req = self.state.care_model.get(acuity)
-            if req is None:
-                continue
-            req.stay_ticks = int(
-                round(self._resolve(tick, "care.stay_ticks", base.stay_ticks, {"acuity": acuity}))
-            )
-            req.mortality_per_unmet = self._resolve(
-                tick,
-                "care.mortality_per_unmet",
-                base.mortality_per_unmet,
-                {"acuity": acuity},
-            )
-            for activity, per in base.consumes.items():
-                req.consumes[activity] = self._resolve(
-                    tick, "care.consumes", per, {"acuity": acuity, "activity": activity}
-                )
+        # A twin that has declared none still gets `templates.care_model_for` at
+        # load, and that model is simply not perturbable — which is the honest
+        # position. Offering an event a lever on numbers the engine invented
+        # would let someone tune a hospital they never described.
 
     # -- step 3 ---------------------------------------------------------------
 

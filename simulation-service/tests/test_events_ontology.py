@@ -416,9 +416,11 @@ def test_an_operation_the_quantity_rejects_is_refused() -> None:
 
 
 def test_a_filter_the_quantity_does_not_have_is_refused() -> None:
-    """Narrowing length of stay by facility looks reasonable and does nothing:
-    the care model is global, so such a filter matches no dimension and the
-    effect would apply everywhere or nowhere depending on how it was read.
+    """Narrowing arrivals by facility looks reasonable and does nothing.
+
+    Demand belongs to a population, not to a building, so such a filter matches
+    no dimension and the effect would apply everywhere or nowhere depending on
+    how it was read.
     """
     import pydantic
 
@@ -426,42 +428,44 @@ def test_a_filter_the_quantity_does_not_have_is_refused() -> None:
 
     with pytest.raises(pydantic.ValidationError, match="cannot be narrowed by"):
         Effect(
-            id="x", target="care.stay_ticks", select={"facility": ["unit-a"]},
+            id="x", target="demand.volume", select={"facility": ["unit-a"]},
             op="add", value=2,
         )
 
 
-def test_length_of_stay_can_be_perturbed() -> None:
-    """The verb that was missing, and the reason the catalogue exists.
+def test_the_retired_care_targets_fail_loudly_rather_than_quietly() -> None:
+    """An event saved against the old catalogue must not half-run.
 
-    A disease that lingers is neither more demand nor less capacity. Before
-    the catalogue it could only be faked by sending more patients, which is a
-    different illness entirely.
+    `care.stay_ticks`, `care.mortality_per_unmet` and `care.consumes` were the
+    last quantities the engine invented, and they shipped with one hospital's
+    numbers. They are gone; a care model is declared as instances now, and an
+    event changes one through `object.property` on the protocol — see
+    `test_events_mechanics.py`.
+
+    What matters here is the *shape* of the failure. Rewriting a stored effect
+    to something plausible, or dropping it, would leave an event that runs and
+    models less than it says. Refusing at construction means the composer marks
+    it inert, the run never starts, and somebody edits it on purpose.
     """
-    from app.events.dynamics import run
-    from app.events.effects import Effect, Event, TemporalProfile
-    from app.events.policy import null_policy
+    import pydantic
 
-    s = runnable()
-    base_stay = s.care_model["critical"].stay_ticks
-    longer = Event(
-        id="lingering", horizon=20,
-        effects=[
-            _demand("wave", 30),
-            Effect(
-                id="slower-recovery", target="care.stay_ticks",
-                select={"acuity": ["critical"]}, op="add", value=2,
-                profile=TemporalProfile(start=0, end=20, shape="step", peak=1.0),
-            ),
-        ],
-    )
-    normal = Event(id="normal", horizon=20, effects=[_demand("wave", 30)])
-    slow = run(s, longer, null_policy(), seed=0)
-    fast = run(s, normal, null_policy(), seed=0)
-    # Beds are held two steps longer each, so fewer people get one.
-    assert slow.deaths > fast.deaths
-    # And the state it was measured from is untouched.
-    assert s.care_model["critical"].stay_ticks == base_stay
+    from app.events.effects import Effect
+
+    for path in ("care.stay_ticks", "care.mortality_per_unmet", "care.consumes"):
+        with pytest.raises(pydantic.ValidationError, match="unknown target"):
+            Effect(id="x", target=path, select={"acuity": ["critical"]}, op="add", value=2)
+
+
+def test_the_refusal_names_what_is_available_instead() -> None:
+    """A message that only says "unknown" leaves the author guessing which of
+    five paths replaced the one they wrote."""
+    import pydantic
+
+    from app.events.effects import Effect
+
+    with pytest.raises(pydantic.ValidationError) as exc:
+        Effect(id="x", target="care.stay_ticks", op="add", value=2)
+    assert "object.property" in str(exc.value)
 
 
 def _scaled(export_dict, *, beds=1.0, population=50_000):
