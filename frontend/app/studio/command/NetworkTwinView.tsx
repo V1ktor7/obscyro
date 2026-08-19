@@ -68,7 +68,7 @@ import { useStudio } from "../StudioShell";
 import TreeExplorer, { type TreeItem } from "../TreeExplorer";
 
 import CoverageDialog from "./CoverageDialog";
-import { unitsTree } from "./units-tree";
+import { capacityOf, unitsTree } from "./units-tree";
 import {
   flattenCoordinates,
   formatArea,
@@ -281,9 +281,17 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   // The map is why this screen exists; on a laptop the panel costs it a fifth
   // of its width, so it folds away.
   const [railOpen, setRailOpen] = useState(true);
-  // Null means "everything". A Set means "only these", and it holds whole
-  // subtrees so checking an establishment carries its installations.
-  const [scoped, setScoped] = useState<Set<string> | null>(null);
+  // Ids the map is *not* drawing. Empty means everything, which is the state
+  // you start in — hiding one site should be one click, not a list you first
+  // have to build.
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+  // Read inside the marker closure, which is built once per redraw and must
+  // not capture a stale selection.
+  const selectedRef = useRef<string | null>(null);
+  useEffect(() => {
+    selectedRef.current = selectedId;
+  }, [selectedId]);
+  const [panelTab, setPanelTab] = useState<"explorer" | "layers" | "views">("explorer");
   const [tree, setTree] = useState<TreeItem[]>([]);
   const [layers, setLayers] = useState<LayerToggles>({});
   const [projection, setProjection] = useState<"globe" | "mercator">("globe");
@@ -810,23 +818,45 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
       const mapboxgl = (await import("mapbox-gl")).default;
       if (!mounted) return;
       for (const site of network.sites) {
-        // Scoping is the tree's whole point: a checkbox that redraws nothing is
-        // an ornament. Null means everything, which is the default.
-        if (scoped && !scoped.has(site.id)) continue;
+        // The tree's whole point: a control that redraws nothing is an ornament.
+        if (hiddenIds.has(site.id)) continue;
         const pos = positions.get(site.id)!;
         const el = document.createElement("div");
         const occ = site.metrics.occupancyPct;
         const sev = site.worstAlertSeverity;
         const ring =
           sev === "critical" ? "#e11d48" : sev === "warn" ? "#d97706" : "#059669";
+        // A 38px white disc with the name always above it works for a dozen
+        // sites and collapses into a wall of overlapping labels at 190. Three
+        // changes, each carrying one fact instead of stacking them:
+        //
+        //   size    capacity, on a square-root scale so a 732-bed hospital
+        //           reads as bigger than a 9-place group home without a
+        //           500-bed one swallowing the island
+        //   fill    occupancy, so the reading is the colour and needs no text
+        //   ring    an open alert, which is a different axis and stays separate
+        //
+        // The name appears on hover and when selected. A label per site is what
+        // made the map unreadable, and it is the one thing you can ask for on
+        // demand.
+        const cap = capacityOf(site);
+        const size = Math.round(10 + Math.sqrt(Math.min(cap, 900)) * 0.9);
+        const fill =
+          occ === null ? "#c5cbd3" : occ >= 100 ? "#e11d48" : occ >= 85 ? "#d97706" : "#059669";
+        const alerted = site.openAlertCount > 0;
+        el.style.cursor = "pointer";
         el.innerHTML = `
-          <div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;">
-            <div style="font-size:11px;font-weight:600;color:#1c2127;background:rgba(255,255,255,0.9);padding:1px 6px;border-radius:4px;margin-bottom:2px;white-space:nowrap;">${site.name}</div>
-            <div style="width:38px;height:38px;border-radius:50%;background:#fff;border:3px solid ${ring};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${ring};box-shadow:0 1px 4px rgba(0,0,0,0.25);">
-              ${occ !== null ? `${Math.round(occ)}%` : "—"}
-            </div>
-            ${site.openAlertCount > 0 ? `<div style="margin-top:2px;font-size:9px;font-weight:600;color:#fff;background:${ring};border-radius:6px;padding:0 5px;">${site.openAlertCount} alert${site.openAlertCount === 1 ? "" : "s"}</div>` : ""}
+          <div style="position:relative;display:flex;flex-direction:column;align-items:center;">
+            <div class="site-dot" style="width:${size}px;height:${size}px;border-radius:50%;background:${fill};opacity:.85;border:${alerted ? `2px solid ${ring}` : "1px solid rgba(255,255,255,.9)"};box-shadow:0 1px 3px rgba(0,0,0,.3);"></div>
+            <div class="site-name" style="display:none;position:absolute;bottom:${size + 4}px;font-size:11px;font-weight:600;color:#1c2127;background:rgba(255,255,255,.94);padding:1px 6px;border-radius:4px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.2);">${site.name}${cap ? ` · ${cap}` : ""}${occ !== null ? ` · ${Math.round(occ)}%` : ""}</div>
           </div>`;
+        const nameEl = el.querySelector<HTMLElement>(".site-name");
+        const showName = (on: boolean) => {
+          if (nameEl) nameEl.style.display = on || site.id === selectedRef.current ? "block" : "none";
+        };
+        showName(false);
+        el.addEventListener("mouseenter", () => showName(true));
+        el.addEventListener("mouseleave", () => showName(false));
         el.addEventListener("click", (e) => {
           e.stopPropagation();
           siteClickRef.current?.(site.id);
@@ -847,7 +877,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     return () => {
       mounted = false;
     };
-  }, [network, mapReady, positions, scoped]);
+  }, [network, mapReady, positions, hiddenIds]);
 
   // Flow arcs: update sources when flows or toggles change.
   useEffect(() => {
@@ -1064,7 +1094,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         {network ? (
           <span className="flex items-center gap-1.5 rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            live · {scoped ? `${network.sites.filter((s) => scoped.has(s.id)).length} of ` : ""}
+            live · {hiddenIds.size > 0 ? `${network.sites.filter((s) => !hiddenIds.has(s.id)).length} of ` : ""}
             {network.sites.length} site{network.sites.length === 1 ? "" : "s"}
           </span>
         ) : null}
@@ -1240,21 +1270,50 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
             railOpen ? "flex w-72" : "hidden",
           )}
         >
-          <div className="flex shrink-0 items-center justify-end border-b border-[#e5e8eb] px-1 py-1">
+          {/* Tabs rather than three stacked sections: each one gets the whole
+              panel height instead of a share of it, and the explorer is a tree
+              of 241 rows that a 42% slice made unusable. */}
+          <div className="flex shrink-0 items-center gap-0.5 border-b border-[#e5e8eb] px-1 py-1">
+            {(
+              [
+                ["explorer", "Explorer"],
+                ["layers", "Layers"],
+                ["views", "Views"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setPanelTab(id)}
+                className={cn(
+                  "rounded px-2 py-1 text-[11px]",
+                  panelTab === id
+                    ? "bg-[#e7f2fd] font-medium text-[#215db0]"
+                    : "text-[#5f6b7c] hover:bg-[#f6f7f9]",
+                )}
+              >
+                {label}
+              </button>
+            ))}
             <button
               type="button"
               onClick={() => setRailOpen(false)}
               aria-label="Hide the panel"
               title="Hide the panel"
-              className="rounded p-1 text-[#8f99a8] hover:bg-[#f6f7f9] hover:text-[#1c2127]"
+              className="ml-auto rounded p-1 text-[#8f99a8] hover:bg-[#f6f7f9] hover:text-[#1c2127]"
             >
               <PanelLeftClose className="h-4 w-4" />
             </button>
           </div>
 
-          {/* Layers and saved views keep their own scroll and are capped, so a
-              long list of link types cannot squeeze the explorer to nothing. */}
-          <div className="max-h-[42%] shrink-0 overflow-y-auto p-2">
+          <div
+            className={cn(
+              "min-h-0 flex-1 overflow-y-auto p-2",
+              panelTab === "explorer" && "hidden",
+            )}
+          >
+          {panelTab === "layers" ? (
+          <>
           <p className="px-2 pb-1 pt-1 text-[10px] font-medium uppercase tracking-wide text-ink-faint">
             Layers
           </p>
@@ -1287,7 +1346,15 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               );
             })
           )}
-          <p className="px-2 pb-1 pt-3 text-[10px] font-medium uppercase tracking-[0.12em] text-[#8f99a8]">
+          <p className="px-2 pt-3 text-[10px] leading-relaxed text-[#8f99a8]">
+            node ring = alert severity · badge = occupancy · arcs = flows between sites
+          </p>
+          </>
+          ) : null}
+
+          {panelTab === "views" ? (
+          <>
+          <p className="px-2 pb-1 pt-1 text-[10px] font-medium uppercase tracking-[0.12em] text-[#8f99a8]">
             Saved views
           </p>
           {savedViews.length === 0 ? (
@@ -1315,36 +1382,42 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
             <Save className="h-3 w-3" />
             save current view
           </button>
-          <p className="px-2 pt-3 text-[10px] leading-relaxed text-[#8f99a8]">
-            node ring = alert severity · badge = occupancy · arcs = flows between sites
-          </p>
+          </>
+          ) : null}
           </div>
 
-          {/* The hierarchy, browsable. 190 pins on one island is not readable at
-              any zoom; 51 collapsed establishments is. Clicking a row inspects
-              it, the checkbox narrows the map to that branch. Given the rest of
-              the panel its height, because a tree two rows tall is a list. */}
-          <div className="flex min-h-0 flex-1 flex-col border-t border-[#e5e8eb]">
-            <p className="shrink-0 px-3 pb-1 pt-2 text-[10px] font-medium uppercase tracking-wide text-ink-faint">
-              Explorer
-            </p>
+          {/* The hierarchy, browsable. The eye hides a branch; "only" keeps one
+              and hides every other — which is the gesture you actually want
+              when you say "show me Centre-Sud": its 59 installations stay, the
+              other 131 go. */}
+          <div className={cn("min-h-0 flex-1 flex-col", panelTab === "explorer" ? "flex" : "hidden")}>
             <TreeExplorer
-          items={tree}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          scoped={scoped ?? undefined}
-          onScope={(ids, include) => {
-            setScoped((cur) => {
-              const next = new Set(cur ?? []);
-              for (const id of ids) {
-                if (include) next.add(id);
-                else next.delete(id);
+              items={tree}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              hidden={hiddenIds}
+              onToggleHidden={(ids, hide) =>
+                setHiddenIds((cur) => {
+                  const next = new Set(cur);
+                  for (const id of ids) {
+                    if (hide) next.add(id);
+                    else next.delete(id);
+                  }
+                  return next;
+                })
               }
-              // Scoping to nothing means scoping to everything: an empty map is
-              // never what unchecking the last box was asking for.
-              return next.size === 0 ? null : next;
-            });
-          }}
+              onSolo={(ids) => {
+                const keep = new Set(ids);
+                const all = new Set<string>();
+                const walk = (list: TreeItem[]) => {
+                  for (const i of list) {
+                    all.add(i.id);
+                    if (i.children) walk(i.children);
+                  }
+                };
+                walk(tree);
+                setHiddenIds(new Set(Array.from(all).filter((id) => !keep.has(id))));
+              }}
               emptyLabel="No units yet. Import or declare an OrgUnit to see the network here."
             />
           </div>

@@ -25,6 +25,8 @@
 
 import { useMemo, useState } from "react";
 
+import { Eye, EyeOff } from "lucide-react";
+
 export interface TreeItem {
   id: string;
   label: string;
@@ -101,11 +103,22 @@ export interface TreeExplorerProps {
   selectedId?: string | null;
   onSelect?: (id: string) => void;
   /**
-   * Which ids the view is scoped to. Undefined means "no scoping offered", and
-   * the checkboxes disappear rather than being shown doing nothing.
+   * Ids the view is *not* showing. Undefined means visibility is not on offer
+   * and the controls disappear rather than being shown doing nothing.
+   *
+   * A deny-list, not an allow-list, and the difference is the whole reason this
+   * changed: with an allow-list, "hide this one site" is impossible from the
+   * default state — there is no list yet to remove it from, so the first click
+   * does nothing. Starting from "everything is visible" makes hiding one thing
+   * one click, which is what it should have been.
    */
-  scoped?: Set<string>;
-  onScope?: (ids: string[], include: boolean) => void;
+  hidden?: Set<string>;
+  onToggleHidden?: (ids: string[], hide: boolean) => void;
+  /**
+   * Show this subtree and nothing else. The counterpart gesture: hiding fifty
+   * establishments one at a time to look at the fifty-first is not a workflow.
+   */
+  onSolo?: (ids: string[]) => void;
   emptyLabel?: string;
 }
 
@@ -113,8 +126,9 @@ export default function TreeExplorer({
   items,
   selectedId = null,
   onSelect,
-  scoped,
-  onScope,
+  hidden,
+  onToggleHidden,
+  onSolo,
   emptyLabel = "Nothing here yet.",
 }: TreeExplorerProps) {
   const [open, setOpen] = useState<Set<string>>(new Set());
@@ -154,14 +168,26 @@ export default function TreeExplorer({
               setOpen={setOpen}
               selectedId={selectedId}
               onSelect={onSelect}
-              scoped={scoped}
-              onScope={onScope}
+              hidden={hidden}
+              onToggleHidden={onToggleHidden}
+              onSolo={onSolo}
               matches={matches}
               filtering={filtering}
             />
           ))
         )}
       </div>
+
+      {hidden && hidden.size > 0 && onToggleHidden ? (
+        // A hidden thing you have forgotten you hid is a map you will misread.
+        <button
+          type="button"
+          onClick={() => onToggleHidden(Array.from(hidden), false)}
+          className="shrink-0 border-t border-line px-3 py-1.5 text-left text-[10px] text-ink-muted hover:text-brand"
+        >
+          {hidden.size} hidden — show everything
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -173,8 +199,9 @@ function Row({
   setOpen,
   selectedId,
   onSelect,
-  scoped,
-  onScope,
+  hidden,
+  onToggleHidden,
+  onSolo,
   matches,
   filtering,
 }: {
@@ -184,8 +211,9 @@ function Row({
   setOpen: (s: Set<string>) => void;
   selectedId: string | null;
   onSelect?: (id: string) => void;
-  scoped?: Set<string>;
-  onScope?: (ids: string[], include: boolean) => void;
+  hidden?: Set<string>;
+  onToggleHidden?: (ids: string[], hide: boolean) => void;
+  onSolo?: (ids: string[]) => void;
   matches: Set<string>;
   filtering: boolean;
 }) {
@@ -197,15 +225,16 @@ function Row({
   const isOpen = filtering || open.has(item.id);
   const selected = selectedId === item.id;
   const ids = subtreeIds(item);
-  const included = scoped ? ids.every((id) => scoped.has(id)) : false;
-  const partial = scoped ? !included && ids.some((id) => scoped.has(id)) : false;
+  // Visible when nothing under it is hidden; partly visible when only some is.
+  const allHidden = hidden ? ids.every((id) => hidden.has(id)) : false;
+  const someHidden = hidden ? !allHidden && ids.some((id) => hidden.has(id)) : false;
 
   return (
     <>
       <div
-        className={`flex items-center gap-1 px-1 py-0.5 ${
+        className={`group flex items-center gap-1 px-1 py-0.5 ${
           selected ? "bg-brand-soft" : "hover:bg-canvas"
-        }`}
+        } ${allHidden ? "opacity-45" : ""}`}
         style={{ paddingLeft: 4 + depth * 12 }}
       >
         {kids.length > 0 ? (
@@ -227,17 +256,20 @@ function Row({
           <span className="w-3 shrink-0" />
         )}
 
-        {scoped && onScope ? (
-          <input
-            type="checkbox"
-            checked={included}
-            ref={(el) => {
-              if (el) el.indeterminate = partial;
-            }}
-            onChange={() => onScope(ids, !included)}
-            aria-label={`Show only ${item.label}`}
-            className="shrink-0"
-          />
+        {hidden && onToggleHidden ? (
+          <button
+            type="button"
+            onClick={() => onToggleHidden(ids, !allHidden)}
+            aria-label={`${allHidden ? "Show" : "Hide"} ${item.label}`}
+            title={allHidden ? "Show" : "Hide"}
+            className="shrink-0 rounded px-0.5 text-[#8f99a8] hover:text-ink"
+          >
+            {allHidden ? (
+              <EyeOff className="h-3 w-3" />
+            ) : (
+              <Eye className={`h-3 w-3 ${someHidden ? "opacity-50" : ""}`} />
+            )}
+          </button>
         ) : null}
 
         <button
@@ -260,6 +292,22 @@ function Row({
             </span>
           ) : null}
         </button>
+
+        {onSolo ? (
+          // "Show this and nothing else" — the gesture the eye cannot express.
+          // Hiding fifty establishments one at a time to look at the fifty-first
+          // is not a workflow. Appears on hover so a 241-row tree is not a wall
+          // of buttons.
+          <button
+            type="button"
+            onClick={() => onSolo(ids)}
+            aria-label={`Show only ${item.label}`}
+            title="Show only this"
+            className="shrink-0 rounded px-1 text-[9px] uppercase tracking-wide text-[#8f99a8] opacity-0 hover:text-brand focus:opacity-100 group-hover:opacity-100"
+          >
+            only
+          </button>
+        ) : null}
       </div>
 
       {item.hint && selected ? (
@@ -281,8 +329,9 @@ function Row({
               setOpen={setOpen}
               selectedId={selectedId}
               onSelect={onSelect}
-              scoped={scoped}
-              onScope={onScope}
+              hidden={hidden}
+              onToggleHidden={onToggleHidden}
+              onSolo={onSolo}
               matches={matches}
               filtering={filtering}
             />

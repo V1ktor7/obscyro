@@ -30,9 +30,18 @@ const TREE: TreeItem[] = [
 
 function panel(over: Partial<React.ComponentProps<typeof TreeExplorer>> = {}) {
   const onSelect = vi.fn();
-  const onScope = vi.fn();
-  render(<TreeExplorer items={TREE} onSelect={onSelect} onScope={onScope} {...over} />);
-  return { onSelect, onScope };
+  const onToggleHidden = vi.fn();
+  const onSolo = vi.fn();
+  render(
+    <TreeExplorer
+      items={TREE}
+      onSelect={onSelect}
+      onToggleHidden={onToggleHidden}
+      onSolo={onSolo}
+      {...over}
+    />,
+  );
+  return { onSelect, onToggleHidden, onSolo };
 }
 
 describe("expanding", () => {
@@ -75,32 +84,48 @@ describe("what a collapsed row says", () => {
   });
 });
 
-describe("selecting and scoping are separate", () => {
-  it("clicking a row inspects it without scoping", () => {
-    const { onSelect, onScope } = panel();
+describe("inspecting, hiding and soloing are three gestures", () => {
+  it("clicking a row inspects it and changes nothing on the map", () => {
+    const { onSelect, onToggleHidden, onSolo } = panel();
     fireEvent.click(screen.getByText("Santé Québec Centre-Sud"));
     expect(onSelect).toHaveBeenCalledWith("ciusss");
-    expect(onScope).not.toHaveBeenCalled();
+    expect(onToggleHidden).not.toHaveBeenCalled();
+    expect(onSolo).not.toHaveBeenCalled();
   });
 
-  it("checking a parent scopes its whole subtree", () => {
-    const { onScope, onSelect } = panel({ scoped: new Set<string>() });
-    fireEvent.click(screen.getByRole("checkbox", { name: /Show only Santé Québec Centre-Sud/ }));
-    expect(onScope).toHaveBeenCalledWith(["ciusss", "notre-dame", "hotel-dieu"], true);
-    expect(onSelect).not.toHaveBeenCalled();
+  it("the eye hides a whole branch in one click", () => {
+    // Deny-list semantics: from the default state, hiding one thing is one
+    // click. With an allow-list the first click did nothing.
+    const { onToggleHidden } = panel({ hidden: new Set<string>() });
+    fireEvent.click(screen.getByRole("button", { name: /Hide Santé Québec Centre-Sud/ }));
+    expect(onToggleHidden).toHaveBeenCalledWith(["ciusss", "notre-dame", "hotel-dieu"], true);
   });
 
-  it("offers no checkboxes when scoping is not on the table", () => {
+  it("the eye brings a hidden branch back", () => {
+    const { onToggleHidden } = panel({ hidden: new Set(["ciusss", "notre-dame", "hotel-dieu"]) });
+    fireEvent.click(screen.getByRole("button", { name: /Show Santé Québec Centre-Sud/ }));
+    expect(onToggleHidden).toHaveBeenCalledWith(["ciusss", "notre-dame", "hotel-dieu"], false);
+  });
+
+  it("`only` asks for this branch and nothing else", () => {
+    // The gesture behind "show me Centre-Sud": its installations stay, every
+    // other establishment goes. Hiding fifty of them by hand is not a workflow.
+    const { onSolo } = panel({ hidden: new Set<string>() });
+    fireEvent.click(screen.getAllByRole("button", { name: /Show only Santé Québec Centre-Sud/ })[0]!);
+    expect(onSolo).toHaveBeenCalledWith(["ciusss", "notre-dame", "hotel-dieu"]);
+  });
+
+  it("offers no visibility controls when hiding is not on the table", () => {
     // A control that redraws nothing is an ornament.
     render(<TreeExplorer items={TREE} />);
-    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Hide / })).toBeNull();
   });
 
-  it("marks a partly-included parent as indeterminate", () => {
-    panel({ scoped: new Set(["notre-dame"]) });
-    const box = screen.getByRole("checkbox", { name: /Show only Santé Québec Centre-Sud/ }) as HTMLInputElement;
-    expect(box.checked).toBe(false);
-    expect(box.indeterminate).toBe(true);
+  it("offers a way back when something is hidden", () => {
+    // A hidden thing you have forgotten you hid is a map you will misread.
+    const { onToggleHidden } = panel({ hidden: new Set(["notre-dame"]) });
+    fireEvent.click(screen.getByText(/1 hidden/));
+    expect(onToggleHidden).toHaveBeenCalledWith(["notre-dame"], false);
   });
 });
 

@@ -13,7 +13,13 @@ import type { TwinTreeSnapshot, TwinUnitNode } from "@/lib/platform-api";
 import type { TreeItem } from "../TreeExplorer";
 import { buildForest, type TreeNode } from "./twin-hierarchy";
 
-/** Beds and places under a unit — what the network is made of. */
+/**
+ * Beds and places under a unit — what the network is made of, and what a
+ * marker's size should mean. Exported because the map sizes its dots from the
+ * same number the tree counts with; two definitions of "how big is this site"
+ * would put a 500-bed hospital and a 9-place home at the same radius on one
+ * screen and not the other.
+ */
 export function capacityOf(node: TwinUnitNode): number {
   const byType = node.metrics.instanceCountByType ?? {};
   return Object.entries(byType)
