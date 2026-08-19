@@ -46,6 +46,7 @@ import {
   createEnvType,
   fetchGeoCapability,
   fetchTwinNetwork,
+  fetchTwinTree,
   getEnvObject,
   listEnvTypes,
   listGeoShapes,
@@ -62,8 +63,10 @@ import {
   type TwinNetworkSnapshot,
 } from "@/lib/platform-api";
 import { useStudio } from "../StudioShell";
+import TreeExplorer, { type TreeItem } from "../TreeExplorer";
 
 import CoverageDialog from "./CoverageDialog";
+import { unitsTree } from "./units-tree";
 import {
   flattenCoordinates,
   formatArea,
@@ -273,6 +276,10 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   const [alerts, setAlerts] = useState<TwinAlert[]>([]);
   const [feedEvents, setFeedEvents] = useState<{ id: string; receivedAt: string }[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Null means "everything". A Set means "only these", and it holds whole
+  // subtrees so checking an establishment carries its installations.
+  const [scoped, setScoped] = useState<Set<string> | null>(null);
+  const [tree, setTree] = useState<TreeItem[]>([]);
   const [layers, setLayers] = useState<LayerToggles>({});
   const [projection, setProjection] = useState<"globe" | "mercator">("globe");
   const [styleMode, setStyleMode] = useState<"standard" | "satellite">("standard");
@@ -495,6 +502,12 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         listEnvTypes(env).catch(() => ({ linkTypes: [] as EnvLinkType[] })),
       ]);
       setNetwork(net);
+      // The map reads a flat list of sites; the tree needs the parent/child
+      // edges, which only the tree endpoint carries. A failure here costs the
+      // panel, not the map.
+      fetchTwinTree(env)
+        .then((t) => setTree(unitsTree(t)))
+        .catch(() => setTree([]));
       setLinkTypes(schema.linkTypes);
       setAlerts(al.alerts);
       setFeedEvents(ev.events.map((e) => ({ id: e.id, receivedAt: e.receivedAt })));
@@ -792,6 +805,9 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
       const mapboxgl = (await import("mapbox-gl")).default;
       if (!mounted) return;
       for (const site of network.sites) {
+        // Scoping is the tree's whole point: a checkbox that redraws nothing is
+        // an ornament. Null means everything, which is the default.
+        if (scoped && !scoped.has(site.id)) continue;
         const pos = positions.get(site.id)!;
         const el = document.createElement("div");
         const occ = site.metrics.occupancyPct;
@@ -826,7 +842,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     return () => {
       mounted = false;
     };
-  }, [network, mapReady, positions]);
+  }, [network, mapReady, positions, scoped]);
 
   // Flow arcs: update sources when flows or toggles change.
   useEffect(() => {
@@ -1043,7 +1059,8 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         {network ? (
           <span className="flex items-center gap-1.5 rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            live · {network.sites.length} site{network.sites.length === 1 ? "" : "s"}
+            live · {scoped ? `${network.sites.filter((s) => scoped.has(s.id)).length} of ` : ""}
+            {network.sites.length} site{network.sites.length === 1 ? "" : "s"}
           </span>
         ) : null}
         {missingCoords > 0 ? (
@@ -1260,6 +1277,29 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
             node ring = alert severity · badge = occupancy · arcs = flows between sites
           </p>
         </aside>
+
+        {/* The hierarchy, browsable. 190 pins on one island is not readable at
+            any zoom; 51 collapsed establishments is. Clicking a row inspects
+            it, the checkbox narrows the map to that branch. */}
+        <TreeExplorer
+          items={tree}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          scoped={scoped ?? undefined}
+          onScope={(ids, include) => {
+            setScoped((cur) => {
+              const next = new Set(cur ?? []);
+              for (const id of ids) {
+                if (include) next.add(id);
+                else next.delete(id);
+              }
+              // Scoping to nothing means scoping to everything: an empty map is
+              // never what unchecking the last box was asking for.
+              return next.size === 0 ? null : next;
+            });
+          }}
+          emptyLabel="No units yet. Import or declare an OrgUnit to see the network here."
+        />
 
         {/* Map */}
         <div className="relative min-h-[440px] min-w-0 flex-1">
