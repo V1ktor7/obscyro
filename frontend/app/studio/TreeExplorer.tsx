@@ -125,7 +125,9 @@ export default function TreeExplorer({
   const total = useMemo(() => items.reduce((n, i) => n + subtreeIds(i).length, 0), [items]);
 
   return (
-    <div className="flex min-h-0 w-72 shrink-0 flex-col border-r border-line bg-white">
+    // No width, no border of its own: a component that sizes itself cannot be
+    // put inside a panel, which is exactly what was asked of this one.
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 border-b border-line px-2 py-1.5">
         <input
           value={query}

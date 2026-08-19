@@ -29,6 +29,8 @@ import {
   Map as MapIcon,
   MapPin,
   Mountain,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   RefreshCw,
   Satellite,
@@ -276,6 +278,9 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   const [alerts, setAlerts] = useState<TwinAlert[]>([]);
   const [feedEvents, setFeedEvents] = useState<{ id: string; receivedAt: string }[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // The map is why this screen exists; on a laptop the panel costs it a fifth
+  // of its width, so it folds away.
+  const [railOpen, setRailOpen] = useState(true);
   // Null means "everything". A Set means "only these", and it holds whole
   // subtrees so checking an establishment carries its installations.
   const [scoped, setScoped] = useState<Set<string> | null>(null);
@@ -1211,8 +1216,45 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
       ) : null}
 
       <div className="flex min-h-[440px] flex-1">
+        {/* Collapsed: a rail wide enough for one button. The map is the reason
+            this screen exists, and on a laptop the panel costs it a fifth of
+            its width. */}
+        {!railOpen ? (
+          <div className="flex w-8 shrink-0 flex-col items-center border-r border-[#d3d8de] bg-white pt-2">
+            <button
+              type="button"
+              onClick={() => setRailOpen(true)}
+              aria-label="Show the panel"
+              title="Show layers, saved views and the explorer"
+              className="rounded p-1 text-[#5f6b7c] hover:bg-[#f6f7f9] hover:text-[#2d72d2]"
+            >
+              <PanelLeftOpen className="h-4 w-4" />
+            </button>
+          </div>
+        ) : null}
+
         {/* Layers rail */}
-        <aside className="flex w-44 shrink-0 flex-col overflow-y-auto border-r border-[#d3d8de] bg-white p-2">
+        <aside
+          className={cn(
+            "shrink-0 flex-col border-r border-[#d3d8de] bg-white",
+            railOpen ? "flex w-72" : "hidden",
+          )}
+        >
+          <div className="flex shrink-0 items-center justify-end border-b border-[#e5e8eb] px-1 py-1">
+            <button
+              type="button"
+              onClick={() => setRailOpen(false)}
+              aria-label="Hide the panel"
+              title="Hide the panel"
+              className="rounded p-1 text-[#8f99a8] hover:bg-[#f6f7f9] hover:text-[#1c2127]"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Layers and saved views keep their own scroll and are capped, so a
+              long list of link types cannot squeeze the explorer to nothing. */}
+          <div className="max-h-[42%] shrink-0 overflow-y-auto p-2">
           <p className="px-2 pb-1 pt-1 text-[10px] font-medium uppercase tracking-wide text-ink-faint">
             Layers
           </p>
@@ -1273,15 +1315,20 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
             <Save className="h-3 w-3" />
             save current view
           </button>
-          <p className="mt-auto px-2 pt-3 text-[10px] leading-relaxed text-[#8f99a8]">
+          <p className="px-2 pt-3 text-[10px] leading-relaxed text-[#8f99a8]">
             node ring = alert severity · badge = occupancy · arcs = flows between sites
           </p>
-        </aside>
+          </div>
 
-        {/* The hierarchy, browsable. 190 pins on one island is not readable at
-            any zoom; 51 collapsed establishments is. Clicking a row inspects
-            it, the checkbox narrows the map to that branch. */}
-        <TreeExplorer
+          {/* The hierarchy, browsable. 190 pins on one island is not readable at
+              any zoom; 51 collapsed establishments is. Clicking a row inspects
+              it, the checkbox narrows the map to that branch. Given the rest of
+              the panel its height, because a tree two rows tall is a list. */}
+          <div className="flex min-h-0 flex-1 flex-col border-t border-[#e5e8eb]">
+            <p className="shrink-0 px-3 pb-1 pt-2 text-[10px] font-medium uppercase tracking-wide text-ink-faint">
+              Explorer
+            </p>
+            <TreeExplorer
           items={tree}
           selectedId={selectedId}
           onSelect={setSelectedId}
@@ -1298,8 +1345,10 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               return next.size === 0 ? null : next;
             });
           }}
-          emptyLabel="No units yet. Import or declare an OrgUnit to see the network here."
-        />
+              emptyLabel="No units yet. Import or declare an OrgUnit to see the network here."
+            />
+          </div>
+        </aside>
 
         {/* Map */}
         <div className="relative min-h-[440px] min-w-0 flex-1">
