@@ -76,6 +76,33 @@ function toItem(n: TreeNode): TreeItem {
   };
 }
 
+/**
+ * Whether a map marker should be drawn, given what the tree has hidden.
+ *
+ * The map and the tree do not share identifiers. The map draws `Site`
+ * instances — the ones carrying latitude and longitude — while the tree is
+ * built from the `OrgUnit`s that stand on them. Matching `site.id` against a
+ * set of unit ids therefore matched nothing, and hiding the entire tree left
+ * every pin on the map.
+ *
+ * The join is `contributingUnits`, which each site already carries. A site
+ * disappears when every unit standing on it is hidden, and stays while any one
+ * of them is visible — a shared address should not vanish because one of its
+ * two tenants was hidden.
+ *
+ * A site with no contributing unit is never hidden: nothing in the tree can
+ * speak for it, so nothing in the tree should be able to silence it.
+ */
+export function isSiteHidden(
+  site: { id: string; contributingUnits?: Array<{ id: string }> | null },
+  hidden: Set<string>,
+): boolean {
+  if (hidden.size === 0) return false;
+  const units = site.contributingUnits ?? [];
+  if (units.length === 0) return hidden.has(site.id);
+  return units.every((u) => hidden.has(u.id));
+}
+
 export function unitsTree(snapshot: TwinTreeSnapshot | null): TreeItem[] {
   if (!snapshot) return [];
   const items = buildForest(snapshot).map(toItem);

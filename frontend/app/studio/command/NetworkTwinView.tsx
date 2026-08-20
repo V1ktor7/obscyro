@@ -68,7 +68,7 @@ import { useStudio } from "../StudioShell";
 import TreeExplorer, { type TreeItem } from "../TreeExplorer";
 
 import CoverageDialog from "./CoverageDialog";
-import { capacityOf, unitsTree } from "./units-tree";
+import { capacityOf, isSiteHidden, unitsTree } from "./units-tree";
 import {
   flattenCoordinates,
   formatArea,
@@ -819,7 +819,12 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
       if (!mounted) return;
       for (const site of network.sites) {
         // The tree's whole point: a control that redraws nothing is an ornament.
-        if (hiddenIds.has(site.id)) continue;
+        //
+        // The map draws Sites — the instances that carry coordinates — while
+        // the tree is built from the OrgUnits above them. Two id spaces, no
+        // overlap, so matching on `site.id` hid nothing at all. A site is hidden
+        // when every unit standing on it is.
+        if (isSiteHidden(site, hiddenIds)) continue;
         const pos = positions.get(site.id)!;
         const el = document.createElement("div");
         const occ = site.metrics.occupancyPct;
@@ -1094,7 +1099,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         {network ? (
           <span className="flex items-center gap-1.5 rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            live · {hiddenIds.size > 0 ? `${network.sites.filter((s) => !hiddenIds.has(s.id)).length} of ` : ""}
+            live · {hiddenIds.size > 0 ? `${network.sites.filter((s) => !isSiteHidden(s, hiddenIds)).length} of ` : ""}
             {network.sites.length} site{network.sites.length === 1 ? "" : "s"}
           </span>
         ) : null}
