@@ -61,6 +61,7 @@ import {
   type GeoCapability,
   type InstanceShape,
   type TwinAlert,
+  type TwinTreeSnapshot,
   type TwinNetworkSite,
   type TwinNetworkSnapshot,
 } from "@/lib/platform-api";
@@ -68,7 +69,8 @@ import { useStudio } from "../StudioShell";
 import TreeExplorer, { type TreeItem } from "../TreeExplorer";
 
 import CoverageDialog from "./CoverageDialog";
-import { capacityOf, isSiteHidden, unitsTree } from "./units-tree";
+import { capacityOf, isSiteHidden } from "./units-tree";
+import { AXES, treeForAxis, type GroupingAxis } from "./units-axes";
 import {
   flattenCoordinates,
   formatArea,
@@ -292,7 +294,18 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     selectedRef.current = selectedId;
   }, [selectedId]);
   const [panelTab, setPanelTab] = useState<"explorer" | "layers" | "views">("explorer");
-  const [tree, setTree] = useState<TreeItem[]>([]);
+  const [axis, setAxis] = useState<GroupingAxis>("etablissement");
+  // unit id -> territory name, resolved from the polygons rather than from a
+  // field on the unit: an installation belongs to the territory it stands in.
+  /**
+   * unit id -> territory name, from the boundaries themselves.
+   *
+   * Territory is not a field on a unit and inventing one would be a second
+   * truth to keep in step. A point in polygon test against the shapes already
+   * loaded for the map answers it, and recomputes on its own whenever either
+   * side lands.
+   */
+  const [treeSnap, setTreeSnap] = useState<TwinTreeSnapshot | null>(null);
   const [layers, setLayers] = useState<LayerToggles>({});
   const [projection, setProjection] = useState<"globe" | "mercator">("globe");
   const [styleMode, setStyleMode] = useState<"standard" | "satellite">("standard");
@@ -336,6 +349,38 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   // extension, so "unavailable" is the ordinary state, not an error path.
   const [capability, setCapability] = useState<GeoCapability | null>(null);
   const [shapes, setShapes] = useState<InstanceShape[]>([]);
+
+  const territoryOf = useMemo(() => {
+    const out = new Map<string, string>();
+    const terr = shapes.filter((g) => g.kind === "territoire");
+    if (!network || terr.length === 0) return out;
+    const named = new Map(terr.map((g) => [g.instanceId, g.instanceName ?? ""]));
+    const hit = (px: number, py: number, ring: number[][]) => {
+      let c = false;
+      for (let i = 0, n = ring.length; i < n; i++) {
+        const a = ring[i]!, b = ring[(i + 1) % n]!;
+        if (a[1]! > py !== b[1]! > py &&
+            px < ((b[0]! - a[0]!) * (py - a[1]!)) / (b[1]! - a[1]! + 1e-15) + a[0]!) c = !c;
+      }
+      return c;
+    };
+    for (const site of network.sites) {
+      if (site.longitude == null || site.latitude == null) continue;
+      for (const g of terr) {
+        const ring = (g.geometry.coordinates as unknown as number[][][])[0];
+        if (!ring || !hit(site.longitude, site.latitude, ring)) continue;
+        for (const u of site.contributingUnits ?? []) out.set(u.id, named.get(g.instanceId) ?? "");
+        break;
+      }
+    }
+    return out;
+  }, [network, shapes]);
+
+  const tree = useMemo(
+    () => treeForAxis(treeSnap, axis, territoryOf),
+    [treeSnap, axis, territoryOf],
+  );
+
   const [drawArea, setDrawArea] = useState<null | {
     instanceId: string;
     instanceName: string;
@@ -519,8 +564,8 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
       // edges, which only the tree endpoint carries. A failure here costs the
       // panel, not the map.
       fetchTwinTree(env)
-        .then((t) => setTree(unitsTree(t)))
-        .catch(() => setTree([]));
+        .then((t) => setTreeSnap(t))
+        .catch(() => setTreeSnap(null));
       setLinkTypes(schema.linkTypes);
       setAlerts(al.alerts);
       setFeedEvents(ev.events.map((e) => ({ id: e.id, receivedAt: e.receivedAt })));
@@ -1396,6 +1441,29 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               when you say "show me Centre-Sud": its 59 installations stay, the
               other 131 go. */}
           <div className={cn("min-h-0 flex-1 flex-col", panelTab === "explorer" ? "flex" : "hidden")}>
+            {/* Three ways to group the same 190 installations, because they are
+                three different questions. Only one of them has boundaries the
+                map can honestly draw. */}
+            <div className="shrink-0 border-b border-line px-2 pb-1.5 pt-2">
+              <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink-faint">
+                Grouper par
+              </label>
+              <select
+                value={axis}
+                onChange={(e) => setAxis(e.target.value as GroupingAxis)}
+                aria-label="Axe de regroupement"
+                className="w-full rounded border border-line px-2 py-1 text-[11px] text-ink focus:border-brand focus:outline-none"
+              >
+                {AXES.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[10px] leading-snug text-ink-faint">
+                {AXES.find((a) => a.id === axis)?.hint}
+              </p>
+            </div>
             <TreeExplorer
               items={tree}
               selectedId={selectedId}
