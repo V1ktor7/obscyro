@@ -42,6 +42,15 @@ export interface InstanceGeometry {
   geometry: GeoJsonGeometry;
   /** Square metres. Zero for points and lines. */
   areaM2: number;
+  /**
+   * The instance's own declared properties, carried with the shape.
+   *
+   * A map that colours its polygons needs to know what colour, and the only
+   * honest source is what the institution declared on the object — not a
+   * palette compiled into the client. Shipping the properties here is what
+   * lets a territory be recoloured or retagged by editing the ontology.
+   */
+  properties: Record<string, unknown>;
 }
 
 export interface GeometryOverlap {
@@ -174,13 +183,15 @@ export async function listGeometries(
     kind: string;
     geojson: string;
     area_m2: string;
+    properties: Record<string, unknown> | null;
   }>(
     `SELECT g.instance_id,
             COALESCE(oi.properties ->> 'name', oi.properties ->> 'label') AS instance_name,
             t.name AS object_type,
             g.kind,
             ST_AsGeoJSON(g.geom) AS geojson,
-            ST_Area(g.geom)::text AS area_m2
+            ST_Area(g.geom)::text AS area_m2,
+            oi.properties
        FROM app.instance_geometry g
        JOIN app.ontology_object_instances oi ON oi.id = g.instance_id
        JOIN app.ontology_object_types t ON t.id = oi.object_type_id
@@ -196,6 +207,7 @@ export async function listGeometries(
     kind: r.kind,
     geometry: JSON.parse(r.geojson) as GeoJsonGeometry,
     areaM2: Number(r.area_m2),
+    properties: r.properties ?? {},
   }));
 }
 

@@ -51,6 +51,8 @@ const shapeOut = z.object({
   kind: z.string(),
   geometry: z.object({ type: z.string(), coordinates: z.unknown() }),
   areaM2: z.number(),
+  /** Whatever the institution declared on the instance. Never a fixed set. */
+  properties: z.record(z.unknown()),
 });
 
 async function requireUserId(req: {

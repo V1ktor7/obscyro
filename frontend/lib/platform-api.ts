@@ -1546,6 +1546,12 @@ export interface InstanceShape {
   geometry: GeoJsonGeometry;
   /** Square metres. Zero for points and lines. */
   areaM2: number;
+  /**
+   * The instance's declared properties. The map reads its colour and its tags
+   * from here rather than from a palette in the client, so an institution
+   * recolours its territories by editing the ontology.
+   */
+  properties?: Record<string, unknown>;
 }
 
 export interface ShapeOverlap {

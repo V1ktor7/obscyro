@@ -70,6 +70,7 @@ import TreeExplorer, { type TreeItem } from "../TreeExplorer";
 
 import CoverageDialog from "./CoverageDialog";
 import { capacityOf, isSiteHidden } from "./units-tree";
+import { shapeFeatures } from "./map-shapes";
 import { AXES, treeForAxis, type GroupingAxis } from "./units-axes";
 import {
   flattenCoordinates,
@@ -190,6 +191,7 @@ function assignLayerStyles(
 const SHAPES_SRC = "twin-shapes";
 const SHAPES_FILL = "twin-shapes-fill";
 const SHAPES_LINE = "twin-shapes-line";
+const SHAPES_LABEL = "twin-shapes-label";
 const DRAW_SRC = "twin-draw";
 const DRAW_FILL = "twin-draw-fill";
 const DRAW_LINE = "twin-draw-line";
@@ -739,7 +741,23 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
           id: SHAPES_FILL,
           type: "fill",
           source: SHAPES_SRC,
-          paint: { "fill-color": "#5f6b7c", "fill-opacity": 0.1 },
+          // Read from the feature, not hard-coded: the colour is a declared
+          // property of the instance, so an institution recolours its map by
+          // editing its ontology rather than by asking for a deploy.
+          //
+          // The fill fades as you zoom in. Far out the territory is the subject
+          // and the installations are dots inside it; close in the installation
+          // is the subject and the territory is context that should not tint
+          // the building you are reading.
+          paint: {
+            "fill-color": ["get", "couleur"],
+            "fill-opacity": [
+              "case",
+              ["get", "dimmed"],
+              0.02,
+              ["interpolate", ["linear"], ["zoom"], 8, 0.2, 11, 0.12, 14, 0.04],
+            ],
+          },
         },
         firstFlow,
       );
@@ -750,10 +768,48 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
           id: SHAPES_LINE,
           type: "line",
           source: SHAPES_SRC,
-          paint: { "line-color": "#404854", "line-width": 1.2, "line-opacity": 0.55 },
+          // The outline survives the zoom the fill gives up: a boundary you can
+          // still trace is what tells you two neighbouring hospitals are not in
+          // the same territory.
+          paint: {
+            "line-color": ["get", "couleur"],
+            "line-width": ["interpolate", ["linear"], ["zoom"], 8, 1, 11, 1.6, 14, 2.4],
+            "line-opacity": ["case", ["get", "dimmed"], 0.15, 0.85],
+          },
         },
         firstFlow,
       );
+    }
+
+    if (!map.getLayer(SHAPES_LABEL)) {
+      map.addLayer({
+        id: SHAPES_LABEL,
+        type: "symbol",
+        source: SHAPES_SRC,
+        filter: ["==", ["get", "kind"], "territoire"],
+        layout: {
+          "text-field": ["get", "label"],
+          // Spaced small caps is how an atlas names an area rather than a
+          // place: it reads as the ground the pins stand on, not as one of them.
+          "text-transform": "uppercase",
+          "text-letter-spacing": 0.09,
+          "text-size": ["interpolate", ["linear"], ["zoom"], 8, 10, 12, 12.5, 15, 14],
+          "text-anchor": "center",
+          "text-max-width": 8,
+          // Mapbox drops a label rather than overlap one already placed, which
+          // is the behaviour we want: twelve names on one island cannot all fit
+          // at every zoom, and a stack of overlapping names is worse than ten.
+          "text-allow-overlap": false,
+        },
+        paint: {
+          "text-color": ["get", "couleur"],
+          "text-opacity": ["case", ["get", "dimmed"], 0.25, 1],
+          // On imagery the ground is dark, so the halo that makes a label
+          // legible has to invert with it.
+          "text-halo-color": styleMode === "satellite" ? "#0b0f14" : "#ffffff",
+          "text-halo-width": 1.6,
+        },
+      });
     }
 
     // The ring in progress sits above everything: it is what the hand is doing.
@@ -807,16 +863,11 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     const map = mapRef.current;
     if (!map || !mapReady) return;
     ensureShapeLayers(map);
-    (map.getSource(SHAPES_SRC) as GeoSource)?.setData({
-      type: "FeatureCollection",
-      features: shapes.map((s) => ({
-        type: "Feature" as const,
-        properties: { instanceId: s.instanceId, kind: s.kind },
-        geometry: s.geometry,
-      })),
-    });
+    (map.getSource(SHAPES_SRC) as GeoSource)?.setData(
+      shapeFeatures(shapes, { axis, hidden: hiddenIds }) as never,
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shapes, mapReady, styleMode]);
+  }, [shapes, mapReady, styleMode, axis, hiddenIds]);
 
   // The ring being drawn: the closed polygon once it is one, the open line
   // before that, plus a dot on every corner so a misplaced click is visible.
