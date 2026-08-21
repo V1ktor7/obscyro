@@ -10,7 +10,8 @@
  *     that is a CSS hex colour is a colour — rather than by knowing a blessed
  *     key called `couleur`. A deployment that names it `color`, `teinte` or
  *     `display_colour` gets the same behaviour without a code change, which is
- *     the whole point of an ontology you can edit.
+ *     the whole point of an ontology you can edit. Nothing declared means a
+ *     tint no *neighbour* is using — a distinction, not a meaning.
  *
  *  2. **When a boundary is allowed on screen.** Only the territory axis has
  *     real boundaries. An establishment's envelope was measured wrong for 135
@@ -80,8 +81,166 @@ export interface ShapeFeatureCollection {
   features: ShapeFeature[];
 }
 
-/** The colour used when the institution declared none. Grey, never a guess. */
+/**
+ * Tints for territories nobody has coloured yet.
+ *
+ * The same choice `TYPE_TINTS` makes for object types, for the same reason:
+ * these are categorical, not semantic. The fifth is violet because it is the
+ * fifth, and none of them means "worse". Naming them `danger` or `warn` would
+ * have a reader infer a severity from an outline that is only a border.
+ *
+ * Six is deliberate headroom — four suffice to colour any planar map, so a
+ * palette of six is never the reason two neighbours end up alike.
+ */
+export const AUTO_TINTS = [
+  "#2d72d2",
+  "#1d9e75",
+  "#d9822b",
+  "#8f5cc4",
+  "#c23030",
+  "#0f6f7a",
+] as const;
+
+/** Used only when a shape has no neighbours and no declaration to go on. */
 export const UNCOLOURED = "#8a94a6";
+
+/** Vertices are matched at ~10 cm, which is finer than the source's precision. */
+function vertexKeys(geometry: InstanceShape["geometry"]): string[] {
+  const out: string[] = [];
+  const walk = (v: unknown) => {
+    if (!Array.isArray(v)) return;
+    if (typeof v[0] === "number" && typeof v[1] === "number") {
+      out.push(`${(v[0] as number).toFixed(6)},${(v[1] as number).toFixed(6)}`);
+      return;
+    }
+    for (const child of v) walk(child);
+  };
+  walk(geometry.coordinates);
+  return out;
+}
+
+/**
+ * Which shapes touch which.
+ *
+ * Two territories are neighbours when they share a vertex. Official boundaries
+ * are cut from one source geometry, so a shared border is a shared vertex list
+ * rather than two lines that merely look coincident — which makes an exact test
+ * both correct here and far cheaper than intersecting every edge pair.
+ */
+export function adjacency(shapes: InstanceShape[]): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  for (const s of shapes) out.set(s.instanceId, new Set());
+
+  const byVertex = new Map<string, string[]>();
+  for (const s of shapes) {
+    for (const key of Array.from(new Set(vertexKeys(s.geometry)))) {
+      const list = byVertex.get(key);
+      if (list) list.push(s.instanceId);
+      else byVertex.set(key, [s.instanceId]);
+    }
+  }
+  let found = 0;
+  for (const ids of Array.from(byVertex.values())) {
+    if (ids.length < 2) continue;
+    for (const a of ids) {
+      for (const b of ids) {
+        if (a !== b && !out.get(a)?.has(b)) {
+          out.get(a)?.add(b);
+          found++;
+        }
+      }
+    }
+  }
+  if (found > 0) return out;
+
+  // Nothing shared a vertex. Either these shapes genuinely do not touch, or
+  // they were simplified ring by ring and a border that is one line on the
+  // ground is now two that miss each other by metres. Overlapping extents are
+  // the coarse read that survives that: it over-reports, which only ever costs
+  // an extra colour, whereas under-reporting paints two neighbours alike.
+  const box = new Map<string, [number, number, number, number]>();
+  for (const s of shapes) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const key of vertexKeys(s.geometry)) {
+      const [x, y] = key.split(",").map(Number) as [number, number];
+      if (x < x0) x0 = x;
+      if (y < y0) y0 = y;
+      if (x > x1) x1 = x;
+      if (y > y1) y1 = y;
+    }
+    if (x0 !== Infinity) box.set(s.instanceId, [x0, y0, x1, y1]);
+  }
+  for (const a of shapes) {
+    for (const b of shapes) {
+      if (a.instanceId === b.instanceId) continue;
+      const p = box.get(a.instanceId);
+      const q = box.get(b.instanceId);
+      if (!p || !q) continue;
+      if (p[0] <= q[2] && q[0] <= p[2] && p[1] <= q[3] && q[1] <= p[3]) {
+        out.get(a.instanceId)?.add(b.instanceId);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * A colour for every shape: the declared one where there is one, otherwise a
+ * tint no neighbour is already using.
+ *
+ * Greedy colouring in Welsh–Powell order — most-connected territory first,
+ * because the shape hemmed in by five others is the one with the fewest tints
+ * left if you leave it until last. A hash of the name would have been one line,
+ * and on twelve RLS packed onto one island it would have put two of them side
+ * by side in the same blue often enough to matter; the entire job of the colour
+ * is to say *this outline is not that one*.
+ *
+ * Declared colours are assigned first and constrain their neighbours, so an
+ * institution that colours one territory pushes the rest out of its way rather
+ * than colliding with them.
+ */
+export function assignColours(shapes: InstanceShape[]): Map<string, string> {
+  const out = new Map<string, string>();
+  const neighbours = adjacency(shapes);
+
+  const declared: InstanceShape[] = [];
+  const derived: InstanceShape[] = [];
+  for (const s of shapes) {
+    const c = colourOf(s.properties);
+    if (c) {
+      out.set(s.instanceId, c);
+      declared.push(s);
+    } else derived.push(s);
+  }
+
+  // Ties broken by id so the same data always paints the same map; a territory
+  // that changes colour on reload is a legend nobody can trust.
+  derived.sort(
+    (a, b) =>
+      (neighbours.get(b.instanceId)?.size ?? 0) - (neighbours.get(a.instanceId)?.size ?? 0) ||
+      a.instanceId.localeCompare(b.instanceId),
+  );
+
+  derived.forEach((s, i) => {
+    const taken = new Set<string>();
+    for (const n of Array.from(neighbours.get(s.instanceId) ?? [])) {
+      const c = out.get(n);
+      if (c) taken.add(c);
+    }
+    if (taken.size === 0) {
+      // Touching nothing, so no constraint to satisfy — but "first free tint"
+      // would then hand every island the same blue. Cycling keeps a set of
+      // detached shapes distinguishable, which is what the colour is for.
+      out.set(s.instanceId, AUTO_TINTS[i % AUTO_TINTS.length]!);
+      return;
+    }
+    const free = AUTO_TINTS.find((t) => !taken.has(t));
+    // Only reachable with more than six mutually touching shapes, which no
+    // planar map has. Grey then, rather than silently repeating a neighbour.
+    out.set(s.instanceId, free ?? UNCOLOURED);
+  });
+  return out;
+}
 
 export function shapeFeatures(
   shapes: InstanceShape[],
@@ -96,6 +255,7 @@ export function shapeFeatures(
 ): ShapeFeatureCollection {
   const hidden = opts.hidden ?? new Set<string>();
   const boundaries = axisHasBoundaries(opts.axis);
+  const colours = assignColours(shapes);
 
   const features: ShapeFeature[] = [];
   for (const s of shapes) {
@@ -112,7 +272,7 @@ export function shapeFeatures(
         instanceId: s.instanceId,
         kind: s.kind,
         label,
-        couleur: colourOf(s.properties) ?? UNCOLOURED,
+        couleur: colours.get(s.instanceId) ?? UNCOLOURED,
         tags: tagsOf(s.properties).join(" · "),
         dimmed: isTerritory && hidden.has(`axis:${label}`),
       },

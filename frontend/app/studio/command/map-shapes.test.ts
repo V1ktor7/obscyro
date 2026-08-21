@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import type { InstanceShape } from "@/lib/platform-api";
 
-import { UNCOLOURED, colourOf, shapeFeatures, tagsOf } from "./map-shapes";
+import { AUTO_TINTS, adjacency, assignColours, colourOf, shapeFeatures, tagsOf } from "./map-shapes";
 
 function shape(over: Partial<InstanceShape> = {}): InstanceShape {
   return {
@@ -94,10 +94,9 @@ describe("what each feature carries", () => {
     expect(fc.features[0]!.properties.couleur).toBe("#2f80ed");
   });
 
-  it("falls back to grey rather than leaving the expression without a value", () => {
-    expect(shapeFeatures([shape()], { axis: "territoire" })[
-      "features"
-    ][0]!.properties.couleur).toBe(UNCOLOURED);
+  it("always carries a colour, so the paint expression never runs dry", () => {
+    const c = shapeFeatures([shape()], { axis: "territoire" }).features[0]!.properties.couleur;
+    expect(c).toMatch(/^#[0-9a-f]{6}$/i);
   });
 
   it("joins tags into something a tooltip can print", () => {
@@ -121,5 +120,81 @@ describe("what each feature carries", () => {
   it("leaves a visible territory undimmed", () => {
     const fc = shapeFeatures([shape()], { axis: "territoire", hidden: new Set(["axis:Autre"]) });
     expect(fc.features[0]!.properties.dimmed).toBe(false);
+  });
+});
+
+
+// A square with its lower-left corner at (x, y), sharing edges with its
+// neighbours the way official boundaries cut from one source geometry do.
+function square(id: string, x: number, y: number): InstanceShape {
+  return shape({
+    instanceId: id,
+    instanceName: id,
+    geometry: {
+      type: "Polygon",
+      coordinates: [[[x, y], [x + 1, y], [x + 1, y + 1], [x, y + 1], [x, y]]],
+    },
+  });
+}
+
+describe("adjacency", () => {
+  it("calls two shapes that share a corner neighbours", () => {
+    const a = adjacency([square("a", 0, 0), square("b", 1, 0)]);
+    expect(Array.from(a.get("a")!)).toEqual(["b"]);
+  });
+
+  it("leaves shapes that touch nothing alone", () => {
+    const a = adjacency([square("a", 0, 0), square("b", 1, 0), square("far", 40, 40)]);
+    expect(a.get("far")!.size).toBe(0);
+  });
+
+  it("falls back to overlapping extents when no vertex is shared at all", () => {
+    // RDP simplified each ring on its own, so a border that is one line on the
+    // ground can come back as two that miss each other by metres. Reading zero
+    // neighbours off that would paint the whole island one colour.
+    const drifted = shape({
+      instanceId: "b",
+      instanceName: "b",
+      geometry: {
+        type: "Polygon",
+        coordinates: [[[0.99, 0.02], [2, 0], [2, 1], [1.01, 0.98], [0.99, 0.02]]],
+      },
+    });
+    const a = adjacency([square("a", 0, 0), drifted]);
+    expect(a.get("a")!.has("b")).toBe(true);
+  });
+});
+
+describe("colouring what nobody has coloured", () => {
+  it("never gives two neighbours the same tint", () => {
+    // This is the whole job of the colour. A hash of the name would have been
+    // one line and would put two of twelve RLS side by side in the same blue
+    // often enough to matter on an island this crowded.
+    const row = [square("a", 0, 0), square("b", 1, 0), square("c", 2, 0)];
+    const c = assignColours(row);
+    expect(c.get("a")).not.toBe(c.get("b"));
+    expect(c.get("b")).not.toBe(c.get("c"));
+    // Non-neighbours may reuse a tint; six colours over fifty territories has
+    // to reuse them somewhere, and a and c share no border.
+    expect(AUTO_TINTS).toContain(c.get("a"));
+  });
+
+  it("paints the same map every time", () => {
+    // A territory that changes colour on reload is a legend nobody can trust.
+    const row = [square("b", 1, 0), square("a", 0, 0), square("c", 2, 0)];
+    expect(Array.from(assignColours(row))).toEqual(Array.from(assignColours(row)));
+  });
+
+  it("keeps a declared colour and pushes the neighbours out of its way", () => {
+    const a = shape({ ...square("a", 0, 0), properties: { couleur: AUTO_TINTS[0] } });
+    const c = assignColours([a, square("b", 1, 0)]);
+    expect(c.get("a")).toBe(AUTO_TINTS[0]);
+    expect(c.get("b")).not.toBe(AUTO_TINTS[0]);
+  });
+  it("keeps detached shapes apart instead of giving them all the first tint", () => {
+    // Three islands constrain nothing, so "first free colour" would hand each
+    // the same blue and the colour would stop saying anything at all.
+    const c = assignColours([square("a", 0, 0), square("b", 40, 40), square("c", 80, 80)]);
+    expect(new Set(Array.from(c.values())).size).toBe(3);
   });
 });
