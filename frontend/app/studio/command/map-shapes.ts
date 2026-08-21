@@ -222,10 +222,10 @@ export function assignColours(shapes: InstanceShape[]): Map<string, string> {
   );
 
   derived.forEach((s, i) => {
-    const taken = new Set<string>();
+    const taken = new Map<string, number>();
     for (const n of Array.from(neighbours.get(s.instanceId) ?? [])) {
       const c = out.get(n);
-      if (c) taken.add(c);
+      if (c) taken.set(c, (taken.get(c) ?? 0) + 1);
     }
     if (taken.size === 0) {
       // Touching nothing, so no constraint to satisfy — but "first free tint"
@@ -234,10 +234,15 @@ export function assignColours(shapes: InstanceShape[]): Map<string, string> {
       out.set(s.instanceId, AUTO_TINTS[i % AUTO_TINTS.length]!);
       return;
     }
-    const free = AUTO_TINTS.find((t) => !taken.has(t));
-    // Only reachable with more than six mutually touching shapes, which no
-    // planar map has. Grey then, rather than silently repeating a neighbour.
-    out.set(s.instanceId, free ?? UNCOLOURED);
+    // Six tints colour any planar map, so a free one is the normal case. It
+    // runs out only under the extent fallback above, which calls shapes
+    // neighbours that merely sit in the same rectangle — and there the least
+    // crowded tint beats grey, because the collision it risks is with a shape
+    // that probably shares no border in the first place.
+    const ranked = AUTO_TINTS.slice().sort(
+      (a, b) => (taken.get(a) ?? 0) - (taken.get(b) ?? 0) || AUTO_TINTS.indexOf(a) - AUTO_TINTS.indexOf(b),
+    );
+    out.set(s.instanceId, ranked[0] ?? UNCOLOURED);
   });
   return out;
 }

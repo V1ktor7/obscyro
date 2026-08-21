@@ -6,7 +6,15 @@ import { describe, expect, it } from "vitest";
 
 import type { InstanceShape } from "@/lib/platform-api";
 
-import { AUTO_TINTS, adjacency, assignColours, colourOf, shapeFeatures, tagsOf } from "./map-shapes";
+import {
+  AUTO_TINTS,
+  UNCOLOURED,
+  adjacency,
+  assignColours,
+  colourOf,
+  shapeFeatures,
+  tagsOf,
+} from "./map-shapes";
 
 function shape(over: Partial<InstanceShape> = {}): InstanceShape {
   return {
@@ -196,5 +204,13 @@ describe("colouring what nobody has coloured", () => {
     // the same blue and the colour would stop saying anything at all.
     const c = assignColours([square("a", 0, 0), square("b", 40, 40), square("c", 80, 80)]);
     expect(new Set(Array.from(c.values())).size).toBe(3);
+  });
+  it("repeats the least crowded tint rather than going grey", () => {
+    // Reachable only through the extent fallback, which over-reports. Grey
+    // there would be a legend entry meaning nothing on a map with no such
+    // territory.
+    const many = Array.from({ length: 9 }, (_, i) => square(`s${i}`, 0, 0));
+    const c = assignColours(many);
+    expect(Array.from(c.values())).not.toContain(UNCOLOURED);
   });
 });
