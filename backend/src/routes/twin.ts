@@ -502,6 +502,10 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
 
   const metricSelector = z.object({
     ofType: z.string().max(200).nullable().optional(),
+    // Select by declared role instead of by name, which is how a metric counts
+    // capacity across an ontology whose types it has never seen.
+    ofRole: z.enum(["space", "staff", "stuff", "systems", "demand"]).nullable().optional(),
+    inUse: z.boolean().optional(),
     where: z
       .array(z.object({ property: z.string().min(1).max(200), equals: z.string().max(500) }))
       .optional(),

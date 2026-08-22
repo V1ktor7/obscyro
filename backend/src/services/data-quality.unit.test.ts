@@ -43,6 +43,7 @@ describe("mlAnomalyHook (L6)", () => {
       properties: { heart_rate: hr },
       provenance: {},
       propertySchema: schema,
+      simRole: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

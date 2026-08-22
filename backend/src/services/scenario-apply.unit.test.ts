@@ -20,6 +20,7 @@ function inst(id: string, typeName: string, props: Record<string, unknown> = {})
     properties: props,
     provenance: {},
     propertySchema: [{ key: "name", type: "string" }],
+    simRole: null,
     createdAt: new Date(0),
     updatedAt: new Date(0),
   };

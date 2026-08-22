@@ -853,6 +853,10 @@ export type TwinMetricUnit = "percent" | "ratio" | "count" | "number";
 
 export interface TwinMetricSelector {
   ofType?: string | null;
+  /** Declared role, so a metric can count capacity without knowing its name. */
+  ofRole?: "space" | "staff" | "stuff" | "systems" | "demand" | null;
+  /** Keep only units of capacity already spoken for. */
+  inUse?: boolean;
   where?: { property: string; equals: string }[];
   agg: "count" | "sum" | "mean" | "min" | "max";
   property?: string | null;

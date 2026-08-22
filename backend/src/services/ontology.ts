@@ -3,7 +3,7 @@ import type { DbClient } from "../lib/db.js";
 import { BadRequest, NotFound } from "../lib/errors.js";
 import { identityKeyOf } from "./identity.js";
 import { assertLensSupported, type ReadLens } from "./ontology-lens.js";
-import type { PropertyDef } from "./property-schema.js";
+import type { PropertyDef, SimRole } from "./property-schema.js";
 import { applyOverridesToInstances, applyOverridesToLinks } from "./scenario-apply.js";
 import { resolveOverrides } from "./scenario-overrides.js";
 
@@ -14,6 +14,12 @@ export interface EnvInstanceRow {
   properties: Record<string, unknown>;
   provenance: Record<string, unknown>;
   propertySchema: PropertyDef[];
+  /**
+   * The part this instance's type plays in a run. Carried on every instance
+   * because the metric roll-up counts capacity by role rather than by name,
+   * and a second query per type to find out would be one per bed.
+   */
+  simRole: SimRole | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -507,7 +513,7 @@ export async function listInstancesForEnv(
   assertLensSupported(opts, ["live", "scenario"]);
   const params: unknown[] = [environmentId];
   let sql = `SELECT oi.id, oi.object_type_id, t.name AS type_name,
-                    oi.properties, oi.provenance, t.property_schema,
+                    oi.properties, oi.provenance, t.property_schema, t.sim_role,
                     oi.created_at, oi.updated_at
                FROM app.ontology_object_instances oi
                JOIN app.ontology_object_types t ON t.id = oi.object_type_id
@@ -533,6 +539,7 @@ export async function listInstancesForEnv(
     properties: Record<string, unknown>;
     provenance: Record<string, unknown>;
     property_schema: PropertyDef[];
+    sim_role: SimRole | null;
     created_at: Date;
     updated_at: Date;
   }>(sql, params);
@@ -544,6 +551,7 @@ export async function listInstancesForEnv(
     properties: r.properties,
     provenance: r.provenance,
     propertySchema: r.property_schema ?? [],
+    simRole: r.sim_role ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }));

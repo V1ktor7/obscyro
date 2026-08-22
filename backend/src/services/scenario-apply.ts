@@ -84,6 +84,10 @@ export function applyOverridesToInstances(
         properties: { ...((o.payload.properties as Record<string, unknown>) ?? {}) },
         provenance: { source: "scenario", scenarioId, overrideId: o.id },
         propertySchema: sibling?.propertySchema ?? [],
+        // Same reason as the schema: a ward added by a scenario has to count as
+        // capacity the moment it exists, or "what if we build the wing" would
+        // report the wing at zero beds.
+        simRole: sibling?.simRole ?? null,
         createdAt: new Date(0),
         updatedAt: new Date(0),
       });

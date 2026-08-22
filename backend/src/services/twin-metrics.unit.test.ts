@@ -18,7 +18,9 @@ import {
 // ---------------------------------------------------------------------------
 
 function bed(status: string): MetricInstance {
-  return { typeName: "Bed", properties: { status } };
+  // The role is what the default metric selects on. A type that plays no part
+  // in a run is not capacity, whatever it is called.
+  return { typeName: "Bed", simRole: "space", properties: { status } };
 }
 
 test("occupancy is occupied beds over total beds", () => {
@@ -158,4 +160,56 @@ test("a parent is its whole subtree, not the average of its children", () => {
   // And it does not depend on the order the wards arrive in.
   const reversed = evaluateMetric(DEFAULT_OCCUPANCY, [...large, ...tiny])!;
   assert.equal(hospital, reversed);
+});
+
+test("the default metric counts capacity by role, not by name", () => {
+  // The failure this replaced: 190 Montréal installations holding 22,916
+  // objects of type `LitSantePhysique`, `CiviereUrgence`, `PlaceFoyerGroupe`,
+  // every one reporting null because the seeded metric asked for a type called
+  // `Bed`. Not one of them is called that, and not one of them should have to
+  // be.
+  const network: MetricInstance[] = [
+    { typeName: "LitSantePhysique", simRole: "space", properties: { status: "occupé" } },
+    { typeName: "CiviereUrgence", simRole: "space", properties: { status: "occupe" } },
+    { typeName: "PlaceFoyerGroupe", simRole: "space", properties: { status: "libre" } },
+    { typeName: "LitHebergementPermanent", simRole: "space", properties: { etat: "occupied" } },
+  ];
+  assert.equal(evaluateMetric(DEFAULT_OCCUPANCY, network), 75);
+});
+
+test("a nurse is not a bed", () => {
+  // Roles are what separate them. Counting staff into occupancy would report a
+  // ward as half full because half its nurses are on shift.
+  const ward: MetricInstance[] = [
+    { typeName: "Lit", simRole: "space", properties: { status: "occupé" } },
+    { typeName: "Lit", simRole: "space", properties: { status: "libre" } },
+    { typeName: "Infirmiere", simRole: "staff", properties: { status: "occupé" } },
+    { typeName: "Infirmiere", simRole: "staff", properties: { status: "occupé" } },
+  ];
+  assert.equal(evaluateMetric(DEFAULT_OCCUPANCY, ward), 50);
+});
+
+test("an undeclared status reads as available rather than as a guess", () => {
+  // `en réfection` is neither free nor occupied, and pattern-matching it would
+  // be wrong in a direction nobody could see. Counting it available is an
+  // over-count of capacity that someone will challenge.
+  const ward: MetricInstance[] = [
+    { typeName: "Lit", simRole: "space", properties: { status: "occupé" } },
+    { typeName: "Lit", simRole: "space", properties: { status: "en réfection" } },
+  ];
+  assert.equal(evaluateMetric(DEFAULT_OCCUPANCY, ward), 50);
+});
+
+test("a role nobody declared is rejected instead of matching nothing", () => {
+  // A misspelt role reads null everywhere, which looks like missing data.
+  const issues = validateMetric({
+    key: "o",
+    label: "O",
+    objectType: "OrgUnit",
+    unit: "percent",
+    numerator: { ofRole: "spaces" as never, agg: "count" },
+    denominator: { ofRole: "space", agg: "count" },
+  });
+  assert.equal(issues.length, 1);
+  assert.match(issues[0]!.message, /is not a role/);
 });

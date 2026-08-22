@@ -1,7 +1,15 @@
 import type { DbClient } from "../lib/db.js";
 import type { ReadLens } from "./ontology-lens.js";
 import { listInstancesForEnv, listLinksForEnv } from "./ontology.js";
-import { behaviourOf, type Mechanic, type PropertyDef } from "./property-schema.js";
+import {
+  IN_USE_VALUES,
+  STATUS_KEYS,
+  behaviourOf,
+  isInUse,
+  type Mechanic,
+  type PropertyDef,
+  type SimRole,
+} from "./property-schema.js";
 import { aggregationEnds, attaches, buildsHierarchy, getUnitTree } from "./twin.js";
 
 /**
@@ -149,6 +157,8 @@ export interface SimObjectType {
   properties: SimPropertyDef[];
 }
 
+export type { SimRole };
+
 export interface SimExport {
   environment: string;
   /** The scenario this was read under, or null for the live twin. */
@@ -168,36 +178,6 @@ export interface SimExport {
   edges: SimEdge[];
   /** What is missing, named. The engine refuses to run on a blocking gap. */
   gaps: SimGap[];
-}
-
-export type SimRole = "space" | "staff" | "stuff" | "systems" | "demand";
-
-/**
- * Property values that mean "this unit of capacity is already spoken for".
- *
- * Deliberately a short list rather than a clever rule. A site that writes
- * `status: "en réfection"` is not served by pattern-matching, and the honest
- * failure is to count it available — a visible over-count someone will
- * challenge — rather than to guess and be quietly wrong in either direction.
- */
-const IN_USE_VALUES = new Set([
-  "occupied",
-  "occupé",
-  "occupee",
-  "occupée",
-  "in_use",
-  "busy",
-  "unavailable",
-]);
-
-const STATUS_KEYS = ["status", "state", "etat", "état"];
-
-function isInUse(properties: Record<string, unknown>): boolean {
-  for (const key of STATUS_KEYS) {
-    const v = properties[key];
-    if (typeof v === "string" && IN_USE_VALUES.has(v.trim().toLowerCase())) return true;
-  }
-  return false;
 }
 
 function coordOf(properties: Record<string, unknown>): [number, number] | null {

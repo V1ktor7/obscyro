@@ -20,6 +20,7 @@
 
 import type { DbClient } from "../lib/db.js";
 import { AppError } from "../lib/errors.js";
+import { SIM_ROLES, isInUse, type SimRole } from "./property-schema.js";
 
 export type Agg = "count" | "sum" | "mean" | "min" | "max";
 
@@ -32,7 +33,24 @@ export interface MetricFilter {
 export interface MetricSelector {
   /** Object type name to keep. Null counts every instance in the subtree. */
   ofType?: string | null;
+  /**
+   * Declared role to keep, which is how a metric counts capacity without
+   * knowing its name. `ofType: "Bed"` is one institution's vocabulary;
+   * `ofRole: "space"` is a question every institution has already answered on
+   * its own types.
+   */
+  ofRole?: SimRole | null;
   where?: MetricFilter[];
+  /**
+   * Keep only units of capacity that are already spoken for.
+   *
+   * The alternative was `where: [{ property: "status", equals: "occupied" }]`,
+   * which is the same preset one level down: it hands a null to anyone who
+   * writes `occupé`, or stores it under `etat`. The test lives in
+   * `property-schema` and is the one the exporter uses, so a bed cannot be
+   * occupied for the simulation and free on the map.
+   */
+  inUse?: boolean;
   agg: Agg;
   /** The numeric property to aggregate. Required for everything but `count`. */
   property?: string | null;
@@ -54,11 +72,15 @@ export interface MetricDef {
 /** The shape the roll-up already has on hand for every instance in a subtree. */
 export interface MetricInstance {
   typeName: string;
+  /** Declared on the type. Null for types that play no part in a run. */
+  simRole?: SimRole | null;
   properties: Record<string, unknown>;
 }
 
 function matches(inst: MetricInstance, sel: MetricSelector): boolean {
   if (sel.ofType && inst.typeName !== sel.ofType) return false;
+  if (sel.ofRole && (inst.simRole ?? null) !== sel.ofRole) return false;
+  if (sel.inUse && !isInUse(inst.properties)) return false;
   for (const f of sel.where ?? []) {
     const raw = inst.properties[f.property];
     if (raw === undefined || raw === null) return false;
@@ -146,6 +168,14 @@ export function validateMetric(def: MetricDef): MetricIssue[] {
       if (!f.property.trim()) {
         issues.push({ field, message: "A filter needs a property name." });
       }
+    }
+    // A misspelt role silently matches nothing, and a metric that reads null
+    // everywhere looks like missing data rather than a typo.
+    if (sel.ofRole && !SIM_ROLES.includes(sel.ofRole)) {
+      issues.push({
+        field,
+        message: `"${sel.ofRole}" is not a role. Declared roles are ${SIM_ROLES.join(", ")}.`,
+      });
     }
   };
   check(def.numerator, "numerator");
@@ -276,15 +306,25 @@ export async function metricsForRollup(
   return [seeded];
 }
 
+/**
+ * The metric an institution gets before it has declared one.
+ *
+ * It used to name a type called `Bed` and a status reading `occupied`, which is
+ * exactly the failure this file's own header describes: a network that models
+ * `LitSantePhysique` with a status of `libre` matched neither half and every
+ * one of its 190 sites reported null. The seed was reintroducing the preset the
+ * rest of the file exists to remove.
+ *
+ * It now asks the two questions the ontology has already answered — which types
+ * play the part of capacity, and which units of it are spoken for — and names
+ * nothing. A transit authority whose `Quai` is declared `space` gets platform
+ * occupancy from the same definition, without a line of code knowing the word.
+ */
 export const DEFAULT_OCCUPANCY: MetricDef = {
   key: "occupancy",
   label: "Occupancy",
   objectType: "OrgUnit",
   unit: "percent",
-  numerator: {
-    ofType: "Bed",
-    where: [{ property: "status", equals: "occupied" }],
-    agg: "count",
-  },
-  denominator: { ofType: "Bed", agg: "count" },
+  numerator: { ofRole: "space", inUse: true, agg: "count" },
+  denominator: { ofRole: "space", agg: "count" },
 };

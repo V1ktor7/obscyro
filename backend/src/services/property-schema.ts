@@ -248,3 +248,50 @@ export function schemaProblems(schema: PropertyDef[]): Map<number, string> {
 
   return problems;
 }
+
+/**
+ * What part an object plays when the engine runs.
+ *
+ * Lives here rather than beside the exporter because two very different callers
+ * need it and neither may import the other: the exporter, to decide which
+ * perturbation reaches an instance, and the metric roll-up, to count capacity
+ * without knowing that this institution calls it `LitSantePhysique` and the
+ * next one calls it `Bed`. A role is declared once on the type; a name is not
+ * something the engine is entitled to pattern-match on.
+ */
+export type SimRole = "space" | "staff" | "stuff" | "systems" | "demand";
+
+export const SIM_ROLES = ["space", "staff", "stuff", "systems", "demand"] as const;
+
+/**
+ * Property values that mean "this unit of capacity is already spoken for".
+ *
+ * Deliberately a short list rather than a clever rule. A site that writes
+ * `status: "en réfection"` is not served by pattern-matching, and the honest
+ * failure is to count it available — a visible over-count someone will
+ * challenge — rather than to guess and be quietly wrong in either direction.
+ *
+ * One list, read by both the exporter and the metric roll-up, so a bed cannot
+ * be occupied for the simulation and free on the map.
+ */
+export const IN_USE_VALUES = new Set([
+  "occupied",
+  "occupé",
+  "occupee",
+  "occupée",
+  "occupe",
+  "in_use",
+  "busy",
+  "unavailable",
+]);
+
+/** The property names a status may be written under. */
+export const STATUS_KEYS = ["status", "state", "etat", "état"] as const;
+
+export function isInUse(properties: Record<string, unknown>): boolean {
+  for (const key of STATUS_KEYS) {
+    const v = properties[key];
+    if (typeof v === "string" && IN_USE_VALUES.has(v.trim().toLowerCase())) return true;
+  }
+  return false;
+}
