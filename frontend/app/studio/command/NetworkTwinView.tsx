@@ -51,6 +51,7 @@ import {
   fetchTwinTree,
   getEnvObject,
   listEnvTypes,
+  listEnvObjects,
   listGeoShapes,
   listIngestEvents,
   listTwinAlerts,
@@ -71,7 +72,7 @@ import TreeExplorer, { type TreeItem } from "../TreeExplorer";
 import CoverageDialog from "./CoverageDialog";
 import { capacityOf, isSiteHidden } from "./units-tree";
 import { shapeFeatures } from "./map-shapes";
-import { AXES, treeForAxis, type GroupingAxis } from "./units-axes";
+import { AXES, missionsIn, treeForAxis, type GroupingAxis } from "./units-axes";
 import {
   flattenCoordinates,
   formatArea,
@@ -351,6 +352,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   // extension, so "unavailable" is the ordinary state, not an error path.
   const [capability, setCapability] = useState<GeoCapability | null>(null);
   const [shapes, setShapes] = useState<InstanceShape[]>([]);
+  const [missionsOf, setMissionsOf] = useState<Map<string, string[]>>(new Map());
 
   const territoryOf = useMemo(() => {
     const out = new Map<string, string>();
@@ -379,8 +381,8 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   }, [network, shapes]);
 
   const tree = useMemo(
-    () => treeForAxis(treeSnap, axis, territoryOf),
-    [treeSnap, axis, territoryOf],
+    () => treeForAxis(treeSnap, axis, territoryOf, missionsOf),
+    [treeSnap, axis, territoryOf, missionsOf],
   );
 
   const [drawArea, setDrawArea] = useState<null | {
@@ -600,6 +602,42 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
       // thing to show, and the capability banner already explains why.
       setShapes([]);
     }
+  }, [env]);
+
+  // What each installation declares it does.
+  //
+  // Read off the instances rather than off the twin snapshot, which carries
+  // metrics and hierarchy and has no room for an attribute only one axis uses.
+  // Nothing here knows the vocabulary: whatever list the institution declared
+  // becomes the headings, so a network that files its sites under "urgence" and
+  // "réadaptation" gets those and not a translation of somebody else's.
+  useEffect(() => {
+    if (!env) {
+      setMissionsOf(new Map());
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { objects } = await listEnvObjects(env, {
+          where: "kind:installation",
+          limit: 200,
+        });
+        const out = new Map<string, string[]>();
+        for (const o of objects) {
+          const list = missionsIn(o.properties);
+          if (list.length) out.set(o.id, list);
+        }
+        if (!cancelled) setMissionsOf(out);
+      } catch {
+        // An axis with no data says so on screen. Failing the whole map because
+        // one grouping could not be resolved would be the worse trade.
+        if (!cancelled) setMissionsOf(new Map());
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [env]);
 
   // Asked once per environment: whether the extension is installed changes when

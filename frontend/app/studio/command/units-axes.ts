@@ -50,6 +50,33 @@ export function axisHasBoundaries(axis: GroupingAxis): boolean {
   return axis === "territoire";
 }
 
+/**
+ * The missions declared on an installation.
+ *
+ * This is the one property name the axis knows, and it knows it because the
+ * axis is named for it — `mission` is the question being asked, not a value
+ * being assumed. Everything past the key belongs to the institution: the
+ * vocabulary is whatever they wrote, so a network filing its sites under
+ * "urgence" and "réadaptation" gets those headings and not a translation into
+ * somebody else's register.
+ *
+ * Singular or plural, one string or a list, because both are things a person
+ * reasonably types when declaring the property. Blanks are dropped rather than
+ * becoming a heading with no name.
+ */
+export function missionsIn(properties: Record<string, unknown> | undefined): string[] {
+  if (!properties) return [];
+  const raw = properties["missions"] ?? properties["mission"];
+  const list = Array.isArray(raw) ? raw : raw == null ? [] : [raw];
+  const out: string[] = [];
+  for (const v of list) {
+    if (typeof v !== "string") continue;
+    const t = v.trim();
+    if (t && !out.includes(t)) out.push(t);
+  }
+  return out;
+}
+
 function toneFor(pct: number | null): TreeItem["tone"] {
   if (pct == null) return null;
   if (pct >= 100) return "danger";
@@ -80,18 +107,40 @@ function leafItem(n: TwinUnitNode, capacity: number): TreeItem {
  * only a key to bucket on. A leaf whose key is missing lands under a named
  * bucket rather than vanishing: an installation that quietly stops appearing
  * when you switch axis is worse than one you can see is unclassified.
+ *
+ * `keysOf` returns a *list*, because one of the two axes is not a partition. An
+ * installation sits in exactly one territory, but 46 of Montréal's 328 declare
+ * more than one mission — a hospital that also runs a CHSLD wing and a CLSC is
+ * three things at once in the MSSS register. Forcing a primary mission would
+ * mean inventing a rank the source does not state, and the axis exists to
+ * answer "show me everything that does CHSLD", which that hospital does.
+ *
+ * The consequence is that capacities across mission headings sum to more than
+ * the network holds. That is a property of an overlapping grouping rather than
+ * a bug, and the hint on each heading says so instead of leaving the reader to
+ * add the columns up and get a wrong total.
  */
 function groupBy(
   leaves: TreeNode[],
-  keyOf: (n: TwinUnitNode) => string | null,
+  keysOf: (n: TwinUnitNode) => string[],
   unknownLabel: string,
 ): TreeItem[] {
   const buckets = new Map<string, TreeNode[]>();
   for (const leaf of leaves) {
-    const key = keyOf(leaf.node) ?? unknownLabel;
-    const list = buckets.get(key);
-    if (list) list.push(leaf);
-    else buckets.set(key, [leaf]);
+    const keys = keysOf(leaf.node);
+    for (const key of keys.length ? keys : [unknownLabel]) {
+      const list = buckets.get(key);
+      if (list) list.push(leaf);
+      else buckets.set(key, [leaf]);
+    }
+  }
+
+  // How many headings each leaf landed under. Anything above one means the
+  // capacities on screen no longer add up to the network, and the reader has to
+  // be told that on the heading rather than left to sum the columns.
+  const bucketsPer = new Map<string, number>();
+  for (const group of Array.from(buckets.values())) {
+    for (const g of group) bucketsPer.set(g.node.id, (bucketsPer.get(g.node.id) ?? 0) + 1);
   }
 
   const items: TreeItem[] = [];
@@ -104,6 +153,7 @@ function groupBy(
       .map((g) => g.node.metrics.occupancyPct)
       .filter((v): v is number => v != null);
     const pct = worst.length ? Math.max(...worst) : null;
+    const shared = group.filter((g) => (bucketsPer.get(g.node.id) ?? 1) > 1).length;
     items.push({
       id: `axis:${label}`,
       label,
@@ -111,7 +161,9 @@ function groupBy(
       count: capacity || null,
       value: pct != null ? `${Math.round(pct)}%` : null,
       tone: toneFor(pct),
-      hint: `${children.length} installation${children.length === 1 ? "" : "s"} · ${capacity} lits et places`,
+      hint:
+        `${children.length} installation${children.length === 1 ? "" : "s"} · ${capacity} lits et places` +
+        (shared > 0 ? ` · ${shared} compté${shared === 1 ? "e" : "es"} aussi ailleurs` : ""),
     });
   }
   return items.sort((a, b) => (b.count ?? 0) - (a.count ?? 0) || a.label.localeCompare(b.label));
@@ -161,6 +213,11 @@ export function treeForAxis(
    * metric that does not exist.
    */
   territoryOf: Map<string, string> = new Map(),
+  /**
+   * unit id → the missions that installation declares. A list, not a value:
+   * the register lets one installation be a hospital, a CHSLD and a CLSC.
+   */
+  missionsOf: Map<string, string[]> = new Map(),
 ): TreeItem[] {
   if (!snapshot) return [];
   const forest = buildForest(snapshot);
@@ -172,11 +229,14 @@ export function treeForAxis(
 
   const leaves = allLeaves(forest);
   if (axis === "territoire") {
-    return groupBy(leaves, (n) => territoryOf.get(n.id) ?? null, "Territoire non attribué");
+    const t = (n: TwinUnitNode) => {
+      const name = territoryOf.get(n.id);
+      return name ? [name] : [];
+    };
+    return groupBy(leaves, t, "Territoire non attribué");
   }
-  // `kind` holds the mission once it is imported. Until then every installation
-  // lands in one honest bucket rather than the axis being hidden — an empty
-  // grouping you can see is a prompt; a missing tab is a mystery.
-  return groupBy(leaves, (n) => (n.kind === "installation" ? null : n.kind || null),
-                 "Mission non déclarée");
+  // Before the register is imported every installation lands in one honest
+  // bucket rather than the axis being hidden — an empty grouping you can see is
+  // a prompt; a missing tab is a mystery.
+  return groupBy(leaves, (n) => missionsOf.get(n.id) ?? [], "Mission non déclarée");
 }

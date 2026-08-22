@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import type { TwinTreeSnapshot, TwinUnitNode } from "@/lib/platform-api";
 
-import { AXES, axisHasBoundaries, treeForAxis } from "./units-axes";
+import { AXES, axisHasBoundaries, missionsIn, treeForAxis } from "./units-axes";
 
 function unit(id: string, name: string, over: Partial<TwinUnitNode> = {}): TwinUnitNode {
   return {
@@ -131,20 +131,97 @@ describe("grouping by territory", () => {
   });
 });
 
+// The MSSS register, as it reads for these three: Notre-Dame is a hospital that
+// also runs a CHSLD wing, Hôtel-Dieu is a hospital, Angus is a CHSLD.
+const MISSIONS = new Map([
+  ["nd", ["CHSGS", "CHSLD"]],
+  ["hd", ["CHSGS"]],
+  ["chsld", ["CHSLD"]],
+]);
+
 describe("grouping by mission", () => {
   it("says the mission is undeclared instead of pretending to group", () => {
-    // `kind` is still "installation" for every unit until the mission is
-    // imported. An empty grouping you can see is a prompt; a hidden axis is a
-    // mystery.
+    // Until the register is imported. An empty grouping you can see is a
+    // prompt; a hidden axis is a mystery.
     const t = treeForAxis(SNAP, "mission", TERRITORY);
     expect(t).toHaveLength(1);
     expect(t[0]!.label).toBe("Mission non déclarée");
     expect(t[0]!.children).toHaveLength(3);
+  });
+
+  it("puts an installation under every mission it declares", () => {
+    // 46 of Montréal's 328 declare more than one. Picking a primary would be
+    // inventing a rank the register does not state, and "show me everything
+    // that does CHSLD" has to include the hospital that does.
+    const t = treeForAxis(SNAP, "mission", TERRITORY, MISSIONS);
+    const under = (m: string) =>
+      t.find((x) => x.label === m)!.children!.map((c) => c.label).sort();
+    expect(under("CHSGS")).toEqual(["HÔPITAL NOTRE-DAME", "HÔTEL-DIEU"]);
+    expect(under("CHSLD")).toEqual(["CHSLD ANGUS", "HÔPITAL NOTRE-DAME"]);
+  });
+
+  it("loses no installation, and adds none", () => {
+    const t = treeForAxis(SNAP, "mission", TERRITORY, MISSIONS);
+    const seen = new Set(t.flatMap((x) => x.children!).map((c) => c.label));
+    expect(Array.from(seen).sort()).toEqual(["CHSLD ANGUS", "HÔPITAL NOTRE-DAME", "HÔTEL-DIEU"]);
+  });
+
+  it("warns on the heading that its beds are counted twice", () => {
+    // CHSGS shows 446 and CHSLD 345; they sum to more than the 495 that exist.
+    // That is what an overlapping grouping does, and a reader who adds the
+    // columns without being told is the one who gets it wrong.
+    const t = treeForAxis(SNAP, "mission", TERRITORY, MISSIONS);
+    expect(t.find((x) => x.label === "CHSGS")!.hint).toMatch(/1 comptée aussi ailleurs/);
+    expect(t.find((x) => x.label === "CHSLD")!.hint).toMatch(/1 comptée aussi ailleurs/);
+  });
+
+  it("says nothing about double counting when nothing is doubled", () => {
+    // Territory is a partition, so the warning would be noise on every heading.
+    const t = treeForAxis(SNAP, "territoire", TERRITORY);
+    expect(t[0]!.hint).not.toMatch(/ailleurs/);
+  });
+
+  it("still names the unclassified when only some are registered", () => {
+    const t = treeForAxis(SNAP, "mission", TERRITORY, new Map([["nd", ["CHSGS"]]]));
+    const orphan = t.find((x) => x.label === "Mission non déclarée");
+    expect(orphan!.children!.map((c) => c.label).sort()).toEqual(["CHSLD ANGUS", "HÔTEL-DIEU"]);
   });
 });
 
 describe("an empty twin", () => {
   it("returns nothing rather than throwing", () => {
     expect(treeForAxis(null, "territoire")).toEqual([]);
+  });
+});
+
+describe("missionsIn", () => {
+  it("reads the list the institution declared", () => {
+    expect(missionsIn({ missions: ["CHSGS", "CHSLD"] })).toEqual(["CHSGS", "CHSLD"]);
+  });
+
+  it("takes a single mission written as a string", () => {
+    // Both are things a person reasonably types when declaring the property.
+    expect(missionsIn({ mission: "CLSC" })).toEqual(["CLSC"]);
+    expect(missionsIn({ missions: "CLSC" })).toEqual(["CLSC"]);
+  });
+
+  it("assumes nothing about the vocabulary", () => {
+    // A transit network has no CHSLD. Whatever they wrote becomes the headings.
+    expect(missionsIn({ missions: ["urgence", "réadaptation"] }))
+      .toEqual(["urgence", "réadaptation"]);
+  });
+
+  it("drops blanks rather than making a heading with no name", () => {
+    expect(missionsIn({ missions: ["CHSGS", "  ", ""] })).toEqual(["CHSGS"]);
+  });
+
+  it("drops a repeat rather than counting the installation twice under one heading", () => {
+    expect(missionsIn({ missions: ["CHSLD", "CHSLD"] })).toEqual(["CHSLD"]);
+  });
+
+  it("says nothing when the property is absent or not text", () => {
+    expect(missionsIn({})).toEqual([]);
+    expect(missionsIn(undefined)).toEqual([]);
+    expect(missionsIn({ missions: [1, 2] })).toEqual([]);
   });
 });
