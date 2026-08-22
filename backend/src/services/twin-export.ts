@@ -159,6 +159,16 @@ export interface SimObjectType {
 
 export type { SimRole };
 
+/**
+ * Whether the institution has told the engine what an admission does.
+ *
+ * One predicate rather than an inline filter, because it decides whether the
+ * `NO_CARE_MODEL` gap is a fact or a lie, and that is worth a test.
+ */
+export function bindsAnyMechanic(types: { properties: { mechanic?: Mechanic | null }[] }[]): boolean {
+  return types.some((t) => t.properties.some((p) => p.mechanic));
+}
+
 export interface SimExport {
   environment: string;
   /** The scenario this was read under, or null for the live twin. */
@@ -500,13 +510,21 @@ export async function buildTwinExport(
     });
   }
 
-  gaps.push({
-    code: "NO_CARE_MODEL",
-    message:
-      "The ontology says what exists, not what an admission consumes or how many " +
-      "people die when it is refused. Those come from the scenario.",
-    subjects: [],
-  });
+  // Reported only when nothing binds a mechanic. This used to be pushed on
+  // every export, from back when a care model could only come from the
+  // scenario — so a twin that had declared one was still told it had none, and
+  // the one gap that decides whether a run means anything was the one that
+  // never changed.
+  if (!bindsAnyMechanic(object_types)) {
+    gaps.push({
+      code: "NO_CARE_MODEL",
+      message:
+        "The ontology says what exists, not what an admission consumes, how long it " +
+        "holds it, or how many people die when it is refused. Declare a type whose " +
+        "instances bind those mechanics, or the engine has no arithmetic to do.",
+      subjects: [],
+    });
+  }
 
   return {
     environment: environmentSlug,
