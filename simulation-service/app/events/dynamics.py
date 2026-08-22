@@ -580,19 +580,63 @@ class Engine:
                         out[(pop_id, acuity)] = out.get((pop_id, acuity), 0.0) + amount
         return {k: v for k, v in out.items() if v > 0}
 
+    def _able_to_admit(self, facility_ids: list[str], acuity: str) -> list[str]:
+        """Those of `facility_ids` that could admit this acuity at all.
+
+        Capability, not availability: the test is whether the facility holds any
+        capacity for every activity the care model says this acuity consumes,
+        not whether any is free this tick. A full hospital is still where an
+        acute patient belongs.
+
+        An acuity nothing describes has no requirement to check, so every
+        facility qualifies — the same answer the even split used to give, kept
+        for the case where it was right.
+        """
+        req = self.state.care_model.get(acuity)
+        if req is None or not req.consumes:
+            return list(facility_ids)
+        out: list[str] = []
+        for fid in facility_ids:
+            facility = self.state.facilities.get(fid)
+            if facility is None:
+                continue
+            if all(facility.enabling(activity) for activity in req.consumes):
+                out.append(fid)
+        return out
+
     def _deliver_care(self, tick: int) -> TickRecord:
         rec = TickRecord(tick=tick)
 
-        # Arrivals land on the facilities that serve the population. Split
-        # evenly: an unmodelled preference is better than an invented one.
+        # Arrivals land on the facilities that serve the population, and only on
+        # the ones that could ever admit them. Splitting evenly across every
+        # facility in the catchment is an unmodelled preference only when they
+        # can all serve; when they cannot it is a known-wrong allocation. On the
+        # Montréal twin 34 of 190 installations hold an acute bed, so an even
+        # split sent 82% of hospital demand to nursing homes and group homes
+        # that structurally cannot admit it, where it queued for the whole run.
+        # The result was 223,317 patient-days unserved out of 6,584 arrivals and
+        # every policy scored the same, because the number measured the routing
+        # rather than the shortage.
+        #
+        # A facility qualifies when it can provide every activity the acuity
+        # consumes — not when it happens to have some free right now. A hospital
+        # that is full is still the right place to queue; a group home with no
+        # acute bed never becomes one.
         for (pop_id, acuity), count in self._arrivals(tick).items():
             pop = self.state.populations.get(pop_id)
             if pop is None or not pop.served_by:
                 continue
             scaled = count * self.demand_scale.get(pop_id, 1.0)
             rec.arrivals[acuity] = rec.arrivals.get(acuity, 0.0) + scaled
-            share = scaled / len(pop.served_by)
-            for fid in pop.served_by:
+            able = self._able_to_admit(pop.served_by, acuity)
+            # Nowhere in the catchment can take them. They are unserved, and
+            # they have to stay visible: dropping them would make a territory
+            # with no hospital look like a territory with no patients. Queued
+            # across the catchment as before, which is where a transfer policy
+            # would find them.
+            targets = able or list(pop.served_by)
+            share = scaled / len(targets)
+            for fid in targets:
                 q = self.state.backlog.setdefault(fid, {})
                 q[acuity] = q.get(acuity, 0.0) + share
 

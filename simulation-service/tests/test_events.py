@@ -289,3 +289,111 @@ def test_the_best_response_differs_by_event(objective: Objective) -> None:
     # is cheap and buying capacity is not.
     flood_cost = {r["policy"]: r["response_cost"] for r in flood}
     assert flood_cost["load-balance"] * 5 < flood_cost["surge-and-balance"]
+
+
+# --- who a patient can actually be sent to ----------------------------------
+
+
+def _catchment_system(*, capable: int, incapable: int) -> SystemState:
+    """One population served by `capable` hospitals and `incapable` places that
+    hold no acute bed at all — the shape of a real health region."""
+    from app.events.domain import Facility
+    from app.events.examples.system import NetworkxBackend
+
+    facilities: dict[str, Facility] = {}
+    for i in range(capable):
+        facilities[f"hosp{i}"] = Facility(
+            id=f"hosp{i}",
+            name=f"Hospital {i}",
+            resources={
+                "beds": Resource(
+                    id="beds", category=SPACE, quantity=500, capacity=500,
+                    enables=frozenset({"acute_bed"}),
+                )
+            },
+        )
+    for i in range(incapable):
+        facilities[f"home{i}"] = Facility(
+            id=f"home{i}",
+            name=f"Nursing home {i}",
+            resources={
+                "places": Resource(
+                    id="places", category=SPACE, quantity=90, capacity=90,
+                    enables=frozenset({"long_stay_place"}),
+                )
+            },
+        )
+    net = NetworkxBackend()
+    for fid in facilities:
+        net.add_node(fid)
+    from app.events.domain import Population
+
+    return SystemState(
+        facilities=facilities,
+        populations={
+            "region": Population(id="region", size=200_000, served_by=list(facilities))
+        },
+        care_model={
+            "acute": CareRequirement(
+                acuity="acute", consumes={"acute_bed": 1.0}, mortality_per_unmet=0.0,
+                stay_ticks=3,
+            )
+        },
+        network=net,
+    )
+
+
+def _steady_demand(per_thousand: float, horizon: int = 10) -> Event:
+    return Event(
+        id="demand",
+        name="Steady demand",
+        horizon=horizon,
+        effects=[
+            Effect(
+                id="d",
+                target="demand.incidence",
+                select={"acuity": ["acute"]},
+                op="add",
+                value=per_thousand,
+                profile=TemporalProfile(start=0, end=horizon, shape="step", peak=1.0),
+            )
+        ],
+    )
+
+
+def test_acute_demand_is_not_queued_at_places_with_no_acute_bed() -> None:
+    """The defect this replaced: on the Montréal twin 34 of 190 installations
+    hold an acute bed, and an even split across the catchment sent 82% of
+    hospital demand to nursing homes where it queued for the whole run. The
+    result read 223,317 patient-days unserved out of 6,584 arrivals and every
+    policy scored identically, because the number was measuring the routing.
+
+    Capacity here is ample, so a correct allocation serves everyone.
+    """
+    state = _catchment_system(capable=2, incapable=9)
+    traj = run(state, _steady_demand(0.05), null_policy(), seed=0)
+    unmet = sum(sum(t.unmet.values()) for t in traj.ticks)
+    served = sum(sum(t.served.values()) for t in traj.ticks)
+    assert served > 0
+    assert unmet == pytest.approx(0.0, abs=1e-9)
+
+
+def test_a_catchment_with_no_capable_facility_still_shows_its_patients() -> None:
+    """Dropping them would make a territory with no hospital look like a
+    territory with no patients. Rivière-des-Prairies — Anjou has 0 of 17, and
+    211,308 people behind it."""
+    state = _catchment_system(capable=0, incapable=5)
+    traj = run(state, _steady_demand(0.05), null_policy(), seed=0)
+    assert sum(sum(t.arrivals.values()) for t in traj.ticks) > 0
+    assert sum(sum(t.unmet.values()) for t in traj.ticks) > 0
+
+
+def test_a_full_hospital_is_still_where_an_acute_patient_belongs() -> None:
+    """Capability, not availability. Excluding a hospital because it is full
+    would send its overflow to a nursing home, which is worse than a queue."""
+    state = _catchment_system(capable=1, incapable=3)
+    for r in state.facilities["hosp0"].resources.values():
+        r.quantity = 0
+    traj = run(state, _steady_demand(0.05), null_policy(), seed=0)
+    assert sum(sum(t.unmet.values()) for t in traj.ticks) > 0
+    assert sum(sum(t.served.values()) for t in traj.ticks) == pytest.approx(0.0, abs=1e-9)
