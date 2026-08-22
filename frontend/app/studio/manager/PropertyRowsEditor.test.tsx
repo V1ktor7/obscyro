@@ -139,6 +139,7 @@ describe("binding a mechanic", () => {
       "occupies_for",
       "dies_without",
       "consumes_amount",
+      "scales_incidence",
     ]);
   });
 

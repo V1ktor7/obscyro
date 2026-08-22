@@ -33,6 +33,7 @@ export const MECHANICS = [
   "dies_without",
   "consumes_activity",
   "consumes_amount",
+  "scales_incidence",
 ] as const;
 
 export type Mechanic = (typeof MECHANICS)[number];
@@ -44,6 +45,7 @@ export const MECHANIC_KIND: Record<Mechanic, "select" | "quantity"> = {
   dies_without: "quantity",
   consumes_activity: "select",
   consumes_amount: "quantity",
+  scales_incidence: "quantity",
 };
 
 /**
@@ -60,6 +62,7 @@ export const MECHANIC_LABEL: Record<Mechanic, string> = {
   dies_without: "Losses per unserved unit, per step",
   consumes_activity: "Names what it draws on",
   consumes_amount: "How much of that it draws, per unit per step",
+  scales_incidence: "How many people this covers, for an incidence to be multiplied by",
 };
 
 export const PROPERTY_BEHAVIOURS = ["level", "rate", "stock", "state"] as const;

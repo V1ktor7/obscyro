@@ -65,6 +65,15 @@ export type PropertyType = (typeof PROPERTY_TYPES)[number];
  * A type whose instances carry these becomes the care model. Nothing is
  * required: bind none of them and the engine simply has no care model of its
  * own, which is the honest state rather than a fabricated one.
+ *
+ * `scales_incidence` is the sixth and belongs to the other side of the run. An
+ * epidemic infects a share of a population, so the engine multiplies a declared
+ * incidence by a head count — arithmetic it performs, exactly like holding
+ * demand for N steps. What that head count is called, and which object carries
+ * it, stay with the institution: a health network sizes an RLS, a transit
+ * authority sizes a catchment, and neither has to learn the other's word. The
+ * export used to ship every population at size 0 with a gap explaining that the
+ * ontology could not hold one. It can now.
  */
 export const MECHANICS = [
   "serves_severity",
@@ -72,6 +81,7 @@ export const MECHANICS = [
   "dies_without",
   "consumes_activity",
   "consumes_amount",
+  "scales_incidence",
 ] as const;
 
 export type Mechanic = (typeof MECHANICS)[number];
@@ -89,6 +99,7 @@ export const MECHANIC_KIND: Record<Mechanic, "select" | "quantity"> = {
   dies_without: "quantity",
   consumes_activity: "select",
   consumes_amount: "quantity",
+  scales_incidence: "quantity",
 };
 
 /** An institution's numeric range for a property. Both ends optional. */

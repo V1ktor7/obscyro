@@ -165,6 +165,48 @@ export type { SimRole };
  * One predicate rather than an inline filter, because it decides whether the
  * `NO_CARE_MODEL` gap is a fact or a lie, and that is worth a test.
  */
+
+/**
+ * Declared populations, from the instances that carry a head count.
+ *
+ * Split out from the export because the subtle part is not the loop: it is that
+ * a catchment with no number still has to appear. Dropping it would make the
+ * run quietly smaller — an epidemic that never reaches a third of the island
+ * because nobody typed its population — where an entry sized zero is visible in
+ * the gap list and in every result table.
+ */
+export function populationsFrom(
+  objectTypes: { name: string; properties: { key: string; mechanic?: Mechanic | null }[] }[],
+  instances: { id: string; typeName: string; properties: Record<string, unknown> }[],
+  membersByHolder: Map<string, string[]>,
+): { populations: SimPopulation[]; unsized: string[] } {
+  const sizeKeyByType = new Map<string, string>();
+  for (const t of objectTypes) {
+    const p = t.properties.find((x) => x.mechanic === "scales_incidence");
+    if (p) sizeKeyByType.set(t.name, p.key);
+  }
+
+  const populations: SimPopulation[] = [];
+  const unsized: string[] = [];
+  for (const inst of instances) {
+    const key = sizeKeyByType.get(inst.typeName);
+    if (!key) continue;
+    const raw = inst.properties[key];
+    // A negative or fractional-nonsense head count is not a smaller population,
+    // it is a typo. Zero is what the gap list is for.
+    const size = typeof raw === "number" && Number.isFinite(raw) && raw > 0 ? raw : 0;
+    const name = String(inst.properties.name ?? inst.properties.code ?? inst.id.slice(0, 8));
+    if (size === 0) unsized.push(name);
+    populations.push({
+      id: `pop:${inst.id}`,
+      name,
+      size,
+      served_by: [...new Set(membersByHolder.get(inst.id) ?? [])],
+    });
+  }
+  return { populations, unsized };
+}
+
 export function bindsAnyMechanic(types: { properties: { mechanic?: Mechanic | null }[] }[]): boolean {
   return types.some((t) => t.properties.some((p) => p.mechanic));
 }
@@ -412,33 +454,79 @@ export async function buildTwinExport(
     });
   }
 
-  // Populations, one per place, serving the units sited there. Derived from
-  // placement — the ontology holds no catchment and no head count.
+  // Populations.
+  //
+  // Preferred: whatever the institution declared. An instance whose type binds
+  // `scales_incidence` carries a head count, and the units linked to it are who
+  // it is served by. Montréal declares twelve — one per RLS, the boundaries the
+  // ministry draws and the ones 190 installations are already linked into.
+  //
+  // Fallback: one per place, sized zero. That is what the ontology could say
+  // before it could hold a catchment, and it is still the honest answer for a
+  // twin that has declared none — a fabricated catchment would set the scale of
+  // every run against this export, and nobody goes back to check a number that
+  // already looked reasonable.
+  const sizeKeyByType = new Map<string, string>();
+  for (const t of object_types) {
+    const p = t.properties.find((x) => x.mechanic === "scales_incidence");
+    if (p) sizeKeyByType.set(t.name, p.key);
+  }
+
+  const unitsByHolder = new Map<string, string[]>();
+  for (const link of links) {
+    const { receiver, giver } = aggregationEnds(link);
+    // Either end may be the population: `situe_dans` points from the unit into
+    // the territory, and a catchment declared the other way round is the same
+    // statement written backwards.
+    for (const [holder, member] of [
+      [receiver, giver],
+      [giver, receiver],
+    ] as const) {
+      const h = instanceById.get(holder);
+      if (!h || !sizeKeyByType.has(h.typeName)) continue;
+      if (!unitIds.has(member)) continue;
+      unitsByHolder.set(holder, [...(unitsByHolder.get(holder) ?? []), member]);
+    }
+  }
+
+  const { populations: declared, unsized } = populationsFrom(
+    object_types,
+    instances.map((i) => ({ id: i.id, typeName: i.typeName, properties: i.properties })),
+    unitsByHolder,
+  );
+
   const unitsByPlace = new Map<string, string[]>();
   for (const [unitId, placeId] of placeOfUnit) {
     unitsByPlace.set(placeId, [...(unitsByPlace.get(placeId) ?? []), unitId]);
   }
-  const populations: SimPopulation[] = [...unitsByPlace].map(([placeId, units]) => {
+  const derived: SimPopulation[] = [...unitsByPlace].map(([placeId, units]) => {
     const p = instanceById.get(placeId);
-    const name = String(p?.properties.name ?? p?.properties.code ?? placeId.slice(0, 8));
     return {
       id: `pop:${placeId}`,
-      name,
-      // Zero, not a plausible-looking guess. A fabricated catchment would set
-      // the scale of every scenario run against this export, and nobody would
-      // ever go back and check a number that already looked reasonable.
+      name: String(p?.properties.name ?? p?.properties.code ?? placeId.slice(0, 8)),
       size: 0,
       served_by: units,
     };
   });
-  if (populations.length > 0) {
+
+  const populations = declared.length > 0 ? declared : derived;
+
+  // Reported for whichever set is in play, and only for the ones actually
+  // missing a number. A twin that has sized eleven of its twelve territories
+  // should be told about the twelfth, not handed the same blanket sentence it
+  // got when it had sized none.
+  const missing = declared.length > 0 ? unsized : populations.map((p) => p.name);
+  if (missing.length > 0) {
     gaps.push({
       code: "POPULATION_WITHOUT_SIZE",
       message:
-        `${populations.length} population(s) were derived from placement, each with ` +
-        `size 0. The ontology records no catchment, so demand has to be sized in the ` +
-        `scenario.`,
-      subjects: populations.map((p) => p.name),
+        declared.length > 0
+          ? `${missing.length} declared population(s) carry no head count. An incidence ` +
+            `multiplied by zero reaches nobody, so those catchments produce no demand.`
+          : `${missing.length} population(s) were derived from placement, each with ` +
+            `size 0. No type binds \`scales_incidence\`, so nothing in the ontology says ` +
+            `how many people a site serves and demand has to be sized in the scenario.`,
+      subjects: missing,
     });
   }
 

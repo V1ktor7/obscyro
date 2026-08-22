@@ -19,6 +19,10 @@ instances *are* the care model, and binds its properties to mechanics:
     consumes_activity   what it draws on
     consumes_amount     how much of it, per unit per step
 
+A sixth, `scales_incidence`, belongs to the other side of the run: it sizes the
+population an incidence is multiplied by. It is read by the exporter rather than
+here, because it describes who arrives, not what happens to them once they do.
+
 One instance is one (severity, activity) pair. Several instances sharing a
 severity merge their consumption, which is how "a critical case needs a bed and
 half a nurse" is written without the engine knowing either word.
@@ -40,6 +44,7 @@ OCCUPIES_FOR = "occupies_for"
 DIES_WITHOUT = "dies_without"
 CONSUMES_ACTIVITY = "consumes_activity"
 CONSUMES_AMOUNT = "consumes_amount"
+SCALES_INCIDENCE = "scales_incidence"
 
 
 class ContradictoryCareModel(ValueError):
