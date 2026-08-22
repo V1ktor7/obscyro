@@ -157,6 +157,19 @@ def _reject_effects_that_hit_nothing(event: Event, state: SystemState) -> None:
     Templates cannot trip this — they generate their selections from the state —
     so the cost falls entirely on the case that needs it.
     """
+    # An event with no effects at all is the same failure one step earlier, and
+    # it is how a field-name mismatch between this service and its caller stayed
+    # invisible: the platform sent the effects under a key pydantic did not
+    # know, they were dropped without a word, every policy tied at zero, and the
+    # run reported a clean result for a question nobody had asked.
+    if not event.effects:
+        raise HTTPException(
+            422,
+            f"Event {event.id!r} carries no effects, so the run would perturb nothing "
+            "and every response would score identically. An event that does nothing is "
+            "not a scenario the twin survived.",
+        )
+
     known = {
         "facility": set(state.facilities),
         "population": set(state.populations),

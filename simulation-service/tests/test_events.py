@@ -397,3 +397,42 @@ def test_a_full_hospital_is_still_where_an_acute_patient_belongs() -> None:
     traj = run(state, _steady_demand(0.05), null_policy(), seed=0)
     assert sum(sum(t.unmet.values()) for t in traj.ticks) > 0
     assert sum(sum(t.served.values()) for t in traj.ticks) == pytest.approx(0.0, abs=1e-9)
+
+
+def test_an_event_that_carries_nothing_is_refused() -> None:
+    """How a field-name mismatch stayed invisible: the platform sent the effects
+    under a key pydantic did not know, they were dropped without a word, every
+    policy tied at zero, and the run reported a clean result for a question
+    nobody had asked. An event that does nothing is not a scenario survived.
+    """
+    from fastapi import HTTPException
+
+    from app.events.api import _reject_effects_that_hit_nothing
+
+    with pytest.raises(HTTPException) as caught:
+        _reject_effects_that_hit_nothing(
+            Event(id="empty", name="Empty", horizon=10, effects=[]), toy_system()
+        )
+    assert caught.value.status_code == 422
+    assert "no effects" in str(caught.value.detail)
+
+
+def test_the_engine_reads_effects_under_the_name_the_platform_sends() -> None:
+    """The mismatch itself. `perturbations` is silently dropped, so this pins
+    the one key both sides have to agree on."""
+    payload = {
+        "id": "e",
+        "name": "n",
+        "horizon": 10,
+        "effects": [
+            {
+                "id": "a",
+                "target": "demand.incidence",
+                "select": {"acuity": ["critical"]},
+                "op": "add",
+                "value": 0.05,
+                "profile": {"start": 0, "end": 10, "shape": "step", "peak": 1.0},
+            }
+        ],
+    }
+    assert len(Event.model_validate(payload).effects) == 1

@@ -385,7 +385,12 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
           name: row.name,
           description: row.description,
           horizon: row.horizon,
-          perturbations: row.effects,
+          // `effects`, which is what the engine's model calls them. Sent as
+          // `perturbations` it was dropped in silence: pydantic ignores an
+          // unknown field, so every event composed here arrived carrying
+          // nothing, every policy tied at zero, and the run reported a clean
+          // result for a question it had never been asked.
+          effects: row.effects,
         };
       }
 
