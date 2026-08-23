@@ -38,6 +38,7 @@ import {
   type ScenarioSummary,
 } from "@/lib/platform-api";
 import PolicyComposer, { type PolicyDraft } from "./PolicyComposer";
+import ReplayPlayer from "./ReplayPlayer";
 import { runBlockedBecause, unsizedPopulations } from "./run-gate";
 import { useStudio } from "../StudioShell";
 import EventWorkspace from "./EventWorkspace";
@@ -419,6 +420,18 @@ export default function EventsView() {
               />
             ) : null}
             {result ? <Results result={result} /> : null}
+
+            {result && snapshot ? (
+              <Card title="La course, rejouée">
+                <p className="mb-3 text-[11px] leading-relaxed text-ink-faint">
+                  Le réseau pas par pas. Un point est une installation, placée où
+                  elle est, dimensionnée par ce qu&rsquo;elle tient et colorée par la
+                  chose la plus pleine qu&rsquo;elle fournit — pas par une moyenne, qui
+                  ferait passer un service d&rsquo;urgence saturé pour un hôpital calme.
+                </p>
+                <ReplayPlayer result={result} snapshot={snapshot} />
+              </Card>
+            ) : null}
 
             {result?.datasets?.length ? (
               <Card title="What the run produced">
