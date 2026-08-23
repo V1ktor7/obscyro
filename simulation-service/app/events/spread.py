@@ -170,7 +170,13 @@ def spread_model_from(
         # is two rows that agree on every word and disagree on the number.
         key = (leaves, enters, driven or "", along or "")
         prior = seen.get(key)
-        if prior is not None and prior[0] != rate:
+        if prior is not None and prior[0] == rate:
+            # The same passage, declared twice, with the same number. Appending
+            # it ran the flow twice and doubled what crossed — silently, since
+            # nothing about the result says how many rows produced it. One
+            # passage is one flow however many times it was written down.
+            continue
+        if prior is not None:
             raise ContradictorySpreadModel(
                 f"{obj.id!r} and {prior[1]!r} both describe {leaves!r} to {enters!r} and give "
                 f"different rates ({rate} and {prior[0]}). Two rows that agree on every "

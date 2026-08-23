@@ -594,3 +594,31 @@ def test_an_unseeded_catchment_is_not_also_called_underfilled() -> None:
     codes = [g["code"] for g in out.gaps]
     assert "CATCHMENT_NOT_SEEDED" in codes
     assert "CATCHMENT_PARTLY_PLACED" not in codes
+
+
+def test_the_same_passage_written_twice_runs_once() -> None:
+    # A duplicate row is not two flows. Integrating both doubled what crossed,
+    # and nothing in the result said how many rows had produced it — which is
+    # exactly how an import that dedupes on a curly apostrophe turns into twice
+    # the emergency demand.
+    model = spread_model_from(
+        [
+            tr("t1", de="malade", vers="soin", taux=0.007, devient="urgence"),
+            tr("t2", de="malade", vers="soin", taux=0.007, devient="urgence"),
+        ],
+        SCHEMA,
+    )
+    assert len(model.transitions) == 1
+
+
+def test_a_duplicate_row_does_not_double_the_demand() -> None:
+    # Accepting one row is not the same as integrating one flow.
+    def crossed(rows: list) -> float:
+        steps = run_spread(
+            spread_model_from(rows, SCHEMA), [Pop("pop:a", 1000.0)],
+            {"pop:a": {"malade": 100, "sain": 900}}, 10,
+        )
+        return sum(sum(s.incidence.values()) for s in steps)
+
+    one = [tr("t1", de="malade", vers="soin", taux=0.007, devient="urgence")]
+    assert crossed(one + [tr("t2", de="malade", vers="soin", taux=0.007, devient="urgence")]) == crossed(one)

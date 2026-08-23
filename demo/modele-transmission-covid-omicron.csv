@@ -1,0 +1,9 @@
+nom,etat_depart,etat_arrivee,taux,pousse_par,voie,produit_severite
+Transmission — Domicile,sain,malade,0.0604,malade,domicile,
+Transmission — Visiteurs,sain,malade,0.0604,malade,visiteurs,
+Transmission — Travail,sain,malade,0.0604,malade,travail,
+Transmission — École,sain,malade,0.0604,malade,ecole,
+Transmission — Autre,sain,malade,0.0604,malade,autre,
+Rétablissement sans soin,malade,retabli,0.19,,,
+Passage à l'urgence,malade,retabli_urgence,0.007,,,urgence
+Hospitalisation,malade,retabli_hospitalise,0.003,,,hospitalisation
