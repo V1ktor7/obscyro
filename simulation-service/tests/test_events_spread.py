@@ -508,3 +508,53 @@ def test_a_real_run_still_names_the_catchments() -> None:
 
     out = spread_route(SpreadRequest.model_validate(_request()))
     assert {p["id"] for p in out.populations} == {"pop:a", "pop:b"}
+
+
+def test_two_layers_of_the_same_passage_may_transmit_differently() -> None:
+    # A home contact and a school contact both carry `sain` to `malade`, and
+    # they are two passages rather than one described twice. Keyed on the
+    # endpoints alone this raised, which rejected the only declaration anybody
+    # would actually write.
+    model = spread_model_from(
+        [
+            tr("t1", de="sain", vers="malade", taux=0.05, pousse="malade", voie="ecole"),
+            tr("t2", de="sain", vers="malade", taux=0.02, pousse="malade", voie="domicile"),
+        ],
+        SCHEMA,
+    )
+    assert len(model.transitions) == 2
+    assert model.couplings == ["domicile", "ecole"]
+
+
+def test_the_same_passage_twice_with_two_numbers_is_still_refused() -> None:
+    # Same states, same driver, same layer, two rates: the engine reads one of
+    # them and the author never learns which.
+    with pytest.raises(ContradictorySpreadModel):
+        spread_model_from(
+            [
+                tr("t1", de="sain", vers="malade", taux=0.05, pousse="malade", voie="ecole"),
+                tr("t2", de="sain", vers="malade", taux=0.09, pousse="malade", voie="ecole"),
+            ],
+            SCHEMA,
+        )
+
+
+def test_two_layers_that_differ_actually_move_different_amounts() -> None:
+    # Accepting the declaration is not the same as integrating it. Doubling the
+    # rate on one layer has to change the run, or the second row was parsed and
+    # then dropped.
+    def total(school_rate: float) -> float:
+        model = spread_model_from(
+            [
+                tr("t1", de="sain", vers="malade", taux=school_rate, pousse="malade",
+                   voie="ecole", devient="urgence"),
+                tr("t2", de="sain", vers="malade", taux=0.02, pousse="malade",
+                   voie="domicile", devient="urgence"),
+            ],
+            SCHEMA,
+        )
+        pops = [Pop("pop:a", 1000.0, {"ecole": 1.6, "domicile": 1.2})]
+        steps = run_spread(model, pops, {"pop:a": {"sain": 990, "malade": 10}}, 20)
+        return sum(sum(s.incidence.values()) for s in steps)
+
+    assert total(0.10) > total(0.05)

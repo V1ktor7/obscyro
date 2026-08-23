@@ -162,12 +162,21 @@ def spread_model_from(
         along = _text(obj.properties.get(along_key)) if along_key else None
         produces = _text(obj.properties.get(produces_key)) if produces_key else None
 
-        key = (leaves, enters)
+        # Keyed by the whole passage and not by its endpoints alone. Five
+        # contact layers all carrying `sain` to `malade` are five passages, not
+        # one described five times, and keying on the endpoints rejected the
+        # only declaration anybody would actually write: a home contact and a
+        # school contact that do not transmit alike. What stays a contradiction
+        # is two rows that agree on every word and disagree on the number.
+        key = (leaves, enters, driven or "", along or "")
         prior = seen.get(key)
         if prior is not None and prior[0] != rate:
             raise ContradictorySpreadModel(
                 f"{obj.id!r} and {prior[1]!r} both describe {leaves!r} to {enters!r} and give "
-                f"different rates ({rate} and {prior[0]}). The engine reads one number; say which."
+                f"different rates ({rate} and {prior[0]}). Two rows that agree on every "
+                f"word and disagree on the number leave the engine reading one of them; "
+                f"say which. (A different coupling or a different driver makes it a "
+                f"different passage, and those are allowed to differ.)"
             )
         seen[key] = (rate, obj.id)
         model.transitions.append(
