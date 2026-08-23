@@ -33,6 +33,7 @@ import {
   type SimTarget,
   type ScenarioSummary,
 } from "@/lib/platform-api";
+import { runBlockedBecause, unsizedPopulations } from "./run-gate";
 import { useStudio } from "../StudioShell";
 import EventWorkspace from "./EventWorkspace";
 import EventLibrary from "./EventLibrary";
@@ -228,18 +229,15 @@ export default function ResilienceView() {
   const advisory = (snapshot?.gaps ?? []).filter((g) => !BLOCKING.includes(g.code));
   const noCapacity = Object.keys(totals.byRole).length === 0;
 
-  const sized = (snapshot?.populations ?? []).filter((p) => Number(sizes[p.id] ?? "0") > 0);
-  // Each hole has to be filled by hand, so the button says which one is still
-  // open rather than sitting greyed out with no explanation.
-  const blockedBecause = !event
-    ? "Pick one of your events, or create one."
-    : noCapacity
-    ? "No object type carries capacity yet — set a resilience role on your types first."
-    : sized.length === 0
-      ? "Enter how many people at least one site serves."
-      : snapshot && snapshot.edges.length > 0 && Number(routeCapacity) <= 0
-        ? "Enter how many patients a route can carry, or no transfer can complete."
-        : null;
+  const unsizedPops = unsizedPopulations(snapshot?.populations ?? [], sizes);
+  const blockedBecause = runBlockedBecause({
+    event,
+    hasCapacity: !noCapacity,
+    populations: snapshot?.populations ?? [],
+    typedSizes: sizes,
+    edgeCount: snapshot?.edges.length ?? 0,
+    routeCapacity,
+  });
 
   async function run() {
     if (!env || running || blockedBecause) return;
@@ -315,15 +313,6 @@ export default function ResilienceView() {
 
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-canvas">
-      <header className="border-b border-line bg-white px-6 py-4">
-        <h1 className="text-sm font-medium text-ink">Resilience</h1>
-        <p className="mt-1 max-w-3xl text-xs leading-relaxed text-ink-faint">
-          Put your network through an event that has not happened, and find out
-          which response comes out ahead. Same question every time: if this hits,
-          what does it cost, and does acting beat standing still?
-        </p>
-      </header>
-
       {error ? (
         <div className="mx-6 mt-4 rounded-md border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">
           {error}
@@ -532,20 +521,29 @@ export default function ResilienceView() {
                 <div className="mb-3 flex flex-col gap-2">
                   {ownEvents.map((e) => (
                     <div key={e.id} className="flex items-start gap-2">
-                      <input
-                        type="radio"
-                        name="event"
-                        checked={event === `event:${e.id}`}
-                        onChange={() => setEvent(`event:${e.id}`)}
-                        className="mt-0.5"
-                      />
-                      <span className="flex-1">
-                        <span className="block text-xs text-ink">{e.name}</span>
-                        <span className="block text-[11px] leading-snug text-ink-faint">
-                          {e.description ||
-                            `${e.effects.length} effect${e.effects.length === 1 ? "" : "s"} over ${e.horizon} steps`}
+                      {/* The label is the whole row. As a bare input beside a
+                          span, the only target was the 13px circle: clicking
+                          the name of the event you wanted did nothing, and the
+                          run button stayed greyed out with no way to see why. */}
+                      <label className="flex flex-1 cursor-pointer items-start gap-2">
+                        <input
+                          type="radio"
+                          name="event"
+                          checked={event === `event:${e.id}`}
+                          onChange={() => setEvent(`event:${e.id}`)}
+                          className="mt-0.5"
+                        />
+                        <span className="flex-1">
+                          <span className="block text-xs text-ink">{e.name}</span>
+                          {/* Clamped: a description carrying its own provenance
+                              is worth keeping and would otherwise push the
+                              controls under it off the panel. */}
+                          <span className="line-clamp-3 block text-[11px] leading-snug text-ink-faint">
+                            {e.description ||
+                              `${e.effects.length} effect${e.effects.length === 1 ? "" : "s"} over ${e.horizon} steps`}
+                          </span>
                         </span>
-                      </span>
+                      </label>
                       <button
                         type="button"
                         onClick={() => setComposing(e)}
@@ -636,15 +634,16 @@ export default function ResilienceView() {
             {blocking.length > 0 && !noCapacity ? (
               <Card title="4 · Fill in what the twin cannot know">
                 <p className="mb-3 text-[11px] leading-relaxed text-ink-faint">
-                  Two numbers that decide the result and that no ontology holds.
-                  Left at zero the run still completes and tells you nothing.
+                  Numbers that decide the result and that your ontology has not
+                  answered. Left at zero the run still completes and tells you
+                  nothing. Anything already declared is not asked for again.
                 </p>
-                {snapshot.populations.length > 0 ? (
+                {unsizedPops.length > 0 ? (
                   <div className="mb-3 flex flex-col gap-2">
                     <span className="text-[11px] font-medium text-ink">
                       People each site serves
                     </span>
-                    {snapshot.populations.map((p) => (
+                    {unsizedPops.map((p) => (
                       <label key={p.id} className="flex items-center gap-2">
                         <span className="flex-1 truncate text-[11px] text-ink-faint">
                           {p.name}
