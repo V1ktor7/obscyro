@@ -27,6 +27,7 @@ from app.events.harness import compare
 from app.events.mechanics import ContradictoryCareModel, care_model_from
 from app.events.ontology import OntologyExport, UnrunnableExport, load
 from app.events.scoring import Objective
+from app.events.policy import Policy
 from app.events.targets import CATALOGUE
 from app.events.templates import EVENTS, POLICIES, care_model_for
 
@@ -45,7 +46,17 @@ class CompareRequest(BaseModel):
     # branch and removes the ceiling: three canned events is a demo.
     template: str | None = None
     event: Event | None = None
-    policies: list[str] = Field(min_length=1)
+    # Shipped responses, by name.
+    policies: list[str] = Field(default_factory=list)
+    # Responses written by the institution, sent whole.
+    #
+    # A `Policy` is already inspectable data — a typed condition tree, four
+    # kinds of action, and the frictions that stop every response from looking
+    # free and instant. Nothing about it needed to live in this service; it was
+    # simply unreachable, because the only way in was a name in a dictionary of
+    # three. The same argument the composer makes for events: adding a kind of
+    # response should mean writing one of these, not editing the engine.
+    custom_policies: list[Policy] = Field(default_factory=list)
     seed: int | None = None
     # The two facts the ontology cannot hold. Both default to nothing, and both
     # are checked before the run rather than silently zeroed.
@@ -248,6 +259,19 @@ def compare_route(req: CompareRequest) -> CompareResponse:
             422,
             f"Unknown response(s) {', '.join(unknown)}. Available: {', '.join(sorted(POLICIES))}.",
         )
+    if not req.policies and not req.custom_policies:
+        raise HTTPException(
+            422, "Send at least one response to compare, shipped or written by hand."
+        )
+    # Ids are how a result row is read back, so two responses may not share one.
+    seen_ids = list(req.policies) + [p.id for p in req.custom_policies]
+    clashing = sorted({i for i in seen_ids if seen_ids.count(i) > 1})
+    if clashing:
+        raise HTTPException(
+            422,
+            f"Two responses share the id(s) {', '.join(clashing)}. The ranking is read "
+            f"by id, so one would silently stand in for the other.",
+        )
 
     # The care model needs the loaded state to know which activities exist, and
     # the loader needs a care model to check against — so load once with a probe
@@ -287,7 +311,7 @@ def compare_route(req: CompareRequest) -> CompareResponse:
 
     event = req.event if req.event is not None else EVENTS[req.template or ""](state)
     _reject_effects_that_hit_nothing(event, state)
-    policies = [POLICIES[p](state) for p in req.policies]
+    policies = [POLICIES[p](state) for p in req.policies] + list(req.custom_policies)
 
     # Cost is weighted at roughly two dollars per micro-life so it registers
     # without dominating. It is a placeholder for a number the customer owns,

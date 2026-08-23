@@ -1902,6 +1902,8 @@ export async function runSimulation(
     /** An event composed here. Mutually exclusive with `scenario`. */
     eventId?: string;
     policies: string[];
+    /** Responses written here rather than shipped with the engine. */
+    customPolicies?: Record<string, unknown>[];
     seed?: number;
     populationSizes?: Record<string, number>;
     routeCapacity?: number;

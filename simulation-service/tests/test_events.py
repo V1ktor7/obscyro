@@ -512,3 +512,76 @@ def test_the_queue_is_recorded_beside_what_it_is_waiting_for() -> None:
 def test_a_facility_with_nobody_waiting_records_no_queue() -> None:
     traj = run(_catchment_system(capable=1, incapable=0), _steady_demand(0.001), null_policy(), seed=0)
     assert all(not t.waiting for t in traj.ticks)
+
+
+# --- a response written by the institution ----------------------------------
+
+
+def test_a_hand_written_response_runs_beside_the_shipped_ones() -> None:
+    """`Policy` was already inspectable data — a typed condition tree, four
+    actions, and the frictions that stop a response looking free and instant.
+    It was simply unreachable: the only way in was a name in a dictionary of
+    three.
+    """
+    from app.events.api import CompareRequest
+
+    body = CompareRequest.model_validate({
+        "system": {"facilities": [], "objects": []},
+        "event": {"id": "e", "name": "e", "horizon": 5, "effects": []},
+        "policies": ["null"],
+        "custom_policies": [{
+            "id": "ferme-tot",
+            "name": "Fermer tôt",
+            "rules": [{
+                "id": "r1",
+                "trigger": {"when": "from_tick", "start": 3},
+                "condition": {"compare": {
+                    "left": {"fn": "backlog", "facility": "h"}, "op": ">", "right": 10,
+                }},
+                "action": {
+                    "kind": "modify_demand", "population": "p", "factor": 0.7,
+                    "friction": {"delay": 2, "cost": 1000.0},
+                },
+            }],
+        }],
+    })
+    assert len(body.custom_policies) == 1
+    rule = body.custom_policies[0].rules[0]
+    assert rule.action.kind == "modify_demand"
+    assert rule.action.friction.delay == 2
+    assert body.custom_policies[0].ordered()[0].id == "r1"
+
+
+def test_two_responses_may_not_share_an_id() -> None:
+    """The ranking is read by id, so a collision means one row silently stands
+    in for the other and the comparison is between a policy and itself."""
+    from fastapi import HTTPException
+
+    from app.events.api import CompareRequest, compare_route
+
+    body = CompareRequest.model_validate({
+        "system": {"facilities": [], "objects": []},
+        "event": {"id": "e", "name": "e", "horizon": 5, "effects": []},
+        "policies": ["null"],
+        "custom_policies": [{"id": "null", "name": "Homonyme", "rules": []}],
+    })
+    with pytest.raises(HTTPException) as caught:
+        compare_route(body)
+    assert caught.value.status_code == 422
+    assert "share the id" in str(caught.value.detail)
+
+
+def test_sending_no_response_at_all_is_refused() -> None:
+    from fastapi import HTTPException
+
+    from app.events.api import CompareRequest, compare_route
+
+    body = CompareRequest.model_validate({
+        "system": {"facilities": [], "objects": []},
+        "event": {"id": "e", "name": "e", "horizon": 5, "effects": []},
+        "policies": [],
+        "custom_policies": [],
+    })
+    with pytest.raises(HTTPException) as caught:
+        compare_route(body)
+    assert caught.value.status_code == 422

@@ -332,7 +332,18 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
           template: z.string().min(1).optional(),
           /** An event composed here. Mutually exclusive with `scenario`. */
           eventId: z.string().uuid().optional(),
-          policies: z.array(z.string().min(1)).min(1),
+          /** Shipped responses, by name. */
+          policies: z.array(z.string().min(1)).default([]),
+          /**
+           * Responses written here, sent whole.
+           *
+           * Passed through rather than validated field by field: the engine's
+           * own model already checks the shape, and mirroring a typed condition
+           * tree in zod would give two definitions of a response that drift
+           * apart. What this route owes the caller is a clear failure, which the
+           * engine's 422 already is.
+           */
+          customPolicies: z.array(z.record(z.unknown())).default([]),
           seed: z.number().int().optional(),
           /** Sizes the ontology cannot supply. Empty runs a hollow model. */
           populationSizes: z.record(z.number().nonnegative()).default({}),
@@ -412,6 +423,7 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
         template: req.body.template ?? null,
         event,
         policies: req.body.policies,
+        custom_policies: req.body.customPolicies,
         seed: req.body.seed ?? null,
         population_sizes: req.body.populationSizes,
         route_capacity: req.body.routeCapacity,
