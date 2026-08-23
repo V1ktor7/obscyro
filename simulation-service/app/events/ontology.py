@@ -115,6 +115,37 @@ class UnrunnableExport(ValueError):
     """
 
 
+def _people_held(from_objects: float, facility: Facility, requirement: CareRequirement | None) -> float:
+    """How many people are in this facility when the run starts.
+
+    Two kinds of evidence, and a twin has one or the other. A twin that models
+    patients as objects says so directly, and those are counted. A twin that
+    records occupancy as a property of the bed — which is how the Montréal one
+    is built, and how any twin loaded from an occupancy feed will be — has no
+    patient objects at all, and its evidence is the beds that are already
+    unavailable.
+
+    Reading only the first is what made `census_acuity` do nothing here: the
+    parameter was accepted, the census came back empty, and four emergency
+    departments held their loaded figure for ninety-one steps as if the argument
+    had never been passed. The docstring on `load` describes this as being about
+    "occupied beds", which is the behaviour, not what the code did.
+
+    Never the sum: in a twin that has both, the bed is unavailable *because* the
+    patient is in it, and adding them would admit every patient twice.
+    """
+    if from_objects > 0 or requirement is None:
+        return from_objects
+    # The scarcest input decides how many people those units account for: two
+    # beds and one ventilator is one patient's worth, not three.
+    per_activity = [
+        sum(r.capacity - r.quantity for r in facility.enabling(activity)) / per
+        for activity, per in requirement.consumes.items()
+        if per > 0
+    ]
+    return min(per_activity) if per_activity else 0.0
+
+
 def _reserve_held(facility: Facility, requirement: CareRequirement | None, held: float) -> None:
     """Mark the already-occupied units as drawn by the run.
 
@@ -175,7 +206,11 @@ def load(
             resources=derive_resources(ex.objects, ex.object_rules, f.id),
         )
         if census_acuity:
-            held = sum(derive_census(ex.objects, f.id).values())
+            held = _people_held(
+                sum(derive_census(ex.objects, f.id).values()),
+                facilities[f.id],
+                care_model.get(census_acuity),
+            )
             if held:
                 census[f.id] = {census_acuity: held}
                 # Hand those units to the run.

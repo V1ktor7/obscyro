@@ -986,3 +986,43 @@ def test_an_unnamed_census_still_holds_its_beds() -> None:
     s = runnable()
     traj = run(s, Event(id="none", name="Rien", horizon=8, effects=[]), null_policy(), seed=0)
     assert traj.ticks[-1].occupancy["unit-a"]["lit"] == pytest.approx(28 / 48)
+
+
+def test_a_twin_that_records_occupancy_on_the_bed_still_has_a_census() -> None:
+    """Montréal's shape, and any twin loaded from an occupancy feed.
+
+    There are no patient objects — a bed carries a status. `derive_census` sees
+    only demand-role objects, so the census came back empty, `census_acuity` did
+    nothing at all, and four emergency departments held their loaded figure for
+    ninety-one steps as if the argument had never been passed.
+    """
+    from app.events.domain import CareRequirement
+
+    model = {
+        "routine": CareRequirement(
+            acuity="routine", consumes={"lit": 1.0}, mortality_per_unmet=0.0, stay_ticks=2
+        )
+    }
+    ex = export()
+    # Montréal's shape: strip the patient objects, keep the beds and their
+    # status. 28 of unit-a's 48 stay marked unavailable.
+    ex["objects"] = [o for o in ex["objects"] if o.get("role") != "demand"]
+    s = load(ex, care_model=model, population_sizes={"pop:site-1": 1},
+             route_capacity=1, census_acuity="routine")
+    assert s.census["unit-a"]["routine"] == pytest.approx(28)
+
+
+def test_patients_are_not_counted_twice_when_the_twin_models_both() -> None:
+    """A bed is unavailable *because* someone is in it. Summing the two kinds of
+    evidence would admit every patient twice and halve the network on load."""
+    from app.events.domain import CareRequirement, Facility, Resource, SPACE
+    from app.events.ontology import _people_held
+
+    req = CareRequirement(acuity="a", consumes={"lit": 1.0})
+    f = Facility(
+        id="f", name="f",
+        resources={"b": Resource(id="b", category=SPACE, quantity=20, capacity=48,
+                                 enables=frozenset({"lit"}))},
+    )
+    assert _people_held(28, f, req) == 28
+    assert _people_held(0, f, req) == 28
