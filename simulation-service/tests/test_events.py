@@ -585,3 +585,62 @@ def test_sending_no_response_at_all_is_refused() -> None:
     with pytest.raises(HTTPException) as caught:
         compare_route(body)
     assert caught.value.status_code == 422
+
+
+def test_one_response_may_reduce_demand_in_every_catchment() -> None:
+    """A public-health lever is written once per population, and every one of
+    them has to fire.
+
+    The exclusivity key read only `target` and `source`, which `modify_demand`
+    does not set. Twelve rules therefore claimed the empty string, the first
+    won, and eleven were suppressed as conflicting with one another — a
+    confinement that reached one territory out of twelve and reported the same
+    total as doing nothing.
+    """
+    from app.events.policy import Action, Condition, Policy, Rule
+    from app.events.domain import Population
+
+    state = _catchment_system(capable=2, incapable=0)
+    state.populations = {
+        f"pop{i}": Population(id=f"pop{i}", size=100_000, served_by=list(state.facilities))
+        for i in range(3)
+    }
+    policy = Policy(
+        id="confinement",
+        name="Réduire la demande partout",
+        rules=[
+            Rule(
+                id=f"r{i}",
+                condition=Condition(always=True),
+                action=Action(kind="modify_demand", population=f"pop{i}", factor=0.5),
+            )
+            for i in range(3)
+        ],
+    )
+    traj = run(state, _steady_demand(0.05), policy, seed=0)
+    assert not any(t.suppressed for t in traj.ticks), traj.ticks[0].suppressed
+
+    plain = run(state, _steady_demand(0.05), null_policy(), seed=0)
+    cut = sum(sum(t.arrivals.values()) for t in traj.ticks)
+    full = sum(sum(t.arrivals.values()) for t in plain.ticks)
+    assert cut < full * 0.6, f"la demande n a pas baisse partout: {cut:.0f} contre {full:.0f}"
+
+
+def test_two_rules_spending_the_same_thing_still_conflict() -> None:
+    """The guard itself is not weakened: two rules aimed at one population are
+    still one claim, and the loser is recorded rather than dropped."""
+    from app.events.policy import Action, Condition, Policy, Rule
+
+    state = _catchment_system(capable=1, incapable=0)
+    policy = Policy(
+        id="double",
+        name="Deux fois la meme chose",
+        rules=[
+            Rule(id="a", priority=2, condition=Condition(always=True),
+                 action=Action(kind="modify_demand", population="region", factor=0.5)),
+            Rule(id="b", priority=1, condition=Condition(always=True),
+                 action=Action(kind="modify_demand", population="region", factor=0.5)),
+        ],
+    )
+    traj = run(state, _steady_demand(0.05), policy, seed=0)
+    assert any("b (conflict" in s for t in traj.ticks for s in t.suppressed)

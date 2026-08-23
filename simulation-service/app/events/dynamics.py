@@ -502,7 +502,18 @@ class Engine:
             # Two rules must not both spend the same thing. First by priority
             # wins the claim; the loser is recorded rather than dropped, so the
             # trace shows what was considered and rejected.
-            claim = (rule.action.kind, rule.action.target or rule.action.source or "")
+            #
+            # The claim names what is actually being spent, which for
+            # `modify_demand` is a population — it has neither target nor
+            # source. Reading only those two gave every demand rule the empty
+            # string, so a response that reduces demand across twelve
+            # catchments kept the first and suppressed eleven as conflicting
+            # with each other. It fired, it changed one territory, and it
+            # reported the same total as doing nothing.
+            claim = (
+                rule.action.kind,
+                rule.action.target or rule.action.source or rule.action.population or "",
+            )
             if claim in claimed:
                 suppressed.append(f"{rule.id} (conflict on {claim[0]}@{claim[1]})")
                 continue
