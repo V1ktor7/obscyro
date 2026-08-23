@@ -15,6 +15,13 @@ import {
   listSimEvents,
   updateSimEvent,
 } from "../services/sim-events.js";
+import {
+  createSimPolicy,
+  deleteSimPolicy,
+  getSimPolicy,
+  listSimPolicies,
+  updateSimPolicy,
+} from "../services/sim-policies.js";
 import { buildTwinExport } from "../services/twin-export.js";
 import { proxyToSimService } from "../services/ml-simulation.js";
 import {
@@ -344,6 +351,8 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
            * engine's 422 already is.
            */
           customPolicies: z.array(z.record(z.unknown())).default([]),
+          /** Responses stored here, by id. Resolved before the export. */
+          policyIds: z.array(z.string().uuid()).default([]),
           seed: z.number().int().optional(),
           /** Sizes the ontology cannot supply. Empty runs a hollow model. */
           populationSizes: z.record(z.number().nonnegative()).default({}),
@@ -417,13 +426,22 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
         };
       }
 
+      // Resolved before the export so a missing response fails on its own
+      // terms rather than after a minute of building the world.
+      const stored = await Promise.all(
+        req.body.policyIds.map(async (id) => {
+          const row = await getSimPolicy(req.db, env.id, id);
+          return { id: row.id, name: row.name, rules: row.rules };
+        }),
+      );
+
       const system = await buildTwinExport(req.db, env.id, req.params.env, lens);
       return proxyToSimService("/events/compare", {
         system,
         template: req.body.template ?? null,
         event,
         policies: req.body.policies,
-        custom_policies: req.body.customPolicies,
+        custom_policies: [...stored, ...req.body.customPolicies],
         seed: req.body.seed ?? null,
         population_sizes: req.body.populationSizes,
         route_capacity: req.body.routeCapacity,
@@ -542,6 +560,126 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
     agg: z.enum(["count", "sum", "mean", "min", "max"]),
     property: z.string().max(200).nullable().optional(),
   });
+
+  const simPolicyBody = z.object({
+    name: z.string().trim().min(1).max(200),
+    description: z.string().max(4000).default(""),
+    // Passed through: the engine's own model checks the shape, and mirroring a
+    // typed condition tree in zod would give two definitions of a response that
+    // drift apart.
+    rules: z.array(z.record(z.unknown())).default([]),
+  });
+
+  const simPolicyOut = z.object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string(),
+    rules: z.array(z.record(z.unknown())),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  });
+
+  app.get(
+    "/ontology/:env/sim-policies",
+    {
+      schema: {
+        summary: "Responses written by this organisation",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1) }),
+        response: { 200: z.object({ policies: z.array(simPolicyOut) }), 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      return { policies: await listSimPolicies(req.db, env.id) };
+    },
+  );
+
+  app.post(
+    "/ontology/:env/sim-policies",
+    {
+      schema: {
+        summary: "Write a response",
+        description:
+          "A response is a list of rules: when this reading crosses that line, do " +
+          "this, after this delay, at this cost. Nothing here decides whether a rule " +
+          "is wise — transferring patients and closing schools are the same object " +
+          "with different actions.",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1) }),
+        body: simPolicyBody,
+        response: { 201: simPolicyOut, 400: errorEnvelope, 409: errorEnvelope },
+      },
+    },
+    async (req, reply) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const created = await createSimPolicy(req.db, env.id, userId, req.body);
+      await recordAudit(req.db, {
+        actorUserId: userId,
+        projectId: env.id,
+        action: "sim.policy.create",
+        resourceType: "sim_policy",
+        resourceId: created.id,
+        metadata: { name: created.name, rules: created.rules.length },
+      });
+      return reply.code(201).send(created);
+    },
+  );
+
+  app.put(
+    "/ontology/:env/sim-policies/:id",
+    {
+      schema: {
+        summary: "Replace a written response",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1), id: z.string().uuid() }),
+        body: simPolicyBody,
+        response: { 200: simPolicyOut, 400: errorEnvelope, 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const updated = await updateSimPolicy(req.db, env.id, req.params.id, req.body);
+      await recordAudit(req.db, {
+        actorUserId: userId,
+        projectId: env.id,
+        action: "sim.policy.update",
+        resourceType: "sim_policy",
+        resourceId: updated.id,
+        metadata: { name: updated.name, rules: updated.rules.length },
+      });
+      return updated;
+    },
+  );
+
+  app.delete(
+    "/ontology/:env/sim-policies/:id",
+    {
+      schema: {
+        summary: "Delete a written response",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1), id: z.string().uuid() }),
+        response: { 200: z.object({ ok: z.literal(true) }), 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      await deleteSimPolicy(req.db, env.id, req.params.id);
+      await recordAudit(req.db, {
+        actorUserId: userId,
+        projectId: env.id,
+        action: "sim.policy.delete",
+        resourceType: "sim_policy",
+        resourceId: req.params.id,
+        metadata: {},
+      });
+      return { ok: true as const };
+    },
+  );
 
   const metricOut = z.object({
     id: z.string(),

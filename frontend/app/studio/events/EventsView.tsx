@@ -24,7 +24,11 @@ import {
   fetchSimExport,
   listSimEvents,
   listScenarios,
+  deleteSimPolicy,
+  listSimPolicies,
   runSimulation,
+  saveSimPolicy,
+  type SimPolicy,
   saveSimEvent,
   type SimComparison,
   type SimEvent,
@@ -33,6 +37,7 @@ import {
   type SimTarget,
   type ScenarioSummary,
 } from "@/lib/platform-api";
+import PolicyComposer, { type PolicyDraft } from "./PolicyComposer";
 import { runBlockedBecause, unsizedPopulations } from "./run-gate";
 import { useStudio } from "../StudioShell";
 import EventWorkspace from "./EventWorkspace";
@@ -133,6 +138,9 @@ export default function EventsView() {
   const [composed, setComposed] = useState<SimEvent[]>([]);
   const [targets, setTargets] = useState<SimTarget[]>([]);
   const [composing, setComposing] = useState<SimEvent | "new" | null>(null);
+  const [policies, setPolicies] = useState<SimPolicy[]>([]);
+  const [chosenPolicies, setChosenPolicies] = useState<string[]>([]);
+  const [writing, setWriting] = useState<SimPolicy | "new" | null>(null);
 
   const load = useCallback(async () => {
     if (!env) return;
@@ -169,9 +177,19 @@ export default function EventsView() {
     }
   }, [env]);
 
+  const loadPolicies = useCallback(async () => {
+    if (!env) return;
+    try {
+      setPolicies((await listSimPolicies(env)).policies);
+    } catch {
+      setPolicies([]);
+    }
+  }, [env]);
+
   useEffect(() => {
     void loadEvents();
-  }, [loadEvents]);
+    void loadPolicies();
+  }, [loadEvents, loadPolicies]);
 
   useEffect(() => {
     if (!env) return;
@@ -247,6 +265,7 @@ export default function EventsView() {
         await runSimulation(env, {
           eventId: event.slice(6),
           policies: responses,
+          policyIds: chosenPolicies,
           populationSizes,
           routeCapacity: Number(routeCapacity) || 0,
           twinScenarioId: twinScenarioId || undefined,
@@ -269,6 +288,44 @@ export default function EventsView() {
    * something. An event is the subject of this page; while you are writing one,
    * it is the only subject.
    */
+  if (writing && snapshot) {
+    return (
+      <PolicyComposer
+        snapshot={snapshot}
+        initial={
+          writing === "new"
+            ? null
+            : {
+                id: writing.id,
+                name: writing.name,
+                description: writing.description,
+                // Stored as JSON, checked by the engine. The composer needs the
+                // shape to draw a form; a stored rule that no longer matches it
+                // shows as a rule with a missing field rather than a crash.
+                rules: writing.rules as unknown as PolicyDraft["rules"],
+              }
+        }
+        onCancel={() => setWriting(null)}
+        onSave={async (draft) => {
+          const saved = await saveSimPolicy(
+            env!,
+            {
+              name: draft.name,
+              description: draft.description,
+              rules: draft.rules as unknown as Record<string, unknown>[],
+            },
+            draft.id,
+          );
+          await loadPolicies();
+          setChosenPolicies((prev) =>
+            prev.includes(saved.id) ? prev : [...prev, saved.id],
+          );
+          setWriting(null);
+        }}
+      />
+    );
+  }
+
   if (composing && snapshot) {
     return (
       <EventWorkspace
@@ -543,6 +600,65 @@ export default function EventsView() {
                   </label>
                 ))}
               </div>
+
+              {policies.length > 0 ? (
+                <div className="mt-3 flex flex-col gap-2 border-t border-line-soft pt-3">
+                  <span className="text-[11px] uppercase tracking-wide text-ink-faint">
+                    Écrites ici
+                  </span>
+                  {policies.map((p) => (
+                    <div key={p.id} className="flex items-start gap-2">
+                      <label className="flex flex-1 cursor-pointer items-start gap-2">
+                        <input
+                          type="checkbox"
+                          checked={chosenPolicies.includes(p.id)}
+                          onChange={(ev) =>
+                            setChosenPolicies((prev) =>
+                              ev.target.checked
+                                ? [...prev, p.id]
+                                : prev.filter((x) => x !== p.id),
+                            )
+                          }
+                          className="mt-0.5"
+                        />
+                        <span className="flex-1">
+                          <span className="block text-xs text-ink">{p.name}</span>
+                          <span className="line-clamp-2 block text-[11px] leading-snug text-ink-faint">
+                            {p.description ||
+                              `${p.rules.length} règle${p.rules.length === 1 ? "" : "s"}`}
+                          </span>
+                        </span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setWriting(p)}
+                        className="text-[11px] text-ink-faint hover:text-brand"
+                      >
+                        Modifier
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await deleteSimPolicy(env!, p.id);
+                          setChosenPolicies((prev) => prev.filter((x) => x !== p.id));
+                          await loadPolicies();
+                        }}
+                        className="text-[11px] text-ink-faint hover:text-danger"
+                      >
+                        Supprimer
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={() => setWriting("new")}
+                className="mt-3 rounded-md border border-line px-3 py-1.5 text-xs text-ink-body hover:border-ink-ghost"
+              >
+                Écrire une réponse
+              </button>
             </Card>
 
             {blocking.length > 0 && !noCapacity ? (
@@ -594,7 +710,9 @@ export default function EventsView() {
             <button
               type="button"
               onClick={run}
-              disabled={running || !!blockedBecause || responses.length === 0}
+              disabled={
+              running || !!blockedBecause || responses.length + chosenPolicies.length === 0
+            }
               className="rounded-md bg-brand px-3 py-2 text-xs text-white hover:bg-brand-deep disabled:bg-ink-ghost"
             >
               {running ? "Running…" : "Compare responses"}

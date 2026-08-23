@@ -1890,6 +1890,32 @@ export async function saveSimEvent(
   return apiFetch(path, { method: id ? "PUT" : "POST", body });
 }
 
+export interface SimPolicy {
+  id: string;
+  name: string;
+  description: string;
+  rules: Record<string, unknown>[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function listSimPolicies(env: string): Promise<{ policies: SimPolicy[] }> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/sim-policies`);
+}
+
+export async function saveSimPolicy(
+  env: string,
+  body: { name: string; description: string; rules: Record<string, unknown>[] },
+  id?: string,
+): Promise<SimPolicy> {
+  const path = `/v1/ontology/${encEnv(env)}/sim-policies${id ? `/${id}` : ""}`;
+  return apiFetch(path, { method: id ? "PUT" : "POST", body });
+}
+
+export async function deleteSimPolicy(env: string, id: string): Promise<{ ok: true }> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/sim-policies/${id}`, { method: "DELETE" });
+}
+
 export async function deleteSimEvent(env: string, id: string): Promise<{ ok: true }> {
   return apiFetch(`/v1/ontology/${encEnv(env)}/sim-events/${id}`, { method: "DELETE" });
 }
@@ -1904,6 +1930,8 @@ export async function runSimulation(
     policies: string[];
     /** Responses written here rather than shipped with the engine. */
     customPolicies?: Record<string, unknown>[];
+    /** Responses saved here, by id. */
+    policyIds?: string[];
     seed?: number;
     populationSizes?: Record<string, number>;
     routeCapacity?: number;
