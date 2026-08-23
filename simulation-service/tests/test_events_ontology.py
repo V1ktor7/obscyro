@@ -943,3 +943,46 @@ def test_a_real_twin_runs_and_a_policy_beats_doing_nothing() -> None:
     )
     assert rows[-1]["policy"] == "null", "doing nothing should never win"
     assert rows[0]["excess_deaths"] < rows[-1]["excess_deaths"]
+
+
+def test_the_census_frees_its_beds_when_it_discharges() -> None:
+    """The half of `census_acuity` that never worked.
+
+    `reserved` means "drawn by this run", and `release` gives back only what was
+    reserved — so admitting the ontology's occupied beds as patients discharged
+    the patient and kept the bed. Four Montréal emergency departments read 100%
+    on step 0 and 100% on step 90 with nobody waiting: a straight line that
+    looked like a crisis and was an artefact of loading.
+    """
+    from app.events.domain import CareRequirement
+    from app.events.dynamics import run
+    from app.events.effects import Event
+    from app.events.policy import null_policy
+
+    model = {
+        "routine": CareRequirement(
+            acuity="routine", consumes={"lit": 1.0}, mortality_per_unmet=0.0, stay_ticks=2
+        )
+    }
+    ex = export()
+    s = load(ex, care_model=model, population_sizes={"pop:site-1": 1},
+             route_capacity=1, census_acuity="routine")
+    assert s.occupancy_ratio("unit-a", activity="lit") == pytest.approx(28 / 48)
+
+    # No event at all: nothing arrives, so the only thing that can move is the
+    # census leaving.
+    traj = run(s, Event(id="none", name="Rien", horizon=8, effects=[]), null_policy(), seed=0)
+    end = traj.ticks[-1].occupancy["unit-a"]["lit"]
+    assert end < 0.05, f"les lits ne se liberent pas: {end:.0%} encore occupes"
+
+
+def test_an_unnamed_census_still_holds_its_beds() -> None:
+    """The other half, unchanged: left unnamed, the occupants are not patients
+    and nothing in the run may hand their beds back."""
+    from app.events.dynamics import run
+    from app.events.effects import Event
+    from app.events.policy import null_policy
+
+    s = runnable()
+    traj = run(s, Event(id="none", name="Rien", horizon=8, effects=[]), null_policy(), seed=0)
+    assert traj.ticks[-1].occupancy["unit-a"]["lit"] == pytest.approx(28 / 48)

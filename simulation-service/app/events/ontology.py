@@ -115,6 +115,27 @@ class UnrunnableExport(ValueError):
     """
 
 
+def _reserve_held(facility: Facility, requirement: CareRequirement | None, held: float) -> None:
+    """Mark the already-occupied units as drawn by the run.
+
+    Spread over the enabling resources in id order, the same way `consume` does,
+    so a facility whose activity is split across two resources reserves them in
+    the order it would have drawn them.
+    """
+    if requirement is None:
+        return
+    for activity, per in requirement.consumes.items():
+        remaining = held * per
+        for r in sorted(facility.enabling(activity), key=lambda x: x.id):
+            if remaining <= 0:
+                break
+            # Only what is already unavailable can have been drawn: this claims
+            # the occupied units, never free ones.
+            take = min(remaining, max(0.0, r.capacity - r.quantity - r.reserved))
+            r.reserved += take
+            remaining -= take
+
+
 def load(
     export: OntologyExport | dict[str, Any],
     care_model: dict[str, CareRequirement],
@@ -157,6 +178,18 @@ def load(
             held = sum(derive_census(ex.objects, f.id).values())
             if held:
                 census[f.id] = {census_acuity: held}
+                # Hand those units to the run.
+                #
+                # `reserved` means "drawn by this run", and the units are drawn
+                # the moment we decide to call the people in them patients.
+                # Without this the discharge frees the patient and not the bed:
+                # `release` only gives back what was reserved, so a hospital
+                # whose beds were occupied when the feed was read stayed at that
+                # exact figure for the whole horizon. Four Montréal emergency
+                # departments read 100% on step 0 and 100% on step 90, with
+                # nobody waiting — a straight line that looked like a crisis and
+                # was an artefact of loading.
+                _reserve_held(facilities[f.id], care_model.get(census_acuity), held)
 
     network = NetworkxBackend()
     for fid in facilities:
