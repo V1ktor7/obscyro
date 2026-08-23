@@ -12,7 +12,14 @@ import {
 } from "@/lib/platform-api";
 
 import { framesFor, type FacilitiesTable, type Frame } from "../events/replay-frames";
-import { divergenceProblem, divergesAt, rulesFromStep, type StepPoint } from "./branch";
+import {
+  demandFactorOf,
+  divergenceProblem,
+  divergesAt,
+  rulesFromStep,
+  withDemandFactor,
+  type StepPoint,
+} from "./branch";
 
 /**
  * Running an event on the real map, and asking what a different day would have
@@ -57,6 +64,11 @@ export default function ReplayPanel({
   const [runs, setRuns] = useState<Run[]>([]);
   const [showing, setShowing] = useState("");
   const [branchWith, setBranchWith] = useState("");
+  // Overridden per branch rather than edited on the stored response, because a
+  // strength that cannot be pinned down is one you run at several values. The
+  // December package fitted somewhere between 0.95 and 0.97 a day on Montréal's
+  // own wave, and lifting it three weeks later produced no rebound at all.
+  const [strength, setStrength] = useState("");
   const [busy, setBusy] = useState<null | "trunk" | "branch">(null);
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -136,7 +148,12 @@ export default function ReplayPanel({
                     // The delta: the same rules, made to start where the reader
                     // is looking. A stored response carries timing written when
                     // nobody knew which day would matter.
-                    rules: rulesFromStep(policy.rules, step),
+                    rules: rulesFromStep(
+                      Number(strength) > 0
+                        ? withDemandFactor(policy.rules, Number(strength))
+                        : policy.rules,
+                      step,
+                    ),
                   },
                 ]
               : [],
@@ -167,7 +184,14 @@ export default function ReplayPanel({
         const id = `b${runs.length}`;
         setRuns((prev) => [
           ...prev,
-          { id, label: `${policy!.name}, from ${step}`, fromStep: step, frames: built },
+          {
+            id,
+            label:
+              `${policy!.name}, from ${step}` +
+              (Number(strength) > 0 ? ` at ×${strength}` : ""),
+            fromStep: step,
+            frames: built,
+          },
         ]);
         setShowing(id);
       } catch (err) {
@@ -312,6 +336,27 @@ export default function ReplayPanel({
                 </option>
               ))}
             </select>
+            {(() => {
+              const stored = demandFactorOf(
+                policies.find((p) => p.id === branchWith)?.rules ?? [],
+              );
+              if (stored === null) return null;
+              return (
+                <label className="flex items-center gap-2">
+                  <span className="flex-1 text-[10px] leading-snug text-ink-faint">
+                    Strength, per step
+                  </span>
+                  <input
+                    inputMode="decimal"
+                    aria-label="Strength per step"
+                    value={strength}
+                    placeholder={String(stored)}
+                    onChange={(e) => setStrength(e.target.value)}
+                    className="w-20 rounded border border-line px-2 py-1 text-right text-[11px] text-ink focus:border-brand focus:outline-none"
+                  />
+                </label>
+              );
+            })()}
             <button
               type="button"
               onClick={() => void go("branch")}

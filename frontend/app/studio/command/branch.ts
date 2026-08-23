@@ -66,6 +66,38 @@ export function rulesFromStep(rules: readonly RuleLike[], fromStep: number): Rul
   });
 }
 
+/**
+ * The same rules at a different strength.
+ *
+ * Only `modify_demand` carries one, and it is the field a reader has to be able
+ * to move: fitted against Montréal's own wave, the December package sits
+ * somewhere between 0.95 and 0.97 a day, and lifting it three weeks later
+ * produced no rebound at all. A number that cannot be pinned down is one you
+ * run at several values, not one you print to four decimals.
+ *
+ * Everything else is left alone. A transfer rule has no strength — it moves the
+ * number of patients it says it moves — and scaling it would be inventing a
+ * dimension the action does not have.
+ */
+export function withDemandFactor(rules: readonly RuleLike[], factor: number): RuleLike[] {
+  return rules.map((rule) => {
+    const action = rule.action as { kind?: string } | undefined;
+    if (!action || action.kind !== "modify_demand") return rule;
+    return { ...rule, action: { ...action, factor } };
+  });
+}
+
+/** The strength a response is stored at, or null when it carries none. */
+export function demandFactorOf(rules: readonly RuleLike[]): number | null {
+  for (const rule of rules) {
+    const action = rule.action as { kind?: string; factor?: unknown } | undefined;
+    if (action?.kind === "modify_demand" && typeof action.factor === "number") {
+      return action.factor;
+    }
+  }
+  return null;
+}
+
 export interface StepPoint {
   step: number;
   waiting: number;

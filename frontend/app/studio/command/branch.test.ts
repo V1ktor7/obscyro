@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { divergenceProblem, divergesAt, rulesFromStep, type StepPoint } from "./branch";
+import {
+  demandFactorOf,
+  divergenceProblem,
+  divergesAt,
+  rulesFromStep,
+  withDemandFactor,
+  type StepPoint,
+} from "./branch";
 
 const RULES = [
   { id: "r1", trigger: { when: "every_tick", start: 0, end: null }, action: { kind: "transfer" } },
@@ -106,5 +113,41 @@ describe("where they part", () => {
     // A branch that never parts is a real answer — this response would not have
     // helped — and it has to read as that rather than as a failed run.
     expect(divergesAt(line(0, 10, 40), line(0, 10, 40))).toBeNull();
+  });
+});
+
+describe("running a lever at another strength", () => {
+  const rules = [
+    { id: "d1", action: { kind: "modify_demand", population: "pop:a", factor: 0.96 } },
+    { id: "d2", action: { kind: "modify_demand", population: "pop:b", factor: 0.96 } },
+    { id: "t1", action: { kind: "transfer", source: "u1", target: "u2", amount: 5 } },
+  ];
+
+  it("moves every demand rule to the same strength", () => {
+    // A package applies across catchments. Moving one and not the others makes
+    // a lever that is stronger in Verdun than in Anjou for no reason anyone
+    // could state.
+    const out = withDemandFactor(rules, 0.9);
+    expect((out[0]!.action as { factor: number }).factor).toBe(0.9);
+    expect((out[1]!.action as { factor: number }).factor).toBe(0.9);
+  });
+
+  it("leaves an action that has no strength alone", () => {
+    // A transfer moves the number of patients it says it moves. Scaling it
+    // would invent a dimension the action does not have.
+    expect(withDemandFactor(rules, 0.9)[2]).toBe(rules[2]);
+  });
+
+  it("does not touch the rules it was given", () => {
+    withDemandFactor(rules, 0.5);
+    expect((rules[0]!.action as { factor: number }).factor).toBe(0.96);
+  });
+
+  it("reads the strength a response was stored at", () => {
+    expect(demandFactorOf(rules)).toBe(0.96);
+  });
+
+  it("says nothing for a response that changes no demand", () => {
+    expect(demandFactorOf([rules[2]!])).toBeNull();
   });
 });
