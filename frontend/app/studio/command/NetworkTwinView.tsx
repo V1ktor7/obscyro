@@ -1545,6 +1545,11 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               panel height instead of a share of it, and the explorer is a tree
               of 241 rows that a 42% slice made unusable. */}
           <div className="flex shrink-0 items-center gap-0.5 border-b border-[#e5e8eb] px-1 py-1">
+            {/* The tabs scroll and the close button does not. Laid out as one
+                row they shared the rail's 288px, and the fifth tab pushed the
+                button off its edge — a control that leaves the screen when a
+                tab is added is a layout that only worked by arithmetic. */}
+            <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
             {(
               [
                 ["explorer", "Explorer"],
@@ -1559,7 +1564,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                 type="button"
                 onClick={() => setPanelTab(id)}
                 className={cn(
-                  "rounded px-2 py-1 text-[11px]",
+                  "shrink-0 rounded px-2 py-1 text-[11px]",
                   panelTab === id
                     ? "bg-[#e7f2fd] font-medium text-[#215db0]"
                     : "text-[#5f6b7c] hover:bg-[#f6f7f9]",
@@ -1568,21 +1573,27 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                 {label}
               </button>
             ))}
+            </div>
             <button
               type="button"
               onClick={() => setRailOpen(false)}
               aria-label="Hide the panel"
               title="Hide the panel"
-              className="ml-auto rounded p-1 text-[#8f99a8] hover:bg-[#f6f7f9] hover:text-[#1c2127]"
+              className="shrink-0 rounded p-1 text-[#8f99a8] hover:bg-[#f6f7f9] hover:text-[#1c2127]"
             >
               <PanelLeftClose className="h-4 w-4" />
             </button>
           </div>
 
+          {/* Named for the two tabs it holds rather than hidden from the one it
+              does not. Excluding only the explorer left this box rendering
+              empty on every tab added since, and an empty `flex-1` is not
+              nothing on screen — it took half the rail and pushed the replay
+              and the spread down into the bottom of it. */}
           <div
             className={cn(
               "min-h-0 flex-1 overflow-y-auto p-2",
-              panelTab === "explorer" && "hidden",
+              panelTab !== "layers" && panelTab !== "views" && "hidden",
             )}
           >
           {panelTab === "layers" ? (
