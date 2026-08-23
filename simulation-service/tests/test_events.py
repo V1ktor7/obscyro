@@ -644,3 +644,83 @@ def test_two_rules_spending_the_same_thing_still_conflict() -> None:
     )
     traj = run(state, _steady_demand(0.05), policy, seed=0)
     assert any("b (conflict" in s for t in traj.ticks for s in t.suppressed)
+
+
+# --- branching from a step --------------------------------------------------
+
+
+def test_a_response_that_starts_late_leaves_the_past_untouched() -> None:
+    """The invariant the whole branching design rests on.
+
+    "Pause at day 42, act, carry on" and "re-run from zero with a rule that
+    fires from day 42" are the same trajectory, because the engine is
+    deterministic and a rule that is not eligible does nothing. That is why
+    there is no checkpoint API here and no session state on the server: the
+    prefix is identical by construction, and this test is what makes that a
+    fact rather than a hope.
+    """
+    from app.events.policy import Action, Condition, Policy, Rule, Trigger
+
+    state = _catchment_system(capable=1, incapable=0)
+    event = _steady_demand(0.5, horizon=30)
+    FROM = 12
+
+    plain = run(state, event, null_policy(), seed=0)
+    branched = run(
+        state,
+        event,
+        Policy(
+            id="surge-late",
+            name="Add beds from day 12",
+            rules=[
+                Rule(
+                    id="r1",
+                    trigger=Trigger(when="from_tick", start=FROM),
+                    condition=Condition(always=True),
+                    action=Action(kind="surge_resource", target="hosp0", activity="acute_bed",
+                                  amount=50),
+                )
+            ],
+        ),
+        seed=0,
+    )
+
+    for t in range(FROM):
+        assert plain.ticks[t].model_dump() == branched.ticks[t].model_dump(), (
+            f"the branch changed the past at step {t}"
+        )
+    # And it has to actually diverge afterwards, or the test proves nothing.
+    tail = [t for t in range(FROM, 30)
+            if plain.ticks[t].model_dump() != branched.ticks[t].model_dump()]
+    assert tail, "the branch changed nothing at all"
+    assert tail[0] >= FROM
+
+
+def test_a_response_with_no_start_changes_the_past_too() -> None:
+    """The other half, and the reason a branch has to rewrite the triggers.
+
+    A stored response carries its own timing. Running it unchanged from a
+    scrubbed step would apply it from its own start, not from where the reader
+    is looking — and the two trajectories would differ before the point they
+    were supposed to branch at.
+    """
+    from app.events.policy import Action, Condition, Policy, Rule
+
+    state = _catchment_system(capable=1, incapable=0)
+    event = _steady_demand(0.5, horizon=30)
+    plain = run(state, event, null_policy(), seed=0)
+    always = run(
+        state,
+        event,
+        Policy(
+            id="surge-always",
+            name="Add beds",
+            rules=[
+                Rule(id="r1", condition=Condition(always=True),
+                     action=Action(kind="surge_resource", target="hosp0",
+                                   activity="acute_bed", amount=50))
+            ],
+        ),
+        seed=0,
+    )
+    assert plain.ticks[3].model_dump() != always.ticks[3].model_dump()
