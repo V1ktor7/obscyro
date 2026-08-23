@@ -77,15 +77,15 @@ function comparison(withTable = true): SimComparison {
 describe("what the player says at a step", () => {
   it("starts at the first step and counts what is full", () => {
     render(<ReplayPlayer result={comparison()} snapshot={SNAPSHOT} />);
-    expect(screen.getByText("pas 0 / 2")).toBeTruthy();
+    expect(screen.getByText("step 0 of 2")).toBeTruthy();
     // Angus is at capacity, Notre-Dame is at a fifth.
-    expect(screen.getByLabelText("Le réseau au pas 0")).toBeTruthy();
+    expect(screen.getByLabelText("The network at step 0")).toBeTruthy();
   });
 
   it("moves when the slider moves", () => {
     render(<ReplayPlayer result={comparison()} snapshot={SNAPSHOT} />);
-    fireEvent.change(screen.getByLabelText("Pas de temps"), { target: { value: "1" } });
-    expect(screen.getByText("pas 1 / 2")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Time step"), { target: { value: "1" } });
+    expect(screen.getByText("step 1 of 2")).toBeTruthy();
     // 42 people waiting at Notre-Dame on step 1.
     expect(screen.getByText("42")).toBeTruthy();
   });
@@ -94,7 +94,7 @@ describe("what the player says at a step", () => {
     // A site with no coordinates piled at the origin is a red dot in the
     // Atlantic that somebody will ask about.
     const { container } = render(<ReplayPlayer result={comparison()} snapshot={SNAPSHOT} />);
-    const map = container.querySelector('[aria-label="Le réseau au pas 0"]')!;
+    const map = container.querySelector('[aria-label="The network at step 0"]')!;
     expect(map.querySelectorAll("circle")).toHaveLength(2);
   });
 
@@ -110,10 +110,10 @@ describe("switching response", () => {
     // Two responses share the table. Reading rows that belong to the other is
     // how a player shows a crisis that this policy prevented.
     const { container } = render(<ReplayPlayer result={comparison()} snapshot={SNAPSHOT} />);
-    const map = () => container.querySelector("svg[aria-label^='Le réseau']")!;
+    const map = () => container.querySelector("svg[aria-label^='The network']")!;
     expect(map().querySelectorAll("circle")).toHaveLength(2);
 
-    fireEvent.change(screen.getByLabelText("Réponse à rejouer"), {
+    fireEvent.change(screen.getByLabelText("Response to replay"), {
       target: { value: "load-balance" },
     });
     // `load-balance` only ever reported Notre-Dame.
@@ -125,17 +125,17 @@ describe("switching response", () => {
     // same day". Jumping back to zero would answer a different question and
     // lose the reader's place.
     render(<ReplayPlayer result={comparison()} snapshot={SNAPSHOT} />);
-    fireEvent.change(screen.getByLabelText("Pas de temps"), { target: { value: "2" } });
-    fireEvent.change(screen.getByLabelText("Réponse à rejouer"), {
+    fireEvent.change(screen.getByLabelText("Time step"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Response to replay"), {
       target: { value: "load-balance" },
     });
-    expect(screen.getByText("pas 2 / 2")).toBeTruthy();
+    expect(screen.getByText("step 2 of 2")).toBeTruthy();
   });
 });
 
 describe("when the trajectory was not collected", () => {
   it("says which box to tick rather than showing an empty map", () => {
     render(<ReplayPlayer result={comparison(false)} snapshot={SNAPSHOT} />);
-    expect(screen.getByText(/une ligne par pas et par installation/)).toBeTruthy();
+    expect(screen.getByText(/one row per step and facility/)).toBeTruthy();
   });
 });

@@ -109,18 +109,18 @@ export function framesFor(table: FacilitiesTable, policy: string, horizon: numbe
  * does not have, and the only question a reader has while scrubbing is which
  * of these four a site is in.
  */
-export function bandOf(worst: number): "calme" | "charge" | "tendu" | "plein" {
-  if (worst >= FULL) return "plein";
-  if (worst >= 0.9) return "tendu";
-  if (worst >= 0.6) return "charge";
-  return "calme";
+export function bandOf(worst: number): "quiet" | "busy" | "strained" | "full" {
+  if (worst >= FULL) return "full";
+  if (worst >= 0.9) return "strained";
+  if (worst >= 0.6) return "busy";
+  return "quiet";
 }
 
 export const BAND_COLOUR: Record<ReturnType<typeof bandOf>, string> = {
-  calme: "#1d9e75",
-  charge: "#d9822b",
-  tendu: "#c23030",
-  plein: "#7a1414",
+  quiet: "#1d9e75",
+  busy: "#d9822b",
+  strained: "#c23030",
+  full: "#7a1414",
 };
 
 /**

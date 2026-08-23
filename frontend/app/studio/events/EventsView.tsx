@@ -39,6 +39,7 @@ import {
 } from "@/lib/platform-api";
 import PolicyComposer, { type PolicyDraft } from "./PolicyComposer";
 import ReplayPlayer from "./ReplayPlayer";
+import { downloadText, slug, toCsv } from "./download";
 import { runBlockedBecause, unsizedPopulations } from "./run-gate";
 import { useStudio } from "../StudioShell";
 import EventWorkspace from "./EventWorkspace";
@@ -422,12 +423,12 @@ export default function EventsView() {
             {result ? <Results result={result} /> : null}
 
             {result && snapshot ? (
-              <Card title="La course, rejouée">
+              <Card title="The run, played back">
                 <p className="mb-3 text-[11px] leading-relaxed text-ink-faint">
-                  Le réseau pas par pas. Un point est une installation, placée où
-                  elle est, dimensionnée par ce qu&rsquo;elle tient et colorée par la
-                  chose la plus pleine qu&rsquo;elle fournit — pas par une moyenne, qui
-                  ferait passer un service d&rsquo;urgence saturé pour un hôpital calme.
+                  The network step by step. A dot is one facility, placed where it
+                  is, sized by what it holds and coloured by the fullest thing it
+                  provides — not by an average, which would read a saturated
+                  emergency department as a calm hospital.
                 </p>
                 <ReplayPlayer result={result} snapshot={snapshot} />
               </Card>
@@ -617,7 +618,7 @@ export default function EventsView() {
               {policies.length > 0 ? (
                 <div className="mt-3 flex flex-col gap-2 border-t border-line-soft pt-3">
                   <span className="text-[11px] uppercase tracking-wide text-ink-faint">
-                    Écrites ici
+                    Written here
                   </span>
                   {policies.map((p) => (
                     <div key={p.id} className="flex items-start gap-2">
@@ -647,7 +648,7 @@ export default function EventsView() {
                         onClick={() => setWriting(p)}
                         className="text-[11px] text-ink-faint hover:text-brand"
                       >
-                        Modifier
+                        Edit
                       </button>
                       <button
                         type="button"
@@ -658,7 +659,7 @@ export default function EventsView() {
                         }}
                         className="text-[11px] text-ink-faint hover:text-danger"
                       >
-                        Supprimer
+                        Delete
                       </button>
                     </div>
                   ))}
@@ -670,7 +671,7 @@ export default function EventsView() {
                 onClick={() => setWriting("new")}
                 className="mt-3 rounded-md border border-line px-3 py-1.5 text-xs text-ink-body hover:border-ink-ghost"
               >
-                Écrire une réponse
+                Write a response
               </button>
             </Card>
 
@@ -751,8 +752,33 @@ function Results({ result }: { result: SimComparison }) {
   };
   const baseline = result.rows.find((r) => r.policy === "null");
 
+  // Every column the engine scored on, not the three drawn above: the table on
+  // screen is an argument and the file is the evidence, and the evidence should
+  // not have been narrowed by the argument.
+  const allColumns = Array.from(
+    result.rows.reduce((set, row) => {
+      for (const k of Object.keys(row)) set.add(k);
+      return set;
+    }, new Set<string>()),
+  );
+
   return (
     <Card title={`Result — ${result.scenario.name}`}>
+      <div className="mb-3 flex justify-end">
+        <button
+          type="button"
+          onClick={() =>
+            downloadText(
+              toCsv(allColumns, result.rows.map((r) => allColumns.map((c) => r[c] ?? ""))),
+              `${slug(result.scenario.name)}-ranking.csv`,
+              "text/csv",
+            )
+          }
+          className="rounded-md border border-line px-2.5 py-1 text-[11px] text-ink hover:border-brand hover:text-brand"
+        >
+          Download ranking (CSV)
+        </button>
+      </div>
       <p className="mb-3 text-[11px] leading-relaxed text-ink-faint">
         {result.scenario.description} Run over {result.horizon} steps across{" "}
         {result.facilities} facilities.

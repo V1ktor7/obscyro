@@ -42,9 +42,9 @@ export interface PolicyDraft {
 
 const OPS: CompareOp[] = [">", ">=", "<", "<=", "==", "!="];
 const WHENS: Array<{ id: TriggerWhen; label: string }> = [
-  { id: "every_tick", label: "à chaque pas" },
-  { id: "from_tick", label: "à partir du pas" },
-  { id: "between", label: "entre deux pas" },
+  { id: "every_tick", label: "every step" },
+  { id: "from_tick", label: "from step" },
+  { id: "between", label: "between two steps" },
 ];
 
 export default function PolicyComposer({
@@ -107,9 +107,9 @@ export default function PolicyComposer({
 
   const problems = rules.map(ruleProblem);
   const blocked = !name.trim()
-    ? "Donne un nom à la réponse."
+    ? "Give the response a name."
     : rules.length === 0
-      ? "Une réponse sans règle ne fait rien."
+      ? "A response with no rules does nothing."
       : (problems.find((p) => p) ?? null);
 
   async function save() {
@@ -132,14 +132,14 @@ export default function PolicyComposer({
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Nom de la réponse"
-            aria-label="Nom de la réponse"
+            placeholder="Name this response"
+            aria-label="Name this response"
             className="w-full max-w-lg border-0 bg-transparent p-0 text-sm font-medium text-ink placeholder:text-ink-ghost focus:outline-none"
           />
           <input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Ce qu'elle fait, et pourquoi"
+            placeholder="What it does, and why"
             aria-label="Description"
             className="mt-1 w-full max-w-2xl border-0 bg-transparent p-0 text-[11px] text-ink-faint placeholder:text-ink-ghost focus:outline-none"
           />
@@ -150,7 +150,7 @@ export default function PolicyComposer({
             onClick={onCancel}
             className="rounded-md border border-line px-3 py-1.5 text-xs text-ink-body hover:border-ink-ghost"
           >
-            Annuler
+            Cancel
           </button>
           <button
             type="button"
@@ -158,7 +158,7 @@ export default function PolicyComposer({
             disabled={!!blocked || saving}
             className="rounded-md bg-brand px-3 py-1.5 text-xs text-white hover:bg-brand-deep disabled:bg-ink-ghost"
           >
-            {saving ? "Enregistrement…" : "Enregistrer"}
+            {saving ? "Saving…" : "Save"}
           </button>
         </div>
       </div>
@@ -179,17 +179,17 @@ export default function PolicyComposer({
             <section
               key={i}
               className="rounded-lg border border-line bg-white p-4"
-              aria-label={`Règle ${i + 1}`}
+              aria-label={`Rule ${i + 1}`}
             >
               <div className="mb-3 flex items-center gap-2">
                 <input
                   value={rule.id}
                   onChange={(e) => patch(i, (r) => ({ ...r, id: e.target.value }))}
-                  aria-label={`Nom de la règle ${i + 1}`}
+                  aria-label={`Name of rule ${i + 1}`}
                   className="w-32 rounded-md border border-line px-2 py-1 text-xs text-ink focus:border-brand focus:outline-none"
                 />
                 <Select
-                  label={`Action de la règle ${i + 1}`}
+                  label={`Action of rule ${i + 1}`}
                   value={kind}
                   onChange={(v) =>
                     patch(i, (r) => ({ ...r, action: { ...blankRule(r.id, v as ActionKind).action } }))
@@ -202,13 +202,13 @@ export default function PolicyComposer({
                   onClick={() => setRules((p) => p.filter((_, j) => j !== i))}
                   className="text-[11px] text-ink-faint hover:text-danger"
                 >
-                  Retirer
+                  Remove
                 </button>
               </div>
 
-              <Row label="Quand">
+              <Row label="When">
                 <Select
-                  label={`Déclenchement de la règle ${i + 1}`}
+                  label={`Trigger of rule ${i + 1}`}
                   value={rule.trigger.when}
                   onChange={(v) =>
                     patch(i, (r) => ({ ...r, trigger: { ...r.trigger, when: v as TriggerWhen } }))
@@ -217,23 +217,23 @@ export default function PolicyComposer({
                 />
                 {rule.trigger.when !== "every_tick" ? (
                   <Num
-                    label={`Pas de début de la règle ${i + 1}`}
+                    label={`Start step of rule ${i + 1}`}
                     value={rule.trigger.start}
                     onChange={(n) => patch(i, (r) => ({ ...r, trigger: { ...r.trigger, start: n } }))}
                   />
                 ) : null}
                 {rule.trigger.when === "between" ? (
                   <Num
-                    label={`Pas de fin de la règle ${i + 1}`}
+                    label={`End step of rule ${i + 1}`}
                     value={rule.trigger.end ?? rule.trigger.start}
                     onChange={(n) => patch(i, (r) => ({ ...r, trigger: { ...r.trigger, end: n } }))}
                   />
                 ) : null}
               </Row>
 
-              <Row label="Si">
+              <Row label="If">
                 <Select
-                  label={`Condition de la règle ${i + 1}`}
+                  label={`Condition of rule ${i + 1}`}
                   value={compare ? compare.left.fn : "always"}
                   onChange={(v) =>
                     patch(i, (r) => ({
@@ -251,7 +251,7 @@ export default function PolicyComposer({
                     }))
                   }
                   options={[
-                    { id: "always", label: "toujours" },
+                    { id: "always", label: "always" },
                     ...Object.entries(METRIC_LABEL).map(([id, l]) => ({ id, label: l })),
                   ]}
                 />
@@ -260,7 +260,7 @@ export default function PolicyComposer({
                     {METRIC_FIELDS[compare.left.fn].map((f) => (
                       <Select
                         key={String(f)}
-                        label={`${String(f)} de la lecture, règle ${i + 1}`}
+                        label={`${String(f)} of the reading, rule ${i + 1}`}
                         value={String(compare.left[f] ?? "")}
                         onChange={(v) =>
                           patch(i, (r) => {
@@ -274,7 +274,7 @@ export default function PolicyComposer({
                       />
                     ))}
                     <Select
-                      label={`Comparaison de la règle ${i + 1}`}
+                      label={`Comparison of rule ${i + 1}`}
                       value={compare.op}
                       onChange={(v) =>
                         patch(i, (r) => {
@@ -286,7 +286,7 @@ export default function PolicyComposer({
                       options={OPS.map((o) => ({ id: o, label: o }))}
                     />
                     <Num
-                      label={`Seuil de la règle ${i + 1}`}
+                      label={`Threshold of rule ${i + 1}`}
                       value={compare.right}
                       step="any"
                       onChange={(n) =>
@@ -300,12 +300,12 @@ export default function PolicyComposer({
                 ) : null}
               </Row>
 
-              <Row label="Alors">
+              <Row label="Then">
                 {shown.map((f) =>
                   f === "amount" || f === "factor" ? (
                     <Num
                       key={String(f)}
-                      label={`${f === "amount" ? "Quantité" : "Facteur"} de la règle ${i + 1}`}
+                      label={`${f === "amount" ? "Amount" : "Factor"} of rule ${i + 1}`}
                       value={Number(rule.action[f] ?? 0)}
                       step="any"
                       onChange={(n) =>
@@ -315,7 +315,7 @@ export default function PolicyComposer({
                   ) : (
                     <Select
                       key={String(f)}
-                      label={`${String(f)} de la règle ${i + 1}`}
+                      label={`${String(f)} of rule ${i + 1}`}
                       value={String(rule.action[f] ?? "")}
                       onChange={(v) =>
                         patch(i, (r) => ({ ...r, action: { ...r.action, [f]: v || null } }))
@@ -327,11 +327,11 @@ export default function PolicyComposer({
                 )}
               </Row>
 
-              <Row label="Coûte">
+              <Row label="Costs">
                 <Num
-                  label={`Délai de la règle ${i + 1}`}
+                  label={`Delay of rule ${i + 1}`}
                   value={rule.action.friction.delay}
-                  suffix="pas de délai"
+                  suffix="steps of delay"
                   onChange={(n) =>
                     patch(i, (r) => ({
                       ...r,
@@ -340,7 +340,7 @@ export default function PolicyComposer({
                   }
                 />
                 <Num
-                  label={`Coût de la règle ${i + 1}`}
+                  label={`Cost of rule ${i + 1}`}
                   value={rule.action.friction.cost}
                   suffix="$"
                   step="any"
@@ -370,7 +370,7 @@ export default function PolicyComposer({
             onClick={() => setRules((p) => [...p, blankRule(`r${p.length + 1}`)])}
             className="rounded-md border border-line bg-white px-3 py-1.5 text-xs text-ink-body hover:border-ink-ghost"
           >
-            Ajouter une règle
+            Add a rule
           </button>
           {/* One rule per catchment is how any public-health lever is written,
               and typing twelve of them by hand is not a workflow. */}
@@ -390,7 +390,7 @@ export default function PolicyComposer({
             }
             className="rounded-md border border-line bg-white px-3 py-1.5 text-xs text-ink-body hover:border-ink-ghost"
           >
-            Une règle de demande par bassin ({snapshot.populations.length})
+            One demand rule per catchment ({snapshot.populations.length})
           </button>
         </div>
 

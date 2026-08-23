@@ -59,11 +59,11 @@ describe("frames", () => {
 
 describe("bands", () => {
   it("says full only at capacity", () => {
-    expect(bandOf(1)).toBe("plein");
-    expect(bandOf(FULL)).toBe("plein");
-    expect(bandOf(0.95)).toBe("tendu");
-    expect(bandOf(0.7)).toBe("charge");
-    expect(bandOf(0.1)).toBe("calme");
+    expect(bandOf(1)).toBe("full");
+    expect(bandOf(FULL)).toBe("full");
+    expect(bandOf(0.95)).toBe("strained");
+    expect(bandOf(0.7)).toBe("busy");
+    expect(bandOf(0.1)).toBe("quiet");
   });
 });
 

@@ -34,17 +34,17 @@ describe("a blank rule", () => {
 describe("what stops a rule from doing anything", () => {
   it("names the missing field rather than counting problems", () => {
     const r = transfer({ target: null });
-    expect(ruleProblem(r)).toBe("Il manque la destination.");
+    expect(ruleProblem(r)).toBe("Fill in the destination.");
   });
 
   it("catches a quantity of zero", () => {
-    expect(ruleProblem(transfer({ amount: 0 }))).toMatch(/ne déplace rien/);
+    expect(ruleProblem(transfer({ amount: 0 }))).toMatch(/moves nothing/);
   });
 
   it("catches a demand factor that changes nothing", () => {
     const r = blankRule("r1", "modify_demand");
     r.action.population = "pop:rdp";
-    expect(ruleProblem(r)).toMatch(/ne change rien/);
+    expect(ruleProblem(r)).toMatch(/changes nothing/);
     r.action.factor = 0.7;
     expect(ruleProblem(r)).toBeNull();
   });
@@ -52,13 +52,13 @@ describe("what stops a rule from doing anything", () => {
   it("catches a window that ends before it starts", () => {
     const r = transfer();
     r.trigger = { when: "between", start: 30, end: 10 };
-    expect(ruleProblem(r)).toBe("La fin est avant le début.");
+    expect(ruleProblem(r)).toBe("It ends before it starts.");
   });
 
   it("asks the reading for what it needs", () => {
     const r = transfer();
     r.condition = { compare: { left: { fn: "occupancy_ratio", activity: "lit" }, op: ">", right: 0.9 } };
-    expect(ruleProblem(r)).toMatch(/l'installation/);
+    expect(ruleProblem(r)).toMatch(/the facility/);
   });
 
   it("says nothing when the rule would act", () => {
@@ -77,10 +77,10 @@ describe("reading a rule back", () => {
     };
     r.action.friction = { delay: 2, cost: 40000, effectiveness: 1 };
     const s = describeRule(r, label);
-    expect(s).toContain("à partir du pas 21");
+    expect(s).toContain("from step 21");
     expect(s).toContain("HÔPITAL NOTRE-DAME");
     expect(s).toContain("HÔPITAL MAISONNEUVE-ROSEMONT");
-    expect(s).toContain("2 pas plus tard");
+    expect(s).toContain("2 steps later");
     expect(s).not.toContain("u-1");
   });
 
@@ -97,7 +97,7 @@ describe("reading a rule back", () => {
     r.action.factor = 0.7;
     r.trigger = { when: "between", start: 21, end: 21 };
     expect(describeRule(r, label)).toBe(
-      "du pas 21 au pas 21, toujours, multiplier la demande de RLS de Rivière-des-Prairies par 0.7.",
+      "from step 21 to step 21, always, multiply demand at RLS de Rivière-des-Prairies by 0.7.",
     );
   });
 });
@@ -110,7 +110,7 @@ describe("the compounding trap", () => {
     r.action.population = "pop:rdp";
     r.action.factor = 0.7;
     r.trigger = { when: "from_tick", start: 21, end: null };
-    expect(compoundingWarning(r)).toMatch(/baisse unique/);
+    expect(compoundingWarning(r)).toMatch(/one-off/);
   });
 
   it("stays quiet on a one-off", () => {

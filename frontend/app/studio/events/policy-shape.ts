@@ -78,10 +78,10 @@ export const ACTION_REQUIRED: Record<ActionKind, Array<keyof PolicyAction>> = {
 };
 
 export const ACTION_LABEL: Record<ActionKind, string> = {
-  transfer: "Déplacer des patients",
-  surge_resource: "Ajouter de la capacité",
-  reallocate: "Déplacer de la capacité",
-  modify_demand: "Changer la demande",
+  transfer: "Move patients",
+  surge_resource: "Add capacity",
+  reallocate: "Move capacity",
+  modify_demand: "Change demand",
 };
 
 /** Which fields each reading needs to mean anything. */
@@ -105,23 +105,23 @@ export const METRIC_REQUIRED: Record<MetricFn, Array<keyof PolicyMetric>> = {
 };
 
 export const METRIC_LABEL: Record<MetricFn, string> = {
-  occupancy_ratio: "taux d'occupation",
-  available: "unités encore libres",
-  backlog: "patients en attente",
-  census: "patients présents",
-  capacity: "capacité totale",
-  total: "total sur le réseau",
+  occupancy_ratio: "how full it is",
+  available: "units still free",
+  backlog: "patients waiting",
+  census: "patients held",
+  capacity: "total capacity",
+  total: "network total",
 };
 
 const FIELD_LABEL: Record<string, string> = {
-  source: "l'origine",
-  target: "la destination",
-  activity: "la ressource",
-  acuity: "la sévérité",
-  resource: "la ressource",
-  population: "le bassin",
-  facility: "l'installation",
-  category: "la catégorie",
+  source: "the origin",
+  target: "the destination",
+  activity: "the resource",
+  acuity: "the severity",
+  resource: "the resource",
+  population: "the catchment",
+  facility: "the facility",
+  category: "the category",
 };
 
 export function blankRule(id: string, kind: ActionKind = "transfer"): PolicyRule {
@@ -150,35 +150,35 @@ export function blankRule(id: string, kind: ActionKind = "transfer"): PolicyRule
  * sees it after the world has been built, a minute later.
  */
 export function ruleProblem(rule: PolicyRule): string | null {
-  if (!rule.id.trim()) return "Chaque règle a besoin d'un nom.";
+  if (!rule.id.trim()) return "Every rule needs a name.";
   for (const f of ACTION_REQUIRED[rule.action.kind]) {
     const v = rule.action[f];
-    if (!v || !String(v).trim()) return `Il manque ${FIELD_LABEL[f] ?? String(f)}.`;
+    if (!v || !String(v).trim()) return `Fill in ${FIELD_LABEL[f] ?? String(f)}.`;
   }
   if (rule.action.kind === "modify_demand") {
-    if (rule.action.factor === 1) return "Un facteur de 1 ne change rien.";
-    if (rule.action.factor < 0) return "Un facteur négatif n'a pas de sens.";
+    if (rule.action.factor === 1) return "A factor of 1 changes nothing.";
+    if (rule.action.factor < 0) return "A negative factor means nothing.";
   } else if (rule.action.amount <= 0) {
-    return "Une quantité de zéro ne déplace rien.";
+    return "An amount of zero moves nothing.";
   }
   if ("compare" in rule.condition) {
     for (const f of METRIC_REQUIRED[rule.condition.compare.left.fn]) {
       const v = rule.condition.compare.left[f];
       if (!v || !String(v).trim()) {
-        return `La lecture a besoin de ${FIELD_LABEL[f] ?? String(f)}.`;
+        return `The reading needs ${FIELD_LABEL[f] ?? String(f)}.`;
       }
     }
   }
   if (rule.trigger.when === "between" && rule.trigger.end !== null) {
-    if (rule.trigger.end < rule.trigger.start) return "La fin est avant le début.";
+    if (rule.trigger.end < rule.trigger.start) return "It ends before it starts.";
   }
   return null;
 }
 
 function whenPhrase(t: PolicyRule["trigger"]): string {
-  if (t.when === "from_tick") return `à partir du pas ${t.start}`;
-  if (t.when === "between") return `du pas ${t.start} au pas ${t.end ?? t.start}`;
-  return "à chaque pas";
+  if (t.when === "from_tick") return `from step ${t.start}`;
+  if (t.when === "between") return `from step ${t.start} to step ${t.end ?? t.start}`;
+  return "every step";
 }
 
 /**
@@ -194,29 +194,29 @@ export function describeRule(rule: PolicyRule, label: (id: string) => string): s
   let does: string;
   if (a.kind === "transfer") {
     does =
-      `déplacer ${a.amount} patient${a.amount === 1 ? "" : "s"}` +
-      `${a.acuity ? ` de sévérité ${a.acuity}` : ""} de ${n(a.source)} vers ${n(a.target)}`;
+      `move ${a.amount} patient${a.amount === 1 ? "" : "s"}` +
+      `${a.acuity ? ` of severity ${a.acuity}` : ""} from ${n(a.source)} to ${n(a.target)}`;
   } else if (a.kind === "surge_resource") {
-    does = `ajouter ${a.amount} × ${a.activity ?? "?"} à ${n(a.target)}`;
+    does = `add ${a.amount} × ${a.activity ?? "?"} at ${n(a.target)}`;
   } else if (a.kind === "reallocate") {
-    does = `déplacer ${a.amount} × ${a.resource ?? "?"} de ${n(a.source)} vers ${n(a.target)}`;
+    does = `move ${a.amount} × ${a.resource ?? "?"} from ${n(a.source)} to ${n(a.target)}`;
   } else {
-    does = `multiplier la demande de ${n(a.population)} par ${a.factor}`;
+    does = `multiply demand at ${n(a.population)} by ${a.factor}`;
   }
 
   const cond =
     "compare" in rule.condition
-      ? `si ${METRIC_LABEL[rule.condition.compare.left.fn]}` +
+      ? `if ${METRIC_LABEL[rule.condition.compare.left.fn]}` +
         `${
           rule.condition.compare.left.facility
-            ? ` de ${label(rule.condition.compare.left.facility)}`
+            ? ` at ${label(rule.condition.compare.left.facility)}`
             : ""
         } ${rule.condition.compare.op} ${rule.condition.compare.right}`
-      : "toujours";
+      : "always";
 
   const f = a.friction;
-  const after = f.delay > 0 ? `, ${f.delay} pas plus tard` : "";
-  const cost = f.cost > 0 ? `, pour ${f.cost.toLocaleString("fr-CA")} $` : "";
+  const after = f.delay > 0 ? `, ${f.delay} step${f.delay === 1 ? "" : "s"} later` : "";
+  const cost = f.cost > 0 ? `, at ${f.cost.toLocaleString("en-CA")} $` : "";
   return `${whenPhrase(rule.trigger)}, ${cond}, ${does}${after}${cost}.`;
 }
 
@@ -236,7 +236,7 @@ export function compoundingWarning(rule: PolicyRule): string | null {
     (rule.trigger.end ?? rule.trigger.start) > rule.trigger.start;
   if (!standing) return null;
   return (
-    "Cette règle se déclenche à chaque pas, et la demande est multipliée à chaque fois. " +
-    "Pour une baisse unique, mettre le même pas en début et en fin."
+    "This rule fires every step, and demand is multiplied each time. For a one-off " +
+    "cut, set the same step as start and end."
   );
 }
