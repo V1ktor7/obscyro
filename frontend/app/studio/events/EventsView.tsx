@@ -43,14 +43,6 @@ import EventTimeline from "./EventTimeline";
 /** Sentinel for "no scenario" so the select has a real value to hold. */
 const LIVE = "";
 
-const ROLE_LABEL: Record<string, string> = {
-  space: "Space",
-  staff: "Staff",
-  stuff: "Supplies",
-  systems: "Systems",
-  demand: "Demand",
-};
-
 /**
  * There is no shipped catalogue of events, and that is the point.
  *
@@ -109,7 +101,7 @@ const COLLECTABLE: Array<{ id: "steps" | "facilities" | "decisions"; label: stri
 /** Gaps that make a result meaningless rather than merely narrower. */
 const BLOCKING: SimGap["code"][] = ["POPULATION_WITHOUT_SIZE", "ROUTE_WITHOUT_CAPACITY"];
 
-export default function ResilienceView() {
+export default function EventsView() {
   const { selectedEnv: env } = useStudio();
   const [snapshot, setSnapshot] = useState<SimExport | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -197,17 +189,16 @@ export default function ResilienceView() {
     setResult(null);
   }, [twinScenarioId]);
 
-  const totals = useMemo(() => {
-    const byRole: Record<string, number> = {};
-    let census = 0;
-    for (const f of snapshot?.facilities ?? []) {
-      for (const r of Object.values(f.resources)) {
-        byRole[r.category] = (byRole[r.category] ?? 0) + r.capacity;
-      }
-      census += Object.values(f.census).reduce((a, b) => a + b, 0);
-    }
-    return { byRole, census };
-  }, [snapshot]);
+  // Only whether anything at all is capacity, which is what the run gate asks.
+  // The totals by role and the starting census went with the panel that showed
+  // them; keeping them here would be arithmetic nobody reads.
+  const hasCapacity = useMemo(
+    () =>
+      (snapshot?.facilities ?? []).some((f) =>
+        Object.values(f.resources).some((r) => r.capacity > 0),
+      ),
+    [snapshot],
+  );
 
   // An event's effects name instances by id, so one written against a scenario
   // means nothing on the live twin. Splitting them here rather than letting the
@@ -226,8 +217,7 @@ export default function ResilienceView() {
       : null;
 
   const blocking = (snapshot?.gaps ?? []).filter((g) => BLOCKING.includes(g.code));
-  const advisory = (snapshot?.gaps ?? []).filter((g) => !BLOCKING.includes(g.code));
-  const noCapacity = Object.keys(totals.byRole).length === 0;
+  const noCapacity = !hasCapacity;
 
   const unsizedPops = unsizedPopulations(snapshot?.populations ?? [], sizes);
   const blockedBecause = runBlockedBecause({
@@ -371,82 +361,6 @@ export default function ResilienceView() {
                 onCreate={() => setComposing("new")}
               />
             ) : null}
-
-            {result || composing ? null : <HowItWorks />}
-
-            <Card title="What the engine reads from your twin">
-              {/* Echoed from the payload, not from the picker: the point is to
-                  show which world the server actually read, so a scenario that
-                  silently fell back to live is visible rather than assumed. */}
-              <p className="mb-3 text-[11px] text-ink-faint">
-                Read from{" "}
-                <strong className="font-medium text-ink">
-                  {snapshot.scenario_id
-                    ? (scenarios.find((s) => s.id === snapshot.scenario_id)?.name ??
-                      "a scenario")
-                    : "the live twin"}
-                </strong>
-                .
-              </p>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <Stat label="Facilities" value={snapshot.facilities.length} />
-                <Stat label="Routes between them" value={snapshot.edges.length} />
-                <Stat label="Catchments" value={snapshot.populations.length} />
-                <Stat label="Patients already in" value={Math.round(totals.census)} />
-              </div>
-              {noCapacity ? (
-                <p className="mt-4 rounded-md border border-warn/30 bg-warn/5 px-3 py-2 text-xs leading-relaxed text-ink">
-                  No object type declares a resilience role, so nothing in your
-                  twin carries capacity. A run like this would turn nobody away,
-                  kill nobody, and rank every response as a tie — a clean table
-                  that means nothing. Open{" "}
-                  <strong className="font-medium">Ontology → Manager</strong>,
-                  edit the type that represents your beds, and set its role to
-                  Space.
-                </p>
-              ) : (
-                <>
-                  <p className="mt-4 text-[11px] leading-relaxed text-ink-faint">
-                    Capacity by role, totalled across every facility. These come
-                    from the roles you set on your object types — not from any
-                    name the engine recognises.
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {Object.entries(totals.byRole).map(([role, cap]) => (
-                      <span
-                        key={role}
-                        className="rounded-md border border-line bg-canvas px-2 py-1 text-[11px] text-ink"
-                      >
-                        {ROLE_LABEL[role] ?? role} · {Math.round(cap)}
-                      </span>
-                    ))}
-                  </div>
-                </>
-              )}
-            </Card>
-
-            {advisory.length > 0 ? (
-              <Card title="What your ontology does not say">
-                <p className="mb-3 text-[11px] leading-relaxed text-ink-faint">
-                  Listed rather than guessed. A twin records what exists; these
-                  are the things it has no way to know.
-                </p>
-                <ul className="flex flex-col gap-3">
-                  {advisory.map((g) => (
-                    <li key={g.code} className="text-xs leading-relaxed text-ink-faint">
-                      {g.message}
-                      {g.subjects.length > 0 ? (
-                        <span className="mt-1 block text-[11px] text-ink-ghost">
-                          {g.subjects.slice(0, 8).join(", ")}
-                          {g.subjects.length > 8 ? ` +${g.subjects.length - 8} more` : ""}
-                        </span>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              </Card>
-            ) : null}
-
             {result ? <Results result={result} /> : null}
 
             {result?.datasets?.length ? (
@@ -697,49 +611,6 @@ export default function ResilienceView() {
   );
 }
 
-/**
- * Shown until the first result, then it gets out of the way.
- *
- * Present because the screen is not self-evident: nothing else in the platform
- * asks you to choose a disaster, and without this the three panels on the right
- * read as unrelated settings.
- */
-function HowItWorks() {
-  const steps = [
-    {
-      title: "Your twin becomes a network",
-      body: "Every unit turns into a facility, and whatever is attached to it becomes capacity — beds, staff, equipment — according to the resilience role you set on each object type. Relationships that are not structural become the routes between facilities.",
-    },
-    {
-      title: "An event perturbs it",
-      body: "Not modelled by what it is called, but by what it does: demand rises somewhere, a resource falls somewhere, a connection breaks somewhere. A pandemic and a flood are the same three verbs with different numbers, which is why one engine handles both.",
-    },
-    {
-      title: "Each response is scored against doing nothing",
-      body: "A response is a set of rules — transfer when full, add capacity when short. The engine runs the event forward step by step, applies the rules, and counts what it cost: lives, care not delivered, money. Doing nothing is always in the table so you can see whether acting helped at all.",
-    },
-  ];
-  return (
-    <Card title="What this screen does">
-      <ol className="flex flex-col gap-3">
-        {steps.map((s, i) => (
-          <li key={s.title} className="flex gap-3">
-            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-line text-[11px] tabular-nums text-ink-faint">
-              {i + 1}
-            </span>
-            <span>
-              <span className="block text-xs text-ink">{s.title}</span>
-              <span className="block text-[11px] leading-relaxed text-ink-faint">
-                {s.body}
-              </span>
-            </span>
-          </li>
-        ))}
-      </ol>
-    </Card>
-  );
-}
-
 function Results({ result }: { result: SimComparison }) {
   const columns = ["excess_deaths", "unmet_care", "response_cost"] as const;
   const label: Record<string, string> = {
@@ -820,14 +691,5 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
       <h2 className="mb-3 text-xs font-medium text-ink">{title}</h2>
       {children}
     </section>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-md border border-line bg-canvas px-3 py-2">
-      <div className="text-lg tabular-nums text-ink">{value.toLocaleString("en-CA")}</div>
-      <div className="text-[11px] text-ink-faint">{label}</div>
-    </div>
   );
 }
