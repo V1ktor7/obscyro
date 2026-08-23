@@ -92,19 +92,32 @@ def facilities_table(
     rows: list[list[Any]] = []
     for policy, t in trajectories.items():
         for tick in t.ticks:
-            for fid, occ in sorted(tick.occupancy.items()):
-                rows.append(
-                    [policy, tick.tick, fid, names.get(fid, fid), round(occ, 4)]
-                )
+            for fid, by_activity in sorted(tick.occupancy.items()):
+                waiting = tick.waiting.get(fid, {})
+                for activity, occ in sorted(by_activity.items()):
+                    rows.append([
+                        policy,
+                        tick.tick,
+                        fid,
+                        names.get(fid, fid),
+                        activity,
+                        round(occ, 4),
+                        round(waiting.get(activity, 0.0), 3),
+                    ])
     return Dataset(
         name="facilities",
-        label="One row per step and facility",
+        label="One row per step, facility and activity",
         description=(
-            "How full each unit was at each step. The id travels beside the name "
-            "so a row can be joined back to the ontology rather than matched on a "
-            "label that may not be unique."
+            "How full each thing a unit provides was at each step, and how many "
+            "units of demand were waiting for it. Split by activity because a "
+            "unit-wide figure averages full acute beds with empty long-stay "
+            "places and reports neither. The id travels beside the name so a row "
+            "can be joined back to the ontology rather than matched on a label "
+            "that may not be unique."
         ),
-        columns=["policy", "step", "facility_id", "facility", "occupancy"],
+        columns=[
+            "policy", "step", "facility_id", "facility", "activity", "occupancy", "waiting",
+        ],
         rows=rows,
     )
 

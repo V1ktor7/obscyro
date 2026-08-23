@@ -59,7 +59,13 @@ def _cost(t: Trajectory) -> tuple[float, list[float]]:
 
 @register_objective("peak_occupancy")
 def _peak_occupancy(t: Trajectory) -> tuple[float, list[float]]:
-    series = [max(x.occupancy.values(), default=0.0) for x in t.ticks]
+    # The worst activity anywhere, not the worst facility average. A network
+    # whose only full thing is one hospital's acute beds should read 100%, and
+    # under the category-wide reading it read 6%.
+    series = [
+        max((v for by_activity in x.occupancy.values() for v in by_activity.values()), default=0.0)
+        for x in t.ticks
+    ]
     return max(series, default=0.0), series
 
 

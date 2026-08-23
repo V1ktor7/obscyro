@@ -1,3 +1,4 @@
+import { config } from "../lib/config.js";
 import type { DbClient } from "../lib/db.js";
 import type { ReadLens } from "./ontology-lens.js";
 import { listInstancesForEnv, listLinksForEnv } from "./ontology.js";
@@ -74,7 +75,8 @@ export interface SimGap {
     | "ROUTE_WITHOUT_CAPACITY"
     | "POPULATION_WITHOUT_SIZE"
     | "FACILITY_WITHOUT_RESOURCES"
-    | "PROPERTY_WITHOUT_BEHAVIOUR";
+    | "PROPERTY_WITHOUT_BEHAVIOUR"
+    | "TWIN_TRUNCATED";
   message: string;
   subjects: string[];
 }
@@ -268,7 +270,13 @@ export async function buildTwinExport(
 ): Promise<SimExport> {
   const [{ nodes }, instances, links, roleRows] = await Promise.all([
     getUnitTree(db, environmentId, lens),
-    listInstancesForEnv(db, environmentId, { limit: 20000, ...lens }),
+    // The configured ceiling, not a literal. This read used to cap at 20 000
+    // while `rollupInstanceCap` said 50 000, and the query orders by age — so a
+    // twin holding 25 113 units of capacity exported 19 949 of them and dropped
+    // the oldest 5 000 without a word. Silent truncation is the worst failure
+    // an export can have: everything downstream completes and answers
+    // confidently about a network that is a fifth smaller than the real one.
+    listInstancesForEnv(db, environmentId, { limit: config.rollupInstanceCap, ...lens }),
     listLinksForEnv(db, environmentId, lens),
     db.query<{ name: string; sim_role: SimRole | null; property_schema: PropertyDef[] | null }>(
       `SELECT name, sim_role, property_schema FROM app.ontology_object_types
@@ -306,6 +314,22 @@ export async function buildTwinExport(
   const unitIds = new Set(nodes.map((n) => n.id));
   const instanceById = new Map(instances.map((i) => [i.id, i]));
   const gaps: SimGap[] = [];
+
+  // Reported first, because it invalidates every other number in the export. A
+  // full page means the read stopped at the ceiling and there may be more; the
+  // export cannot tell how many more without a second count, and saying "there
+  // may be more" is the honest answer rather than a figure it would have to
+  // guess at.
+  if (instances.length >= config.rollupInstanceCap) {
+    gaps.push({
+      code: "TWIN_TRUNCATED",
+      message:
+        `The read stopped at ${config.rollupInstanceCap} instances, which is its ceiling, ` +
+        `so part of the twin is missing from this export and every figure below is a ` +
+        `lower bound. Raise ROLLUP_INSTANCE_CAP or narrow the environment.`,
+      subjects: [],
+    });
+  }
 
   // What hangs off a unit becomes capacity or census there. Which of the two,
   // and under which of the four constraints, is read from the type's declared

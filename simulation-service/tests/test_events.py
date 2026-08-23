@@ -436,3 +436,79 @@ def test_the_engine_reads_effects_under_the_name_the_platform_sends() -> None:
         ],
     }
     assert len(Event.model_validate(payload).effects) == 1
+
+
+# --- what the map is allowed to read ----------------------------------------
+
+
+def _mixed_hospital() -> SystemState:
+    """One hospital with a small acute ward and a large long-stay wing — the
+    shape that made the category-wide reading useless."""
+    from app.events.domain import Facility, Population
+    from app.events.examples.system import NetworkxBackend
+
+    f = Facility(
+        id="h",
+        name="Hôpital",
+        resources={
+            "acute": Resource(
+                id="acute", category=SPACE, quantity=20, capacity=20,
+                enables=frozenset({"acute_bed"}),
+            ),
+            "longstay": Resource(
+                id="longstay", category=SPACE, quantity=300, capacity=300,
+                enables=frozenset({"long_stay_place"}),
+            ),
+        },
+    )
+    net = NetworkxBackend()
+    net.add_node("h")
+    return SystemState(
+        facilities={"h": f},
+        populations={"r": Population(id="r", size=100_000, served_by=["h"])},
+        care_model={
+            "acute": CareRequirement(
+                acuity="acute", consumes={"acute_bed": 1.0}, mortality_per_unmet=0.0,
+                stay_ticks=5,
+            )
+        },
+        network=net,
+    )
+
+
+def test_occupancy_is_reported_per_activity_not_per_category() -> None:
+    """The defect: twenty acute beds full and three hundred long-stay places
+    empty reported 6% on the category. A map coloured from that number shows a
+    calm hospital while its ward is turning people away.
+    """
+    state = _mixed_hospital()
+    traj = run(state, _steady_demand(1.0, horizon=12), null_policy(), seed=0)
+    last = traj.ticks[-1].occupancy["h"]
+    assert set(last) == {"acute_bed", "long_stay_place"}
+    assert last["acute_bed"] == pytest.approx(1.0, abs=1e-6)
+    assert last["long_stay_place"] == pytest.approx(0.0, abs=1e-6)
+
+
+def test_peak_occupancy_sees_the_thing_that_is_full() -> None:
+    # Averaged over the category this run peaked around 6%, which is the reading
+    # that made every policy look equally comfortable.
+    from app.events.scoring import _OBJECTIVES
+
+    traj = run(_mixed_hospital(), _steady_demand(1.0, horizon=12), null_policy(), seed=0)
+    peak, _ = _OBJECTIVES["peak_occupancy"](traj)
+    assert peak == pytest.approx(1.0, abs=1e-6)
+
+
+def test_the_queue_is_recorded_beside_what_it_is_waiting_for() -> None:
+    """Occupancy alone cannot tell a full ward with nobody waiting from a full
+    ward with forty people in the corridor, and those are different emergencies.
+    """
+    traj = run(_mixed_hospital(), _steady_demand(1.0, horizon=12), null_policy(), seed=0)
+    waiting = traj.ticks[-1].waiting["h"]
+    assert waiting["acute_bed"] > 0
+    assert "long_stay_place" not in waiting
+
+
+def test_a_facility_with_nobody_waiting_records_no_queue() -> None:
+    traj = run(_catchment_system(capable=1, incapable=0), _steady_demand(0.001), null_policy(), seed=0)
+    assert all(not t.waiting for t in traj.ticks)

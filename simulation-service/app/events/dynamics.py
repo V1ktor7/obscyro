@@ -61,7 +61,16 @@ class TickRecord(BaseModel):
     unmet: dict[str, float] = Field(default_factory=dict)
     deaths: float = 0.0
     cost: float = 0.0
-    occupancy: dict[str, float] = Field(default_factory=dict)
+    # facility -> activity -> used/total. Per activity, not per category: a
+    # hospital whose twenty acute beds are full but which holds three hundred
+    # long-stay places reports 6% on the category and 100% on the activity, and
+    # the second is the one a reader has to see. `occupancy_ratio` says so in
+    # its own docstring; this record used to ignore it.
+    occupancy: dict[str, dict[str, float]] = Field(default_factory=dict)
+    # facility -> activity -> units of demand waiting for something that
+    # consumes it. Occupancy alone cannot distinguish a full ward with nobody
+    # waiting from a full ward with forty people in the corridor.
+    waiting: dict[str, dict[str, float]] = Field(default_factory=dict)
     shortfall: dict[str, float] = Field(default_factory=dict)
     fired: list[FiredRule] = Field(default_factory=list)
     suppressed: list[str] = Field(default_factory=list)
@@ -697,8 +706,23 @@ class Engine:
                     rec.deaths += died
                     waiting[acuity] = left - died
 
-        for fid in self.state.facilities:
-            rec.occupancy[fid] = self.state.occupancy_ratio(fid, SPACE)
+        for fid, facility in self.state.facilities.items():
+            offered = {a for r in facility.resources.values() for a in r.enables}
+            if offered:
+                rec.occupancy[fid] = {
+                    a: self.state.occupancy_ratio(fid, activity=a) for a in sorted(offered)
+                }
+            queued = self.state.backlog.get(fid, {})
+            if queued:
+                per_activity: dict[str, float] = {}
+                for acuity, n in queued.items():
+                    if n <= 0:
+                        continue
+                    req = self.state.care_model.get(acuity)
+                    for a in (req.consumes if req else {}):
+                        per_activity[a] = per_activity.get(a, 0.0) + n
+                if per_activity:
+                    rec.waiting[fid] = per_activity
         for cat in (SPACE, STAFF, STUFF, SYSTEMS):
             cap = sum(
                 r.capacity for f in self.state.facilities.values() for r in f.by_category(cat)
