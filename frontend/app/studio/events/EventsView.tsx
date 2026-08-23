@@ -26,6 +26,7 @@ import {
   listScenarios,
   deleteSimPolicy,
   listSimPolicies,
+  runReportProblem,
   runSimulation,
   saveSimPolicy,
   type SimPolicy,
@@ -275,8 +276,7 @@ export default function EventsView() {
       // from the UI, and the branch that sent one still named the request field
       // `scenario`, which was renamed to `template` several commits ago — dead
       // and broken at the same time.
-      setResult(
-        await runSimulation(env, {
+      const out = await runSimulation(env, {
           eventId: event.slice(6),
           policies: responses,
           policyIds: chosenPolicies,
@@ -284,8 +284,13 @@ export default function EventsView() {
           routeCapacity: Number(routeCapacity) || 0,
           twinScenarioId: twinScenarioId || undefined,
           collect,
-        }),
-      );
+      });
+      // Checked before it reaches the screen. A result whose shape the engine
+      // and this page disagree about used to take the whole page down with a
+      // client-side exception, which says nothing about what happened.
+      const wrong = runReportProblem(out);
+      if (wrong) throw new Error(wrong);
+      setResult(out);
     } catch (err) {
       setError((err as Error).message);
       setResult(null);
@@ -781,14 +786,14 @@ function Results({ result }: { result: SimComparison }) {
   );
 
   return (
-    <Card title={`Result — ${result.scenario.name}`}>
+    <Card title={`Result — ${result.event.name}`}>
       <div className="mb-3 flex justify-end">
         <button
           type="button"
           onClick={() =>
             downloadText(
               toCsv(allColumns, result.rows.map((r) => allColumns.map((c) => r[c] ?? ""))),
-              `${slug(result.scenario.name)}-ranking.csv`,
+              `${slug(result.event.name)}-ranking.csv`,
               "text/csv",
             )
           }
@@ -798,7 +803,7 @@ function Results({ result }: { result: SimComparison }) {
         </button>
       </div>
       <p className="mb-3 text-[11px] leading-relaxed text-ink-faint">
-        {result.scenario.description} Run over {result.horizon} steps across{" "}
+        {result.event.description ?? ""} Run over {result.horizon} steps across{" "}
         {result.facilities} facilities.
       </p>
       <div className="overflow-x-auto">

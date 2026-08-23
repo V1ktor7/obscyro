@@ -51,7 +51,7 @@ function comparison(withTable = true): SimComparison {
     facilities: 2,
     activities: [],
     weights: {},
-    scenario: { id: "e", name: "Vague", description: "", perturbations: [] },
+    event: { id: "e", name: "Vague Omicron", description: "", effects: [] },
     datasets: withTable
       ? [
           {

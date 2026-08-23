@@ -1708,7 +1708,21 @@ export interface SimDataset {
 }
 
 export interface SimComparison {
-  scenario: { id: string; name: string; description: string; perturbations: string[] };
+  /**
+   * The event that was run, echoed back by the engine.
+   *
+   * Named `event`, because that is what the engine sends. It was declared here
+   * as `scenario` with a `perturbations` list, and neither exists on the wire —
+   * so the first run that ever reached the results card threw on
+   * `result.scenario.name` and took the page down with it. Nothing caught it
+   * because nothing had ever got that far: the proxy was cutting every run off
+   * at sixty seconds first.
+   *
+   * The third time this session that the platform and the engine disagreed on a
+   * field name in silence. `runReportProblem` below is the check that stops the
+   * fourth from being invisible.
+   */
+  event: { id: string; name: string; description?: string; effects?: unknown[] };
   rows: Array<Record<string, string | number>>;
   facilities: number;
   horizon: number;
@@ -1716,6 +1730,25 @@ export interface SimComparison {
   weights: Record<string, number>;
   /** Present only when the run was asked to collect them. */
   datasets?: SimDataset[];
+}
+
+/**
+ * What is missing from a run report, named, or null when it is whole.
+ *
+ * A contract check at the seam rather than a type assertion, because the type
+ * is a claim about the wire and the wire is written by another service in
+ * another language. Twice this session a field was renamed on one side and
+ * dropped in silence on the other; the failure was a blank page the second
+ * time and a run that reported success while doing nothing the first.
+ */
+export function runReportProblem(result: SimComparison | null | undefined): string | null {
+  if (!result) return "The run returned nothing.";
+  if (!result.event || typeof result.event.name !== "string") {
+    return "The run came back without the event it ran, so the engine and this page disagree about the shape of a result.";
+  }
+  if (!Array.isArray(result.rows)) return "The run came back with no ranking.";
+  if (typeof result.horizon !== "number") return "The run came back without a horizon.";
+  return null;
 }
 
 /**

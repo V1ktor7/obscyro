@@ -78,7 +78,7 @@ export default function ReplayPlayer({
   ) {
     const el = ref.current;
     if (!el) return;
-    const base = `${slug(result.scenario.name)}-${what}-${policy}`;
+    const base = `${slug(result.event.name)}-${what}-${policy}`;
     try {
       setSaveError(null);
       if (kind === "svg") downloadSvg(el, `${base}.svg`);
@@ -277,7 +277,7 @@ export default function ReplayPlayer({
                 ["step", "waiting", "facilities_full", "facilities_on_map"],
                 frames.map((f) => [f.step, Math.round(f.waiting), f.full, f.facilities.length]),
               ),
-              `${slug(result.scenario.name)}-queue-${policy}.csv`,
+              `${slug(result.event.name)}-queue-${policy}.csv`,
               "text/csv",
             )
           }
