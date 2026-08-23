@@ -75,6 +75,10 @@ class ExportedPopulation(BaseModel):
     name: str = ""
     size: NonNegativeFloat = 0.0
     served_by: list[str] = Field(default_factory=list)
+    # How strongly this catchment couples, per layer the institution named.
+    # Empty for a twin with no spreading model, which is the honest state — a
+    # set of zeros would make every coupled transition inert while looking set.
+    couples: dict[str, float] = Field(default_factory=dict)
 
 
 class Gap(BaseModel):
