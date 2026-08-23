@@ -70,10 +70,11 @@ import { useStudio } from "../StudioShell";
 import TreeExplorer, { type TreeItem } from "../TreeExplorer";
 import { BAND_COLOUR, bandOf, type Frame } from "../events/replay-frames";
 import ReplayPanel from "./ReplayPanel";
+import SpreadPanel from "./SpreadPanel";
 
 import CoverageDialog from "./CoverageDialog";
 import { capacityOf, isSiteHidden } from "./units-tree";
-import { shapeFeatures } from "./map-shapes";
+import { shapeFeatures, WAVE_RAMP } from "./map-shapes";
 import { AXES, missionsIn, treeForAxis, type GroupingAxis } from "./units-axes";
 import {
   flattenCoordinates,
@@ -301,9 +302,17 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   useEffect(() => {
     selectedRef.current = selectedId;
   }, [selectedId]);
-  const [panelTab, setPanelTab] = useState<"explorer" | "layers" | "views" | "replay">(
-    "explorer",
-  );
+  const [panelTab, setPanelTab] = useState<
+    "explorer" | "layers" | "views" | "replay" | "spread"
+  >("explorer");
+  /**
+   * The wave being painted on the boundaries, shape id → 0..1.
+   *
+   * Held here rather than in the panel because the fill layer is the view's:
+   * two components setting the same source is how one step's colour ends up
+   * under another step's label.
+   */
+  const [waveIntensity, setWaveIntensity] = useState<Map<string, number> | null>(null);
   // The frame the replay is showing, or null when it is not running. While it
   // holds a frame the DOM markers step aside: two things drawing the same site
   // with two different colours is worse than either.
@@ -363,6 +372,13 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   // extension, so "unavailable" is the ordinary state, not an error path.
   const [capability, setCapability] = useState<GeoCapability | null>(null);
   const [shapes, setShapes] = useState<InstanceShape[]>([]);
+  // What the map can actually draw a wave on. Passed down so the spread panel
+  // can say which catchments are running and not drawn, rather than leaving a
+  // blank territory to read as one the wave never reached.
+  const shapeIds = useMemo(
+    () => new Set(shapes.map((sh) => sh.instanceId)),
+    [shapes],
+  );
   const [missionsOf, setMissionsOf] = useState<Map<string, string[]>>(new Map());
 
   const territoryOf = useMemo(() => {
@@ -799,11 +815,31 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
           // is the subject and the territory is context that should not tint
           // the building you are reading.
           paint: {
-            "fill-color": ["get", "couleur"],
+            "fill-color": [
+              "case",
+              ["get", "wave"],
+              [
+                "interpolate",
+                ["linear"],
+                ["get", "intensity"],
+                0,
+                WAVE_RAMP[0],
+                0.5,
+                WAVE_RAMP[1],
+                1,
+                WAVE_RAMP[2],
+              ],
+              ["get", "couleur"],
+            ],
+            // A played run is the subject, so its fill holds at every zoom
+            // rather than fading out — reading the wave means reading the fill,
+            // and a boundary tint that disappears is only ever context.
             "fill-opacity": [
               "case",
               ["get", "dimmed"],
               0.02,
+              ["get", "wave"],
+              ["interpolate", ["linear"], ["get", "intensity"], 0, 0.18, 1, 0.72],
               ["interpolate", ["linear"], ["zoom"], 8, 0.2, 11, 0.12, 14, 0.04],
             ],
           },
@@ -948,10 +984,10 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     if (!map || !mapReady) return;
     ensureShapeLayers(map);
     (map.getSource(SHAPES_SRC) as GeoSource)?.setData(
-      shapeFeatures(shapes, { axis, hidden: hiddenIds }) as never,
+      shapeFeatures(shapes, { axis, hidden: hiddenIds, intensity: waveIntensity ?? undefined }) as never,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shapes, mapReady, styleMode, axis, hiddenIds]);
+  }, [shapes, mapReady, styleMode, axis, hiddenIds, waveIntensity]);
 
   // The replay frame onto the map.
   //
@@ -1515,6 +1551,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                 ["layers", "Layers"],
                 ["views", "Views"],
                 ["replay", "Replay"],
+                ["spread", "Spread"],
               ] as const
             ).map(([id, label]) => (
               <button
@@ -1629,6 +1666,17 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
           {panelTab === "replay" ? (
             <div className="min-h-0 flex-1 overflow-y-auto">
               <ReplayPanel env={env} twinScenarioId={null} onFrame={setReplayFrame} />
+            </div>
+          ) : null}
+
+          {panelTab === "spread" ? (
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <SpreadPanel
+                env={env}
+                twinScenarioId={null}
+                onWave={setWaveIntensity}
+                shapeIds={shapeIds}
+              />
             </div>
           ) : null}
 

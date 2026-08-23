@@ -455,3 +455,56 @@ def test_a_declaration_with_no_instances_is_refused() -> None:
     with pytest.raises(HTTPException) as caught:
         spread_route(SpreadRequest.model_validate(body))
     assert "no instance fills them in" in str(caught.value.detail)
+
+
+def test_a_probe_reads_the_declaration_back_without_running_it() -> None:
+    # The form that seeds a run has to name a state, and a state misspelled by
+    # one letter seeds nothing: the run comes back empty and nothing on screen
+    # says why. So the vocabulary has to be readable before the first run.
+    from app.events.api import SpreadRequest, spread_route
+
+    out = spread_route(SpreadRequest.model_validate(_request(seeds={}, probe=True)))
+    assert out.vocabulary["states"] == ["malade", "retabli", "sain"]
+    assert out.vocabulary["couplings"] == ["ecole"]
+    assert out.states == []
+    assert out.event["effects"] == []
+
+
+def test_a_probe_names_the_catchments_a_form_has_to_offer() -> None:
+    # A run reports ids and a picker shows names. Without these the reader
+    # chooses between eleven UUIDs.
+    from app.events.api import SpreadRequest, spread_route
+
+    out = spread_route(SpreadRequest.model_validate(_request(seeds={}, probe=True)))
+    assert {p["id"] for p in out.populations} == {"pop:a", "pop:b"}
+    assert all(p["name"] for p in out.populations)
+
+
+def test_a_probe_is_not_refused_for_being_unseeded() -> None:
+    # Refusing it would make the vocabulary readable only by parsing an error
+    # message, which turns a refusal into an API.
+    from app.events.api import SpreadRequest, spread_route
+
+    out = spread_route(SpreadRequest.model_validate(_request(seeds={}, probe=True)))
+    assert [g["code"] for g in out.gaps] == []
+
+
+def test_a_probe_still_refuses_a_twin_that_declared_nothing() -> None:
+    # There is no vocabulary to read back, and answering with an empty one
+    # would look like a model whose states are all named "".
+    from fastapi import HTTPException
+
+    from app.events.api import SpreadRequest, spread_route
+
+    body = _request(seeds={}, probe=True)
+    body["system"]["object_types"] = [{"name": "Lit", "role": "space", "properties": []}]
+    with pytest.raises(HTTPException) as caught:
+        spread_route(SpreadRequest.model_validate(body))
+    assert caught.value.status_code == 422
+
+
+def test_a_real_run_still_names_the_catchments() -> None:
+    from app.events.api import SpreadRequest, spread_route
+
+    out = spread_route(SpreadRequest.model_validate(_request()))
+    assert {p["id"] for p in out.populations} == {"pop:a", "pop:b"}

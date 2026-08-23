@@ -109,6 +109,14 @@ class SpreadRequest(BaseModel):
     #: Named couplings, scaled over windows. Closing a school is `factor: 0` on
     #: the layer it is — the counterfactual is built, not estimated.
     changes: list[LayerChange] = Field(default_factory=list)
+    #: Read the declaration back without integrating it.
+    #:
+    #: A form that seeds a run has to name a state, and a state misspelled by
+    #: one letter seeds nothing: the run comes back empty and nothing on screen
+    #: says why. So the vocabulary has to be readable before the first run, and
+    #: the alternative — running with no seeds and parsing the refusal — makes
+    #: an error message into an API.
+    probe: bool = False
 
 
 class SpreadResponse(BaseModel):
@@ -121,6 +129,8 @@ class SpreadResponse(BaseModel):
     #: Every state and coupling the declaration names, so a caller can seed and
     #: intervene without guessing at spelling.
     vocabulary: dict[str, list[str]]
+    #: The catchments, named. A run reports ids and a form has to show names.
+    populations: list[dict[str, Any]] = Field(default_factory=list)
     gaps: list[dict[str, Any]] = Field(default_factory=list)
 
 
@@ -147,6 +157,22 @@ def spread_route(req: SpreadRequest) -> SpreadResponse:
         )
 
     gaps: list[dict[str, Any]] = []
+    populations = [
+        {"id": p.id, "name": p.name, "size": p.size, "couples": p.couples}
+        for p in ex.populations
+    ]
+    if req.probe:
+        # Answered before anything is seeded or integrated: this is what the
+        # twin declared, which is the question a form asks before it can be
+        # filled in.
+        return SpreadResponse(
+            event={"id": "spread", "name": "", "description": "", "horizon": 0, "effects": []},
+            states=[],
+            vocabulary={"states": model.states, "couplings": model.couplings},
+            populations=populations,
+            gaps=gaps,
+        )
+
     seeded = {p for p, s in req.seeds.items() if any(v > 0 for v in s.values())}
     if not seeded:
         raise HTTPException(
@@ -198,6 +224,7 @@ def spread_route(req: SpreadRequest) -> SpreadResponse:
             for s in steps
         ],
         vocabulary={"states": model.states, "couplings": model.couplings},
+        populations=populations,
         gaps=gaps,
     )
 

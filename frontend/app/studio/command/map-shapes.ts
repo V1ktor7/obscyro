@@ -72,6 +72,17 @@ export interface ShapeFeature {
     tags: string;
     /** A territory the tree has hidden is drawn faintly, not removed. */
     dimmed: boolean;
+    /**
+     * A run is being played over this map, so the fill means a quantity.
+     *
+     * Carried per feature rather than set on the layer, because the two states
+     * have to coexist: a catchment the run never reached keeps its categorical
+     * tint while its neighbours carry the wave, and painting the whole layer
+     * one way or the other would have to choose.
+     */
+    wave: boolean;
+    /** Where this shape sits between nothing and the run's peak, 0 to 1. */
+    intensity: number;
   };
   geometry: InstanceShape["geometry"];
 }
@@ -103,6 +114,16 @@ export const AUTO_TINTS = [
 
 /** Used only when a shape has no neighbours and no declaration to go on. */
 export const UNCOLOURED = "#8a94a6";
+
+/**
+ * The ramp a played run is drawn with: one hue family, pale to deep.
+ *
+ * Categorical tints are wrong here for the reason `AUTO_TINTS` exists at all —
+ * they are meant to be distinguishable, not ordered, and a reader cannot tell
+ * which of violet and orange is more. A quantity needs a ramp somebody can rank
+ * at a glance, so this one only ever gets darker and warmer.
+ */
+export const WAVE_RAMP = ["#fbf0d9", "#e8a33d", "#a8261f"] as const;
 
 /** Vertices are matched at ~10 cm, which is finer than the source's precision. */
 function vertexKeys(geometry: InstanceShape["geometry"]): string[] {
@@ -256,9 +277,18 @@ export function shapeFeatures(
      * which is why the name is what gets tested here.
      */
     hidden?: Set<string>;
+    /**
+     * Instance id → 0..1, when a spreading run is being played.
+     *
+     * Scaled against the peak of the whole run by the caller, not per step —
+     * per-step scaling makes every frame equally deep and the wave stops
+     * rising.
+     */
+    intensity?: Map<string, number>;
   },
 ): ShapeFeatureCollection {
   const hidden = opts.hidden ?? new Set<string>();
+  const intensity = opts.intensity;
   const boundaries = axisHasBoundaries(opts.axis);
   const colours = assignColours(shapes);
 
@@ -280,6 +310,11 @@ export function shapeFeatures(
         couleur: colours.get(s.instanceId) ?? UNCOLOURED,
         tags: tagsOf(s.properties).join(" · "),
         dimmed: isTerritory && hidden.has(`axis:${label}`),
+        // A shape the run did not report is not at zero, it is unmeasured, and
+        // colouring it as the pale end of the ramp would state something the
+        // run never said. It keeps its own tint instead.
+        wave: intensity?.has(s.instanceId) ?? false,
+        intensity: intensity?.get(s.instanceId) ?? 0,
       },
       geometry: s.geometry,
     });

@@ -22,6 +22,7 @@ import {
   listSimPolicies,
   updateSimPolicy,
 } from "../services/sim-policies.js";
+import { spreadPayload } from "../services/spread-payload.js";
 import { buildTwinExport } from "../services/twin-export.js";
 import { proxyToSimService } from "../services/ml-simulation.js";
 import {
@@ -448,6 +449,123 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
         census_acuity: req.body.censusAcuity ?? null,
         collect: req.body.collect,
       });
+    },
+  );
+
+  app.post(
+    "/ontology/:env/twin/spread",
+    {
+      schema: {
+        summary: "Run the spreading process the twin declared",
+        description:
+          "Reads the transitions declared as ontology instances and integrates them " +
+          "forward, one catchment at a time. Returns the run written as an event, so " +
+          "what comes back is composable with everything else: it can be saved, " +
+          "replayed, branched, and ranked against responses by `/twin/simulate`. " +
+          "Nothing is seeded on the caller's behalf — a wave starts where the author " +
+          "says it started.",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1) }),
+        body: z.object({
+          /**
+           * Units in each state, per catchment: `{ "pop:<uuid>": { "malade": 5 } }`.
+           *
+           * Keyed by the export's population ids rather than by object ids,
+           * because that is what comes back in `states` and what the map draws
+           * — one vocabulary across the round trip, so nobody has to map
+           * between two of them at the point they are reading a result.
+           */
+          seeds: z.record(z.record(z.number().finite().nonnegative())).default({}),
+          horizon: z.number().int().min(1).max(1000).default(91),
+          /**
+           * Named couplings, scaled over windows.
+           *
+           * This is what a structural measure *is* here: closing a school is a
+           * factor of zero on the layer the school is, and the counterfactual is
+           * built rather than inferred. Fitted against the observed curve the
+           * same question had no answer at all — the closure fell on the same
+           * day as the holidays.
+           */
+          changes: z
+            .array(
+              z.object({
+                layer: z.string().min(1).max(120),
+                factor: z.number().finite().min(0),
+                fromStep: z.number().int().min(0).default(0),
+                /** Null runs to the end. A window that closes puts it back. */
+                toStep: z.number().int().min(0).nullable().default(null),
+              }),
+            )
+            .default([]),
+          /**
+           * Keep the run as a composed event under this name.
+           *
+           * The seam, taken: the effects the model produced are `demand.incidence`
+           * like any other, so saved once they arrive in the replay, the branch
+           * and the ranking with no further translation. Left out, the run is
+           * returned and not kept, which is what exploring looks like.
+           */
+          saveAs: z.string().trim().min(1).max(120).optional(),
+          /**
+           * Read the declaration back without integrating it.
+           *
+           * What a seeding form asks before it can be filled in: which states
+           * exist, which couplings a measure can name, and what the catchments
+           * are called. Cheap — the export still has to be built, but nothing
+           * is integrated.
+           */
+          probe: z.boolean().default(false),
+          twinScenarioId: z.string().uuid().optional(),
+          atOffsetHours: z.number().int().min(0).optional(),
+        }),
+        response: { 200: z.record(z.unknown()), 404: errorEnvelope, 503: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const lens = req.body.twinScenarioId
+        ? { scenarioId: req.body.twinScenarioId, atOffsetHours: req.body.atOffsetHours ?? 0 }
+        : undefined;
+      const system = await buildTwinExport(req.db, env.id, req.params.env, lens);
+      const out = await proxyToSimService<{
+        event: { effects: unknown[]; horizon?: number };
+        states: unknown[];
+        vocabulary: Record<string, string[]>;
+        gaps: unknown[];
+      }>("/events/spread", spreadPayload(system, req.body));
+
+      let saved: { id: string; name: string } | null = null;
+      // A probe produced no effects, so there is nothing to keep. Saving it
+      // would create an event that runs and changes nothing.
+      if (req.body.saveAs && !req.body.probe) {
+        const row = await createSimEvent(req.db, env.id, userId, {
+          name: req.body.saveAs,
+          description:
+            `Produced by the declared spreading model over ${req.body.horizon} steps` +
+            (req.body.changes.length
+              ? `, with ${req.body.changes.length} measure(s) on its couplings.`
+              : "."),
+          horizon: req.body.horizon,
+          // Passed through whole. The engine wrote them as `demand.incidence`
+          // precisely so nothing here has to understand them, and a route that
+          // reshaped them would be a second opinion about a format it does not
+          // own.
+          effects: out.event.effects as Array<Record<string, unknown>>,
+          twinScenarioId: req.body.twinScenarioId ?? null,
+        });
+        saved = { id: row.id, name: row.name };
+        await recordAudit(req.db, {
+          actorUserId: userId,
+          projectId: env.id,
+          action: "sim.event.create",
+          resourceType: "sim_event",
+          resourceId: row.id,
+          metadata: { name: row.name, effects: out.event.effects.length, from: "spread" },
+        });
+      }
+
+      return { ...out, saved };
     },
   );
 

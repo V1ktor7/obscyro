@@ -1981,4 +1981,53 @@ export async function runSimulation(
   });
 }
 
+/** One step of one catchment, as the spreading model left it. */
+export interface SpreadState {
+  tick: number;
+  population: string;
+  states: Record<string, number>;
+  incidence: Record<string, number>;
+}
+
+export interface SpreadResult {
+  /** The run written as an event: effects the rest of the engine already reads. */
+  event: { id: string; name: string; description: string; horizon: number; effects: unknown[] };
+  states: SpreadState[];
+  /**
+   * Every state and coupling the declaration names.
+   *
+   * Read by the seed panel rather than typed by the reader: a state misspelled
+   * by one letter seeds nothing, the run comes back empty, and nothing on
+   * screen says why.
+   */
+  vocabulary: { states: string[]; couplings: string[] };
+  /** The catchments, named: a run reports ids and a form has to show names. */
+  populations: { id: string; name: string; size: number; couples: Record<string, number> }[];
+  gaps: { code: string; message: string; subjects?: string[] }[];
+  /** Set when `saveAs` was sent: the composed event the run was kept as. */
+  saved: { id: string; name: string } | null;
+}
+
+export async function runSpread(
+  env: string,
+  body: {
+    /** Units per state per catchment, keyed by the export's population ids. */
+    seeds: Record<string, Record<string, number>>;
+    horizon?: number;
+    changes?: {
+      layer: string;
+      factor: number;
+      fromStep?: number;
+      toStep?: number | null;
+    }[];
+    /** Keep the run as a composed event under this name. */
+    saveAs?: string;
+    /** Read the declaration back — states, couplings, catchments — without running. */
+    probe?: boolean;
+    twinScenarioId?: string;
+  },
+): Promise<SpreadResult> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/spread`, { method: "POST", body });
+}
+
 export type { MeResult };
