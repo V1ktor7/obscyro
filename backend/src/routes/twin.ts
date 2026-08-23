@@ -338,6 +338,18 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
           populationSizes: z.record(z.number().nonnegative()).default({}),
           routeCapacity: z.number().nonnegative().default(0),
           /**
+           * What to call the patients already in the beds when the run starts.
+           *
+           * Left out, an occupied bed simply starts unavailable and stays that
+           * way for the whole horizon — Sainte-Justine read full for 91 steps
+           * because sixteen stretchers were occupied when the feed was read, not
+           * because anything happened. Naming an acuity admits them as patients
+           * instead, so they occupy a bed, leave, and free it. The second is
+           * more realistic and needs an assumption about who they are, which is
+           * the caller's to make.
+           */
+          censusAcuity: z.string().min(1).max(120).optional(),
+          /**
            * Twin scenario to read the world through. Named `twinScenarioId`
            * rather than `scenarioId` because `scenario` above already means the
            * event, and two different things called scenario in one body is how
@@ -403,6 +415,7 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
         seed: req.body.seed ?? null,
         population_sizes: req.body.populationSizes,
         route_capacity: req.body.routeCapacity,
+        census_acuity: req.body.censusAcuity ?? null,
         collect: req.body.collect,
       });
     },

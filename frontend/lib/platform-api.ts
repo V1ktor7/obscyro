@@ -1905,6 +1905,8 @@ export async function runSimulation(
     seed?: number;
     populationSizes?: Record<string, number>;
     routeCapacity?: number;
+    /** What to call the patients already in the beds when the run starts. */
+    censusAcuity?: string;
     twinScenarioId?: string;
     /** Which tables of the run to bring back. Empty means the ranking only. */
     collect?: Array<"steps" | "facilities" | "decisions">;
