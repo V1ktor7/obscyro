@@ -34,6 +34,13 @@ export const MECHANICS = [
   "consumes_activity",
   "consumes_amount",
   "scales_incidence",
+  "leaves_state",
+  "enters_state",
+  "transition_rate",
+  "driven_by_state",
+  "couples_along",
+  "couples_at",
+  "produces_demand",
 ] as const;
 
 export type Mechanic = (typeof MECHANICS)[number];
@@ -46,6 +53,13 @@ export const MECHANIC_KIND: Record<Mechanic, "select" | "quantity"> = {
   consumes_activity: "select",
   consumes_amount: "quantity",
   scales_incidence: "quantity",
+  leaves_state: "select",
+  enters_state: "select",
+  transition_rate: "quantity",
+  driven_by_state: "select",
+  couples_along: "select",
+  couples_at: "quantity",
+  produces_demand: "select",
 };
 
 /**
@@ -63,6 +77,13 @@ export const MECHANIC_LABEL: Record<Mechanic, string> = {
   consumes_activity: "Names what it draws on",
   consumes_amount: "How much of that it draws, per unit per step",
   scales_incidence: "How many people this covers, for an incidence to be multiplied by",
+  leaves_state: "Names the state this transition leaves",
+  enters_state: "Names the state it enters",
+  transition_rate: "How much of the leaving state crosses, per step",
+  driven_by_state: "Names the state whose size makes this happen — leave it out and it happens on its own",
+  couples_along: "Names the coupling it travels — leave it out and it reaches the whole catchment",
+  couples_at: "How strongly this catchment couples along the layer this property is named for",
+  produces_demand: "Names the severity a unit becomes when it crosses",
 };
 
 export const PROPERTY_BEHAVIOURS = ["level", "rate", "stock", "state"] as const;

@@ -105,3 +105,65 @@ test("a unit linked twice is served once", () => {
   );
   assert.deepEqual(populations[0]!.served_by, ["u1", "u2"]);
 });
+
+
+test("a catchment carries the layers it declared, by the names it chose", () => {
+  // The layer's name is the property key, so the keys travel with the values: a
+  // transition says it couples along `ecole`, and the only thing that can
+  // answer is a property called `ecole`. Nothing here knows what a school is.
+  const types = [
+    {
+      name: "Territoire",
+      properties: [
+        { key: "population", mechanic: "scales_incidence" as const },
+        { key: "ecole", mechanic: "couples_at" as const },
+        { key: "menage", mechanic: "couples_at" as const },
+        { key: "superficie_km2", mechanic: null },
+      ],
+    },
+  ];
+  const { populations } = populationsFrom(
+    types,
+    [
+      {
+        id: "t1",
+        typeName: "Territoire",
+        properties: { name: "RLS", population: 170146, ecole: 1.6, menage: 1.2, superficie_km2: 15 },
+      },
+    ],
+    new Map(),
+  );
+  assert.deepEqual(populations[0]!.couples, { ecole: 1.6, menage: 1.2 });
+});
+
+test("a layer left blank is left out rather than sent as zero", () => {
+  // Zero is a statement — nobody meets anybody there — and an empty field is
+  // not. Sending it would make a coupled transition inert while looking set.
+  const types = [
+    {
+      name: "Territoire",
+      properties: [
+        { key: "population", mechanic: "scales_incidence" as const },
+        { key: "travail", mechanic: "couples_at" as const },
+      ],
+    },
+  ];
+  const { populations } = populationsFrom(
+    types,
+    [{ id: "t1", typeName: "Territoire", properties: { name: "RLS", population: 100 } }],
+    new Map(),
+  );
+  assert.deepEqual(populations[0]!.couples, {});
+});
+
+test("a twin with no spreading model ships no couplings rather than a set of zeros", () => {
+  const types = [
+    { name: "Territoire", properties: [{ key: "population", mechanic: "scales_incidence" as const }] },
+  ];
+  const { populations } = populationsFrom(
+    types,
+    [{ id: "t1", typeName: "Territoire", properties: { name: "RLS", population: 100 } }],
+    new Map(),
+  );
+  assert.deepEqual(populations[0]!.couples, {});
+});

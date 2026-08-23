@@ -150,3 +150,39 @@ describe("schemaProblems", () => {
     assert.match(problems.get(1) ?? "", /unit measures/);
   });
 });
+
+describe("the spreading model", () => {
+  it("binds its mechanics the way a care requirement does", () => {
+    // The same idiom, third application: a type whose instances bind these
+    // becomes the spreading model, exactly as a type binding the first five
+    // becomes the care model. The engine learns no vocabulary — not
+    // "susceptible", not "school" — only which state a transition leaves,
+    // which it enters, how fast, and what makes it go.
+    const rows: PropertyDef[] = [
+      { key: "de_etat", type: "string", mechanic: "leaves_state" },
+      { key: "vers_etat", type: "string", mechanic: "enters_state" },
+      { key: "taux", type: "number", behaviour: "level", mechanic: "transition_rate" },
+      { key: "pousse_par", type: "string", mechanic: "driven_by_state" },
+      { key: "le_long_de", type: "string", mechanic: "couples_along" },
+      { key: "devient", type: "string", mechanic: "produces_demand" },
+    ];
+    for (const r of rows) assert.equal(propertyProblem(r), null, `${r.key}: ${propertyProblem(r)}`);
+  });
+
+  it("names a state, never counts it", () => {
+    // Binding a number to `leaves_state` gives a model keyed by "3", which runs
+    // and matches nothing — the failure `serves_severity` already guards against.
+    const bad: PropertyDef = {
+      key: "de_etat",
+      type: "number",
+      behaviour: "level",
+      mechanic: "leaves_state",
+    };
+    assert.match(String(propertyProblem(bad)), /leaves_state/);
+  });
+
+  it("keeps a coupling strength a quantity, because the engine multiplies by it", () => {
+    const bad: PropertyDef = { key: "ecole", type: "string", mechanic: "couples_at" };
+    assert.match(String(propertyProblem(bad)), /couples_at/);
+  });
+});

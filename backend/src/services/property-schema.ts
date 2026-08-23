@@ -74,6 +74,36 @@ export type PropertyType = (typeof PROPERTY_TYPES)[number];
  * authority sizes a catchment, and neither has to learn the other's word. The
  * export used to ship every population at size 0 with a gap explaining that the
  * ontology could not hold one. It can now.
+ *
+ * The last seven describe a *spreading process*, and they nearly doubled this
+ * list — which is worth saying, because the list being short is most of its
+ * value. They earn it by replacing a second engine, not by decorating this one.
+ *
+ * The alternative was to ship a compartmental model with S, E, I and R written
+ * into it. That answers one question — an epidemic — and the same failure as
+ * `care.stay_ticks`: a cyberattack travels a network of institutions, a heatwave
+ * travels nothing at all and pushes every catchment at once, a strike takes
+ * capacity away instead of adding demand. A model with `infectious` in its
+ * source code has already decided which of those a customer is allowed to ask.
+ *
+ * So the engine learns three shapes of transition and no vocabulary:
+ *
+ *   spontaneous   a rate out of a state, depending on nothing else
+ *   coupled       a rate proportional to how much of another state there is,
+ *                 travelling along a named coupling
+ *   forced        a rate an event perturbs over time — which needs no mechanic
+ *                 at all, because `object.property` effects already do exactly
+ *                 that to a declared number
+ *
+ * A type whose instances bind these becomes the spreading model, the way a type
+ * whose instances bind the first five becomes the care model. The engine never
+ * learns what "susceptible" or "school" means; it reads which state a transition
+ * leaves, which it enters, how fast, and what makes it go.
+ *
+ * `produces_demand` is the seam between the two models. A unit crossing that
+ * transition becomes demand at a named severity — which is how the thing that
+ * spreads reaches the thing that has beds, without either model importing the
+ * other's words.
  */
 export const MECHANICS = [
   "serves_severity",
@@ -82,6 +112,13 @@ export const MECHANICS = [
   "consumes_activity",
   "consumes_amount",
   "scales_incidence",
+  "leaves_state",
+  "enters_state",
+  "transition_rate",
+  "driven_by_state",
+  "couples_along",
+  "couples_at",
+  "produces_demand",
 ] as const;
 
 export type Mechanic = (typeof MECHANICS)[number];
@@ -100,6 +137,13 @@ export const MECHANIC_KIND: Record<Mechanic, "select" | "quantity"> = {
   consumes_activity: "select",
   consumes_amount: "quantity",
   scales_incidence: "quantity",
+  leaves_state: "select",
+  enters_state: "select",
+  transition_rate: "quantity",
+  driven_by_state: "select",
+  couples_along: "select",
+  couples_at: "quantity",
+  produces_demand: "select",
 };
 
 /** An institution's numeric range for a property. Both ends optional. */

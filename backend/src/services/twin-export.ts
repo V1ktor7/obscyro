@@ -65,6 +65,20 @@ export interface SimPopulation {
   name: string;
   size: number;
   served_by: string[];
+  /**
+   * How strongly this catchment couples, per named layer.
+   *
+   * The key is the property the institution named — `ecole`, `menage`,
+   * `reseau_electrique` — and a transition says which one it travels. Nothing
+   * here knows that a school is a place children go: it knows this catchment
+   * couples at 1.6 along something called `ecole`, and that a transition asked
+   * to travel it.
+   *
+   * Empty for a twin that has declared none, which is the honest state for a
+   * network with no spreading model rather than a set of zeros that would make
+   * every coupled transition silently inert.
+   */
+  couples: Record<string, number>;
 }
 
 /** A fact the export could not establish, and what it did instead. */
@@ -183,9 +197,15 @@ export function populationsFrom(
   membersByHolder: Map<string, string[]>,
 ): { populations: SimPopulation[]; unsized: string[] } {
   const sizeKeyByType = new Map<string, string>();
+  // The layer's *name* is the property key, which is why the keys travel rather
+  // than the values alone: a transition says it couples along `ecole`, and the
+  // only thing that can answer is a property called `ecole`.
+  const couplingKeysByType = new Map<string, string[]>();
   for (const t of objectTypes) {
     const p = t.properties.find((x) => x.mechanic === "scales_incidence");
     if (p) sizeKeyByType.set(t.name, p.key);
+    const couplings = t.properties.filter((x) => x.mechanic === "couples_at").map((x) => x.key);
+    if (couplings.length) couplingKeysByType.set(t.name, couplings);
   }
 
   const populations: SimPopulation[] = [];
@@ -199,11 +219,19 @@ export function populationsFrom(
     const size = typeof raw === "number" && Number.isFinite(raw) && raw > 0 ? raw : 0;
     const name = String(inst.properties.name ?? inst.properties.code ?? inst.id.slice(0, 8));
     if (size === 0) unsized.push(name);
+    const couples: Record<string, number> = {};
+    for (const key of couplingKeysByType.get(inst.typeName) ?? []) {
+      const v = inst.properties[key];
+      // A layer left blank is left out rather than sent as zero. Zero is a
+      // statement — nobody meets anybody there — and an empty field is not.
+      if (typeof v === "number" && Number.isFinite(v)) couples[key] = v;
+    }
     populations.push({
       id: `pop:${inst.id}`,
       name,
       size,
       served_by: [...new Set(membersByHolder.get(inst.id) ?? [])],
+      couples,
     });
   }
   return { populations, unsized };
@@ -530,6 +558,7 @@ export async function buildTwinExport(
       name: String(p?.properties.name ?? p?.properties.code ?? placeId.slice(0, 8)),
       size: 0,
       served_by: units,
+      couples: {},
     };
   });
 

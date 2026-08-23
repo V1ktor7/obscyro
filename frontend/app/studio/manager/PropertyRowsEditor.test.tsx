@@ -140,6 +140,8 @@ describe("binding a mechanic", () => {
       "dies_without",
       "consumes_amount",
       "scales_incidence",
+      "transition_rate",
+      "couples_at",
     ]);
   });
 
@@ -151,6 +153,11 @@ describe("binding a mechanic", () => {
       "",
       "serves_severity",
       "consumes_activity",
+      "leaves_state",
+      "enters_state",
+      "driven_by_state",
+      "couples_along",
+      "produces_demand",
     ]);
   });
 

@@ -46,6 +46,18 @@ CONSUMES_ACTIVITY = "consumes_activity"
 CONSUMES_AMOUNT = "consumes_amount"
 SCALES_INCIDENCE = "scales_incidence"
 
+# The spreading model. Read by the spreading engine rather than here, because
+# they describe how a unit moves between states, not what happens to it once it
+# arrives. Kept in this file so the mirror of the closed set stays in one place:
+# a mechanic added on the platform and not here has to be visibly absent.
+LEAVES_STATE = "leaves_state"
+ENTERS_STATE = "enters_state"
+TRANSITION_RATE = "transition_rate"
+DRIVEN_BY_STATE = "driven_by_state"
+COUPLES_ALONG = "couples_along"
+COUPLES_AT = "couples_at"
+PRODUCES_DEMAND = "produces_demand"
+
 
 class ContradictoryCareModel(ValueError):
     """Two rows describe one severity and disagree about it.
