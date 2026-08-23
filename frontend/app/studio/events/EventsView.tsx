@@ -141,6 +141,11 @@ export default function EventsView() {
   const [targets, setTargets] = useState<SimTarget[]>([]);
   const [composing, setComposing] = useState<SimEvent | "new" | null>(null);
   const [policies, setPolicies] = useState<SimPolicy[]>([]);
+  // A comparison over 241 facilities and 91 steps with every table collected
+  // takes about ninety seconds. A button that says "Running…" and nothing else
+  // for a minute and a half reads as hung, which is how a working run got
+  // reported as a broken service.
+  const [elapsed, setElapsed] = useState(0);
   const [chosenPolicies, setChosenPolicies] = useState<string[]>([]);
   const [writing, setWriting] = useState<SimPolicy | "new" | null>(null);
 
@@ -178,6 +183,12 @@ export default function EventsView() {
       setComposed([]);
     }
   }, [env]);
+
+  useEffect(() => {
+    if (!running) return;
+    const id = window.setInterval(() => setElapsed((n) => n + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [running]);
 
   const loadPolicies = useCallback(async () => {
     if (!env) return;
@@ -251,6 +262,7 @@ export default function EventsView() {
 
   async function run() {
     if (!env || running || blockedBecause) return;
+    setElapsed(0);
     setRunning(true);
     setError(null);
     try {
@@ -729,8 +741,14 @@ export default function EventsView() {
             }
               className="rounded-md bg-brand px-3 py-2 text-xs text-white hover:bg-brand-deep disabled:bg-ink-ghost"
             >
-              {running ? "Running…" : "Compare responses"}
+              {running ? `Running… ${elapsed}s` : "Compare responses"}
             </button>
+            {running ? (
+              <p className="-mt-2 text-[11px] leading-snug text-ink-faint">
+                Around ninety seconds for three responses with every table collected,
+                and about forty for the ranking alone.
+              </p>
+            ) : null}
             {blockedBecause ? (
               <p className="-mt-2 text-[11px] leading-snug text-ink-faint">
                 {blockedBecause}
