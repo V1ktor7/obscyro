@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { cn } from "@/lib/cn";
+
 import {
   listSimEvents,
   listSimPolicies,
@@ -20,6 +22,14 @@ import {
   withDemandFactor,
   type StepPoint,
 } from "./branch";
+import {
+  candidatesFrom,
+  frontier,
+  halfAndDouble,
+  rankOptions,
+  type RankedOption,
+  type ResultRow,
+} from "./options";
 
 /**
  * Running an event on the real map, and asking what a different day would have
@@ -69,7 +79,8 @@ export default function ReplayPanel({
   // December package fitted somewhere between 0.95 and 0.97 a day on Montréal's
   // own wave, and lifting it three weeks later produced no rebound at all.
   const [strength, setStrength] = useState("");
-  const [busy, setBusy] = useState<null | "trunk" | "branch">(null);
+  const [busy, setBusy] = useState<null | "trunk" | "branch" | "options">(null);
+  const [options, setOptions] = useState<RankedOption[] | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
@@ -203,6 +214,42 @@ export default function ReplayPanel({
     [env, eventId, busy, policies, branchWith, step, twinScenarioId, runs.length, trunk],
   );
 
+  const rank = useCallback(async () => {
+    if (!env || !eventId || busy || policies.length === 0) return;
+    setBusy("options");
+    setError(null);
+    setPlaying(false);
+    try {
+      // One call, not one per candidate: `compare` already runs several
+      // responses against one event and scores them, which is exactly this.
+      // Nothing is collected: ranking needs the scores, and asking for the
+      // per-facility trajectory would double the runs to draw a map nobody is
+      // looking at yet.
+      const candidates = candidatesFrom(policies, step, halfAndDouble);
+      const out = await runSimulation(env, {
+        eventId,
+        policies: ["null"],
+        customPolicies: candidates.map((c) => ({ id: c.id, name: c.label, rules: c.rules })),
+        censusAcuity: "urgence",
+        routeCapacity: 20,
+        twinScenarioId: twinScenarioId ?? undefined,
+        collect: [],
+      });
+      const wrong = runReportProblem(out);
+      if (wrong) throw new Error(wrong);
+      setOptions(rankOptions(out.rows as unknown as ResultRow[]));
+    } catch (err) {
+      setError((err as Error).message);
+      setOptions(null);
+    } finally {
+      setBusy(null);
+    }
+  }, [env, eventId, busy, policies, step, twinScenarioId]);
+
+  // Named here rather than inside the handler so the button can say how many
+  // runs the reader is about to wait for.
+  const candidateCount = candidatesFrom(policies, step, halfAndDouble).length;
+
   const frame = frames[Math.min(step, Math.max(0, frames.length - 1))];
   const last = Math.max(0, frames.length - 1);
 
@@ -316,6 +363,84 @@ export default function ReplayPanel({
               ) : null}
             </div>
           ) : null}
+
+          {/* The machine proposes, the reader decides. Nothing here blends what
+              an option costs with what it achieves into one number: that needs
+              an exchange rate between a dollar and a patient-day, and it is the
+              institution's to set. What can be said without one is which
+              options nothing could justify. */}
+          <div className="flex flex-col gap-2 border-t border-line pt-3">
+            <div className="flex items-center gap-2">
+              <span className="flex-1 text-[10px] uppercase tracking-wide text-ink-faint">
+                Options from step {step}
+              </span>
+              <button
+                type="button"
+                onClick={() => void rank()}
+                disabled={!!busy || policies.length === 0}
+                className="rounded border border-line px-2 py-1 text-[11px] text-ink-body hover:border-ink-ghost disabled:text-ink-ghost"
+              >
+                {busy === "options"
+                  ? `Ranking ${candidateCount}… ${elapsed}s`
+                  : `Rank ${candidateCount || "my"} options`}
+              </button>
+            </div>
+
+            {options ? (
+              options.length === 0 ? (
+                <p className="text-[10px] leading-snug text-ink-faint">
+                  Nothing to rank — the run came back without a baseline to measure
+                  against.
+                </p>
+              ) : (
+                <>
+                  {options.map((o) => (
+                    <div
+                      key={o.id}
+                      className={cn(
+                        "rounded border px-2 py-1.5",
+                        o.dominated ? "border-line bg-sunk/40" : "border-line bg-white",
+                      )}
+                    >
+                      <div className="flex items-baseline gap-2">
+                        <span
+                          className={cn(
+                            "flex-1 text-[11px] leading-snug",
+                            o.dominated ? "text-ink-faint" : "text-ink",
+                          )}
+                        >
+                          {o.label}
+                        </span>
+                        <span className="text-[11px] tabular-nums text-ink-faint">
+                          {o.cost > 0 ? `${Math.round(o.cost).toLocaleString("en-CA")} $` : "free"}
+                        </span>
+                      </div>
+                      <div className="text-[10px] tabular-nums text-ink-faint">
+                        {o.avoidedDeaths > 0
+                          ? `${Math.round(o.avoidedDeaths)} lives · `
+                          : ""}
+                        {Math.round(o.avoidedWaiting).toLocaleString("en-CA")} patient-days avoided
+                        {o.costPerDay !== null
+                          ? ` · ${o.costPerDay.toFixed(0)} $ each`
+                          : ""}
+                      </div>
+                      {o.dominated ? (
+                        <div className="text-[10px] leading-snug text-warn">
+                          Costs more and achieves less than “{o.dominatedBy}”. No price on a
+                          patient-day makes this the answer.
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                  <p className="text-[10px] leading-snug text-ink-faint">
+                    {frontier(options).length} of {options.length} are real choices. Picking
+                    among them is a judgement about what a patient-day is worth — which is
+                    yours, not the engine&rsquo;s.
+                  </p>
+                </>
+              )
+            ) : null}
+          </div>
 
           <div className="flex flex-col gap-2 border-t border-line pt-3">
             <span className="text-[10px] uppercase tracking-wide text-ink-faint">
