@@ -49,8 +49,15 @@ export const config = {
 
   /** Base URL of the hybrid ML simulation-service. Empty => ML sim disabled. */
   simServiceUrl: (process.env.SIM_SERVICE_URL ?? "").trim().replace(/\/$/, ""),
-  /** Upstream timeout for simulation-service calls (ms). */
-  simServiceTimeoutMs: intEnv("SIM_SERVICE_TIMEOUT_MS", 60_000, 1_000, 600_000),
+  /**
+   * Upstream timeout for simulation-service calls (ms).
+   *
+   * Five minutes, not one. A comparison over Montréal's twin — 241 facilities,
+   * 91 steps, three responses, with the per-facility trajectory collected —
+   * runs between 35 and 100 seconds, and the old minute cut off the ones that
+   * mattered most. The ones it cuts off now are genuinely stuck.
+   */
+  simServiceTimeoutMs: intEnv("SIM_SERVICE_TIMEOUT_MS", 300_000, 1_000, 900_000),
   /** Optional JSON graph spec (model DAG) used when a request omits one. */
   simDefaultGraph: (process.env.SIM_DEFAULT_GRAPH ?? "").trim(),
 

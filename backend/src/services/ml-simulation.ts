@@ -141,7 +141,12 @@ export async function proxyToSimService<T>(path: string, body: unknown): Promise
   }
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), config.simServiceTimeoutMs);
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, config.simServiceTimeoutMs);
+  const started = Date.now();
   try {
     const upstream = await fetch(`${base}${path}`, {
       method: "POST",
@@ -166,6 +171,21 @@ export async function proxyToSimService<T>(path: string, body: unknown): Promise
     return data as T;
   } catch (err) {
     if (err instanceof AppError) throw err;
+    // A run that took too long is not a service that is down, and saying so
+    // sends the reader to check whether the thing is up while it answers in
+    // seventy milliseconds. Montréal's twin is 241 facilities over 91 steps
+    // across three responses, and collecting the trajectory puts it past a
+    // minute — which the old ceiling cut off and then blamed on the network.
+    if (timedOut) {
+      throw new AppError(
+        "SIM_TIMEOUT",
+        `The run was still going after ${Math.round(config.simServiceTimeoutMs / 1000)}s ` +
+          `and was cut off. Fewer responses, a shorter horizon, or fewer tables to ` +
+          `collect will finish; raising SIM_SERVICE_TIMEOUT_MS lets it run longer.`,
+        504,
+        { elapsedMs: Date.now() - started },
+      );
+    }
     throw new AppError("SIM_UNAVAILABLE", "Simulation service is unreachable.", 503);
   } finally {
     clearTimeout(timer);
