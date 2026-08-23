@@ -30,18 +30,18 @@ export type GroupingAxis = "etablissement" | "territoire" | "mission";
 export const AXES: Array<{ id: GroupingAxis; label: string; hint: string }> = [
   {
     id: "etablissement",
-    label: "Établissement",
-    hint: "Qui possède quoi. Aucune frontière sur la carte — un CIUSSS n'est pas un lieu.",
+    label: "Establishment",
+    hint: "Who owns what. No boundaries on the map — a CIUSSS is not a place.",
   },
   {
     id: "territoire",
-    label: "Territoire",
-    hint: "Les RLS, limites officielles du MSSS. La carte dessine leurs frontières.",
+    label: "Territory",
+    hint: "The RLS, official MSSS boundaries. The map draws them.",
   },
   {
     id: "mission",
     label: "Mission",
-    hint: "Ce que fait l'installation. Aucune frontière — une mission est partout.",
+    hint: "What the facility does. No boundaries — a mission is everywhere.",
   },
 ];
 
@@ -94,8 +94,8 @@ function leafItem(n: TwinUnitNode, capacity: number): TreeItem {
     tone: toneFor(occ),
     hint:
       capacity > 0
-        ? `${capacity} lits et places`
-        : "Aucune capacité déclarée — un événement ici n'atteindrait rien.",
+        ? `${capacity} beds and places`
+        : "No capacity declared — an event here would reach nothing.",
   };
 }
 
@@ -162,8 +162,8 @@ function groupBy(
       value: pct != null ? `${Math.round(pct)}%` : null,
       tone: toneFor(pct),
       hint:
-        `${children.length} installation${children.length === 1 ? "" : "s"} · ${capacity} lits et places` +
-        (shared > 0 ? ` · ${shared} compté${shared === 1 ? "e" : "es"} aussi ailleurs` : ""),
+        `${children.length} facilit${children.length === 1 ? "y" : "ies"} · ${capacity} beds and places` +
+        (shared > 0 ? ` · ${shared} also counted elsewhere` : ""),
     });
   }
   return items.sort((a, b) => (b.count ?? 0) - (a.count ?? 0) || a.label.localeCompare(b.label));
@@ -197,10 +197,10 @@ function fromForest(n: TreeNode): TreeItem {
     tone: toneFor(worst),
     hint:
       n.children.length > 0
-        ? `${n.children.length} installation${n.children.length === 1 ? "" : "s"} · ${capacity} lits et places`
+        ? `${n.children.length} facilit${n.children.length === 1 ? "y" : "ies"} · ${capacity} beds and places`
         : capacity > 0
-          ? `${capacity} lits et places`
-          : "Aucune capacité déclarée — un événement ici n'atteindrait rien.",
+          ? `${capacity} beds and places`
+          : "No capacity declared — an event here would reach nothing.",
   };
 }
 
@@ -233,10 +233,10 @@ export function treeForAxis(
       const name = territoryOf.get(n.id);
       return name ? [name] : [];
     };
-    return groupBy(leaves, t, "Territoire non attribué");
+    return groupBy(leaves, t, "No territory");
   }
   // Before the register is imported every installation lands in one honest
   // bucket rather than the axis being hidden — an empty grouping you can see is
   // a prompt; a missing tab is a mystery.
-  return groupBy(leaves, (n) => missionsOf.get(n.id) ?? [], "Mission non déclarée");
+  return groupBy(leaves, (n) => missionsOf.get(n.id) ?? [], "No mission declared");
 }

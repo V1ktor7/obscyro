@@ -118,7 +118,7 @@ describe("grouping by territory", () => {
 
   it("names the unassigned rather than dropping them", () => {
     const t = treeForAxis(SNAP, "territoire", new Map([["nd", "RLS des Faubourgs"]]));
-    const orphan = t.find((x) => x.label === "Territoire non attribué");
+    const orphan = t.find((x) => x.label === "No territory");
     expect(orphan).toBeTruthy();
     expect(orphan!.children).toHaveLength(2);
   });
@@ -145,7 +145,7 @@ describe("grouping by mission", () => {
     // prompt; a hidden axis is a mystery.
     const t = treeForAxis(SNAP, "mission", TERRITORY);
     expect(t).toHaveLength(1);
-    expect(t[0]!.label).toBe("Mission non déclarée");
+    expect(t[0]!.label).toBe("No mission declared");
     expect(t[0]!.children).toHaveLength(3);
   });
 
@@ -171,19 +171,19 @@ describe("grouping by mission", () => {
     // That is what an overlapping grouping does, and a reader who adds the
     // columns without being told is the one who gets it wrong.
     const t = treeForAxis(SNAP, "mission", TERRITORY, MISSIONS);
-    expect(t.find((x) => x.label === "CHSGS")!.hint).toMatch(/1 comptée aussi ailleurs/);
-    expect(t.find((x) => x.label === "CHSLD")!.hint).toMatch(/1 comptée aussi ailleurs/);
+    expect(t.find((x) => x.label === "CHSGS")!.hint).toMatch(/1 also counted elsewhere/);
+    expect(t.find((x) => x.label === "CHSLD")!.hint).toMatch(/1 also counted elsewhere/);
   });
 
   it("says nothing about double counting when nothing is doubled", () => {
     // Territory is a partition, so the warning would be noise on every heading.
     const t = treeForAxis(SNAP, "territoire", TERRITORY);
-    expect(t[0]!.hint).not.toMatch(/ailleurs/);
+    expect(t[0]!.hint).not.toMatch(/elsewhere/);
   });
 
   it("still names the unclassified when only some are registered", () => {
     const t = treeForAxis(SNAP, "mission", TERRITORY, new Map([["nd", ["CHSGS"]]]));
-    const orphan = t.find((x) => x.label === "Mission non déclarée");
+    const orphan = t.find((x) => x.label === "No mission declared");
     expect(orphan!.children!.map((c) => c.label).sort()).toEqual(["CHSLD ANGUS", "HÔTEL-DIEU"]);
   });
 });

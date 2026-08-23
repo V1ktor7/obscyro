@@ -69,10 +69,10 @@ function toItem(n: TreeNode): TreeItem {
     tone: toneFor(worst),
     hint:
       n.children.length > 0
-        ? `${n.children.length} installation${n.children.length === 1 ? "" : "s"} · ${capacity} lits et places`
+        ? `${n.children.length} facilit${n.children.length === 1 ? "y" : "ies"} · ${capacity} beds and places`
         : capacity > 0
-          ? `${capacity} lits et places`
-          : "Aucune capacité déclarée — un événement ici n'atteindrait rien.",
+          ? `${capacity} beds and places`
+          : "No capacity declared — an event here would reach nothing.",
   };
 }
 

@@ -68,6 +68,8 @@ import {
 } from "@/lib/platform-api";
 import { useStudio } from "../StudioShell";
 import TreeExplorer, { type TreeItem } from "../TreeExplorer";
+import { BAND_COLOUR, bandOf, type Frame } from "../events/replay-frames";
+import ReplayPanel from "./ReplayPanel";
 
 import CoverageDialog from "./CoverageDialog";
 import { capacityOf, isSiteHidden } from "./units-tree";
@@ -193,6 +195,9 @@ const SHAPES_SRC = "twin-shapes";
 const SHAPES_FILL = "twin-shapes-fill";
 const SHAPES_LINE = "twin-shapes-line";
 const SHAPES_LABEL = "twin-shapes-label";
+const REPLAY_SRC = "twin-replay";
+const REPLAY_DOT = "twin-replay-dot";
+const REPLAY_RING = "twin-replay-ring";
 const DRAW_SRC = "twin-draw";
 const DRAW_FILL = "twin-draw-fill";
 const DRAW_LINE = "twin-draw-line";
@@ -296,7 +301,13 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   useEffect(() => {
     selectedRef.current = selectedId;
   }, [selectedId]);
-  const [panelTab, setPanelTab] = useState<"explorer" | "layers" | "views">("explorer");
+  const [panelTab, setPanelTab] = useState<"explorer" | "layers" | "views" | "replay">(
+    "explorer",
+  );
+  // The frame the replay is showing, or null when it is not running. While it
+  // holds a frame the DOM markers step aside: two things drawing the same site
+  // with two different colours is worse than either.
+  const [replayFrame, setReplayFrame] = useState<Frame | null>(null);
   const [axis, setAxis] = useState<GroupingAxis>("etablissement");
   // unit id -> territory name, resolved from the polygons rather than from a
   // field on the unit: an installation belongs to the territory it stands in.
@@ -850,6 +861,41 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
       });
     }
 
+    // Replay sits above the shapes and below the hand-drawn ring. Circles on a
+    // GeoJSON source rather than DOM markers: ninety-one frames of two hundred
+    // markers is a scrubber, and moving two hundred DOM nodes cannot answer a
+    // slider inside a frame. `setData` on a source can.
+    if (!map.getSource(REPLAY_SRC)) map.addSource(REPLAY_SRC, { type: "geojson", data: empty });
+    if (!map.getLayer(REPLAY_RING)) {
+      map.addLayer({
+        id: REPLAY_RING,
+        type: "circle",
+        source: REPLAY_SRC,
+        filter: [">", ["get", "waiting"], 0],
+        paint: {
+          "circle-radius": ["+", ["get", "r"], ["get", "queue"]],
+          "circle-color": "rgba(0,0,0,0)",
+          "circle-stroke-color": "#c23030",
+          "circle-stroke-width": 1.2,
+          "circle-stroke-opacity": 0.45,
+        },
+      });
+    }
+    if (!map.getLayer(REPLAY_DOT)) {
+      map.addLayer({
+        id: REPLAY_DOT,
+        type: "circle",
+        source: REPLAY_SRC,
+        paint: {
+          "circle-radius": ["get", "r"],
+          "circle-color": ["get", "colour"],
+          "circle-opacity": 0.9,
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 0.8,
+        },
+      });
+    }
+
     // The ring in progress sits above everything: it is what the hand is doing.
     if (!map.getSource(DRAW_SRC)) map.addSource(DRAW_SRC, { type: "geojson", data: empty });
     if (!map.getLayer(DRAW_FILL)) {
@@ -907,6 +953,53 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shapes, mapReady, styleMode, axis, hiddenIds]);
 
+  // The replay frame onto the map.
+  //
+  // Keyed by the unit ids the engine reports, which are the `contributingUnits`
+  // of a site rather than the site itself — the map draws places and the engine
+  // runs units, and joining them anywhere else would put a second definition of
+  // "where is this hospital" in the product.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    ensureShapeLayers(map);
+    const src = map.getSource(REPLAY_SRC) as GeoSource | undefined;
+    if (!src) return;
+    if (!replayFrame || !network) {
+      src.setData({ type: "FeatureCollection", features: [] });
+      return;
+    }
+    const byUnit = new Map(replayFrame.facilities.map((f) => [f.id, f]));
+    const features = [];
+    for (const site of network.sites) {
+      const pos = positions.get(site.id);
+      if (!pos) continue;
+      // A site may host several units; the worst of them is what colours it,
+      // for the same reason the worst activity colours a unit.
+      let worst: (typeof replayFrame.facilities)[number] | null = null;
+      let waiting = 0;
+      for (const u of site.contributingUnits ?? []) {
+        const f = byUnit.get(u.id);
+        if (!f) continue;
+        waiting += f.waiting;
+        if (!worst || f.worst > worst.worst) worst = f;
+      }
+      if (!worst) continue;
+      features.push({
+        type: "Feature" as const,
+        properties: {
+          colour: BAND_COLOUR[bandOf(worst.worst)],
+          r: Math.max(4, Math.sqrt(capacityOf(site)) * 0.7),
+          waiting,
+          queue: Math.min(14, Math.sqrt(waiting) * 1.6),
+        },
+        geometry: { type: "Point" as const, coordinates: pos },
+      });
+    }
+    src.setData({ type: "FeatureCollection", features } as never);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [replayFrame, network, positions, mapReady, styleMode]);
+
   // The ring being drawn: the closed polygon once it is one, the open line
   // before that, plus a dot on every corner so a misplaced click is visible.
   useEffect(() => {
@@ -959,6 +1052,9 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         // overlap, so matching on `site.id` hid nothing at all. A site is hidden
         // when every unit standing on it is.
         if (isSiteHidden(site, hiddenIds)) continue;
+        // The replay draws these sites itself. Two things painting one hospital
+        // in two different colours is worse than either of them alone.
+        if (replayFrame) continue;
         const pos = positions.get(site.id)!;
         const el = document.createElement("div");
         const occ = site.metrics.occupancyPct;
@@ -1016,7 +1112,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     return () => {
       mounted = false;
     };
-  }, [network, mapReady, positions, hiddenIds]);
+  }, [network, mapReady, positions, hiddenIds, replayFrame]);
 
   // Flow arcs: update sources when flows or toggles change.
   useEffect(() => {
@@ -1418,6 +1514,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                 ["explorer", "Explorer"],
                 ["layers", "Layers"],
                 ["views", "Views"],
+                ["replay", "Replay"],
               ] as const
             ).map(([id, label]) => (
               <button
@@ -1529,18 +1626,24 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               and hides every other — which is the gesture you actually want
               when you say "show me Centre-Sud": its 59 installations stay, the
               other 131 go. */}
+          {panelTab === "replay" ? (
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <ReplayPanel env={env} twinScenarioId={null} onFrame={setReplayFrame} />
+            </div>
+          ) : null}
+
           <div className={cn("min-h-0 flex-1 flex-col", panelTab === "explorer" ? "flex" : "hidden")}>
             {/* Three ways to group the same 190 installations, because they are
                 three different questions. Only one of them has boundaries the
                 map can honestly draw. */}
             <div className="shrink-0 border-b border-line px-2 pb-1.5 pt-2">
               <label className="mb-1 block text-[10px] uppercase tracking-wide text-ink-faint">
-                Grouper par
+                Group by
               </label>
               <select
                 value={axis}
                 onChange={(e) => setAxis(e.target.value as GroupingAxis)}
-                aria-label="Axe de regroupement"
+                aria-label="Grouping axis"
                 className="w-full rounded border border-line px-2 py-1 text-[11px] text-ink focus:border-brand focus:outline-none"
               >
                 {AXES.map((a) => (
