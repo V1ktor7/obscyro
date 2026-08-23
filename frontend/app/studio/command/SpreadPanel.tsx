@@ -5,8 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { runSpread, type SpreadResult } from "@/lib/platform-api";
 
-import { leaders, paintFor, type Measure } from "./spread-map";
-import { waveFrames } from "./spread-map";
+import { leaders, paintFor, resolveSeeds, waveFrames, type Measure } from "./spread-map";
 
 /**
  * Seed a spreading process, watch it cross the map, and act on it mid-wave.
@@ -59,6 +58,19 @@ export default function SpreadPanel({ env, twinScenarioId, onWave, shapeIds }: P
   const [seedState, setSeedState] = useState("");
   const [seedCount, setSeedCount] = useState("10");
   const [seeds, setSeeds] = useState<Record<string, Record<string, number>>>({});
+  /**
+   * Where the rest of a seeded catchment starts.
+   *
+   * Without this the obvious gesture — "put ten sick people in Villeray" —
+   * leaves the other 274 990 in no state at all, and a unit that is nowhere
+   * cannot be reached by anything. The run then comes back almost empty, which
+   * reads as a wave that fizzled rather than one that had nobody to infect.
+   *
+   * Only catchments the reader actually seeded are filled. Filling all twelve
+   * would mark every one of them as started and silence the gap that says a
+   * wave seeded in one territory never reaches the next.
+   */
+  const [restState, setRestState] = useState("");
   const [horizon, setHorizon] = useState("91");
   const [changes, setChanges] = useState<Change[]>([]);
   const [measure, setMeasure] = useState<Measure>({ kind: "incidence" });
@@ -79,6 +91,7 @@ export default function SpreadPanel({ env, twinScenarioId, onWave, shapeIds }: P
         setDeclared(out);
         setSeedPop((p) => p || out.populations[0]?.id || "");
         setSeedState((s) => s || out.vocabulary.states[0] || "");
+        setRestState((s) => s || "");
         setProbeError(null);
       })
       .catch((err: Error) => live && setProbeError(err.message))
@@ -133,6 +146,18 @@ export default function SpreadPanel({ env, twinScenarioId, onWave, shapeIds }: P
     return () => window.clearInterval(id);
   }, [playing, wave]);
 
+  const sizeOf = useMemo(() => {
+    const m = new Map((declared?.populations ?? []).map((p) => [p.id, p.size]));
+    return (id: string) => m.get(id) ?? 0;
+  }, [declared]);
+
+  // Derived rather than written into `seeds`, so changing the rest state
+  // re-computes every catchment instead of leaving one at the old answer.
+  const resolved = useMemo(
+    () => resolveSeeds(seeds, restState, sizeOf),
+    [seeds, restState, sizeOf],
+  );
+
   const seedTotal = Object.values(seeds).reduce(
     (n, byState) => n + Object.values(byState).reduce((a, b) => a + b, 0),
     0,
@@ -154,7 +179,7 @@ export default function SpreadPanel({ env, twinScenarioId, onWave, shapeIds }: P
     setPlaying(false);
     try {
       const out = await runSpread(env, {
-        seeds,
+        seeds: resolved,
         horizon: Math.max(1, Number(horizon) || 91),
         changes: changes
           .filter((c) => c.layer && Number.isFinite(Number(c.factor)))
@@ -175,7 +200,7 @@ export default function SpreadPanel({ env, twinScenarioId, onWave, shapeIds }: P
     } finally {
       setBusy(null);
     }
-  }, [env, busy, seeds, seedTotal, horizon, changes, saveAs, twinScenarioId]);
+  }, [env, busy, resolved, seedTotal, horizon, changes, saveAs, twinScenarioId]);
 
   if (probeError) {
     return (
@@ -246,12 +271,35 @@ export default function SpreadPanel({ env, twinScenarioId, onWave, shapeIds }: P
             Add
           </button>
         </div>
-        {Object.entries(seeds).map(([pop, byState]) => (
+        <div className="flex items-center gap-1">
+          <label className="text-[10px] text-ink-faint">Everyone else starts</label>
+          <select
+            value={restState}
+            onChange={(e) => setRestState(e.target.value)}
+            className="min-w-0 flex-1 rounded border border-line bg-canvas px-1.5 py-1 text-[11px] text-ink"
+          >
+            <option value="">nowhere — only what I typed</option>
+            {states.map((s) => (
+              <option key={s} value={s}>
+                in {s}
+              </option>
+            ))}
+          </select>
+        </div>
+        {restState === "" && Object.keys(seeds).length > 0 ? (
+          <p className="text-[10px] leading-snug text-warn">
+            A unit in no state cannot be reached by anything. Ten sick people in a
+            catchment of 275,000 leaves the other 274,990 nowhere, and the run comes back
+            almost empty — which reads as a wave that fizzled rather than one with nobody
+            to infect.
+          </p>
+        ) : null}
+        {Object.entries(resolved).map(([pop, byState]) => (
           <div key={pop} className="flex items-baseline gap-2 text-[10px] text-ink-faint">
             <span className="flex-1 truncate">{nameOf(pop)}</span>
             <span className="tabular-nums">
               {Object.entries(byState)
-                .map(([s, n]) => `${n} ${s}`)
+                .map(([s, n]) => `${Math.round(n).toLocaleString("en-CA")} ${s}`)
                 .join(", ")}
             </span>
             <button

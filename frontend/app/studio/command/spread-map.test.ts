@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { SpreadState } from "@/lib/platform-api";
 
-import { leaders, paintFor, shapeIdOf, waveFrames } from "./spread-map";
+import { leaders, paintFor, resolveSeeds, shapeIdOf, waveFrames } from "./spread-map";
 
 function s(tick: number, population: string, malade: number, inc: number): SpreadState {
   return {
@@ -99,5 +99,51 @@ describe("the list beside the map", () => {
     // Zero is not a small amount of something, and listing it as a leader
     // reads as a place with a little of the wave rather than none.
     expect(leaders(frames[0]!, values[0]!, (id) => id)).toHaveLength(1);
+  });
+});
+
+describe("filling in the rest of a seeded catchment", () => {
+  const size = (id: string) => (id === "pop:a" ? 1000 : 500);
+
+  it("puts everyone the reader did not place into the state they named", () => {
+    // "Ten sick people in Villeray" is the whole gesture. Without this the
+    // other 990 are in no state at all, and a unit that is nowhere cannot be
+    // reached by anything.
+    expect(resolveSeeds({ "pop:a": { malade: 10 } }, "sain", size)).toEqual({
+      "pop:a": { malade: 10, sain: 990 },
+    });
+  });
+
+  it("does not count the rest state against itself", () => {
+    // This runs on every keystroke. Counting the previous remainder as placed
+    // would shrink it a little more each pass.
+    const once = resolveSeeds({ "pop:a": { malade: 10 } }, "sain", size);
+    expect(resolveSeeds(once, "sain", size)).toEqual(once);
+  });
+
+  it("leaves a catchment the reader never seeded alone", () => {
+    // Filling all twelve would mark every one as started and silence the gap
+    // that says a wave seeded in one territory never reaches the next.
+    expect(resolveSeeds({ "pop:a": { malade: 10 } }, "sain", size)["pop:b"]).toBeUndefined();
+  });
+
+  it("changes nothing when the reader wants only what they typed", () => {
+    expect(resolveSeeds({ "pop:a": { malade: 10 } }, "", size)).toEqual({
+      "pop:a": { malade: 10 },
+    });
+  });
+
+  it("does not invent a negative remainder", () => {
+    // Seeding more than the catchment holds is the reader's statement about
+    // their own world, not an error to rebalance behind their back.
+    expect(resolveSeeds({ "pop:a": { malade: 5000 } }, "sain", size)).toEqual({
+      "pop:a": { malade: 5000 },
+    });
+  });
+
+  it("leaves the seeds it was given untouched", () => {
+    const given = { "pop:a": { malade: 10 } };
+    resolveSeeds(given, "sain", size);
+    expect(given["pop:a"]).toEqual({ malade: 10 });
   });
 });

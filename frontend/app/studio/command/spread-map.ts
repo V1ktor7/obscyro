@@ -66,6 +66,45 @@ export function waveFrames(states: readonly SpreadState[], measure: Measure): Wa
 }
 
 /**
+ * The seeds as the engine will read them.
+ *
+ * What the reader typed, plus the remainder of each seeded catchment in
+ * whichever state they said the rest are in. Without that step the obvious
+ * gesture — "ten sick people in Villeray" — leaves the other 274 990 in no
+ * state at all, and a unit that is nowhere cannot be reached by anything: the
+ * run comes back almost empty, which reads as a wave that fizzled rather than
+ * one that had nobody to infect.
+ *
+ * Only catchments that were actually seeded are filled. Filling all twelve
+ * would mark every one of them as started and silence the gap that says a wave
+ * seeded in one territory never reaches the next.
+ */
+export function resolveSeeds(
+  seeds: Readonly<Record<string, Record<string, number>>>,
+  restState: string,
+  sizeOf: (populationId: string) => number,
+): Record<string, Record<string, number>> {
+  const out: Record<string, Record<string, number>> = {};
+  for (const [pop, byState] of Object.entries(seeds)) {
+    const typed = { ...byState };
+    if (restState) {
+      // The rest state's own prior value is replaced, not added to: this runs
+      // again on every keystroke, and counting it would shrink the remainder
+      // by itself each time.
+      const placed = Object.entries(typed)
+        .filter(([st]) => st !== restState)
+        .reduce((a, [, n]) => a + n, 0);
+      const rest = sizeOf(pop) - placed;
+      // Never negative. Seeding more units than the catchment holds is the
+      // reader's statement about their own world, not an error to rebalance.
+      if (rest > 0) typed[restState] = rest;
+    }
+    out[pop] = typed;
+  }
+  return out;
+}
+
+/**
  * The ontology instance a catchment was built from.
  *
  * `populationsFrom` names a catchment `pop:<instance id>`, and the map keys its

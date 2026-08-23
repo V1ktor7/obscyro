@@ -558,3 +558,39 @@ def test_two_layers_that_differ_actually_move_different_amounts() -> None:
         return sum(sum(s.incidence.values()) for s in steps)
 
     assert total(0.10) > total(0.05)
+
+
+def test_a_catchment_seeded_but_not_filled_is_named() -> None:
+    # Ten units into a catchment of ten thousand leaves 9 990 in no state at
+    # all — not susceptible, not immune, absent. The run comes back nearly
+    # empty and reads as a wave that fizzled, not one with nobody to reach.
+    from app.events.api import SpreadRequest, spread_route
+
+    out = spread_route(
+        SpreadRequest.model_validate(_request(seeds={"pop:a": {"malade": 10}}))
+    )
+    gap = next(g for g in out.gaps if g["code"] == "CATCHMENT_PARTLY_PLACED")
+    assert "pop:a" in gap["subjects"]
+    assert "9,990" in gap["message"]
+
+
+def test_a_catchment_filled_to_its_head_count_says_nothing() -> None:
+    from app.events.api import SpreadRequest, spread_route
+
+    out = spread_route(
+        SpreadRequest.model_validate(_request())
+    )
+    assert "CATCHMENT_PARTLY_PLACED" not in [g["code"] for g in out.gaps]
+
+
+def test_an_unseeded_catchment_is_not_also_called_underfilled() -> None:
+    # It is already named by CATCHMENT_NOT_SEEDED, and saying it twice in two
+    # vocabularies makes a reader look for two problems.
+    from app.events.api import SpreadRequest, spread_route
+
+    out = spread_route(
+        SpreadRequest.model_validate(_request())
+    )
+    codes = [g["code"] for g in out.gaps]
+    assert "CATCHMENT_NOT_SEEDED" in codes
+    assert "CATCHMENT_PARTLY_PLACED" not in codes

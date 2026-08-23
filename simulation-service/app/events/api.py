@@ -196,6 +196,33 @@ def spread_route(req: SpreadRequest) -> SpreadResponse:
                 "subjects": quiet[:20],
             }
         )
+    # Seeded is not the same as placed. Ten units into a catchment of 275 000
+    # leaves 274 990 in no state at all — not susceptible, not immune, simply
+    # absent — and the run comes back almost empty looking like a wave that
+    # fizzled rather than one that had nobody to reach. Reported per catchment
+    # and by name, because the reader who did this typed one number and has no
+    # reason to suspect the other 274 990 needed typing too.
+    short = []
+    for p in ex.populations:
+        if p.id not in seeded or p.size <= 0:
+            continue
+        placed = sum(req.seeds.get(p.id, {}).values())
+        if p.size - placed >= 1:
+            short.append((p.id, p.name, p.size - placed))
+    if short:
+        gaps.append(
+            {
+                "code": "CATCHMENT_PARTLY_PLACED",
+                "message": (
+                    f"{len(short)} seeded catchment(s) have units in no state at all — "
+                    f"{short[0][1] or short[0][0]} alone has {short[0][2]:,.0f} of them. "
+                    "Nothing can happen to a unit that is nowhere; put the rest of the "
+                    "head count in a state."
+                ),
+                "subjects": [pid for pid, _, _ in short[:20]],
+            }
+        )
+
     unknown = sorted({c.layer for c in req.changes} - set(model.couplings))
     if unknown:
         gaps.append(
