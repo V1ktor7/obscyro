@@ -245,3 +245,213 @@ def test_a_step_with_nobody_crossing_writes_no_effect() -> None:
     model = spread_model_from([tr("t1", de="a", vers="b", taux=0.5)], SCHEMA)
     pops = [Pop("p", 100)]
     assert incidence_effects(run_spread(model, pops, {"p": {"a": 100}}, 3), pops) == []
+
+
+# --- the structural intervention --------------------------------------------
+
+
+def _sir():
+    return spread_model_from(
+        [
+            tr("c", de="sain", vers="malade", taux=0.08, pousse="malade", voie="ecole"),
+            tr("r", de="malade", vers="retabli", taux=0.2, devient="hospitalisation"),
+        ],
+        SCHEMA,
+    )
+
+
+def test_closing_a_layer_leaves_the_days_before_it_untouched() -> None:
+    """The same invariant branching rests on, one model down.
+
+    A measure that starts on day 30 cannot change day 29, and if it does then
+    the difference on screen is not the one anybody asked about.
+    """
+    from app.events.spread import LayerChange
+
+    model = _sir()
+    pop = [Pop("p", 10_000, {"ecole": 3.0})]
+    seeds = {"p": {"sain": 9900, "malade": 100}}
+    plain = run_spread(model, pop, seeds, horizon=60)
+    closed = run_spread(
+        model, pop, seeds, horizon=60, changes=[LayerChange(layer="ecole", factor=0.0, from_step=30)]
+    )
+    for a, b in zip(plain[:30], closed[:30]):
+        assert a.states == b.states
+    assert closed[-1].states["retabli"] < plain[-1].states["retabli"]
+
+
+def test_a_window_that_closes_puts_the_coupling_back() -> None:
+    # "Schools shut for two weeks" is not "schools shut forever", and a model
+    # that cannot say the difference cannot answer the question that started
+    # all of this.
+    from app.events.spread import LayerChange
+
+    model = _sir()
+    pop = [Pop("p", 10_000, {"ecole": 3.0})]
+    seeds = {"p": {"sain": 9900, "malade": 100}}
+    forever = run_spread(
+        model, pop, seeds, horizon=80, changes=[LayerChange("ecole", 0.0, from_step=20)]
+    )
+    fortnight = run_spread(
+        model, pop, seeds, horizon=80, changes=[LayerChange("ecole", 0.0, 20, 34)]
+    )
+    assert fortnight[-1].states["retabli"] > forever[-1].states["retabli"]
+
+
+def test_four_more_days_of_closure_is_a_question_the_model_can_answer() -> None:
+    # The sentence this whole design exists for. Two windows, four days apart.
+    from app.events.spread import LayerChange
+
+    model = _sir()
+    pop = [Pop("p", 10_000, {"ecole": 3.0})]
+    seeds = {"p": {"sain": 9900, "malade": 100}}
+    short = run_spread(model, pop, seeds, horizon=90, changes=[LayerChange("ecole", 0.0, 20, 34)])
+    longer = run_spread(model, pop, seeds, horizon=90, changes=[LayerChange("ecole", 0.0, 20, 38)])
+    assert longer[-1].states["retabli"] < short[-1].states["retabli"]
+
+
+def test_two_measures_on_one_layer_compound() -> None:
+    # What happens on the ground, and what a reader who wrote both would expect.
+    # The last one winning would silently discard a measure they declared.
+    #
+    # Measured on infection alone: with recovery in the model the count of the
+    # sick is a net of two flows, and a weaker coupling makes it fall rather
+    # than rise — which is true, and not what this test is about.
+    from app.events.spread import LayerChange
+
+    model = spread_model_from(
+        [tr("c", de="sain", vers="malade", taux=0.08, pousse="malade", voie="ecole")], SCHEMA
+    )
+    pop = [Pop("p", 10_000, {"ecole": 4.0})]
+    seeds = {"p": {"sain": 9900, "malade": 100}}
+    one = run_spread(model, pop, seeds, horizon=1, changes=[LayerChange("ecole", 0.5)])
+    both = run_spread(
+        model, pop, seeds, horizon=1, changes=[LayerChange("ecole", 0.5), LayerChange("ecole", 0.5)]
+    )
+    assert both[0].states["malade"] - 100 == pytest.approx((one[0].states["malade"] - 100) / 2)
+
+
+def test_a_change_to_a_layer_nobody_declared_does_nothing_rather_than_raising() -> None:
+    # A stale measure naming a layer that has gone is a rule that reaches
+    # nothing, which the run should survive and the gap list should mention —
+    # not a crash halfway through an integration.
+    from app.events.spread import LayerChange
+
+    model = _sir()
+    pop = [Pop("p", 10_000, {"ecole": 3.0})]
+    seeds = {"p": {"sain": 9900, "malade": 100}}
+    plain = run_spread(model, pop, seeds, horizon=10)
+    stale = run_spread(model, pop, seeds, horizon=10, changes=[LayerChange("metro", 0.0)])
+    assert [s.states for s in plain] == [s.states for s in stale]
+
+
+# --- the endpoint -----------------------------------------------------------
+
+
+def _request(**over):
+    """The smallest twin that can spread: one catchment, one coupling, a SIR."""
+    body = {
+        "system": {
+            "facilities": [],
+            "objects": [
+                {"id": "c", "type": "Transition", "role": None, "at": None,
+                 "properties": {"de": "sain", "vers": "malade", "taux": 0.08,
+                                "pousse": "malade", "voie": "ecole"}},
+                {"id": "r", "type": "Transition", "role": None, "at": None,
+                 "properties": {"de": "malade", "vers": "retabli", "taux": 0.2,
+                                "devient": "hospitalisation"}},
+            ],
+            "object_types": SCHEMA.model_dump()["types"],
+            "populations": [
+                {"id": "pop:a", "name": "A", "size": 10_000, "served_by": [], "couples": {"ecole": 3.0}},
+                {"id": "pop:b", "name": "B", "size": 8_000, "served_by": [], "couples": {"ecole": 2.0}},
+            ],
+        },
+        "seeds": {"pop:a": {"sain": 9_900, "malade": 100}},
+        "horizon": 20,
+    }
+    body.update(over)
+    return body
+
+
+def test_the_endpoint_writes_the_run_as_an_event() -> None:
+    from app.events.api import SpreadRequest, spread_route
+
+    out = spread_route(SpreadRequest.model_validate(_request()))
+    assert out.event["horizon"] == 20
+    assert out.event["effects"], "the run produced no demand at all"
+    assert all(e["target"] == "demand.incidence" for e in out.event["effects"])
+    assert out.vocabulary["states"] == ["malade", "retabli", "sain"]
+    assert out.vocabulary["couplings"] == ["ecole"]
+
+
+def test_an_unseeded_catchment_is_named_rather_than_left_to_be_noticed() -> None:
+    # Every declared coupling is internal, so B stays empty for the whole run.
+    # A reader who expects a wave to travel has to be told here, not by squinting
+    # at a map.
+    from app.events.api import SpreadRequest, spread_route
+
+    out = spread_route(SpreadRequest.model_validate(_request()))
+    codes = [g["code"] for g in out.gaps]
+    assert "CATCHMENT_NOT_SEEDED" in codes
+    assert "pop:b" in next(g for g in out.gaps if g["code"] == "CATCHMENT_NOT_SEEDED")["subjects"]
+
+
+def test_a_measure_on_a_coupling_nobody_travels_is_reported() -> None:
+    from app.events.api import SpreadRequest, spread_route
+
+    out = spread_route(
+        SpreadRequest.model_validate(_request(changes=[{"layer": "metro", "factor": 0.0}]))
+    )
+    assert "CHANGE_ON_UNKNOWN_COUPLING" in [g["code"] for g in out.gaps]
+
+
+def test_closing_a_coupling_through_the_endpoint_reaches_the_event() -> None:
+    from app.events.api import SpreadRequest, spread_route
+
+    plain = spread_route(SpreadRequest.model_validate(_request()))
+    closed = spread_route(
+        SpreadRequest.model_validate(
+            _request(changes=[{"layer": "ecole", "factor": 0.0, "from_step": 5}])
+        )
+    )
+    total = lambda r: sum(e["value"] for e in r.event["effects"])
+    assert total(closed) < total(plain)
+
+
+def test_a_twin_that_declares_no_spreading_model_is_refused_with_a_reason() -> None:
+    from fastapi import HTTPException
+
+    from app.events.api import SpreadRequest, spread_route
+
+    body = _request()
+    body["system"]["object_types"] = [{"name": "Lit", "role": "space", "properties": []}]
+    with pytest.raises(HTTPException) as caught:
+        spread_route(SpreadRequest.model_validate(body))
+    assert caught.value.status_code == 422
+    assert "leaves_state" in str(caught.value.detail)
+
+
+def test_a_run_with_nothing_seeded_is_refused_and_names_the_states() -> None:
+    # Every state empty means nothing can move, and the run would come back
+    # looking like a wave that fizzled rather than one that never started.
+    from fastapi import HTTPException
+
+    from app.events.api import SpreadRequest, spread_route
+
+    with pytest.raises(HTTPException) as caught:
+        spread_route(SpreadRequest.model_validate(_request(seeds={})))
+    assert caught.value.status_code == 422
+    assert "sain" in str(caught.value.detail)
+
+
+def test_a_declaration_with_no_instances_is_refused() -> None:
+    from fastapi import HTTPException
+
+    from app.events.api import SpreadRequest, spread_route
+
+    body = _request()
+    body["system"]["objects"] = []
+    with pytest.raises(HTTPException) as caught:
+        spread_route(SpreadRequest.model_validate(body))
+    assert "no instance fills them in" in str(caught.value.detail)

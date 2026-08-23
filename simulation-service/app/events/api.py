@@ -27,7 +27,16 @@ from app.events.harness import compare
 from app.events.mechanics import ContradictoryCareModel, care_model_from
 from app.events.ontology import OntologyExport, UnrunnableExport, load
 from app.events.scoring import Objective
+from app.events.objects import PropertySchema
 from app.events.policy import Policy
+from app.events.spread import (
+    ContradictorySpreadModel,
+    LayerChange,
+    declares_spread,
+    incidence_effects,
+    run_spread,
+    spread_model_from,
+)
 from app.events.targets import CATALOGUE
 from app.events.templates import EVENTS, POLICIES, care_model_for
 
@@ -85,6 +94,112 @@ class CompareResponse(BaseModel):
     # run that produced `rows`, never a second one: a download that re-ran the
     # simulation could disagree with the summary it sits beneath.
     datasets: list[Dataset] = Field(default_factory=list)
+
+
+class SpreadRequest(BaseModel):
+    """Run the spreading model the twin declared, and write what it produced."""
+
+    system: OntologyExport
+    #: How many units start in each state, per catchment. Nothing is seeded on
+    #: the caller's behalf: a wave has to start somewhere and only the author
+    #: knows where, and seeding it here would be the engine deciding that the
+    #: outbreak began in the biggest territory.
+    seeds: dict[str, dict[str, float]] = Field(default_factory=dict)
+    horizon: int = 91
+    #: Named couplings, scaled over windows. Closing a school is `factor: 0` on
+    #: the layer it is — the counterfactual is built, not estimated.
+    changes: list[LayerChange] = Field(default_factory=list)
+
+
+class SpreadResponse(BaseModel):
+    #: The run, written as an event. This is the seam: the effects land in the
+    #: engine that already queues, serves and counts, so the branch, the replay,
+    #: the map and the downloads work on it unchanged.
+    event: dict[str, Any]
+    #: What sat in each state, per step and catchment, for the map to draw.
+    states: list[dict[str, Any]]
+    #: Every state and coupling the declaration names, so a caller can seed and
+    #: intervene without guessing at spelling.
+    vocabulary: dict[str, list[str]]
+    gaps: list[dict[str, Any]] = Field(default_factory=list)
+
+
+@router.post("/spread", response_model=SpreadResponse)
+def spread_route(req: SpreadRequest) -> SpreadResponse:
+    ex = req.system
+    schema = PropertySchema(types=ex.object_types)
+    if not declares_spread(schema):
+        raise HTTPException(
+            422,
+            "No object type binds `leaves_state` and `enters_state`, so this twin "
+            "describes no spreading process. Declare a type whose instances are its "
+            "transitions, the way a care model is declared.",
+        )
+    try:
+        model = spread_model_from(list(ex.objects), schema)
+    except ContradictorySpreadModel as exc:
+        raise HTTPException(422, f"The declared spreading model disagrees with itself: {exc}") from exc
+    if not model.transitions:
+        raise HTTPException(
+            422,
+            "The type binds the mechanics but no instance fills them in, so nothing "
+            "would move. A model with no transitions is not a run that found nothing.",
+        )
+
+    gaps: list[dict[str, Any]] = []
+    seeded = {p for p, s in req.seeds.items() if any(v > 0 for v in s.values())}
+    if not seeded:
+        raise HTTPException(
+            422,
+            "Nothing is seeded, so every state starts empty and nothing can move. "
+            f"Put units in a state for at least one catchment; the states declared "
+            f"here are {', '.join(model.states)}.",
+        )
+    # Stated rather than discovered while reading a map: every declared coupling
+    # is inside a catchment, so a wave seeded in one never reaches the next.
+    quiet = [p.id for p in ex.populations if p.id not in seeded]
+    if quiet:
+        gaps.append(
+            {
+                "code": "CATCHMENT_NOT_SEEDED",
+                "message": (
+                    f"{len(quiet)} catchment(s) start empty, and nothing crosses between "
+                    "them: every declared coupling is internal. They will stay empty for "
+                    "the whole run."
+                ),
+                "subjects": quiet[:20],
+            }
+        )
+    unknown = sorted({c.layer for c in req.changes} - set(model.couplings))
+    if unknown:
+        gaps.append(
+            {
+                "code": "CHANGE_ON_UNKNOWN_COUPLING",
+                "message": (
+                    f"{', '.join(unknown)} is scaled by a measure and travelled by no "
+                    "transition, so that measure reaches nothing."
+                ),
+                "subjects": unknown,
+            }
+        )
+
+    steps = run_spread(model, list(ex.populations), req.seeds, req.horizon, req.changes)
+    effects = incidence_effects(steps, list(ex.populations))
+    return SpreadResponse(
+        event={
+            "id": "spread",
+            "name": "Spreading model",
+            "description": "",
+            "horizon": req.horizon,
+            "effects": effects,
+        },
+        states=[
+            {"tick": s.tick, "population": s.population, "states": s.states, "incidence": s.incidence}
+            for s in steps
+        ],
+        vocabulary={"states": model.states, "couplings": model.couplings},
+        gaps=gaps,
+    )
 
 
 @router.get("/catalogue")

@@ -184,6 +184,30 @@ def spread_model_from(
     return model
 
 
+@dataclass(frozen=True)
+class LayerChange:
+    """A named coupling, scaled over a window.
+
+    This is what a structural intervention *is* here, and why it needs no
+    estimation: closing a school is `factor=0` on the layer the school is, and
+    the counterfactual is built rather than inferred. Fitted against an observed
+    curve the same question was not answerable at all — the closure landed on
+    the same day as the holidays, and no method separates two things that only
+    ever happened together.
+    """
+
+    layer: str
+    factor: float
+    from_step: int = 0
+    #: None runs to the end. A window that closes puts the coupling back.
+    to_step: int | None = None
+
+    def active(self, tick: int) -> bool:
+        if tick < self.from_step:
+            return False
+        return self.to_step is None or tick <= self.to_step
+
+
 @dataclass
 class SpreadStep:
     """One step of one catchment, as the caller needs to read it."""
@@ -201,6 +225,7 @@ def run_spread(
     populations: list,
     seeds: dict[str, dict[str, float]],
     horizon: int,
+    changes: list[LayerChange] | None = None,
 ) -> list[SpreadStep]:
     """Integrate the declared model forward, one catchment at a time.
 
@@ -214,6 +239,11 @@ def run_spread(
     rate above one drains a state past zero and the deficit turns up as demand
     that was never there, which reads as a bigger wave rather than as a rate
     somebody typed wrong.
+
+    `changes` scale named couplings over windows. They multiply where several
+    overlap, so two measures on one layer compound rather than the last one
+    winning — which is what happens on the ground and what a reader would expect
+    from having written both.
     """
     out: list[SpreadStep] = []
     if not model.transitions or horizon <= 0:
@@ -227,8 +257,16 @@ def run_spread(
     }
     size = {p.id: float(getattr(p, "size", 0.0) or 0.0) for p in populations}
     couples = {p.id: dict(getattr(p, "couples", {}) or {}) for p in populations}
+    changes = changes or []
 
     for tick in range(horizon):
+        # Recomputed per tick rather than per transition: the same layer is read
+        # by every transition that travels it, and scaling it twelve times would
+        # be twelve chances to drift.
+        scaled: dict[str, float] = {}
+        for ch in changes:
+            if ch.active(tick):
+                scaled[ch.layer] = scaled.get(ch.layer, 1.0) * ch.factor
         for p in populations:
             pid = p.id
             here = stock[pid]
@@ -246,6 +284,8 @@ def run_spread(
                     # catchment: the rate is then the whole contact-and-
                     # transmission product, and there is nothing to look up.
                     strength = couples[pid].get(t.along, 0.0) if t.along else 1.0
+                    if t.along and t.along in scaled:
+                        strength *= scaled[t.along]
                     flow = t.rate * strength * share * available
                 else:
                     flow = t.rate * available
