@@ -56,16 +56,16 @@ export function eventFromRows(
   rows: ReadonlyArray<Record<string, unknown>>,
   map: RowMapping,
 ): BuiltEvent {
-  const dated = rows
-    .map((r) => ({ when: String(r[map.when] ?? "").trim(), raw: r[map.count] }))
-    // A row with no date cannot be placed on a timeline. Dropped rather than
-    // pushed to step zero, where it would read as a spike on the first day.
-    .filter((r) => r.when !== "");
+  const all = rows.map((r) => ({ when: String(r[map.when] ?? "").trim(), raw: r[map.count] }));
+  // A row with no date cannot be placed on a timeline — but it is counted as
+  // skipped rather than filtered away here, because a file where a tenth of the
+  // dates are blank should say so, not silently describe a shorter wave.
+  const dated = all.filter((r) => r.when !== "");
   const origin =
     map.origin ?? dated.map((r) => r.when).sort()[0] ?? new Date().toISOString().slice(0, 10);
 
   const effects: Array<Record<string, unknown>> = [];
-  let skipped = 0;
+  let skipped = all.length - dated.length;
   let horizon = 0;
   let total = 0;
   const seen = new Set<number>();
