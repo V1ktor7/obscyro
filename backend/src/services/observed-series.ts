@@ -79,6 +79,60 @@ export function asDaily(series: ReadonlyArray<number | null>): Array<number | nu
   return out;
 }
 
+/**
+ * A series read on the log scale.
+ *
+ * Not a knob to reach for when a result disappoints — a decision about what the
+ * measurement *is*. A viral concentration is log-normal and spans orders of
+ * magnitude: over one epidemic these files run from 0.0000 to 0.064, so a
+ * Pearson correlation on the raw values is decided almost entirely by whichever
+ * day happened to be largest, and a single bad sample outranks a whole wave.
+ * On the log scale a doubling counts the same wherever it happens, which is how
+ * exponential growth is actually compared.
+ *
+ * Zero and negative values become unknown rather than minus infinity: below the
+ * detection limit means "we could not see it", not "there was none".
+ */
+export function asLog(series: ReadonlyArray<number | null>): Array<number | null> {
+  return series.map((v) => (v === null || v === undefined || v <= 0 ? null : Math.log10(v)));
+}
+
+/**
+ * Values improbably far from the rest of the series, as unknown.
+ *
+ * A single sample a hundred times the neighbouring week is a plant event or a
+ * pipetting error, and Pearson has no defence against it: one such point can
+ * set the sign of a whole episode. Removed rather than winsorised, because
+ * pulling it to a threshold would keep a number nobody measured.
+ *
+ * The cut is in median-absolute-deviations, which is itself resistant — using a
+ * standard deviation would let the outlier widen the very band meant to catch
+ * it.
+ */
+export function withoutOutliers(
+  series: ReadonlyArray<number | null>,
+  mads = 6,
+): { series: Array<number | null>; removed: number } {
+  const seen = series.filter((v): v is number => v !== null && v !== undefined);
+  if (seen.length < 8) return { series: series.slice(), removed: 0 };
+  const sorted = seen.slice().sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)]!;
+  const devs = seen.map((v) => Math.abs(v - median)).sort((a, b) => a - b);
+  const mad = devs[Math.floor(devs.length / 2)]!;
+  // A series with no spread has no outliers, only repetition.
+  if (mad <= 0) return { series: series.slice(), removed: 0 };
+  let removed = 0;
+  const out = series.map((v) => {
+    if (v === null || v === undefined) return null;
+    if (Math.abs(v - median) / mad > mads) {
+      removed++;
+      return null;
+    }
+    return v;
+  });
+  return { series: out, removed };
+}
+
 export interface Peak {
   step: number;
   value: number;

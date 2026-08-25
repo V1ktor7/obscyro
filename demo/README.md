@@ -96,6 +96,50 @@ avant de regarder le résultat, sinon on ne mesure plus rien, on négocie.
 Les trois autres signaux sont du bruit : la positivité saute de −14 à +12 selon
 la vague, ce qui est la signature d'un décalage qui n'est pas identifié du tout.
 
+## Eaux usées — ce que trois vagues permettent de dire
+
+`phac-eaux-usees-montreal.csv` et `phac-bassins-collecte-montreal.csv` viennent de
+l'[Enquête canadienne sur les eaux usées](https://open.canada.ca/data/fr/dataset/f9e0d3ad-223c-490a-ac36-f918b42b823f)
+(ASPC / Statistique Canada). Deux intercepteurs montréalais, 528 mesures sur
+89 jours d'échantillonnage, du 2021-04-02 au 2022-01-30. Les bassins portent leur
+propre population — Nord 1 018 516, Sud 1 033 404 — donc la pondération ne se
+devine pas.
+
+Le programme *québécois* de l'INSPQ couvre une fenêtre plus longue mais **n'a pas
+de CSV ouvert** : il n'existe que dans un tableau de bord.
+
+Trois vagues sont couvertes : avril 2021, septembre 2021, et Omicron avec son pic.
+
+| Traitement | avance | r | n | n effectif | survit |
+|---|---|---|---|---|---|
+| Concentration brute | 21 j | **−0,108** | 89 | 17 | non |
+| Log, aberrants retirés | **7 j** | **0,694** | 84 | 16 | non |
+
+**Le signal est réel.** La ligne de base tourne autour de 0,0001 tout l'été 2021 ;
+elle passe à 0,0044 le 23 décembre, quand les admissions montent de 7 à 40. Un
+facteur vingt, au bon moment.
+
+**Pourquoi le log.** Une charge virale est log-normale et court sur trois ordres
+de grandeur. Sur l'échelle brute, une corrélation de Pearson est décidée presque
+entièrement par la journée la plus haute — et un seul mauvais échantillon, comme
+le 2021-05-20 à cent fois la ligne de base, renverse le signe d'une vague
+entière. Sur l'échelle log, un doublement compte pareil en bas et en haut.
+
+**Divulgation honnête :** ce changement a été fait *après* avoir vu le résultat
+brut nul. Sa justification tient sans lui — c'est la pratique courante du domaine
+et ça découle de la nature de la mesure, pas du résultat — mais vous devez le
+savoir pour en juger.
+
+**Ce que ça ne dit pas.** L'avance de 7 jours ne franchit pas la barre : 84 points
+ne portent que 16 observations indépendantes, contre 43 combinaisons essayées. Et
+la réplication vague par vague **échoue** — les fenêtres de 61 jours ne
+contiennent que 8 à 20 échantillons chacune, et le décalage trouvé se colle au
+bord de la recherche, ce qui est la signature d'un décalage non identifié.
+
+Autrement dit : l'avance d'environ une semaine est cohérente avec la littérature
+et apparaît dans ces données, **mais ces trois vagues ne suffisent pas à
+l'établir**. Il faudrait la fenêtre québécoise complète — qui n'est pas ouverte.
+
 ## Rejouer le montage
 
 `provision.cjs` monte le projet **Montréal — données ouvertes** entièrement par

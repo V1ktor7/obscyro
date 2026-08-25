@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { alignSeries, asDaily, compareSeries } from "./observed-series.js";
+import {
+  alignSeries,
+  asDaily,
+  asLog,
+  compareSeries,
+  withoutOutliers,
+} from "./observed-series.js";
 
 const OPTS = { when: "date", value: "n", origin: "2021-12-01", horizon: 5 };
 
@@ -106,5 +112,53 @@ describe("comparing a run against what happened", () => {
     assert.equal(fit.n, 0);
     assert.equal(fit.meanAbsoluteError, null);
     assert.equal(fit.peakOffset, null);
+  });
+});
+
+describe("reading a series on the scale it lives on", () => {
+  it("compares a doubling the same wherever it happens", () => {
+    // A viral load runs over orders of magnitude. On the raw scale a Pearson
+    // correlation is decided by whichever day was largest; on the log scale a
+    // doubling counts the same at the bottom and at the top.
+    const out = asLog([1, 10, 100]);
+    assert.deepEqual(out, [0, 1, 2]);
+  });
+
+  it("treats a value below detection as unknown, not as minus infinity", () => {
+    // "We could not see it" is not "there was none", and log(0) would take the
+    // whole series with it.
+    assert.deepEqual(asLog([0, -1, 5]), [null, null, Math.log10(5)]);
+  });
+});
+
+describe("a sample nothing else supports", () => {
+  const normal = [1, 1.1, 0.9, 1.2, 0.95, 1.05, 1.15, 0.85, 1.0, 1.1];
+
+  it("removes a point a hundred times its neighbours", () => {
+    // One such point can set the sign of a whole episode, and Pearson has no
+    // defence against it.
+    const { series, removed } = withoutOutliers([...normal, 100]);
+    assert.equal(removed, 1);
+    assert.equal(series[series.length - 1], null);
+  });
+
+  it("keeps every ordinary point", () => {
+    const { removed } = withoutOutliers(normal);
+    assert.equal(removed, 0);
+  });
+
+  it("does not let the outlier widen the band meant to catch it", () => {
+    // A standard deviation would be inflated by the very point being tested.
+    // The median absolute deviation is not.
+    const { removed } = withoutOutliers([...normal, 100, 120]);
+    assert.equal(removed, 2);
+  });
+
+  it("leaves a short series alone rather than guessing at its spread", () => {
+    assert.equal(withoutOutliers([1, 99]).removed, 0);
+  });
+
+  it("reports no outliers in a series with no spread", () => {
+    assert.equal(withoutOutliers(Array.from({ length: 20 }, () => 7)).removed, 0);
   });
 });
