@@ -1,2 +1,3 @@
-nom,severite,ressource,quantite,sejour_pas
-Hospitalisation — lit de santé physique,hospitalisation,litsantephysique,1,7
+nom,severite,ressource,quantite,sejour_pas,provenance
+Urgence — civière,urgence,civiereurgence,1,0.8,"MESURÉ — DMS sur civière du relevé horaire MSSS, médiane des 16 urgences de Montréal : 19,2 h = 0,80 jour"
+Hospitalisation — lit de santé physique,hospitalisation,litsantephysique,1,7,"HYPOTHÈSE — aucun fichier de cet import ne publie la durée de séjour hospitalier. À remplacer par la vraie, disponible dans la BDCU."

@@ -76,6 +76,34 @@ const TYPES = [
       prop("longitude", "number", "Longitude", { behaviour: "level" }),
       prop("latitude", "number", "Latitude", { behaviour: "level" }),
       prop("statut", "string", "Statut au permis", { behaviour: "state" }),
+      // The state of the emergency department, from the ministry's own hourly
+      // file. Carried on the installation rather than only inside the beds so
+      // every figure is readable, summable and traceable to one published row —
+      // which is what makes a decision defensible rather than merely informed.
+      prop("civieres_fonctionnelles", "number", "Civieres fonctionnelles", { behaviour: "level" }),
+      prop("civieres_occupees", "number", "Civieres occupees", { behaviour: "stock" }),
+      prop("patients_plus_24h", "number", "Sur civiere depuis plus de 24 h", { behaviour: "stock" }),
+      prop("patients_plus_48h", "number", "Sur civiere depuis plus de 48 h", { behaviour: "stock" }),
+      prop("patients_presents", "number", "Patients presents a l urgence", { behaviour: "stock" }),
+      prop("en_attente_prise_en_charge", "number", "En attente de prise en charge", { behaviour: "stock" }),
+      prop("dms_civiere_heures", "number", "DMS sur civiere", { unit: "heures", behaviour: "level" }),
+      prop("mise_a_jour", "string", "Releve du", { behaviour: "state" }),
+    ],
+  },
+  {
+    // Back, with a real number. The permit register lists an emergency
+    // department as a service offered and never says how many stretchers it
+    // holds; the hourly file says how many are *functional*, which is the
+    // stronger fact — it is what is staffed today, not what is licensed.
+    name: "CiviereUrgence",
+    role: "space",
+    identity: ["label"],
+    schema: [
+      prop("label", "string", "Etiquette", { behaviour: "state" }),
+      // Named `etat` and not `statut`: the engine reads occupancy from a
+      // property called status, state, etat or etat, and a bed whose state it
+      // cannot find is a bed it counts as free.
+      prop("etat", "string", "Etat", { behaviour: "state" }),
     ],
   },
   // One type per kind of capacity, because the engine names an activity after
@@ -122,10 +150,14 @@ const TYPES = [
         mechanic: "consumes_activity",
       }),
       prop("quantite", "number", "Quantité", { behaviour: "level", mechanic: "consumes_amount" }),
-      prop("sejour_pas", "number", "Séjour (pas)", {
+      prop("sejour_pas", "number", "Sejour (pas)", {
         behaviour: "level",
         mechanic: "occupies_for",
       }),
+      // Where each number came from, on the object itself. The one figure in
+      // this twin that nobody published is the hospital length of stay, and it
+      // says so where a reader will be standing when they ask.
+      prop("provenance", "string", "Provenance du chiffre", { behaviour: "state" }),
     ],
   },
 ];
@@ -137,6 +169,7 @@ const TYPES = [
  */
 const LINKS = [
   { name: "situe_a", from: "LitSantePhysique", to: "OrgUnit" },
+  { name: "civiere_situe_a", from: "CiviereUrgence", to: "OrgUnit" },
   { name: "dessert", from: "Territoire", to: "OrgUnit" },
 ];
 
@@ -515,6 +548,143 @@ async function main() {
     ],
   );
 
+  const dsUrg = await upload(
+    db,
+    proj.id,
+    "msss-urgences-montreal.csv",
+    "MSSS \u2014 Situation horaire \u00e0 l'urgence (Montr\u00e9al)",
+    "Relev\u00e9 horaire de la situation \u00e0 l'urgence, MSSS, via Donn\u00e9es Qu\u00e9bec. " +
+      "Civi\u00e8res fonctionnelles et occup\u00e9es, patients au-del\u00e0 de 24 h et 48 h, dur\u00e9e " +
+      "moyenne de s\u00e9jour sur civi\u00e8re. Les 16 urgences de la r\u00e9gion 06, un instantan\u00e9.",
+  );
+
+  // Two pipelines from one file, because it carries two different kinds of
+  // fact: how many stretchers exist, and what state the department is in.
+  await pipeline(
+    db,
+    proj.id,
+    "Urgences \u2192 Civi\u00e8res",
+    [
+      { id: "in", kind: "dataset_input", name: "Urgences", x: 60, y: 100, config: { datasetId: dsUrg } },
+      {
+        // Four of the sixteen answer "pas d'information disponible" rather than
+        // a number. Dropped and counted, never read as zero.
+        id: "keep",
+        kind: "filter",
+        name: "Capacite connue",
+        x: 240,
+        y: 100,
+        config: { column: "civieres_fonctionnelles", op: "not_null" },
+      },
+      {
+        id: "each",
+        kind: "expand",
+        name: "Une par civiere",
+        x: 420,
+        y: 100,
+        config: { countColumn: "civieres_fonctionnelles", indexColumn: "no", labelColumn: "nom_installation" },
+      },
+      {
+        // How many stretchers are still free once this one is counted. Negative
+        // means this stretcher is one of the occupied ones.
+        id: "reste",
+        kind: "derive",
+        name: "Rang dans l occupation",
+        x: 600,
+        y: 100,
+        config: { as: "reste", op: "arithmetic", columns: ["civieres_occupees", "no"], arith: "subtract" },
+      },
+      {
+        // The run starts from the department as it stands, not from an empty
+        // one. Starting empty would flatter every response at once and rank
+        // them wrongly, which is the whole point of running this at all.
+        id: "etat",
+        kind: "derive",
+        name: "Occupee ou libre",
+        x: 780,
+        y: 100,
+        config: {
+          as: "etat",
+          op: "conditional",
+          columns: ["reste"],
+          compareOp: "gte",
+          compareTo: 0,
+          thenValue: "occupee",
+          elseValue: "libre",
+        },
+      },
+      {
+        id: "name",
+        kind: "derive",
+        name: "Etiquette",
+        x: 960,
+        y: 100,
+        config: { as: "label", op: "concat", columns: ["code_installation", "no"], separator: "-civiere-" },
+      },
+      {
+        id: "out",
+        kind: "object_output",
+        name: "CiviereUrgence",
+        x: 1140,
+        y: 100,
+        config: {
+          objectTypeName: "CiviereUrgence",
+          identityProperties: ["label"],
+          columnMapping: [scalar("label", "label", "string"), scalar("etat", "etat", "string")],
+          linkRules: [
+            {
+              linkType: "civiere_situe_a",
+              targetType: "OrgUnit",
+              fromColumn: "code_installation",
+              targetProperty: "code",
+              direction: "out",
+            },
+          ],
+        },
+      },
+    ],
+    [
+      { from: "in", to: "keep" },
+      { from: "keep", to: "each" },
+      { from: "each", to: "reste" },
+      { from: "reste", to: "etat" },
+      { from: "etat", to: "name" },
+      { from: "name", to: "out" },
+    ],
+  );
+
+  await pipeline(
+    db,
+    proj.id,
+    "Urgences \u2192 Etat de l'installation",
+    [
+      { id: "in", kind: "dataset_input", name: "Urgences", x: 60, y: 100, config: { datasetId: dsUrg } },
+      {
+        id: "out",
+        kind: "object_output",
+        name: "OrgUnit",
+        x: 420,
+        y: 100,
+        config: {
+          objectTypeName: "OrgUnit",
+          identityProperties: ["code"],
+          columnMapping: [
+            scalar("code_installation", "code", "string"),
+            scalar("civieres_fonctionnelles", "civieres_fonctionnelles", "number"),
+            scalar("civieres_occupees", "civieres_occupees", "number"),
+            scalar("patients_plus_24h", "patients_plus_24h", "number"),
+            scalar("patients_plus_48h", "patients_plus_48h", "number"),
+            scalar("patients_presents", "patients_presents", "number"),
+            scalar("en_attente_prise_en_charge", "en_attente_prise_en_charge", "number"),
+            scalar("dms_civiere_heures", "dms_civiere_heures", "number"),
+            scalar("mise_a_jour", "mise_a_jour", "string"),
+          ],
+        },
+      },
+    ],
+    [{ from: "in", to: "out" }],
+  );
+
   const dsSoins = await upload(
     db,
     proj.id,
@@ -544,6 +714,7 @@ async function main() {
             scalar("ressource", "ressource", "string"),
             scalar("quantite", "quantite", "number"),
             scalar("sejour_pas", "sejour_pas", "number"),
+            scalar("provenance", "provenance", "string"),
           ],
         },
       },
