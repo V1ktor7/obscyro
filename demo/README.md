@@ -62,15 +62,30 @@ d'une structure de contacts par milieu, et c'est pour ça qu'elle est là. Mais 
 et les règles de déclaration. Elles disent où le virus a été *trouvé*, pas où il
 a circulé.
 
-**Une réserve sur la corrélation.** Deux courbes qui montent puis descendent
-corrèlent fortement, que le modèle soit juste ou non. L'écart entre les deux pics
-dit ce que la corrélation cache. Mesuré sur ces fichiers, origine 2021-12-01 :
+**Une réserve sur la corrélation, et elle est plus grave que prévu.** Deux
+courbes qui montent puis descendent corrèlent fortement, que le modèle soit juste
+ou non. Mesuré d'abord par simple écart des pics, ces fichiers semblaient dire :
+décès 7 jours après les hospitalisations, positivité 2 jours avant.
 
-- hospitalisations et soins intensifs culminent **le même jour** (2022-01-06)
-- les décès culminent **7 jours après** les hospitalisations
-- la positivité culmine **2 jours avant** — indicateur avancé
+**Aucune de ces deux affirmations ne survit à un examen honnête.** Passées au
+balayage de décalages avec correction de la taille effective :
 
-Aucun de ces trois nombres ne se lit dans une corrélation.
+| Signal | r apparent | jours | observations indépendantes | survit | sur la période de validation |
+|---|---|---|---|---|---|
+| Positivité | 0,895 | 10 | **5** sur 52 | non | 0,573 |
+| Soins intensifs | 0,802 | 0 | **18** sur 62 | non | 0,490 |
+| Décès | 0,888 | −10 | **6** sur 52 | non | 0,491 |
+
+La raison : une courbe épidémique est lisse. Le compte d'aujourd'hui est presque
+celui d'hier, donc 52 jours ne portent pas 52 observations indépendantes mais
+cinq. Un r de 0,895 sur cinq observations n'est pas un résultat. Et le décalage
+trouvé change selon la fenêtre — 2 jours ou 10 selon qu'on regarde tout ou les
+premiers 70 % — ce qui est en soi le signe qu'il n'est pas déterminé.
+
+**Ce qu'il faut en conclure :** une seule vague ne permet pas d'établir un délai
+d'avance. Il en faut plusieurs, ou plusieurs territoires. Le décalage
+mortalité–hospitalisation est probablement réel — la littérature le dit — mais
+*ces fichiers-là ne le démontrent pas*, et c'est une chose différente.
 
 ## Rejouer le montage
 
