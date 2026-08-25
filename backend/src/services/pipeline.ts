@@ -45,6 +45,7 @@ export const NODE_KINDS = [
   "select",
   "derive",
   "cast",
+  "expand",
   "join",
   "text_field",
   "extract_snomed",
@@ -206,6 +207,14 @@ export const NODE_CATALOGUE: NodeMeta[] = [
     outputs: 1,
   },
   {
+    kind: "expand",
+    label: "Expand a count",
+    category: "Shape",
+    description: "One row per unit of a counted quantity.",
+    inputs: 1,
+    outputs: 1,
+  },
+  {
     kind: "join",
     label: "Join",
     category: "Combine",
@@ -335,6 +344,12 @@ export function validate(p: Pick<Pipeline, "nodes" | "edges">): ValidationIssue[
     } else if (ins.length > 1) {
       issues.push({ nodeId: n.id, message: "This node takes a single input." });
     }
+    if (n.kind === "expand" && !n.config.countColumn) {
+      issues.push({
+        nodeId: n.id,
+        message: "Name the column holding the count, otherwise every row passes through as one.",
+      });
+    }
     if (n.kind === "object_output") {
       const ident = n.config.identityProperties;
       if (!Array.isArray(ident) || ident.length === 0) {
@@ -433,6 +448,66 @@ export function applyFilter(rows: Row[], cfg: Record<string, unknown>): Row[] {
   const value = cfg.value;
   if (!col) return rows;
   return rows.filter((r) => compare(r[col], op, value));
+}
+
+/**
+ * One row per unit of a counted quantity.
+ *
+ * Every capacity register in the world publishes a count — "this installation
+ * is licensed for 30 permanent beds" — and the twin reasons about units, because
+ * a bed is either free or holding someone and a number cannot be either. The
+ * gap between the two has to be closed somewhere, and doing it in a spreadsheet
+ * before upload means the file that arrives is no longer the file the ministry
+ * published. So it is closed here, where the reshaping is visible on the canvas
+ * and re-runs when the register does.
+ *
+ * Each output row carries its own index, because the rows are otherwise
+ * identical and an upsert keyed on the source columns would collapse thirty
+ * beds back into one.
+ */
+export function applyExpand(
+  rows: Row[],
+  cfg: Record<string, unknown>,
+): { rows: Row[]; dropped: number; issue: string | null } {
+  const col = String(cfg.countColumn ?? "");
+  const indexAs = String(cfg.indexColumn ?? "unit_index");
+  // A ceiling on one row, not on the run: a register that says 4 000 000 is a
+  // misread column, and expanding it would take the whole run down rather than
+  // naming the row that was wrong.
+  const perRow = Number(cfg.maxPerRow ?? 5000);
+  if (!col) return { rows, dropped: 0, issue: null };
+
+  const out: Row[] = [];
+  let dropped = 0;
+  let worst = 0;
+  let worstAt: string | null = null;
+  for (const r of rows) {
+    const raw = r[col];
+    const n = Math.floor(Number(raw));
+    // Not a number, zero, or negative: no units to make. Dropped rather than
+    // passed through as one, because passing it through would silently turn a
+    // blank capacity into a single bed.
+    if (!Number.isFinite(n) || n <= 0) {
+      dropped++;
+      continue;
+    }
+    if (n > perRow) {
+      if (n > worst) {
+        worst = n;
+        worstAt = String(r[String(cfg.labelColumn ?? "")] ?? "");
+      }
+      dropped++;
+      continue;
+    }
+    for (let i = 1; i <= n; i++) out.push({ ...r, [indexAs]: i });
+  }
+  const issue =
+    worst > 0
+      ? `A row asks for ${worst.toLocaleString("en-CA")} units${worstAt ? ` (${worstAt})` : ""}, ` +
+        `past the ${perRow.toLocaleString("en-CA")} allowed per row. Check the column is the ` +
+        `count and not an amount, or raise the ceiling.`
+      : null;
+  return { rows: out, dropped, issue };
 }
 
 export function applySelect(rows: Row[], cfg: Record<string, unknown>): Row[] {
@@ -900,6 +975,13 @@ export async function execute(
           const r = applyCast(inRows, node.config);
           out = r.rows;
           dropped = r.dropped;
+          break;
+        }
+        case "expand": {
+          const r = applyExpand(inRows, node.config);
+          out = r.rows;
+          dropped = r.dropped;
+          if (r.issue) issues.push({ nodeId: node.id, message: r.issue });
           break;
         }
         case "text_field": {

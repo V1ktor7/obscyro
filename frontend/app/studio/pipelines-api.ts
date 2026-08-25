@@ -14,6 +14,7 @@ export type NodeKind =
   | "select"
   | "derive"
   | "cast"
+  | "expand"
   | "join"
   | "text_field"
   | "extract_snomed"

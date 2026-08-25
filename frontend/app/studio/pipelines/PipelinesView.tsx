@@ -3,6 +3,7 @@
 import {
   Box,
   Columns3,
+  CopyPlus,
   Database,
   FileText,
   FunctionSquare,
@@ -56,6 +57,7 @@ const NODE_H = 62;
 const ICON: Record<NodeKind, typeof Database> = {
   dataset_input: Database,
   cast: Wand2,
+  expand: CopyPlus,
   filter: FilterIcon,
   select: Columns3,
   derive: FunctionSquare,
@@ -835,6 +837,43 @@ function Inspector({
                 className={F}
               />
             ) : null}
+          </>
+        ) : null}
+
+        {node.kind === "expand" ? (
+          <>
+            {/* A register publishes a count; the twin reasons about units. The
+                reshaping belongs on the canvas, where it is visible and re-runs
+                when the register does, rather than in a spreadsheet before
+                upload — a file edited before it arrives is no longer the file
+                the ministry published. */}
+            <label className={L}>Column holding the count</label>
+            {colSelect(String(cfg.countColumn ?? ""), (v) => onConfig({ countColumn: v }))}
+            <label className={L}>Number each unit into</label>
+            <input
+              value={String(cfg.indexColumn ?? "")}
+              onChange={(e) => onConfig({ indexColumn: e.target.value })}
+              placeholder="unit_index"
+              className={F}
+            />
+            <p className="mt-1 text-[10px] leading-snug text-[#8f99a8]">
+              The rows are otherwise identical. Without a number on each, an upsert keyed
+              on the source columns collapses thirty beds back into one.
+            </p>
+            <label className={L}>Name each unit after (optional)</label>
+            {colSelect(String(cfg.labelColumn ?? ""), (v) => onConfig({ labelColumn: v }))}
+            <label className={L}>Most units one row may make</label>
+            <input
+              value={String(cfg.maxPerRow ?? "")}
+              onChange={(e) => onConfig({ maxPerRow: e.target.value })}
+              placeholder="5000"
+              inputMode="numeric"
+              className={F}
+            />
+            <p className="mt-1 text-[10px] leading-snug text-[#8f99a8]">
+              A column read as a capacity that is really an amount would expand to
+              millions of rows. Past this, the row is dropped and named instead.
+            </p>
           </>
         ) : null}
 
