@@ -22,6 +22,8 @@ import {
   listSimPolicies,
   updateSimPolicy,
 } from "../services/sim-policies.js";
+import { getDataset, previewRows } from "../services/datasets.js";
+import { eventFromRows } from "../services/sim-event-from-rows.js";
 import { spreadPayload } from "../services/spread-payload.js";
 import { buildTwinExport } from "../services/twin-export.js";
 import { proxyToSimService } from "../services/ml-simulation.js";
@@ -449,6 +451,91 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
         census_acuity: req.body.censusAcuity ?? null,
         collect: req.body.collect,
       });
+    },
+  );
+
+  app.post(
+    "/ontology/:env/sim-events/from-dataset",
+    {
+      schema: {
+        summary: "Build an event from an observed time series already imported",
+        description:
+          "Reads a dataset in this environment and writes each dated row as arrivals " +
+          "on that step. The shortest honest path from a published file to a run: a " +
+          "ministry says what happened, the engine already knows how to queue, serve " +
+          "and count it, and nothing between them needs inventing. Uses flat arrival " +
+          "counts rather than a rate per thousand, so no catchment size has to be " +
+          "supplied that the file does not carry.",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1) }),
+        body: z.object({
+          datasetId: z.string().uuid(),
+          name: z.string().trim().min(1).max(120),
+          /** Column holding the date. */
+          when: z.string().min(1).max(120),
+          /** Column holding the count of arrivals. */
+          count: z.string().min(1).max(120),
+          /** The severity these arrivals present with, as the care model names it. */
+          acuity: z.string().min(1).max(120),
+          /** The catchment they arrive in, as the export names it. */
+          population: z.string().min(1).max(200),
+          /**
+           * The date step 0 is. Left out, the earliest row in the file.
+           *
+           * Worth passing whenever two events will be compared: a file that
+           * happens to start three days late shifts its whole wave, and the
+           * comparison is then three days out with nothing on screen saying so.
+           */
+          origin: z.string().trim().max(40).optional(),
+          twinScenarioId: z.string().uuid().nullable().default(null),
+        }),
+        response: { 200: z.record(z.unknown()), 400: errorEnvelope, 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const ds = await getDataset(req.db, req.body.datasetId);
+      if (ds.projectId !== env.id) {
+        throw NotFound("DATASET_NOT_FOUND", "That dataset is not in this environment.");
+      }
+      // The whole table, not a preview: an event built from the first fifty
+      // rows would be a fifty-day wave nobody asked for, and it would look
+      // exactly like a real one.
+      const rows = await previewRows(req.db, ds.id, config.rollupInstanceCap);
+      const built = eventFromRows(rows, {
+        when: req.body.when,
+        count: req.body.count,
+        acuity: req.body.acuity,
+        population: req.body.population,
+        origin: req.body.origin,
+      });
+      if (built.effects.length === 0) {
+        throw BadRequest(
+          "NO_ARRIVALS",
+          `No row in "${ds.name}" carried both a date and a count above zero, so the ` +
+            `event would perturb nothing. Check the two column names.`,
+        );
+      }
+      const row = await createSimEvent(req.db, env.id, userId, {
+        name: req.body.name,
+        description:
+          `Observé : ${built.total.toLocaleString("fr-CA")} arrivées entre ${built.first} ` +
+          `et ${built.last}, depuis « ${ds.name} »` +
+          (built.skipped > 0 ? `. ${built.skipped} ligne(s) sans date ou sans compte utilisable.` : "."),
+        horizon: built.horizon,
+        effects: built.effects,
+        twinScenarioId: req.body.twinScenarioId,
+      });
+      await recordAudit(req.db, {
+        actorUserId: userId,
+        projectId: env.id,
+        action: "sim.event.create",
+        resourceType: "sim_event",
+        resourceId: row.id,
+        metadata: { name: row.name, effects: built.effects.length, from: "dataset", datasetId: ds.id },
+      });
+      return { event: row, skipped: built.skipped, total: built.total };
     },
   );
 
