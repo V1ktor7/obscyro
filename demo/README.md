@@ -62,30 +62,39 @@ d'une structure de contacts par milieu, et c'est pour ça qu'elle est là. Mais 
 et les règles de déclaration. Elles disent où le virus a été *trouvé*, pas où il
 a circulé.
 
-**Une réserve sur la corrélation, et elle est plus grave que prévu.** Deux
+**Une réserve sur la corrélation, et ce qu'il a fallu pour la lever.** Deux
 courbes qui montent puis descendent corrèlent fortement, que le modèle soit juste
-ou non. Mesuré d'abord par simple écart des pics, ces fichiers semblaient dire :
-décès 7 jours après les hospitalisations, positivité 2 jours avant.
+ou non. Mesuré sur la seule vague Omicron, ces fichiers semblaient dire : décès
+7 jours après les hospitalisations, positivité 2 jours avant. **Aucune de ces
+deux affirmations ne tenait** — 52 jours de courbe lisse ne portent que cinq
+observations indépendantes, et un r de 0,895 sur cinq observations n'est rien.
 
-**Aucune de ces deux affirmations ne survit à un examen honnête.** Passées au
-balayage de décalages avec correction de la taille effective :
+La série complète va du 2020-01-23 au 2023-01-01 et contient **dix vagues** :
+avril 2020, octobre 2020, janvier 2021, avril 2021, septembre 2021, janvier 2022,
+avril 2022, juillet 2022, octobre 2022, novembre 2022. Chacune est un épisode
+distinct, avec son variant, sa saison et son régime de dépistage. Le décalage a
+donc été cherché **dans chaque vague séparément**, et ce qui compte est l'accord
+entre elles — pas la force d'une seule.
 
-| Signal | r apparent | jours | observations indépendantes | survit | sur la période de validation |
-|---|---|---|---|---|---|
-| Positivité | 0,895 | 10 | **5** sur 52 | non | 0,573 |
-| Soins intensifs | 0,802 | 0 | **18** sur 62 | non | 0,490 |
-| Décès | 0,888 | −10 | **6** sur 52 | non | 0,491 |
+| Signal | décalage médian | mesuré sur | vagues à ±2 j | verdict |
+|---|---|---|---|---|
+| Décès | **−7 j** (suivent) | 10/10 | 50 % | structure réelle, sous la barre |
+| Positivité | +3,5 j | 10/10 | 40 % | non |
+| Soins intensifs | −0,5 j | 10/10 | 30 % | non |
+| Cas déclarés | −6 j | 10/10 | 20 % | non |
 
-La raison : une courbe épidémique est lisse. Le compte d'aujourd'hui est presque
-celui d'hier, donc 52 jours ne portent pas 52 observations indépendantes mais
-cinq. Un r de 0,895 sur cinq observations n'est pas un résultat. Et le décalage
-trouvé change selon la fenêtre — 2 jours ou 10 selon qu'on regarde tout ou les
-premiers 70 % — ce qui est en soi le signe qu'il n'est pas déterminé.
+**Le décalage mortalité–hospitalisation est le seul à montrer une vraie
+structure** : huit vagues sur dix le placent entre −4 et −12 jours, groupées
+autour de −7. C'est cohérent avec la littérature, et cette fois ça repose sur dix
+épidémies indépendantes plutôt que sur une.
 
-**Ce qu'il faut en conclure :** une seule vague ne permet pas d'établir un délai
-d'avance. Il en faut plusieurs, ou plusieurs territoires. Le décalage
-mortalité–hospitalisation est probablement réel — la littérature le dit — mais
-*ces fichiers-là ne le démontrent pas*, et c'est une chose différente.
+Il ne franchit quand même pas la barre fixée (70 % des vagues à ±2 jours).
+Élargir la tolérance à ±4 jours le ferait passer à 70 % — **et ce serait
+exactement la faute que ce module existe pour empêcher.** On choisit sa tolérance
+avant de regarder le résultat, sinon on ne mesure plus rien, on négocie.
+
+Les trois autres signaux sont du bruit : la positivité saute de −14 à +12 selon
+la vague, ce qui est la signature d'un décalage qui n'est pas identifié du tout.
 
 ## Rejouer le montage
 
