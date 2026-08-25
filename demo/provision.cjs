@@ -64,6 +64,7 @@ const TYPES = [
   {
     name: "OrgUnit",
     role: null,
+    identity: ["code"],
     schema: [
       prop("name", "string", "Nom", { behaviour: "state" }),
       prop("code", "string", "Code d'installation", { behaviour: "state" }),
@@ -83,6 +84,7 @@ const TYPES = [
   {
     name: "LitSantePhysique",
     role: "space",
+    identity: ["label"],
     schema: [
       prop("label", "string", "Étiquette", { behaviour: "state" }),
       prop("statut", "string", "État", { behaviour: "state" }),
@@ -91,6 +93,7 @@ const TYPES = [
   {
     name: "CiviereUrgence",
     role: "space",
+    identity: ["label"],
     schema: [
       prop("label", "string", "Étiquette", { behaviour: "state" }),
       prop("statut", "string", "État", { behaviour: "state" }),
@@ -99,6 +102,7 @@ const TYPES = [
   {
     name: "Territoire",
     role: null,
+    identity: ["code"],
     schema: [
       prop("name", "string", "Nom", { behaviour: "state" }),
       prop("code", "string", "Code", { behaviour: "state" }),
@@ -115,6 +119,7 @@ const TYPES = [
   {
     name: "Protocole",
     role: null,
+    identity: ["name"],
     schema: [
       prop("name", "string", "Nom", { behaviour: "state" }),
       prop("severite", "string", "Sévérité servie", {
@@ -149,10 +154,15 @@ async function declare(db, projectId) {
   const ids = {};
   for (const t of TYPES) {
     ids[t.name] = await O.getOrCreateObjectType(db, projectId, t.name, null, t.schema);
-    await db.query(`UPDATE app.ontology_object_types SET sim_role = $2 WHERE id = $1`, [
-      ids[t.name],
-      t.role,
-    ]);
+    // Declared on the type, not left to each writer. The upsert then looks the
+    // instance up through the `instance_identity` index the constraint already
+    // uses, instead of scanning properties — which is both how two pipelines
+    // stop disagreeing about what a bed is called, and the difference between
+    // an import that finishes and one that crawls.
+    await db.query(
+      `UPDATE app.ontology_object_types SET sim_role = $2, identity_properties = $3 WHERE id = $1`,
+      [ids[t.name], t.role, t.identity ?? []],
+    );
   }
   for (const l of LINKS) {
     const id = await O.getOrCreateLinkType(db, projectId, l.name, ids[l.from], ids[l.to], "many_to_one");
@@ -248,6 +258,19 @@ async function main() {
 
   await declare(db, proj.id);
   console.log(`types déclarés: ${TYPES.map((t) => t.name).join(", ")}`);
+
+  // Instances written before an identity was declared carry no row in
+  // `instance_identity`, so the upsert cannot find them and the insert it tries
+  // instead hits the constraint. Cleared rather than reconciled: this project
+  // exists to be rebuilt from the files, and every object in it comes from one.
+  const { rows: wiped } = await db.query(
+    `DELETE FROM app.ontology_object_instances o
+      USING app.ontology_object_types t
+      WHERE t.id = o.object_type_id AND t.organization_id = $1
+      RETURNING o.id`,
+    [proj.orgId],
+  );
+  if (wiped.length) console.log(`${wiped.length} objet(s) d'un import interrompu retirés`);
 
   const dsInstal = await upload(
     db,
