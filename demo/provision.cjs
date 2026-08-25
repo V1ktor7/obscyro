@@ -80,7 +80,13 @@ const TYPES = [
       // file. Carried on the installation rather than only inside the beds so
       // every figure is readable, summable and traceable to one published row —
       // which is what makes a decision defensible rather than merely informed.
-      prop("civieres_fonctionnelles", "number", "Civieres fonctionnelles", { behaviour: "level" }),
+      prop("civieres_fonctionnelles", "number", "Civieres au permis", { behaviour: "level" }),
+      // Ce que le service tient reellement. Une civiere occupee est une
+      // position qui existe, meme hors permis : modeliser seulement les
+      // civieres financees, c est modeliser un reseau incapable de faire ce
+      // qu il fait deja. L ecart entre les deux est lui-meme un chiffre.
+      prop("civieres_en_service", "number", "Civieres en service", { behaviour: "level" }),
+      prop("civieres_hors_permis", "number", "Civieres hors permis", { behaviour: "level" }),
       prop("civieres_occupees", "number", "Civieres occupees", { behaviour: "stock" }),
       prop("patients_plus_24h", "number", "Sur civiere depuis plus de 24 h", { behaviour: "stock" }),
       prop("patients_plus_48h", "number", "Sur civiere depuis plus de 48 h", { behaviour: "stock" }),
@@ -574,7 +580,7 @@ async function main() {
         name: "Capacite connue",
         x: 240,
         y: 100,
-        config: { column: "civieres_fonctionnelles", op: "not_null" },
+        config: { column: "civieres_en_service", op: "not_null" },
       },
       {
         id: "each",
@@ -582,7 +588,7 @@ async function main() {
         name: "Une par civiere",
         x: 420,
         y: 100,
-        config: { countColumn: "civieres_fonctionnelles", indexColumn: "no", labelColumn: "nom_installation" },
+        config: { countColumn: "civieres_en_service", indexColumn: "no", labelColumn: "nom_installation" },
       },
       {
         // How many stretchers are still free once this one is counted. Negative
@@ -671,6 +677,10 @@ async function main() {
           columnMapping: [
             scalar("code_installation", "code", "string"),
             scalar("civieres_fonctionnelles", "civieres_fonctionnelles", "number"),
+            scalar("civieres_en_service", "civieres_en_service", "number"),
+            scalar("civieres_hors_permis", "civieres_hors_permis", "number"),
+        scalar("civieres_en_service", "civieres_en_service", "number"),
+        scalar("civieres_hors_permis", "civieres_hors_permis", "number"),
             scalar("civieres_occupees", "civieres_occupees", "number"),
             scalar("patients_plus_24h", "patients_plus_24h", "number"),
             scalar("patients_plus_48h", "patients_plus_48h", "number"),
