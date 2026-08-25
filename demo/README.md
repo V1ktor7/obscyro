@@ -38,6 +38,40 @@ et c'est le nombre d'arrivées. Le modèle de propagation, lui, est un modèle �
 il sert à demander ce qui *aurait* pu se passer, ce qu'aucune donnée observée
 ne peut dire.
 
+## Séries d'observation — pour comparer, pas pour alimenter
+
+Ces neuf-là ne deviennent aucun objet et n'alimentent aucune mécanique. Elles
+existent pour être posées sur une course et répondre à la seule question qu'un
+modèle ne peut pas se poser à lui-même : *a-t-il reproduit ce qui est arrivé.*
+
+| Jeu | Portée | Ce qu'il sert à demander |
+|---|---|---|
+| Admissions aux soins intensifs | région 06 | la seconde sévérité de la même vague |
+| Décès cumulatifs | région 06 | le décalage mortalité–hospitalisation |
+| Cas et tests cumulatifs | région 06 | ce que le dépistage a vu, et quand il a saturé |
+| Taux de positivité | région 06 | indicateur avancé ; décembre 2021 en particulier |
+| Doses administrées par jour | région 06 | la contre-mesure, dans le temps |
+| Taux de reproduction Rt | Québec | le régime de croissance estimé par l'INSPQ |
+| Éclosions actives par milieu | Québec | travail, primaire, secondaire, cégep, université, garderie, soins |
+| Part des variants par semaine | Québec | les changements de régime qu'un modèle ne voit pas venir |
+| Cas selon le statut vaccinal et l'âge | Québec | l'effet de la vaccination, par âge |
+
+**Une réserve sur les éclosions.** C'est la donnée québécoise la plus proche
+d'une structure de contacts par milieu, et c'est pour ça qu'elle est là. Mais des
+éclosions ne sont pas des contacts : elles suivent aussi l'intensité du dépistage
+et les règles de déclaration. Elles disent où le virus a été *trouvé*, pas où il
+a circulé.
+
+**Une réserve sur la corrélation.** Deux courbes qui montent puis descendent
+corrèlent fortement, que le modèle soit juste ou non. L'écart entre les deux pics
+dit ce que la corrélation cache. Mesuré sur ces fichiers, origine 2021-12-01 :
+
+- hospitalisations et soins intensifs culminent **le même jour** (2022-01-06)
+- les décès culminent **7 jours après** les hospitalisations
+- la positivité culmine **2 jours avant** — indicateur avancé
+
+Aucun de ces trois nombres ne se lit dans une corrélation.
+
 ## Rejouer le montage
 
 `provision.cjs` monte le projet **Montréal — données ouvertes** entièrement par
