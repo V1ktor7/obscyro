@@ -23,6 +23,11 @@ import {
   updateSimPolicy,
 } from "../services/sim-policies.js";
 import { getDataset, previewRows } from "../services/datasets.js";
+import {
+  alignSeries,
+  asDaily,
+  compareSeries,
+} from "../services/observed-series.js";
 import { eventFromRows } from "../services/sim-event-from-rows.js";
 import { spreadPayload } from "../services/spread-payload.js";
 import { buildTwinExport } from "../services/twin-export.js";
@@ -451,6 +456,61 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
         census_acuity: req.body.censusAcuity ?? null,
         collect: req.body.collect,
       });
+    },
+  );
+
+  app.post(
+    "/ontology/:env/observed-series",
+    {
+      schema: {
+        summary: "Put an imported observation series on a run's axis",
+        description:
+          "Reads a dataset and returns its values indexed by step, plus — when a " +
+          "simulated series is sent alongside — how far apart the two peaks are and " +
+          "how large the average gap is. A day the file did not report comes back as " +
+          "null rather than zero, because a reporting gap and a quiet day are " +
+          "different and only one of them is worth explaining.",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1) }),
+        body: z.object({
+          datasetId: z.string().uuid(),
+          when: z.string().min(1).max(120),
+          value: z.string().min(1).max(120),
+          origin: z.string().trim().min(4).max(40),
+          horizon: z.number().int().min(1).max(2000),
+          /** Read a cumulative column as what happened each step. */
+          cumulative: z.boolean().default(false),
+          /**
+           * The run, for comparison. Left out, the series comes back alone.
+           *
+           * `null` for a step the run did not report, same as the observed side.
+           */
+          simulated: z.array(z.number().nullable()).max(2000).optional(),
+        }),
+        response: { 200: z.record(z.unknown()), 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const ds = await getDataset(req.db, req.body.datasetId);
+      if (ds.projectId !== env.id) {
+        throw NotFound("DATASET_NOT_FOUND", "That dataset is not in this environment.");
+      }
+      const rows = await previewRows(req.db, ds.id, config.rollupInstanceCap);
+      const raw = alignSeries(rows, {
+        when: req.body.when,
+        value: req.body.value,
+        origin: req.body.origin,
+        horizon: req.body.horizon,
+      });
+      const series = req.body.cumulative ? asDaily(raw) : raw;
+      return {
+        dataset: { id: ds.id, name: ds.name },
+        series,
+        reported: series.filter((v) => v !== null).length,
+        fit: req.body.simulated ? compareSeries(req.body.simulated, series) : null,
+      };
     },
   );
 

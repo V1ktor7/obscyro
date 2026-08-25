@@ -551,6 +551,35 @@ async function main() {
     [{ from: "in", to: "out" }],
   );
 
+  // Nine observation series. They become no ontology object and feed no
+  // mechanic: they exist to be laid over a run and answer the one question a
+  // model cannot answer about itself — did it reproduce what happened. A series
+  // nobody can put beside a run would be a table, which is why the list stops
+  // here rather than at every file the institute has ever published.
+  const OBSERVED = [
+    ["inspq-soins-intensifs-montreal.csv", "INSPQ — Admissions aux soins intensifs (Montréal)",
+     "Admissions quotidiennes aux soins intensifs, région 06. La seconde sévérité de la même vague."],
+    ["inspq-deces-montreal.csv", "INSPQ — Décès cumulatifs (Montréal)",
+     "Décès cumulatifs, région 06. Cumulatif : à lire en différences pour obtenir le quotidien."],
+    ["inspq-cas-et-tests-montreal.csv", "INSPQ — Cas et tests cumulatifs (Montréal)",
+     "Cas confirmés et tests réalisés, cumulatifs, région 06."],
+    ["inspq-positivite-montreal.csv", "INSPQ — Taux de positivité (Montréal)",
+     "Positivité quotidienne, région 06. Ce qui dit quand le dépistage a saturé — décembre 2021 en particulier."],
+    ["inspq-vaccination-montreal.csv", "INSPQ — Doses administrées par jour (Montréal)",
+     "Doses 1 à 4 par jour, région 06."],
+    ["inspq-rt-quebec.csv", "INSPQ — Taux de reproduction Rt (Québec)",
+     "Rt estimé par l'INSPQ avec son intervalle. Province entière, non régionalisé."],
+    ["inspq-eclosions-par-milieu-quebec.csv", "INSPQ — Éclosions actives par milieu (Québec)",
+     "Éclosions actives par jour et par milieu : travail, primaire, secondaire, cégep, université, garderie, soins. La donnée québécoise la plus proche d'une structure de contacts par milieu — mais des éclosions ne sont pas des contacts, et elles suivent aussi l'intensité du dépistage."],
+    ["inspq-variants-part-quebec.csv", "INSPQ — Part des variants par semaine (Québec)",
+     "Séquençage aléatoire. Ce qui explique un changement de régime que le modèle ne verrait pas venir."],
+    ["inspq-cas-par-statut-vaccinal-quebec.csv", "INSPQ — Cas selon le statut vaccinal et l'âge (Québec)",
+     "Nouveaux cas par jour, groupe d'âge et statut vaccinal. Province entière."],
+  ];
+  for (const [file, name, desc] of OBSERVED) {
+    await upload(db, proj.id, file, name, desc);
+  }
+
   // The observed wave, read straight off the imported series. No R0, no contact
   // matrix, no case-hospitalisation fraction: the file says how many people
   // were admitted on each day, and that is the arrival count.
