@@ -91,15 +91,6 @@ const TYPES = [
     ],
   },
   {
-    name: "CiviereUrgence",
-    role: "space",
-    identity: ["label"],
-    schema: [
-      prop("label", "string", "Étiquette", { behaviour: "state" }),
-      prop("statut", "string", "État", { behaviour: "state" }),
-    ],
-  },
-  {
     name: "Territoire",
     role: null,
     identity: ["code"],
@@ -146,7 +137,6 @@ const TYPES = [
  */
 const LINKS = [
   { name: "situe_a", from: "LitSantePhysique", to: "OrgUnit" },
-  { name: "civiere_situe_a", from: "CiviereUrgence", to: "OrgUnit" },
   { name: "dessert", from: "Territoire", to: "OrgUnit" },
 ];
 
@@ -332,9 +322,12 @@ async function main() {
 
   // One pipeline per kind of capacity: the filter picks the unit of measure the
   // register publishes, and `expand` turns its count into that many objects.
+  // Only one kind of capacity is imported, because only one is published with a
+  // number: the register lists an emergency department as a service offered and
+  // never says how many stretchers it holds. Inventing that number is exactly
+  // what this rebuild exists to stop.
   for (const [name, unite, typeName] of [
     ["Capacités → Lits de santé physique", "Lit(s) de santé physique", "LitSantePhysique"],
-    ["Capacités → Civières d'urgence", "Urgence", "CiviereUrgence"],
   ]) {
     await pipeline(
       db,
@@ -390,7 +383,7 @@ async function main() {
             columnMapping: [scalar("label", "label", "string")],
             linkRules: [
               {
-                linkType: typeName === "CiviereUrgence" ? "civiere_situe_a" : "situe_a",
+                linkType: "situe_a",
                 targetType: "OrgUnit",
                 fromColumn: "code_installation",
                 targetProperty: "code",
@@ -408,6 +401,81 @@ async function main() {
       ],
     );
   }
+
+  // The catchment, from the region column of the installations file. All 312
+  // rows carry the same region code and upsert onto one object — which is the
+  // granularity the observed data has, and stating a finer one would claim a
+  // territorial breakdown no file here carries.
+  await pipeline(
+    db,
+    proj.id,
+    "Installations → Territoire desservi",
+    [
+      { id: "in", kind: "dataset_input", name: "Installations", x: 60, y: 100, config: { datasetId: dsInstal } },
+      {
+        id: "out",
+        kind: "object_output",
+        name: "Territoire",
+        x: 420,
+        y: 100,
+        config: {
+          objectTypeName: "Territoire",
+          identityProperties: ["code"],
+          // `population` is deliberately unmapped: no file in this import
+          // carries it, and the export says so rather than this script picking
+          // a number. Flat arrival counts do not need it; a rate per thousand
+          // would, and then the gap is the thing to fix first.
+          columnMapping: [scalar("RSS_CODE", "code", "string"), scalar("RSS_NOM", "name", "string")],
+          linkRules: [
+            {
+              linkType: "dessert",
+              targetType: "OrgUnit",
+              fromColumn: "INSTAL_COD",
+              targetProperty: "code",
+              direction: "out",
+            },
+          ],
+        },
+      },
+    ],
+    [{ from: "in", to: "out" }],
+  );
+
+  const dsSoins = await upload(
+    db,
+    proj.id,
+    "hypotheses-soins-montreal.csv",
+    "HYPOTHÈSE — Modèle de soins",
+    "PAS UNE SOURCE. Combien de temps une hospitalisation occupe un lit. Aucun " +
+      "fichier de cet import ne le publie ; c'est une hypothèse à ajuster.",
+  );
+  await pipeline(
+    db,
+    proj.id,
+    "Hypothèses → Protocole",
+    [
+      { id: "in", kind: "dataset_input", name: "Hypothèses", x: 60, y: 100, config: { datasetId: dsSoins } },
+      {
+        id: "out",
+        kind: "object_output",
+        name: "Protocole",
+        x: 420,
+        y: 100,
+        config: {
+          objectTypeName: "Protocole",
+          identityProperties: ["name"],
+          columnMapping: [
+            scalar("nom", "name", "string"),
+            scalar("severite", "severite", "string"),
+            scalar("ressource", "ressource", "string"),
+            scalar("quantite", "quantite", "number"),
+            scalar("sejour_pas", "sejour_pas", "number"),
+          ],
+        },
+      },
+    ],
+    [{ from: "in", to: "out" }],
+  );
 
   await pool.end();
 }

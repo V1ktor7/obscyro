@@ -1,572 +1,572 @@
 code_installation,nom_installation,mct_capacite_service_installation,unite_mesure_installation,capacite_installation,statut,date_extraction
-53324349,CHSLD du Manoir-de-l'Ouest-de-l'�le,CHSLD,Lit(s) d'h�bergement permanent,88,Priv�,2026-08-01
-51230118,Ch�teau sur le Lac,CHSLD,Lit(s) d'h�bergement permanent,50,Priv�,2026-08-01
-51223204,CHSLD Vigi l'Orchid�e blanche,CHSLD,Lit(s) d'h�bergement permanent,128,Priv�,2026-08-01
-51223329,CHSLD Vigi de l'Outaouais,CHSLD,Lit(s) d'h�bergement permanent,96,Priv�,2026-08-01
-51223337,CHSLD Vigi Yves-Blais,CHSLD,Lit(s) d'h�bergement permanent,99,Priv�,2026-08-01
-51223345,CHSLD Vigi de Brossard,CHSLD,Lit(s) d'h�bergement permanent,66,Priv�,2026-08-01
-51225407,CHSLD Vigi Reine-�lizabeth,CHSLD,Lit(s) d'h�bergement permanent,150,Priv�,2026-08-01
-51225563,CHSLD Vigi Les Chutes,CHSLD,Lit(s) d'h�bergement permanent,64,Priv�,2026-08-01
-51230506,CHSLD Vigi Shermont,CHSLD,Lit(s) d'h�bergement permanent,64,Priv�,2026-08-01
-51231215,CHSLD Vigi de Deux-Montagnes,CHSLD,Lit(s) d'h�bergement permanent,76,Priv�,2026-08-01
-51232627,CHSLD Vigi Marie-Claret,CHSLD,Lit(s) d'h�bergement permanent,52,Priv�,2026-08-01
-54583091,CHSLD Vigi de Saint-Augustin,CHSLD,Lit(s) d'h�bergement permanent,100,Priv�,2026-08-01
-54583208,CHSLD Vigi de Dollard-des-Ormeaux,CHSLD,Centre de jour,n.a.,Priv�,2026-08-01
-54583208,CHSLD Vigi de Dollard-des-Ormeaux,CHSLD,Lit(s) d'h�bergement permanent,160,Priv�,2026-08-01
-54583232,CHSLD Vigi de Pierrefonds,CHSLD,Lit(s) d'h�bergement permanent,64,Priv�,2026-08-01
-54601018,CHSLD Vigi Notre-Dame-de-Lourdes,CHSLD,Lit(s) d'h�bergement permanent,40,Priv�,2026-08-01
-54661442,CHSLD Vigi de Mont�r�gie,CHSLD,Lit(s) d'h�bergement permanent,90,Priv�,2026-08-01
-55477988,CHSLD Vigi de Mont-Royal,CHSLD,Lit(s) d'h�bergement permanent,273,Priv�,2026-08-01
-51220911,Atelier de travail Labrosse,CRDI,Place(s) en atelier de travail,56,Public � Territorial,2026-08-01
-51221455,Foyer de groupe Dornal,CRJDA,Place(s) en foyer de groupe,9,Public � Territorial,2026-08-01
-51221794,Centre act. de jour Option,CRDI,Place(s) en centre d'activit�s de jour,20,Public � Territorial,2026-08-01
-51221802,Atelier de travail et centre act. de jour Benny,CRDI,Place(s) en atelier de travail,25,Public � Territorial,2026-08-01
-51221802,Atelier de travail et centre act. de jour Benny,CRDI,Place(s) en centre d'activit�s de jour,28,Public � Territorial,2026-08-01
-51223048,Campus Cartier,CRJDA,Place(s) en internat - unit� de vie,11,Public � Territorial,2026-08-01
-51223246,H�pital Grace Dart,CHSLD,Lit(s) d'h�bergement temporaire,92,Public,2026-08-01
-51223253,Centre d'h�bergement de Dorval,CHSLD,Lit(s) d'h�bergement permanent,96,Public � Territorial,2026-08-01
-51223253,Centre d'h�bergement de Dorval,CHSLD,Centre de jour,n.a.,Public � Territorial,2026-08-01
-51223253,Centre d'h�bergement de Dorval,CHSLD,Lit(s) d'h�bergement temporaire,15,Public � Territorial,2026-08-01
-51223261,Centre d'h�bergement Nazaire-Pich�,CHSLD,Lit(s) d'h�bergement permanent,100,Public � Territorial,2026-08-01
-51224103,Foyer de groupe Colton,CRJDA,Place(s) en foyer de groupe,9,Public � Territorial,2026-08-01
-51224392,H�pital de LaSalle,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51224392,H�pital de LaSalle,CHSLD,Lit(s) d'h�bergement permanent,115,Public � Territorial,2026-08-01
-51224392,H�pital de LaSalle,CHSGS,Lit(s) de sant� physique,110,Public � Territorial,2026-08-01
-51224392,H�pital de LaSalle,CHSGS,Urgence,n.a.,Public � Territorial,2026-08-01
-51225068,Centre serv. amb. en SM Saint-Charles,CLSC,,n.a.,Public � Territorial,2026-08-01
-51225340,Centre de services en DITED de l'Ouest-de-Montr�al,CRDI,Services externes,n.a.,Public � Territorial,2026-08-01
-51228245,Centre d'h�bergement Denis-Benjamin-Viger,CHSLD,Centre de jour,n.a.,Public � Territorial,2026-08-01
-51228245,Centre d'h�bergement Denis-Benjamin-Viger,CHSLD,Lit(s) d'h�bergement permanent,125,Public � Territorial,2026-08-01
-51228252,CLSC du Lac-Saint-Louis,CLSC,,n.a.,Public � Territorial,2026-08-01
-51228260,CLSC de Pierrefonds,CLSC,,n.a.,Public � Territorial,2026-08-01
-51228278,H�pital g�n�ral du Lakeshore,CHSGS,Groupe de m�decine de famille universitaire,0,Public � Territorial,2026-08-01
-51228278,H�pital g�n�ral du Lakeshore,CLSC,,n.a.,Public � Territorial,2026-08-01
-51228278,H�pital g�n�ral du Lakeshore,CHSLD,Lit(s) d'h�bergement transitoire,30,Public � Territorial,2026-08-01
-51228278,H�pital g�n�ral du Lakeshore,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51228278,H�pital g�n�ral du Lakeshore,CHSLD,H�pital de jour,n.a.,Public � Territorial,2026-08-01
-51228278,H�pital g�n�ral du Lakeshore,CHSGS,Lit(s) de sant� physique,234,Public � Territorial,2026-08-01
-51228278,H�pital g�n�ral du Lakeshore,CHSGS,Lit(s) de psychiatrie,31,Public � Territorial,2026-08-01
-51228278,H�pital g�n�ral du Lakeshore,CHSGS,Urgence,n.a.,Public � Territorial,2026-08-01
-51228286,Centre d'h�bergement de LaSalle,CHSLD,Lit(s) d'h�bergement temporaire,4,Public � Territorial,2026-08-01
-51228286,Centre d'h�bergement de LaSalle,CHSLD,Centre de jour,n.a.,Public � Territorial,2026-08-01
-51228286,Centre d'h�bergement de LaSalle,CHSLD,Lit(s) d'h�bergement permanent,198,Public � Territorial,2026-08-01
-51228294,CLSC de Dorval-Lachine,CLSC,,n.a.,Public � Territorial,2026-08-01
-51228302,Centre d'h�bergement de Lachine,CHSLD,Centre de jour,n.a.,Public � Territorial,2026-08-01
-51228302,Centre d'h�bergement de Lachine,CHSLD,Lit(s) d'h�bergement permanent,187,Public � Territorial,2026-08-01
-51232650,Foyer de groupe Roxboro,CRJDA,Place(s) en foyer de groupe,9,Public � Territorial,2026-08-01
-51234383,Centre act. de jour Alternative,CRDI,Place(s) en centre d'activit�s de jour,30,Public � Territorial,2026-08-01
-51234391,Centre act. de jour Cartier,CRDI,Place(s) en centre d'activit�s de jour,30,Public � Territorial,2026-08-01
-51235190,H�pital Douglas,CHPSY,Lit(s) de psychiatrie,260,Public,2026-08-01
-51235190,H�pital Douglas,CHPSY,Lit(s) de sant� physique,6,Public,2026-08-01
-51235190,H�pital Douglas,CHPSY,"Centre de jour, sant� mentale",n.a.,Public,2026-08-01
-51235190,H�pital Douglas,CHPSY,Consultations externes,n.a.,Public,2026-08-01
-51235190,H�pital Douglas,CHPSY,"H�pital de jour, sant� mentale",n.a.,Public,2026-08-01
-51235190,H�pital Douglas,CHPSY,Urgence,n.a.,Public,2026-08-01
+53324349,CHSLD du Manoir-de-l'Ouest-de-l'Île,CHSLD,Lit(s) d'hébergement permanent,88,Privé,2026-08-01
+51230118,Château sur le Lac,CHSLD,Lit(s) d'hébergement permanent,50,Privé,2026-08-01
+51223204,CHSLD Vigi l'Orchidée blanche,CHSLD,Lit(s) d'hébergement permanent,128,Privé,2026-08-01
+51223329,CHSLD Vigi de l'Outaouais,CHSLD,Lit(s) d'hébergement permanent,96,Privé,2026-08-01
+51223337,CHSLD Vigi Yves-Blais,CHSLD,Lit(s) d'hébergement permanent,99,Privé,2026-08-01
+51223345,CHSLD Vigi de Brossard,CHSLD,Lit(s) d'hébergement permanent,66,Privé,2026-08-01
+51225407,CHSLD Vigi Reine-Élizabeth,CHSLD,Lit(s) d'hébergement permanent,150,Privé,2026-08-01
+51225563,CHSLD Vigi Les Chutes,CHSLD,Lit(s) d'hébergement permanent,64,Privé,2026-08-01
+51230506,CHSLD Vigi Shermont,CHSLD,Lit(s) d'hébergement permanent,64,Privé,2026-08-01
+51231215,CHSLD Vigi de Deux-Montagnes,CHSLD,Lit(s) d'hébergement permanent,76,Privé,2026-08-01
+51232627,CHSLD Vigi Marie-Claret,CHSLD,Lit(s) d'hébergement permanent,52,Privé,2026-08-01
+54583091,CHSLD Vigi de Saint-Augustin,CHSLD,Lit(s) d'hébergement permanent,100,Privé,2026-08-01
+54583208,CHSLD Vigi de Dollard-des-Ormeaux,CHSLD,Centre de jour,n.a.,Privé,2026-08-01
+54583208,CHSLD Vigi de Dollard-des-Ormeaux,CHSLD,Lit(s) d'hébergement permanent,160,Privé,2026-08-01
+54583232,CHSLD Vigi de Pierrefonds,CHSLD,Lit(s) d'hébergement permanent,64,Privé,2026-08-01
+54601018,CHSLD Vigi Notre-Dame-de-Lourdes,CHSLD,Lit(s) d'hébergement permanent,40,Privé,2026-08-01
+54661442,CHSLD Vigi de Montérégie,CHSLD,Lit(s) d'hébergement permanent,90,Privé,2026-08-01
+55477988,CHSLD Vigi de Mont-Royal,CHSLD,Lit(s) d'hébergement permanent,273,Privé,2026-08-01
+51220911,Atelier de travail Labrosse,CRDI,Place(s) en atelier de travail,56,Public – Territorial,2026-08-01
+51221455,Foyer de groupe Dornal,CRJDA,Place(s) en foyer de groupe,9,Public – Territorial,2026-08-01
+51221794,Centre act. de jour Option,CRDI,Place(s) en centre d'activités de jour,20,Public – Territorial,2026-08-01
+51221802,Atelier de travail et centre act. de jour Benny,CRDI,Place(s) en atelier de travail,25,Public – Territorial,2026-08-01
+51221802,Atelier de travail et centre act. de jour Benny,CRDI,Place(s) en centre d'activités de jour,28,Public – Territorial,2026-08-01
+51223048,Campus Cartier,CRJDA,Place(s) en internat - unité de vie,11,Public – Territorial,2026-08-01
+51223246,Hôpital Grace Dart,CHSLD,Lit(s) d'hébergement temporaire,92,Public,2026-08-01
+51223253,Centre d'hébergement de Dorval,CHSLD,Lit(s) d'hébergement permanent,96,Public – Territorial,2026-08-01
+51223253,Centre d'hébergement de Dorval,CHSLD,Centre de jour,n.a.,Public – Territorial,2026-08-01
+51223253,Centre d'hébergement de Dorval,CHSLD,Lit(s) d'hébergement temporaire,15,Public – Territorial,2026-08-01
+51223261,Centre d'hébergement Nazaire-Piché,CHSLD,Lit(s) d'hébergement permanent,100,Public – Territorial,2026-08-01
+51224103,Foyer de groupe Colton,CRJDA,Place(s) en foyer de groupe,9,Public – Territorial,2026-08-01
+51224392,Hôpital de LaSalle,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51224392,Hôpital de LaSalle,CHSLD,Lit(s) d'hébergement permanent,115,Public – Territorial,2026-08-01
+51224392,Hôpital de LaSalle,CHSGS,Lit(s) de santé physique,110,Public – Territorial,2026-08-01
+51224392,Hôpital de LaSalle,CHSGS,Urgence,n.a.,Public – Territorial,2026-08-01
+51225068,Centre serv. amb. en SM Saint-Charles,CLSC,,n.a.,Public – Territorial,2026-08-01
+51225340,Centre de services en DITED de l'Ouest-de-Montréal,CRDI,Services externes,n.a.,Public – Territorial,2026-08-01
+51228245,Centre d'hébergement Denis-Benjamin-Viger,CHSLD,Centre de jour,n.a.,Public – Territorial,2026-08-01
+51228245,Centre d'hébergement Denis-Benjamin-Viger,CHSLD,Lit(s) d'hébergement permanent,125,Public – Territorial,2026-08-01
+51228252,CLSC du Lac-Saint-Louis,CLSC,,n.a.,Public – Territorial,2026-08-01
+51228260,CLSC de Pierrefonds,CLSC,,n.a.,Public – Territorial,2026-08-01
+51228278,Hôpital général du Lakeshore,CHSGS,Groupe de médecine de famille universitaire,0,Public – Territorial,2026-08-01
+51228278,Hôpital général du Lakeshore,CLSC,,n.a.,Public – Territorial,2026-08-01
+51228278,Hôpital général du Lakeshore,CHSLD,Lit(s) d'hébergement transitoire,30,Public – Territorial,2026-08-01
+51228278,Hôpital général du Lakeshore,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51228278,Hôpital général du Lakeshore,CHSLD,Hôpital de jour,n.a.,Public – Territorial,2026-08-01
+51228278,Hôpital général du Lakeshore,CHSGS,Lit(s) de santé physique,234,Public – Territorial,2026-08-01
+51228278,Hôpital général du Lakeshore,CHSGS,Lit(s) de psychiatrie,31,Public – Territorial,2026-08-01
+51228278,Hôpital général du Lakeshore,CHSGS,Urgence,n.a.,Public – Territorial,2026-08-01
+51228286,Centre d'hébergement de LaSalle,CHSLD,Lit(s) d'hébergement temporaire,4,Public – Territorial,2026-08-01
+51228286,Centre d'hébergement de LaSalle,CHSLD,Centre de jour,n.a.,Public – Territorial,2026-08-01
+51228286,Centre d'hébergement de LaSalle,CHSLD,Lit(s) d'hébergement permanent,198,Public – Territorial,2026-08-01
+51228294,CLSC de Dorval-Lachine,CLSC,,n.a.,Public – Territorial,2026-08-01
+51228302,Centre d'hébergement de Lachine,CHSLD,Centre de jour,n.a.,Public – Territorial,2026-08-01
+51228302,Centre d'hébergement de Lachine,CHSLD,Lit(s) d'hébergement permanent,187,Public – Territorial,2026-08-01
+51232650,Foyer de groupe Roxboro,CRJDA,Place(s) en foyer de groupe,9,Public – Territorial,2026-08-01
+51234383,Centre act. de jour Alternative,CRDI,Place(s) en centre d'activités de jour,30,Public – Territorial,2026-08-01
+51234391,Centre act. de jour Cartier,CRDI,Place(s) en centre d'activités de jour,30,Public – Territorial,2026-08-01
+51235190,Hôpital Douglas,CHPSY,Lit(s) de psychiatrie,260,Public,2026-08-01
+51235190,Hôpital Douglas,CHPSY,Lit(s) de santé physique,6,Public,2026-08-01
+51235190,Hôpital Douglas,CHPSY,"Centre de jour, santé mentale",n.a.,Public,2026-08-01
+51235190,Hôpital Douglas,CHPSY,Consultations externes,n.a.,Public,2026-08-01
+51235190,Hôpital Douglas,CHPSY,"Hôpital de jour, santé mentale",n.a.,Public,2026-08-01
+51235190,Hôpital Douglas,CHPSY,Urgence,n.a.,Public,2026-08-01
 51235208,Centre serv. amb. de soins psy. Crawford,CHPSY,Consultations externes,n.a.,Public,2026-08-01
-51235216,Centre serv. amb. de soins psy. Wellington,CHPSY,"Centre de jour, sant� mentale",n.a.,Public,2026-08-01
+51235216,Centre serv. amb. de soins psy. Wellington,CHPSY,"Centre de jour, santé mentale",n.a.,Public,2026-08-01
 51236263,GMFU et centre serv. amb. de St. Mary,CHSGS,Consultations externes,n.a.,Public,2026-08-01
-51236263,GMFU et centre serv. amb. de St. Mary,CHSGS,Groupe de m�decine de famille universitaire,0,Public,2026-08-01
-51236305,CHSLD des Berges-de-Lachine,CHSLD,Lit(s) d'h�bergement permanent,30,Public � Territorial,2026-08-01
-51236305,CHSLD des Berges-de-Lachine,CHSLD,Lit(s) d'h�bergement permanent en sant� mentale,32,Public � Territorial,2026-08-01
-51236412,Centre serv. amb. en SM de Longueuil,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51243202,CRDI-TSA Garry-Taylor,CRDI,Services externes,n.a.,Public � Territorial,2026-08-01
-51248235,Centre de soins prolong�s Grace Dart,CHSLD,Lit(s) d'h�bergement temporaire,15,Public,2026-08-01
-51248235,Centre de soins prolong�s Grace Dart,CHSLD,Lit(s) d'h�bergement permanent,241,Public,2026-08-01
+51236263,GMFU et centre serv. amb. de St. Mary,CHSGS,Groupe de médecine de famille universitaire,0,Public,2026-08-01
+51236305,CHSLD des Berges-de-Lachine,CHSLD,Lit(s) d'hébergement permanent,30,Public – Territorial,2026-08-01
+51236305,CHSLD des Berges-de-Lachine,CHSLD,Lit(s) d'hébergement permanent en santé mentale,32,Public – Territorial,2026-08-01
+51236412,Centre serv. amb. en SM de Longueuil,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51243202,CRDI-TSA Garry-Taylor,CRDI,Services externes,n.a.,Public – Territorial,2026-08-01
+51248235,Centre de soins prolongés Grace Dart,CHSLD,Lit(s) d'hébergement temporaire,15,Public,2026-08-01
+51248235,Centre de soins prolongés Grace Dart,CHSLD,Lit(s) d'hébergement permanent,241,Public,2026-08-01
 51248243,Centre hospitalier de St. Mary,CHSGS,Urgence,n.a.,Public,2026-08-01
-51248243,Centre hospitalier de St. Mary,CHSGS,Lit(s) de sant� physique,224,Public,2026-08-01
+51248243,Centre hospitalier de St. Mary,CHSGS,Lit(s) de santé physique,224,Public,2026-08-01
 51248243,Centre hospitalier de St. Mary,CHSGS,Consultations externes,n.a.,Public,2026-08-01
 51248243,Centre hospitalier de St. Mary,CHSGS,Lit(s) de psychiatrie,29,Public,2026-08-01
-51248243,Centre hospitalier de St. Mary,CHSGS,Lit(s) de g�riatrie,24,Public,2026-08-01
-51248524,MA Dorval,CHSLD,Lit(s) d'h�bergement permanent,72,Public � Territorial,2026-08-01
-51248896,CHSLD Stillview,CHSLD,Lit(s) d'h�bergement permanent,38,Public � Territorial,2026-08-01
-51249027,Centre serv. amb. Stillview,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51249589,Aire ouverte de Lasalle,CLSC,,n.a.,Public � Territorial,2026-08-01
-51249688,Foyer de groupe pour JDA Lachine,CRJDA,Place(s) en internat - unit� de vie,9,Public � Territorial,2026-08-01
-51340248,CPEJ West Island,CPEJ,,n.a.,Public � Territorial,2026-08-01
-51340297,CPEJ Sainte-Catherine,CPEJ,,n.a.,Public � Territorial,2026-08-01
-51521425,H�pital Sainte-Anne,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51521425,H�pital Sainte-Anne,CHSLD,Lit(s) d'h�bergement permanent,446,Public � Territorial,2026-08-01
-51521425,H�pital Sainte-Anne,CHSLD,Centre de jour,n.a.,Public � Territorial,2026-08-01
-51521425,H�pital Sainte-Anne,CHSLD,Lit(s) d'h�bergement temporaire en sant� mentale,15,Public � Territorial,2026-08-01
-51610095,Appart. Supervis� pour JDA Aspire 2,CRJDA,Place(s) en appartement supervis� pour jeunes,6,Public � Territorial,2026-08-01
-51610111,Foyer de groupe Maisonneuve,CRJDA,Place(s) en foyer de groupe,9,Public � Territorial,2026-08-01
-51610137,Foyer de groupe Couvrette,CRJDA,Place(s) en foyer de groupe,9,Public � Territorial,2026-08-01
-51610145,Foyer de groupe Rudel,CRJDA,Place(s) en foyer de groupe,9,Public � Territorial,2026-08-01
-51610186,Foyer de groupe Saint-James,CRJDA,Place(s) en foyer de groupe,9,Public � Territorial,2026-08-01
-51610194,Foyer de groupe Bourbonni�re,CRJDA,Centre de jour,n.a.,Public � Territorial,2026-08-01
-51610194,Foyer de groupe Bourbonni�re,CRJDA,Place(s) en foyer de groupe,6,Public � Territorial,2026-08-01
-51791754,Succursale Tribunal de la jeunesse,CPEJ,,n.a.,Public � Territorial,2026-08-01
-51835742,CPEJ Tupper,CPEJ,,n.a.,Public � Territorial,2026-08-01
-52504065,CRJDA Pr�vost,CRJDA,Place(s) en internat - unit� de vie,76,Public � Territorial,2026-08-01
-52527314,CRJDA Dorval,CRJDA,Centre de jour,n.a.,Public � Territorial,2026-08-01
-52527314,CRJDA Dorval,CRJDA,Place(s) en internat - unit� de vie,41,Public � Territorial,2026-08-01
-52527348,Foyer de groupe Wolseley,CRJDA,Place(s) en foyer de groupe,6,Public � Territorial,2026-08-01
-52527355,Foyer de groupe Hawkins,CRJDA,Place(s) en foyer de groupe,9,Public � Territorial,2026-08-01
-53584785,Appart. supervis� pour JDA ASPIRE,CRJDA,Place(s) en appartement supervis� pour jeunes,5,Public � Territorial,2026-08-01
-54103080,Les centres de la jeunesse et de la famille Batshaw,CRJDA,Services externes,n.a.,Public � Territorial,2026-08-01
-54878111,CLSC de LaSalle,CLSC,,n.a.,Public � Territorial,2026-08-01
-51248029,CHSLD Bayview,CHSLD,Lit(s) d'h�bergement permanent,128,Priv�,2026-08-01
-51248094,Manoir Beaconsfield,CHSLD,Lit(s) d'h�bergement permanent,23,Priv�,2026-08-01
-51248110,CHSLD Bussey (Qu�bec),CHSLD,Lit(s) d'h�bergement permanent,27,Priv�,2026-08-01
-51218162,CHSLD Le Royer,CHSLD,Lit(s) d'h�bergement permanent,96,Priv�,2026-08-01
-51227957,CHSLD Saint-Georges,CHSLD,Lit(s) d'h�bergement permanent,260,Priv�,2026-08-01
-51234359,CRD du Nouveau D�part,CRD,Centre de jour,n.a.,Priv�,2026-08-01
-51234359,CRD du Nouveau D�part,CRD,Services externes,n.a.,Priv�,2026-08-01
-51234359,CRD du Nouveau D�part,CRD,Place(s) en internat,30,Priv�,2026-08-01
-51217933,Maison de naissance de C�te-des-Neiges,CLSC,,n.a.,Public � Territorial,2026-08-01
-51228393,CLSC Ren�-Cassin,CLSC,,n.a.,Public � Territorial,2026-08-01
-51228401,H�pital Richardson,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51228401,H�pital Richardson,CHSGS,Lit(s) de sant� physique,60,Public � Territorial,2026-08-01
-51228419,CLSC et GMFU C�te-des-Neiges,CLSC,,n.a.,Public � Territorial,2026-08-01
-51228419,CLSC et GMFU C�te-des-Neiges,CHSGS,Groupe de m�decine de famille universitaire,0,Public � Territorial,2026-08-01
-51228427,CLSC et GMFU M�tro,CHSGS,Groupe de m�decine de famille universitaire,0,Public � Territorial,2026-08-01
-51228427,CLSC et GMFU M�tro,CLSC,,n.a.,Public � Territorial,2026-08-01
-51230225,Centre d'h�bergement Father-Dowd,CHSLD,Lit(s) d'h�bergement permanent,134,Public � Territorial,2026-08-01
-51230233,Centre d'h�bergement Saint-Margaret,CHSLD,Lit(s) d'h�bergement permanent,96,Public � Territorial,2026-08-01
-51230233,Centre d'h�bergement Saint-Margaret,CHSLD,Centre de jour,n.a.,Public � Territorial,2026-08-01
-51231363,Centre multi. SSS de Parc-Extension,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51231363,Centre multi. SSS de Parc-Extension,CHSGS,Groupe de m�decine de famille universitaire,0,Public � Territorial,2026-08-01
-51231363,Centre multi. SSS de Parc-Extension,CLSC,,n.a.,Public � Territorial,2026-08-01
-51231363,Centre multi. SSS de Parc-Extension,CHSLD,Centre de jour,n.a.,Public � Territorial,2026-08-01
+51248243,Centre hospitalier de St. Mary,CHSGS,Lit(s) de gériatrie,24,Public,2026-08-01
+51248524,MA Dorval,CHSLD,Lit(s) d'hébergement permanent,72,Public – Territorial,2026-08-01
+51248896,CHSLD Stillview,CHSLD,Lit(s) d'hébergement permanent,38,Public – Territorial,2026-08-01
+51249027,Centre serv. amb. Stillview,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51249589,Aire ouverte de Lasalle,CLSC,,n.a.,Public – Territorial,2026-08-01
+51249688,Foyer de groupe pour JDA Lachine,CRJDA,Place(s) en internat - unité de vie,9,Public – Territorial,2026-08-01
+51340248,CPEJ West Island,CPEJ,,n.a.,Public – Territorial,2026-08-01
+51340297,CPEJ Sainte-Catherine,CPEJ,,n.a.,Public – Territorial,2026-08-01
+51521425,Hôpital Sainte-Anne,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51521425,Hôpital Sainte-Anne,CHSLD,Lit(s) d'hébergement permanent,446,Public – Territorial,2026-08-01
+51521425,Hôpital Sainte-Anne,CHSLD,Centre de jour,n.a.,Public – Territorial,2026-08-01
+51521425,Hôpital Sainte-Anne,CHSLD,Lit(s) d'hébergement temporaire en santé mentale,15,Public – Territorial,2026-08-01
+51610095,Appart. Supervisé pour JDA Aspire 2,CRJDA,Place(s) en appartement supervisé pour jeunes,6,Public – Territorial,2026-08-01
+51610111,Foyer de groupe Maisonneuve,CRJDA,Place(s) en foyer de groupe,9,Public – Territorial,2026-08-01
+51610137,Foyer de groupe Couvrette,CRJDA,Place(s) en foyer de groupe,9,Public – Territorial,2026-08-01
+51610145,Foyer de groupe Rudel,CRJDA,Place(s) en foyer de groupe,9,Public – Territorial,2026-08-01
+51610186,Foyer de groupe Saint-James,CRJDA,Place(s) en foyer de groupe,9,Public – Territorial,2026-08-01
+51610194,Foyer de groupe Bourbonnière,CRJDA,Centre de jour,n.a.,Public – Territorial,2026-08-01
+51610194,Foyer de groupe Bourbonnière,CRJDA,Place(s) en foyer de groupe,6,Public – Territorial,2026-08-01
+51791754,Succursale Tribunal de la jeunesse,CPEJ,,n.a.,Public – Territorial,2026-08-01
+51835742,CPEJ Tupper,CPEJ,,n.a.,Public – Territorial,2026-08-01
+52504065,CRJDA Prévost,CRJDA,Place(s) en internat - unité de vie,76,Public – Territorial,2026-08-01
+52527314,CRJDA Dorval,CRJDA,Centre de jour,n.a.,Public – Territorial,2026-08-01
+52527314,CRJDA Dorval,CRJDA,Place(s) en internat - unité de vie,41,Public – Territorial,2026-08-01
+52527348,Foyer de groupe Wolseley,CRJDA,Place(s) en foyer de groupe,6,Public – Territorial,2026-08-01
+52527355,Foyer de groupe Hawkins,CRJDA,Place(s) en foyer de groupe,9,Public – Territorial,2026-08-01
+53584785,Appart. supervisé pour JDA ASPIRE,CRJDA,Place(s) en appartement supervisé pour jeunes,5,Public – Territorial,2026-08-01
+54103080,Les centres de la jeunesse et de la famille Batshaw,CRJDA,Services externes,n.a.,Public – Territorial,2026-08-01
+54878111,CLSC de LaSalle,CLSC,,n.a.,Public – Territorial,2026-08-01
+51248029,CHSLD Bayview,CHSLD,Lit(s) d'hébergement permanent,128,Privé,2026-08-01
+51248094,Manoir Beaconsfield,CHSLD,Lit(s) d'hébergement permanent,23,Privé,2026-08-01
+51248110,CHSLD Bussey (Québec),CHSLD,Lit(s) d'hébergement permanent,27,Privé,2026-08-01
+51218162,CHSLD Le Royer,CHSLD,Lit(s) d'hébergement permanent,96,Privé,2026-08-01
+51227957,CHSLD Saint-Georges,CHSLD,Lit(s) d'hébergement permanent,260,Privé,2026-08-01
+51234359,CRD du Nouveau Départ,CRD,Centre de jour,n.a.,Privé,2026-08-01
+51234359,CRD du Nouveau Départ,CRD,Services externes,n.a.,Privé,2026-08-01
+51234359,CRD du Nouveau Départ,CRD,Place(s) en internat,30,Privé,2026-08-01
+51217933,Maison de naissance de Côte-des-Neiges,CLSC,,n.a.,Public – Territorial,2026-08-01
+51228393,CLSC René-Cassin,CLSC,,n.a.,Public – Territorial,2026-08-01
+51228401,Hôpital Richardson,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51228401,Hôpital Richardson,CHSGS,Lit(s) de santé physique,60,Public – Territorial,2026-08-01
+51228419,CLSC et GMFU Côte-des-Neiges,CLSC,,n.a.,Public – Territorial,2026-08-01
+51228419,CLSC et GMFU Côte-des-Neiges,CHSGS,Groupe de médecine de famille universitaire,0,Public – Territorial,2026-08-01
+51228427,CLSC et GMFU Métro,CHSGS,Groupe de médecine de famille universitaire,0,Public – Territorial,2026-08-01
+51228427,CLSC et GMFU Métro,CLSC,,n.a.,Public – Territorial,2026-08-01
+51230225,Centre d'hébergement Father-Dowd,CHSLD,Lit(s) d'hébergement permanent,134,Public – Territorial,2026-08-01
+51230233,Centre d'hébergement Saint-Margaret,CHSLD,Lit(s) d'hébergement permanent,96,Public – Territorial,2026-08-01
+51230233,Centre d'hébergement Saint-Margaret,CHSLD,Centre de jour,n.a.,Public – Territorial,2026-08-01
+51231363,Centre multi. SSS de Parc-Extension,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51231363,Centre multi. SSS de Parc-Extension,CHSGS,Groupe de médecine de famille universitaire,0,Public – Territorial,2026-08-01
+51231363,Centre multi. SSS de Parc-Extension,CLSC,,n.a.,Public – Territorial,2026-08-01
+51231363,Centre multi. SSS de Parc-Extension,CHSLD,Centre de jour,n.a.,Public – Territorial,2026-08-01
 51231959,CRDP Constance-Lethbridge,CRDPM,Services externes,n.a.,Public,2026-08-01
 51231959,CRDP Constance-Lethbridge,CRDPM,Service d'aides techniques,n.a.,Public,2026-08-01
-51232221,Serv. aides tech. et serv. ext. �dith-Strauss,CRDPM,Services externes,n.a.,Public,2026-08-01
-51232221,Serv. aides tech. et serv. ext. �dith-Strauss,CRDPM,Service d'aides techniques,n.a.,Public,2026-08-01
-51233013,H�pital g�n�ral juif,CHSGS,Consultations externes,n.a.,Public,2026-08-01
-51233013,H�pital g�n�ral juif,CHSGS,"H�pital de jour, sant� mentale",n.a.,Public,2026-08-01
-51233401,Centre d'h�bergement Saint-Andrew,CHSLD,Lit(s) d'h�bergement permanent,70,Public � Territorial,2026-08-01
-51234235,H�pital Catherine-Booth,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51234235,H�pital Catherine-Booth,CHSGS,Lit(s) de sant� physique,86,Public � Territorial,2026-08-01
-51234698,CLSC de Benny Farm,CLSC,,n.a.,Public � Territorial,2026-08-01
-51235109,CHSLD Kastner,CHSLD,Lit(s) d'h�bergement permanent,160,Public,2026-08-01
-51235117,CHSLD Hope,CHSLD,Lit(s) d'h�bergement permanent,160,Public,2026-08-01
+51232221,Serv. aides tech. et serv. ext. Édith-Strauss,CRDPM,Services externes,n.a.,Public,2026-08-01
+51232221,Serv. aides tech. et serv. ext. Édith-Strauss,CRDPM,Service d'aides techniques,n.a.,Public,2026-08-01
+51233013,Hôpital général juif,CHSGS,Consultations externes,n.a.,Public,2026-08-01
+51233013,Hôpital général juif,CHSGS,"Hôpital de jour, santé mentale",n.a.,Public,2026-08-01
+51233401,Centre d'hébergement Saint-Andrew,CHSLD,Lit(s) d'hébergement permanent,70,Public – Territorial,2026-08-01
+51234235,Hôpital Catherine-Booth,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51234235,Hôpital Catherine-Booth,CHSGS,Lit(s) de santé physique,86,Public – Territorial,2026-08-01
+51234698,CLSC de Benny Farm,CLSC,,n.a.,Public – Territorial,2026-08-01
+51235109,CHSLD Kastner,CHSLD,Lit(s) d'hébergement permanent,160,Public,2026-08-01
+51235117,CHSLD Hope,CHSLD,Lit(s) d'hébergement permanent,160,Public,2026-08-01
 51236024,CRDP MAB,CRDPA,Services externes,n.a.,Public,2026-08-01
 51236024,CRDP MAB,CRDPV,Services externes,n.a.,Public,2026-08-01
 51236024,CRDP MAB,CRDPV,Service d'aides techniques,n.a.,Public,2026-08-01
 51236024,CRDP MAB,CRDPA,Service d'aides techniques,n.a.,Public,2026-08-01
 51236032,CRDP Mackay,CRDPM,Services externes,n.a.,Public,2026-08-01
 51236032,CRDP Mackay,CRDPM,Service d'aides techniques,n.a.,Public,2026-08-01
-51248250,H�pital g�n�ral juif,CHSGS,Consultations externes,n.a.,Public,2026-08-01
-51248250,H�pital g�n�ral juif,CHSGS,Lit(s) de n�onatalogie,34,Public,2026-08-01
-51248250,H�pital g�n�ral juif,CHSGS,Groupe de m�decine de famille universitaire,0,Public,2026-08-01
-51248250,H�pital g�n�ral juif,CHSGS,Urgence,n.a.,Public,2026-08-01
-51248250,H�pital g�n�ral juif,CHSGS,"H�pital de jour, sant� mentale",n.a.,Public,2026-08-01
-51248250,H�pital g�n�ral juif,CHSGS,Lit(s) de psychiatrie,52,Public,2026-08-01
-51248250,H�pital g�n�ral juif,CHSGS,Lit(s) de g�riatrie,28,Public,2026-08-01
-51248250,H�pital g�n�ral juif,CHSGS,Lit(s) de sant� physique,516,Public,2026-08-01
-51248268,Centre Miriam,CRDI,Place(s) en centre d'activit�s de jour,150,Public,2026-08-01
+51248250,Hôpital général juif,CHSGS,Consultations externes,n.a.,Public,2026-08-01
+51248250,Hôpital général juif,CHSGS,Lit(s) de néonatalogie,34,Public,2026-08-01
+51248250,Hôpital général juif,CHSGS,Groupe de médecine de famille universitaire,0,Public,2026-08-01
+51248250,Hôpital général juif,CHSGS,Urgence,n.a.,Public,2026-08-01
+51248250,Hôpital général juif,CHSGS,"Hôpital de jour, santé mentale",n.a.,Public,2026-08-01
+51248250,Hôpital général juif,CHSGS,Lit(s) de psychiatrie,52,Public,2026-08-01
+51248250,Hôpital général juif,CHSGS,Lit(s) de gériatrie,28,Public,2026-08-01
+51248250,Hôpital général juif,CHSGS,Lit(s) de santé physique,516,Public,2026-08-01
+51248268,Centre Miriam,CRDI,Place(s) en centre d'activités de jour,150,Public,2026-08-01
 51248268,Centre Miriam,CRDI,Services externes,n.a.,Public,2026-08-01
-51248276,H�pital Mont Sina�,CHSLD,Lit(s) d'h�bergement permanent,30,Public,2026-08-01
-51248276,H�pital Mont Sina�,CHSGS,Lit(s) de sant� physique,65,Public,2026-08-01
-51248284,Centre hospitalier g�riatrique Maimonides,CHSLD,Lit(s) d'h�bergement permanent,387,Public,2026-08-01
-51248938,Aire ouverte de C�te-des-Neiges,CLSC,,n.a.,Public � Territorial,2026-08-01
-51249373,Clinique IPS+ Snowdon,CLSC,,n.a.,Public � Territorial,2026-08-01
-52609203,Centre d'h�bergement Henri-Bradet,CHSLD,Lit(s) d'h�bergement permanent,124,Public � Territorial,2026-08-01
-52678091,CLSC William C.-Van Horne,CLSC,,n.a.,Public � Territorial,2026-08-01
-51248060,Maison Elizabeth,CRMDA,Centre de jour,n.a.,Priv�,2026-08-01
-51248060,Maison Elizabeth,CRMDA,Services externes,n.a.,Priv�,2026-08-01
-51248060,Maison Elizabeth,CRMDA,Place(s) en internat - unit� de vie,18,Priv�,2026-08-01
-51223287,H�pital neurologique de Montr�al,CHSGS,Lit(s) de sant� physique,90,Public � Autre que territorial,2026-08-01
-51223287,H�pital neurologique de Montr�al,CHSGS,Consultations externes,n.a.,Public � Autre que territorial,2026-08-01
-51228310,H�pital de Lachine,CHSGS,Consultations externes,n.a.,Public � Autre que territorial,2026-08-01
-51228310,H�pital de Lachine,CHSGS,Urgence,n.a.,Public � Autre que territorial,2026-08-01
-51228310,H�pital de Lachine,CHSGS,Lit(s) de sant� physique,56,Public � Autre que territorial,2026-08-01
-51235406,H�pital Glen,CHSGS,Urgence,n.a.,Public � Autre que territorial,2026-08-01
-51235406,H�pital Glen,CHSGS,Lit(s) de psychiatrie,8,Public � Autre que territorial,2026-08-01
-51235406,H�pital Glen,CHSGS,"H�pital de jour, sant� mentale",n.a.,Public � Autre que territorial,2026-08-01
-51235406,H�pital Glen,CHSGS,Consultations externes,n.a.,Public � Autre que territorial,2026-08-01
-51235406,H�pital Glen,CHSGS,Lit(s) de sant� physique,480,Public � Autre que territorial,2026-08-01
-51235406,H�pital Glen,CHSGS,Lit(s) de n�onatalogie,52,Public � Autre que territorial,2026-08-01
-51235638,Centre serv. amb. de Maisonneuve,CHSGS,Consultations externes,n.a.,Public � Autre que territorial,2026-08-01
-51247138,Centre serv. amb. Allan Memorial,CHSGS,"H�pital de jour, sant� mentale",n.a.,Public � Autre que territorial,2026-08-01
-51247138,Centre serv. amb. Allan Memorial,CHSGS,Consultations externes,n.a.,Public � Autre que territorial,2026-08-01
-51247146,Centre serv. amb. Gilman,CHSGS,Consultations externes,n.a.,Public � Autre que territorial,2026-08-01
-51248219,H�pital g�n�ral de Montr�al,CHSGS,Consultations externes,n.a.,Public � Autre que territorial,2026-08-01
-51248219,H�pital g�n�ral de Montr�al,CHSGS,Lit(s) de sant� physique,236,Public � Autre que territorial,2026-08-01
-51248219,H�pital g�n�ral de Montr�al,CHSGS,Lit(s) de psychiatrie,46,Public � Autre que territorial,2026-08-01
-51248219,H�pital g�n�ral de Montr�al,CHSGS,Urgence,n.a.,Public � Autre que territorial,2026-08-01
-55603351,Centre d'h�bergement Camille-Lefebvre,CHSGS,Lit(s) de sant� physique,20,Public � Autre que territorial,2026-08-01
-55603351,Centre d'h�bergement Camille-Lefebvre,CHSLD,Lit(s) d'h�bergement permanent,114,Public � Autre que territorial,2026-08-01
-51222800,CHU Sainte-Justine,CHSGS,Lit(s) de sant� physique,333,Public � Autre que territorial,2026-08-01
-51222800,CHU Sainte-Justine,CHSGS,Lit(s) de n�onatalogie,66,Public � Autre que territorial,2026-08-01
-51222800,CHU Sainte-Justine,CHSGS,Urgence,n.a.,Public � Autre que territorial,2026-08-01
-51222800,CHU Sainte-Justine,CRDPM,Service d'aides techniques,n.a.,Public � Autre que territorial,2026-08-01
-51222800,CHU Sainte-Justine,CHSGS,"H�pital de jour, sant� mentale",n.a.,Public � Autre que territorial,2026-08-01
-51222800,CHU Sainte-Justine,CHSGS,Lit(s) de psychiatrie,19,Public � Autre que territorial,2026-08-01
-51222800,CHU Sainte-Justine,CHSGS,Consultations externes,n.a.,Public � Autre que territorial,2026-08-01
-51224061,Centre de r�adaptation Marie Enfant,CRDPM,Centre de jour,n.a.,Public � Autre que territorial,2026-08-01
-51224061,Centre de r�adaptation Marie Enfant,CHSLD,Lit(s) d'h�bergement temporaire,12,Public � Autre que territorial,2026-08-01
-51224061,Centre de r�adaptation Marie Enfant,CHSLD,Lit(s) d'h�bergement permanent,20,Public � Autre que territorial,2026-08-01
-51224061,Centre de r�adaptation Marie Enfant,CRDPM,Service d'aides techniques,n.a.,Public � Autre que territorial,2026-08-01
-51224061,Centre de r�adaptation Marie Enfant,CRDPM,Services externes,n.a.,Public � Autre que territorial,2026-08-01
-51224061,Centre de r�adaptation Marie Enfant,CRDPM,Lit(s) en unit� de r�adaptation fonctionnelle intensive,35,Public � Autre que territorial,2026-08-01
-51233070,Centre hospitalier universitaire Sainte-Justine,CHSGS,Consultations externes,n.a.,Public � Autre que territorial,2026-08-01
-51235703,H�pital Shriners pour enfants (Qu�bec),CHSGS,Lit(s) de sant� physique,22,Priv�,2026-08-01
-55095202,Ch�teau Westmount,CHSLD,Lit(s) d'h�bergement permanent,112,Priv�,2026-08-01
-51231884,Programme de recherche clinique CHUM-IRCM,CHSGS,Consultations externes,n.a.,Public � Autre que territorial,2026-08-01
-51235653,Centre serv. amb. de dialyse de la rue de Gasp�,CHSGS,Consultations externes,n.a.,Public � Autre que territorial,2026-08-01
-51236297,Centre hospitalier de l'Universit� de Montr�al,CHSGS,Urgence,n.a.,Public � Autre que territorial,2026-08-01
-51236297,Centre hospitalier de l'Universit� de Montr�al,CHSGS,Consultations externes,n.a.,Public � Autre que territorial,2026-08-01
-51236297,Centre hospitalier de l'Universit� de Montr�al,CHSGS,Lit(s) de sant� physique,732,Public � Autre que territorial,2026-08-01
-51236297,Centre hospitalier de l'Universit� de Montr�al,CHSGS,Lit(s) de psychiatrie,38,Public � Autre que territorial,2026-08-01
-51236297,Centre hospitalier de l'Universit� de Montr�al,CHSGS,Lit(s) de n�onatalogie,10,Public � Autre que territorial,2026-08-01
-51236321,Pavillon �douard-Asselin,CHSGS,Consultations externes,n.a.,Public � Autre que territorial,2026-08-01
-51236339,Centre de recherche du CHUM,CHSGS,Consultations externes,n.a.,Public � Autre que territorial,2026-08-01
-51248839,Centre serv. amb. de Maisonneuve-Est,CHSGS,Consultations externes,n.a.,Public � Autre que territorial,2026-08-01
-15103666,Institut universitaire de g�riatrie de Montr�al,CHSGS,Lit(s) de g�riatrie,67,Public � Territorial,2026-08-01
-15103666,Institut universitaire de g�riatrie de Montr�al,CHSLD,Lit(s) d'h�bergement temporaire,43,Public � Territorial,2026-08-01
-15103666,Institut universitaire de g�riatrie de Montr�al,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-15103666,Institut universitaire de g�riatrie de Montr�al,CHSLD,Lit(s) d'h�bergement permanent,92,Public � Territorial,2026-08-01
-15103666,Institut universitaire de g�riatrie de Montr�al,CHSLD,H�pital de jour,n.a.,Public � Territorial,2026-08-01
-51217735,Centre d'h�bergement Jean-De-la-Lande,CHSLD,Lit(s) d'h�bergement permanent,276,Public � Territorial,2026-08-01
-51218030,CHSLD et centre serv. amb. Champlain,CHSLD,Lit(s) d'h�bergement temporaire,75,Public � Territorial,2026-08-01
-51218030,CHSLD et centre serv. amb. Champlain,CHSLD,Lit(s) d'h�bergement permanent,121,Public � Territorial,2026-08-01
-51218030,CHSLD et centre serv. amb. Champlain,CHSLD,Services externes,n.a.,Public � Territorial,2026-08-01
-51218030,CHSLD et centre serv. amb. Champlain,CHSLD,H�pital de jour,n.a.,Public � Territorial,2026-08-01
-51218030,CHSLD et centre serv. amb. Champlain,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51218097,H�pital de Verdun,CHSGS,Urgence,n.a.,Public � Territorial,2026-08-01
-51218097,H�pital de Verdun,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51218097,H�pital de Verdun,CHSGS,Lit(s) de sant� physique,244,Public � Territorial,2026-08-01
-51218170,CLSC de la Visitation et GMFU des Faubourgs,CHSGS,Groupe de m�decine de famille universitaire,0,Public � Territorial,2026-08-01
-51218170,CLSC de la Visitation et GMFU des Faubourgs,CLSC,,n.a.,Public � Territorial,2026-08-01
-51219228,H�tel-Dieu de Montr�al,CHSGS,Lit(s) de sant� physique,150,Public � Territorial,2026-08-01
-51219228,H�tel-Dieu de Montr�al,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51220275,CRJDA du Mont Saint-Antoine,CRJDA,Place(s) en programme d'arr�t d'agir,5,Public � Territorial,2026-08-01
-51220275,CRJDA du Mont Saint-Antoine,CRJDA,Place(s) en internat - unit� de vie,158,Public � Territorial,2026-08-01
-51220275,CRJDA du Mont Saint-Antoine,CRJDA,Centre de jour,n.a.,Public � Territorial,2026-08-01
-51220283,Centre d'h�bergement Jeanne-Mance,CHSLD,Lit(s) d'h�bergement permanent,123,Public � Territorial,2026-08-01
-51220283,Centre d'h�bergement Jeanne-Mance,CHSLD,Lit(s) d'h�bergement temporaire,3,Public � Territorial,2026-08-01
-51220283,Centre d'h�bergement Jeanne-Mance,CHSLD,Lit(s) d'h�bergement permanent en sant� mentale,30,Public � Territorial,2026-08-01
-51220713,Foyer de groupe pour JDA de Lachine,CRJDA,Place(s) en foyer de groupe,9,Public � Territorial,2026-08-01
-51220762,Foyer de groupe pour JDA Gouin,CRJDA,Place(s) en foyer de groupe,9,Public � Territorial,2026-08-01
-51220853,Foyer de groupe pour JDA Godbout,CRJDA,Place(s) en foyer de groupe,9,Public � Territorial,2026-08-01
-51220887,CRJDA Dominique-Savio,CRJDA,Place(s) en internat - unit� de vie,99,Public � Territorial,2026-08-01
-51220887,CRJDA Dominique-Savio,CRJDA,Place(s) en programme d'arr�t d'agir,21,Public � Territorial,2026-08-01
-51220887,CRJDA Dominique-Savio,CRJDA,Centre de jour,n.a.,Public � Territorial,2026-08-01
-51220952,CRDI-TSA Marie-Bourassa,CRDI,Services externes,n.a.,Public � Territorial,2026-08-01
-51220960,CRDI-TSA Dandurand,CRDI,Place(s) en atelier de travail,55,Public � Territorial,2026-08-01
-51220960,CRDI-TSA Dandurand,CRDI,Services externes,n.a.,Public � Territorial,2026-08-01
-51221919,CRD et DI-TSA Louvain,CRD,Place(s) en internat,27,Public � Territorial,2026-08-01
-51221919,CRD et DI-TSA Louvain,CRDI,Services externes,n.a.,Public � Territorial,2026-08-01
-51221919,CRD et DI-TSA Louvain,CRD,Services externes,n.a.,Public � Territorial,2026-08-01
-51221927,CRD Saint-Urbain,CRD,Services externes,n.a.,Public � Territorial,2026-08-01
-51221935,CRD Prince-Arthur,CRD,Services externes,n.a.,Public � Territorial,2026-08-01
-51221935,CRD Prince-Arthur,CRD,Place(s) en internat,28,Public � Territorial,2026-08-01
-51222289,Foyer de groupe pour JDA Esplanade,CRJDA,Place(s) en foyer de groupe,9,Public � Territorial,2026-08-01
-51222289,Foyer de groupe pour JDA Esplanade,CRJDA,Place(s) en appartement supervis� pour jeunes,2,Public � Territorial,2026-08-01
-51225431,CRDI-TSA Parc-des-Roseraies,CRDI,Services externes,n.a.,Public � Territorial,2026-08-01
-51226199,CPRJDA D�carie,CPEJ,,n.a.,Public � Territorial,2026-08-01
-51226199,CPRJDA D�carie,CRJDA,Centre de jour,n.a.,Public � Territorial,2026-08-01
-51226207,CPEJ de Pointe-aux-Trembles,CPEJ,,n.a.,Public � Territorial,2026-08-01
-51227973,Foyer de groupe pour JDA Saint-Vital,CRJDA,Place(s) en foyer de groupe,6,Public � Territorial,2026-08-01
-51228328,Centre d'h�bergement Louis-Riel,CHSLD,Lit(s) d'h�bergement permanent,100,Public � Territorial,2026-08-01
-51228336,Centre d'h�bergement R�al-Morel,CHSLD,Lit(s) d'h�bergement permanent,144,Public � Territorial,2026-08-01
-51228344,CLSC de Saint-Henri,CLSC,,n.a.,Public � Territorial,2026-08-01
-51228351,CLSC et centre serv. amb. de Verdun,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51228351,CLSC et centre serv. amb. de Verdun,CLSC,,n.a.,Public � Territorial,2026-08-01
-51228369,Centre d'h�bergement Yvon-Brunet,CHSLD,Lit(s) d'h�bergement permanent en sant� mentale,54,Public � Territorial,2026-08-01
-51228369,Centre d'h�bergement Yvon-Brunet,CHSLD,Lit(s) d'h�bergement permanent,100,Public � Territorial,2026-08-01
-51228377,Centre multi. SSS de Saint-Henri,CRD,Services externes,n.a.,Public � Territorial,2026-08-01
-51228377,Centre multi. SSS de Saint-Henri,CHSLD,Centre de jour,n.a.,Public � Territorial,2026-08-01
-51228377,Centre multi. SSS de Saint-Henri,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51228377,Centre multi. SSS de Saint-Henri,CHSLD,Lit(s) d'h�bergement permanent,174,Public � Territorial,2026-08-01
-51228534,Centre d'h�bergement Paul-�mile-L�ger,CHSLD,Lit(s) d'h�bergement permanent,193,Public � Territorial,2026-08-01
-51228534,Centre d'h�bergement Paul-�mile-L�ger,CHSLD,Lit(s) d'h�bergement temporaire,3,Public � Territorial,2026-08-01
-51228542,Centre d'h�bergement �milie-Gamelin,CHSLD,Lit(s) d'h�bergement permanent en sant� mentale,35,Public � Territorial,2026-08-01
-51228542,Centre d'h�bergement �milie-Gamelin,CHSLD,Centre de jour,n.a.,Public � Territorial,2026-08-01
-51228542,Centre d'h�bergement �milie-Gamelin,CHSLD,Lit(s) d'h�bergement permanent,147,Public � Territorial,2026-08-01
-51230092,CLSC du Plateau-Mont-Royal,CLSC,,n.a.,Public � Territorial,2026-08-01
-51230100,CLSC Saint-Urbain,CLSC,,n.a.,Public � Territorial,2026-08-01
-51230829,Foyer de groupe pour JDA Harmony,CRJDA,Place(s) en foyer de groupe,9,Public � Territorial,2026-08-01
-51231470,Centre multi. SSS de Saint-Louis-du-Parc,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51231470,Centre multi. SSS de Saint-Louis-du-Parc,CRDI,Services externes,n.a.,Public � Territorial,2026-08-01
-51231470,Centre multi. SSS de Saint-Louis-du-Parc,CLSC,,n.a.,Public � Territorial,2026-08-01
-51231892,CRDP Lucie-Bruneau-Laurier,CRDPM,Services externes - activit�s compl�mentaires,n.a.,Public � Territorial,2026-08-01
-51231892,CRDP Lucie-Bruneau-Laurier,CRDPM,Services externes,n.a.,Public � Territorial,2026-08-01
-51232007,H�pital et CRDP IRGLM-Charles W. Lindsay,CRDPM,Autre(s) lit(s) de r�adaptation,10,Public � Territorial,2026-08-01
-51232007,H�pital et CRDP IRGLM-Charles W. Lindsay,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51232007,H�pital et CRDP IRGLM-Charles W. Lindsay,CHSGS,Lit(s) de sant� physique,44,Public � Territorial,2026-08-01
-51232007,H�pital et CRDP IRGLM-Charles W. Lindsay,CRDPM,Services externes,n.a.,Public � Territorial,2026-08-01
-51232015,H�pital et CRDP IRGLM-Gustave-Gingras,CRDPM,Service d'aides techniques,n.a.,Public � Territorial,2026-08-01
-51232015,H�pital et CRDP IRGLM-Gustave-Gingras,CRDPM,Services externes,n.a.,Public � Territorial,2026-08-01
-51232015,H�pital et CRDP IRGLM-Gustave-Gingras,CHSGS,Lit(s) de sant� physique,99,Public � Territorial,2026-08-01
-51232015,H�pital et CRDP IRGLM-Gustave-Gingras,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51232015,H�pital et CRDP IRGLM-Gustave-Gingras,CRDPM,Service d'aides techniques - activit�s compl�mentaires,n.a.,Public � Territorial,2026-08-01
-51232536,CPRJDA du Centre-de-Montr�al,CPEJ,,n.a.,Public � Territorial,2026-08-01
-51232536,CPRJDA du Centre-de-Montr�al,CRJDA,Centre de jour,n.a.,Public � Territorial,2026-08-01
-51232551,Centre de jour pour JDA Fullum,CRJDA,Centre de jour,n.a.,Public � Territorial,2026-08-01
-51232569,Centre de jour pour JDA Lajeunesse,CRJDA,Centre de jour,n.a.,Public � Territorial,2026-08-01
-51232577,CPEJ Saint-Laurent,CPEJ,,n.a.,Public � Territorial,2026-08-01
-51233187,CRDI-TSA Saint-Patrick,CRDI,Services externes,n.a.,Public � Territorial,2026-08-01
-51233187,CRDI-TSA Saint-Patrick,CRDI,Place(s) en centre d'activit�s de jour,72,Public � Territorial,2026-08-01
-51233419,Centre act. de jour DI et TSA Jeanne-D'Arc,CRDI,Place(s) en centre d'activit�s de jour,40,Public � Territorial,2026-08-01
-51233427,CRDI-TSA Beaubien,CRDI,Services externes,n.a.,Public � Territorial,2026-08-01
-51233443,Centre act. de jour DI et TSA Hochelaga-Maisonneuve,CRDI,Place(s) en centre d'activit�s de jour,22,Public � Territorial,2026-08-01
-51233625,Foyer de groupe pour JDA D�sy,CRJDA,Place(s) en foyer de groupe,9,Public � Territorial,2026-08-01
-51233633,Foyer de groupe pour JDA Montpetit,CRJDA,Place(s) en foyer de groupe,6,Public � Territorial,2026-08-01
-51235083,Foyer de groupe pour JDA d'Ahunstic,CRJDA,Place(s) en foyer de groupe,9,Public � Territorial,2026-08-01
-51235729,Foyer de groupe pour JDA Chambord,CRJDA,Place(s) en foyer de groupe,6,Public � Territorial,2026-08-01
-51235737,GMFU Notre-Dame,CHSGS,Groupe de m�decine de famille universitaire,0,Public � Territorial,2026-08-01
-51235976,Maison de naissance Jeanne-Mance,CLSC,,n.a.,Public � Territorial,2026-08-01
-51236149,Centre act. de jour DI et TSA 17e Avenue,CRDI,Place(s) en centre d'activit�s de jour,70,Public � Territorial,2026-08-01
-51236206,CLSC Sainte-Catherine et GMFU des Faubourgs,CLSC,,n.a.,Public � Territorial,2026-08-01
-51236206,CLSC Sainte-Catherine et GMFU des Faubourgs,CHSGS,Groupe de m�decine de famille universitaire,0,Public � Territorial,2026-08-01
-51236206,CLSC Sainte-Catherine et GMFU des Faubourgs,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51236214,GMFU de Verdun,CHSGS,Groupe de m�decine de famille universitaire,0,Public � Territorial,2026-08-01
-51236313,H�pital Notre-Dame,CHSGS,"H�pital de jour, sant� mentale",n.a.,Public � Territorial,2026-08-01
-51236313,H�pital Notre-Dame,CHSGS,Lit(s) de sant� physique,224,Public � Territorial,2026-08-01
-51236313,H�pital Notre-Dame,CHSGS,Lit(s) de g�riatrie,34,Public � Territorial,2026-08-01
-51236313,H�pital Notre-Dame,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51236313,H�pital Notre-Dame,CHSGS,Lit(s) de psychiatrie,38,Public � Territorial,2026-08-01
-51236313,H�pital Notre-Dame,CHSGS,"Centre de jour, sant� mentale",n.a.,Public � Territorial,2026-08-01
-51236313,H�pital Notre-Dame,CHSGS,Urgence,n.a.,Public � Territorial,2026-08-01
-51236313,H�pital Notre-Dame,CRD,Services externes,n.a.,Public � Territorial,2026-08-01
-51244754,CLSC �le-des-S�urs,CLSC,,n.a.,Public � Territorial,2026-08-01
-51246452,CRDP Raymond-Dewar-Laurier,CRDPL,Services externes,n.a.,Public � Territorial,2026-08-01
-51246452,CRDP Raymond-Dewar-Laurier,CRDPA,Service d'aides techniques,n.a.,Public � Territorial,2026-08-01
-51246452,CRDP Raymond-Dewar-Laurier,CRDPA,Services externes,n.a.,Public � Territorial,2026-08-01
-51246460,CRDP Raymond-Dewar-Radisson,CRDPA,Service d'aides techniques,n.a.,Public � Territorial,2026-08-01
-51246460,CRDP Raymond-Dewar-Radisson,CRDPA,Services externes,n.a.,Public � Territorial,2026-08-01
-51246460,CRDP Raymond-Dewar-Radisson,CRDPV,Services externes,n.a.,Public � Territorial,2026-08-01
-51246478,CRDP Lucie-Bruneau-Fullum,CRDPM,Services externes,n.a.,Public � Territorial,2026-08-01
-51246478,CRDP Lucie-Bruneau-Fullum,CRDPM,Service d'aides techniques,n.a.,Public � Territorial,2026-08-01
-51246577,Serv. ext. pour JDA La Fontaine,CRJDA,Services externes,n.a.,Public � Territorial,2026-08-01
-51246650,CRDI-TSA Gouin,CRDI,Services externes,n.a.,Public � Territorial,2026-08-01
-51246668,CRDI-TSA Henri-Bourassa,CRDI,Services externes,n.a.,Public � Territorial,2026-08-01
-51248292,L'H�pital chinois de Montr�al (1963),CHSLD,Services externes,n.a.,Public,2026-08-01
-51248292,L'H�pital chinois de Montr�al (1963),CHSLD,Lit(s) d'h�bergement permanent,128,Public,2026-08-01
-51248292,L'H�pital chinois de Montr�al (1963),CHSLD,Centre de jour,n.a.,Public,2026-08-01
-51248920,Aire ouverte du M�tro-Berri,CLSC,,n.a.,Public � Territorial,2026-08-01
-51249092,CRD Hochelaga,CRD,Services externes,n.a.,Public � Territorial,2026-08-01
-51249100,CRD Monkland,CRD,Services externes,n.a.,Public � Territorial,2026-08-01
-51249118,CRD Notre-Dame-Est,CRD,Services externes,n.a.,Public � Territorial,2026-08-01
-51249126,CRD Lachine,CRD,Services externes,n.a.,Public � Territorial,2026-08-01
-51249134,CRD Gouin,CRD,Services externes,n.a.,Public � Territorial,2026-08-01
-51249241,Foyer de groupe pour JDA Pelletier,CRJDA,Place(s) en foyer de groupe,7,Public � Territorial,2026-08-01
-51249258,Foyer de groupe pour JDA Charleroi,CRJDA,Place(s) en foyer de groupe,8,Public � Territorial,2026-08-01
-51249431,GMFU de Verdun-de-l'�glise,CHSGS,Groupe de m�decine de famille universitaire,0,Public � Territorial,2026-08-01
-51249563,CRD Cavendish  /Cavendish addiction readaptation centre,CRD,Services externes,n.a.,Public � Territorial,2026-08-01
-51249613,Aire ouverte du M�tro-Lionel-Groulx,CLSC,,n.a.,Public � Territorial,2026-08-01
-51341477,CPEJ Henri-Bourassa Est,CPEJ,,n.a.,Public � Territorial,2026-08-01
-51341543,CPEJ de l'�glise,CPEJ,,n.a.,Public � Territorial,2026-08-01
-51497576,Centre d'h�bergement de Verdun,CHSLD,Lit(s) d'h�bergement permanent,220,Public � Territorial,2026-08-01
-51497576,Centre d'h�bergement de Verdun,CHSLD,Centre de jour,n.a.,Public � Territorial,2026-08-01
-51585826,CPEJ Sherbrooke Est,CPEJ,,n.a.,Public � Territorial,2026-08-01
-51608214,CPEJ La Fontaine,CPEJ,,n.a.,Public � Territorial,2026-08-01
-51831485,Foyer de groupe pour JDA La Fontaine,CRJDA,Place(s) en foyer de groupe,9,Public � Territorial,2026-08-01
-51831501,Foyer de groupe pour JDA Meilleur,CRJDA,Place(s) en foyer de groupe,9,Public � Territorial,2026-08-01
-52253796,Centre d'h�bergement Alfred-DesRochers,CHSLD,Lit(s) d'h�bergement permanent,125,Public � Territorial,2026-08-01
-52253796,Centre d'h�bergement Alfred-DesRochers,CHSLD,Centre de jour,n.a.,Public � Territorial,2026-08-01
-52266889,Centre d'h�bergement Ernest-Routhier,CHSLD,Lit(s) d'h�bergement permanent,96,Public � Territorial,2026-08-01
-52389285,Centre act. de jour DI et TSA Lapierre,CRDI,Place(s) en centre d'activit�s de jour,110,Public � Territorial,2026-08-01
-52393758,CLSC Parthenais et GMFU des Faubourgs,CHSGS,Groupe de m�decine de famille universitaire,0,Public � Territorial,2026-08-01
-52393758,CLSC Parthenais et GMFU des Faubourgs,CLSC,,n.a.,Public � Territorial,2026-08-01
-52585460,Foyer de groupe pour JDA de Rivi�re-des-Prairies,CRJDA,Place(s) en foyer de groupe,9,Public � Territorial,2026-08-01
-52585510,Foyer de groupe pour JDA Langelier,CRJDA,Place(s) en foyer de groupe,9,Public � Territorial,2026-08-01
-52697893,Centre d'h�bergement Paul-Bruch�si,CHSLD,Lit(s) d'h�bergement permanent,83,Public � Territorial,2026-08-01
-52756772,Centre d'h�bergement Armand-Lavergne,CHSLD,Lit(s) d'h�bergement temporaire,66,Public � Territorial,2026-08-01
-52756772,Centre d'h�bergement Armand-Lavergne,CHSLD,Lit(s) d'h�bergement permanent en sant� mentale,22,Public � Territorial,2026-08-01
-52756772,Centre d'h�bergement Armand-Lavergne,CHSLD,Lit(s) d'h�bergement permanent,92,Public � Territorial,2026-08-01
-52756772,Centre d'h�bergement Armand-Lavergne,CHSLD,Services externes,n.a.,Public � Territorial,2026-08-01
-52756772,Centre d'h�bergement Armand-Lavergne,CHSLD,H�pital de jour,n.a.,Public � Territorial,2026-08-01
-52792058,Foyer de groupe pour JDA 1re Avenue,CRJDA,Place(s) en foyer de groupe,9,Public � Territorial,2026-08-01
-53417077,Centre act. de jour DI et TSA L�ger,CRDI,Place(s) en centre d'activit�s de jour,66,Public � Territorial,2026-08-01
-53876330,CLSC de Ville-�mard-C�te-Saint-Paul,CLSC,,n.a.,Public � Territorial,2026-08-01
-54102900,Foyer de groupe pour JDA Louis-H�mon,CRJDA,Place(s) en foyer de groupe,6,Public � Territorial,2026-08-01
-54583364,Centre d'h�bergement des Seigneurs,CHSLD,Lit(s) d'h�bergement permanent en sant� mentale,48,Public � Territorial,2026-08-01
-54583364,Centre d'h�bergement des Seigneurs,CHSLD,Lit(s) d'h�bergement permanent,120,Public � Territorial,2026-08-01
-54583679,CRDI-TSA Notre-Dame,CRDI,Place(s) en atelier de travail,13,Public � Territorial,2026-08-01
-54583679,CRDI-TSA Notre-Dame,CRDI,Services externes,n.a.,Public � Territorial,2026-08-01
-54583695,CPEJ Maisonneuve Est,CPEJ,,n.a.,Public � Territorial,2026-08-01
-54583703,CRJDA Cit�-des-Prairies,CRJDA,Place(s) en programme d'arr�t d'agir,8,Public � Territorial,2026-08-01
-54583703,CRJDA Cit�-des-Prairies,CRJDA,Centre de jour,n.a.,Public � Territorial,2026-08-01
-54583703,CRJDA Cit�-des-Prairies,CRJDA,Place(s) en internat - unit� de vie,150,Public � Territorial,2026-08-01
-54583737,CRJDA Rose-Virginie-Pelletier,CRJDA,Place(s) en internat - unit� de vie,68,Public � Territorial,2026-08-01
-54583737,CRJDA Rose-Virginie-Pelletier,CRJDA,Centre de jour,n.a.,Public � Territorial,2026-08-01
-54711718,CRDI-TSA Pie-IX,CRDI,Services externes,n.a.,Public � Territorial,2026-08-01
-54830559,Centre act. de jour DI et TSA Ontario,CRDI,Place(s) en centre d'activit�s de jour,22,Public � Territorial,2026-08-01
-54878178,Atelier de travail DI et TSA Edison,CRDI,Place(s) en atelier de travail,24,Public � Territorial,2026-08-01
-54878186,CRDI-TSA Champ-d'Eau,CRDI,Services externes,n.a.,Public � Territorial,2026-08-01
-54878186,CRDI-TSA Champ-d'Eau,CRDI,Place(s) en centre d'activit�s de jour,15,Public � Territorial,2026-08-01
-54878186,CRDI-TSA Champ-d'Eau,CRDI,Place(s) en atelier de travail,24,Public � Territorial,2026-08-01
-55022412,Foyer de groupe pour JDA de Verdun,CRJDA,Place(s) en foyer de groupe,6,Public � Territorial,2026-08-01
-55612196,CPEJ Saint-Denis,CPEJ,,n.a.,Public � Territorial,2026-08-01
-55612212,Foyer de groupe pour JDA Sagamo,CRJDA,Place(s) en foyer de groupe,9,Public � Territorial,2026-08-01
-55612220,Foyer de groupe pour JDA J.-O. Roussi,CRJDA,Place(s) en foyer de groupe,9,Public � Territorial,2026-08-01
-51248011,Atelier le Fil d'Ariane,CRDI,Place(s) en atelier de travail,20,Priv�,2026-08-01
-51248052,Clinique communautaire de Pointe St-Charles,CLSC,,n.a.,Priv�,2026-08-01
-51770048,Clinique communautaire de Pointe St-Charles,CLSC,,n.a.,Priv�,2026-08-01
-51495869,R�sidence des filles et/ou gar�ons (Havre-Jeunesse),CRJDA,Place(s) en foyer de groupe,7,Priv�,2026-08-01
-51495877,R�sidence des gar�ons et/ou filles (Havre-Jeunesse),CRJDA,Place(s) en foyer de groupe,8,Priv�,2026-08-01
-51231223,Centre d'accueil Le Programme de Portage,CRD,Place(s) en internat,80,Priv�,2026-08-01
-51231231,Centre d'accueil Le Programme de Portage,CRD,Place(s) en internat,139,Priv�,2026-08-01
-51232619,Centre d'accueil Le Programme de Portage,CRD,Place(s) en internat,40,Priv�,2026-08-01
-51235257,Centre d'accueil Le Programme de Portage,CRD,Place(s) en internat,32,Priv�,2026-08-01
-51235422,Centre d'acceuil Le Programme de Portage,CRD,Services externes,n.a.,Priv�,2026-08-01
-51235950,Centre d'accueil Le Programme de Portage,CRD,Centre de jour,n.a.,Priv�,2026-08-01
-51235950,Centre d'accueil Le Programme de Portage,CRD,Services externes,n.a.,Priv�,2026-08-01
-51767366,Centre d'accueil Le Programme de Portage,CRD,Services externes,n.a.,Priv�,2026-08-01
-51767366,Centre d'accueil Le Programme de Portage,CRD,Centre de jour,n.a.,Priv�,2026-08-01
-51248128,H�pital Villa Medica,CHSGS,Consultations externes,n.a.,Priv�,2026-08-01
-51248128,H�pital Villa Medica,CHSGS,Lit(s) de sant� physique,207,Priv�,2026-08-01
-12475976,H�pital du Sacr�-Coeur-de-Montr�al,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-12475976,H�pital du Sacr�-Coeur-de-Montr�al,CHSGS,Lit(s) de g�riatrie,20,Public � Territorial,2026-08-01
-12475976,H�pital du Sacr�-Coeur-de-Montr�al,CHSGS,Lit(s) de sant� physique,420,Public � Territorial,2026-08-01
-12475976,H�pital du Sacr�-Coeur-de-Montr�al,CHSGS,Urgence,n.a.,Public � Territorial,2026-08-01
-51225613,CHSLD Saint-Joseph-de-la-Providence,CHSLD,Centre de jour,n.a.,Public � Territorial,2026-08-01
-51225613,CHSLD Saint-Joseph-de-la-Providence,CHSLD,Lit(s) d'h�bergement permanent,140,Public � Territorial,2026-08-01
-51228443,Centre d'h�bergement Notre-Dame-de-La-Merci,CHSLD,Lit(s) d'h�bergement temporaire,138,Public � Territorial,2026-08-01
-51228443,Centre d'h�bergement Notre-Dame-de-La-Merci,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51228443,Centre d'h�bergement Notre-Dame-de-La-Merci,CHSLD,H�pital de jour,n.a.,Public � Territorial,2026-08-01
-51228443,Centre d'h�bergement Notre-Dame-de-La-Merci,CHSLD,Lit(s) d'h�bergement permanent,284,Public � Territorial,2026-08-01
-51228443,Centre d'h�bergement Notre-Dame-de-La-Merci,CHSGS,Lit(s) de g�riatrie,18,Public � Territorial,2026-08-01
-51228450,CHSLD de Cartierville,CHSLD,Centre de jour,n.a.,Public � Territorial,2026-08-01
-51228450,CHSLD de Cartierville,CHSLD,Lit(s) d'h�bergement permanent,209,Public � Territorial,2026-08-01
-51228468,CLSC de Montr�al-Nord,CLSC,,n.a.,Public � Territorial,2026-08-01
-51228476,CHSLD Laurendeau,CHSLD,Lit(s) d'h�bergement permanent,300,Public � Territorial,2026-08-01
-51228484,CLSC d'Ahuntsic,CLSC,,n.a.,Public � Territorial,2026-08-01
-51228492,H�pital Fleury,CHSGS,"H�pital de jour, sant� mentale",n.a.,Public � Territorial,2026-08-01
-51228492,H�pital Fleury,CHSGS,Lit(s) de g�riatrie,10,Public � Territorial,2026-08-01
-51228492,H�pital Fleury,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51228492,H�pital Fleury,CHSGS,Lit(s) de sant� physique,115,Public � Territorial,2026-08-01
-51228492,H�pital Fleury,CHSGS,Urgence,n.a.,Public � Territorial,2026-08-01
-51228500,H�pital Jean-Talon,CHSGS,Urgence,n.a.,Public � Territorial,2026-08-01
-51228500,H�pital Jean-Talon,CHSGS,Lit(s) de psychiatrie,30,Public � Territorial,2026-08-01
-51228500,H�pital Jean-Talon,CHSGS,Lit(s) de g�riatrie,25,Public � Territorial,2026-08-01
-51228500,H�pital Jean-Talon,CHSGS,Lit(s) de sant� physique,131,Public � Territorial,2026-08-01
-51228500,H�pital Jean-Talon,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51228518,CLSC de Villeray,CLSC,,n.a.,Public � Territorial,2026-08-01
-51228526,CLSC de La Petite-Patrie,CLSC,,n.a.,Public � Territorial,2026-08-01
-51229631,Centre serv. amb. en SM Papineau,CHPSY,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51229631,Centre serv. amb. en SM Papineau,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51230779,CHSLD de Saint-Laurent,CHSLD,Lit(s) d'h�bergement permanent,154,Public � Territorial,2026-08-01
-51230779,CHSLD de Saint-Laurent,CHSLD,Centre de jour,n.a.,Public � Territorial,2026-08-01
-51234938,Centre multi. SSS Rivi�re-des-Prairies,CHPSY,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51234938,Centre multi. SSS Rivi�re-des-Prairies,CHPSY,Lit(s) de psychiatrie,86,Public � Territorial,2026-08-01
-51234938,Centre multi. SSS Rivi�re-des-Prairies,CHPSY,Urgence,n.a.,Public � Territorial,2026-08-01
-51234938,Centre multi. SSS Rivi�re-des-Prairies,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51234938,Centre multi. SSS Rivi�re-des-Prairies,CHPSY,"H�pital de jour, sant� mentale",n.a.,Public � Territorial,2026-08-01
-51234938,Centre multi. SSS Rivi�re-des-Prairies,CHSLD,Lit(s) d'h�bergement permanent en sant� mentale,31,Public � Territorial,2026-08-01
-51236081,Centre serv. amb. Bois-de-Boulogne,CHPSY,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51236081,Centre serv. amb. Bois-de-Boulogne,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51236107,Centre serv. amb. en g�rontopsy. Grenet,CHPSY,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51236180,GMFU Sacr�-C�ur,CHSGS,Groupe de m�decine de famille universitaire,0,Public � Territorial,2026-08-01
-51245579,Aire ouverte Sauriol,CLSC,,n.a.,Public � Territorial,2026-08-01
-51247401,Maison alternative de Rivi�re-des-Prairies,CHSLD,Lit(s) d'h�bergement permanent,72,Public � Territorial,2026-08-01
-51248573,Aire ouverte Montr�al-Nord,CLSC,,n.a.,Public � Territorial,2026-08-01
-51248581,CLSC et GMFU Montr�al-Nord-Est,CHSGS,Groupe de m�decine de famille universitaire,0,Public � Territorial,2026-08-01
-51248581,CLSC et GMFU Montr�al-Nord-Est,CLSC,,n.a.,Public � Territorial,2026-08-01
-51249712,CHSLD Angelica,CHSLD,Lit(s) d'h�bergement permanent,350,Public � Territorial,2026-08-01
-51249712,CHSLD Angelica,CHSLD,Centre de jour,n.a.,Public � Territorial,2026-08-01
-51848752,H�pital en sant� mentale Albert-Pr�vost,CHSGS,Lit(s) de psychiatrie,89,Public � Territorial,2026-08-01
-51848752,H�pital en sant� mentale Albert-Pr�vost,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51848752,H�pital en sant� mentale Albert-Pr�vost,CHSGS,"Centre de jour, sant� mentale",n.a.,Public � Territorial,2026-08-01
-51848752,H�pital en sant� mentale Albert-Pr�vost,CHSGS,"H�pital de jour, sant� mentale",n.a.,Public � Territorial,2026-08-01
-51848752,H�pital en sant� mentale Albert-Pr�vost,CHSGS,Urgence,n.a.,Public � Territorial,2026-08-01
-52238870,CHSLD De la Petite-Patrie,CHSLD,Lit(s) d'h�bergement permanent,96,Public � Territorial,2026-08-01
-52579851,CHSLD Paul-Gouin,CHSLD,Centre de jour,n.a.,Public � Territorial,2026-08-01
-52579851,CHSLD Paul-Gouin,CHSLD,Lit(s) d'h�bergement permanent,100,Public � Territorial,2026-08-01
-52678281,CHSLD Paul-Lizotte,CHSLD,Lit(s) d'h�bergement permanent,128,Public � Territorial,2026-08-01
-54201306,CLSC et GMFU Bordeaux-Cartierville,CLSC,,n.a.,Public � Territorial,2026-08-01
-54201306,CLSC et GMFU Bordeaux-Cartierville,CHSGS,Groupe de m�decine de famille universitaire,0,Public � Territorial,2026-08-01
-54583372,CHSLD Auclair,CHSLD,Lit(s) d'h�bergement permanent,160,Public � Territorial,2026-08-01
-54878145,CLSC de Saint-Laurent,CLSC,,n.a.,Public � Territorial,2026-08-01
-55616940,Centre serv. amb et maison de naissance Louvain,CLSC,,n.a.,Public � Territorial,2026-08-01
-55616940,Centre serv. amb et maison de naissance Louvain,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-55616957,CHSLD L�gar�,CHSLD,Lit(s) d'h�bergement permanent,105,Public � Territorial,2026-08-01
-51248037,R�sidence Berthiaume-Du Tremblay,CHSLD,Centre de jour,n.a.,Priv�,2026-08-01
-51248037,R�sidence Berthiaume-Du Tremblay,CHSLD,Lit(s) d'h�bergement permanent,198,Priv�,2026-08-01
-51248045,H�pital Marie-Clarac,CHSGS,Lit(s) de sant� physique,228,Priv�,2026-08-01
-51248045,H�pital Marie-Clarac,CHSGS,Consultations externes,n.a.,Priv�,2026-08-01
-51248078,Les c�dres - Centre d'accueil pour personnes �g�es,CHSLD,Lit(s) d'h�bergement permanent,32,Priv�,2026-08-01
-51248086,Centre m�tropolitain de chirurgie plastique,CHSGS,Lit(s) de sant� physique,17,Priv�,2026-08-01
-51234284,CHSLD de la Belle-Rive,CHSLD,Lit(s) d'h�bergement permanent,44,Priv�,2026-08-01
-51216802,Centre Le Cardinal,CHSLD,Lit(s) d'h�bergement permanent,174,Priv�,2026-08-01
-51225027,Centre d'h�bergement de la Mar�e,CHSLD,Lit(s) d'h�bergement permanent,45,Priv�,2026-08-01
-51223303,Centre d'h�bergement Champlain-de-la-Villa-Soleil,CHSLD,Lit(s) d'h�bergement permanent,166,Priv�,2026-08-01
-51223303,Centre d'h�bergement Champlain-de-la-Villa-Soleil,CHSLD,Lit(s) d'h�bergement temporaire,2,Priv�,2026-08-01
-51223311,Centre d'h�bergement Champlain-de-Gatineau,CHSLD,Lit(s) d'h�bergement permanent,101,Priv�,2026-08-01
-51224921,Centre d'h�bergement Champlain - Chanoine-Audet,CHSLD,Lit(s) d'h�bergement permanent,96,Priv�,2026-08-01
-51230175,Centre d'h�bergement Champlain-des-Montagnes,CHSLD,Lit(s) d'h�bergement permanent,105,Priv�,2026-08-01
-51230183,Centre d'h�bergement Champlain-de-Saint-Fran�ois,CHSLD,Lit(s) d'h�bergement permanent,53,Priv�,2026-08-01
-51230209,Centre d'h�bergement Champlain - Jean-Louis-Lapierre,CHSLD,Lit(s) d'h�bergement permanent,76,Priv�,2026-08-01
-51230217,Centre d'h�bergement Champlain-du-Ch�teau,CHSLD,Lit(s) d'h�bergement permanent,73,Priv�,2026-08-01
-51232122,Centre d'h�bergement Champlain-de-l'Assomption,CHSLD,Lit(s) d'h�bergement permanent,96,Priv�,2026-08-01
-51233104,Centre d'h�bergement Champlain-de-la-Rose-Blanche,CHSLD,Lit(s) d'h�bergement permanent en sant� mentale,60,Priv�,2026-08-01
-54982822,Centre d'h�bergement Champlain - Marie-Victorin,CHSLD,Lit(s) d'h�bergement temporaire,15,Priv�,2026-08-01
-54982822,Centre d'h�bergement Champlain - Marie-Victorin,CHSLD,Lit(s) d'h�bergement permanent,314,Priv�,2026-08-01
-51388874,Centre d'h�bergement de la Maison-Saint-Joseph,CHSLD,Lit(s) d'h�bergement permanent,155,Priv�,2026-08-01
-51234615,CHSLD Angus,CHSLD,Lit(s) d'h�bergement permanent,49,Priv�,2026-08-01
-12387692,CHSLD Polonais Marie-Curie-Sklodowska,CHSLD,Lit(s) d'h�bergement permanent,126,Public � Territorial,2026-08-01
-12934659,H�pital Maisonneuve-Rosemont,CHSGS,Lit(s) de n�onatalogie,26,Public � Territorial,2026-08-01
-12934659,H�pital Maisonneuve-Rosemont,CHSGS,Lit(s) de g�riatrie,28,Public � Territorial,2026-08-01
-12934659,H�pital Maisonneuve-Rosemont,CHSGS,Lit(s) de sant� physique,507,Public � Territorial,2026-08-01
-12934659,H�pital Maisonneuve-Rosemont,CHSGS,Urgence,n.a.,Public � Territorial,2026-08-01
-12934659,H�pital Maisonneuve-Rosemont,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51221828,Centre d'h�bergement J.-Henri-Charbonneau,CHSLD,Lit(s) d'h�bergement permanent,162,Public � Territorial,2026-08-01
-51221828,Centre d'h�bergement J.-Henri-Charbonneau,CHSGS,Lit(s) de sant� physique,33,Public � Territorial,2026-08-01
-51221836,CHSLD �loria-Lepage,CHSLD,Centre de jour,n.a.,Public � Territorial,2026-08-01
-51221836,CHSLD �loria-Lepage,CHSLD,Lit(s) d'h�bergement permanent,156,Public � Territorial,2026-08-01
-51222602,Pavillon Rachel-Tourigny,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51225035,CHSLD Joseph-Fran�ois-Perreault,CHSLD,Centre de jour,n.a.,Public � Territorial,2026-08-01
-51225035,CHSLD Joseph-Fran�ois-Perreault,CHSLD,Lit(s) d'h�bergement permanent,192,Public � Territorial,2026-08-01
-51228583,CHSLD de Saint-Michel,CHSLD,Lit(s) d'h�bergement permanent,190,Public � Territorial,2026-08-01
-51228583,CHSLD de Saint-Michel,CHSLD,Lit(s) d'h�bergement temporaire,2,Public � Territorial,2026-08-01
-51228583,CHSLD de Saint-Michel,CHSGS,Lit(s) de sant� physique,16,Public � Territorial,2026-08-01
-51228609,CLSC de Saint-L�onard,CLSC,,n.a.,Public � Territorial,2026-08-01
-51228609,CLSC de Saint-L�onard,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51228617,CLSC et GMFU de Hochelaga-Maisonneuve,CLSC,,n.a.,Public � Territorial,2026-08-01
-51228617,CLSC et GMFU de Hochelaga-Maisonneuve,CHSGS,Groupe de m�decine de famille universitaire,0,Public � Territorial,2026-08-01
-51228617,CLSC et GMFU de Hochelaga-Maisonneuve,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51228625,CLSC Olivier-Guimond,CLSC,,n.a.,Public � Territorial,2026-08-01
-51228625,CLSC Olivier-Guimond,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51228641,CHSLD Benjamin-Victor-Rousselot,CHSLD,Lit(s) d'h�bergement permanent,171,Public � Territorial,2026-08-01
-51228658,CHSLD Jean-Hubert-Biermans,CHSLD,Lit(s) d'h�bergement permanent,200,Public � Territorial,2026-08-01
-51228674,CLSC de Rivi�re-des-Prairies,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51228674,CLSC de Rivi�re-des-Prairies,CLSC,,n.a.,Public � Territorial,2026-08-01
-51228682,CLSC de l'Est-de-Montr�al,CLSC,,n.a.,Public � Territorial,2026-08-01
-51228682,CLSC de l'Est-de-Montr�al,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51229946,CLSC de Mercier-Est,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51229946,CLSC de Mercier-Est,CLSC,,n.a.,Public � Territorial,2026-08-01
-51229995,Centre de crise �mile-Nelligan,CHSLD,Lit(s) d'h�bergement temporaire en sant� mentale,8,Public � Territorial,2026-08-01
-51232155,CLSC de Saint-Michel,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51232155,CLSC de Saint-Michel,CLSC,,n.a.,Public � Territorial,2026-08-01
-51232940,CLSC de Rosemont,CLSC,,n.a.,Public � Territorial,2026-08-01
-51232940,CLSC de Rosemont,CHSGS,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51235299,Pavillon Fernand-S�guin,CHPSY,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51235307,Institut universitaire en SM de Montr�al,CHPSY,Consultations externes,n.a.,Public � Territorial,2026-08-01
-51235307,Institut universitaire en SM de Montr�al,CHPSY,"Centre de jour, sant� mentale",n.a.,Public � Territorial,2026-08-01
-51235307,Institut universitaire en SM de Montr�al,CHPSY,Lit(s) de psychiatrie,267,Public � Territorial,2026-08-01
-51235307,Institut universitaire en SM de Montr�al,CHPSY,Lit(s) de sant� physique,20,Public � Territorial,2026-08-01
-51235307,Institut universitaire en SM de Montr�al,CHPSY,"H�pital de jour, sant� mentale",n.a.,Public � Territorial,2026-08-01
-51235307,Institut universitaire en SM de Montr�al,CHPSY,Urgence,n.a.,Public � Territorial,2026-08-01
-51235307,Institut universitaire en SM de Montr�al,CHSLD,Lit(s) d'h�bergement permanent en sant� mentale,18,Public � Territorial,2026-08-01
-51235919,H�pital Santa Cabrini,CHSGS,Urgence,n.a.,Public,2026-08-01
-51235919,H�pital Santa Cabrini,CHSGS,Consultations externes,n.a.,Public,2026-08-01
-51235919,H�pital Santa Cabrini,CHSGS,Lit(s) de g�riatrie,18,Public,2026-08-01
-51235919,H�pital Santa Cabrini,CHSGS,Lit(s) de sant� physique,305,Public,2026-08-01
-51245629,Maison de naissance Anne-Courtemanche,CLSC,,n.a.,Public � Territorial,2026-08-01
-51248490,Aire ouverte de l'Est de Montr�al,CLSC,,n.a.,Public � Territorial,2026-08-01
-51340776,Pavillon Rosemont,CHSGS,Groupe de m�decine de famille universitaire,0,Public � Territorial,2026-08-01
-52253770,CHSLD Dante,CHSLD,Lit(s) d'h�bergement permanent,100,Public,2026-08-01
-52253770,CHSLD Dante,CHSLD,Lit(s) d'h�bergement temporaire,3,Public,2026-08-01
+51248276,Hôpital Mont Sinaï,CHSLD,Lit(s) d'hébergement permanent,30,Public,2026-08-01
+51248276,Hôpital Mont Sinaï,CHSGS,Lit(s) de santé physique,65,Public,2026-08-01
+51248284,Centre hospitalier gériatrique Maimonides,CHSLD,Lit(s) d'hébergement permanent,387,Public,2026-08-01
+51248938,Aire ouverte de Côte-des-Neiges,CLSC,,n.a.,Public – Territorial,2026-08-01
+51249373,Clinique IPS+ Snowdon,CLSC,,n.a.,Public – Territorial,2026-08-01
+52609203,Centre d'hébergement Henri-Bradet,CHSLD,Lit(s) d'hébergement permanent,124,Public – Territorial,2026-08-01
+52678091,CLSC William C.-Van Horne,CLSC,,n.a.,Public – Territorial,2026-08-01
+51248060,Maison Elizabeth,CRMDA,Centre de jour,n.a.,Privé,2026-08-01
+51248060,Maison Elizabeth,CRMDA,Services externes,n.a.,Privé,2026-08-01
+51248060,Maison Elizabeth,CRMDA,Place(s) en internat - unité de vie,18,Privé,2026-08-01
+51223287,Hôpital neurologique de Montréal,CHSGS,Lit(s) de santé physique,90,Public – Autre que territorial,2026-08-01
+51223287,Hôpital neurologique de Montréal,CHSGS,Consultations externes,n.a.,Public – Autre que territorial,2026-08-01
+51228310,Hôpital de Lachine,CHSGS,Consultations externes,n.a.,Public – Autre que territorial,2026-08-01
+51228310,Hôpital de Lachine,CHSGS,Urgence,n.a.,Public – Autre que territorial,2026-08-01
+51228310,Hôpital de Lachine,CHSGS,Lit(s) de santé physique,56,Public – Autre que territorial,2026-08-01
+51235406,Hôpital Glen,CHSGS,Urgence,n.a.,Public – Autre que territorial,2026-08-01
+51235406,Hôpital Glen,CHSGS,Lit(s) de psychiatrie,8,Public – Autre que territorial,2026-08-01
+51235406,Hôpital Glen,CHSGS,"Hôpital de jour, santé mentale",n.a.,Public – Autre que territorial,2026-08-01
+51235406,Hôpital Glen,CHSGS,Consultations externes,n.a.,Public – Autre que territorial,2026-08-01
+51235406,Hôpital Glen,CHSGS,Lit(s) de santé physique,480,Public – Autre que territorial,2026-08-01
+51235406,Hôpital Glen,CHSGS,Lit(s) de néonatalogie,52,Public – Autre que territorial,2026-08-01
+51235638,Centre serv. amb. de Maisonneuve,CHSGS,Consultations externes,n.a.,Public – Autre que territorial,2026-08-01
+51247138,Centre serv. amb. Allan Memorial,CHSGS,"Hôpital de jour, santé mentale",n.a.,Public – Autre que territorial,2026-08-01
+51247138,Centre serv. amb. Allan Memorial,CHSGS,Consultations externes,n.a.,Public – Autre que territorial,2026-08-01
+51247146,Centre serv. amb. Gilman,CHSGS,Consultations externes,n.a.,Public – Autre que territorial,2026-08-01
+51248219,Hôpital général de Montréal,CHSGS,Consultations externes,n.a.,Public – Autre que territorial,2026-08-01
+51248219,Hôpital général de Montréal,CHSGS,Lit(s) de santé physique,236,Public – Autre que territorial,2026-08-01
+51248219,Hôpital général de Montréal,CHSGS,Lit(s) de psychiatrie,46,Public – Autre que territorial,2026-08-01
+51248219,Hôpital général de Montréal,CHSGS,Urgence,n.a.,Public – Autre que territorial,2026-08-01
+55603351,Centre d'hébergement Camille-Lefebvre,CHSGS,Lit(s) de santé physique,20,Public – Autre que territorial,2026-08-01
+55603351,Centre d'hébergement Camille-Lefebvre,CHSLD,Lit(s) d'hébergement permanent,114,Public – Autre que territorial,2026-08-01
+51222800,CHU Sainte-Justine,CHSGS,Lit(s) de santé physique,333,Public – Autre que territorial,2026-08-01
+51222800,CHU Sainte-Justine,CHSGS,Lit(s) de néonatalogie,66,Public – Autre que territorial,2026-08-01
+51222800,CHU Sainte-Justine,CHSGS,Urgence,n.a.,Public – Autre que territorial,2026-08-01
+51222800,CHU Sainte-Justine,CRDPM,Service d'aides techniques,n.a.,Public – Autre que territorial,2026-08-01
+51222800,CHU Sainte-Justine,CHSGS,"Hôpital de jour, santé mentale",n.a.,Public – Autre que territorial,2026-08-01
+51222800,CHU Sainte-Justine,CHSGS,Lit(s) de psychiatrie,19,Public – Autre que territorial,2026-08-01
+51222800,CHU Sainte-Justine,CHSGS,Consultations externes,n.a.,Public – Autre que territorial,2026-08-01
+51224061,Centre de réadaptation Marie Enfant,CRDPM,Centre de jour,n.a.,Public – Autre que territorial,2026-08-01
+51224061,Centre de réadaptation Marie Enfant,CHSLD,Lit(s) d'hébergement temporaire,12,Public – Autre que territorial,2026-08-01
+51224061,Centre de réadaptation Marie Enfant,CHSLD,Lit(s) d'hébergement permanent,20,Public – Autre que territorial,2026-08-01
+51224061,Centre de réadaptation Marie Enfant,CRDPM,Service d'aides techniques,n.a.,Public – Autre que territorial,2026-08-01
+51224061,Centre de réadaptation Marie Enfant,CRDPM,Services externes,n.a.,Public – Autre que territorial,2026-08-01
+51224061,Centre de réadaptation Marie Enfant,CRDPM,Lit(s) en unité de réadaptation fonctionnelle intensive,35,Public – Autre que territorial,2026-08-01
+51233070,Centre hospitalier universitaire Sainte-Justine,CHSGS,Consultations externes,n.a.,Public – Autre que territorial,2026-08-01
+51235703,Hôpital Shriners pour enfants (Québec),CHSGS,Lit(s) de santé physique,22,Privé,2026-08-01
+55095202,Château Westmount,CHSLD,Lit(s) d'hébergement permanent,112,Privé,2026-08-01
+51231884,Programme de recherche clinique CHUM-IRCM,CHSGS,Consultations externes,n.a.,Public – Autre que territorial,2026-08-01
+51235653,Centre serv. amb. de dialyse de la rue de Gaspé,CHSGS,Consultations externes,n.a.,Public – Autre que territorial,2026-08-01
+51236297,Centre hospitalier de l'Université de Montréal,CHSGS,Urgence,n.a.,Public – Autre que territorial,2026-08-01
+51236297,Centre hospitalier de l'Université de Montréal,CHSGS,Consultations externes,n.a.,Public – Autre que territorial,2026-08-01
+51236297,Centre hospitalier de l'Université de Montréal,CHSGS,Lit(s) de santé physique,732,Public – Autre que territorial,2026-08-01
+51236297,Centre hospitalier de l'Université de Montréal,CHSGS,Lit(s) de psychiatrie,38,Public – Autre que territorial,2026-08-01
+51236297,Centre hospitalier de l'Université de Montréal,CHSGS,Lit(s) de néonatalogie,10,Public – Autre que territorial,2026-08-01
+51236321,Pavillon Édouard-Asselin,CHSGS,Consultations externes,n.a.,Public – Autre que territorial,2026-08-01
+51236339,Centre de recherche du CHUM,CHSGS,Consultations externes,n.a.,Public – Autre que territorial,2026-08-01
+51248839,Centre serv. amb. de Maisonneuve-Est,CHSGS,Consultations externes,n.a.,Public – Autre que territorial,2026-08-01
+15103666,Institut universitaire de gériatrie de Montréal,CHSGS,Lit(s) de gériatrie,67,Public – Territorial,2026-08-01
+15103666,Institut universitaire de gériatrie de Montréal,CHSLD,Lit(s) d'hébergement temporaire,43,Public – Territorial,2026-08-01
+15103666,Institut universitaire de gériatrie de Montréal,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+15103666,Institut universitaire de gériatrie de Montréal,CHSLD,Lit(s) d'hébergement permanent,92,Public – Territorial,2026-08-01
+15103666,Institut universitaire de gériatrie de Montréal,CHSLD,Hôpital de jour,n.a.,Public – Territorial,2026-08-01
+51217735,Centre d'hébergement Jean-De-la-Lande,CHSLD,Lit(s) d'hébergement permanent,276,Public – Territorial,2026-08-01
+51218030,CHSLD et centre serv. amb. Champlain,CHSLD,Lit(s) d'hébergement temporaire,75,Public – Territorial,2026-08-01
+51218030,CHSLD et centre serv. amb. Champlain,CHSLD,Lit(s) d'hébergement permanent,121,Public – Territorial,2026-08-01
+51218030,CHSLD et centre serv. amb. Champlain,CHSLD,Services externes,n.a.,Public – Territorial,2026-08-01
+51218030,CHSLD et centre serv. amb. Champlain,CHSLD,Hôpital de jour,n.a.,Public – Territorial,2026-08-01
+51218030,CHSLD et centre serv. amb. Champlain,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51218097,Hôpital de Verdun,CHSGS,Urgence,n.a.,Public – Territorial,2026-08-01
+51218097,Hôpital de Verdun,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51218097,Hôpital de Verdun,CHSGS,Lit(s) de santé physique,244,Public – Territorial,2026-08-01
+51218170,CLSC de la Visitation et GMFU des Faubourgs,CHSGS,Groupe de médecine de famille universitaire,0,Public – Territorial,2026-08-01
+51218170,CLSC de la Visitation et GMFU des Faubourgs,CLSC,,n.a.,Public – Territorial,2026-08-01
+51219228,Hôtel-Dieu de Montréal,CHSGS,Lit(s) de santé physique,150,Public – Territorial,2026-08-01
+51219228,Hôtel-Dieu de Montréal,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51220275,CRJDA du Mont Saint-Antoine,CRJDA,Place(s) en programme d'arrêt d'agir,5,Public – Territorial,2026-08-01
+51220275,CRJDA du Mont Saint-Antoine,CRJDA,Place(s) en internat - unité de vie,158,Public – Territorial,2026-08-01
+51220275,CRJDA du Mont Saint-Antoine,CRJDA,Centre de jour,n.a.,Public – Territorial,2026-08-01
+51220283,Centre d'hébergement Jeanne-Mance,CHSLD,Lit(s) d'hébergement permanent,123,Public – Territorial,2026-08-01
+51220283,Centre d'hébergement Jeanne-Mance,CHSLD,Lit(s) d'hébergement temporaire,3,Public – Territorial,2026-08-01
+51220283,Centre d'hébergement Jeanne-Mance,CHSLD,Lit(s) d'hébergement permanent en santé mentale,30,Public – Territorial,2026-08-01
+51220713,Foyer de groupe pour JDA de Lachine,CRJDA,Place(s) en foyer de groupe,9,Public – Territorial,2026-08-01
+51220762,Foyer de groupe pour JDA Gouin,CRJDA,Place(s) en foyer de groupe,9,Public – Territorial,2026-08-01
+51220853,Foyer de groupe pour JDA Godbout,CRJDA,Place(s) en foyer de groupe,9,Public – Territorial,2026-08-01
+51220887,CRJDA Dominique-Savio,CRJDA,Place(s) en internat - unité de vie,99,Public – Territorial,2026-08-01
+51220887,CRJDA Dominique-Savio,CRJDA,Place(s) en programme d'arrêt d'agir,21,Public – Territorial,2026-08-01
+51220887,CRJDA Dominique-Savio,CRJDA,Centre de jour,n.a.,Public – Territorial,2026-08-01
+51220952,CRDI-TSA Marie-Bourassa,CRDI,Services externes,n.a.,Public – Territorial,2026-08-01
+51220960,CRDI-TSA Dandurand,CRDI,Place(s) en atelier de travail,55,Public – Territorial,2026-08-01
+51220960,CRDI-TSA Dandurand,CRDI,Services externes,n.a.,Public – Territorial,2026-08-01
+51221919,CRD et DI-TSA Louvain,CRD,Place(s) en internat,27,Public – Territorial,2026-08-01
+51221919,CRD et DI-TSA Louvain,CRDI,Services externes,n.a.,Public – Territorial,2026-08-01
+51221919,CRD et DI-TSA Louvain,CRD,Services externes,n.a.,Public – Territorial,2026-08-01
+51221927,CRD Saint-Urbain,CRD,Services externes,n.a.,Public – Territorial,2026-08-01
+51221935,CRD Prince-Arthur,CRD,Services externes,n.a.,Public – Territorial,2026-08-01
+51221935,CRD Prince-Arthur,CRD,Place(s) en internat,28,Public – Territorial,2026-08-01
+51222289,Foyer de groupe pour JDA Esplanade,CRJDA,Place(s) en foyer de groupe,9,Public – Territorial,2026-08-01
+51222289,Foyer de groupe pour JDA Esplanade,CRJDA,Place(s) en appartement supervisé pour jeunes,2,Public – Territorial,2026-08-01
+51225431,CRDI-TSA Parc-des-Roseraies,CRDI,Services externes,n.a.,Public – Territorial,2026-08-01
+51226199,CPRJDA Décarie,CPEJ,,n.a.,Public – Territorial,2026-08-01
+51226199,CPRJDA Décarie,CRJDA,Centre de jour,n.a.,Public – Territorial,2026-08-01
+51226207,CPEJ de Pointe-aux-Trembles,CPEJ,,n.a.,Public – Territorial,2026-08-01
+51227973,Foyer de groupe pour JDA Saint-Vital,CRJDA,Place(s) en foyer de groupe,6,Public – Territorial,2026-08-01
+51228328,Centre d'hébergement Louis-Riel,CHSLD,Lit(s) d'hébergement permanent,100,Public – Territorial,2026-08-01
+51228336,Centre d'hébergement Réal-Morel,CHSLD,Lit(s) d'hébergement permanent,144,Public – Territorial,2026-08-01
+51228344,CLSC de Saint-Henri,CLSC,,n.a.,Public – Territorial,2026-08-01
+51228351,CLSC et centre serv. amb. de Verdun,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51228351,CLSC et centre serv. amb. de Verdun,CLSC,,n.a.,Public – Territorial,2026-08-01
+51228369,Centre d'hébergement Yvon-Brunet,CHSLD,Lit(s) d'hébergement permanent en santé mentale,54,Public – Territorial,2026-08-01
+51228369,Centre d'hébergement Yvon-Brunet,CHSLD,Lit(s) d'hébergement permanent,100,Public – Territorial,2026-08-01
+51228377,Centre multi. SSS de Saint-Henri,CRD,Services externes,n.a.,Public – Territorial,2026-08-01
+51228377,Centre multi. SSS de Saint-Henri,CHSLD,Centre de jour,n.a.,Public – Territorial,2026-08-01
+51228377,Centre multi. SSS de Saint-Henri,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51228377,Centre multi. SSS de Saint-Henri,CHSLD,Lit(s) d'hébergement permanent,174,Public – Territorial,2026-08-01
+51228534,Centre d'hébergement Paul-Émile-Léger,CHSLD,Lit(s) d'hébergement permanent,193,Public – Territorial,2026-08-01
+51228534,Centre d'hébergement Paul-Émile-Léger,CHSLD,Lit(s) d'hébergement temporaire,3,Public – Territorial,2026-08-01
+51228542,Centre d'hébergement Émilie-Gamelin,CHSLD,Lit(s) d'hébergement permanent en santé mentale,35,Public – Territorial,2026-08-01
+51228542,Centre d'hébergement Émilie-Gamelin,CHSLD,Centre de jour,n.a.,Public – Territorial,2026-08-01
+51228542,Centre d'hébergement Émilie-Gamelin,CHSLD,Lit(s) d'hébergement permanent,147,Public – Territorial,2026-08-01
+51230092,CLSC du Plateau-Mont-Royal,CLSC,,n.a.,Public – Territorial,2026-08-01
+51230100,CLSC Saint-Urbain,CLSC,,n.a.,Public – Territorial,2026-08-01
+51230829,Foyer de groupe pour JDA Harmony,CRJDA,Place(s) en foyer de groupe,9,Public – Territorial,2026-08-01
+51231470,Centre multi. SSS de Saint-Louis-du-Parc,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51231470,Centre multi. SSS de Saint-Louis-du-Parc,CRDI,Services externes,n.a.,Public – Territorial,2026-08-01
+51231470,Centre multi. SSS de Saint-Louis-du-Parc,CLSC,,n.a.,Public – Territorial,2026-08-01
+51231892,CRDP Lucie-Bruneau-Laurier,CRDPM,Services externes - activités complémentaires,n.a.,Public – Territorial,2026-08-01
+51231892,CRDP Lucie-Bruneau-Laurier,CRDPM,Services externes,n.a.,Public – Territorial,2026-08-01
+51232007,Hôpital et CRDP IRGLM-Charles W. Lindsay,CRDPM,Autre(s) lit(s) de réadaptation,10,Public – Territorial,2026-08-01
+51232007,Hôpital et CRDP IRGLM-Charles W. Lindsay,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51232007,Hôpital et CRDP IRGLM-Charles W. Lindsay,CHSGS,Lit(s) de santé physique,44,Public – Territorial,2026-08-01
+51232007,Hôpital et CRDP IRGLM-Charles W. Lindsay,CRDPM,Services externes,n.a.,Public – Territorial,2026-08-01
+51232015,Hôpital et CRDP IRGLM-Gustave-Gingras,CRDPM,Service d'aides techniques,n.a.,Public – Territorial,2026-08-01
+51232015,Hôpital et CRDP IRGLM-Gustave-Gingras,CRDPM,Services externes,n.a.,Public – Territorial,2026-08-01
+51232015,Hôpital et CRDP IRGLM-Gustave-Gingras,CHSGS,Lit(s) de santé physique,99,Public – Territorial,2026-08-01
+51232015,Hôpital et CRDP IRGLM-Gustave-Gingras,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51232015,Hôpital et CRDP IRGLM-Gustave-Gingras,CRDPM,Service d'aides techniques - activités complémentaires,n.a.,Public – Territorial,2026-08-01
+51232536,CPRJDA du Centre-de-Montréal,CPEJ,,n.a.,Public – Territorial,2026-08-01
+51232536,CPRJDA du Centre-de-Montréal,CRJDA,Centre de jour,n.a.,Public – Territorial,2026-08-01
+51232551,Centre de jour pour JDA Fullum,CRJDA,Centre de jour,n.a.,Public – Territorial,2026-08-01
+51232569,Centre de jour pour JDA Lajeunesse,CRJDA,Centre de jour,n.a.,Public – Territorial,2026-08-01
+51232577,CPEJ Saint-Laurent,CPEJ,,n.a.,Public – Territorial,2026-08-01
+51233187,CRDI-TSA Saint-Patrick,CRDI,Services externes,n.a.,Public – Territorial,2026-08-01
+51233187,CRDI-TSA Saint-Patrick,CRDI,Place(s) en centre d'activités de jour,72,Public – Territorial,2026-08-01
+51233419,Centre act. de jour DI et TSA Jeanne-D'Arc,CRDI,Place(s) en centre d'activités de jour,40,Public – Territorial,2026-08-01
+51233427,CRDI-TSA Beaubien,CRDI,Services externes,n.a.,Public – Territorial,2026-08-01
+51233443,Centre act. de jour DI et TSA Hochelaga-Maisonneuve,CRDI,Place(s) en centre d'activités de jour,22,Public – Territorial,2026-08-01
+51233625,Foyer de groupe pour JDA Désy,CRJDA,Place(s) en foyer de groupe,9,Public – Territorial,2026-08-01
+51233633,Foyer de groupe pour JDA Montpetit,CRJDA,Place(s) en foyer de groupe,6,Public – Territorial,2026-08-01
+51235083,Foyer de groupe pour JDA d'Ahunstic,CRJDA,Place(s) en foyer de groupe,9,Public – Territorial,2026-08-01
+51235729,Foyer de groupe pour JDA Chambord,CRJDA,Place(s) en foyer de groupe,6,Public – Territorial,2026-08-01
+51235737,GMFU Notre-Dame,CHSGS,Groupe de médecine de famille universitaire,0,Public – Territorial,2026-08-01
+51235976,Maison de naissance Jeanne-Mance,CLSC,,n.a.,Public – Territorial,2026-08-01
+51236149,Centre act. de jour DI et TSA 17e Avenue,CRDI,Place(s) en centre d'activités de jour,70,Public – Territorial,2026-08-01
+51236206,CLSC Sainte-Catherine et GMFU des Faubourgs,CLSC,,n.a.,Public – Territorial,2026-08-01
+51236206,CLSC Sainte-Catherine et GMFU des Faubourgs,CHSGS,Groupe de médecine de famille universitaire,0,Public – Territorial,2026-08-01
+51236206,CLSC Sainte-Catherine et GMFU des Faubourgs,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51236214,GMFU de Verdun,CHSGS,Groupe de médecine de famille universitaire,0,Public – Territorial,2026-08-01
+51236313,Hôpital Notre-Dame,CHSGS,"Hôpital de jour, santé mentale",n.a.,Public – Territorial,2026-08-01
+51236313,Hôpital Notre-Dame,CHSGS,Lit(s) de santé physique,224,Public – Territorial,2026-08-01
+51236313,Hôpital Notre-Dame,CHSGS,Lit(s) de gériatrie,34,Public – Territorial,2026-08-01
+51236313,Hôpital Notre-Dame,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51236313,Hôpital Notre-Dame,CHSGS,Lit(s) de psychiatrie,38,Public – Territorial,2026-08-01
+51236313,Hôpital Notre-Dame,CHSGS,"Centre de jour, santé mentale",n.a.,Public – Territorial,2026-08-01
+51236313,Hôpital Notre-Dame,CHSGS,Urgence,n.a.,Public – Territorial,2026-08-01
+51236313,Hôpital Notre-Dame,CRD,Services externes,n.a.,Public – Territorial,2026-08-01
+51244754,CLSC Île-des-Sœurs,CLSC,,n.a.,Public – Territorial,2026-08-01
+51246452,CRDP Raymond-Dewar-Laurier,CRDPL,Services externes,n.a.,Public – Territorial,2026-08-01
+51246452,CRDP Raymond-Dewar-Laurier,CRDPA,Service d'aides techniques,n.a.,Public – Territorial,2026-08-01
+51246452,CRDP Raymond-Dewar-Laurier,CRDPA,Services externes,n.a.,Public – Territorial,2026-08-01
+51246460,CRDP Raymond-Dewar-Radisson,CRDPA,Service d'aides techniques,n.a.,Public – Territorial,2026-08-01
+51246460,CRDP Raymond-Dewar-Radisson,CRDPA,Services externes,n.a.,Public – Territorial,2026-08-01
+51246460,CRDP Raymond-Dewar-Radisson,CRDPV,Services externes,n.a.,Public – Territorial,2026-08-01
+51246478,CRDP Lucie-Bruneau-Fullum,CRDPM,Services externes,n.a.,Public – Territorial,2026-08-01
+51246478,CRDP Lucie-Bruneau-Fullum,CRDPM,Service d'aides techniques,n.a.,Public – Territorial,2026-08-01
+51246577,Serv. ext. pour JDA La Fontaine,CRJDA,Services externes,n.a.,Public – Territorial,2026-08-01
+51246650,CRDI-TSA Gouin,CRDI,Services externes,n.a.,Public – Territorial,2026-08-01
+51246668,CRDI-TSA Henri-Bourassa,CRDI,Services externes,n.a.,Public – Territorial,2026-08-01
+51248292,L'Hôpital chinois de Montréal (1963),CHSLD,Services externes,n.a.,Public,2026-08-01
+51248292,L'Hôpital chinois de Montréal (1963),CHSLD,Lit(s) d'hébergement permanent,128,Public,2026-08-01
+51248292,L'Hôpital chinois de Montréal (1963),CHSLD,Centre de jour,n.a.,Public,2026-08-01
+51248920,Aire ouverte du Métro-Berri,CLSC,,n.a.,Public – Territorial,2026-08-01
+51249092,CRD Hochelaga,CRD,Services externes,n.a.,Public – Territorial,2026-08-01
+51249100,CRD Monkland,CRD,Services externes,n.a.,Public – Territorial,2026-08-01
+51249118,CRD Notre-Dame-Est,CRD,Services externes,n.a.,Public – Territorial,2026-08-01
+51249126,CRD Lachine,CRD,Services externes,n.a.,Public – Territorial,2026-08-01
+51249134,CRD Gouin,CRD,Services externes,n.a.,Public – Territorial,2026-08-01
+51249241,Foyer de groupe pour JDA Pelletier,CRJDA,Place(s) en foyer de groupe,7,Public – Territorial,2026-08-01
+51249258,Foyer de groupe pour JDA Charleroi,CRJDA,Place(s) en foyer de groupe,8,Public – Territorial,2026-08-01
+51249431,GMFU de Verdun-de-l'Église,CHSGS,Groupe de médecine de famille universitaire,0,Public – Territorial,2026-08-01
+51249563,CRD Cavendish  /Cavendish addiction readaptation centre,CRD,Services externes,n.a.,Public – Territorial,2026-08-01
+51249613,Aire ouverte du Métro-Lionel-Groulx,CLSC,,n.a.,Public – Territorial,2026-08-01
+51341477,CPEJ Henri-Bourassa Est,CPEJ,,n.a.,Public – Territorial,2026-08-01
+51341543,CPEJ de l'Église,CPEJ,,n.a.,Public – Territorial,2026-08-01
+51497576,Centre d'hébergement de Verdun,CHSLD,Lit(s) d'hébergement permanent,220,Public – Territorial,2026-08-01
+51497576,Centre d'hébergement de Verdun,CHSLD,Centre de jour,n.a.,Public – Territorial,2026-08-01
+51585826,CPEJ Sherbrooke Est,CPEJ,,n.a.,Public – Territorial,2026-08-01
+51608214,CPEJ La Fontaine,CPEJ,,n.a.,Public – Territorial,2026-08-01
+51831485,Foyer de groupe pour JDA La Fontaine,CRJDA,Place(s) en foyer de groupe,9,Public – Territorial,2026-08-01
+51831501,Foyer de groupe pour JDA Meilleur,CRJDA,Place(s) en foyer de groupe,9,Public – Territorial,2026-08-01
+52253796,Centre d'hébergement Alfred-DesRochers,CHSLD,Lit(s) d'hébergement permanent,125,Public – Territorial,2026-08-01
+52253796,Centre d'hébergement Alfred-DesRochers,CHSLD,Centre de jour,n.a.,Public – Territorial,2026-08-01
+52266889,Centre d'hébergement Ernest-Routhier,CHSLD,Lit(s) d'hébergement permanent,96,Public – Territorial,2026-08-01
+52389285,Centre act. de jour DI et TSA Lapierre,CRDI,Place(s) en centre d'activités de jour,110,Public – Territorial,2026-08-01
+52393758,CLSC Parthenais et GMFU des Faubourgs,CHSGS,Groupe de médecine de famille universitaire,0,Public – Territorial,2026-08-01
+52393758,CLSC Parthenais et GMFU des Faubourgs,CLSC,,n.a.,Public – Territorial,2026-08-01
+52585460,Foyer de groupe pour JDA de Rivière-des-Prairies,CRJDA,Place(s) en foyer de groupe,9,Public – Territorial,2026-08-01
+52585510,Foyer de groupe pour JDA Langelier,CRJDA,Place(s) en foyer de groupe,9,Public – Territorial,2026-08-01
+52697893,Centre d'hébergement Paul-Bruchési,CHSLD,Lit(s) d'hébergement permanent,83,Public – Territorial,2026-08-01
+52756772,Centre d'hébergement Armand-Lavergne,CHSLD,Lit(s) d'hébergement temporaire,66,Public – Territorial,2026-08-01
+52756772,Centre d'hébergement Armand-Lavergne,CHSLD,Lit(s) d'hébergement permanent en santé mentale,22,Public – Territorial,2026-08-01
+52756772,Centre d'hébergement Armand-Lavergne,CHSLD,Lit(s) d'hébergement permanent,92,Public – Territorial,2026-08-01
+52756772,Centre d'hébergement Armand-Lavergne,CHSLD,Services externes,n.a.,Public – Territorial,2026-08-01
+52756772,Centre d'hébergement Armand-Lavergne,CHSLD,Hôpital de jour,n.a.,Public – Territorial,2026-08-01
+52792058,Foyer de groupe pour JDA 1re Avenue,CRJDA,Place(s) en foyer de groupe,9,Public – Territorial,2026-08-01
+53417077,Centre act. de jour DI et TSA Léger,CRDI,Place(s) en centre d'activités de jour,66,Public – Territorial,2026-08-01
+53876330,CLSC de Ville-Émard-Côte-Saint-Paul,CLSC,,n.a.,Public – Territorial,2026-08-01
+54102900,Foyer de groupe pour JDA Louis-Hémon,CRJDA,Place(s) en foyer de groupe,6,Public – Territorial,2026-08-01
+54583364,Centre d'hébergement des Seigneurs,CHSLD,Lit(s) d'hébergement permanent en santé mentale,48,Public – Territorial,2026-08-01
+54583364,Centre d'hébergement des Seigneurs,CHSLD,Lit(s) d'hébergement permanent,120,Public – Territorial,2026-08-01
+54583679,CRDI-TSA Notre-Dame,CRDI,Place(s) en atelier de travail,13,Public – Territorial,2026-08-01
+54583679,CRDI-TSA Notre-Dame,CRDI,Services externes,n.a.,Public – Territorial,2026-08-01
+54583695,CPEJ Maisonneuve Est,CPEJ,,n.a.,Public – Territorial,2026-08-01
+54583703,CRJDA Cité-des-Prairies,CRJDA,Place(s) en programme d'arrêt d'agir,8,Public – Territorial,2026-08-01
+54583703,CRJDA Cité-des-Prairies,CRJDA,Centre de jour,n.a.,Public – Territorial,2026-08-01
+54583703,CRJDA Cité-des-Prairies,CRJDA,Place(s) en internat - unité de vie,150,Public – Territorial,2026-08-01
+54583737,CRJDA Rose-Virginie-Pelletier,CRJDA,Place(s) en internat - unité de vie,68,Public – Territorial,2026-08-01
+54583737,CRJDA Rose-Virginie-Pelletier,CRJDA,Centre de jour,n.a.,Public – Territorial,2026-08-01
+54711718,CRDI-TSA Pie-IX,CRDI,Services externes,n.a.,Public – Territorial,2026-08-01
+54830559,Centre act. de jour DI et TSA Ontario,CRDI,Place(s) en centre d'activités de jour,22,Public – Territorial,2026-08-01
+54878178,Atelier de travail DI et TSA Edison,CRDI,Place(s) en atelier de travail,24,Public – Territorial,2026-08-01
+54878186,CRDI-TSA Champ-d'Eau,CRDI,Services externes,n.a.,Public – Territorial,2026-08-01
+54878186,CRDI-TSA Champ-d'Eau,CRDI,Place(s) en centre d'activités de jour,15,Public – Territorial,2026-08-01
+54878186,CRDI-TSA Champ-d'Eau,CRDI,Place(s) en atelier de travail,24,Public – Territorial,2026-08-01
+55022412,Foyer de groupe pour JDA de Verdun,CRJDA,Place(s) en foyer de groupe,6,Public – Territorial,2026-08-01
+55612196,CPEJ Saint-Denis,CPEJ,,n.a.,Public – Territorial,2026-08-01
+55612212,Foyer de groupe pour JDA Sagamo,CRJDA,Place(s) en foyer de groupe,9,Public – Territorial,2026-08-01
+55612220,Foyer de groupe pour JDA J.-O. Roussi,CRJDA,Place(s) en foyer de groupe,9,Public – Territorial,2026-08-01
+51248011,Atelier le Fil d'Ariane,CRDI,Place(s) en atelier de travail,20,Privé,2026-08-01
+51248052,Clinique communautaire de Pointe St-Charles,CLSC,,n.a.,Privé,2026-08-01
+51770048,Clinique communautaire de Pointe St-Charles,CLSC,,n.a.,Privé,2026-08-01
+51495869,Résidence des filles et/ou garçons (Havre-Jeunesse),CRJDA,Place(s) en foyer de groupe,7,Privé,2026-08-01
+51495877,Résidence des garçons et/ou filles (Havre-Jeunesse),CRJDA,Place(s) en foyer de groupe,8,Privé,2026-08-01
+51231223,Centre d'accueil Le Programme de Portage,CRD,Place(s) en internat,80,Privé,2026-08-01
+51231231,Centre d'accueil Le Programme de Portage,CRD,Place(s) en internat,139,Privé,2026-08-01
+51232619,Centre d'accueil Le Programme de Portage,CRD,Place(s) en internat,40,Privé,2026-08-01
+51235257,Centre d'accueil Le Programme de Portage,CRD,Place(s) en internat,32,Privé,2026-08-01
+51235422,Centre d'acceuil Le Programme de Portage,CRD,Services externes,n.a.,Privé,2026-08-01
+51235950,Centre d'accueil Le Programme de Portage,CRD,Centre de jour,n.a.,Privé,2026-08-01
+51235950,Centre d'accueil Le Programme de Portage,CRD,Services externes,n.a.,Privé,2026-08-01
+51767366,Centre d'accueil Le Programme de Portage,CRD,Services externes,n.a.,Privé,2026-08-01
+51767366,Centre d'accueil Le Programme de Portage,CRD,Centre de jour,n.a.,Privé,2026-08-01
+51248128,Hôpital Villa Medica,CHSGS,Consultations externes,n.a.,Privé,2026-08-01
+51248128,Hôpital Villa Medica,CHSGS,Lit(s) de santé physique,207,Privé,2026-08-01
+12475976,Hôpital du Sacré-Coeur-de-Montréal,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+12475976,Hôpital du Sacré-Coeur-de-Montréal,CHSGS,Lit(s) de gériatrie,20,Public – Territorial,2026-08-01
+12475976,Hôpital du Sacré-Coeur-de-Montréal,CHSGS,Lit(s) de santé physique,420,Public – Territorial,2026-08-01
+12475976,Hôpital du Sacré-Coeur-de-Montréal,CHSGS,Urgence,n.a.,Public – Territorial,2026-08-01
+51225613,CHSLD Saint-Joseph-de-la-Providence,CHSLD,Centre de jour,n.a.,Public – Territorial,2026-08-01
+51225613,CHSLD Saint-Joseph-de-la-Providence,CHSLD,Lit(s) d'hébergement permanent,140,Public – Territorial,2026-08-01
+51228443,Centre d'hébergement Notre-Dame-de-La-Merci,CHSLD,Lit(s) d'hébergement temporaire,138,Public – Territorial,2026-08-01
+51228443,Centre d'hébergement Notre-Dame-de-La-Merci,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51228443,Centre d'hébergement Notre-Dame-de-La-Merci,CHSLD,Hôpital de jour,n.a.,Public – Territorial,2026-08-01
+51228443,Centre d'hébergement Notre-Dame-de-La-Merci,CHSLD,Lit(s) d'hébergement permanent,284,Public – Territorial,2026-08-01
+51228443,Centre d'hébergement Notre-Dame-de-La-Merci,CHSGS,Lit(s) de gériatrie,18,Public – Territorial,2026-08-01
+51228450,CHSLD de Cartierville,CHSLD,Centre de jour,n.a.,Public – Territorial,2026-08-01
+51228450,CHSLD de Cartierville,CHSLD,Lit(s) d'hébergement permanent,209,Public – Territorial,2026-08-01
+51228468,CLSC de Montréal-Nord,CLSC,,n.a.,Public – Territorial,2026-08-01
+51228476,CHSLD Laurendeau,CHSLD,Lit(s) d'hébergement permanent,300,Public – Territorial,2026-08-01
+51228484,CLSC d'Ahuntsic,CLSC,,n.a.,Public – Territorial,2026-08-01
+51228492,Hôpital Fleury,CHSGS,"Hôpital de jour, santé mentale",n.a.,Public – Territorial,2026-08-01
+51228492,Hôpital Fleury,CHSGS,Lit(s) de gériatrie,10,Public – Territorial,2026-08-01
+51228492,Hôpital Fleury,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51228492,Hôpital Fleury,CHSGS,Lit(s) de santé physique,115,Public – Territorial,2026-08-01
+51228492,Hôpital Fleury,CHSGS,Urgence,n.a.,Public – Territorial,2026-08-01
+51228500,Hôpital Jean-Talon,CHSGS,Urgence,n.a.,Public – Territorial,2026-08-01
+51228500,Hôpital Jean-Talon,CHSGS,Lit(s) de psychiatrie,30,Public – Territorial,2026-08-01
+51228500,Hôpital Jean-Talon,CHSGS,Lit(s) de gériatrie,25,Public – Territorial,2026-08-01
+51228500,Hôpital Jean-Talon,CHSGS,Lit(s) de santé physique,131,Public – Territorial,2026-08-01
+51228500,Hôpital Jean-Talon,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51228518,CLSC de Villeray,CLSC,,n.a.,Public – Territorial,2026-08-01
+51228526,CLSC de La Petite-Patrie,CLSC,,n.a.,Public – Territorial,2026-08-01
+51229631,Centre serv. amb. en SM Papineau,CHPSY,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51229631,Centre serv. amb. en SM Papineau,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51230779,CHSLD de Saint-Laurent,CHSLD,Lit(s) d'hébergement permanent,154,Public – Territorial,2026-08-01
+51230779,CHSLD de Saint-Laurent,CHSLD,Centre de jour,n.a.,Public – Territorial,2026-08-01
+51234938,Centre multi. SSS Rivière-des-Prairies,CHPSY,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51234938,Centre multi. SSS Rivière-des-Prairies,CHPSY,Lit(s) de psychiatrie,86,Public – Territorial,2026-08-01
+51234938,Centre multi. SSS Rivière-des-Prairies,CHPSY,Urgence,n.a.,Public – Territorial,2026-08-01
+51234938,Centre multi. SSS Rivière-des-Prairies,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51234938,Centre multi. SSS Rivière-des-Prairies,CHPSY,"Hôpital de jour, santé mentale",n.a.,Public – Territorial,2026-08-01
+51234938,Centre multi. SSS Rivière-des-Prairies,CHSLD,Lit(s) d'hébergement permanent en santé mentale,31,Public – Territorial,2026-08-01
+51236081,Centre serv. amb. Bois-de-Boulogne,CHPSY,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51236081,Centre serv. amb. Bois-de-Boulogne,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51236107,Centre serv. amb. en gérontopsy. Grenet,CHPSY,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51236180,GMFU Sacré-Cœur,CHSGS,Groupe de médecine de famille universitaire,0,Public – Territorial,2026-08-01
+51245579,Aire ouverte Sauriol,CLSC,,n.a.,Public – Territorial,2026-08-01
+51247401,Maison alternative de Rivière-des-Prairies,CHSLD,Lit(s) d'hébergement permanent,72,Public – Territorial,2026-08-01
+51248573,Aire ouverte Montréal-Nord,CLSC,,n.a.,Public – Territorial,2026-08-01
+51248581,CLSC et GMFU Montréal-Nord-Est,CHSGS,Groupe de médecine de famille universitaire,0,Public – Territorial,2026-08-01
+51248581,CLSC et GMFU Montréal-Nord-Est,CLSC,,n.a.,Public – Territorial,2026-08-01
+51249712,CHSLD Angelica,CHSLD,Lit(s) d'hébergement permanent,350,Public – Territorial,2026-08-01
+51249712,CHSLD Angelica,CHSLD,Centre de jour,n.a.,Public – Territorial,2026-08-01
+51848752,Hôpital en santé mentale Albert-Prévost,CHSGS,Lit(s) de psychiatrie,89,Public – Territorial,2026-08-01
+51848752,Hôpital en santé mentale Albert-Prévost,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51848752,Hôpital en santé mentale Albert-Prévost,CHSGS,"Centre de jour, santé mentale",n.a.,Public – Territorial,2026-08-01
+51848752,Hôpital en santé mentale Albert-Prévost,CHSGS,"Hôpital de jour, santé mentale",n.a.,Public – Territorial,2026-08-01
+51848752,Hôpital en santé mentale Albert-Prévost,CHSGS,Urgence,n.a.,Public – Territorial,2026-08-01
+52238870,CHSLD De la Petite-Patrie,CHSLD,Lit(s) d'hébergement permanent,96,Public – Territorial,2026-08-01
+52579851,CHSLD Paul-Gouin,CHSLD,Centre de jour,n.a.,Public – Territorial,2026-08-01
+52579851,CHSLD Paul-Gouin,CHSLD,Lit(s) d'hébergement permanent,100,Public – Territorial,2026-08-01
+52678281,CHSLD Paul-Lizotte,CHSLD,Lit(s) d'hébergement permanent,128,Public – Territorial,2026-08-01
+54201306,CLSC et GMFU Bordeaux-Cartierville,CLSC,,n.a.,Public – Territorial,2026-08-01
+54201306,CLSC et GMFU Bordeaux-Cartierville,CHSGS,Groupe de médecine de famille universitaire,0,Public – Territorial,2026-08-01
+54583372,CHSLD Auclair,CHSLD,Lit(s) d'hébergement permanent,160,Public – Territorial,2026-08-01
+54878145,CLSC de Saint-Laurent,CLSC,,n.a.,Public – Territorial,2026-08-01
+55616940,Centre serv. amb et maison de naissance Louvain,CLSC,,n.a.,Public – Territorial,2026-08-01
+55616940,Centre serv. amb et maison de naissance Louvain,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+55616957,CHSLD Légaré,CHSLD,Lit(s) d'hébergement permanent,105,Public – Territorial,2026-08-01
+51248037,Résidence Berthiaume-Du Tremblay,CHSLD,Centre de jour,n.a.,Privé,2026-08-01
+51248037,Résidence Berthiaume-Du Tremblay,CHSLD,Lit(s) d'hébergement permanent,198,Privé,2026-08-01
+51248045,Hôpital Marie-Clarac,CHSGS,Lit(s) de santé physique,228,Privé,2026-08-01
+51248045,Hôpital Marie-Clarac,CHSGS,Consultations externes,n.a.,Privé,2026-08-01
+51248078,Les cèdres - Centre d'accueil pour personnes âgées,CHSLD,Lit(s) d'hébergement permanent,32,Privé,2026-08-01
+51248086,Centre métropolitain de chirurgie plastique,CHSGS,Lit(s) de santé physique,17,Privé,2026-08-01
+51234284,CHSLD de la Belle-Rive,CHSLD,Lit(s) d'hébergement permanent,44,Privé,2026-08-01
+51216802,Centre Le Cardinal,CHSLD,Lit(s) d'hébergement permanent,174,Privé,2026-08-01
+51225027,Centre d'hébergement de la Marée,CHSLD,Lit(s) d'hébergement permanent,45,Privé,2026-08-01
+51223303,Centre d'hébergement Champlain-de-la-Villa-Soleil,CHSLD,Lit(s) d'hébergement permanent,166,Privé,2026-08-01
+51223303,Centre d'hébergement Champlain-de-la-Villa-Soleil,CHSLD,Lit(s) d'hébergement temporaire,2,Privé,2026-08-01
+51223311,Centre d'hébergement Champlain-de-Gatineau,CHSLD,Lit(s) d'hébergement permanent,101,Privé,2026-08-01
+51224921,Centre d'hébergement Champlain - Chanoine-Audet,CHSLD,Lit(s) d'hébergement permanent,96,Privé,2026-08-01
+51230175,Centre d'hébergement Champlain-des-Montagnes,CHSLD,Lit(s) d'hébergement permanent,105,Privé,2026-08-01
+51230183,Centre d'hébergement Champlain-de-Saint-François,CHSLD,Lit(s) d'hébergement permanent,53,Privé,2026-08-01
+51230209,Centre d'hébergement Champlain - Jean-Louis-Lapierre,CHSLD,Lit(s) d'hébergement permanent,76,Privé,2026-08-01
+51230217,Centre d'hébergement Champlain-du-Château,CHSLD,Lit(s) d'hébergement permanent,73,Privé,2026-08-01
+51232122,Centre d'hébergement Champlain-de-l'Assomption,CHSLD,Lit(s) d'hébergement permanent,96,Privé,2026-08-01
+51233104,Centre d'hébergement Champlain-de-la-Rose-Blanche,CHSLD,Lit(s) d'hébergement permanent en santé mentale,60,Privé,2026-08-01
+54982822,Centre d'hébergement Champlain - Marie-Victorin,CHSLD,Lit(s) d'hébergement temporaire,15,Privé,2026-08-01
+54982822,Centre d'hébergement Champlain - Marie-Victorin,CHSLD,Lit(s) d'hébergement permanent,314,Privé,2026-08-01
+51388874,Centre d'hébergement de la Maison-Saint-Joseph,CHSLD,Lit(s) d'hébergement permanent,155,Privé,2026-08-01
+51234615,CHSLD Angus,CHSLD,Lit(s) d'hébergement permanent,49,Privé,2026-08-01
+12387692,CHSLD Polonais Marie-Curie-Sklodowska,CHSLD,Lit(s) d'hébergement permanent,126,Public – Territorial,2026-08-01
+12934659,Hôpital Maisonneuve-Rosemont,CHSGS,Lit(s) de néonatalogie,26,Public – Territorial,2026-08-01
+12934659,Hôpital Maisonneuve-Rosemont,CHSGS,Lit(s) de gériatrie,28,Public – Territorial,2026-08-01
+12934659,Hôpital Maisonneuve-Rosemont,CHSGS,Lit(s) de santé physique,507,Public – Territorial,2026-08-01
+12934659,Hôpital Maisonneuve-Rosemont,CHSGS,Urgence,n.a.,Public – Territorial,2026-08-01
+12934659,Hôpital Maisonneuve-Rosemont,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51221828,Centre d'hébergement J.-Henri-Charbonneau,CHSLD,Lit(s) d'hébergement permanent,162,Public – Territorial,2026-08-01
+51221828,Centre d'hébergement J.-Henri-Charbonneau,CHSGS,Lit(s) de santé physique,33,Public – Territorial,2026-08-01
+51221836,CHSLD Éloria-Lepage,CHSLD,Centre de jour,n.a.,Public – Territorial,2026-08-01
+51221836,CHSLD Éloria-Lepage,CHSLD,Lit(s) d'hébergement permanent,156,Public – Territorial,2026-08-01
+51222602,Pavillon Rachel-Tourigny,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51225035,CHSLD Joseph-François-Perreault,CHSLD,Centre de jour,n.a.,Public – Territorial,2026-08-01
+51225035,CHSLD Joseph-François-Perreault,CHSLD,Lit(s) d'hébergement permanent,192,Public – Territorial,2026-08-01
+51228583,CHSLD de Saint-Michel,CHSLD,Lit(s) d'hébergement permanent,190,Public – Territorial,2026-08-01
+51228583,CHSLD de Saint-Michel,CHSLD,Lit(s) d'hébergement temporaire,2,Public – Territorial,2026-08-01
+51228583,CHSLD de Saint-Michel,CHSGS,Lit(s) de santé physique,16,Public – Territorial,2026-08-01
+51228609,CLSC de Saint-Léonard,CLSC,,n.a.,Public – Territorial,2026-08-01
+51228609,CLSC de Saint-Léonard,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51228617,CLSC et GMFU de Hochelaga-Maisonneuve,CLSC,,n.a.,Public – Territorial,2026-08-01
+51228617,CLSC et GMFU de Hochelaga-Maisonneuve,CHSGS,Groupe de médecine de famille universitaire,0,Public – Territorial,2026-08-01
+51228617,CLSC et GMFU de Hochelaga-Maisonneuve,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51228625,CLSC Olivier-Guimond,CLSC,,n.a.,Public – Territorial,2026-08-01
+51228625,CLSC Olivier-Guimond,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51228641,CHSLD Benjamin-Victor-Rousselot,CHSLD,Lit(s) d'hébergement permanent,171,Public – Territorial,2026-08-01
+51228658,CHSLD Jean-Hubert-Biermans,CHSLD,Lit(s) d'hébergement permanent,200,Public – Territorial,2026-08-01
+51228674,CLSC de Rivière-des-Prairies,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51228674,CLSC de Rivière-des-Prairies,CLSC,,n.a.,Public – Territorial,2026-08-01
+51228682,CLSC de l'Est-de-Montréal,CLSC,,n.a.,Public – Territorial,2026-08-01
+51228682,CLSC de l'Est-de-Montréal,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51229946,CLSC de Mercier-Est,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51229946,CLSC de Mercier-Est,CLSC,,n.a.,Public – Territorial,2026-08-01
+51229995,Centre de crise Émile-Nelligan,CHSLD,Lit(s) d'hébergement temporaire en santé mentale,8,Public – Territorial,2026-08-01
+51232155,CLSC de Saint-Michel,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51232155,CLSC de Saint-Michel,CLSC,,n.a.,Public – Territorial,2026-08-01
+51232940,CLSC de Rosemont,CLSC,,n.a.,Public – Territorial,2026-08-01
+51232940,CLSC de Rosemont,CHSGS,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51235299,Pavillon Fernand-Séguin,CHPSY,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51235307,Institut universitaire en SM de Montréal,CHPSY,Consultations externes,n.a.,Public – Territorial,2026-08-01
+51235307,Institut universitaire en SM de Montréal,CHPSY,"Centre de jour, santé mentale",n.a.,Public – Territorial,2026-08-01
+51235307,Institut universitaire en SM de Montréal,CHPSY,Lit(s) de psychiatrie,267,Public – Territorial,2026-08-01
+51235307,Institut universitaire en SM de Montréal,CHPSY,Lit(s) de santé physique,20,Public – Territorial,2026-08-01
+51235307,Institut universitaire en SM de Montréal,CHPSY,"Hôpital de jour, santé mentale",n.a.,Public – Territorial,2026-08-01
+51235307,Institut universitaire en SM de Montréal,CHPSY,Urgence,n.a.,Public – Territorial,2026-08-01
+51235307,Institut universitaire en SM de Montréal,CHSLD,Lit(s) d'hébergement permanent en santé mentale,18,Public – Territorial,2026-08-01
+51235919,Hôpital Santa Cabrini,CHSGS,Urgence,n.a.,Public,2026-08-01
+51235919,Hôpital Santa Cabrini,CHSGS,Consultations externes,n.a.,Public,2026-08-01
+51235919,Hôpital Santa Cabrini,CHSGS,Lit(s) de gériatrie,18,Public,2026-08-01
+51235919,Hôpital Santa Cabrini,CHSGS,Lit(s) de santé physique,305,Public,2026-08-01
+51245629,Maison de naissance Anne-Courtemanche,CLSC,,n.a.,Public – Territorial,2026-08-01
+51248490,Aire ouverte de l'Est de Montréal,CLSC,,n.a.,Public – Territorial,2026-08-01
+51340776,Pavillon Rosemont,CHSGS,Groupe de médecine de famille universitaire,0,Public – Territorial,2026-08-01
+52253770,CHSLD Dante,CHSLD,Lit(s) d'hébergement permanent,100,Public,2026-08-01
+52253770,CHSLD Dante,CHSLD,Lit(s) d'hébergement temporaire,3,Public,2026-08-01
 52253770,CHSLD Dante,CHSLD,Centre de jour,n.a.,Public,2026-08-01
-52256997,CHSLD Marie-Rollet,CHSLD,Lit(s) d'h�bergement permanent,111,Public � Territorial,2026-08-01
-52366564,CHSLD Fran�ois-S�guenot,CHSLD,Lit(s) d'h�bergement permanent,77,Public � Territorial,2026-08-01
-52366564,CHSLD Fran�ois-S�guenot,CHSLD,Centre de jour,n.a.,Public � Territorial,2026-08-01
-52492840,CHSLD Robert-Cliche,CHSLD,Lit(s) d'h�bergement permanent,100,Public � Territorial,2026-08-01
-52579869,CHSLD Judith-Jasmin,CHSLD,Lit(s) d'h�bergement permanent,75,Public � Territorial,2026-08-01
-54255880,CHSLD Nicolet,CHSLD,Lit(s) d'h�bergement permanent,145,Public � Territorial,2026-08-01
-54674023,CHSLD Jeanne-Le Ber,CHSLD,Lit(s) d'h�bergement permanent,244,Public � Territorial,2026-08-01
-54674023,CHSLD Jeanne-Le Ber,CHSGS,Lit(s) de sant� physique,82,Public � Territorial,2026-08-01
-55617054,CHSLD Pierre-Joseph-Triest,CHSLD,Lit(s) d'h�bergement temporaire,1,Public � Territorial,2026-08-01
-55617054,CHSLD Pierre-Joseph-Triest,CHSLD,Lit(s) d'h�bergement permanent,273,Public � Territorial,2026-08-01
-55617054,CHSLD Pierre-Joseph-Triest,CHSLD,Centre de jour,n.a.,Public � Territorial,2026-08-01
-51248003,CHSLD Providence Notre-Dame de Lourdes,CHSLD,Lit(s) d'h�bergement permanent,100,Priv�,2026-08-01
-51248201,Institut de cardiologie de Montr�al,CHSGS,Urgence,n.a.,Public � Autre que territorial,2026-08-01
-51248201,Institut de cardiologie de Montr�al,CHSGS,Lit(s) de sant� physique,153,Public � Autre que territorial,2026-08-01
-51248201,Institut de cardiologie de Montr�al,CHSGS,Consultations externes,n.a.,Public � Autre que territorial,2026-08-01
-51248227,Institut national de psychiatrie l�gale Philippe-Pinel,CHPSY,Lit(s) de psychiatrie,295,Public � Autre que territorial,2026-08-01
-51248227,Institut national de psychiatrie l�gale Philippe-Pinel,CHPSY,Urgence,n.a.,Public � Autre que territorial,2026-08-01
-51248227,Institut national de psychiatrie l�gale Philippe-Pinel,CHPSY,Consultations externes,n.a.,Public � Autre que territorial,2026-08-01
-51248102,CHSLD Bourget,CHSLD,Lit(s) d'h�bergement permanent,70,Priv�,2026-08-01
+52256997,CHSLD Marie-Rollet,CHSLD,Lit(s) d'hébergement permanent,111,Public – Territorial,2026-08-01
+52366564,CHSLD François-Séguenot,CHSLD,Lit(s) d'hébergement permanent,77,Public – Territorial,2026-08-01
+52366564,CHSLD François-Séguenot,CHSLD,Centre de jour,n.a.,Public – Territorial,2026-08-01
+52492840,CHSLD Robert-Cliche,CHSLD,Lit(s) d'hébergement permanent,100,Public – Territorial,2026-08-01
+52579869,CHSLD Judith-Jasmin,CHSLD,Lit(s) d'hébergement permanent,75,Public – Territorial,2026-08-01
+54255880,CHSLD Nicolet,CHSLD,Lit(s) d'hébergement permanent,145,Public – Territorial,2026-08-01
+54674023,CHSLD Jeanne-Le Ber,CHSLD,Lit(s) d'hébergement permanent,244,Public – Territorial,2026-08-01
+54674023,CHSLD Jeanne-Le Ber,CHSGS,Lit(s) de santé physique,82,Public – Territorial,2026-08-01
+55617054,CHSLD Pierre-Joseph-Triest,CHSLD,Lit(s) d'hébergement temporaire,1,Public – Territorial,2026-08-01
+55617054,CHSLD Pierre-Joseph-Triest,CHSLD,Lit(s) d'hébergement permanent,273,Public – Territorial,2026-08-01
+55617054,CHSLD Pierre-Joseph-Triest,CHSLD,Centre de jour,n.a.,Public – Territorial,2026-08-01
+51248003,CHSLD Providence Notre-Dame de Lourdes,CHSLD,Lit(s) d'hébergement permanent,100,Privé,2026-08-01
+51248201,Institut de cardiologie de Montréal,CHSGS,Urgence,n.a.,Public – Autre que territorial,2026-08-01
+51248201,Institut de cardiologie de Montréal,CHSGS,Lit(s) de santé physique,153,Public – Autre que territorial,2026-08-01
+51248201,Institut de cardiologie de Montréal,CHSGS,Consultations externes,n.a.,Public – Autre que territorial,2026-08-01
+51248227,Institut national de psychiatrie légale Philippe-Pinel,CHPSY,Lit(s) de psychiatrie,295,Public – Autre que territorial,2026-08-01
+51248227,Institut national de psychiatrie légale Philippe-Pinel,CHPSY,Urgence,n.a.,Public – Autre que territorial,2026-08-01
+51248227,Institut national de psychiatrie légale Philippe-Pinel,CHPSY,Consultations externes,n.a.,Public – Autre que territorial,2026-08-01
+51248102,CHSLD Bourget,CHSLD,Lit(s) d'hébergement permanent,70,Privé,2026-08-01
