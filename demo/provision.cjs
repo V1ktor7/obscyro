@@ -1,0 +1,395 @@
+/**
+ * The demo twin, built the way the product means it to be built.
+ *
+ * Every object below arrives from a published government file through the same
+ * Data → pipeline → ontology path a person drives from the screens. Nothing is
+ * written straight into the ontology, and nothing is reshaped in a spreadsheet
+ * first: the capacity register publishes counts, and the `expand` node turns a
+ * count into the units the twin reasons about, on the canvas, where it is
+ * visible and re-runs when the register does.
+ *
+ * Run inside the API container, which is where DATABASE_URL lives:
+ *   node /app/provision.cjs
+ *
+ * Idempotent. Every write is an upsert keyed on the government's own
+ * identifiers, so running it twice updates and never duplicates.
+ */
+
+const { Pool } = require("pg");
+const D = require("/app/dist/services/datasets.js");
+const P = require("/app/dist/services/pipeline.js");
+const O = require("/app/dist/services/ontology.js");
+
+const RAW = "https://raw.githubusercontent.com/V1ktor7/obscyro/main/demo/";
+const PROJECT = "Montréal — données ouvertes";
+const SLUG = "montreal-donnees-ouvertes";
+
+/**
+ * A fresh organization, not just a fresh project.
+ *
+ * Object types are keyed `(organization_id, name)` and instances are read back
+ * by organization, so two projects sharing one would share their ontology and
+ * each would list the other's objects. The isolation people expect from "a new
+ * project" is actually organization-level.
+ */
+async function makeProject(db, ownerUserId) {
+  const { rows: existing } = await db.query(
+    `SELECT id, organization_id FROM app.project WHERE slug = $1`,
+    [SLUG],
+  );
+  if (existing[0]) return { id: existing[0].id, orgId: existing[0].organization_id, made: false };
+
+  const { rows: org } = await db.query(
+    `INSERT INTO app.organizations (name, slug) VALUES ($1, $2) RETURNING id`,
+    [PROJECT, SLUG],
+  );
+  const orgId = org[0].id;
+  await db.query(
+    `INSERT INTO app.organization_members (organization_id, user_id, role)
+     VALUES ($1, $2, 'owner') ON CONFLICT DO NOTHING`,
+    [orgId, ownerUserId],
+  );
+  const { rows } = await db.query(
+    `INSERT INTO app.project (owner_user_id, organization_id, name, slug, project_kind)
+     VALUES ($1, $2, $3, $4, 'operations') RETURNING id`,
+    [ownerUserId, orgId, PROJECT, SLUG],
+  );
+  return { id: rows[0].id, orgId, made: true };
+}
+
+/** A property the engine reads, declared with the mechanic it feeds. */
+const prop = (key, type, label, extra = {}) => ({ key, type, label, ...extra });
+
+const TYPES = [
+  {
+    name: "OrgUnit",
+    role: null,
+    schema: [
+      prop("name", "string", "Nom", { behaviour: "state" }),
+      prop("code", "string", "Code d'installation", { behaviour: "state" }),
+      prop("kind", "string", "Genre", { behaviour: "state" }),
+      prop("etablissement", "string", "Établissement", { behaviour: "state" }),
+      prop("rls_code", "string", "Code RLS", { behaviour: "state" }),
+      prop("rls_nom", "string", "RLS", { behaviour: "state" }),
+      prop("adresse", "string", "Adresse", { behaviour: "state" }),
+      prop("longitude", "number", "Longitude", { behaviour: "level" }),
+      prop("latitude", "number", "Latitude", { behaviour: "level" }),
+      prop("statut", "string", "Statut au permis", { behaviour: "state" }),
+    ],
+  },
+  // One type per kind of capacity, because the engine names an activity after
+  // the type: a stretcher and a long-term bed are not interchangeable, and one
+  // shared `Capacite` type would make them so.
+  {
+    name: "LitSantePhysique",
+    role: "space",
+    schema: [
+      prop("label", "string", "Étiquette", { behaviour: "state" }),
+      prop("statut", "string", "État", { behaviour: "state" }),
+    ],
+  },
+  {
+    name: "CiviereUrgence",
+    role: "space",
+    schema: [
+      prop("label", "string", "Étiquette", { behaviour: "state" }),
+      prop("statut", "string", "État", { behaviour: "state" }),
+    ],
+  },
+  {
+    name: "Territoire",
+    role: null,
+    schema: [
+      prop("name", "string", "Nom", { behaviour: "state" }),
+      prop("code", "string", "Code", { behaviour: "state" }),
+      // The catchment is the region, because that is the granularity the
+      // observed data has. Splitting Montréal into twelve would state a
+      // territorial breakdown the INSPQ file does not carry.
+      prop("population", "number", "Population", {
+        unit: "personnes",
+        behaviour: "level",
+        mechanic: "scales_incidence",
+      }),
+    ],
+  },
+  {
+    name: "Protocole",
+    role: null,
+    schema: [
+      prop("name", "string", "Nom", { behaviour: "state" }),
+      prop("severite", "string", "Sévérité servie", {
+        behaviour: "state",
+        mechanic: "serves_severity",
+      }),
+      prop("ressource", "string", "Ressource consommée", {
+        behaviour: "state",
+        mechanic: "consumes_activity",
+      }),
+      prop("quantite", "number", "Quantité", { behaviour: "level", mechanic: "consumes_amount" }),
+      prop("sejour_pas", "number", "Séjour (pas)", {
+        behaviour: "level",
+        mechanic: "occupies_for",
+      }),
+    ],
+  },
+];
+
+/**
+ * `aggregates: metrics` with `transitive: false` is what the export reads as
+ * "this thing is attached to that unit" — a bed is in a hospital, and there is
+ * no bed inside a bed for a chain to continue through.
+ */
+const LINKS = [
+  { name: "situe_a", from: "LitSantePhysique", to: "OrgUnit" },
+  { name: "civiere_situe_a", from: "CiviereUrgence", to: "OrgUnit" },
+  { name: "dessert", from: "Territoire", to: "OrgUnit" },
+];
+
+async function declare(db, projectId) {
+  const ids = {};
+  for (const t of TYPES) {
+    ids[t.name] = await O.getOrCreateObjectType(db, projectId, t.name, null, t.schema);
+    await db.query(`UPDATE app.ontology_object_types SET sim_role = $2 WHERE id = $1`, [
+      ids[t.name],
+      t.role,
+    ]);
+  }
+  for (const l of LINKS) {
+    const id = await O.getOrCreateLinkType(db, projectId, l.name, ids[l.from], ids[l.to], "many_to_one");
+    await db.query(
+      `UPDATE app.ontology_link_types
+          SET aggregates = 'metrics', transitive = false, aggregate_toward = 'target'
+        WHERE id = $1`,
+      [id],
+    );
+  }
+  return ids;
+}
+
+/** Exactly what `parseCsvRows` does in the browser: text in, strings out. */
+function parseCsv(text) {
+  const lines = text.replace(/^﻿/, "").trim().split(/\r?\n/);
+  const head = lines[0].split(",").map((h) => h.trim());
+  return lines.slice(1).filter((l) => l.trim()).map((line) => {
+    const cells = [];
+    let field = "";
+    let q = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (q) {
+        if (ch === '"' && line[i + 1] === '"') { field += '"'; i++; }
+        else if (ch === '"') q = false;
+        else field += ch;
+      } else if (ch === '"') q = true;
+      else if (ch === ",") { cells.push(field); field = ""; }
+      else field += ch;
+    }
+    cells.push(field);
+    const rec = {};
+    head.forEach((h, i) => { rec[h] = (cells[i] ?? "").trim(); });
+    return rec;
+  });
+}
+
+async function upload(db, projectId, file, name, description) {
+  const res = await fetch(RAW + file);
+  if (!res.ok) throw new Error(`${file}: HTTP ${res.status}`);
+  const rows = parseCsv(await res.text());
+  const { rows: found } = await db.query(
+    `SELECT id FROM app.dataset WHERE project_id = $1 AND name = $2`,
+    [projectId, name],
+  );
+  const ds = found[0]
+    ? { id: found[0].id }
+    : await D.createDataset(db, { projectId, name, kind: "table", description });
+  const v = await D.loadTableVersion(db, ds.id, rows, { note: `import ${file}` });
+  console.log(`  dataset "${name}": ${v.rowCount} lignes (v${v.version})`);
+  return ds.id;
+}
+
+const scalar = (from, to, coerce) => ({ from, to, kind: "scalar", coerce });
+
+async function pipeline(db, projectId, name, nodes, edges) {
+  const { rows: found } = await db.query(
+    `SELECT id FROM app.pipeline WHERE project_id = $1 AND name = $2`,
+    [projectId, name],
+  );
+  const p = found[0]
+    ? { id: found[0].id }
+    : await P.createPipeline(db, {
+        projectId,
+        name,
+        slug: name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+        description: null,
+      });
+  const saved = await P.savePipeline(db, p.id, { nodes, edges });
+  const run = await P.execute(db, saved, { trigger: "manual" });
+  console.log(
+    `  pipeline "${name}": ${run.status} — ${run.rowsIn} lues, ${run.rowsOut} écrites` +
+      (run.error ? ` — ${run.error}` : ""),
+  );
+  if (run.issues && run.issues.length) {
+    for (const i of run.issues) console.log(`    ! ${i.message}`);
+  }
+  return run;
+}
+
+async function main() {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: false });
+  const db = { query: (t, p) => pool.query(t, p) };
+
+  const { rows: owner } = await db.query(
+    `SELECT owner_user_id FROM app.project WHERE slug = 'montreal-covid-19'`,
+  );
+  const userId = owner[0].owner_user_id;
+
+  const proj = await makeProject(db, userId);
+  console.log(`projet ${proj.made ? "créé" : "retrouvé"}: ${SLUG} (${proj.id})`);
+
+  await declare(db, proj.id);
+  console.log(`types déclarés: ${TYPES.map((t) => t.name).join(", ")}`);
+
+  const dsInstal = await upload(
+    db,
+    proj.id,
+    "msss-installations-montreal.csv",
+    "MSSS — Répertoire M02 des installations (Montréal)",
+    "Registre M02 des installations du réseau de la santé, MSSS, via Données Québec. " +
+      "Filtré sur la région 06 (Montréal). Colonnes telles que publiées.",
+  );
+  const dsCap = await upload(
+    db,
+    proj.id,
+    "msss-capacites-montreal.csv",
+    "MSSS — Capacités et services au permis (Montréal)",
+    "Répartition des capacités et des services autorisés au permis par installation, " +
+      "MSSS, via Données Québec. Dernier relevé mensuel, région 06.",
+  );
+  await upload(
+    db,
+    proj.id,
+    "inspq-hospitalisations-montreal.csv",
+    "INSPQ — Admissions quotidiennes à l'hôpital (Montréal)",
+    "Nouvelles hospitalisations par jour, région 06, INSPQ. " +
+      "Décembre 2021 à février 2022 : la vague Omicron telle qu'elle a eu lieu.",
+  );
+
+  console.log("pipelines:");
+  await pipeline(
+    db,
+    proj.id,
+    "Installations → OrgUnit",
+    [
+      { id: "in", kind: "dataset_input", name: "Installations", x: 60, y: 100, config: { datasetId: dsInstal } },
+      {
+        id: "out",
+        kind: "object_output",
+        name: "OrgUnit",
+        x: 420,
+        y: 100,
+        config: {
+          objectTypeName: "OrgUnit",
+          identityProperties: ["code"],
+          columnMapping: [
+            scalar("INSTAL_COD", "code", "string"),
+            scalar("INSTAL_NOM", "name", "string"),
+            scalar("ETAB_NOM", "etablissement", "string"),
+            scalar("RLS_CODE", "rls_code", "string"),
+            scalar("RLS_NOM", "rls_nom", "string"),
+            scalar("ADRESSE", "adresse", "string"),
+            scalar("LONGITUDE", "longitude", "number"),
+            scalar("LATITUDE", "latitude", "number"),
+            scalar("STATUT_COD", "statut", "string"),
+          ],
+        },
+      },
+    ],
+    [{ from: "in", to: "out" }],
+  );
+
+  // One pipeline per kind of capacity: the filter picks the unit of measure the
+  // register publishes, and `expand` turns its count into that many objects.
+  for (const [name, unite, typeName] of [
+    ["Capacités → Lits de santé physique", "Lit(s) de santé physique", "LitSantePhysique"],
+    ["Capacités → Civières d'urgence", "Urgence", "CiviereUrgence"],
+  ]) {
+    await pipeline(
+      db,
+      proj.id,
+      name,
+      [
+        { id: "in", kind: "dataset_input", name: "Capacités", x: 60, y: 100, config: { datasetId: dsCap } },
+        {
+          id: "keep",
+          kind: "filter",
+          name: unite,
+          x: 260,
+          y: 100,
+          config: { column: "unite_mesure_installation", op: "eq", value: unite },
+        },
+        {
+          id: "each",
+          kind: "expand",
+          name: "Une ligne par unité",
+          x: 460,
+          y: 100,
+          config: {
+            countColumn: "capacite_installation",
+            indexColumn: "no",
+            labelColumn: "nom_installation",
+          },
+        },
+        {
+          // A name per unit, from the government's own installation code plus
+          // the index. The rows are otherwise identical, and an upsert keyed on
+          // anything they share would fold thirty beds back into one.
+          id: "name",
+          kind: "derive",
+          name: "Étiquette",
+          x: 680,
+          y: 100,
+          config: {
+            as: "label",
+            op: "concat",
+            columns: ["code_installation", "unite_mesure_installation", "no"],
+            separator: "-",
+          },
+        },
+        {
+          id: "out",
+          kind: "object_output",
+          name: typeName,
+          x: 900,
+          y: 100,
+          config: {
+            objectTypeName: typeName,
+            identityProperties: ["label"],
+            columnMapping: [scalar("label", "label", "string")],
+            linkRules: [
+              {
+                linkType: typeName === "CiviereUrgence" ? "civiere_situe_a" : "situe_a",
+                targetType: "OrgUnit",
+                fromColumn: "code_installation",
+                targetProperty: "code",
+                direction: "out",
+              },
+            ],
+          },
+        },
+      ],
+      [
+        { from: "in", to: "keep" },
+        { from: "keep", to: "each" },
+        { from: "each", to: "name" },
+        { from: "name", to: "out" },
+      ],
+    );
+  }
+
+  await pool.end();
+}
+
+main().catch((e) => {
+  console.error("ERR", e.message);
+  process.exit(1);
+});
