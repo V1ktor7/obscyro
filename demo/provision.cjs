@@ -300,7 +300,7 @@ async function main() {
     "Répartition des capacités et des services autorisés au permis par installation, " +
       "MSSS, via Données Québec. Dernier relevé mensuel, région 06.",
   );
-  await upload(
+  const dsObs = await upload(
     db,
     proj.id,
     "inspq-hospitalisations-montreal.csv",
@@ -498,6 +498,49 @@ async function main() {
     ],
     [{ from: "in", to: "out" }],
   );
+
+  // The observed wave, read straight off the imported series. No R0, no contact
+  // matrix, no case-hospitalisation fraction: the file says how many people
+  // were admitted on each day, and that is the arrival count.
+  const E = require("/app/dist/services/sim-event-from-rows.js");
+  const S = require("/app/dist/services/sim-events.js");
+  const DS = require("/app/dist/services/datasets.js");
+  const [terr] = (
+    await db.query(
+      `SELECT o.id FROM app.ontology_object_instances o
+         JOIN app.ontology_object_types t ON t.id = o.object_type_id
+        WHERE t.name = 'Territoire' AND t.organization_id = $1`,
+      [proj.orgId],
+    )
+  ).rows;
+  if (terr) {
+    const rows = await DS.previewRows(db, dsObs, 50000);
+    const built = E.eventFromRows(rows, {
+      when: "date",
+      count: "admissions_hopital",
+      acuity: "hospitalisation",
+      population: `pop:${terr.id}`,
+      origin: "2021-12-01",
+    });
+    const { rows: had } = await db.query(
+      `SELECT id FROM app.sim_event WHERE organization_id = $1 AND name = $2`,
+      [proj.orgId, "Vague Omicron — Montréal, telle qu'observée"],
+    );
+    if (had[0]) await db.query(`DELETE FROM app.sim_event WHERE id = $1`, [had[0].id]);
+    const ev = await S.createSimEvent(db, proj.id, userId, {
+      name: "Vague Omicron — Montréal, telle qu'observée",
+      description:
+        `Admissions quotidiennes publiées par l'INSPQ, région 06, du ${built.first} au ` +
+        `${built.last} : ${built.total} arrivées. Rien n'est modélisé — c'est ce qui a eu lieu.`,
+      horizon: built.horizon,
+      effects: built.effects,
+      twinScenarioId: null,
+    });
+    console.log(
+      `événement « ${ev.name} » : ${built.effects.length} jours, ${built.total} arrivées` +
+        (built.skipped ? `, ${built.skipped} ligne(s) inutilisable(s)` : ""),
+    );
+  }
 
   await pool.end();
 }
