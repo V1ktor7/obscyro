@@ -223,7 +223,13 @@ async function pipeline(db, projectId, name, nodes, edges) {
         description: null,
       });
   const saved = await P.savePipeline(db, p.id, { nodes, edges });
-  const run = await P.execute(db, saved, { trigger: "manual" });
+  const stop = heartbeat();
+  let run;
+  try {
+    run = await P.execute(db, saved, { trigger: "manual" });
+  } finally {
+    stop();
+  }
   console.log(
     `  pipeline "${name}": ${run.status} — ${run.rowsIn} lues, ${run.rowsOut} écrites` +
       (run.error ? ` — ${run.error}` : ""),
@@ -232,6 +238,22 @@ async function pipeline(db, projectId, name, nodes, edges) {
     for (const i of run.issues) console.log(`    ! ${i.message}`);
   }
   return run;
+}
+
+/**
+ * A dot every few seconds while a long step runs.
+ *
+ * Not decoration: the transport this is driven over closes an idle connection,
+ * and a pipeline writing six thousand rows says nothing for minutes. The run
+ * was being cut two thirds of the way through and reported as finished.
+ */
+function heartbeat() {
+  const id = setInterval(() => process.stdout.write("."), 4000);
+  id.unref?.();
+  return () => {
+    clearInterval(id);
+    process.stdout.write(String.fromCharCode(10));
+  };
 }
 
 async function main() {
@@ -253,7 +275,7 @@ async function main() {
   // `instance_identity`, so the upsert cannot find them and the insert it tries
   // instead hits the constraint. Cleared rather than reconciled: this project
   // exists to be rebuilt from the files, and every object in it comes from one.
-  const { rows: wiped } = await db.query(
+  const { rows: wiped } = process.env.SKIP_WIPE ? { rows: [] } : await db.query(
     `DELETE FROM app.ontology_object_instances o
       USING app.ontology_object_types t
       WHERE t.id = o.object_type_id AND t.organization_id = $1
