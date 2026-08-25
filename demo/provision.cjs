@@ -463,6 +463,58 @@ async function main() {
     [{ from: "in", to: "out" }],
   );
 
+  // The catchment's head count, from the ISQ series the ministry publishes.
+  // Kept as its own file and its own step so the number on screen has a source
+  // behind it: the engine refuses a run where every catchment is size zero, and
+  // the tempting fix is to type a population in.
+  const dsPop = await upload(
+    db,
+    proj.id,
+    "isq-population-montreal.csv",
+    "ISQ — Population par territoire sociosanitaire (Montréal)",
+    "Estimations de population par territoire sociosanitaire, Institut de la " +
+      "statistique du Québec, via Données Québec. Année 2021, région 06 et ses RLS.",
+  );
+  await pipeline(
+    db,
+    proj.id,
+    "Population → Territoire",
+    [
+      { id: "in", kind: "dataset_input", name: "Population", x: 60, y: 100, config: { datasetId: dsPop } },
+      {
+        // The region only. The RLS rows travel in the same file so the finer
+        // grain is there the day the observed series is published that way —
+        // but writing them now would create twelve catchments the admissions
+        // data cannot be split across.
+        id: "rss",
+        kind: "filter",
+        name: "Région",
+        x: 260,
+        y: 100,
+        config: { column: "niveau", op: "eq", value: "RSS" },
+      },
+      {
+        id: "out",
+        kind: "object_output",
+        name: "Territoire",
+        x: 520,
+        y: 100,
+        config: {
+          objectTypeName: "Territoire",
+          identityProperties: ["code"],
+          columnMapping: [
+            scalar("code_territoire", "code", "string"),
+            scalar("population", "population", "number"),
+          ],
+        },
+      },
+    ],
+    [
+      { from: "in", to: "rss" },
+      { from: "rss", to: "out" },
+    ],
+  );
+
   const dsSoins = await upload(
     db,
     proj.id,
