@@ -151,7 +151,17 @@ def test_new_crisis_type_is_only_data() -> None:
                 target="resource.capacity",
                 select={"facility": ["north", "south", "clinic"], "category": [STAFF]},
                 op="multiply",
-                value=0.35,
+                # Recalibrated when arrivals stopped being split evenly. At 0.35
+                # the toy absorbs the walkout entirely once patients go to the
+                # large hospital because it is large: the old assertion passed
+                # on the forty-bed site overflowing, which it did whatever
+                # happened.
+                #
+                # Nearly everyone has to be out before staffing binds here, and
+                # that is a fact about this toy rather than about the engine —
+                # its nurse ratios leave far more slack than its beds do. A
+                # shock has to reach the actual constraint to be a shock.
+                value=0.05,
                 profile=TemporalProfile(start=3, end=14, shape="step", peak=1.0),
             ),
             Effect(
@@ -172,8 +182,20 @@ def test_new_crisis_type_is_only_data() -> None:
             ),
         ],
     )
-    t = run(toy_system(), strike, null_policy())
-    assert t.deaths > 0
+    # Measured against the same world without the walkout rather than against
+    # zero. `deaths > 0` used to pass because arrivals were split evenly between
+    # a sixty-bed hospital and a forty-bed one, so the small one overflowed
+    # whatever happened — the assertion was reading the allocation rule, not the
+    # strike. Comparing the two runs tests what the test is named for: that a
+    # crisis nobody wrote code for still does something.
+    quiet = Event(id="quiet", name="No walkout", description="",
+                  effects=[e for e in strike.effects if e.id != "walkout"])
+    with_strike = run(toy_system(), strike, null_policy())
+    without = run(toy_system(), quiet, null_policy())
+    total = lambda t: sum(sum(x.unmet.values()) for x in t.ticks)
+    assert total(with_strike) > total(without), (
+        f"{total(with_strike)} should exceed {total(without)}"
+    )
 
 
 # --- auditability -----------------------------------------------------------

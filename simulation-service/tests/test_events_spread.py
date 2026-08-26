@@ -622,3 +622,49 @@ def test_a_duplicate_row_does_not_double_the_demand() -> None:
 
     one = [tr("t1", de="malade", vers="soin", taux=0.007, devient="urgence")]
     assert crossed(one + [tr("t2", de="malade", vers="soin", taux=0.007, devient="urgence")]) == crossed(one)
+
+
+def test_arrivals_are_split_by_size_not_evenly() -> None:
+    # A sixty-stretcher department and a sixteen-stretcher one are not two equal
+    # places to queue. Splitting evenly overflows the small one every tick
+    # whatever happens, which manufactures a shortage out of the allocation rule
+    # and then reports it as a finding.
+    from app.events.domain import (
+        CareRequirement,
+        NetworkxBackend,
+        Population,
+        SystemState,
+    )
+    from app.events.effects import Effect, Event, TemporalProfile
+    from app.events.dynamics import run
+    from app.events.policy import null_policy
+    from app.events.examples.system import _hospital
+
+    net = NetworkxBackend()
+    facilities = {
+        "grand": _hospital("grand", "Grand", icu=0, ward=60, nurses=100, vents=0),
+        "petit": _hospital("petit", "Petit", icu=0, ward=6, nurses=100, vents=0),
+    }
+    for fid in facilities:
+        net.add_node(fid)
+    state = SystemState(
+        facilities=facilities,
+        network=net,
+        populations={"v": Population(id="v", size=100_000, served_by=["grand", "petit"])},
+        care_model={
+            "routine": CareRequirement(
+                acuity="routine", consumes={"ward_bed": 1.0}, mortality_per_unmet=0.0, stay_ticks=1
+            )
+        },
+    )
+    ev = Event(
+        id="e", name="e", description="",
+        effects=[Effect(id="a", target="demand.volume", select={"population": ["v"], "acuity": ["routine"]},
+                        op="add", value=60,
+                        profile=TemporalProfile(start=0, end=10, shape="step", peak=1.0))],
+    )
+    t = run(state, ev, null_policy())
+    unmet = sum(sum(x.unmet.values()) for x in t.ticks)
+    # Sixty arrivals against sixty-six places. Split evenly, thirty went to the
+    # six-bed site and twenty-four of them waited every single tick.
+    assert unmet < 1.0, f"{unmet} patient-days unserved when there was room for everyone"

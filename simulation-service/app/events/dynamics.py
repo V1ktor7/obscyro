@@ -624,6 +624,38 @@ class Engine:
                 out.append(fid)
         return out
 
+    def _capability_weight(self, facility_id: str, acuity: str) -> float:
+        """How much of the scarcest thing this acuity needs the facility holds.
+
+        The scarcest, not the sum: an acuity needing one stretcher and one nurse
+        is limited by whichever the facility has fewer of, and adding them would
+        let a ward with no stretchers and many nurses look like somewhere to
+        send a patient.
+
+        Measured on the capacity the facility normally holds, not on what it has
+        left today. Patients go to the large hospital because it is large, not
+        because it happens to have a free bed this afternoon — and weighting by
+        what is free would give the whole network perfect, costless load
+        balancing, which is precisely the thing a transfer policy is supposed to
+        buy. Modelled as free, no response could ever be worth its price.
+        """
+        req = self.state.care_model.get(acuity)
+        facility = self.state.facilities.get(facility_id)
+        if facility is None:
+            return 0.0
+        if req is None or not req.consumes:
+            return 1.0
+        holdings: list[float] = []
+        for activity, per in req.consumes.items():
+            resource = next(
+                (r for r in facility.resources.values() if activity in r.enables), None
+            )
+            if resource is None:
+                return 0.0
+            held = self.baseline_capacity.get((facility_id, resource.id), resource.capacity)
+            holdings.append(held / per if per > 0 else held)
+        return min(holdings) if holdings else 0.0
+
     def _deliver_care(self, tick: int) -> TickRecord:
         rec = TickRecord(tick=tick)
 
@@ -655,8 +687,19 @@ class Engine:
             # across the catchment as before, which is where a transfer policy
             # would find them.
             targets = able or list(pop.served_by)
-            share = scaled / len(targets)
+            # Split in proportion to what each one holds, not evenly. Evenly is
+            # neutral only between facilities of the same size; between a
+            # sixty-stretcher emergency department and a sixteen-stretcher one
+            # it sends both the same queue, and the small one overflows every
+            # tick for the whole run. That manufactures a shortage out of the
+            # allocation rule and then reports it as a finding.
+            weights = {fid: self._capability_weight(fid, acuity) for fid in targets}
+            total = sum(weights.values())
             for fid in targets:
+                # No capacity anywhere: fall back to an even split rather than
+                # dividing by zero. That is the case where nowhere can serve
+                # them, and the queue has to stay visible somewhere.
+                share = scaled * (weights[fid] / total) if total > 0 else scaled / len(targets)
                 q = self.state.backlog.setdefault(fid, {})
                 q[acuity] = q.get(acuity, 0.0) + share
 
