@@ -985,6 +985,8 @@ function Inspector({
                   <option value="subtract">subtract</option>
                   <option value="multiply">multiply</option>
                   <option value="divide">divide</option>
+                  <option value="max">max — the larger of the two</option>
+                  <option value="min">min — the smaller of the two</option>
                 </select>
                 <input
                   value={String(cfg.value ?? "")}

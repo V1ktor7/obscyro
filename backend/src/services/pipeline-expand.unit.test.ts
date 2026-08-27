@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { applyExpand } from "./pipeline.js";
+import { applyDerive, applyExpand } from "./pipeline.js";
 
 /**
  * Turning a published count into the units a twin reasons about.
@@ -102,5 +102,43 @@ describe("expanding a count into units", () => {
     const given = [{ c: "2" }];
     applyExpand(given, { countColumn: "c" });
     assert.deepEqual(given, [{ c: "2" }]);
+  });
+});
+
+describe("arithmetic on two columns", () => {
+  it("takes the larger of the two", () => {
+    // A register that publishes both a licensed figure and an observed one
+    // needs this to say what a service actually holds today. Without it the
+    // only route is a column computed in a spreadsheet before upload, and then
+    // the file that arrives is no longer the file that was published.
+    const out = applyDerive([{ permis: "31", occupees: "64" }], {
+      as: "en_service",
+      op: "arithmetic",
+      arith: "max",
+      columns: ["permis", "occupees"],
+    });
+    assert.equal(out[0]!.en_service, 64);
+  });
+
+  it("takes the larger when the licensed figure is the bigger one", () => {
+    const out = applyDerive([{ permis: "16", occupees: "12" }], {
+      as: "en_service", op: "arithmetic", arith: "max", columns: ["permis", "occupees"],
+    });
+    assert.equal(out[0]!.en_service, 16);
+  });
+
+  it("takes the smaller when asked for the smaller", () => {
+    const out = applyDerive([{ a: "31", b: "64" }], {
+      as: "m", op: "arithmetic", arith: "min", columns: ["a", "b"],
+    });
+    assert.equal(out[0]!.m, 31);
+  });
+
+  it("says nothing when one side is not a number", () => {
+    // "pas d'information disponible" is not a zero to be maxed against.
+    const out = applyDerive([{ a: "pas d'information disponible", b: "12" }], {
+      as: "m", op: "arithmetic", arith: "max", columns: ["a", "b"],
+    });
+    assert.equal(out[0]!.m, null);
   });
 });

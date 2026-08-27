@@ -585,6 +585,14 @@ export function applyDerive(rows: Row[], cfg: Record<string, unknown>): Row[] {
           : arith === "subtract" ? a - b
           : arith === "multiply" ? a * b
           : arith === "divide" ? (b === 0 ? null : a / b)
+          // Whichever of the two is larger, or smaller. A register that
+          // publishes both a licensed figure and an observed one needs this to
+          // say what a service actually holds today, and without it the only
+          // way to get there is to compute the column in a spreadsheet before
+          // upload — which makes the file that arrives no longer the file that
+          // was published.
+          : arith === "max" ? Math.max(a, b)
+          : arith === "min" ? Math.min(a, b)
           : null;
         break;
       }
