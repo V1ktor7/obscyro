@@ -1132,7 +1132,16 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
       // Where the number came from. A configurable aggregation that cannot show
       // its working is a machine for producing plausible wrong answers, and
       // this map has produced two of those already.
-      contributingUnits: place?.contributingUnits ?? [],
+      //
+      // A site that is itself a unit contributes itself. Twins that separate
+      // the building from the service running in it have a placement link and
+      // this is a list of what stands there; twins that do not — an ontology
+      // whose installations carry their own coordinates — have no placement to
+      // read, and returning nothing left the replay unable to join a run back
+      // to the map. Every site drew grey while the counters climbed.
+      contributingUnits:
+        place?.contributingUnits ??
+        (node ? [{ id, name: node.name }] : []),
     };
   });
 
