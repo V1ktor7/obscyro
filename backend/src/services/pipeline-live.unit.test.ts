@@ -36,11 +36,38 @@ test("only live pipelines are picked up", async () => {
   assert.match(cap.sql, /p\.status = 'live'/, "a draft or paused pipeline must never auto-run");
 });
 
-test("only stream inputs trigger a run", async () => {
+test("a stream somebody pushed into still triggers a run", async () => {
   const { db, cap } = captureDb();
   await findDuePipelines(db);
   assert.match(cap.sql, /d\.kind = 'stream'/);
   assert.match(cap.sql, /n->>'kind' = 'dataset_input'/);
+});
+
+test("a table an active sync pulls into also triggers a run", async () => {
+  // A REST source on a schedule writes a versioned table, never a stream. With
+  // streams alone the two halves never met: the sync refreshed the dataset
+  // every interval and no pipeline ever fired from it, so the ontology — and
+  // the twin reading it — never moved.
+  const { db, cap } = captureDb();
+  await findDuePipelines(db);
+  assert.match(cap.sql, /FROM app\.sync sy/);
+  assert.match(cap.sql, /sy\.dataset_id = d\.id/);
+  assert.match(cap.sql, /sy\.status = 'active'/);
+});
+
+test("a table only a pipeline writes does not trigger anything", async () => {
+  // `dataset_output` writes tables. Widening the condition to every table
+  // would let two live pipelines feed each other and re-trigger forever —
+  // `d.kind = 'stream'` had been an accidental cycle guard, and the sync test
+  // is what replaces it. What must never appear is a bare "any table".
+  const { db, cap } = captureDb();
+  await findDuePipelines(db);
+  assert.doesNotMatch(
+    cap.sql,
+    /AND d\.kind = 'table'/,
+    "an unqualified table condition would open a cycle between two live pipelines",
+  );
+  assert.match(cap.sql, /EXISTS \(/, "the table case must be qualified by an active sync");
 });
 
 test("a run is due only when rows arrived after the last one", async () => {

@@ -1429,7 +1429,22 @@ export async function findDuePipelines(db: DbClient, limit = PIPELINE_BATCH): Pr
         -- Guard the cast: a half-configured node holds '' or a name, and
         -- ::uuid on that aborts the whole query rather than skipping the row.
         AND n->'config'->>'datasetId' ~ '^[0-9a-fA-F-]{36}$'
-        AND d.kind = 'stream'
+        -- Data that arrived from outside: a stream somebody pushed into, or a
+        -- table an active sync pulls on a schedule. Those are the two ways the
+        -- world changes without anyone here pressing anything.
+        --
+        -- Not simply "any table": a dataset_output writes tables too, so
+        -- widening this to every table would let two live pipelines feed each
+        -- other and re-trigger forever. The stream test had been acting as an
+        -- accidental cycle guard, and naming the real condition keeps that
+        -- guarantee instead of relying on it.
+        AND (
+          d.kind = 'stream'
+          OR EXISTS (
+            SELECT 1 FROM app.sync sy
+             WHERE sy.dataset_id = d.id AND sy.status = 'active'
+          )
+        )
         AND d.last_written_at IS NOT NULL
         AND (p.last_run_at IS NULL OR d.last_written_at > p.last_run_at)
       ORDER BY p.last_run_at ASC NULLS FIRST
