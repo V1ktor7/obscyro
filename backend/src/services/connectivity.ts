@@ -257,9 +257,17 @@ export async function recordSyncRun(
     .catch(() => undefined);
   await db
     .query(
+      // Cast the parameter. Without it Postgres cannot type $2 — it appears in
+      // "$2 IS NULL" inside a CASE, where nothing constrains it — and the whole
+      // statement fails with "could not determine data type of parameter $2".
+      //
+      // That failure was swallowed, and it was not cosmetic: last_run_at stayed
+      // null, the scheduler reads "(last_run_at IS NULL OR ...)" as due, and an
+      // hourly sync called the source every thirty seconds instead. A failing
+      // sync was never marked in error either.
       `UPDATE app.sync
-          SET last_run_at = now(), last_error = $2,
-              status = CASE WHEN $2 IS NULL THEN 'active' ELSE 'error' END,
+          SET last_run_at = now(), last_error = $2::text,
+              status = CASE WHEN $2::text IS NULL THEN 'active' ELSE 'error' END,
               updated_at = now()
         WHERE id = $1`,
       [syncId, outcome.error],
@@ -397,13 +405,24 @@ export function startSyncScheduler(
     void (async () => {
       try {
         const { rows } = await (pool as DbClient).query<{ id: string }>(
-          `SELECT id FROM app.sync
-            WHERE mode <> 'stream'
-              AND status = 'active'
-              AND interval_seconds IS NOT NULL
-              AND (last_run_at IS NULL
-                   OR last_run_at < now() - make_interval(secs => interval_seconds))
-            ORDER BY last_run_at ASC NULLS FIRST
+          // Due is decided against the run log as well as the column. The
+          // column is a denormalised convenience and one swallowed error left
+          // it null through four successful runs — which reads as "never ran"
+          // and turns an hourly sync into one that fires every tick. The log
+          // cannot lie about that: a row is written before the column is
+          // touched, so the second test holds even when the first is stale.
+          `SELECT s.id FROM app.sync s
+            WHERE s.mode <> 'stream'
+              AND s.status = 'active'
+              AND s.interval_seconds IS NOT NULL
+              AND (s.last_run_at IS NULL
+                   OR s.last_run_at < now() - make_interval(secs => s.interval_seconds))
+              AND NOT EXISTS (
+                SELECT 1 FROM app.sync_run r
+                 WHERE r.sync_id = s.id
+                   AND r.started_at > now() - make_interval(secs => s.interval_seconds)
+              )
+            ORDER BY s.last_run_at ASC NULLS FIRST
             LIMIT 5`,
         );
         for (const r of rows) {
