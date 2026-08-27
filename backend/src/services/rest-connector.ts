@@ -109,13 +109,41 @@ export function extractRecords(body: unknown, recordPath?: string): Record<strin
   return raw.filter((r): r is Record<string, unknown> => Boolean(r) && typeof r === "object");
 }
 
+/**
+ * Which character actually separates the fields.
+ *
+ * Counted, not detected. Asking whether the header *contains* a tab reads a
+ * single stray tab as "this whole file is tab-separated", and one real file
+ * does exactly that: the ministry's hourly emergency-department release has
+ * tabs padding the inside of a column name. That header holds eight commas and
+ * two tabs, the presence test picked tabs, and a nine-column file came back as
+ * three columns of joined text — with no error, because splitting on the wrong
+ * character always succeeds.
+ *
+ * A genuine TSV has far more tabs than commas in its header, so counting gets
+ * both cases right where presence gets one of them silently wrong.
+ */
+export function sniffDelimiter(text: string): string {
+  const end = text.indexOf("\n");
+  const header = end === -1 ? text : text.slice(0, end);
+  const count = (ch: string) => header.split(ch).length - 1;
+  const tabs = count("\t");
+  const commas = count(",");
+  const semis = count(";");
+  // Semicolons win only outright: several European exports use them, and a
+  // decimal comma inside such a file would otherwise outvote the real
+  // separator. Ties go to the comma, which is what most files are.
+  if (semis > tabs && semis > commas) return ";";
+  return tabs > commas ? "\t" : ",";
+}
+
 /** Minimal RFC 4180 CSV/TSV reader: quoted fields, doubled quotes, CRLF. */
 export function parseDelimited(text: string): Record<string, unknown>[] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";
   let quoted = false;
-  const delim = text.slice(0, text.indexOf("\n")).includes("\t") ? "\t" : ",";
+  const delim = sniffDelimiter(text);
 
   for (let i = 0; i < text.length; i++) {
     const c = text[i]!;
