@@ -123,3 +123,49 @@ describe("what the picker offers", () => {
     assert.match(String(whyNoChart(readColumns([{ name: "a", type: "string" }], []))), /vide/);
   });
 });
+
+describe("a column that has the shape of a date but not the meaning", () => {
+  // Straight from the INSPQ Rt series as it sits in the platform: 112 of 200
+  // sampled values carry a month between 13 and 31. Day and month are the
+  // wrong way round, and the only rows that survive the swap are the ones
+  // where the day is twelve or less — so the fault hides behind a column that
+  // looks two-thirds fine.
+  const RT = [{ name: "date", type: "string" as const }];
+  const rows = [
+    ...["2020-01-07", "2020-02-07", "2020-03-07", "2020-11-07", "2020-12-07"].map((date) => ({ date })),
+    ...["2020-13-07", "2020-14-07", "2020-25-07", "2020-31-12"].map((date) => ({ date })),
+  ];
+
+  it("does not call it a timeline", () => {
+    // Plotted, half the points land nowhere and the curve is a lie.
+    assert.notEqual(readColumns(RT, rows)[0]!.role, "time");
+  });
+
+  it("does not quietly file it under text either", () => {
+    // "du texte, 200 valeurs distinctes" hides a broken import behind a
+    // missing chart type.
+    const f = readColumns(RT, rows)[0]!;
+    assert.equal(f.role, "unusable");
+    assert.match(f.reason, /forme d'une date/);
+  });
+
+  it("counts how many are impossible and shows one", () => {
+    const f = readColumns(RT, rows)[0]!;
+    assert.match(f.reason, /^4 valeurs/);
+    assert.match(f.reason, /2020-13-07/);
+  });
+
+  it("names the likely cause without asserting it", () => {
+    assert.match(readColumns(RT, rows)[0]!.reason, /jour et mois inversés \?/);
+  });
+
+  it("carries the finding up into the picker", () => {
+    // The one place somebody is looking when they wonder why there is no curve.
+    assert.match(String(whyNoChart(readColumns(RT, rows))), /date/);
+  });
+
+  it("still accepts a column where every date is real", () => {
+    const ok = ["2020-01-07", "2020-07-13", "2020-12-31"].map((date) => ({ date }));
+    assert.equal(readColumns(RT, ok)[0]!.role, "time");
+  });
+});

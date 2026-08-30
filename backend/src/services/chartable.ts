@@ -34,10 +34,14 @@ export interface ColumnFit {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}([T ]|$)/;
 
-function looksLikeDate(v: string): boolean {
+function hasDateShape(v: string): boolean {
   // Anchored on the ISO shape rather than handed to Date.parse, which accepts
   // "2" and "Dec" and would turn a column of small integers into a timeline.
-  return ISO_DATE.test(v.trim()) && !Number.isNaN(Date.parse(v.trim().slice(0, 10)));
+  return ISO_DATE.test(v.trim());
+}
+
+function isRealDate(v: string): boolean {
+  return !Number.isNaN(Date.parse(v.trim().slice(0, 10)));
 }
 
 function asNumber(v: unknown): number | null {
@@ -70,9 +74,30 @@ export function readColumns(
       return { name: c.name, role: "unusable", filled, distinct, reason: "aucune valeur dans l'aperçu" };
     }
 
-    const dates = raw.filter((v) => typeof v === "string" && looksLikeDate(v)).length;
-    if (dates / filled > 0.8) {
-      return { name: c.name, role: "time", filled, distinct, reason: "des dates" };
+    const shaped = raw.filter((v) => typeof v === "string" && hasDateShape(v));
+    const real = shaped.filter((v) => isRealDate(v as string));
+    if (shaped.length / filled > 0.8) {
+      if (real.length === shaped.length) {
+        return { name: c.name, role: "time", filled, distinct, reason: "des dates" };
+      }
+      // The shape is a date and the value is not one. This is worth naming
+      // rather than filing under "text", because it is almost always a real
+      // fault in the file: the Rt series carries 2020-13-07 and 2020-31-12 —
+      // day and month written the wrong way round, where the only rows that
+      // survive the swap are the ambiguous ones with a day of twelve or less.
+      // Silently calling the column "text" hides a broken import behind a
+      // missing chart type.
+      const example = shaped.find((v) => !isRealDate(v as string));
+      const bad = shaped.length - real.length;
+      return {
+        name: c.name,
+        role: "unusable",
+        filled,
+        distinct,
+        reason:
+          `${bad} valeur${bad > 1 ? "s ont" : " a"} la forme d'une date sans en être une ` +
+          `(${String(example)}) — jour et mois inversés ?`,
+      };
     }
 
     const nums = raw.map(asNumber).filter((n): n is number => n !== null);
@@ -201,6 +226,10 @@ export function whyNoChart(fits: readonly ColumnFit[]): string | null {
       `ressemble${ids.length > 1 ? "nt" : ""} à des identifiants : des entiers tous ` +
       `différents, qu'additionner ne voudrait rien dire.`
     );
+  }
+  const broken = fits.filter((f) => f.role === "unusable" && f.reason.includes("forme d'une date"));
+  if (broken.length) {
+    return `${broken.map((f) => f.name).join(", ")} : ${broken[0]!.reason}`;
   }
   if (fits.every((f) => f.role === "unusable")) {
     return "L'aperçu est vide — le jeu de données n'a pas encore de lignes.";
