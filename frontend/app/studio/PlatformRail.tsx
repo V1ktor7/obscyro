@@ -14,6 +14,7 @@ import {
   Box,
   Home,
   Database,
+  LayoutGrid,
   LineChart,
   Map as MapIcon,
   Settings,
@@ -29,6 +30,7 @@ import { NAV_SECTIONS, sectionForPath, type NavSection } from "./platform-nav";
 const ICONS: Record<string, LucideIcon> = {
   Home,
   Database,
+  LayoutGrid,
   Workflow,
   Box,
   LineChart,

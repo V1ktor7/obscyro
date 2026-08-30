@@ -149,6 +149,10 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         caps.add("health");
       }
       if (has("auditor") || has("security_administrator")) caps.add("govern");
+      // A dashboard shows what a project's datasets and ontology already hold,
+      // so it is reachable by whoever can reach either. Derived from the set
+      // rather than from a fresh list of roles, so the two cannot drift apart.
+      if (caps.has("data") || caps.has("ontology")) caps.add("dashboards");
       if (has("security_administrator")) caps.add("admin");
       return {
         ...id,

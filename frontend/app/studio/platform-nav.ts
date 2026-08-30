@@ -65,6 +65,14 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    id: "dashboards",
+    label: "Dashboard",
+    icon: "LayoutGrid",
+    capability: "dashboards",
+    href: "/studio/dashboards",
+    groups: [{ items: [{ label: "Boards", href: "/studio/dashboards" }] }],
+  },
+  {
     id: "pipelines",
     label: "Lineage",
     icon: "Workflow",
@@ -205,6 +213,7 @@ export function sectionForPath(pathname: string): NavSection | null {
     "/studio/parser": "data",
     "/studio/data": "data",
     "/studio/sources": "data",
+    "/studio/dashboards": "dashboards",
     "/studio/workspace": "pipelines",
     "/studio/lineage": "pipelines",
     "/studio/pipelines": "pipelines",
