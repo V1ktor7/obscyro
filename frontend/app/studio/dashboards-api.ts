@@ -39,6 +39,8 @@ export interface CardData {
   columns: string[];
   rowsRead: number;
   rowsSkipped: number;
+  /** Categories a bar chart could not fit. Said on the card, never hidden. */
+  categoriesHidden: number;
   error: string | null;
 }
 

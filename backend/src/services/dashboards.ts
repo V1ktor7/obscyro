@@ -87,6 +87,15 @@ export interface CardData {
   rowsRead: number;
   /** Rows whose measure was absent or unreadable. Named, never hidden. */
   rowsSkipped: number;
+  /**
+   * Categories the chart could not fit, for a bar card.
+   *
+   * A bar chart of the thirty largest out of a hundred and twenty is a useful
+   * chart and a dishonest one unless it admits the ninety. The card reads
+   * "30 barres sur 120" rather than "30 catégories", which somebody would
+   * otherwise take for the size of the network.
+   */
+  categoriesHidden: number;
   /** Set when the source is gone or the columns no longer exist. */
   error: string | null;
 }
@@ -347,6 +356,7 @@ export async function readCard(db: DbClient, card: CardRow): Promise<CardData> {
     columns: [],
     rowsRead: 0,
     rowsSkipped: 0,
+    categoriesHidden: 0,
     error: null,
   };
 
@@ -413,19 +423,29 @@ export async function readCard(db: DbClient, card: CardRow): Promise<CardData> {
     [card.sourceId, cfg.x, cfg.y],
   );
 
-  const { rows: counts } = await db.query<{ n: string; miss: string }>(
+  // Counted rather than inferred from the page: `rows.length === cap` says the
+  // chart is full, not how much it left out.
+  const { rows: counts } = await db.query<{ n: string; miss: string; cats: string }>(
     `${cte}
-     SELECT count(*) AS n, count(*) FILTER (WHERE ${num("$2")} IS NULL) AS miss FROM src`,
-    [card.sourceId, cfg.y],
+     SELECT count(*) AS n,
+            count(*) FILTER (WHERE ${num("$2")} IS NULL) AS miss,
+            count(DISTINCT (data->>$3)) FILTER (
+              WHERE (data->>$3) IS NOT NULL AND (data->>$3) <> ''
+            ) AS cats
+       FROM src`,
+    [card.sourceId, cfg.y, cfg.x],
   );
+
+  const points = rows
+    .filter((r) => r.value !== null)
+    .map((r) => ({ label: r.label, value: Number(r.value) }));
 
   return {
     ...empty,
-    points: rows
-      .filter((r) => r.value !== null)
-      .map((r) => ({ label: r.label, value: Number(r.value) })),
+    points,
     rowsRead: Number(counts[0]?.n ?? 0),
     rowsSkipped: Number(counts[0]?.miss ?? 0),
+    categoriesHidden: isLine ? 0 : Math.max(0, Number(counts[0]?.cats ?? 0) - points.length),
   };
 }
 

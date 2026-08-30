@@ -420,7 +420,14 @@ function CardPicker({
   const [title, setTitle] = useState("");
 
   const quantities = ds?.columns.filter((c) => c.role === "quantity") ?? [];
-  const axes = ds?.columns.filter((c) => c.role === "time" || c.role === "category") ?? [];
+  // The offer already refused a category with more values than a bar chart can
+  // carry. Letting the adjust step below put one back undoes that judgement one
+  // field lower down — which is how a chart of the top thirty out of a hundred
+  // and twenty gets built by someone who was never told.
+  const axes =
+    ds?.columns.filter((c) =>
+      kind === "bar" ? c.role === "category" && c.distinct <= 30 : c.role === "time" || c.role === "category",
+    ) ?? [];
 
   function choose(offerKind: CardKind, ox: string | null, oy: string | null, label: string) {
     setKind(offerKind);

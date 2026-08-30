@@ -59,7 +59,15 @@ function Empty({ note }: { note: string }) {
  * hospitals in sixteen publish "pas d'information disponible", and a chart that
  * silently drops them is a chart of twelve presented as a chart of the network.
  */
-function Footprint({ read, skipped }: { read: number; skipped: number }) {
+function Footprint({
+  read,
+  skipped,
+  hidden,
+}: {
+  read: number;
+  skipped: number;
+  hidden: number;
+}) {
   return (
     <div className="flex items-center gap-2 border-t border-line-faint px-4 py-2 text-[11px] text-ink-faint">
       <span>
@@ -68,6 +76,13 @@ function Footprint({ read, skipped }: { read: number; skipped: number }) {
       {skipped > 0 && (
         <span className="rounded bg-warn-soft px-1.5 py-0.5 text-warn-ink">
           {skipped.toLocaleString("fr-CA")} sans mesure
+        </span>
+      )}
+      {/* A chart of the thirty largest out of a hundred and twenty is useful
+          and dishonest unless it admits the ninety. */}
+      {hidden > 0 && (
+        <span className="rounded bg-warn-soft px-1.5 py-0.5 text-warn-ink">
+          {hidden.toLocaleString("fr-CA")} de plus hors du graphique
         </span>
       )}
     </div>
@@ -226,7 +241,10 @@ function BarCard({ card }: { card: Card }) {
 
       {bars.length > 12 && (
         <text x={PLOT.padLeft} y={PLOT.height - 12} fontSize={10} fill={AXIS}>
-          {bars.length} catégories — survolez une barre pour la lire
+          {card.data.categoriesHidden > 0
+            ? `les ${bars.length} plus élevées sur ${bars.length + card.data.categoriesHidden}`
+            : `${bars.length} catégories`}{" "}
+          — survolez une barre pour la lire
         </text>
       )}
     </svg>
@@ -341,7 +359,11 @@ export default function CardChart({
       )}
 
       {!card.data.error && (
-        <Footprint read={card.data.rowsRead} skipped={card.data.rowsSkipped} />
+        <Footprint
+          read={card.data.rowsRead}
+          skipped={card.data.rowsSkipped}
+          hidden={card.data.categoriesHidden}
+        />
       )}
     </section>
   );

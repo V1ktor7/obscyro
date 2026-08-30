@@ -74,6 +74,7 @@ const cardWithData = cardOut.extend({
     columns: z.array(z.string()),
     rowsRead: z.number(),
     rowsSkipped: z.number(),
+    categoriesHidden: z.number(),
     error: z.string().nullable(),
   }),
 });
