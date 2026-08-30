@@ -41,6 +41,8 @@ export interface CardData {
   rowsSkipped: number;
   /** Categories a bar chart could not fit. Said on the card, never hidden. */
   categoriesHidden: number;
+  /** For a line: one point in this many was kept. 1 means all of them. */
+  sampledEvery: number;
   error: string | null;
 }
 

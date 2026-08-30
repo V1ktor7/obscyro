@@ -63,10 +63,12 @@ function Footprint({
   read,
   skipped,
   hidden,
+  every,
 }: {
   read: number;
   skipped: number;
   hidden: number;
+  every: number;
 }) {
   return (
     <div className="flex items-center gap-2 border-t border-line-faint px-4 py-2 text-[11px] text-ink-faint">
@@ -83,6 +85,13 @@ function Footprint({
       {hidden > 0 && (
         <span className="rounded bg-warn-soft px-1.5 py-0.5 text-warn-ink">
           {hidden.toLocaleString("fr-CA")} de plus hors du graphique
+        </span>
+      )}
+      {/* The curve covers the whole window; it just does not draw every day.
+          Saying so is what stops a reader counting points as observations. */}
+      {every > 1 && (
+        <span className="rounded bg-canvas-raised px-1.5 py-0.5 text-ink-muted">
+          1 point sur {every} — fenêtre entière
         </span>
       )}
     </div>
@@ -363,6 +372,7 @@ export default function CardChart({
           read={card.data.rowsRead}
           skipped={card.data.rowsSkipped}
           hidden={card.data.categoriesHidden}
+          every={card.data.sampledEvery}
         />
       )}
     </section>

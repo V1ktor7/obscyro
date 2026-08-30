@@ -96,6 +96,16 @@ export interface CardData {
    * otherwise take for the size of the network.
    */
   categoriesHidden: number;
+  /**
+   * For a line: one point in this many was kept.
+   *
+   * A three-year daily series has more days than a card has pixels. Taking the
+   * first five hundred would show 2020 to mid-2021 and cut the recent half off
+   * without a word — the worst half to lose on a dashboard. Sampling evenly
+   * keeps the whole window and the shape of the curve, and this number says so.
+   * 1 means nothing was dropped.
+   */
+  sampledEvery: number;
   /** Set when the source is gone or the columns no longer exist. */
   error: string | null;
 }
@@ -357,6 +367,7 @@ export async function readCard(db: DbClient, card: CardRow): Promise<CardData> {
     rowsRead: 0,
     rowsSkipped: 0,
     categoriesHidden: 0,
+    sampledEvery: 1,
     error: null,
   };
 
@@ -405,21 +416,45 @@ export async function readCard(db: DbClient, card: CardRow): Promise<CardData> {
     };
   }
 
-  // line and bar are the same query with a different sort and cap: a line is
-  // ordered by its axis because time has an order, a bar by its value because
-  // a category does not.
   const isLine = card.kind === "line";
-  const cap = isLine ? MAX_POINTS : MAX_BARS;
-  const order = isLine ? `ORDER BY label ASC` : `ORDER BY value DESC NULLS LAST`;
 
-  const { rows } = await db.query<{ label: string; value: string | null }>(
-    `${cte}
-     SELECT (data->>$2) AS label, ${aggExpr(agg, num("$3"))} AS value
-       FROM src
-      WHERE (data->>$2) IS NOT NULL AND (data->>$2) <> ''
-      GROUP BY 1
-      ${order}
-      LIMIT ${cap}`,
+  // A bar chart keeps the largest and says how many it left out; a category has
+  // no order, so the tallest are the ones worth drawing.
+  //
+  // A line cannot do that. Its axis has an order, and taking the first five
+  // hundred days of a three-year series would end the curve in mid-2021 with
+  // nothing on the card to say the rest exists. So it samples evenly instead:
+  // every nth point across the whole window, which keeps both ends and the
+  // shape between them.
+  const rowsQuery = isLine
+    ? `${cte},
+       grouped AS (
+         SELECT (data->>$2) AS label, ${aggExpr(agg, num("$3"))} AS value
+           FROM src
+          WHERE (data->>$2) IS NOT NULL AND (data->>$2) <> ''
+          GROUP BY 1
+       ),
+       step AS (
+         SELECT GREATEST(1, ceil(count(*)::numeric / ${MAX_POINTS})::int) AS every
+           FROM grouped
+       ),
+       ranked AS (
+         SELECT label, value, row_number() OVER (ORDER BY label ASC) AS rn FROM grouped
+       )
+       SELECT label, value, step.every AS every
+         FROM ranked, step
+        WHERE ranked.rn % step.every = 1 OR step.every = 1
+        ORDER BY label ASC`
+    : `${cte}
+       SELECT (data->>$2) AS label, ${aggExpr(agg, num("$3"))} AS value, 1 AS every
+         FROM src
+        WHERE (data->>$2) IS NOT NULL AND (data->>$2) <> ''
+        GROUP BY 1
+        ORDER BY value DESC NULLS LAST
+        LIMIT ${MAX_BARS}`;
+
+  const { rows } = await db.query<{ label: string; value: string | null; every: number }>(
+    rowsQuery,
     [card.sourceId, cfg.x, cfg.y],
   );
 
@@ -446,6 +481,7 @@ export async function readCard(db: DbClient, card: CardRow): Promise<CardData> {
     rowsRead: Number(counts[0]?.n ?? 0),
     rowsSkipped: Number(counts[0]?.miss ?? 0),
     categoriesHidden: isLine ? 0 : Math.max(0, Number(counts[0]?.cats ?? 0) - points.length),
+    sampledEvery: isLine ? Number(rows[0]?.every ?? 1) : 1,
   };
 }
 

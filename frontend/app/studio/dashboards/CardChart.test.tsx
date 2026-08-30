@@ -36,6 +36,7 @@ const card = (over: Partial<Card> = {}): Card => ({
     rowsRead: 120,
     rowsSkipped: 12,
     categoriesHidden: 90,
+    sampledEvery: 1,
     error: null,
   },
   ...over,
@@ -93,6 +94,27 @@ describe("what a broken card says", () => {
     // "120 lignes lues" under an error message is a contradiction.
     render(<CardChart card={card({ data: { ...card().data, error: "cassé" } })} />);
     expect(screen.queryByText(/lignes lues/)).toBeNull();
+  });
+});
+
+describe("a curve longer than the card is wide", () => {
+  it("says it is drawing one point in three, over the whole window", () => {
+    // Taking the first five hundred days of a three-year series would end the
+    // curve in mid-2021 with nothing saying the rest exists.
+    render(
+      <CardChart
+        card={card({
+          kind: "line",
+          data: { ...card().data, categoriesHidden: 0, sampledEvery: 3 },
+        })}
+      />,
+    );
+    expect(screen.getByText(/1 point sur 3/)).toBeTruthy();
+  });
+
+  it("stays quiet when every point is drawn", () => {
+    render(<CardChart card={card({ kind: "line", data: { ...card().data, sampledEvery: 1 } })} />);
+    expect(screen.queryByText(/1 point sur/)).toBeNull();
   });
 });
 
