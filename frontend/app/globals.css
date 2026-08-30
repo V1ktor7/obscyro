@@ -16,6 +16,37 @@
   --code-fg: #ededed;
 }
 
+/*
+ * The landing page runs dark; the docs do not.
+ *
+ * Scoped as a class rather than a media query or a body-level flip, because the
+ * two surfaces are different products: a marketing page that should feel like
+ * an instrument, and documentation that people read for twenty minutes at a
+ * time and print. SiteChrome puts this on "/" only, so the header, banner and
+ * footer come with it and there is no seam where a white bar meets a black
+ * hero.
+ *
+ * Every value here is a variable the components already consume, so nothing in
+ * the landing markup needed a second set of classes.
+ */
+.landing-dark {
+  --bg-primary: #08090c;
+  --bg-secondary: #0e1116;
+  --bg-tertiary: #151922;
+  --text-primary: #edeff2;
+  --text-secondary: #8b93a1;
+  --border-subtle: #1d222b;
+  /* Inverted on purpose: on this ground the emphatic button is the light one. */
+  --accent: #edeff2;
+  --accent-fg: #08090c;
+  --card-bg: #0e1116;
+  --code-bg: #05060a;
+  --code-fg: #edeff2;
+
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
 * {
   border-color: var(--border-subtle);
 }

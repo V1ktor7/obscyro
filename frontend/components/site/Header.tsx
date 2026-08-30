@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 
 import { useT } from "@/lib/i18n/context";
+import Mark from "@/components/brand/Mark";
 import { cn } from "@/lib/cn";
 
 export default function Header() {
@@ -36,10 +37,13 @@ export default function Header() {
       <div className="container flex h-14 items-center justify-between gap-4 sm:h-16">
         <Link
           href="/"
-          className="font-mono text-base font-semibold lowercase tracking-tight text-fg-primary md:text-lg"
+          className="flex items-center gap-2.5 text-fg-primary"
           aria-label="Obscyro home"
         >
-          obscyro
+          <Mark className="h-5 w-auto md:h-[1.4rem]" />
+          <span className="font-mono text-base font-semibold lowercase tracking-tight md:text-lg">
+            obscyro
+          </span>
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">

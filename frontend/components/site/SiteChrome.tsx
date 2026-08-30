@@ -12,17 +12,21 @@ import Footer from "@/components/site/Footer";
 export default function SiteChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const bare = pathname?.startsWith("/studio") ?? false;
+  // The landing page is dark and the documentation is not. Scoping it here
+  // rather than on the page means the banner, header and footer come with it,
+  // so there is no white bar sitting above a black hero.
+  const dark = pathname === "/";
 
   if (bare) {
     return <main className="min-h-screen">{children}</main>;
   }
 
   return (
-    <>
+    <div className={dark ? "landing-dark" : undefined}>
       <BetaBanner />
       <Header />
       <main className="min-h-[calc(100vh-4rem)]">{children}</main>
       <Footer />
-    </>
+    </div>
   );
 }

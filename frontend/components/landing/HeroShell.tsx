@@ -2,27 +2,32 @@
 
 import { ArrowRight, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import Mark from "@/components/brand/Mark";
 import HeroReveal from "./HeroReveal";
+import DataFlow from "./anim/DataFlow";
 import { useT } from "@/lib/i18n/context";
 import type { DictKey } from "@/lib/i18n/dictionary";
 
 /**
- * The hero used to open on a curl call to /v1/normalize, which was honest when
- * the product was a terminology API. It is not the product any more: the API is
- * one layer of a platform that connects a network's published data, models it,
- * runs it, and compares what could be done about it.
+ * The hero opens on the network moving, not on a curl call.
  *
- * So the panel shows the chain instead of an endpoint. It is structural rather
- * than numeric on purpose — figures from a simulation need the context that
- * produced them, and a hero has no room to give it.
+ * The canvas behind the copy is the product's own chain — five columns of
+ * nodes, packets travelling left to right, a node lighting up when a record
+ * lands on it. It sits at low contrast and is masked away from the headline, so
+ * it reads as the ground the words stand on rather than as something competing
+ * with them.
+ *
+ * The stage names are printed under it. Without them the graphic is an
+ * attractive abstraction; with them it is a claim about what the software does,
+ * which is the only reason to animate anything on a page like this.
  */
 
-const CHAIN: { label: DictKey; body: DictKey }[] = [
-  { label: "hero.chain.1.label", body: "hero.chain.1.body" },
-  { label: "hero.chain.2.label", body: "hero.chain.2.body" },
-  { label: "hero.chain.3.label", body: "hero.chain.3.body" },
-  { label: "hero.chain.4.label", body: "hero.chain.4.body" },
-  { label: "hero.chain.5.label", body: "hero.chain.5.body" },
+const STAGES: DictKey[] = [
+  "hero.chain.1.label",
+  "hero.chain.2.label",
+  "hero.chain.3.label",
+  "hero.chain.4.label",
+  "hero.chain.5.label",
 ];
 
 export default function HeroShell() {
@@ -35,89 +40,80 @@ export default function HeroShell() {
   ];
 
   return (
-    <section className="relative border-b border-border-subtle">
-      <div
-        className="absolute inset-0 -z-10 overflow-hidden grid-bg opacity-50"
-        aria-hidden
-      />
-      <div className="container py-12 sm:py-16 md:py-20 lg:py-28">
-        <div className="grid w-full min-w-0 items-center gap-8 sm:gap-10 md:gap-12 lg:grid-cols-[1.1fr_1fr]">
-          <HeroReveal className="w-full">
-            <div className="mb-5 inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-fg-secondary sm:text-[0.65rem] sm:tracking-[0.2em] md:mb-6">
-              <span className="inline-flex shrink-0 items-center gap-2">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" aria-hidden />
-                <span className="font-semibold text-amber-700">{t("hero.pill.beta")}</span>
-              </span>
-              <span className="text-pretty leading-snug">{t("hero.pill.body")}</span>
-            </div>
-            <h1 className="text-balance text-[2rem] font-semibold leading-[1.08] tracking-tighter text-fg-primary min-[380px]:text-[2.25rem] sm:text-5xl md:text-6xl lg:text-6xl xl:text-7xl">
-              {t("hero.title")}
-            </h1>
-            <p className="mt-4 max-w-xl text-pretty text-base leading-relaxed text-fg-secondary sm:mt-6 sm:text-lg lg:text-xl">
-              {t("hero.subtitle")}
-            </p>
-            <div className="mt-7 flex w-full min-w-0 flex-col gap-3 sm:mt-8 sm:flex-row">
-              <Button href="/studio" size="lg" width="fullMobile">
-                {t("hero.cta.studio")}
-                <ArrowRight className="h-4 w-4 shrink-0" />
-              </Button>
-              <Button href="/docs" size="lg" variant="secondary" width="fullMobile">
-                <BookOpen className="h-4 w-4 shrink-0" />
-                {t("hero.cta.docs")}
-              </Button>
-            </div>
-            <dl className="mt-8 flex max-w-md justify-between gap-2 sm:mt-10 sm:grid sm:grid-cols-3 sm:gap-6">
-              {stats.map((stat) => (
-                <div key={stat.label} className="min-w-0 flex-1 text-center sm:text-left">
-                  <dt className="text-pretty font-mono text-[0.5rem] uppercase leading-tight tracking-[0.12em] text-fg-secondary min-[380px]:text-[0.55rem] sm:text-[0.65rem] sm:tracking-[0.2em]">
-                    {stat.label}
-                  </dt>
-                  <dd className="mt-1 font-mono text-lg font-semibold tracking-tight text-fg-primary min-[380px]:text-xl sm:text-2xl">
-                    {stat.value}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </HeroReveal>
+    <section className="relative overflow-hidden border-b border-border-subtle">
+      <div className="absolute inset-0 -z-10 grid-bg opacity-[0.35]" aria-hidden />
 
-          <HeroReveal delay={0.15} className="w-full min-w-0">
-            <div className="rounded-xl border border-border-subtle bg-bg-secondary p-4 sm:p-5">
-              <div className="font-mono text-[0.6rem] uppercase tracking-[0.2em] text-fg-secondary">
+      <div className="container relative py-14 sm:py-20 lg:py-24">
+        <HeroReveal className="w-full">
+          <div className="flex items-center gap-3">
+            <Mark className="h-7 w-auto text-fg-primary sm:h-8" />
+            <span className="font-mono text-[0.6rem] uppercase tracking-[0.3em] text-fg-secondary">
+              {t("hero.pill.beta")}
+            </span>
+          </div>
+
+          <h1 className="mt-7 max-w-4xl text-balance text-[2.25rem] font-semibold leading-[1.03] tracking-[-0.035em] text-fg-primary sm:text-6xl lg:text-7xl">
+            {t("hero.title")}
+          </h1>
+          <p className="mt-5 max-w-2xl text-pretty text-base leading-relaxed text-fg-secondary sm:mt-6 sm:text-lg">
+            {t("hero.subtitle")}
+          </p>
+
+          <div className="mt-8 flex w-full min-w-0 flex-col gap-3 sm:flex-row">
+            <Button href="/studio" size="lg" width="fullMobile">
+              {t("hero.cta.studio")}
+              <ArrowRight className="h-4 w-4 shrink-0" />
+            </Button>
+            <Button href="/docs" size="lg" variant="secondary" width="fullMobile">
+              <BookOpen className="h-4 w-4 shrink-0" />
+              {t("hero.cta.docs")}
+            </Button>
+          </div>
+        </HeroReveal>
+
+        <HeroReveal delay={0.18} className="mt-12 w-full sm:mt-16">
+          <div className="relative overflow-hidden rounded-xl border border-border-subtle bg-bg-secondary">
+            <div className="flex items-center justify-between border-b border-border-subtle px-4 py-2.5">
+              <span className="font-mono text-[0.6rem] uppercase tracking-[0.22em] text-fg-secondary">
                 {t("hero.chain.title")}
-              </div>
-
-              <ol className="mt-4 flex flex-col">
-                {CHAIN.map((step, i) => (
-                  <li key={step.label} className="flex flex-col">
-                    <div className="flex items-baseline gap-3">
-                      <span className="w-5 shrink-0 font-mono text-[0.65rem] tabular-nums text-fg-secondary">
-                        {String(i + 1).padStart(2, "0")}
-                      </span>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold tracking-tight text-fg-primary">
-                          {t(step.label)}
-                        </div>
-                        <div className="font-mono text-[0.7rem] leading-relaxed text-fg-secondary">
-                          {t(step.body)}
-                        </div>
-                      </div>
-                    </div>
-                    {i < CHAIN.length - 1 ? (
-                      <span
-                        aria-hidden
-                        className="my-1.5 ml-[0.5625rem] h-3 w-px bg-border-subtle"
-                      />
-                    ) : null}
-                  </li>
-                ))}
-              </ol>
-
-              <p className="mt-4 border-t border-border-subtle pt-3 text-[0.7rem] leading-relaxed text-fg-secondary">
+              </span>
+              <span className="hidden font-mono text-[0.6rem] uppercase tracking-[0.22em] text-fg-secondary sm:block">
                 {t("hero.chain.caption")}
-              </p>
+              </span>
             </div>
-          </HeroReveal>
-        </div>
+
+            <div className="relative h-[210px] sm:h-[280px] lg:h-[340px]">
+              <DataFlow className="absolute inset-0 h-full w-full" />
+            </div>
+
+            <ol className="grid grid-cols-5 border-t border-border-subtle">
+              {STAGES.map((key, i) => (
+                <li
+                  key={key}
+                  className={
+                    "px-2 py-2.5 text-center font-mono text-[0.55rem] uppercase tracking-[0.14em] text-fg-secondary sm:text-[0.65rem] sm:tracking-[0.2em]" +
+                    (i > 0 ? " border-l border-border-subtle" : "")
+                  }
+                >
+                  {t(key)}
+                </li>
+              ))}
+            </ol>
+          </div>
+        </HeroReveal>
+
+        <dl className="mt-10 grid max-w-3xl grid-cols-3 gap-4 sm:gap-8">
+          {stats.map((stat) => (
+            <div key={stat.label} className="min-w-0">
+              <dt className="font-mono text-[0.5rem] uppercase leading-tight tracking-[0.16em] text-fg-secondary sm:text-[0.62rem] sm:tracking-[0.22em]">
+                {stat.label}
+              </dt>
+              <dd className="mt-1.5 font-mono text-base font-semibold tracking-tight text-fg-primary sm:text-xl">
+                {stat.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
       </div>
     </section>
   );

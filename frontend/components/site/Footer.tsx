@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Mark from "@/components/brand/Mark";
 import { useT } from "@/lib/i18n/context";
 
 export default function Footer() {
@@ -43,11 +44,11 @@ export default function Footer() {
       <div className="container py-10 sm:py-14">
         <div className="grid gap-8 sm:grid-cols-2 sm:gap-10 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
           <div className="sm:col-span-2 md:col-span-1">
-            <Link
-              href="/"
-              className="font-mono text-base font-semibold lowercase tracking-tight text-fg-primary md:text-lg"
-            >
-              obscyro
+            <Link href="/" className="flex items-center gap-2.5 text-fg-primary">
+              <Mark className="h-5 w-auto md:h-[1.4rem]" />
+              <span className="font-mono text-base font-semibold lowercase tracking-tight md:text-lg">
+                obscyro
+              </span>
             </Link>
             <p className="mt-3 max-w-sm text-sm text-fg-secondary">
               {t("footer.tagline")}

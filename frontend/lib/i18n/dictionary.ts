@@ -117,6 +117,32 @@ export const dict = {
     "contact.noSales":
       "No pricing, no sales call, no form. One address, read by the people who build it.",
 
+    "interop.eyebrow": "Interoperability",
+    "interop.title": "Two sources. One region they agree on.",
+    "interop.subtitle":
+      "Nothing is merged and nothing is overwritten. A published file keeps its own vocabulary and its own calendar; what the platform builds is the region where two of them describe the same thing — and that region is the only part a decision can rest on.",
+    "interop.note1.title": "Read, not declared",
+    "interop.note1.body":
+      "A CSV column arrives typed as text whatever it holds. The values are read to find the dates, the measures, the identifiers — which is how a permit number stops being offered as something to sum, and how a date column written the wrong way round gets caught instead of charted.",
+    "interop.note2.title": "The file that arrives is the file that was published",
+    "interop.note2.body":
+      "Encoding, delimiters, unit expansion and coding all happen inside the platform, where they leave a trace. Fixing them in a spreadsheet first is what makes provenance impossible to defend later.",
+    "interop.caption": "Sources · agreement · modelled objects",
+
+    "optim.eyebrow": "Operational optimisation",
+    "optim.title": "The same arithmetic, whatever the network.",
+    "optim.subtitle":
+      "The engine reasons about capacity, occupancy and travel time. Not one of its mechanics knows the name of a city or of a disease, which is why a demonstration built on Montréal open data is a demonstration of the machinery rather than of one region.",
+    "optim.caption": "Sites · transfers · one model",
+    "optim.axis1.title": "Lives",
+    "optim.axis1.body": "Cases that went unserved, and what that cost.",
+    "optim.axis2.title": "Waiting",
+    "optim.axis2.body": "Patient-days spent waiting for a place.",
+    "optim.axis3.title": "Cost",
+    "optim.axis3.body": "What the response itself consumed.",
+    "optim.dominance":
+      "Responses are ranked by dominance, never by a weighted score. An option worse on every axis is named as dominated; where two options each win on something, the platform says so instead of inventing an exchange rate between a death and a dollar that nobody agreed to.",
+
     "finalCta.title": "See it on public data.",
     "finalCta.subtitle":
       "The Studio runs on published government files — a facility registry, an emergency census, epidemiological series. Open it and follow one figure back to the file it came from.",
@@ -374,6 +400,32 @@ export const dict = {
     "contact.exploreDocs": "Lire la documentation",
     "contact.noSales":
       "Pas de tarif, pas d’appel commercial, pas de formulaire. Une adresse, lue par ceux qui construisent.",
+
+    "interop.eyebrow": "Interopérabilité",
+    "interop.title": "Deux sources. Une région où elles s’accordent.",
+    "interop.subtitle":
+      "Rien n’est fusionné, rien n’est écrasé. Un fichier publié garde son vocabulaire et son calendrier ; ce que la plateforme construit, c’est la région où deux d’entre eux décrivent la même chose — et c’est la seule part sur laquelle une décision peut reposer.",
+    "interop.note1.title": "Lu, pas déclaré",
+    "interop.note1.body":
+      "Une colonne de CSV arrive typée en texte quoi qu’elle contienne. Les valeurs sont lues pour trouver les dates, les mesures, les identifiants — c’est ainsi qu’un numéro de permis cesse d’être proposé à l’addition, et qu’une colonne de dates écrite à l’envers est attrapée au lieu d’être tracée.",
+    "interop.note2.title": "Le fichier qui arrive est celui qui a été publié",
+    "interop.note2.body":
+      "Encodage, séparateurs, dépliage en unités et codage se font dans la plateforme, où ils laissent une trace. Les corriger d’abord dans un tableur, c’est rendre la provenance indéfendable ensuite.",
+    "interop.caption": "Sources · accord · objets modélisés",
+
+    "optim.eyebrow": "Optimisation opérationnelle",
+    "optim.title": "La même arithmétique, quel que soit le réseau.",
+    "optim.subtitle":
+      "Le moteur raisonne sur la capacité, l’occupation et le temps de trajet. Aucune de ses mécaniques ne connaît le nom d’une ville ni d’une maladie, et c’est pourquoi une démonstration bâtie sur les données ouvertes de Montréal démontre la machinerie plutôt qu’une région.",
+    "optim.caption": "Sites · transferts · un seul modèle",
+    "optim.axis1.title": "Vies",
+    "optim.axis1.body": "Les cas non servis, et ce qu’ils ont coûté.",
+    "optim.axis2.title": "Attente",
+    "optim.axis2.body": "Les jours-patients passés à attendre une place.",
+    "optim.axis3.title": "Coût",
+    "optim.axis3.body": "Ce que la réponse elle-même a consommé.",
+    "optim.dominance":
+      "Les réponses sont classées par dominance, jamais par un score pondéré. Une option pire sur tous les axes est nommée dominée ; là où deux options gagnent chacune sur quelque chose, la plateforme le dit plutôt que d’inventer entre un décès et un dollar un taux de change que personne n’a approuvé.",
 
     "finalCta.title": "Voyez-le sur des données publiques.",
     "finalCta.subtitle":
