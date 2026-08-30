@@ -44,6 +44,38 @@ function isRealDate(v: string): boolean {
   return !Number.isNaN(Date.parse(v.trim().slice(0, 10)));
 }
 
+/**
+ * Whether the two middle fields of a date column could be swapped.
+ *
+ * The Rt series arrived written AAAA-JJ-MM, and it was caught only because 645
+ * of its 1074 rows landed on a month above twelve. Had every true day been
+ * twelve or less, every value would have parsed, every chart would have drawn,
+ * and the curve would have been wrong by up to eleven months with nothing
+ * anywhere to say so. That is the case this looks for.
+ *
+ * The signature is both fields varying and neither exceeding twelve. Genuine
+ * daily data crosses the 13th of some month within a few weeks, so it never
+ * matches; monthly data stamped on the first has a day that never varies, so it
+ * does not match either. What matches is a column where the two fields are
+ * genuinely interchangeable — and there the honest answer is not "this is
+ * broken" but "the data cannot tell you which is which".
+ */
+function daysAndMonthsInterchangeable(values: readonly string[]): boolean {
+  const months = new Set<number>();
+  const days = new Set<number>();
+  for (const v of values) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v.trim());
+    if (!m) continue;
+    months.add(Number(m[2]));
+    days.add(Number(m[3]));
+  }
+  if (values.length < 25) return false;
+  const max = (s: Set<number>) => Math.max(...s);
+  return (
+    months.size >= 5 && days.size >= 5 && max(months) <= 12 && max(days) <= 12
+  );
+}
+
 function asNumber(v: unknown): number | null {
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
   if (typeof v !== "string") return null;
@@ -78,7 +110,21 @@ export function readColumns(
     const real = shaped.filter((v) => isRealDate(v as string));
     if (shaped.length / filled > 0.8) {
       if (real.length === shaped.length) {
-        return { name: c.name, role: "time", filled, distinct, reason: "des dates" };
+        // Still a time column — it plots, and the ambiguity is a question about
+        // the source, not a fault in the values. Saying it here is what puts
+        // the question in front of somebody before a curve is built on it.
+        const unsure = daysAndMonthsInterchangeable(
+          [...new Set(shaped.map((v) => String(v).slice(0, 10)))],
+        );
+        return {
+          name: c.name,
+          role: "time",
+          filled,
+          distinct,
+          reason: unsure
+            ? "des dates, mais jour et mois y sont indistinguables — aucun jour ne dépasse 12"
+            : "des dates",
+        };
       }
       // The shape is a date and the value is not one. This is worth naming
       // rather than filing under "text", because it is almost always a real

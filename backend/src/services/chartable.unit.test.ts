@@ -169,3 +169,53 @@ describe("a column that has the shape of a date but not the meaning", () => {
     assert.equal(readColumns(RT, ok)[0]!.role, "time");
   });
 });
+
+describe("a date column whose day and month could be swapped", () => {
+  // The case the Rt series would have been if every true day had fallen on the
+  // twelfth or earlier: every value parses, every chart draws, and the curve is
+  // wrong by up to eleven months with nothing anywhere to say so.
+  const COL = [{ name: "date", type: "string" as const }];
+  const rows = (dates: string[]) => dates.map((date) => ({ date }));
+
+  const swapped: string[] = [];
+  for (let mois = 1; mois <= 12; mois++) {
+    for (let jour = 1; jour <= 5; jour++) {
+      swapped.push(`2021-${String(jour).padStart(2, "0")}-${String(mois).padStart(2, "0")}`);
+    }
+  }
+
+  it("still calls it a time column, because it does plot", () => {
+    // The ambiguity is a question about the source, not a fault in the values.
+    assert.equal(readColumns(COL, rows(swapped))[0]!.role, "time");
+  });
+
+  it("says the two fields cannot be told apart", () => {
+    assert.match(readColumns(COL, rows(swapped))[0]!.reason, /indistinguables/);
+  });
+
+  it("stays quiet on a real daily series", () => {
+    // Any run of more than a fortnight crosses the 13th of some month.
+    const jours = Array.from({ length: 60 }, (_, i) => {
+      const d = new Date(Date.UTC(2021, 0, 1 + i));
+      return d.toISOString().slice(0, 10);
+    });
+    assert.equal(readColumns(COL, rows(jours))[0]!.reason, "des dates");
+  });
+
+  it("stays quiet on monthly data stamped on the first", () => {
+    // The day never varies, so the two fields are not interchangeable — this
+    // was the false positive the rule had to avoid.
+    const mois = Array.from({ length: 36 }, (_, i) =>
+      `${2020 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}-01`,
+    );
+    assert.equal(readColumns(COL, rows(mois))[0]!.reason, "des dates");
+  });
+
+  it("stays quiet when there is too little to judge", () => {
+    // Four dates prove nothing, and a warning nobody can act on is noise.
+    assert.equal(
+      readColumns(COL, rows(["2021-01-02", "2021-02-03", "2021-03-04", "2021-04-05"]))[0]!.reason,
+      "des dates",
+    );
+  });
+});
