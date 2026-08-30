@@ -24,27 +24,28 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Obscyro — Health data, finally fluent",
+    default: "Obscyro — Decisions a health network can defend",
     template: "%s · Obscyro",
   },
   description:
-    "SNOMED-first semantic API with ICD-10 mapping via /v1/translate. Public beta — RxNorm, LOINC, FHIR, and HL7 on the roadmap.",
+    "Connect a health network's published data into one ontology, run it as a digital twin, and compare the responses on what each one costs. Public beta.",
   keywords: [
+    "health data interoperability",
+    "health system operations",
+    "hospital capacity planning",
+    "digital twin",
+    "health ontology",
+    "decision support",
     "SNOMED",
     "ICD-10",
-    "RxNorm",
-    "LOINC",
     "FHIR",
     "HL7",
-    "healthcare API",
-    "semantic interoperability",
-    "clinical NLP",
   ],
   authors: [{ name: "Obscyro" }],
   openGraph: {
-    title: "Obscyro — Health data, finally fluent",
+    title: "Obscyro — Decisions a health network can defend",
     description:
-      "SNOMED-first semantic API with ICD-10 mapping via /v1/translate. Public beta — more standards on the roadmap.",
+      "Connect a health network's published data into one ontology, run it as a digital twin, and compare the responses on what each one costs. Public beta.",
     url: SITE_URL,
     siteName: "Obscyro",
     locale: "en_US",
@@ -52,9 +53,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Obscyro — Health data, finally fluent",
+    title: "Obscyro — Decisions a health network can defend",
     description:
-      "SNOMED-first semantic API with ICD-10 mapping. Public beta.",
+      "One ontology for a health network, a digital twin on top, and responses ranked by dominance. Public beta.",
   },
   robots: {
     index: true,

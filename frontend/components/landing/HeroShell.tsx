@@ -2,23 +2,30 @@
 
 import { ArrowRight, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import StaticCodeBlock from "@/components/ui/StaticCodeBlock";
 import HeroReveal from "./HeroReveal";
 import { useT } from "@/lib/i18n/context";
+import type { DictKey } from "@/lib/i18n/dictionary";
 
-interface HeroShellProps {
-  curlCode: string;
-  curlHtml: string;
-  responseCode: string;
-  responseHtml: string;
-}
+/**
+ * The hero used to open on a curl call to /v1/normalize, which was honest when
+ * the product was a terminology API. It is not the product any more: the API is
+ * one layer of a platform that connects a network's published data, models it,
+ * runs it, and compares what could be done about it.
+ *
+ * So the panel shows the chain instead of an endpoint. It is structural rather
+ * than numeric on purpose — figures from a simulation need the context that
+ * produced them, and a hero has no room to give it.
+ */
 
-export default function HeroShell({
-  curlCode,
-  curlHtml,
-  responseCode,
-  responseHtml,
-}: HeroShellProps) {
+const CHAIN: { label: DictKey; body: DictKey }[] = [
+  { label: "hero.chain.1.label", body: "hero.chain.1.body" },
+  { label: "hero.chain.2.label", body: "hero.chain.2.body" },
+  { label: "hero.chain.3.label", body: "hero.chain.3.body" },
+  { label: "hero.chain.4.label", body: "hero.chain.4.body" },
+  { label: "hero.chain.5.label", body: "hero.chain.5.body" },
+];
+
+export default function HeroShell() {
   const t = useT();
 
   const stats = [
@@ -73,55 +80,41 @@ export default function HeroShell({
             </dl>
           </HeroReveal>
 
-          {/* Desktop (lg+): full split with curl + response */}
           <HeroReveal delay={0.15} className="w-full min-w-0">
-            <div className="hidden min-w-0 space-y-3 lg:block">
-              <StaticCodeBlock
-                html={curlHtml}
-                rawValue={curlCode}
-                language="bash"
-                filename="POST /v1/normalize"
-                solidDarkCode
-                className="min-w-0"
-              />
-              <div className="flex items-center justify-center">
-                <div className="rounded-full border border-border-subtle bg-bg-secondary px-3 py-1 font-mono text-[0.65rem] uppercase tracking-[0.2em] text-fg-secondary">
-                  {t("hero.responseLabel")}
-                </div>
+            <div className="rounded-xl border border-border-subtle bg-bg-secondary p-4 sm:p-5">
+              <div className="font-mono text-[0.6rem] uppercase tracking-[0.2em] text-fg-secondary">
+                {t("hero.chain.title")}
               </div>
-              <StaticCodeBlock
-                html={responseHtml}
-                rawValue={responseCode}
-                language="json"
-                filename="200 OK"
-                solidDarkCode
-                className="min-w-0"
-              />
-            </div>
 
-            {/* Tablette (md-lg): centered single curl block under copy */}
-            <div className="hidden min-w-0 md:block lg:hidden">
-              <div className="mx-auto w-full max-w-2xl">
-                <StaticCodeBlock
-                  html={curlHtml}
-                  rawValue={curlCode}
-                  language="bash"
-                  filename="POST /v1/normalize"
-                  solidDarkCode
-                  className="min-w-0"
-                />
-              </div>
-            </div>
+              <ol className="mt-4 flex flex-col">
+                {CHAIN.map((step, i) => (
+                  <li key={step.label} className="flex flex-col">
+                    <div className="flex items-baseline gap-3">
+                      <span className="w-5 shrink-0 font-mono text-[0.65rem] tabular-nums text-fg-secondary">
+                        {String(i + 1).padStart(2, "0")}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold tracking-tight text-fg-primary">
+                          {t(step.label)}
+                        </div>
+                        <div className="font-mono text-[0.7rem] leading-relaxed text-fg-secondary">
+                          {t(step.body)}
+                        </div>
+                      </div>
+                    </div>
+                    {i < CHAIN.length - 1 ? (
+                      <span
+                        aria-hidden
+                        className="my-1.5 ml-[0.5625rem] h-3 w-px bg-border-subtle"
+                      />
+                    ) : null}
+                  </li>
+                ))}
+              </ol>
 
-            {/* Mobile (<md): compact endpoint teaser — no full curl block (avoids horizontal clip) */}
-            <div className="w-full min-w-0 md:hidden">
-              <div className="rounded-xl border border-border-subtle bg-code-bg px-3 py-3 font-mono text-[0.7rem] leading-relaxed text-code-fg shadow-code">
-                <span className="text-fg-secondary">POST </span>
-                <span className="break-all">/v1/normalize</span>
-                <span className="mt-2 block text-[0.65rem] text-fg-secondary">
-                  Authorization: Bearer obs_live_…
-                </span>
-              </div>
+              <p className="mt-4 border-t border-border-subtle pt-3 text-[0.7rem] leading-relaxed text-fg-secondary">
+                {t("hero.chain.caption")}
+              </p>
             </div>
           </HeroReveal>
         </div>

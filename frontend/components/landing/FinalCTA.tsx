@@ -18,7 +18,7 @@ export default function FinalCTA() {
             {t("finalCta.subtitle")}
           </p>
           <div className="mt-7 w-full sm:mt-8 sm:w-auto">
-            <Button href="/sign-up" size="lg" width="fullMobile">
+            <Button href="/studio" size="lg" width="fullMobile">
               {t("finalCta.cta")}
               <ArrowRight className="h-4 w-4" />
             </Button>

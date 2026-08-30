@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import {
+  Activity,
   ArrowLeftRight,
-  BadgeCheck,
+  BarChart3,
+  Cable,
   ChevronDown,
-  Filter,
   Network,
-  Wand2,
+  Workflow,
   type LucideIcon,
 } from "lucide-react";
 import StaticCodeBlock from "@/components/ui/StaticCodeBlock";
@@ -17,18 +18,19 @@ import type { DictKey } from "@/lib/i18n/dictionary";
 import { cn } from "@/lib/cn";
 
 export interface FeatureSnippet {
-  id: "validate" | "normalize" | "translate" | "expand" | "disambiguate";
+  id: "connect" | "transform" | "code" | "model" | "simulate" | "read";
   language: "bash" | "json";
   rawValue: string;
   html: string;
 }
 
 const ICONS: Record<FeatureSnippet["id"], LucideIcon> = {
-  validate: BadgeCheck,
-  normalize: Wand2,
-  translate: ArrowLeftRight,
-  expand: Network,
-  disambiguate: Filter,
+  connect: Cable,
+  transform: Workflow,
+  code: ArrowLeftRight,
+  model: Network,
+  simulate: Activity,
+  read: BarChart3,
 };
 
 export default function FeaturesShell({

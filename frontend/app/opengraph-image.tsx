@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "Obscyro — Health data, finally fluent.";
+export const alt = "Obscyro — Decisions a health network can defend.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -37,19 +37,19 @@ export default function Image() {
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
           <h1
             style={{
-              fontSize: 100,
+              fontSize: 84,
               fontWeight: 600,
               letterSpacing: -3,
               lineHeight: 1.05,
               margin: 0,
             }}
           >
-            Health data,
+            Decisions a health
             <br />
-            finally fluent.
+            network can defend.
           </h1>
           <p style={{ fontSize: 28, color: "#a1a1aa", margin: 0, maxWidth: 900 }}>
-            SNOMED-first API with ICD-10 mapping. Public beta.
+One ontology, a digital twin, and responses ranked by dominance. Public beta.
           </p>
         </div>
 

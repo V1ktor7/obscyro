@@ -1,26 +1,35 @@
 import { highlightDarkPanel } from "@/lib/shiki";
 import FeaturesShell, { type FeatureSnippet } from "./FeaturesShell";
 
+/**
+ * Six capabilities, each with a real payload from the running system.
+ *
+ * The page used to show five terminology primitives, which described the whole
+ * product at the time. Coding is now one card among six: the platform connects
+ * sources, transforms them into an ontology, runs the network, and reads the
+ * result. Every snippet below is a shape the API actually returns or accepts —
+ * none of it is illustrative.
+ */
 const SNIPPETS: Array<Omit<FeatureSnippet, "html">> = [
   {
-    id: "validate",
+    id: "connect",
     language: "json",
     rawValue: `{
-  "code": "22298006",
-  "active": true,
-  "preferredTerm": "Myocardial infarction"
+  "kind": "rest",
+  "url": "https://.../urgences.csv",
+  "intervalSeconds": 3600
 }`,
   },
   {
-    id: "normalize",
+    id: "transform",
     language: "json",
     rawValue: `{
-  "text": "patient with acute MI",
-  "matches": [{"code":"22298006","confidence":0.94}]
+  "kind": "expand",
+  "config": {"countColumn": "capacite"}
 }`,
   },
   {
-    id: "translate",
+    id: "code",
     language: "json",
     rawValue: `{
   "from": "snomed", "to": "icd10",
@@ -28,17 +37,27 @@ const SNIPPETS: Array<Omit<FeatureSnippet, "html">> = [
 }`,
   },
   {
-    id: "expand",
-    language: "bash",
-    rawValue: `GET /v1/concepts/22298006/descendants
-=> 247 SNOMED codes`,
-  },
-  {
-    id: "disambiguate",
+    id: "model",
     language: "json",
     rawValue: `{
-  "winner":{"code":"22298006","preferredTerm":"Myocardial infarction"},
-  "contextSimilarity": 0.81
+  "objectType": "Installation",
+  "links": [{"type":"serves","to":"Territory"}]
+}`,
+  },
+  {
+    id: "simulate",
+    language: "json",
+    rawValue: `{
+  "policy": "transfer at 90%",
+  "waiting": 1984, "dominated": false
+}`,
+  },
+  {
+    id: "read",
+    language: "json",
+    rawValue: `{
+  "kind": "line",
+  "why": "civieres_occupees over Mise_a_jour"
 }`,
   },
 ];

@@ -11,7 +11,7 @@ export default function Footer() {
       title: t("footer.product"),
       links: [
         { label: t("nav.docs"), href: "/docs" },
-        { label: t("nav.pricing"), href: "/#pricing" },
+        { label: t("nav.pricing"), href: "/#contact" },
         { label: t("nav.signin"), href: "/sign-in" },
         { label: t("footer.status"), href: "/docs/resources/status" },
       ],

@@ -41,23 +41,35 @@ export default function ProblemSolution() {
             {t("problem.diagramEyebrow")}
           </p>
           <div className="mt-6 grid items-stretch gap-3 md:grid-cols-[1fr_auto_1.2fr_auto_1fr]">
+            {/* The examples are the ones the Studio actually runs on: a
+                published facility registry, an hourly emergency census, a daily
+                epidemiological series. They are deliberately not clinical text
+                — the product no longer stops at coding a sentence. */}
             <PipelineNode
               label={t("problem.node.in")}
-              examples={['"pt with acute MI"', "SNOMED 22298006", "ICD-10: I21.9"]}
+              examples={[
+                "M02 facility registry",
+                "emergency census, hourly",
+                "epidemiological series, daily",
+              ]}
             />
             <Arrow />
             <PipelineNode
               accent
               label={t("problem.node.api")}
               examples={[
-                "normalize · translate · expand",
-                "validate · disambiguate",
+                "sync · pipeline · ontology",
+                "twin · responses",
               ]}
             />
             <Arrow />
             <PipelineNode
               label={t("problem.node.out")}
-              examples={["SNOMED 22298006", "ICD-10 I21.9", "preferredTerm + hierarchy"]}
+              examples={[
+                "transfer at 90% — kept",
+                "open 10% everywhere — dominated",
+                "every figure, its lineage",
+              ]}
             />
           </div>
         </div>
