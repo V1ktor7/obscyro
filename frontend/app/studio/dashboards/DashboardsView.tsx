@@ -78,6 +78,12 @@ export default function DashboardsView() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
+  // Naming and deleting happen in the page rather than in a native dialog:
+  // window.prompt cannot be styled, cannot be reached by a keyboard user the
+  // way the rest of the rail can, and is the one part of a screen that cannot
+  // be demonstrated.
+  const [newName, setNewName] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const open = useMemo(() => boards.find((b) => b.id === openId) ?? null, [boards, openId]);
 
@@ -131,14 +137,14 @@ export default function DashboardsView() {
     })();
   }, [picking, env, chartable.length]);
 
-  async function onCreateBoard() {
-    const name = window.prompt("Nom du tableau de bord");
-    if (!name || !env) return;
+  async function onCreateBoard(name: string) {
+    if (!name.trim() || !env) return;
     setBusy(true);
     try {
-      const d = await createDashboard(env, { name });
+      const d = await createDashboard(env, { name: name.trim() });
       setBoards((b) => [d, ...b]);
       setOpenId(d.id);
+      setNewName(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Création impossible");
     } finally {
@@ -147,12 +153,12 @@ export default function DashboardsView() {
   }
 
   async function onDeleteBoard(id: string) {
-    if (!window.confirm("Supprimer ce tableau de bord et ses cartes ?")) return;
     setBusy(true);
     try {
       await deleteDashboard(id);
       setBoards((b) => b.filter((x) => x.id !== id));
       setOpenId((cur) => (cur === id ? null : cur));
+      setConfirmDelete(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Suppression impossible");
     } finally {
@@ -219,7 +225,7 @@ export default function DashboardsView() {
           </span>
           <button
             type="button"
-            onClick={onCreateBoard}
+            onClick={() => setNewName("")}
             disabled={busy || !env}
             className="rounded p-1 text-ink-muted hover:bg-canvas hover:text-ink disabled:opacity-40"
             title="Nouveau tableau de bord"
@@ -228,8 +234,42 @@ export default function DashboardsView() {
           </button>
         </div>
 
+        {newName !== null && (
+          <div className="border-b border-line-soft px-3 py-2">
+            <input
+              autoFocus
+              value={newName}
+              placeholder="Nom du tableau de bord"
+              aria-label="Nom du tableau de bord"
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void onCreateBoard(newName);
+                if (e.key === "Escape") setNewName(null);
+              }}
+              className="w-full rounded border border-line px-2 py-1 text-sm"
+            />
+            <div className="mt-1.5 flex gap-1.5">
+              <button
+                type="button"
+                disabled={busy || !newName.trim()}
+                onClick={() => void onCreateBoard(newName)}
+                className="rounded border border-brand bg-brand px-2 py-1 text-[11px] font-medium text-white hover:bg-brand-deep disabled:opacity-40"
+              >
+                Créer
+              </button>
+              <button
+                type="button"
+                onClick={() => setNewName(null)}
+                className="rounded border border-line px-2 py-1 text-[11px] text-ink-muted hover:bg-canvas"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="min-h-0 flex-1 overflow-auto py-1">
-          {boards.length === 0 && !loading && (
+          {boards.length === 0 && !loading && newName === null && (
             <p className="px-3 py-6 text-center text-xs text-ink-faint">
               Aucun tableau de bord. Créez-en un pour composer des cartes à partir de vos jeux de
               données.
@@ -239,7 +279,10 @@ export default function DashboardsView() {
             <button
               key={b.id}
               type="button"
-              onClick={() => setOpenId(b.id)}
+              onClick={() => {
+                setOpenId(b.id);
+                setConfirmDelete(false);
+              }}
               className={cn(
                 "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm",
                 b.id === openId ? "bg-brand-soft text-brand-deep" : "text-ink-body hover:bg-canvas",
@@ -275,13 +318,23 @@ export default function DashboardsView() {
               >
                 Ajouter une carte
               </button>
+              {/* Two steps rather than a native confirm: the second click says
+                  what it destroys, which a browser dialog cannot. */}
               <button
                 type="button"
-                onClick={() => onDeleteBoard(open.id)}
+                onClick={() => (confirmDelete ? onDeleteBoard(open.id) : setConfirmDelete(true))}
+                onBlur={() => setConfirmDelete(false)}
                 disabled={busy}
-                className="rounded border border-line px-3 py-1.5 text-xs text-ink-muted hover:border-danger hover:text-danger disabled:opacity-40"
+                className={cn(
+                  "rounded border px-3 py-1.5 text-xs disabled:opacity-40",
+                  confirmDelete
+                    ? "border-danger bg-danger-soft text-danger"
+                    : "border-line text-ink-muted hover:border-danger hover:text-danger",
+                )}
               >
-                Supprimer
+                {confirmDelete
+                  ? `Supprimer « ${open.name} » et ses ${open.cardCount} carte${open.cardCount > 1 ? "s" : ""} ?`
+                  : "Supprimer"}
               </button>
             </div>
           )}
