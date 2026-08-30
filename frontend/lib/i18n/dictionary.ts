@@ -143,6 +143,51 @@ export const dict = {
     "optim.dominance":
       "Responses are ranked by dominance, never by a weighted score. An option worse on every axis is named as dominated; where two options each win on something, the platform says so instead of inventing an exchange rate between a death and a dollar that nobody agreed to.",
 
+    "statement.lead": "Our software turns a health network’s published files into one model of itself, so a",
+    "statement.muted": "surge response can be compared before it is chosen",
+    "statement.tail": "rather than argued about after the fact.",
+
+    "sources.title": "What the demonstration runs on.",
+    "sources.subtitle":
+      "Not a sandbox. The Studio reads published government files, with their real encodings, their real gaps and their real publication schedules.",
+    "sources.c1.org": "MSSS · Québec",
+    "sources.c1.body":
+      "The M02 registry of installations and the capacities authorised at permit. Published in Windows-1252, with tabs padding a column name.",
+    "sources.c1.meta": "312 installations · region 06",
+    "sources.c2.org": "MSSS · Québec",
+    "sources.c2.body":
+      "The hourly emergency-room census. Four hospitals in sixteen report “pas d’information disponible”, and the platform says so on every chart.",
+    "sources.c2.meta": "REST · hourly",
+    "sources.c3.org": "INSPQ · Québec",
+    "sources.c3.body":
+      "Nine daily epidemiological series — admissions, intensive care, deaths, positivity, variants, reproduction rate. Laid over a run to ask whether it reproduced what happened.",
+    "sources.c3.meta": "2020–2023 · daily",
+    "sources.c4.org": "PHAC · Canada",
+    "sources.c4.body":
+      "SARS-CoV-2 in wastewater, by collection basin. An early signal that owes nothing to who came forward for a test.",
+    "sources.c4.meta": "89 sampling days",
+    "sources.note":
+      "One of these arrived with its day and month written the wrong way round. The platform caught it, named it, and it was corrected — which is the point of reading values instead of trusting a schema.",
+
+    "demo.cta": "Request a demo",
+    "demo.blurb":
+      "Obscyro is in its test phase and is not being sold. A demo is a working session on your data or on ours — we would rather understand the decision you cannot defend today than present slides.",
+    "demo.eyebrow": "Contact / demo request",
+    "demo.title": "Tell us about the network you run.",
+    "demo.intro":
+      "A few lines are enough. The more precise the problem, the faster this reaches someone who can speak to it.",
+    "demo.f.name": "Name",
+    "demo.f.email": "Work email",
+    "demo.f.role": "Role",
+    "demo.f.org": "Organisation",
+    "demo.f.network": "The network you are responsible for, and roughly its size",
+    "demo.f.problem": "The decision you cannot currently defend with data",
+    "demo.send": "Open in my mail client",
+    "demo.close": "Close",
+    "demo.subject": "Obscyro — demo request",
+    "demo.privacy":
+      "This panel sends nothing on its own. It composes the message and hands it to your mail client, so none of these fields reaches a server of ours until you press send yourself.",
+
     "finalCta.title": "See it on public data.",
     "finalCta.subtitle":
       "The Studio runs on published government files — a facility registry, an emergency census, epidemiological series. Open it and follow one figure back to the file it came from.",
@@ -426,6 +471,51 @@ export const dict = {
     "optim.axis3.body": "Ce que la réponse elle-même a consommé.",
     "optim.dominance":
       "Les réponses sont classées par dominance, jamais par un score pondéré. Une option pire sur tous les axes est nommée dominée ; là où deux options gagnent chacune sur quelque chose, la plateforme le dit plutôt que d’inventer entre un décès et un dollar un taux de change que personne n’a approuvé.",
+
+    "statement.lead": "Notre logiciel transforme les fichiers publiés d’un réseau de santé en un modèle de lui-même, pour qu’une",
+    "statement.muted": "réponse à une poussée puisse être comparée avant d’être choisie",
+    "statement.tail": "plutôt que débattue après coup.",
+
+    "sources.title": "Ce sur quoi tourne la démonstration.",
+    "sources.subtitle":
+      "Pas un bac à sable. Le Studio lit des fichiers gouvernementaux publiés, avec leurs encodages réels, leurs trous réels et leurs calendriers de publication réels.",
+    "sources.c1.org": "MSSS · Québec",
+    "sources.c1.body":
+      "Le répertoire M02 des installations et les capacités autorisées au permis. Publié en Windows-1252, avec des tabulations dans un nom de colonne.",
+    "sources.c1.meta": "312 installations · région 06",
+    "sources.c2.org": "MSSS · Québec",
+    "sources.c2.body":
+      "Le relevé horaire des urgences. Quatre hôpitaux sur seize déclarent « pas d’information disponible », et la plateforme l’écrit sur chaque graphique.",
+    "sources.c2.meta": "REST · à l’heure",
+    "sources.c3.org": "INSPQ · Québec",
+    "sources.c3.body":
+      "Neuf séries épidémiologiques quotidiennes — admissions, soins intensifs, décès, positivité, variants, taux de reproduction. Posées sur une course pour demander si elle a reproduit ce qui est arrivé.",
+    "sources.c3.meta": "2020–2023 · quotidien",
+    "sources.c4.org": "ASPC · Canada",
+    "sources.c4.body":
+      "SRAS-CoV-2 dans les eaux usées, par bassin de collecte. Un signal précoce qui ne doit rien à qui s’est présenté au dépistage.",
+    "sources.c4.meta": "89 jours d’échantillonnage",
+    "sources.note":
+      "L’un d’eux est arrivé avec le jour et le mois écrits à l’envers. La plateforme l’a attrapé, l’a nommé, et il a été corrigé — c’est tout l’intérêt de lire les valeurs plutôt que de faire confiance à un schéma.",
+
+    "demo.cta": "Demander une démonstration",
+    "demo.blurb":
+      "Obscyro est en phase de test et n’est pas vendu. Une démonstration est une séance de travail sur vos données ou sur les nôtres — nous préférons comprendre la décision que vous ne pouvez pas défendre aujourd’hui que présenter des diapositives.",
+    "demo.eyebrow": "Contact / demande de démonstration",
+    "demo.title": "Parlez-nous du réseau dont vous avez la charge.",
+    "demo.intro":
+      "Quelques lignes suffisent. Plus le problème est précis, plus vite ceci atteint quelqu’un capable d’en parler.",
+    "demo.f.name": "Nom",
+    "demo.f.email": "Courriel professionnel",
+    "demo.f.role": "Fonction",
+    "demo.f.org": "Organisation",
+    "demo.f.network": "Le réseau dont vous avez la charge, et son ordre de grandeur",
+    "demo.f.problem": "La décision que vous ne pouvez pas défendre avec vos données aujourd’hui",
+    "demo.send": "Ouvrir dans ma messagerie",
+    "demo.close": "Fermer",
+    "demo.subject": "Obscyro — demande de démonstration",
+    "demo.privacy":
+      "Ce panneau n’envoie rien de lui-même. Il compose le message et le remet à votre messagerie : aucun de ces champs n’atteint un de nos serveurs tant que vous n’avez pas appuyé sur envoyer vous-même.",
 
     "finalCta.title": "Voyez-le sur des données publiques.",
     "finalCta.subtitle":

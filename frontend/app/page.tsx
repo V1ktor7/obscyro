@@ -1,23 +1,21 @@
 import HeroShell from "@/components/landing/HeroShell";
-import ProblemSolution from "@/components/landing/ProblemSolution";
+import Statement from "@/components/landing/Statement";
+import Capabilities from "@/components/landing/Capabilities";
 import Interop from "@/components/landing/Interop";
 import Optimisation from "@/components/landing/Optimisation";
-import Architecture from "@/components/landing/Architecture";
-import Features from "@/components/landing/Features";
-import Contact from "@/components/landing/Contact";
-import FinalCTA from "@/components/landing/FinalCTA";
+import Sources from "@/components/landing/Sources";
+import DemoRequest from "@/components/landing/DemoRequest";
 
 export default function Home() {
   return (
     <>
       <HeroShell />
-      <ProblemSolution />
+      <Statement />
+      <Capabilities />
       <Interop />
       <Optimisation />
-      <Architecture />
-      <Features />
-      <Contact />
-      <FinalCTA />
+      <Sources />
+      <DemoRequest />
     </>
   );
 }
