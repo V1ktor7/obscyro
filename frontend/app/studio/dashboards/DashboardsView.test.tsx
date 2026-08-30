@@ -152,3 +152,29 @@ describe("what the empty board says", () => {
     expect(await screen.findByText(/lues maintenant/)).toBeTruthy();
   });
 });
+
+describe("the picker's catalogue", () => {
+  it("is read again every time the drawer opens", async () => {
+    // Cached for the life of the page, it went stale: a dataset imported or
+    // corrected while the tab was open stayed invisible, and the picker went on
+    // offering chart types for data that had since changed.
+    api.listDashboards.mockResolvedValue({ dashboards: [BOARD] });
+    const user = userEvent.setup();
+    render(<DashboardsView />);
+
+    await user.click(await screen.findByRole("button", { name: "Ajouter une carte" }));
+    await waitFor(() => expect(api.listChartable).toHaveBeenCalledTimes(1));
+
+    await user.click(screen.getByRole("button", { name: "Annuler" }));
+    await user.click(await screen.findByRole("button", { name: "Ajouter une carte" }));
+    await waitFor(() => expect(api.listChartable).toHaveBeenCalledTimes(2));
+  });
+
+  it("does not read it before the drawer is opened", async () => {
+    // Two hundred rows of every dataset in the project is not a page load.
+    api.listDashboards.mockResolvedValue({ dashboards: [BOARD] });
+    render(<DashboardsView />);
+    await screen.findByText(/Ce tableau de bord est vide/);
+    expect(api.listChartable).not.toHaveBeenCalled();
+  });
+});

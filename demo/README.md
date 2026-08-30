@@ -12,9 +12,13 @@ premier argument de la démonstration.
 | `isq-population-montreal.csv` | [Estimations de population par territoire sociosanitaire, ISQ, via Données Québec](https://www.donneesquebec.ca/recherche/dataset/estimations-et-projections-de-population-comparables) | région 06 et ses 12 RLS, 2021 |
 | `inspq-hospitalisations-montreal.csv` | INSPQ, `covid19-hist-archives` | admissions quotidiennes, région 06, déc. 2021 – févr. 2022 |
 
-Filtrés sur la région et sur la période, colonnes telles que publiées. **Rien
-n'est recalculé.** Le fichier des capacités est publié en Windows-1252 et a été
-réencodé en UTF-8 sans que sa valeur change.
+Filtrés sur la région et sur la période, colonnes telles que publiées. **Aucune
+valeur n'est recalculée.** Deux fichiers ont subi une correction de forme, et
+elles sont nommées ici plutôt que passées sous silence : le fichier des
+capacités est publié en Windows-1252 et a été réencodé en UTF-8 ; la colonne de
+dates du fichier Rt était écrite en `AAAA-JJ-MM` et a été réécrite en ISO
+`AAAA-MM-JJ` (voir plus bas). Dans les deux cas les valeurs elles-mêmes sont
+intactes.
 
 ## Hypothèses — pas des sources
 
@@ -55,6 +59,26 @@ modèle ne peut pas se poser à lui-même : *a-t-il reproduit ce qui est arrivé
 | Éclosions actives par milieu | Québec | travail, primaire, secondaire, cégep, université, garderie, soins |
 | Part des variants par semaine | Québec | les changements de régime qu'un modèle ne voit pas venir |
 | Cas selon le statut vaccinal et l'âge | Québec | l'effet de la vaccination, par âge |
+
+**Les dates du Rt étaient inversées.** Le fichier arrivait avec le jour et le
+mois permutés : `2020-01-07` n'était pas le 7 janvier mais le 1er juillet. Six
+cent quarante-cinq lignes sur 1074 portaient un mois entre 13 et 31, donc une
+date qui n'existe pas ; les 429 autres passaient inaperçues parce qu'un jour
+inférieur à 13 se lit dans les deux sens. C'est la forme la plus dangereuse
+d'une erreur de date : elle ne fait rien tomber, elle décale.
+
+La permutation a été corrigée, et non devinée. Réinterprétées en `AAAA-JJ-MM`,
+les 1074 lignes donnent 1074 dates valides et distinctes, du 1er juillet 2020
+au 9 juin 2023, soit exactement 1074 jours : une série quotidienne sans un seul
+trou ni doublon. Et la correspondance tient contre l'extérieur — le Rt maximal
+tombe le 13 décembre 2021, le décollage d'Omicron au Québec, avec 1,84 de
+moyenne sur décembre 2021, 0,91 en juin 2021 après la vaccination et 0,87 en
+février 2022 après le pic. Aucune valeur de Rt n'a été touchée : seules les
+dates ont été réécrites, et les lignes retriées, l'ordre d'origine ayant suivi
+la chaîne cassée.
+
+Les neuf autres fichiers de l'INSPQ ont été vérifiés colonne par colonne : ils
+sont en `AAAA-MM-JJ` et n'ont rien eu à corriger.
 
 **Une réserve sur les éclosions.** C'est la donnée québécoise la plus proche
 d'une structure de contacts par milieu, et c'est pour ça qu'elle est là. Mais des

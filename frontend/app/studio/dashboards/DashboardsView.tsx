@@ -123,19 +123,26 @@ export default function DashboardsView() {
     else setCards([]);
   }, [openId, loadCards]);
 
-  // The picker's catalogue is read once the drawer opens, not on every render:
-  // it reads two hundred rows of every dataset in the project.
+  // Read each time the drawer opens, and only then: it reads two hundred rows of
+  // every dataset in the project, so it has no business running on every render
+  // — but caching it for the life of the page was worse. A dataset imported or
+  // corrected while the tab was open stayed invisible to the picker, which then
+  // offered chart types for data that had since changed.
   useEffect(() => {
-    if (!picking || !env || chartable.length > 0) return;
+    if (!picking || !env) return;
+    let live = true;
     void (async () => {
       try {
         const { datasets } = await listChartable(env);
-        setChartable(datasets);
+        if (live) setChartable(datasets);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Catalogue indisponible");
+        if (live) setError(e instanceof Error ? e.message : "Catalogue indisponible");
       }
     })();
-  }, [picking, env, chartable.length]);
+    return () => {
+      live = false;
+    };
+  }, [picking, env]);
 
   async function onCreateBoard(name: string) {
     if (!name.trim() || !env) return;
