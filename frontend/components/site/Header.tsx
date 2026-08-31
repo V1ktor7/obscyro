@@ -29,19 +29,18 @@ export default function Header() {
     <header
       className={cn(
         "sticky top-0 z-40 w-full border-b transition-all duration-200",
-        scrolled
-          ? "border-border-subtle bg-bg-primary/80 backdrop-blur"
-          : "border-transparent bg-bg-primary/0",
+        "border-border-subtle bg-bg-primary/80 backdrop-blur-xl",
+        scrolled ? "border-border-subtle" : "border-transparent",
       )}
     >
-      <div className="container flex h-14 items-center justify-between gap-4 sm:h-16">
+      <div className="container flex h-12 max-w-[1024px] items-center justify-between gap-4">
         <Link
           href="/"
           className="flex items-center gap-2.5 text-fg-primary"
           aria-label="Obscyro home"
         >
-          <Mark className="h-5 w-auto md:h-[1.4rem]" />
-          <span className="font-mono text-base font-semibold lowercase tracking-tight md:text-lg">
+          <Mark className="h-[1.05rem] w-auto" />
+          <span className="text-[0.9375rem] font-medium lowercase tracking-tight">
             obscyro
           </span>
         </Link>
@@ -51,14 +50,14 @@ export default function Header() {
             <Link
               key={item.href}
               href={item.href}
-              className="rounded-md px-3 py-1.5 text-sm text-fg-secondary transition-colors hover:bg-bg-tertiary hover:text-fg-primary"
+              className="px-3 py-1 text-[0.75rem] text-fg-primary/80 transition-opacity hover:opacity-60"
             >
               {item.label}
             </Link>
           ))}
           <Link
             href="/sign-in"
-            className="rounded-md px-3 py-1.5 text-sm text-fg-secondary transition-colors hover:bg-bg-tertiary hover:text-fg-primary"
+            className="px-3 py-1 text-[0.75rem] text-fg-primary/80 transition-opacity hover:opacity-60"
           >
             {t("nav.signin")}
           </Link>
@@ -67,14 +66,14 @@ export default function Header() {
         <div className="flex items-center gap-2">
           <Link
             href="/sign-in"
-            className="hidden h-9 items-center rounded-md bg-accent px-4 text-sm font-medium text-accent-fg transition-opacity hover:opacity-90 md:inline-flex"
+            className="hidden h-7 items-center rounded-full bg-accent px-3.5 text-[0.75rem] font-medium text-accent-fg transition-colors hover:bg-[#1f5fbd] md:inline-flex"
           >
             {t("nav.signin")}
           </Link>
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-md text-fg-primary hover:bg-bg-tertiary md:hidden"
+            className="inline-flex h-9 w-9 items-center justify-center text-fg-primary md:hidden"
             aria-label={t("nav.toggleMenu")}
             aria-expanded={open}
           >

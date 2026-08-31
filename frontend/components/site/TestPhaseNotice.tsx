@@ -44,14 +44,14 @@ export default function TestPhaseNotice({
           aria-hidden
         />
         <div className="min-w-0 flex-1 space-y-2 text-left">
-          <p className="font-mono text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-amber-800">
+          <p className="text-[0.75rem] font-medium text-amber-900">
             {t("beta.label")}
           </p>
           <p className={cn("text-sm text-fg-primary", isBanner && "max-sm:text-xs")}>
             {t("beta.message")}
           </p>
           <details className="group rounded-md border border-amber-500/20 bg-bg-primary/40">
-            <summary className="cursor-pointer list-none px-2 py-1.5 font-mono text-[0.65rem] uppercase tracking-[0.18em] text-fg-secondary outline-none ring-focus [&::-webkit-details-marker]:hidden">
+            <summary className="cursor-pointer list-none px-2 py-1.5 text-[0.75rem] text-fg-secondary underline underline-offset-2 outline-none ring-focus [&::-webkit-details-marker]:hidden">
               <span className="select-none underline underline-offset-2 group-open:no-underline">
                 {t("beta.unstableApisDetails")}
               </span>
@@ -61,7 +61,7 @@ export default function TestPhaseNotice({
             </summary>
             <div className="border-t border-amber-500/15 px-2 py-2">
               <p className="mb-1.5 text-xs text-fg-secondary">{t("beta.unstableApisIntro")}</p>
-              <ul className="max-h-[40vh] space-y-0.5 overflow-y-auto thin-scrollbar font-mono text-[0.65rem] leading-relaxed text-fg-primary sm:max-h-none">
+              <ul className="max-h-[40vh] space-y-0.5 overflow-y-auto thin-scrollbar font-mono text-[0.6875rem] leading-relaxed text-fg-primary sm:max-h-none">
                 {UNSTABLE_API_ENDPOINTS.map((e) => (
                   <li key={`${e.method}-${e.path}`} className="break-all pl-1">
                     {formatUnstableEndpoint(e)}

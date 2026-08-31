@@ -45,26 +45,26 @@ export default function Footer() {
         <div className="grid gap-8 sm:grid-cols-2 sm:gap-10 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
           <div className="sm:col-span-2 md:col-span-1">
             <Link href="/" className="flex items-center gap-2.5 text-fg-primary">
-              <Mark className="h-5 w-auto md:h-[1.4rem]" />
-              <span className="font-mono text-base font-semibold lowercase tracking-tight md:text-lg">
+              <Mark className="h-[1.05rem] w-auto" />
+              <span className="text-[0.9375rem] font-medium lowercase tracking-tight">
                 obscyro
               </span>
             </Link>
-            <p className="mt-3 max-w-sm text-sm text-fg-secondary">
+            <p className="mt-3 max-w-sm text-[0.75rem] leading-relaxed text-fg-secondary">
               {t("footer.tagline")}
             </p>
           </div>
           {columns.map((col) => (
             <div key={col.title}>
-              <h4 className="mb-3 font-mono text-[0.65rem] uppercase tracking-[0.18em] text-fg-secondary sm:mb-4 sm:text-[0.7rem] sm:tracking-[0.2em]">
+              <h4 className="mb-3 text-[0.75rem] font-medium text-fg-primary sm:mb-4">
                 {col.title}
               </h4>
-              <ul className="space-y-2.5">
+              <ul className="space-y-2">
                 {col.links.map((link) => (
                   <li key={link.href}>
                     <Link
                       href={link.href}
-                      className="text-sm text-fg-secondary transition-colors hover:text-fg-primary"
+                      className="text-[0.75rem] text-fg-secondary transition-colors hover:text-fg-primary hover:underline"
                     >
                       {link.label}
                     </Link>
@@ -75,7 +75,7 @@ export default function Footer() {
           ))}
         </div>
 
-        <div className="mt-10 flex flex-col gap-3 border-t border-border-subtle pt-6 text-xs text-fg-secondary sm:mt-12 sm:gap-4 sm:pt-8 md:flex-row md:items-center md:justify-between">
+        <div className="mt-10 flex flex-col gap-3 border-t border-border-subtle pt-6 text-[0.75rem] text-fg-secondary sm:mt-12 sm:gap-4 sm:pt-8 md:flex-row md:items-center md:justify-between">
           <p>{t("footer.copyright")}</p>
           <p className="max-w-prose text-pretty">{t("footer.disclaimer")}</p>
         </div>

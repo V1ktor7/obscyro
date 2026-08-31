@@ -4,61 +4,51 @@ import { useT } from "@/lib/i18n/context";
 import type { DictKey } from "@/lib/i18n/dictionary";
 
 /**
- * The four layers, as a numbered list with the name at display size.
+ * Four layers, four cards.
  *
- * This is the reference's product-list pattern: a short description held left
- * at body size, an index in the gutter, and the name set large enough to be
- * read across a room. It suits four layers far better than four equal cards
- * did, because these are ordered — connect before model, model before run, run
- * before decide — and a numbered list says that where a grid cannot.
+ * They are ordered — connect before model, model before run, run before decide
+ * — so the cards are numbered. A twin with nothing modelled has nothing to run,
+ * and a grid of equal tiles would hide that.
  *
- * The indices are real information rather than styling. Skipping a layer is not
- * possible: a twin with nothing modelled has nothing to run.
+ * The number is small and grey rather than set as a display element. It is
+ * there for the reader who wonders whether the order matters, not as a
+ * structural flourish.
  */
 
 interface Layer {
-  index: string;
+  n: string;
   name: DictKey;
+  title: DictKey;
   body: DictKey;
 }
 
 const LAYERS: Layer[] = [
-  { index: "/0.1", name: "arch.layer1.label", body: "arch.layer1.body" },
-  { index: "/0.2", name: "arch.layer2.label", body: "arch.layer2.body" },
-  { index: "/0.3", name: "arch.layer3.label", body: "arch.layer3.body" },
-  { index: "/0.4", name: "arch.layer4.label", body: "arch.layer4.body" },
+  { n: "1", name: "arch.layer1.label", title: "arch.layer1.title", body: "arch.layer1.body" },
+  { n: "2", name: "arch.layer2.label", title: "arch.layer2.title", body: "arch.layer2.body" },
+  { n: "3", name: "arch.layer3.label", title: "arch.layer3.title", body: "arch.layer3.body" },
+  { n: "4", name: "arch.layer4.label", title: "arch.layer4.title", body: "arch.layer4.body" },
 ];
 
 export default function Capabilities() {
   const t = useT();
 
   return (
-    <section className="border-b border-border-subtle py-14 sm:py-20 lg:py-24">
-      <div className="container">
-        <h2 className="text-2xl font-semibold tracking-[-0.03em] sm:text-3xl">
-          {t("arch.title")}
-        </h2>
-        <p className="mt-3 max-w-2xl text-pretty text-sm leading-relaxed text-fg-secondary sm:text-base">
-          {t("arch.subtitle")}
-        </p>
+    <section className="py-24 sm:py-32">
+      <div className="container max-w-[1120px]">
+        <div className="mx-auto max-w-[720px] text-center">
+          <h2 className="display-lg text-balance">{t("arch.title")}</h2>
+          <p className="body-lg mt-5 text-balance">{t("arch.subtitle")}</p>
+        </div>
 
-        <ol className="mt-10 sm:mt-14">
+        <ol className="mt-14 grid gap-5 sm:mt-20 sm:grid-cols-2">
           {LAYERS.map((layer) => (
-            <li
-              key={layer.index}
-              className="group grid items-center gap-3 border-t border-border-subtle py-8 sm:gap-8 sm:py-12 md:grid-cols-[minmax(0,20rem)_1fr] lg:py-16"
-            >
-              <div>
-                <p className="max-w-xs text-sm leading-relaxed text-fg-secondary">
-                  {t(layer.body)}
-                </p>
-                <p className="mt-6 font-mono text-[0.7rem] tabular-nums text-fg-secondary/70">
-                  {layer.index}
-                </p>
-              </div>
-              <p className="text-[2.75rem] font-semibold leading-none tracking-[-0.045em] text-fg-primary transition-colors sm:text-[4.5rem] lg:text-[6rem]">
-                {t(layer.name)}
+            <li key={layer.n} className="rounded-[24px] bg-bg-secondary p-8 sm:p-10">
+              <p className="caption">{layer.n}</p>
+              <h3 className="display-md mt-5">{t(layer.name)}</h3>
+              <p className="mt-2 text-[1.0625rem] font-medium tracking-[-0.004em] text-fg-primary">
+                {t(layer.title)}
               </p>
+              <p className="body-md mt-4">{t(layer.body)}</p>
             </li>
           ))}
         </ol>

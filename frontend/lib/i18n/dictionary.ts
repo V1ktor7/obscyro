@@ -173,7 +173,8 @@ export const dict = {
     "demo.blurb":
       "Obscyro is in its test phase and is not being sold. A demo is a working session on your data or on ours — we would rather understand the decision you cannot defend today than present slides.",
     "demo.eyebrow": "Contact / demo request",
-    "demo.title": "Tell us about the network you run.",
+    "demo.title": "See it on your own network.",
+    "demo.drawerTitle": "Tell us about the network you run.",
     "demo.intro":
       "A few lines are enough. The more precise the problem, the faster this reaches someone who can speak to it.",
     "demo.f.name": "Name",
@@ -502,7 +503,8 @@ export const dict = {
     "demo.blurb":
       "Obscyro est en phase de test et n’est pas vendu. Une démonstration est une séance de travail sur vos données ou sur les nôtres — nous préférons comprendre la décision que vous ne pouvez pas défendre aujourd’hui que présenter des diapositives.",
     "demo.eyebrow": "Contact / demande de démonstration",
-    "demo.title": "Parlez-nous du réseau dont vous avez la charge.",
+    "demo.title": "Voyez-le sur votre propre réseau.",
+    "demo.drawerTitle": "Parlez-nous du réseau dont vous avez la charge.",
     "demo.intro":
       "Quelques lignes suffisent. Plus le problème est précis, plus vite ceci atteint quelqu’un capable d’en parler.",
     "demo.f.name": "Nom",

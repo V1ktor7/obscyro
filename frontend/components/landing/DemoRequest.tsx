@@ -81,28 +81,24 @@ export default function DemoRequest() {
 
   return (
     <>
-      <section id="contact" className="border-b border-border-subtle">
-        <div className="container py-14 sm:py-20">
+      <section id="contact" className="bg-bg-secondary py-24 text-center sm:py-32">
+        <div className="container max-w-[720px]">
+          <h2 className="display-lg text-balance">{t("demo.title")}</h2>
+          <p className="body-lg mt-5 text-balance">{t("demo.blurb")}</p>
           <button
             ref={openerRef}
             type="button"
             onClick={() => setOpen(true)}
-            className="group flex w-full items-center justify-between gap-6 bg-accent px-6 py-10 text-left text-accent-fg transition-opacity hover:opacity-90 sm:px-10 sm:py-14"
+            className="pill mt-9"
           >
-            <span className="text-2xl font-semibold tracking-[-0.03em] sm:text-4xl lg:text-5xl">
-              {t("demo.cta")}
-            </span>
-            <ArrowRight className="h-6 w-6 shrink-0 transition-transform group-hover:translate-x-1 sm:h-8 sm:w-8" />
+            {t("demo.cta")}
           </button>
-          <p className="mt-5 max-w-2xl text-sm leading-relaxed text-fg-secondary">
-            {t("demo.blurb")}
-          </p>
         </div>
       </section>
 
       {open ? (
         <div
-          className="fixed inset-0 z-50 flex justify-end bg-black/70"
+          className="fixed inset-0 z-50 flex justify-end bg-fg-primary/25 backdrop-blur-sm"
           onClick={() => setOpen(false)}
         >
           <div
@@ -114,9 +110,7 @@ export default function DemoRequest() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4 px-6 pt-6 sm:px-10 sm:pt-8">
-              <p className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-fg-secondary">
-                {t("demo.eyebrow")}
-              </p>
+              <p className="caption">{t("demo.eyebrow")}</p>
               <button
                 ref={closeRef}
                 type="button"
@@ -129,33 +123,29 @@ export default function DemoRequest() {
             </div>
 
             <div className="px-6 pb-10 sm:px-10">
-              <h2 className="mt-8 text-balance text-2xl font-semibold tracking-[-0.03em] sm:text-3xl">
-                {t("demo.title")}
-              </h2>
-              <p className="mt-3 text-sm leading-relaxed text-fg-secondary">
-                {t("demo.intro")}
-              </p>
+              <h2 className="display-md mt-8 text-balance">{t("demo.drawerTitle")}</h2>
+              <p className="body-md mt-3">{t("demo.intro")}</p>
 
               <div className="mt-8 flex flex-col gap-6">
                 {fields.map((f) => (
                   <label key={f.id} className="block">
-                    <span className="font-mono text-[0.6rem] uppercase tracking-[0.16em] text-fg-secondary">
+                    <span className="caption">
                       {f.label}
-                      {f.required ? <span className="ml-1 text-amber-500">*</span> : null}
+                      {f.required ? <span className="ml-1 text-accent">*</span> : null}
                     </span>
                     {f.type === "textarea" ? (
                       <textarea
                         rows={4}
                         value={values[f.id] ?? ""}
                         onChange={(e) => set(f.id, e.target.value)}
-                        className="mt-2 w-full resize-y border-b border-border-subtle bg-transparent pb-2 text-sm text-fg-primary outline-none transition-colors focus:border-fg-primary"
+                        className="mt-2 w-full resize-y border-b border-border-subtle bg-transparent pb-2 text-[1.0625rem] text-fg-primary outline-none transition-colors focus:border-accent"
                       />
                     ) : (
                       <input
                         type={f.type ?? "text"}
                         value={values[f.id] ?? ""}
                         onChange={(e) => set(f.id, e.target.value)}
-                        className="mt-2 w-full border-b border-border-subtle bg-transparent pb-2 text-sm text-fg-primary outline-none transition-colors focus:border-fg-primary"
+                        className="mt-2 w-full border-b border-border-subtle bg-transparent pb-2 text-[1.0625rem] text-fg-primary outline-none transition-colors focus:border-accent"
                       />
                     )}
                   </label>
@@ -166,15 +156,13 @@ export default function DemoRequest() {
                 type="button"
                 disabled={!ready}
                 onClick={send}
-                className="mt-10 inline-flex items-center gap-2 bg-accent px-6 py-3 text-sm font-medium text-accent-fg transition-opacity hover:opacity-90 disabled:opacity-40"
+                className="pill mt-10 disabled:opacity-40"
               >
                 {t("demo.send")}
                 <ArrowRight className="h-4 w-4" />
               </button>
 
-              <p className="mt-4 text-xs leading-relaxed text-fg-secondary">
-                {t("demo.privacy")}
-              </p>
+              <p className="caption mt-4">{t("demo.privacy")}</p>
             </div>
           </div>
         </div>

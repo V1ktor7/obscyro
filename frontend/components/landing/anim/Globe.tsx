@@ -118,7 +118,7 @@ export default function Globe({ className }: { className?: string }) {
         if (!pen || p.front !== lastFront) {
           if (pen) ctx.stroke();
           ctx.beginPath();
-          ctx.strokeStyle = p.front ? "rgba(255,255,255,0.13)" : "rgba(255,255,255,0.05)";
+          ctx.strokeStyle = p.front ? "rgba(29,29,31,0.16)" : "rgba(29,29,31,0.055)";
           ctx.moveTo(p.x, p.y);
           pen = true;
         } else {
@@ -165,7 +165,7 @@ export default function Globe({ className }: { className?: string }) {
         // A travelling bright head on a dim track.
         const d = Math.abs(t0 - head);
         const near = Math.max(0, 1 - Math.min(d, 1 - d) / 0.16);
-        ctx.strokeStyle = `rgba(110,155,255,${0.08 + 0.72 * near})`;
+        ctx.strokeStyle = `rgba(45,114,210,${0.1 + 0.7 * near})`;
         ctx.beginPath();
         ctx.moveTo(p0.x, p0.y);
         ctx.lineTo(p1.x, p1.y);
@@ -178,13 +178,14 @@ export default function Globe({ className }: { className?: string }) {
       const p = project(v);
       if (!p.front) return;
       const pulse = 0.5 + 0.5 * Math.sin(time * 1.6 + i);
-      ctx.fillStyle = `rgba(232,176,75,${0.12 + 0.1 * pulse})`;
+      ctx.strokeStyle = `rgba(45,114,210,${0.14 + 0.16 * pulse})`;
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, 5.5 + pulse * 2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "rgba(232,176,75,0.95)";
+      ctx.arc(p.x, p.y, 4 + pulse * 2.5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(45,114,210,0.9)";
       ctx.beginPath();
-      ctx.arc(p.x, p.y, 2.2, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
       ctx.fill();
     });
   });

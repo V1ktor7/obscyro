@@ -87,7 +87,7 @@ export default function InteropRings({ className }: { className?: string }) {
           {SOURCES.map((s) => (
             <li
               key={s}
-              className="font-mono text-[0.62rem] leading-tight text-fg-secondary sm:text-right sm:text-[0.68rem]"
+              className="text-[0.8125rem] leading-relaxed text-fg-secondary sm:text-right"
             >
               {s}
             </li>
@@ -112,8 +112,8 @@ export default function InteropRings({ className }: { className?: string }) {
             cx={cxB}
             cy={CY}
             r={R + STROKE / 2}
-            fill={SCENE.overlap}
-            fillOpacity={0.14 * lens}
+            fill={SCENE.flow}
+            fillOpacity={0.16 * lens}
             clipPath="url(#obs-interop-lens)"
           />
 
@@ -124,16 +124,16 @@ export default function InteropRings({ className }: { className?: string }) {
             fill="none"
             stroke={SCENE.flow}
             strokeWidth={STROKE}
-            strokeOpacity={0.5}
+            strokeOpacity={0.65}
           />
           <circle
             cx={cxB}
             cy={CY}
             r={R}
             fill="none"
-            stroke="#EDEFF2"
+            stroke="#1d1d1f"
             strokeWidth={STROKE}
-            strokeOpacity={0.73 * (0.45 + 0.55 * lens)}
+            strokeOpacity={0.72 * (0.5 + 0.5 * lens)}
           />
         </svg>
 
@@ -141,8 +141,8 @@ export default function InteropRings({ className }: { className?: string }) {
           {OBJECTS.map((o) => (
             <li
               key={o}
-              className="font-mono text-[0.62rem] leading-tight transition-colors sm:text-[0.68rem]"
-              style={{ color: `rgba(232,176,75,${0.3 + 0.6 * lens})` }}
+              className="text-[0.8125rem] leading-relaxed transition-colors"
+              style={{ color: `rgba(45,114,210,${0.4 + 0.6 * lens})` }}
             >
               {o}
             </li>

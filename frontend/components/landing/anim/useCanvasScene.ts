@@ -125,14 +125,19 @@ export function useCanvasScene(
   return canvasRef;
 }
 
-/** Shared palette so the three scenes read as one system. */
+/**
+ * Shared palette.
+ *
+ * Ink on paper, and one blue. The earlier version glowed on near-black with two
+ * accents, which is the register of a screensaver rather than of an instrument.
+ * Thin dark lines on a light ground read as a drawing somebody made on purpose,
+ * and they survive being printed or projected — which is where a diagram in
+ * this sector actually ends up.
+ */
 export const SCENE = {
-  ground: "#08090C",
-  hairline: "rgba(255,255,255,0.07)",
-  faint: "rgba(255,255,255,0.14)",
-  /** Data in motion. */
-  flow: "#6E9BFF",
-  /** Where two things meet — the overlap in the mark. */
-  overlap: "#E8B04B",
-  text: "rgba(232,236,239,0.82)",
+  hairline: "rgba(29,29,31,0.10)",
+  faint: "rgba(29,29,31,0.06)",
+  ink: "rgba(29,29,31,0.55)",
+  /** Data in motion, and the only colour any of these scenes uses. */
+  flow: "#2d72d2",
 } as const;

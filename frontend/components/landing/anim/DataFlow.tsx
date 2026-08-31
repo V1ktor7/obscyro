@@ -147,8 +147,8 @@ export default function DataFlow({ className }: { className?: string }) {
       const tx = px(a) + (px(b) - px(a)) * Math.max(0, p.t - tail);
       const ty = py(a) + (py(b) - py(a)) * Math.max(0, p.t - tail);
       const grad = ctx.createLinearGradient(tx, ty, x, y);
-      grad.addColorStop(0, "rgba(110,155,255,0)");
-      grad.addColorStop(1, "rgba(110,155,255,0.85)");
+      grad.addColorStop(0, "rgba(45,114,210,0)");
+      grad.addColorStop(1, "rgba(45,114,210,0.9)");
       ctx.strokeStyle = grad;
       ctx.lineWidth = 1.6;
       ctx.beginPath();
@@ -160,21 +160,24 @@ export default function DataFlow({ className }: { className?: string }) {
     for (const n of nodes) {
       const since = time - n.hit;
       const lit = still ? 0 : Math.max(0, 1 - since / 1.1);
-      const r = 2 + lit * 2.4;
+      const r = 2.1 + lit * 1.6;
 
+      // A node that has just received a record draws a thin ring rather than a
+      // halo. A glow would be the only soft edge on an otherwise hard page.
       if (lit > 0.01) {
-        ctx.fillStyle = `rgba(232,176,75,${0.16 * lit})`;
+        ctx.strokeStyle = `rgba(45,114,210,${0.5 * lit})`;
+        ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.arc(px(n), py(n), r + 7, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.arc(px(n), py(n), r + 5 + (1 - lit) * 5, 0, Math.PI * 2);
+        ctx.stroke();
       }
 
       ctx.fillStyle =
         lit > 0.01
-          ? `rgba(232,176,75,${0.5 + 0.5 * lit})`
+          ? `rgba(45,114,210,${0.55 + 0.45 * lit})`
           : n.col === COLUMNS - 1
-            ? "rgba(232,236,239,0.5)"
-            : "rgba(232,236,239,0.26)";
+            ? "rgba(29,29,31,0.45)"
+            : "rgba(29,29,31,0.24)";
       ctx.beginPath();
       ctx.arc(px(n), py(n), r, 0, Math.PI * 2);
       ctx.fill();

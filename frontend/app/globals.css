@@ -17,34 +17,119 @@
 }
 
 /*
- * The landing page runs dark; the docs do not.
+ * Marketing surface.
  *
- * Scoped as a class rather than a media query or a body-level flip, because the
- * two surfaces are different products: a marketing page that should feel like
- * an instrument, and documentation that people read for twenty minutes at a
- * time and print. SiteChrome puts this on "/" only, so the header, banner and
- * footer come with it and there is no seam where a white bar meets a black
- * hero.
+ * The previous pass ran this page dark with monospace eyebrows, a particle
+ * field and two accent colours. Every one of those is a tell, and together they
+ * read as a template rather than as a product — which for software whose whole
+ * argument is sobriety was the wrong first impression.
  *
- * Every value here is a variable the components already consume, so nothing in
- * the landing markup needed a second set of classes.
+ * So: white and one grey, one accent, black text, and a great deal of space.
+ * The restraint is not a style borrowed for its own sake — an institution
+ * evaluating a decision system reads confidence in what a page leaves out.
+ *
+ * The type stack is the platform's own UI face rather than a webfont. On the
+ * hardware this look comes from it renders San Francisco; on Windows, Segoe UI.
+ * Both are neo-grotesques designed for exactly this, both are already resident,
+ * and neither costs a download.
+ *
+ * Applied to the whole public site, documentation included — a marketing page
+ * and its docs set in two different faces look like two different companies.
+ * /studio keeps Inter and its own scale: it is an instrument people work in for
+ * hours, and it has no business shifting under them because the brochure did.
  */
-.landing-dark {
-  --bg-primary: #08090c;
-  --bg-secondary: #0e1116;
-  --bg-tertiary: #151922;
-  --text-primary: #edeff2;
-  --text-secondary: #8b93a1;
-  --border-subtle: #1d222b;
-  /* Inverted on purpose: on this ground the emphatic button is the light one. */
-  --accent: #edeff2;
-  --accent-fg: #08090c;
-  --card-bg: #0e1116;
-  --code-bg: #05060a;
-  --code-fg: #edeff2;
+.site-light {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f5f7;
+  --bg-tertiary: #ececef;
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --border-subtle: #d2d2d7;
+  /* The product's own blue, so the marketing page and the software it sells
+     are not two different companies. */
+  --accent: #2d72d2;
+  --accent-fg: #ffffff;
+  --card-bg: #ffffff;
 
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial,
+    sans-serif;
   background-color: var(--bg-primary);
   color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+/*
+ * One scale, used everywhere.
+ *
+ * Headlines are large and tightly tracked; body copy is 17-21px with a lot of
+ * leading and set in the secondary grey. Tracking tightens as size grows, which
+ * is the single typographic habit that separates this register from a page that
+ * merely uses big text.
+ */
+.site-light .display-xl {
+  font-size: clamp(2.5rem, 6.2vw, 5.5rem);
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+  font-weight: 600;
+}
+.site-light .display-lg {
+  font-size: clamp(2rem, 4.4vw, 3.5rem);
+  line-height: 1.08;
+  letter-spacing: -0.022em;
+  font-weight: 600;
+}
+.site-light .display-md {
+  font-size: clamp(1.5rem, 2.6vw, 2.25rem);
+  line-height: 1.14;
+  letter-spacing: -0.018em;
+  font-weight: 600;
+}
+.site-light .body-lg {
+  font-size: clamp(1.0625rem, 1.35vw, 1.3125rem);
+  line-height: 1.5;
+  letter-spacing: -0.005em;
+  color: var(--text-secondary);
+}
+.site-light .body-md {
+  font-size: 1.0625rem;
+  line-height: 1.55;
+  letter-spacing: -0.004em;
+  color: var(--text-secondary);
+}
+.site-light .caption {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+/* A text link that ends in a chevron, and a filled pill. Two CTA shapes for
+   the whole site — a third would be a decision nobody could explain. */
+.site-light .link-cta {
+  color: var(--accent);
+  font-size: 1.0625rem;
+  letter-spacing: -0.004em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.site-light .link-cta:hover {
+  text-decoration: underline;
+}
+.site-light .pill {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-radius: 980px;
+  padding: 0.75rem 1.375rem;
+  font-size: 1.0625rem;
+  letter-spacing: -0.004em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: background-color 0.2s ease;
+}
+.site-light .pill:hover {
+  background: #1f5fbd;
 }
 
 * {
