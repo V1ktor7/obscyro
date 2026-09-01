@@ -1,7 +1,7 @@
 "use client";
 
 import { useT } from "@/lib/i18n/context";
-import InteropRings from "./anim/InteropRings";
+import SourceJoin from "./anim/SourceJoin";
 
 /**
  * The first pillar, shown on the mark itself.
@@ -27,7 +27,7 @@ export default function Interop() {
         </div>
 
         <div className="mt-14 panel px-5 py-10 sm:mt-16 sm:px-12 sm:py-14">
-          <InteropRings />
+          <SourceJoin />
         </div>
 
         <dl className="mt-14 grid gap-10 sm:mt-16 sm:grid-cols-2 sm:gap-12">

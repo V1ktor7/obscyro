@@ -21,9 +21,11 @@ const DWELL = 4200;
 
 export default function FeatureCycle({
   labels,
+  captions,
   className,
 }: {
   labels: string[];
+  captions: string[];
   className?: string;
 }) {
   const [step, setStep] = useState(0);
@@ -100,7 +102,9 @@ export default function FeatureCycle({
         </svg>
       </div>
 
-      <div className="mt-4 grid grid-cols-5 gap-px bg-border-subtle">
+      <p className="caption mt-4 min-h-[2.6em] text-center">{captions[step] ?? ""}</p>
+
+      <div className="mt-3 grid grid-cols-5 gap-px bg-border-subtle">
         {labels.slice(0, STEPS).map((label, i) => (
           <button
             key={label}
@@ -201,31 +205,71 @@ function Pipeline({ t }: { t: number }) {
   );
 }
 
-/** Objects and the links between them — the two-ring motif, repeated. */
+/**
+ * Object types and the links between them.
+ *
+ * This panel used to be three overlapping rings, which is the Audi mark with
+ * one wheel missing — a logo nobody on this page wants to evoke. It is now what
+ * an ontology screen actually shows: typed boxes, the properties inside them,
+ * and the named links that join them.
+ */
 function Ontology({ t }: { t: number }) {
-  const centres: [number, number][] = [
-    [200, 150],
-    [310, 150],
-    [420, 150],
+  const boxes: { x: number; y: number; rows: number }[] = [
+    { x: 60, y: 70, rows: 3 },
+    { x: 250, y: 40, rows: 4 },
+    { x: 250, y: 180, rows: 2 },
+    { x: 450, y: 100, rows: 3 },
   ];
+  const links: [number, number][] = [
+    [0, 1],
+    [0, 2],
+    [1, 3],
+    [2, 3],
+  ];
+  const W = 110;
+  const head = 22;
+  const rowH = 17;
+  const boxH = (b: { rows: number }) => head + b.rows * rowH + 8;
+
   return (
     <g>
-      {centres.map(([x, y], i) => {
-        const shown = t * 3 > i;
+      {links.map(([a, b], i) => {
+        const on = t * links.length > i;
+        const A = boxes[a]!;
+        const B = boxes[b]!;
         return (
-          <g key={i} opacity={shown ? 1 : 0.18}>
-            <circle cx={x} cy={y} r={64} fill="none" stroke={INK} strokeWidth={16} opacity={0.85} />
+          <line
+            key={i}
+            x1={A.x + W}
+            y1={A.y + boxH(A) / 2}
+            x2={B.x}
+            y2={B.y + boxH(B) / 2}
+            stroke={on ? ACCENT : HAIR}
+            strokeWidth={on ? 1.5 : 1}
+          />
+        );
+      })}
+      {boxes.map((b, i) => {
+        const shown = t * boxes.length > i - 0.4;
+        return (
+          <g key={i} opacity={shown ? 1 : 0.22}>
+            <rect x={b.x} y={b.y} width={W} height={boxH(b)} fill="#fff" stroke={INK} strokeWidth={1.4} />
+            <line x1={b.x} y1={b.y + head} x2={b.x + W} y2={b.y + head} stroke={INK} strokeWidth={1.4} />
+            <line x1={b.x + 12} y1={b.y + 13} x2={b.x + 62} y2={b.y + 13} stroke={INK} strokeWidth={2.2} />
+            {Array.from({ length: b.rows }, (_, r) => (
+              <line
+                key={r}
+                x1={b.x + 12}
+                y1={b.y + head + 11 + r * rowH}
+                x2={b.x + W - 14 - (r % 2) * 18}
+                y2={b.y + head + 11 + r * rowH}
+                stroke={HAIR}
+                strokeWidth={1.6}
+              />
+            ))}
           </g>
         );
       })}
-      {/* The overlaps: the only coloured region, and the only thing two object
-          types genuinely share. */}
-      {t > 0.66 ? (
-        <>
-          <ellipse cx={255} cy={150} rx={16} ry={52} fill={ACCENT} opacity={0.16} />
-          <ellipse cx={365} cy={150} rx={16} ry={52} fill={ACCENT} opacity={0.16} />
-        </>
-      ) : null}
     </g>
   );
 }

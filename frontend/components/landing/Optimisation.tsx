@@ -1,7 +1,6 @@
 "use client";
 
 import { useT } from "@/lib/i18n/context";
-import MapGlobe from "./anim/MapGlobe";
 
 /**
  * The second pillar, and the claim the globe is there to make.
@@ -30,10 +29,6 @@ export default function Optimisation() {
         <div className="mx-auto max-w-[720px] text-center">
           <h2 className="display-lg text-balance">{t("optim.title")}</h2>
           <p className="body-lg mt-5 text-balance">{t("optim.subtitle")}</p>
-        </div>
-
-        <div className="mx-auto mt-10 aspect-square w-full max-w-[460px] overflow-hidden sm:mt-14">
-          <MapGlobe className="h-full w-full" />
         </div>
 
         <dl className="mt-10 grid gap-8 sm:mt-14 sm:grid-cols-3">
