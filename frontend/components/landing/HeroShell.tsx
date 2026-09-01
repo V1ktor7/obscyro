@@ -1,20 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
-import FeatureCycle from "./anim/FeatureCycle";
+import { ArrowDown, ChevronRight } from "lucide-react";
 import HeroGlobe from "./anim/HeroGlobe";
+import ProductTour from "./anim/ProductTour";
 import HeroReveal from "./HeroReveal";
 import { useT } from "@/lib/i18n/context";
 
 /**
- * The globe is the ground, the headline stands on it, and the product tour sits
- * below.
+ * One line, one way forward, and the software underneath.
  *
- * The globe is held well back and the type carries a soft white wash behind it:
- * a background that competes with the headline is a background that failed. On
- * load, two rings close into the mark over the globe and then fade to a
- * watermark — the one orchestrated moment on the page.
+ * The subtitle is gone. A headline that needs a paragraph under it to be
+ * understood is a headline that has not finished being written, and the
+ * reference this follows carries none — the claim stands alone over the globe,
+ * and the product tour below answers the question it raises.
  */
 export default function HeroShell() {
   const t = useT();
@@ -30,42 +29,42 @@ export default function HeroShell() {
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              "radial-gradient(ellipse 62% 54% at 50% 46%, rgba(255,255,255,0.93) 0%, rgba(255,255,255,0.74) 46%, rgba(255,255,255,0) 78%)",
+              "radial-gradient(ellipse 60% 50% at 50% 44%, rgba(255,255,255,0.94) 0%, rgba(255,255,255,0.76) 46%, rgba(255,255,255,0) 78%)",
           }}
           aria-hidden
         />
 
-        <div className="container relative max-w-[980px] py-24 text-center sm:py-32 lg:py-40">
+        <div className="container relative flex min-h-[78vh] max-w-[1000px] flex-col items-center justify-center py-24 text-center sm:py-28">
           <HeroReveal>
             <h1 className="display-xl text-balance">{t("hero.title")}</h1>
-            <p className="body-lg mx-auto mt-5 max-w-[40rem] text-balance sm:mt-6">
-              {t("hero.subtitle")}
-            </p>
-            {/* One way in, and it goes through a conversation. The Studio
-                holds a network's operating picture; there is no version of
-                this page on which a stranger should reach it in one click. */}
-            <div className="mt-8 flex justify-center sm:mt-10">
+            <div className="mt-10 flex justify-center">
               <Link href="#contact" className="pill">
                 {t("demo.cta")}
                 <ChevronRight className="h-4 w-4" aria-hidden />
               </Link>
             </div>
           </HeroReveal>
+
+          <div className="mt-16 flex flex-col items-center gap-2 sm:mt-20">
+            <ArrowDown className="h-4 w-4 animate-bounce text-fg-secondary" aria-hidden />
+            <span className="caption">{t("hero.scroll")}</span>
+          </div>
         </div>
       </div>
 
-      <HeroReveal delay={0.15}>
-        <div className="container max-w-[1120px] pb-20 sm:pb-28">
-          <FeatureCycle
-            labels={[t("cycle.1"), t("cycle.2"), t("cycle.3"), t("cycle.4"), t("cycle.5")]}
-            captions={[
-              t("cycle.1.note"),
-              t("cycle.2.note"),
-              t("cycle.3.note"),
-              t("cycle.4.note"),
-              t("cycle.5.note"),
+      <HeroReveal delay={0.12}>
+        <div className="container max-w-[1120px] py-20 sm:py-28">
+          <ProductTour
+            labels={[
+              t("tour.1"),
+              t("tour.2"),
+              t("tour.3"),
+              t("tour.4"),
+              t("tour.5"),
+              t("tour.6"),
             ]}
           />
+          <p className="caption mt-4 text-center">{t("cycle.caption")}</p>
         </div>
       </HeroReveal>
     </section>

@@ -20,7 +20,7 @@ export const dict = {
     "hero.pill.beta": "Beta",
     "hero.pill.body":
       "· Test phase — feedback welcome at obscyro-team@obscyro.com",
-    "hero.title": "Decisions a health network can defend.",
+    "hero.title": "Decision Systems for Health Networks",
     "hero.subtitle":
       "Obscyro connects published health data into one ontology, runs the network as a digital twin, and compares the responses to a surge on what each one actually costs — never on a single blended score.",
     "hero.cta.getKey": "Get API key",
@@ -33,6 +33,7 @@ export const dict = {
     "hero.stat.phase": "Phase",
     "hero.stat.phaseValue": "Public beta",
     "hero.responseLabel": "↓ response",
+    "hero.scroll": "Scroll to explore",
     "hero.chain.title": "Source to decision",
     "hero.chain.caption": "Every figure keeps its lineage back to the file it came from.",
     "hero.chain.1.label": "Source",
@@ -46,6 +47,12 @@ export const dict = {
     "hero.chain.5.label": "Responses",
     "hero.chain.5.body": "ranked by dominance",
 
+    "tour.1": "Data",
+    "tour.2": "Pipelines",
+    "tour.3": "Ontology",
+    "tour.4": "Twin",
+    "tour.5": "Dashboards",
+    "tour.6": "Responses",
     "cycle.1": "Import",
     "cycle.2": "Transform",
     "cycle.3": "Model",
@@ -361,7 +368,7 @@ export const dict = {
     "hero.pill.beta": "Beta",
     "hero.pill.body":
       "· Phase de test — vos retours à obscyro-team@obscyro.com",
-    "hero.title": "Des décisions qu’un réseau de santé peut défendre.",
+    "hero.title": "Des systèmes de décision pour les réseaux de santé",
     "hero.subtitle":
       "Obscyro relie les données publiées en une seule ontologie, fait tourner le réseau comme un jumeau numérique, et compare les réponses à une poussée sur ce que chacune coûte réellement — jamais sur un score unique.",
     "hero.cta.getKey": "Obtenir une clé API",
@@ -374,6 +381,7 @@ export const dict = {
     "hero.stat.phase": "Phase",
     "hero.stat.phaseValue": "Bêta publique",
     "hero.responseLabel": "↓ réponse",
+    "hero.scroll": "Faites défiler",
     "hero.chain.title": "De la source à la décision",
     "hero.chain.caption": "Chaque chiffre garde sa lignée jusqu’au fichier d’origine.",
     "hero.chain.1.label": "Source",
@@ -387,6 +395,12 @@ export const dict = {
     "hero.chain.5.label": "Réponses",
     "hero.chain.5.body": "classées par dominance",
 
+    "tour.1": "Données",
+    "tour.2": "Pipelines",
+    "tour.3": "Ontologie",
+    "tour.4": "Jumeau",
+    "tour.5": "Tableaux de bord",
+    "tour.6": "Réponses",
     "cycle.1": "Importer",
     "cycle.2": "Transformer",
     "cycle.3": "Modéliser",

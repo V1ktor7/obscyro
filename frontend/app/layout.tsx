@@ -34,7 +34,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Obscyro — Decisions a health network can defend",
+    default: "Obscyro — Decision Systems for Health Networks",
     template: "%s · Obscyro",
   },
   description:
@@ -53,7 +53,7 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "Obscyro" }],
   openGraph: {
-    title: "Obscyro — Decisions a health network can defend",
+    title: "Obscyro — Decision Systems for Health Networks",
     description:
       "Connect a health network's published data into one ontology, run it as a digital twin, and compare the responses on what each one costs. Public beta.",
     url: SITE_URL,
@@ -63,7 +63,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Obscyro — Decisions a health network can defend",
+    title: "Obscyro — Decision Systems for Health Networks",
     description:
       "One ontology for a health network, a digital twin on top, and responses ranked by dominance. Public beta.",
   },

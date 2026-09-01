@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "Obscyro — Decisions a health network can defend.";
+export const alt = "Obscyro — Decision Systems for Health Networks";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -44,9 +44,9 @@ export default function Image() {
               margin: 0,
             }}
           >
-            Decisions a health
+            Decision Systems
             <br />
-            network can defend.
+            for Health Networks
           </h1>
           <p style={{ fontSize: 28, color: "#a1a1aa", margin: 0, maxWidth: 900 }}>
 One ontology, a digital twin, and responses ranked by dominance. Public beta.
