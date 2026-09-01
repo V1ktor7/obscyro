@@ -26,7 +26,7 @@ export default function Interop() {
           <p className="body-lg mt-5 text-balance">{t("interop.subtitle")}</p>
         </div>
 
-        <div className="mt-14 rounded-[28px] bg-bg-secondary px-5 py-10 sm:mt-16 sm:px-12 sm:py-14">
+        <div className="mt-14 panel px-5 py-10 sm:mt-16 sm:px-12 sm:py-14">
           <InteropRings />
         </div>
 

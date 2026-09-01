@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { SCENE } from "./useCanvasScene";
+import { SCENE } from "./palette";
 
 /**
  * Interoperability, animated on the mark itself.

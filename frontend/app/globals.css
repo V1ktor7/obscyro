@@ -45,10 +45,15 @@
   --text-primary: #1d1d1f;
   --text-secondary: #6e6e73;
   --border-subtle: #d2d2d7;
-  /* The product's own blue, so the marketing page and the software it sells
-     are not two different companies. */
-  --accent: #2d72d2;
+  /* Colour is rationed. The mark is black rings on white with one region where
+     they overlap, and that is the rule the page follows: monochrome
+     everywhere, colour only where two things meet or where something is
+     actually running. */
+  --accent: #1d6fd4;
   --accent-fg: #ffffff;
+  /* Saturation — a threshold crossed, a bed that is not there. Deep rather
+     than neon, because it appears next to numbers people act on. */
+  --pressure: #b3261e;
   --card-bg: #ffffff;
 
   font-family:
@@ -116,9 +121,29 @@
 .site-light .link-cta:hover {
   text-decoration: underline;
 }
+/*
+ * Shape vocabulary, taken from the mark.
+ *
+ * The logo is two true circles and straight-cut letterforms. There is no soft
+ * rectangle anywhere in it, and a soft rectangle is precisely the shape a page
+ * reaches for when nobody decided. So: a thing is either a real circle or a
+ * sharp panel, and nothing sits in between. Panels get 2px, which reads as a
+ * cut edge rather than as a radius.
+ */
+.site-light .panel {
+  border-radius: 2px;
+  background: var(--bg-secondary);
+}
+.site-light .panel-outline {
+  border-radius: 2px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-primary);
+}
+
 .site-light .pill {
   background: var(--accent);
   color: var(--accent-fg);
+  /* Stadium, not a soft rectangle: the circle is in the identity. */
   border-radius: 980px;
   padding: 0.75rem 1.375rem;
   font-size: 1.0625rem;
@@ -129,7 +154,7 @@
   transition: background-color 0.2s ease;
 }
 .site-light .pill:hover {
-  background: #1f5fbd;
+  background: #175bb0;
 }
 
 * {

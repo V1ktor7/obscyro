@@ -35,7 +35,7 @@ export default function Sources() {
           {CARDS.map((c) => (
             <li
               key={c.org}
-              className="flex flex-col rounded-[24px] bg-bg-secondary p-7"
+              className="flex flex-col panel p-7"
             >
               <p className="text-[0.9375rem] font-medium tracking-[-0.004em] text-fg-primary">
                 {t(c.org)}

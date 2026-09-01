@@ -42,7 +42,7 @@ export default function Capabilities() {
 
         <ol className="mt-14 grid gap-5 sm:mt-20 sm:grid-cols-2">
           {LAYERS.map((layer) => (
-            <li key={layer.n} className="rounded-[24px] bg-bg-secondary p-8 sm:p-10">
+            <li key={layer.n} className="panel p-8 sm:p-10">
               <p className="caption">{layer.n}</p>
               <h3 className="display-md mt-5">{t(layer.name)}</h3>
               <p className="mt-2 text-[1.0625rem] font-medium tracking-[-0.004em] text-fg-primary">

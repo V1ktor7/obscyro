@@ -2,31 +2,18 @@
 
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
-import DataFlow from "./anim/DataFlow";
+import FeatureCycle from "./anim/FeatureCycle";
 import HeroReveal from "./HeroReveal";
 import { useT } from "@/lib/i18n/context";
-import type { DictKey } from "@/lib/i18n/dictionary";
-
 /**
- * A centred headline, a line of grey, two ways forward, and the product below.
+ * A centred headline, two ways forward, and the software underneath.
  *
- * The previous version filled the first screen with a dark field and set the
- * type over it. That reads as atmosphere; this reads as a claim. The animation
- * still opens the page, but it sits under the words in a frame of its own,
- * where it can be looked at rather than looked through.
- *
- * Nothing here is monospaced and nothing is letter-spaced open. Those two
- * habits, more than any colour, were what made the earlier page look assembled
- * from parts.
+ * The panel below the copy used to be an abstract field of moving dots. It has
+ * been replaced by the product tour: five diagrams of screens that exist, which
+ * a reader can also step through by hand. An animation that is only atmosphere
+ * asks for attention without returning any.
  */
 
-const STAGES: DictKey[] = [
-  "hero.chain.1.label",
-  "hero.chain.2.label",
-  "hero.chain.3.label",
-  "hero.chain.4.label",
-  "hero.chain.5.label",
-];
 
 export default function HeroShell() {
   const t = useT();
@@ -53,27 +40,10 @@ export default function HeroShell() {
 
       <HeroReveal delay={0.15}>
         <div className="container mt-14 max-w-[1120px] sm:mt-20">
-          <figure className="overflow-hidden rounded-[28px] bg-bg-secondary">
-            <div className="h-[240px] sm:h-[340px] lg:h-[420px]">
-              <DataFlow className="h-full w-full" />
-            </div>
-            <figcaption>
-              <ol className="grid grid-cols-5 border-t border-border-subtle/60">
-                {STAGES.map((key, i) => (
-                  <li
-                    key={key}
-                    className={
-                      "px-2 py-3.5 text-center text-[0.6875rem] text-fg-secondary sm:text-[0.8125rem]" +
-                      (i > 0 ? " border-l border-border-subtle/60" : "")
-                    }
-                  >
-                    {t(key)}
-                  </li>
-                ))}
-              </ol>
-            </figcaption>
-          </figure>
-          <p className="caption mt-4 text-center">{t("hero.chain.caption")}</p>
+          <FeatureCycle
+            labels={[t("cycle.1"), t("cycle.2"), t("cycle.3"), t("cycle.4"), t("cycle.5")]}
+          />
+          <p className="caption mt-4 text-center">{t("cycle.caption")}</p>
         </div>
       </HeroReveal>
     </section>
