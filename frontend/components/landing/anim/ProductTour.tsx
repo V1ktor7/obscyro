@@ -220,14 +220,25 @@ function DataScreen({ t }: { t: number }) {
   );
 }
 
-/** The builder: nodes wired left to right, a run travelling through. */
+/**
+ * The builder: nodes wired left to right, a run travelling through.
+ *
+ * Drawn entirely in SVG. It was HTML boxes positioned in percentages over an
+ * SVG in a 100x80 space, and the two coordinate systems did not agree — every
+ * edge floated away from the node it was supposed to touch, and the last one
+ * hung in mid-air. One space, one set of numbers, and the wires land.
+ */
 function PipelineScreen({ t }: { t: number }) {
-  const nodes: { x: number; y: number; label: string }[] = [
-    { x: 6, y: 34, label: "Dataset" },
-    { x: 32, y: 12, label: "Filter" },
-    { x: 32, y: 58, label: "Expand" },
-    { x: 58, y: 34, label: "Join" },
-    { x: 82, y: 34, label: "Object" },
+  const W = 300;
+  const H = 190;
+  const BW = 52;
+  const BH = 20;
+  const nodes = [
+    { x: 22, y: 85, label: "Dataset" },
+    { x: 100, y: 34, label: "Filter" },
+    { x: 100, y: 136, label: "Expand" },
+    { x: 178, y: 85, label: "Join" },
+    { x: 246, y: 85, label: "Object" },
   ];
   const edges: [number, number][] = [
     [0, 1],
@@ -236,83 +247,173 @@ function PipelineScreen({ t }: { t: number }) {
     [2, 3],
     [3, 4],
   ];
+  // Edges leave the right edge of one box and arrive at the left edge of the
+  // next, at box mid-height — so a wire always meets a border, never a corner
+  // and never empty canvas.
+  const out = (i: number) => ({ x: nodes[i]!.x + BW, y: nodes[i]!.y + BH / 2 });
+  const into = (i: number) => ({ x: nodes[i]!.x, y: nodes[i]!.y + BH / 2 });
+
   return (
     <div className="relative h-full border border-line bg-white">
-      <svg viewBox="0 0 100 80" className="absolute inset-0 h-full w-full" preserveAspectRatio="none">
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full">
         {edges.map(([a, b], i) => {
           const on = t * edges.length > i;
+          const p0 = out(a);
+          const p1 = into(b);
+          const mid = (p0.x + p1.x) / 2;
           return (
-            <line
+            <path
               key={i}
-              x1={nodes[a]!.x + 9}
-              y1={nodes[a]!.y + 6}
-              x2={nodes[b]!.x}
-              y2={nodes[b]!.y + 6}
+              d={`M${p0.x},${p0.y} C${mid},${p0.y} ${mid},${p1.y} ${p1.x},${p1.y}`}
+              fill="none"
               stroke={on ? "#2d72d2" : "#d3d8de"}
-              strokeWidth={on ? 0.8 : 0.5}
-              vectorEffect="non-scaling-stroke"
+              strokeWidth={on ? 1.4 : 1}
             />
           );
         })}
+        {nodes.map((n, i) => {
+          const on = t * nodes.length > i - 0.3;
+          return (
+            <g key={n.label}>
+              <rect
+                x={n.x}
+                y={n.y}
+                width={BW}
+                height={BH}
+                fill="#fff"
+                stroke={on ? "#2d72d2" : "#d3d8de"}
+                strokeWidth={1.2}
+              />
+              <text
+                x={n.x + BW / 2}
+                y={n.y + BH / 2 + 3.2}
+                textAnchor="middle"
+                fontSize="9"
+                fill={on ? "#1c2127" : "#8f99a8"}
+              >
+                {n.label}
+              </text>
+            </g>
+          );
+        })}
+        <text x={10} y={H - 8} fontSize="8" fill="#8f99a8">
+          {t > 0.9 ? "Run complete" : "Running…"}
+        </text>
       </svg>
-      {nodes.map((n, i) => {
-        const on = t * nodes.length > i - 0.3;
-        return (
-          <div
-            key={n.label}
-            className={
-              "absolute border bg-white px-2 py-1 text-[0.625rem] transition-colors " +
-              (on ? "border-brand text-ink" : "border-line text-ink-faint")
-            }
-            style={{ left: `${n.x}%`, top: `${n.y}%` }}
-          >
-            {n.label}
-          </div>
-        );
-      })}
-      <span className="absolute bottom-2 left-3 text-[0.625rem] text-ink-faint">
-        {t > 0.9 ? "Run complete" : "Running…"}
-      </span>
     </div>
   );
 }
 
-/** Object types, their properties, and the links between them. */
+/**
+ * Object types, their properties, and the links between them.
+ *
+ * The first version put three cards in a row and repeated one link name under
+ * each, which asserted two things that are not true: that a stretcher serves a
+ * territory, and that an installation serves its own stretchers. Both are
+ * wrong, and an ontology screen that models the domain incorrectly is worse
+ * than no screen at all — it is the one thing on this page a domain expert
+ * would read closely.
+ *
+ * The real shape is one type with two different relations out of it: an
+ * installation *contains* stretchers and *serves* a territory. Drawn in SVG so
+ * the connectors meet the boxes, for the same reason the pipeline is.
+ */
 function OntologyScreen({ t }: { t: number }) {
+  const W = 300;
+  const H = 190;
+  const BW = 84;
+  const rowH = 13;
+  const head = 17;
+
   const types = [
-    { name: "Installation", props: ["nom", "permis", "rls"] },
-    { name: "CiviereUrgence", props: ["capacite", "occupees"] },
-    { name: "Territoire", props: ["code", "population"] },
+    { x: 12, y: 74, name: "Installation", props: ["nom", "permis", "rls"] },
+    { x: 196, y: 22, name: "CiviereUrgence", props: ["capacite", "occupees"] },
+    { x: 196, y: 122, name: "Territoire", props: ["code", "population"] },
   ];
+  const links = [
+    { from: 0, to: 1, label: "contient" },
+    { from: 0, to: 2, label: "dessert" },
+  ];
+  const boxH = (i: number) => head + types[i]!.props.length * rowH + 6;
+
   return (
-    <div className="grid h-full grid-cols-3 gap-3">
-      {types.map((ty, i) => {
-        const on = t * types.length > i - 0.3;
-        return (
-          <div
-            key={ty.name}
-            className="flex flex-col border border-line bg-white"
-            style={{ opacity: on ? 1 : 0.25 }}
-          >
-            <div className="border-b border-line px-2.5 py-1.5 text-[0.6875rem] font-medium text-ink">
-              {ty.name}
-            </div>
-            <div className="flex flex-col gap-1.5 p-2.5">
-              {ty.props.map((p) => (
-                <div key={p} className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 shrink-0 bg-brand" />
-                  <span className="truncate text-[0.625rem] text-ink-muted">{p}</span>
-                </div>
+    <div className="h-full border border-line bg-white">
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full">
+        {links.map((l, i) => {
+          const on = t * links.length > i;
+          const a = types[l.from]!;
+          const b = types[l.to]!;
+          const p0 = { x: a.x + BW, y: a.y + boxH(l.from) / 2 };
+          const p1 = { x: b.x, y: b.y + boxH(l.to) / 2 };
+          const mid = (p0.x + p1.x) / 2;
+          return (
+            <g key={l.label} opacity={on ? 1 : 0.25}>
+              <path
+                d={`M${p0.x},${p0.y} C${mid},${p0.y} ${mid},${p1.y} ${p1.x},${p1.y}`}
+                fill="none"
+                stroke="#2d72d2"
+                strokeWidth={1.2}
+              />
+              <text
+                x={mid}
+                y={(p0.y + p1.y) / 2 - 4}
+                textAnchor="middle"
+                fontSize="7.5"
+                fill="#5f6b7c"
+              >
+                {l.label}
+              </text>
+            </g>
+          );
+        })}
+
+        {types.map((ty, i) => {
+          const on = t * types.length > i - 0.3;
+          return (
+            <g key={ty.name} opacity={on ? 1 : 0.25}>
+              <rect
+                x={ty.x}
+                y={ty.y}
+                width={BW}
+                height={boxH(i)}
+                fill="#fff"
+                stroke="#d3d8de"
+                strokeWidth={1.1}
+              />
+              <line
+                x1={ty.x}
+                y1={ty.y + head}
+                x2={ty.x + BW}
+                y2={ty.y + head}
+                stroke="#d3d8de"
+                strokeWidth={1.1}
+              />
+              <text x={ty.x + 7} y={ty.y + 11.5} fontSize="8.5" fill="#1c2127">
+                {ty.name}
+              </text>
+              {ty.props.map((prop, k) => (
+                <g key={prop}>
+                  <rect
+                    x={ty.x + 7}
+                    y={ty.y + head + 5 + k * rowH}
+                    width={3}
+                    height={3}
+                    fill="#2d72d2"
+                  />
+                  <text
+                    x={ty.x + 14}
+                    y={ty.y + head + 8 + k * rowH}
+                    fontSize="7.5"
+                    fill="#5f6b7c"
+                  >
+                    {prop}
+                  </text>
+                </g>
               ))}
-            </div>
-            {i < types.length - 1 ? (
-              <span className="mt-auto border-t border-line-faint px-2.5 py-1 text-[0.5625rem] text-ink-faint">
-                dessert →
-              </span>
-            ) : null}
-          </div>
-        );
-      })}
+            </g>
+          );
+        })}
+      </svg>
     </div>
   );
 }
