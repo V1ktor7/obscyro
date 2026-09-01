@@ -41,12 +41,12 @@ export default function HeroShell() {
             <p className="body-lg mx-auto mt-5 max-w-[40rem] text-balance sm:mt-6">
               {t("hero.subtitle")}
             </p>
-            <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:mt-10 sm:flex-row sm:gap-8">
+            {/* One way in, and it goes through a conversation. The Studio
+                holds a network's operating picture; there is no version of
+                this page on which a stranger should reach it in one click. */}
+            <div className="mt-8 flex justify-center sm:mt-10">
               <Link href="#contact" className="pill">
                 {t("demo.cta")}
-              </Link>
-              <Link href="/studio" className="link-cta">
-                {t("hero.cta.studio")}
                 <ChevronRight className="h-4 w-4" aria-hidden />
               </Link>
             </div>

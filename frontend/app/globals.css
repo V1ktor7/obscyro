@@ -56,9 +56,22 @@
   --pressure: #b3261e;
   --card-bg: #ffffff;
 
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial,
-    sans-serif;
+  /*
+   * A palette to draw with, not to decorate with.
+   *
+   * The page was monochrome plus one blue, and it read as unfinished rather
+   * than as restrained. These five are for the artwork and nothing else: the
+   * type stays black, the interface stays grey, and colour lives inside the
+   * figures — which is how a technical illustration earns it.
+   */
+  --art-1: #0f62fe;
+  --art-2: #4589ff;
+  --art-3: #a56eff;
+  --art-4: #08bdba;
+  --art-5: #ffd6a5;
+
+  font-family: var(--font-display), -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Arial, sans-serif;
   background-color: var(--bg-primary);
   color: var(--text-primary);
   letter-spacing: -0.01em;
@@ -131,21 +144,26 @@
  * cut edge rather than as a radius.
  */
 .site-light .panel {
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--bg-secondary);
 }
 .site-light .panel-outline {
-  border-radius: 2px;
+  border-radius: 0;
   border: 1px solid var(--border-subtle);
   background: var(--bg-primary);
 }
 
+/*
+ * Square. The reference sets every control at zero radius, and a stadium button
+ * beside a sharp panel was the last soft edge on the page — the one thing still
+ * reading as a template. The name stays `pill` because a hundred call sites use
+ * it; the shape does not.
+ */
 .site-light .pill {
   background: var(--accent);
   color: var(--accent-fg);
-  /* Stadium, not a soft rectangle: the circle is in the identity. */
-  border-radius: 980px;
-  padding: 0.75rem 1.375rem;
+  border-radius: 0;
+  padding: 0.85rem 1.25rem;
   font-size: 1.0625rem;
   letter-spacing: -0.004em;
   display: inline-flex;

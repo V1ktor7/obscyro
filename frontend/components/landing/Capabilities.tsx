@@ -1,5 +1,6 @@
 "use client";
 
+import Artwork, { type ArtName } from "@/components/brand/Artwork";
 import { useT } from "@/lib/i18n/context";
 import type { DictKey } from "@/lib/i18n/dictionary";
 
@@ -17,16 +18,17 @@ import type { DictKey } from "@/lib/i18n/dictionary";
 
 interface Layer {
   n: string;
+  art: ArtName;
   name: DictKey;
   title: DictKey;
   body: DictKey;
 }
 
 const LAYERS: Layer[] = [
-  { n: "1", name: "arch.layer1.label", title: "arch.layer1.title", body: "arch.layer1.body" },
-  { n: "2", name: "arch.layer2.label", title: "arch.layer2.title", body: "arch.layer2.body" },
-  { n: "3", name: "arch.layer3.label", title: "arch.layer3.title", body: "arch.layer3.body" },
-  { n: "4", name: "arch.layer4.label", title: "arch.layer4.title", body: "arch.layer4.body" },
+  { n: "1", art: "ledger", name: "arch.layer1.label", title: "arch.layer1.title", body: "arch.layer1.body" },
+  { n: "2", art: "converge", name: "arch.layer2.label", title: "arch.layer2.title", body: "arch.layer2.body" },
+  { n: "3", art: "surge", name: "arch.layer3.label", title: "arch.layer3.title", body: "arch.layer3.body" },
+  { n: "4", art: "network", name: "arch.layer4.label", title: "arch.layer4.title", body: "arch.layer4.body" },
 ];
 
 export default function Capabilities() {
@@ -43,7 +45,10 @@ export default function Capabilities() {
         <ol className="mt-14 grid gap-5 sm:mt-20 sm:grid-cols-2">
           {LAYERS.map((layer) => (
             <li key={layer.n} className="panel p-8 sm:p-10">
-              <p className="caption">{layer.n}</p>
+              <div className="flex items-start justify-between gap-6">
+                <p className="caption">{layer.n}</p>
+                <Artwork name={layer.art} className="h-24 w-24 shrink-0 sm:h-28 sm:w-28" />
+              </div>
               <h3 className="display-md mt-5">{t(layer.name)}</h3>
               <p className="mt-2 text-[1.0625rem] font-medium tracking-[-0.004em] text-fg-primary">
                 {t(layer.title)}

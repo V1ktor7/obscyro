@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: Obscyro is a SNOMED-first semantic API for healthcare data — validate, normalize, translate, expand, and disambiguate clinical codes. ICD-10 mapping is live via /v1/translate; RxNorm, LOINC, FHIR, and HL7 are on the roadmap.
+description: Obscyro connects a health network’s published data into one ontology, runs it as a digital twin, and compares the responses to a surge. The terminology API is one layer of that, not the whole of it.
 ---
 
 <h2 id="test-phase">Test phase (public)</h2>
@@ -14,26 +14,64 @@ Do not use responses for clinical decisions without independent verification. Th
 
 ## What Obscyro is
 
-Obscyro turns the messy reality of healthcare data — free-text notes, mismatched code systems, regional dialects, missing terminology updates — into structured JSON your application can use. Every endpoint is a thin, predictable wrapper around the SNOMED CT knowledge graph loaded in our database.
+Obscyro connects the data a health network already publishes — facility
+registries, capacity at permit, hourly emergency censuses, epidemiological
+series — into a single ontology, runs that ontology as a digital twin under an
+observed load, and compares what could be done about the result.
 
-You can call it from any language that speaks HTTP. There is no SDK lock-in, no hidden state, no batch jobs. Send JSON, get JSON.
+There are two halves and they are in series. **Interoperability** is the work of
+making files that were never meant to sit side by side comparable at all:
+different encodings, different vocabularies, different calendars. **Operational
+optimisation** is what that makes possible: putting the modelled network under
+pressure and ranking the responses to it.
 
-## What you get out of the box
+The second is worth nothing without the first. A model fed a column whose day
+and month are the wrong way round will run, produce a ranking, and recommend a
+policy — which is why the platform reads the values in a file rather than
+trusting the schema that describes them.
+
+## What is in it
+
+- **Sources and syncs.** REST endpoints, files and streams on a schedule, with
+  encodings and delimiters handled inside the platform rather than in a
+  spreadsheet before upload.
+- **Pipelines.** A visual graph — filter, select, derive, cast, expand, join —
+  turning rows into the objects a network actually has.
+- **An ontology.** Object types, link types, properties, value sets and
+  hierarchies, with lineage from any figure back to the file it came from.
+- **A digital twin.** The modelled network put under an observed load:
+  beds fill, patients wait, transfers move. Deterministic, so the same question
+  always returns the same answer.
+- **Response comparison.** Two protocols side by side on deaths, waiting and
+  cost, ranked by Pareto dominance rather than by a weighted score.
+- **Dashboards.** Charts offered from what the columns actually hold, and a card
+  that says how many rows it read and how many carried no measure.
+
+## The terminology API
+
+The SNOMED endpoints predate the platform and are still live. They are now one
+layer of it rather than the product:
 
 - Concept lookup against the SNOMED CT International Edition (Feb 2026 release).
-- Free-text normalization (exact, full-text search, and trigram fuzzy match) into SNOMED candidates.
-- Hierarchy traversal: parents, children, ancestors, and descendants via recursive `is-a` relationships.
-- Cross-terminology mappings: SNOMED ↔ ICD-10 (via the SNOMED extended map), ICD-O, CTV3.
-- Synonym, FSN, and text-definition retrieval per concept.
-- Context-aware disambiguation when an abbreviation maps to multiple concepts (`MI` could be myocardial infarction, mitral insufficiency, mental illness, or military intelligence — Obscyro picks the right one given clinical context).
+- Free-text normalization (exact, full-text, and trigram fuzzy match) into
+  SNOMED candidates.
+- Hierarchy traversal: parents, children, ancestors and descendants via
+  recursive `is-a` relationships.
+- Cross-terminology mappings: SNOMED ↔ ICD-10 (extended map), ICD-O, CTV3.
+- Context-aware disambiguation when an abbreviation maps to several concepts.
 
-## How it fits into your stack
+Inside the platform, coding runs as a node in a pipeline rather than as a
+separate migration. Over HTTP it stays exactly as documented in the Core API
+section.
 
-Most teams add Obscyro at one of three integration points:
+## How it fits
 
-1. **Ingestion**: normalize incoming free-text or partner-coded data on the way into your database.
-2. **Display**: hydrate stored codes with preferred terms and translations at render time.
-3. **Analytics**: expand concept hierarchies (e.g. all descendants of `Cardiovascular disease`) before running cohort queries.
+Most of this is reached from the interface rather than from code. The API
+matters at two points:
+
+1. **Ingestion** — normalize incoming free-text or partner-coded data on the way
+   into your own database.
+2. **Analytics** — expand concept hierarchies before running cohort queries.
 
 ## Reading this documentation
 

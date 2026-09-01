@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { IBM_Plex_Sans, Inter, JetBrains_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
 
 import SiteChrome from "@/components/site/SiteChrome";
@@ -10,6 +10,16 @@ import "./globals.css";
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-sans",
+  display: "swap",
+});
+
+// A face with actual character, and the one the reference is built on. It has
+// details a reader notices without being able to name — the flat-topped a, the
+// straight-legged g — which is exactly what a default grotesque does not.
+const plex = IBM_Plex_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-display",
   display: "swap",
 });
 
@@ -76,7 +86,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="light">
       <body
-        className={`${inter.variable} ${jetbrainsMono.variable} min-h-screen bg-bg-primary font-sans text-fg-primary antialiased`}
+        className={`${inter.variable} ${plex.variable} ${jetbrainsMono.variable} min-h-screen bg-bg-primary font-sans text-fg-primary antialiased`}
       >
         <LocaleProvider>
           <SiteChrome>{children}</SiteChrome>

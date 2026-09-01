@@ -64,6 +64,22 @@ const LINKS: [number, number][] = [
   [14, 4],
 ];
 
+/**
+ * The tour.
+ *
+ * Every so often the camera leaves orbit, drops onto a site, and stays low long
+ * enough for the buildings to resolve — then climbs back out. It is the one
+ * claim a rotating globe cannot make on its own: that the model goes all the
+ * way down to a building, not just to a country.
+ *
+ * What is drawn over the map changes with altitude, which is the point of a
+ * semantic zoom. Far out: the links between sites. Mid: the catchment around
+ * one. Close: brackets on individual footprints with a load bar beside them.
+ * Same data, three readings, chosen by how far away the reader is.
+ */
+const TOUR = { orbit: 11, descend: 3.4, dwell: 5.2, ascend: 3.2 };
+const TOUR_CYCLE = TOUR.orbit + TOUR.descend + TOUR.dwell + TOUR.ascend;
+
 /** Logo geometry: equal radii, centres apart by 0.667 r, stroke 0.34 r. */
 const LOGO_GAP = 0.667;
 const LOGO_STROKE = 0.34;
@@ -158,6 +174,11 @@ export default function HeroGlobe({ className }: { className?: string }) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
 
+    // Which site the next descent lands on. Advanced after each ascent so the
+    // tour does not settle on one place.
+    let tourIndex = 2;
+    let phaseAt = -1;
+
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
       const time = (now - t0) / 1000;
@@ -171,59 +192,60 @@ export default function HeroGlobe({ className }: { className?: string }) {
       // rather than on an empty rectangle.
       if (map) {
         try {
-          if (!reduce) {
+          const cycle = time % TOUR_CYCLE;
+          const inOrbit = cycle < TOUR.orbit;
+          const descending = !inOrbit && cycle < TOUR.orbit + TOUR.descend;
+          const low =
+            !inOrbit && !descending && cycle < TOUR.orbit + TOUR.descend + TOUR.dwell;
+
+          // Fire each transition once per cycle rather than every frame: flyTo
+          // called sixty times a second never finishes anything.
+          const phase = inOrbit ? 0 : descending ? 1 : low ? 2 : 3;
+          if (!reduce && phase !== phaseAt) {
+            phaseAt = phase;
+            if (phase === 1) {
+              const site = SITES[tourIndex % SITES.length]!;
+              map.flyTo({
+                center: [site.lng, site.lat],
+                zoom: 15.4,
+                pitch: 52,
+                duration: TOUR.descend * 1000,
+                essential: true,
+              });
+            } else if (phase === 3) {
+              tourIndex += 5;
+              map.flyTo({
+                center: [map.getCenter().lng, 24],
+                zoom: 1.55,
+                pitch: 0,
+                duration: TOUR.ascend * 1000,
+                essential: true,
+              });
+            }
+          }
+
+          // Orbit only from orbit: spinning while the camera is diving fights
+          // the flight and lands somewhere else.
+          if (!reduce && inOrbit) {
             const c = map.getCenter();
             c.lng -= 0.028;
             map.setCenter(c);
           }
+
+          const zoom = map.getZoom();
           const centre = map.getCenter();
           const project = (p: LngLat) => map!.project([p.lng, p.lat]);
 
-          LINKS.forEach(([ai, bi], i) => {
-            const a = SITES[ai]!;
-            const b = SITES[bi]!;
-            const head = reduce ? 0.5 : (((time * 0.22 + i * 0.31) % 1) + 1) % 1;
-            const N = 34;
-            for (let s = 0; s < N; s++) {
-              const u0 = s / N;
-              const u1 = (s + 1) / N;
-              const p0 = along(a, b, u0);
-              const p1 = along(a, b, u1);
-              if (!nearSide(centre, p0) || !nearSide(centre, p1)) continue;
-              const s0 = project(p0);
-              const s1 = project(p1);
-              const d = Math.abs(u0 - head);
-              const near = Math.max(0, 1 - Math.min(d, 1 - d) / 0.14);
-              ctx.strokeStyle = `rgba(${FLOW},${0.1 + 0.62 * near})`;
-              ctx.lineWidth = 1 + near * 0.8;
-              ctx.beginPath();
-              ctx.moveTo(s0.x, s0.y);
-              ctx.lineTo(s1.x, s1.y);
-              ctx.stroke();
-            }
-          });
-
-          // A ring that thickens with load and fills near capacity: shape
-          // carries the state, so colour is not doing the work alone.
-          SITES.forEach((site) => {
-            if (!nearSide(centre, site)) return;
-            const s = project(site);
-            const hot = site.load > 0.8;
-            const r = 3.5 + site.load * 4.5;
-            ctx.strokeStyle = hot
-              ? `rgba(${PRESSURE},0.85)`
-              : `rgba(${INK},${0.3 + site.load * 0.35})`;
-            ctx.lineWidth = 1 + site.load * 1.6;
-            ctx.beginPath();
-            ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
-            ctx.stroke();
-            if (hot) {
-              ctx.fillStyle = `rgba(${PRESSURE},0.16)`;
-              ctx.fill();
-            }
-          });
+          if (zoom < 6) {
+            drawLinks(ctx, time, reduce, centre, project);
+            drawSites(ctx, centre, project);
+          } else if (zoom < 12.5) {
+            drawCatchment(ctx, w, h, time);
+          } else {
+            drawBuildings(ctx, w, h, time);
+          }
         } catch {
-          /* a camera not ready yet costs one frame, not the animation */
+          /* a camera mid-flight costs one frame, not the animation */
         }
       }
 
@@ -252,7 +274,7 @@ export default function HeroGlobe({ className }: { className?: string }) {
 
       const reveal = () => {
         if (disposed) return;
-        host.style.opacity = "0.34";
+        host.style.opacity = "0.55";
         try {
           m.setFog({
             color: "rgb(255,255,255)",
@@ -295,6 +317,129 @@ export default function HeroGlobe({ className }: { className?: string }) {
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden />
     </div>
   );
+}
+
+/* ---------------------------------------------------------------- overlays */
+
+type Project = (p: LngLat) => { x: number; y: number };
+
+/** Far out: what runs between sites. */
+function drawLinks(
+  ctx: CanvasRenderingContext2D,
+  time: number,
+  reduce: boolean,
+  centre: LngLat,
+  project: Project,
+) {
+  LINKS.forEach(([ai, bi], i) => {
+    const a = SITES[ai]!;
+    const b = SITES[bi]!;
+    const head = reduce ? 0.5 : (((time * 0.22 + i * 0.31) % 1) + 1) % 1;
+    const N = 34;
+    for (let s = 0; s < N; s++) {
+      const u0 = s / N;
+      const u1 = (s + 1) / N;
+      const p0 = along(a, b, u0);
+      const p1 = along(a, b, u1);
+      if (!nearSide(centre, p0) || !nearSide(centre, p1)) continue;
+      const s0 = project(p0);
+      const s1 = project(p1);
+      const d = Math.abs(u0 - head);
+      const near = Math.max(0, 1 - Math.min(d, 1 - d) / 0.14);
+      ctx.strokeStyle = `rgba(${FLOW},${0.16 + 0.66 * near})`;
+      ctx.lineWidth = 1.1 + near * 1;
+      ctx.beginPath();
+      ctx.moveTo(s0.x, s0.y);
+      ctx.lineTo(s1.x, s1.y);
+      ctx.stroke();
+    }
+  });
+}
+
+/**
+ * A ring that thickens with load and fills near capacity.
+ *
+ * Shape carries the state, so colour is not doing the work alone — which
+ * matters for the eight percent of men who would otherwise see one grey dot.
+ */
+function drawSites(ctx: CanvasRenderingContext2D, centre: LngLat, project: Project) {
+  SITES.forEach((site) => {
+    if (!nearSide(centre, site)) return;
+    const s = project(site);
+    const hot = site.load > 0.8;
+    const r = 3.5 + site.load * 4.5;
+    ctx.strokeStyle = hot ? `rgba(${PRESSURE},0.9)` : `rgba(${INK},${0.34 + site.load * 0.36})`;
+    ctx.lineWidth = 1.2 + site.load * 1.6;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    if (hot) {
+      ctx.fillStyle = `rgba(${PRESSURE},0.18)`;
+      ctx.fill();
+    }
+  });
+}
+
+/** Mid altitude: the area one site answers for. */
+function drawCatchment(ctx: CanvasRenderingContext2D, w: number, h: number, time: number) {
+  const cx = w / 2;
+  const cy = h / 2;
+  const pulse = 0.5 + 0.5 * Math.sin(time * 1.5);
+  [0.16, 0.26, 0.36].forEach((k, i) => {
+    ctx.strokeStyle = `rgba(${FLOW},${0.34 - i * 0.09})`;
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash(i === 2 ? [6, 6] : []);
+    ctx.beginPath();
+    ctx.arc(cx, cy, Math.min(w, h) * k * (1 + pulse * 0.02), 0, Math.PI * 2);
+    ctx.stroke();
+  });
+  ctx.setLineDash([]);
+}
+
+/**
+ * Close in: brackets on footprints, and a load bar beside each.
+ *
+ * Deliberately unlabelled and unnumbered. The figure has to say "this model
+ * reaches a building" without asserting anything about a building, because a
+ * marketing page carries no context that would make a real occupancy legible —
+ * and a fabricated one would be worse than none.
+ */
+function drawBuildings(ctx: CanvasRenderingContext2D, w: number, h: number, time: number) {
+  const marks: [number, number, number][] = [
+    [0.36, 0.44, 0.92],
+    [0.56, 0.36, 0.48],
+    [0.62, 0.62, 0.71],
+    [0.42, 0.68, 0.33],
+  ];
+  marks.forEach(([fx, fy, load], i) => {
+    const x = w * fx;
+    const y = h * fy;
+    const s = 26;
+    const on = Math.max(0, Math.min(1, (time % TOUR_CYCLE) - (TOUR.orbit + TOUR.descend) - i * 0.35));
+    if (on <= 0) return;
+
+    // Corner brackets rather than a full box: a frame reads as a selection,
+    // which is what this is.
+    ctx.strokeStyle = load > 0.8 ? `rgba(${PRESSURE},0.9)` : `rgba(${INK},0.7)`;
+    ctx.lineWidth = 1.6;
+    const arm = 9;
+    [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([sx, sy]) => {
+      ctx.beginPath();
+      ctx.moveTo(x + sx * s, y + sy * s - sy * arm);
+      ctx.lineTo(x + sx * s, y + sy * s);
+      ctx.lineTo(x + sx * s - sx * arm, y + sy * s);
+      ctx.stroke();
+    });
+
+    // Load bar. No axis, no figure: a proportion, shown as one.
+    const bw = s * 2;
+    const bx = x - s;
+    const by = y + s + 9;
+    ctx.fillStyle = "rgba(29,29,31,0.14)";
+    ctx.fillRect(bx, by, bw, 4);
+    ctx.fillStyle = load > 0.8 ? `rgba(${PRESSURE},0.95)` : `rgba(${FLOW},0.95)`;
+    ctx.fillRect(bx, by, bw * load * Math.min(1, on), 4);
+  });
 }
 
 /**
