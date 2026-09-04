@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from app.events.api import router as events_router
+from app.lab.api import router as lab_router
 from app.registry import list_artifacts, registered_types
 from app.runner import simulate
 from app.schemas import (
@@ -26,6 +27,7 @@ app = FastAPI(
 
 
 app.include_router(events_router)
+app.include_router(lab_router)
 
 
 @app.get("/health")

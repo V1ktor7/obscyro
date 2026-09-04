@@ -130,7 +130,17 @@ function parseDefaultGraph(): GraphSpec | null {
 }
 
 /** POST to the simulation-service. Throws AppError on config/transport errors. */
-export async function proxyToSimService<T>(path: string, body: unknown): Promise<T> {
+export async function proxyToSimService<T>(
+  path: string,
+  body: unknown,
+  /**
+   * The verb. Defaults to POST, which is what every simulation call is — but a
+   * catalogue is a read, and answering a GET route with a POST returns 405.
+   * Duplicating the catalogue on this side instead would let the two disagree,
+   * which is worse than one extra parameter.
+   */
+  method: "GET" | "POST" = "POST",
+): Promise<T> {
   const base = config.simServiceUrl;
   if (!base) {
     throw new AppError(
@@ -149,9 +159,9 @@ export async function proxyToSimService<T>(path: string, body: unknown): Promise
   const started = Date.now();
   try {
     const upstream = await fetch(`${base}${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      method,
+      headers: method === "POST" ? { "Content-Type": "application/json" } : {},
+      body: method === "POST" ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     });
     let data: unknown = null;
