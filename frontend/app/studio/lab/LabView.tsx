@@ -16,8 +16,9 @@ import {
   AlertTriangle,
   ArrowRight,
   Brain,
-  Check,
   ChartLine,
+  Check,
+  Code2,
   GraduationCap,
   Loader2,
   Play,
@@ -33,6 +34,8 @@ import { listEnvTypes, type EnvObjectType } from "@/lib/platform-api";
 import { listChannels, type DataChannel } from "../channels-api";
 import { numericColumns, parseCsvRows } from "../csv-parse";
 import FeedSimulatorTab from "./FeedSimulatorTab";
+import ModelsTab from "./ModelsTab";
+import NotebookTab from "./NotebookTab";
 import {
   deleteLabModel,
   forecastLabModel,
@@ -48,7 +51,7 @@ import {
 } from "../lab-api";
 import { useStudio } from "../StudioShell";
 
-type Tab = "causality" | "train" | "compare" | "feed";
+type Tab = "models" | "notebook" | "causality" | "train" | "compare" | "feed";
 
 const FIELD =
   "rounded border border-[#d3d8de] bg-[#f6f7f9] px-2 py-1 text-xs text-[#1c2127] focus:border-[#2d72d2] focus:outline-none";
@@ -62,7 +65,7 @@ export default function LabView() {
   const { hasKey, selectedEnv } = useStudio();
   const env = selectedEnv;
 
-  const [tab, setTab] = useState<Tab>("causality");
+  const [tab, setTab] = useState<Tab>("models");
   const [error, setError] = useState<string | null>(null);
 
   // Context
@@ -245,9 +248,15 @@ export default function LabView() {
       <div className="flex shrink-0 gap-1 border-b border-[#d3d8de] bg-white px-4 py-1.5">
         {(
           [
+            // Tabular supervised learning first: it works on any table, which
+            // is most of what somebody arrives here wanting. The three time
+            // series tabs keep their place and their names say what they are,
+            // so "Train" is no longer ambiguous beside the new one.
+            ["models", "Models", GraduationCap],
+            ["notebook", "Notebook", Code2],
             ["causality", "Causality", Brain],
-            ["train", "Train", GraduationCap],
-            ["compare", "Simulate + predict vs reality", ChartLine],
+            ["train", "Forecast (time series)", ChartLine],
+            ["compare", "Simulate vs reality", ChartLine],
             ["feed", "Feed simulator", RadioTower],
           ] as const
         ).map(([key, label, Icon]) => (
@@ -278,7 +287,11 @@ export default function LabView() {
       ) : null}
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        {tab === "causality" ? (
+        {tab === "models" ? (
+          <ModelsTab env={env} onError={setError} />
+        ) : tab === "notebook" ? (
+          <NotebookTab env={env} onError={setError} />
+        ) : tab === "causality" ? (
           <CausalityTab
             edges={edges}
             labelOf={labelOf}

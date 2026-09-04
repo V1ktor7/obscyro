@@ -337,6 +337,20 @@ export default function CommandView() {
     return Array.from(new Set(snapshot.nodes.map((n) => n.kind)));
   }, [snapshot]);
 
+  // Above the early returns, not below them. Placed after, these two ran on
+  // some renders and not others, which is the one thing hooks may never do:
+  // React matches them by call order, so a render that bails early shifts every
+  // later hook onto the wrong slot. Neither the type checker nor the tests see
+  // it — only the lint rule does.
+  const viewSnapshot = useMemo(
+    () => applyFrame(snapshot, replayFrame),
+    [snapshot, replayFrame],
+  );
+  const coverage = useMemo(
+    () => frameCoverage(snapshot, replayFrame),
+    [snapshot, replayFrame],
+  );
+
   if (!hasKey) {
     return (
       <div className="flex flex-1 items-center justify-center bg-white">
@@ -377,15 +391,6 @@ export default function CommandView() {
       </div>
     );
   }
-
-  const viewSnapshot = useMemo(
-    () => applyFrame(snapshot, replayFrame),
-    [snapshot, replayFrame],
-  );
-  const coverage = useMemo(
-    () => frameCoverage(snapshot, replayFrame),
-    [snapshot, replayFrame],
-  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-white">
