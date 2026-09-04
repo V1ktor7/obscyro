@@ -17,3 +17,13 @@ networkx==3.5
 # Pinned to the same range requirements-ml.txt asks for, so installing the ML
 # stack later does not resolve a second, different numpy underneath it.
 numpy>=1.26,<2.0
+
+# The lab. These are core, not extras, and the reason is written above: the ML
+# block installs with `|| echo "ml extras skipped"`, so anything the product
+# actually depends on must never live there. A lab that silently vanishes on a
+# deploy is worse than no lab.
+#
+# Pinned to a 1.x line that exists for Python 3.11 — the trap that made
+# pytorch-forecasting skip for months was a version that does not.
+pandas>=2.2,<3.0
+scikit-learn>=1.5,<2.0

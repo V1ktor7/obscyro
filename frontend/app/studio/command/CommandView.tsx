@@ -42,7 +42,10 @@ import {
   listOverlayScenarios,
   type OverlayScenario,
 } from "../scenarios-api";
+import ReplayPanel from "./ReplayPanel";
 import ScenarioPanel from "./ScenarioPanel";
+import { applyFrame, frameCoverage } from "./replay-overlay";
+import type { Frame } from "../events/replay-frames";
 
 import {
   LiveDot,
@@ -92,6 +95,10 @@ export default function CommandView() {
   const isOperations = envMeta?.type === "operations";
 
   const [snapshot, setSnapshot] = useState<TwinTreeSnapshot | null>(null);
+  // The timeline lived on the network globe and had nothing to drive here. It
+  // drives this now: while a step is held, every panel below reads the replayed
+  // state instead of the live one.
+  const [replayFrame, setReplayFrame] = useState<Frame | null>(null);
   const [streamMode, setStreamMode] = useState<"stream" | "poll" | "idle">(
     "idle",
   );
@@ -371,6 +378,15 @@ export default function CommandView() {
     );
   }
 
+  const viewSnapshot = useMemo(
+    () => applyFrame(snapshot, replayFrame),
+    [snapshot, replayFrame],
+  );
+  const coverage = useMemo(
+    () => frameCoverage(snapshot, replayFrame),
+    [snapshot, replayFrame],
+  );
+
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-white">
       {/* ---- Command strip ---- */}
@@ -633,7 +649,7 @@ export default function CommandView() {
           </div>
           {view === "treemap" ? (
             <CommandTreemap
-              snapshot={snapshot}
+              snapshot={viewSnapshot}
               selectedUnitId={selectedUnitId}
               displayMetric={displayMetric}
               kindFilter={kindFilter}
@@ -642,7 +658,7 @@ export default function CommandView() {
             />
           ) : view === "tree" ? (
             <CommandTree
-              snapshot={snapshot}
+              snapshot={viewSnapshot}
               selectedUnitId={selectedUnitId}
               displayMetric={displayMetric}
               kindFilter={kindFilter}
@@ -651,7 +667,7 @@ export default function CommandView() {
             />
           ) : (
             <GridTable
-              snapshot={snapshot}
+              snapshot={viewSnapshot}
               kindFilter={kindFilter}
               search={search}
               selectedUnitId={selectedUnitId}
@@ -665,7 +681,7 @@ export default function CommandView() {
           {selectedUnitId ? (
             <InspectorPanel
               unitId={selectedUnitId}
-              node={snapshot?.nodes.find((n) => n.id === selectedUnitId)}
+              node={viewSnapshot?.nodes.find((n) => n.id === selectedUnitId)}
               detail={unitDetail}
               loading={detailLoading}
               onAck={(id) => void handleAck(id)}
@@ -683,8 +699,26 @@ export default function CommandView() {
         </aside>
       </div>
 
-      {/* ---- Bottom ribbon: alert timeline ---- */}
-      <AlertRibbon alerts={alerts} snapshot={snapshot} />
+      {/* While a step is held, say so loudly. A simulated occupancy and a live
+          one are the same number in the same cell, and only this line tells
+          them apart. */}
+      {replayFrame ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-[#f0d9b5] bg-[#fdf6ec] px-3 py-1.5 text-[11px] text-[#935610]">
+          <span className="font-medium">Replay · step {replayFrame.step}</span>
+          <span>{replayFrame.waiting.toLocaleString("fr-CA")} waiting</span>
+          <span>{replayFrame.full} at capacity</span>
+          <span className="text-[#8f99a8]">
+            {coverage.covered} of {coverage.total} units in this run — the rest are blank,
+            not current
+          </span>
+        </div>
+      ) : (
+        <AlertRibbon alerts={alerts} snapshot={snapshot} />
+      )}
+
+      <div className="shrink-0 border-t border-[#d3d8de]">
+        <ReplayPanel env={env} twinScenarioId={null} onFrame={setReplayFrame} />
+      </div>
     </div>
   );
 }
