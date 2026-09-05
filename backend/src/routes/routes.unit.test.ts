@@ -83,3 +83,44 @@ describe("every route has one owner", () => {
     assert.notEqual(address("GET", "/a/:env/b"), address("POST", "/a/:env/b"));
   });
 });
+
+/**
+ * `lab/ml/` is our namespace. The simulation service does not have one.
+ *
+ * Moving the ML lab under that prefix was a blind string replace, and it moved
+ * the calls *to* the simulation service with it: the backend started asking a
+ * FastAPI app for `/lab/ml/estimators`, which does not exist there, and every
+ * estimator list came back 502 with a message blaming the network.
+ *
+ * The upstream paths are the service's own — `/lab/estimators`, `/lab/train`,
+ * `/lab/cell`, `/lab/forecast/*`. None of them is under `ml`.
+ */
+describe("what we ask the simulation service for", () => {
+  const CALL = /proxyToSimService\s*(?:<[^>]*>)?\s*\(\s*(["'`])([^"'`]+)\1/g;
+
+  function upstreamPaths(): { file: string; path: string }[] {
+    const out: { file: string; path: string }[] = [];
+    const roots = [ROUTES_DIR, join(ROUTES_DIR, "..", "services")];
+    for (const dir of roots) {
+      for (const file of readdirSync(dir)) {
+        if (!file.endsWith(".ts") || file.includes(".test.")) continue;
+        const src = readFileSync(join(dir, file), "utf8");
+        for (const m of src.matchAll(CALL)) out.push({ file, path: m[2]! });
+      }
+    }
+    return out;
+  }
+
+  it("finds the calls at all", () => {
+    assert.ok(upstreamPaths().length >= 5);
+  });
+
+  it("never asks it for a path under our own prefix", () => {
+    const wrong = upstreamPaths().filter((c) => c.path.startsWith("/lab/ml/"));
+    assert.deepEqual(
+      wrong.map((c) => `${c.file}: ${c.path}`),
+      [],
+      "the simulation service has no `ml` namespace — that prefix is ours",
+    );
+  });
+});

@@ -125,7 +125,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
       await requireUserId(req);
       const estimators = await proxyToSimService<
         Array<{ key: string; label: string; task: string; params: Record<string, unknown> }>
-      >("/lab/ml/estimators", undefined, "GET");
+      >("/lab/estimators", undefined, "GET");
       return { estimators };
     },
   );
@@ -378,7 +378,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
         resourceId: req.body.datasetId ?? null,
         metadata: { rows: rows.length, bytes: req.body.code.length },
       });
-      return proxyToSimService("/lab/ml/cell", {
+      return proxyToSimService("/lab/cell", {
         code: req.body.code,
         rows,
         timeout_s: req.body.timeoutS,

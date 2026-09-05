@@ -80,8 +80,15 @@ export default function ForecastTab({
         // A forecast is a regression. Offering a classifier here would fail at
         // the service with a message the picker could have prevented.
         setEstimators(list.filter((e) => e.task === "regression"));
-      } catch {
-        onError("Le service de simulation ne répond pas.");
+      } catch (e) {
+        // Not "the service is down": it answered 404 for a whole afternoon
+        // while this line sent the reader to check whether it was up. Say what
+        // actually came back, and that the list is the thing missing.
+        onError(
+          `Liste des estimateurs indisponible${
+            e instanceof Error && e.message ? ` : ${e.message}` : ""
+          }. Sans elle, aucune prévision ne peut être entraînée.`,
+        );
       }
     })();
   }, [onError]);
