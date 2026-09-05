@@ -8,7 +8,7 @@ export interface MetricsSnapshot {
   byType: Array<{
     typeName: string;
     count: number;
-    freshnessSeconds: number | null;
+    fetchedAgeSeconds: number | null;
     newestUpdatedAt: string | null;
   }>;
   occupancy: Array<{
@@ -112,7 +112,7 @@ export async function computeMetrics(
       typeName: r.type_name,
       count,
       newestUpdatedAt: newest?.toISOString() ?? null,
-      freshnessSeconds: newest ? Math.round((now - newest.getTime()) / 1000) : null,
+      fetchedAgeSeconds: newest ? Math.round((now - newest.getTime()) / 1000) : null,
     };
   });
 

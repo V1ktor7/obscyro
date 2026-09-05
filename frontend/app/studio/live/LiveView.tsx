@@ -153,7 +153,7 @@ export default function LiveView() {
                   key={t.typeName}
                   label={t.typeName}
                   value={t.count}
-                  sub={formatFreshness(t.freshnessSeconds)}
+                  sub={formatFreshness(t.fetchedAgeSeconds)}
                 />
               ))}
             </div>

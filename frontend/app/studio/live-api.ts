@@ -6,7 +6,8 @@ export interface MetricsSnapshot {
   byType: Array<{
     typeName: string;
     count: number;
-    freshnessSeconds: number | null;
+    /** How long ago rows of this type were last written — not the age of the reading. */
+    fetchedAgeSeconds: number | null;
     newestUpdatedAt: string | null;
   }>;
   occupancy: Array<{

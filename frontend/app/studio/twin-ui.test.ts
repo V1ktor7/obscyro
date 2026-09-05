@@ -14,6 +14,8 @@ describe("twin-ui", () => {
     occupancyPct: 75.5,
     numericMeans: { spo2: 94.2 },
     freshnessSeconds: 125,
+    freshnessBasis: "observed" as const,
+    fetchedAgeSeconds: null,
     linkedInstanceCount: 13,
   };
 

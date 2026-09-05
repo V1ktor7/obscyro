@@ -845,9 +845,25 @@ export interface TwinUnitMetrics {
   /** `values.occupancy`, kept for callers that name it directly. */
   occupancyPct: number | null;
   numericMeans: Record<string, number>;
+  /**
+   * Age of the reading, from the timestamp the source published — never from
+   * when the row was written. Null when that is not knowable, and
+   * `freshnessBasis` says which reason applies.
+   */
   freshnessSeconds: number | null;
+  freshnessBasis: FreshnessBasis;
+  /** How long ago the row was last written. Answers "did the sync run". */
+  fetchedAgeSeconds: number | null;
   linkedInstanceCount: number;
 }
+
+/** Where a freshness figure came from, or why there is none. */
+export type FreshnessBasis =
+  | "observed"
+  | "undeclared"
+  | "unreadable"
+  | "zone-unknown"
+  | "empty";
 
 export type TwinMetricUnit = "percent" | "ratio" | "count" | "number";
 

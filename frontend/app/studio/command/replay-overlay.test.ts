@@ -25,6 +25,8 @@ const node = (id: string, occ: number | null): TwinUnitNode => ({
     occupancyPct: occ,
     numericMeans: { x: 1 },
     freshnessSeconds: 120,
+    freshnessBasis: "observed" as const,
+    fetchedAgeSeconds: null,
     linkedInstanceCount: 4,
   },
   worstAlertSeverity: "critical",

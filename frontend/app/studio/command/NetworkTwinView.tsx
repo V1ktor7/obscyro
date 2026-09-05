@@ -66,6 +66,7 @@ import {
   type TwinNetworkSite,
   type TwinNetworkSnapshot,
 } from "@/lib/platform-api";
+import { explainFreshness, formatFreshness } from "../twin-ui";
 import { useStudio } from "../StudioShell";
 import TreeExplorer, { type TreeItem } from "../TreeExplorer";
 import { BAND_COLOUR, bandOf, type Frame } from "../events/replay-frames";
@@ -2062,11 +2063,24 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               label="Linked instances"
               value={selected.metrics.linkedInstanceCount.toLocaleString()}
             />
+            {/* The age of the reading, never the age of the download. An
+                hourly file re-fetched unchanged would otherwise reset this to
+                nothing while the census under it stayed an hour old. */}
             <MetricRow
-              label="Data freshness"
+              label="Reading age"
               value={
                 selected.metrics.freshnessSeconds !== null
-                  ? `${Math.round(selected.metrics.freshnessSeconds)} s`
+                  ? formatFreshness(selected.metrics.freshnessSeconds)
+                  : "unknown"
+              }
+              title={explainFreshness(selected.metrics.freshnessBasis)}
+              danger={(selected.metrics.freshnessSeconds ?? 0) > 3 * 3600}
+            />
+            <MetricRow
+              label="Last fetched"
+              value={
+                selected.metrics.fetchedAgeSeconds !== null
+                  ? formatFreshness(selected.metrics.fetchedAgeSeconds)
                   : "—"
               }
             />
@@ -2197,14 +2211,18 @@ function MetricRow({
   value,
   danger,
   last,
+  title,
 }: {
   label: string;
   value: string;
   danger?: boolean;
   last?: boolean;
+  /** Hovered explanation — why a value is unknown, when it is. */
+  title?: string;
 }) {
   return (
     <div
+      title={title}
       className={cn(
         "flex items-center justify-between py-1 text-[11px]",
         !last && "border-b border-[#eef1f4]",

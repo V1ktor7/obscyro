@@ -1,3 +1,5 @@
+import type { FreshnessBasis } from "@/lib/platform-api";
+
 import type { TwinAlertSeverity, TwinUnitMetrics } from "@/lib/platform-api";
 
 export type TwinKindIcon =
@@ -108,9 +110,32 @@ export function formatTwinMetric(
 
 export function formatFreshness(seconds: number | null): string {
   if (seconds == null) return EMPTY;
+  if (seconds < 0) return "ahead of us";
   if (seconds < 60) return seconds + "s ago";
   if (seconds < 3600) return Math.round(seconds / 60) + "m ago";
   return Math.round(seconds / 3600) + "h ago";
+}
+
+/**
+ * Why there is no age, in a sentence.
+ *
+ * "—" and "unknown" are not the same thing on a screen somebody decides from.
+ * The first reads as a rendering gap; the second is a statement about the data,
+ * and each of these reasons is fixed in a different place.
+ */
+export function explainFreshness(basis: FreshnessBasis): string {
+  switch (basis) {
+    case "observed":
+      return "Age of the reading, from the timestamp the source published.";
+    case "undeclared":
+      return "Unknown — no property on this type is declared as carrying the time of the reading.";
+    case "unreadable":
+      return "Unknown — the declared timestamp property carries nothing readable.";
+    case "zone-unknown":
+      return "Unknown — the timestamp names a wall clock and no zone is declared for it.";
+    case "empty":
+      return "Nothing is linked to this unit.";
+  }
 }
 
 export function truncateId(id: string, len = 8): string {

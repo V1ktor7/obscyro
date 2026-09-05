@@ -140,7 +140,7 @@ describe("live-analysis integration (test-lab)", () => {
     const vitals = metrics.byType.find((t) => t.typeName === "VitalsObservation");
     assert.ok(vitals);
     assert.ok(vitals!.count >= 1);
-    assert.ok(vitals!.freshnessSeconds != null);
+    assert.ok(vitals!.fetchedAgeSeconds != null);
   });
 
   it("SQL-aggregated computeMetrics matches an independent in-memory aggregation", async () => {

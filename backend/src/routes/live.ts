@@ -54,7 +54,13 @@ const liveRoutes: FastifyPluginAsync = async (fastify) => {
               z.object({
                 typeName: z.string(),
                 count: z.number(),
-                freshnessSeconds: z.number().nullable(),
+                /**
+                 * How long ago rows of this type were last written. Renamed
+                 * from `freshnessSeconds`, which it never was: it times the
+                 * write, and a re-sync of an unchanged file resets it while the
+                 * reading under it keeps ageing.
+                 */
+                fetchedAgeSeconds: z.number().nullable(),
                 newestUpdatedAt: z.string().nullable(),
               }),
             ),

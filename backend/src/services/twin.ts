@@ -1,4 +1,5 @@
 import { clampLimit, clampOffset, config } from "../lib/config.js";
+import { freshnessOf, type FreshnessBasis } from "./observed-at.js";
 import type { DbClient } from "../lib/db.js";
 import { NotFound } from "../lib/errors.js";
 import type { ReadLens } from "./ontology-lens.js";
@@ -106,7 +107,22 @@ export interface UnitMetrics {
   /** Kept for callers that name it directly; it is `values.occupancy`. */
   occupancyPct: number | null;
   numericMeans: Record<string, number>;
+  /**
+   * How old the data is, from the timestamp the source published — not from
+   * when we wrote it down. Null when that is not knowable; `freshnessBasis`
+   * says which of the several reasons applies.
+   */
   freshnessSeconds: number | null;
+  freshnessBasis: FreshnessBasis;
+  /**
+   * How long ago the row was last written here.
+   *
+   * Kept, and kept under a name that says what it is. It answers "did the sync
+   * run", which is a real question — but it is not how old the reading is, and
+   * for an hourly file that re-downloads unchanged the two differ by the whole
+   * hour.
+   */
+  fetchedAgeSeconds: number | null;
   linkedInstanceCount: number;
 }
 
@@ -282,6 +298,25 @@ function buildDescendantMap(
   return descendants;
 }
 
+/**
+ * The property the institution declared as carrying the time of the reading.
+ *
+ * Taken from the schemas of the instances actually rolled up, so a unit whose
+ * parts come from two feeds uses whichever of them declared one. Two different
+ * declarations under one unit is not a case worth inventing a rule for: the
+ * first wins and both are the institution's own.
+ */
+function observedProperty(
+  instances: readonly { propertySchema: { key: string; observedAt?: boolean; observedAtZone?: string }[] }[],
+): { key: string; zone?: string | null } | null {
+  for (const inst of instances) {
+    for (const prop of inst.propertySchema) {
+      if (prop.observedAt) return { key: prop.key, zone: prop.observedAtZone ?? null };
+    }
+  }
+  return null;
+}
+
 function emptyMetrics(unitId: string): UnitMetrics {
   return {
     unitId,
@@ -290,6 +325,8 @@ function emptyMetrics(unitId: string): UnitMetrics {
     occupancyPct: null,
     numericMeans: {},
     freshnessSeconds: null,
+    freshnessBasis: "empty",
+    fetchedAgeSeconds: null,
     linkedInstanceCount: 0,
   };
 }
@@ -374,7 +411,10 @@ export async function rollupAllUnits(
     }
     m.occupancyPct = m.values.occupancy ?? null;
 
-    if (newest) m.freshnessSeconds = Math.round((now - newest.getTime()) / 1000);
+    if (newest) m.fetchedAgeSeconds = Math.round((now - newest.getTime()) / 1000);
+    const fresh = freshnessOf({ property: observedProperty(linked), instances: linked, now });
+    m.freshnessSeconds = fresh.seconds;
+    m.freshnessBasis = fresh.basis;
     for (const [key, acc] of numericAcc) {
       m.numericMeans[key] = acc.sum / acc.count;
     }
@@ -553,7 +593,10 @@ export async function rollupPlaces(
 
     for (const def of metricDefs) m.values[def.key] = evaluateMetric(def, linked);
     m.occupancyPct = m.values.occupancy ?? null;
-    if (newest) m.freshnessSeconds = Math.round((now - newest.getTime()) / 1000);
+    if (newest) m.fetchedAgeSeconds = Math.round((now - newest.getTime()) / 1000);
+    const fresh = freshnessOf({ property: observedProperty(linked), instances: linked, now });
+    m.freshnessSeconds = fresh.seconds;
+    m.freshnessBasis = fresh.basis;
     for (const [key, acc] of numericAcc) m.numericMeans[key] = acc.sum / acc.count;
 
     out.set(placeId, {

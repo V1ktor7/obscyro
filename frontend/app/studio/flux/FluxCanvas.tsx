@@ -130,10 +130,10 @@ export default function FluxCanvas({
       {types.slice(0, 8).map((t, i) => {
         const y = 44 + i * 20;
         const fresh =
-          t.freshnessSeconds != null
-            ? t.freshnessSeconds < 300
+          t.fetchedAgeSeconds != null
+            ? t.fetchedAgeSeconds < 300
               ? "#10b981"
-              : t.freshnessSeconds < 3600
+              : t.fetchedAgeSeconds < 3600
                 ? "#f59e0b"
                 : "#f43f5e"
             : "#94a3b8";
@@ -144,7 +144,7 @@ export default function FluxCanvas({
               {t.typeName} ({t.count})
             </text>
             <text x={twinX + 155} y={y} fontSize={7} fill="#94a3b8" textAnchor="end">
-              {t.freshnessSeconds != null ? `${t.freshnessSeconds}s` : "—"}
+              {t.fetchedAgeSeconds != null ? `${t.fetchedAgeSeconds}s` : "—"}
             </text>
           </g>
         );

@@ -177,6 +177,24 @@ export interface PropertyDef {
    * mechanic.
    */
   mechanic?: Mechanic;
+  /**
+   * This property carries the moment the value was true, as the source
+   * published it.
+   *
+   * Declared, never sniffed. A column that looks like a date is not the same as
+   * a column that means "this is when the reading was taken", and the ones that
+   * look alike are exactly the ones a guess gets wrong — the hour of the census,
+   * the hour of publication and the hour of the download all parse identically.
+   */
+  observedAt?: boolean;
+  /**
+   * The clock a zoneless stamp is on, as an IANA name.
+   *
+   * MSSS writes `2026-09-05T18:45` with no zone. Read on a server that runs in
+   * UTC, that is four hours in the future, and freshness comes out negative.
+   * Without this the stamp is reported as unreadable rather than guessed at.
+   */
+  observedAtZone?: string;
 }
 
 /**

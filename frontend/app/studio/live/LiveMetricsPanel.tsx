@@ -124,7 +124,7 @@ export default function LiveMetricsPanel({ env, hasKey }: LiveMetricsPanelProps)
                   key={t.typeName}
                   label={t.typeName}
                   value={t.count}
-                  sub={formatFreshness(t.freshnessSeconds)}
+                  sub={formatFreshness(t.fetchedAgeSeconds)}
                 />
               ))}
             </div>

@@ -24,6 +24,8 @@ function unit(id: string, name: string, over: Partial<TwinUnitNode> = {}): TwinU
       occupancyPct: null,
       numericMeans: {},
       freshnessSeconds: null,
+      freshnessBasis: "observed" as const,
+      fetchedAgeSeconds: null,
       linkedInstanceCount: 0,
     },
     worstAlertSeverity: null,
@@ -42,6 +44,8 @@ function withBeds(id: string, name: string, beds: number, occ: number | null, pa
       occupancyPct: occ,
       numericMeans: {},
       freshnessSeconds: null,
+      freshnessBasis: "observed" as const,
+      fetchedAgeSeconds: null,
       linkedInstanceCount: beds,
     },
   } as Partial<TwinUnitNode>);
