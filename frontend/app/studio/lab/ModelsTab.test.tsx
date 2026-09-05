@@ -160,7 +160,7 @@ describe("the split", () => {
       classes: [], nTrain: 90, nTest: 30, droppedRows: 0, features: ["capacite"],
       numericFeatures: [], categoricalFeatures: [], split: "chronological",
       testSize: 0.25, timeColumn: "date", target: "occupees", params: {},
-      datasetId: "d1", datasetName: "x", projectId: "p", createdAt: "2026-09-04",
+      datasetId: "d1", datasetName: "x", projectId: "p", timeLags: null, horizon: null, exog: [], folds: [], kind: "tabular", createdAt: "2026-09-04",
     });
     render(<ModelsTab env="e" onError={() => {}} />);
     await pickDataset(user, /MSSS/);
@@ -192,7 +192,7 @@ describe("what the result says", () => {
           features: [], numericFeatures: [], categoricalFeatures: [],
           split: "random", testSize: 0.25, timeColumn: null, target: "occupees",
           params: {}, datasetId: "d1", datasetName: "x", projectId: "p",
-          createdAt: "2026-09-04",
+          timeLags: null, horizon: null, exog: [], folds: [], kind: "tabular", createdAt: "2026-09-04",
         },
       ],
     });
@@ -214,7 +214,7 @@ describe("what the result says", () => {
           numericFeatures: [], categoricalFeatures: [], split: "random",
           testSize: 0.25, timeColumn: null, target: "occupees", params: {},
           datasetId: "d1", datasetName: "x", projectId: "p",
-          createdAt: "2026-09-04",
+          timeLags: null, horizon: null, exog: [], folds: [], kind: "tabular", createdAt: "2026-09-04",
         },
       ],
     });

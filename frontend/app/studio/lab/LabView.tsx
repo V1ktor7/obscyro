@@ -25,6 +25,7 @@ import {
   Plus,
   RadioTower,
   Trash2,
+  TrendingUp,
   X,
   Zap,
 } from "lucide-react";
@@ -34,6 +35,7 @@ import { listEnvTypes, type EnvObjectType } from "@/lib/platform-api";
 import { listChannels, type DataChannel } from "../channels-api";
 import { numericColumns, parseCsvRows } from "../csv-parse";
 import FeedSimulatorTab from "./FeedSimulatorTab";
+import ForecastTab from "./ForecastTab";
 import ModelsTab from "./ModelsTab";
 import NotebookTab from "./NotebookTab";
 import {
@@ -51,7 +53,7 @@ import {
 } from "../lab-api";
 import { useStudio } from "../StudioShell";
 
-type Tab = "models" | "notebook" | "causality" | "train" | "compare" | "feed";
+type Tab = "models" | "notebook" | "forecast" | "causality" | "train" | "compare" | "feed";
 
 const FIELD =
   "rounded border border-[#d3d8de] bg-[#f6f7f9] px-2 py-1 text-xs text-[#1c2127] focus:border-[#2d72d2] focus:outline-none";
@@ -248,14 +250,17 @@ export default function LabView() {
       <div className="flex shrink-0 gap-1 border-b border-[#d3d8de] bg-white px-4 py-1.5">
         {(
           [
-            // Tabular supervised learning first: it works on any table, which
-            // is most of what somebody arrives here wanting. The three time
-            // series tabs keep their place and their names say what they are,
-            // so "Train" is no longer ambiguous beside the new one.
+            // Two groups, in order. The first three fit a model to a table:
+            // any table, whatever it came from. The last four work on live
+            // signals — the causality scan, the ARX model it feeds, and the
+            // comparison that replays it against reality. Both are real, so
+            // both keep a tab, and each name says which one it is rather than
+            // leaving two tabs called "train".
             ["models", "Models", GraduationCap],
             ["notebook", "Notebook", Code2],
+            ["forecast", "Forecast", TrendingUp],
             ["causality", "Causality", Brain],
-            ["train", "Forecast (time series)", ChartLine],
+            ["train", "Signal model (ARX)", ChartLine],
             ["compare", "Simulate vs reality", ChartLine],
             ["feed", "Feed simulator", RadioTower],
           ] as const
@@ -291,6 +296,8 @@ export default function LabView() {
           <ModelsTab env={env} onError={setError} />
         ) : tab === "notebook" ? (
           <NotebookTab env={env} onError={setError} />
+        ) : tab === "forecast" ? (
+          <ForecastTab env={env} onError={setError} />
         ) : tab === "causality" ? (
           <CausalityTab
             edges={edges}

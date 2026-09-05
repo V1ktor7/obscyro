@@ -27,8 +27,20 @@ export interface Importance {
   weight: number;
 }
 
+export interface FoldScore {
+  origin: string;
+  nTrain: number;
+  nTest: number;
+  mae: number;
+  rmse: number;
+  naiveMae: number;
+  mase: number;
+}
+
 export interface LabModel {
   id: string;
+  /** A forecast and a table fit share one list, because a user has one list. */
+  kind: "tabular" | "timeseries";
   projectId: string;
   name: string;
   datasetId: string | null;
@@ -53,6 +65,11 @@ export interface LabModel {
   nTrain: number;
   nTest: number;
   droppedRows: number;
+  timeLags: number | null;
+  horizon: number | null;
+  exog: string[];
+  /** Forecast only: every origin the walk-forward evaluation scored. */
+  folds: FoldScore[];
   createdAt: string;
 }
 
@@ -89,6 +106,30 @@ export async function trainLabModel(env: string, body: TrainInput): Promise<LabM
   return apiFetch(`/v1/ontology/${enc(env)}/lab/models`, { method: "POST", body });
 }
 
+export interface ForecastInput {
+  name: string;
+  datasetId: string;
+  timeColumn: string;
+  target: string;
+  estimator: string;
+  lags?: number;
+  horizon?: number;
+  exog?: string[];
+  params?: Record<string, unknown>;
+  folds?: number;
+}
+
+export async function trainForecast(env: string, body: ForecastInput): Promise<LabModel> {
+  return apiFetch(`/v1/ontology/${enc(env)}/lab/forecasts`, { method: "POST", body });
+}
+
+export async function runForecast(
+  id: string,
+  steps: number,
+): Promise<{ points: Array<{ step: number; t: string; value: number }>; note: string }> {
+  return apiFetch(`/v1/lab/models/${enc(id)}/forecast`, { method: "POST", body: { steps } });
+}
+
 export async function deleteLabModel(id: string): Promise<void> {
   await apiFetch(`/v1/lab/models/${enc(id)}`, { method: "DELETE" });
 }
@@ -116,6 +157,14 @@ export async function runCell(
  * means "no error left".
  */
 export function liftOverBaseline(model: LabModel): number | null {
+  // A forecast is already scored against the right baseline: MASE is the error
+  // divided by the naive forecast's error, so 1.0 means "no better than
+  // repeating the last value". Recomputing a lift from MAE here would compare
+  // it against the mean instead, which on a smooth series flatters everything.
+  if (model.kind === "timeseries") {
+    const mase = model.metrics.mase;
+    return mase == null || !Number.isFinite(mase) ? null : 1 - mase;
+  }
   if (model.task === "regression") {
     const mae = model.metrics.mae;
     const base = model.baseline.mae;

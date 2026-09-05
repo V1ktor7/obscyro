@@ -13,7 +13,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.lab import sandbox, tabular
+from app.lab import sandbox, tabular, timeseries
 
 router = APIRouter(prefix="/lab", tags=["lab"])
 
@@ -56,6 +56,52 @@ class CellRequest(BaseModel):
     code: str = Field(..., max_length=200_000)
     rows: list[dict[str, Any]] = Field(default_factory=list, max_length=200_000)
     timeout_s: int = Field(sandbox.DEFAULT_TIMEOUT_S, ge=1, le=sandbox.MAX_TIMEOUT_S)
+
+
+class ForecastTrainRequest(BaseModel):
+    rows: list[dict[str, Any]] = Field(..., max_length=200_000)
+    time_column: str
+    target: str
+    estimator: str
+    lags: int = Field(7, ge=1, le=60)
+    horizon: int = Field(1, ge=1, le=90)
+    exog: list[str] = Field(default_factory=list)
+    params: dict[str, Any] = Field(default_factory=dict)
+    folds: int = Field(timeseries.DEFAULT_FOLDS, ge=2, le=8)
+
+
+class ForecastRunRequest(BaseModel):
+    artifact_b64: str
+    rows: list[dict[str, Any]] = Field(..., max_length=200_000)
+    steps: int = Field(14, ge=1, le=365)
+
+
+@router.post("/forecast/train")
+def forecast_train(req: ForecastTrainRequest) -> dict[str, Any]:
+    """Walk forward through the series, then refit on all of it."""
+    try:
+        out = timeseries.backtest_and_fit(
+            rows=req.rows,
+            time_column=req.time_column,
+            target=req.target,
+            estimator=req.estimator,
+            lags=req.lags,
+            horizon=req.horizon,
+            exog=req.exog or None,
+            params=req.params,
+            folds=req.folds,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {**out.__dict__, "folds": [f.__dict__ for f in out.folds]}
+
+
+@router.post("/forecast/run")
+def forecast_run(req: ForecastRunRequest) -> dict[str, Any]:
+    try:
+        return timeseries.forecast(req.artifact_b64, req.rows, req.steps)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/estimators")

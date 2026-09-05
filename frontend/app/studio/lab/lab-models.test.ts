@@ -13,6 +13,7 @@ import { liftOverBaseline, type LabModel } from "../lab-models-api";
 
 const model = (over: Partial<LabModel>): LabModel => ({
   id: "m",
+  kind: "tabular",
   projectId: "p",
   name: "m",
   datasetId: "d",
@@ -35,6 +36,10 @@ const model = (over: Partial<LabModel>): LabModel => ({
   nTrain: 100,
   nTest: 30,
   droppedRows: 0,
+  timeLags: null,
+  horizon: null,
+  exog: [],
+  folds: [],
   createdAt: "2026-09-04T00:00:00.000Z",
   ...over,
 });
@@ -79,5 +84,33 @@ describe("how much better than nothing a model is", () => {
 
   it("says nothing when the metric is missing", () => {
     expect(liftOverBaseline(model({ metrics: {}, baseline: { mae: 3 } }))).toBeNull();
+  });
+});
+
+describe("a forecast is scored against the naive forecast, not the mean", () => {
+  it("reads MASE rather than recomputing a lift from MAE", () => {
+    // On a smooth daily series the mean is hopeless, so a lift measured against
+    // it flatters every model. MASE divides by the naive forecast instead.
+    const m = model({
+      kind: "timeseries",
+      metrics: { mase: 0.4, mae: 2, naive_mae: 5 },
+      baseline: { mae: 40 },
+    });
+    expect(liftOverBaseline(m)).toBeCloseTo(0.6, 6);
+  });
+
+  it("reads zero when the model is exactly as good as repeating the last value", () => {
+    const m = model({ kind: "timeseries", metrics: { mase: 1 } });
+    expect(liftOverBaseline(m)).toBe(0);
+  });
+
+  it("goes negative when the naive forecast wins", () => {
+    const m = model({ kind: "timeseries", metrics: { mase: 1.3 } });
+    expect(liftOverBaseline(m)).toBeLessThan(0);
+  });
+
+  it("says nothing when the series was too short to score", () => {
+    const m = model({ kind: "timeseries", metrics: { mase: Number.NaN } });
+    expect(liftOverBaseline(m)).toBeNull();
   });
 });

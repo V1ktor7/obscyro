@@ -9,9 +9,11 @@ import {
   deleteModel,
   getModel,
   listModels,
+  forecastAndStore,
   predictOverDataset,
   predictWith,
   readAllRows,
+  runForecast,
   trainAndStore,
 } from "../services/lab-models.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
@@ -30,8 +32,19 @@ const errorEnvelope = z.object({
   }),
 });
 
+const foldOut = z.object({
+  origin: z.string(),
+  nTrain: z.number(),
+  nTest: z.number(),
+  mae: z.number(),
+  rmse: z.number(),
+  naiveMae: z.number(),
+  mase: z.number(),
+});
+
 const modelOut = z.object({
   id: z.string(),
+  kind: z.enum(["tabular", "timeseries"]),
   projectId: z.string(),
   name: z.string(),
   datasetId: z.string().nullable(),
@@ -54,6 +67,10 @@ const modelOut = z.object({
   nTrain: z.number(),
   nTest: z.number(),
   droppedRows: z.number(),
+  timeLags: z.number().nullable(),
+  horizon: z.number().nullable(),
+  exog: z.array(z.string()),
+  folds: z.array(foldOut),
   createdAt: z.string(),
 });
 
@@ -160,6 +177,79 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
       return reply.code(201).send(model);
+    },
+  );
+
+  app.post(
+    "/ontology/:env/lab/forecasts",
+    {
+      schema: {
+        summary: "Fit a forecaster and keep it",
+        description:
+          "Walks forward through the series — every origin trained on its own past — then refits on all of it. The baseline is the naive forecast, not the mean: on a smooth series the mean is hopeless and beating it proves nothing.",
+        tags: ["lab"],
+        params: z.object({ env: z.string().min(1) }),
+        body: z.object({
+          name: z.string().min(1),
+          datasetId: z.string().uuid(),
+          timeColumn: z.string().min(1),
+          target: z.string().min(1),
+          estimator: z.string().min(1),
+          lags: z.number().int().min(1).max(60).default(7),
+          horizon: z.number().int().min(1).max(90).default(1),
+          exog: z.array(z.string()).default([]),
+          params: z.record(z.unknown()).default({}),
+          folds: z.number().int().min(2).max(8).default(4),
+        }),
+        response: { 201: modelOut, 400: errorEnvelope, 404: errorEnvelope },
+      },
+    },
+    async (req, reply) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const model = await forecastAndStore(req.db, env.id, req.body, userId);
+      await recordAudit(req.db, {
+        projectId: env.id,
+        actorUserId: userId,
+        action: "lab.forecast.train",
+        resourceType: "lab_model",
+        resourceId: model.id,
+        metadata: {
+          estimator: model.estimator,
+          target: model.target,
+          horizon: model.horizon,
+          metrics: model.metrics,
+        },
+      });
+      return reply.code(201).send(model);
+    },
+  );
+
+  app.post(
+    "/lab/models/:id/forecast",
+    {
+      schema: {
+        summary: "Continue the series past its last observation",
+        description:
+          "Recursive: each predicted point becomes a lag for the next, so the error compounds. The note in the response says so — a smooth line implies a confidence the fit does not support.",
+        tags: ["lab"],
+        params: z.object({ id: z.string().uuid() }),
+        body: z.object({ steps: z.number().int().min(1).max(365).default(14) }),
+        response: {
+          200: z.object({
+            points: z.array(
+              z.object({ step: z.number(), t: z.string(), value: z.number() }),
+            ),
+            note: z.string(),
+          }),
+          400: errorEnvelope,
+          404: errorEnvelope,
+        },
+      },
+    },
+    async (req) => {
+      await requireUserId(req);
+      return runForecast(req.db, req.params.id, req.body.steps);
     },
   );
 
