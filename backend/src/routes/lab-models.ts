@@ -85,11 +85,21 @@ async function requireUserId(req: {
   return userId;
 }
 
+/**
+ * Everything here lives under `lab/ml/`, one segment deeper than the older
+ * signal lab in `lab.ts`.
+ *
+ * Both fit models, and both wanted to be called `lab/models`. Fastify refuses a
+ * duplicate address at registration, so whichever loaded second took the whole
+ * API down at boot — which is what it did, for four deployments, while the
+ * build stayed green and every unit test passed. The older paths are already
+ * published in the API documentation, so the new lab is the one that moved.
+ */
 const labRoutes: FastifyPluginAsync = async (fastify) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
 
   app.get(
-    "/lab/estimators",
+    "/lab/ml/estimators",
     {
       schema: {
         summary: "Which models the lab can fit",
@@ -115,13 +125,13 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
       await requireUserId(req);
       const estimators = await proxyToSimService<
         Array<{ key: string; label: string; task: string; params: Record<string, unknown> }>
-      >("/lab/estimators", undefined, "GET");
+      >("/lab/ml/estimators", undefined, "GET");
       return { estimators };
     },
   );
 
   app.get(
-    "/ontology/:env/lab/models",
+    "/ontology/:env/lab/ml/models",
     {
       schema: {
         summary: "List trained models",
@@ -138,7 +148,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   app.post(
-    "/ontology/:env/lab/models",
+    "/ontology/:env/lab/ml/models",
     {
       schema: {
         summary: "Fit a model and keep it",
@@ -181,7 +191,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   app.post(
-    "/ontology/:env/lab/forecasts",
+    "/ontology/:env/lab/ml/forecasts",
     {
       schema: {
         summary: "Fit a forecaster and keep it",
@@ -226,7 +236,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   app.post(
-    "/lab/models/:id/forecast",
+    "/lab/ml/models/:id/forecast",
     {
       schema: {
         summary: "Continue the series past its last observation",
@@ -254,7 +264,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   app.get(
-    "/lab/models/:id",
+    "/lab/ml/models/:id",
     {
       schema: {
         summary: "Read one model",
@@ -270,7 +280,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   app.delete(
-    "/lab/models/:id",
+    "/lab/ml/models/:id",
     {
       schema: {
         summary: "Delete a model",
@@ -287,7 +297,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   app.post(
-    "/lab/models/:id/predict",
+    "/lab/ml/models/:id/predict",
     {
       schema: {
         summary: "Apply a model to rows, or to a whole dataset",
@@ -324,7 +334,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   app.post(
-    "/ontology/:env/lab/cell",
+    "/ontology/:env/lab/ml/cell",
     {
       schema: {
         summary: "Run Python against a dataset",
@@ -368,7 +378,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
         resourceId: req.body.datasetId ?? null,
         metadata: { rows: rows.length, bytes: req.body.code.length },
       });
-      return proxyToSimService("/lab/cell", {
+      return proxyToSimService("/lab/ml/cell", {
         code: req.body.code,
         rows,
         timeout_s: req.body.timeoutS,

@@ -1,6 +1,10 @@
 /**
  * Supervised learning on a table, and a cell to write it by hand.
  *
+ * Addressed under `lab/ml/` rather than `lab/`: the older signal lab already
+ * owns `lab/models`, and two route files claiming one address is a Fastify
+ * error at startup, not at build.
+ *
  * The shapes here mirror scikit-learn's, on purpose: an estimator, its
  * parameters, a split, a score. What a user learns in this screen is what they
  * would write in a notebook, and the notebook tab is right beside it so the two
@@ -95,15 +99,15 @@ export interface CellResult {
 }
 
 export async function listEstimators(): Promise<{ estimators: Estimator[] }> {
-  return apiFetch(`/v1/lab/estimators`);
+  return apiFetch(`/v1/lab/ml/estimators`);
 }
 
 export async function listLabModels(env: string): Promise<{ models: LabModel[] }> {
-  return apiFetch(`/v1/ontology/${enc(env)}/lab/models`);
+  return apiFetch(`/v1/ontology/${enc(env)}/lab/ml/models`);
 }
 
 export async function trainLabModel(env: string, body: TrainInput): Promise<LabModel> {
-  return apiFetch(`/v1/ontology/${enc(env)}/lab/models`, { method: "POST", body });
+  return apiFetch(`/v1/ontology/${enc(env)}/lab/ml/models`, { method: "POST", body });
 }
 
 export interface ForecastInput {
@@ -120,32 +124,32 @@ export interface ForecastInput {
 }
 
 export async function trainForecast(env: string, body: ForecastInput): Promise<LabModel> {
-  return apiFetch(`/v1/ontology/${enc(env)}/lab/forecasts`, { method: "POST", body });
+  return apiFetch(`/v1/ontology/${enc(env)}/lab/ml/forecasts`, { method: "POST", body });
 }
 
 export async function runForecast(
   id: string,
   steps: number,
 ): Promise<{ points: Array<{ step: number; t: string; value: number }>; note: string }> {
-  return apiFetch(`/v1/lab/models/${enc(id)}/forecast`, { method: "POST", body: { steps } });
+  return apiFetch(`/v1/lab/ml/models/${enc(id)}/forecast`, { method: "POST", body: { steps } });
 }
 
 export async function deleteLabModel(id: string): Promise<void> {
-  await apiFetch(`/v1/lab/models/${enc(id)}`, { method: "DELETE" });
+  await apiFetch(`/v1/lab/ml/models/${enc(id)}`, { method: "DELETE" });
 }
 
 export async function predictWithModel(
   id: string,
   body: { rows?: Record<string, unknown>[]; datasetId?: string },
 ): Promise<{ predictions: unknown[]; rows?: Record<string, unknown>[] }> {
-  return apiFetch(`/v1/lab/models/${enc(id)}/predict`, { method: "POST", body });
+  return apiFetch(`/v1/lab/ml/models/${enc(id)}/predict`, { method: "POST", body });
 }
 
 export async function runCell(
   env: string,
   body: { code: string; datasetId?: string | null; timeoutS?: number },
 ): Promise<CellResult> {
-  return apiFetch(`/v1/ontology/${enc(env)}/lab/cell`, { method: "POST", body });
+  return apiFetch(`/v1/ontology/${enc(env)}/lab/ml/cell`, { method: "POST", body });
 }
 
 /**
