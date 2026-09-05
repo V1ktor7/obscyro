@@ -85,6 +85,26 @@ def prepare(
 
     frame = frame.assign(_t=_as_time(frame[time_column]))
     frame = frame.sort_values("_t").reset_index(drop=True)
+
+    # One value per step, or the lags mean nothing.
+    #
+    # Every feature here is a row shift. If the table holds one row per date
+    # *and per region*, `lag1` is "the previous row", which is another region on
+    # the same day — so the model learns across places, the naive baseline it is
+    # scored against is equally scrambled, and the MASE that comes out looks
+    # perfectly reasonable. Nothing raises. Refusing here is the only place this
+    # can be caught, because after the shift the damage is invisible.
+    dupes = frame["_t"].duplicated()
+    if bool(dupes.any()):
+        worst = frame["_t"].value_counts()
+        first = worst.index[0]
+        raise ValueError(
+            f"{int(dupes.sum())} lignes portent une date deja vue : « {time_column} » "
+            f"compte jusqu'a {int(worst.iloc[0])} lignes pour un meme pas (par exemple "
+            f"{first}). Une serie temporelle a une valeur par pas — filtrez sur une "
+            "seule entite, ou agregez la table avant de la prevoir."
+        )
+
     y = pd.to_numeric(frame[target], errors="coerce")
 
     out = pd.DataFrame({"_t": frame["_t"]})

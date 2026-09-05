@@ -255,3 +255,43 @@ def test_windows_that_could_not_be_scored_are_counted_out_loud() -> None:
     out = ts.backtest_and_fit(rows, "date", "admissions", "ridge", lags=7)
     assert len(out.folds) < 4
     assert any("constante" in w for w in out.warnings)
+
+
+# --------------------------------------------------- une valeur par pas
+
+
+def two_regions(n: int = 220) -> list[dict]:
+    """One row per day *and per region* — a panel, not a series."""
+    import datetime as dt
+
+    start = dt.date(2026, 1, 1)
+    out = []
+    for i in range(n):
+        d = (start + dt.timedelta(days=i)).isoformat()
+        out.append({"date": d, "region": "Montreal", "admissions": 40 + (i % 7)})
+        out.append({"date": d, "region": "Quebec", "admissions": 12 + (i % 5)})
+    return out
+
+
+def test_a_panel_is_refused_rather_than_shifted_across_entities() -> None:
+    # Every feature is a row shift, so with two regions interleaved `lag1` is
+    # the other region on the same day. The model learns across places, the
+    # naive baseline is scrambled the same way, and the MASE that comes out
+    # looks entirely reasonable. Nothing would raise.
+    with pytest.raises(ValueError, match="date deja vue"):
+        ts.prepare(two_regions(), "date", "admissions", lags=7, horizon=1)
+
+
+def test_the_refusal_says_how_many_and_which_day() -> None:
+    # "Invalid input" sends somebody back to guessing; the count and an example
+    # date point straight at the filter they are missing.
+    with pytest.raises(ValueError) as e:
+        ts.prepare(two_regions(20), "date", "admissions", lags=3, horizon=1)
+    assert "2 lignes pour un meme pas" in str(e.value)
+    assert "2026-01-01" in str(e.value)
+
+
+def test_one_region_of_the_same_table_is_fine() -> None:
+    rows = [r for r in two_regions() if r["region"] == "Montreal"]
+    prep = ts.prepare(rows, "date", "admissions", lags=7, horizon=1)
+    assert len(prep.frame) > 200
