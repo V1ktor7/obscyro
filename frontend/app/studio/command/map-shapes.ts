@@ -321,3 +321,84 @@ export function shapeFeatures(
   }
   return { type: "FeatureCollection", features };
 }
+
+// ---------------------------------------------------------------------------
+// Colouring a boundary by a number it carries
+
+/**
+ * The properties that could colour a choropleth, and how many shapes carry each.
+ *
+ * Offered rather than assumed, for the reason `chartable` exists: a picker that
+ * lists every key lets somebody colour a map by a postal code. Only keys whose
+ * values are numbers on more than one shape are candidates — one shape with a
+ * number has no scale to sit on.
+ */
+export function numericProperties(
+  shapes: readonly InstanceShape[],
+): { name: string; covered: number }[] {
+  const counts = new Map<string, number>();
+  for (const s of shapes) {
+    for (const [key, value] of Object.entries(s.properties ?? {})) {
+      const n = typeof value === "number" ? value : Number(value);
+      if (value === null || value === "" || !Number.isFinite(n)) continue;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+  }
+  return Array.from(counts, ([name, covered]) => ({ name, covered }))
+    .filter((c) => c.covered > 1)
+    .sort((a, b) => b.covered - a.covered || a.name.localeCompare(b.name));
+}
+
+/**
+ * Where each shape sits between the lowest and highest value, 0 to 1.
+ *
+ * A shape that does not carry the property is absent from the map rather than
+ * present at zero. The renderer already draws an absent shape in its own tint,
+ * and that is the difference between "this region reports no deprivation index"
+ * and "this region has the lowest deprivation in the province".
+ *
+ * The scale is over the shapes that *do* carry it. Extending it to zero would
+ * push every real value into the top of the ramp whenever the numbers are large
+ * and close together — a life expectancy map where 78 and 84 are both dark red.
+ */
+export function choroplethIntensity(
+  shapes: readonly InstanceShape[],
+  property: string,
+): Map<string, number> {
+  const values = new Map<string, number>();
+  for (const s of shapes) {
+    const raw = (s.properties ?? {})[property];
+    if (raw === null || raw === undefined || raw === "") continue;
+    const n = typeof raw === "number" ? raw : Number(raw);
+    if (Number.isFinite(n)) values.set(s.instanceId, n);
+  }
+  if (values.size === 0) return new Map();
+
+  const nums = Array.from(values.values());
+  const lo = Math.min(...nums);
+  const hi = Math.max(...nums);
+  const out = new Map<string, number>();
+  for (const [id, n] of Array.from(values)) {
+    // Every shape reading the same is a uniform province, not a province in
+    // crisis. It sits in the middle of the ramp rather than at the top.
+    out.set(id, hi === lo ? 0.5 : (n - lo) / (hi - lo));
+  }
+  return out;
+}
+
+/** The ends of the scale, for a legend that says what the colours mean. */
+export function choroplethRange(
+  shapes: readonly InstanceShape[],
+  property: string,
+): { low: number; high: number; covered: number; missing: number } | null {
+  const nums: number[] = [];
+  let missing = 0;
+  for (const s of shapes) {
+    const raw = (s.properties ?? {})[property];
+    const n = raw === null || raw === undefined || raw === "" ? Number.NaN : Number(raw);
+    if (Number.isFinite(n)) nums.push(n);
+    else missing += 1;
+  }
+  if (nums.length === 0) return null;
+  return { low: Math.min(...nums), high: Math.max(...nums), covered: nums.length, missing };
+}

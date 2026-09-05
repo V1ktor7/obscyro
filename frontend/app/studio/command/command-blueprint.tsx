@@ -191,14 +191,19 @@ export function GaugeArc({
 }) {
   const r = size / 2 - 7;
   const c = 2 * Math.PI * r;
-  const clamped = pct == null ? 0 : Math.min(100, Math.max(0, pct));
-  const off = c * (1 - clamped / 100);
+  // The ring is clamped because a circle cannot hold more than one turn. The
+  // number beside it is not: an emergency department at 137% of its stretchers
+  // is the single most important thing this gauge can say, and rounding it down
+  // to 100 turns a department in crisis into a full one. Occupancy over 100 is
+  // routine in the MSSS feed and must survive to the screen.
+  const drawn = pct == null ? 0 : Math.min(100, Math.max(0, pct));
+  const off = c * (1 - drawn / 100);
   const color =
     pct == null
       ? "#8f99a8"
-      : clamped >= 95
+      : pct >= 95
         ? SEV_HEX.critical
-        : clamped >= 80
+        : pct >= 80
           ? SEV_HEX.warn
           : OCC_OK_HEX;
   return (
@@ -228,7 +233,7 @@ export function GaugeArc({
         textAnchor="middle"
         className="fill-[#1c2127] text-[13px] font-semibold"
       >
-        {pct == null ? "—" : `${Math.round(clamped)}%`}
+        {pct == null ? "—" : `${Math.round(pct)}%`}
       </text>
     </svg>
   );

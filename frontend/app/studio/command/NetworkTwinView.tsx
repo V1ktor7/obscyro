@@ -74,7 +74,13 @@ import SpreadPanel from "./SpreadPanel";
 
 import CoverageDialog from "./CoverageDialog";
 import { capacityOf, isSiteHidden } from "./units-tree";
-import { shapeFeatures, WAVE_RAMP } from "./map-shapes";
+import {
+  choroplethIntensity,
+  choroplethRange,
+  numericProperties,
+  shapeFeatures,
+  WAVE_RAMP,
+} from "./map-shapes";
 import { AXES, missionsIn, treeForAxis, type GroupingAxis } from "./units-axes";
 import {
   flattenCoordinates,
@@ -313,6 +319,8 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
    * under another step's label.
    */
   const [waveIntensity, setWaveIntensity] = useState<Map<string, number> | null>(null);
+  /** A property every boundary carries, painted as a ramp across them. */
+  const [choropleth, setChoropleth] = useState("");
   // The frame the replay is showing, or null when it is not running. While it
   // holds a frame the DOM markers step aside: two things drawing the same site
   // with two different colours is worse than either.
@@ -747,6 +755,27 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   }, []);
 
   /** Layer list and styling, straight from the ontology's link types. */
+  /**
+   * What tints the boundaries.
+   *
+   * A replayed run and a choropleth both want the same channel, and they must
+   * not blend: while a run is playing it is the subject of the map, and a
+   * background layer underneath it would be read as part of the run. The run
+   * wins, and the picker below says so rather than appearing to do nothing.
+   */
+  const fillIntensity = useMemo(() => {
+    if (waveIntensity) return waveIntensity;
+    if (!choropleth) return null;
+    const t = choroplethIntensity(shapes, choropleth);
+    return t.size > 0 ? t : null;
+  }, [waveIntensity, choropleth, shapes]);
+
+  const choroplethOptions = useMemo(() => numericProperties(shapes), [shapes]);
+  const choroplethLegend = useMemo(
+    () => (choropleth ? choroplethRange(shapes, choropleth) : null),
+    [shapes, choropleth],
+  );
+
   const flowLayers = useMemo(() => network?.layers ?? [], [network]);
   const styles = useMemo(
     () => assignLayerStyles(env ?? "", flowLayers.map((l) => l.linkType)),
@@ -984,10 +1013,10 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     if (!map || !mapReady) return;
     ensureShapeLayers(map);
     (map.getSource(SHAPES_SRC) as GeoSource)?.setData(
-      shapeFeatures(shapes, { axis, hidden: hiddenIds, intensity: waveIntensity ?? undefined }) as never,
+      shapeFeatures(shapes, { axis, hidden: hiddenIds, intensity: fillIntensity ?? undefined }) as never,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shapes, mapReady, styleMode, axis, hiddenIds, waveIntensity]);
+  }, [shapes, mapReady, styleMode, axis, hiddenIds, fillIntensity]);
 
   // The replay frame onto the map.
   //
@@ -1630,6 +1659,69 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               );
             })
           )}
+          {/* Colouring a boundary by a number it carries.
+              Only properties that hold numbers on more than one shape are
+              offered: a picker listing every key lets somebody colour a map by
+              a postal code, and there is no scale under a single value. */}
+          <p className="px-2 pt-3 text-[10px] font-medium uppercase tracking-wide text-ink-faint">
+            Colour boundaries by
+          </p>
+          {choroplethOptions.length === 0 ? (
+            <p className="px-2 py-1 text-[10.5px] leading-snug text-ink-faint">
+              No boundary carries a number yet. A property with a numeric value on more than
+              one shape becomes an option here.
+            </p>
+          ) : (
+            <>
+              <select
+                aria-label="Colour boundaries by"
+                value={choropleth}
+                onChange={(e) => setChoropleth(e.target.value)}
+                className="mx-2 w-[calc(100%-1rem)] rounded border border-[#d3d8de] px-2 py-1 text-xs"
+              >
+                <option value="">None</option>
+                {choroplethOptions.map((o) => (
+                  <option key={o.name} value={o.name}>
+                    {o.name} ({o.covered})
+                  </option>
+                ))}
+              </select>
+              {choroplethLegend ? (
+                <div className="px-2 pt-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] tabular-nums text-ink-faint">
+                      {choroplethLegend.low}
+                    </span>
+                    <span
+                      className="h-2 min-w-0 flex-1 rounded-sm"
+                      style={{
+                        background: `linear-gradient(to right, ${WAVE_RAMP[0]}, ${WAVE_RAMP[1]}, ${WAVE_RAMP[2]})`,
+                      }}
+                    />
+                    <span className="text-[10px] tabular-nums text-ink-faint">
+                      {choroplethLegend.high}
+                    </span>
+                  </div>
+                  {/* A boundary with no value keeps its own tint. Counting them
+                      is what stops the map reading as complete when it is not. */}
+                  {choroplethLegend.missing > 0 ? (
+                    <p className="pt-1 text-[10px] leading-snug text-[#935610]">
+                      {choroplethLegend.missing} boundar
+                      {choroplethLegend.missing > 1 ? "ies carry" : "y carries"} no value and
+                      keep{choroplethLegend.missing > 1 ? "" : "s"} its own tint.
+                    </p>
+                  ) : null}
+                  {waveIntensity ? (
+                    <p className="pt-1 text-[10px] leading-snug text-[#935610]">
+                      A run is playing, and it owns the fill. The choropleth returns when the
+                      replay is cleared.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </>
+          )}
+
           <p className="px-2 pt-3 text-[10px] leading-relaxed text-[#8f99a8]">
             node ring = alert severity · badge = occupancy · arcs = flows between sites
           </p>

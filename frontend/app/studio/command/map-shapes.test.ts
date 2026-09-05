@@ -11,7 +11,10 @@ import {
   UNCOLOURED,
   adjacency,
   assignColours,
+  choroplethIntensity,
+  choroplethRange,
   colourOf,
+  numericProperties,
   shapeFeatures,
   tagsOf,
 } from "./map-shapes";
@@ -212,5 +215,102 @@ describe("colouring what nobody has coloured", () => {
     const many = Array.from({ length: 9 }, (_, i) => square(`s${i}`, 0, 0));
     const c = assignColours(many);
     expect(Array.from(c.values())).not.toContain(UNCOLOURED);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Colouring a boundary by a number it carries
+
+const region = (id: string, props: Record<string, unknown>): InstanceShape => ({
+  instanceId: id,
+  instanceName: id,
+  objectType: "Territoire",
+  kind: "territoire",
+  areaM2: 1,
+  geometry: { type: "Polygon", coordinates: [] },
+  properties: props,
+});
+
+describe("what a boundary can be coloured by", () => {
+  it("offers only keys that hold numbers on more than one shape", () => {
+    // One shape with a number has no scale to sit on, and a picker that lists
+    // every key lets somebody colour a map by a postal code.
+    const shapes = [
+      region("a", { pct_65plus: 21.4, code: "06", name: "Montréal" }),
+      region("b", { pct_65plus: 18.9, code: "13" }),
+      region("c", { lonely: 3 }),
+    ];
+    expect(numericProperties(shapes).map((p) => p.name)).toEqual(["code", "pct_65plus"]);
+  });
+
+  it("counts how many shapes carry each one, so a thin layer reads as thin", () => {
+    const shapes = [
+      region("a", { x: 1, y: 1 }),
+      region("b", { x: 2, y: 2 }),
+      region("c", { x: 3 }),
+    ];
+    expect(numericProperties(shapes)).toEqual([
+      { name: "x", covered: 3 },
+      { name: "y", covered: 2 },
+    ]);
+  });
+});
+
+describe("where each boundary sits on the ramp", () => {
+  it("stretches the scale over the values present, not from zero", () => {
+    // Life expectancy runs 78 to 84. Anchored at zero, every region lands in
+    // the top 6% of the ramp and the map is one flat colour.
+    const shapes = [region("a", { e: 78 }), region("b", { e: 81 }), region("c", { e: 84 })];
+    const t = choroplethIntensity(shapes, "e");
+    expect(t.get("a")).toBe(0);
+    expect(t.get("b")).toBeCloseTo(0.5, 6);
+    expect(t.get("c")).toBe(1);
+  });
+
+  it("leaves out a shape that does not carry the property", () => {
+    // Absent from the map, not present at zero: the renderer draws an absent
+    // shape in its own tint, and "reports nothing" is not "lowest in the
+    // province".
+    const shapes = [region("a", { e: 78 }), region("b", {}), region("c", { e: 84 })];
+    const t = choroplethIntensity(shapes, "e");
+    expect(t.has("b")).toBe(false);
+    expect(t.size).toBe(2);
+  });
+
+  it("treats an empty string as absent rather than as zero", () => {
+    const shapes = [region("a", { e: 78 }), region("b", { e: "" }), region("c", { e: 84 })];
+    expect(choroplethIntensity(shapes, "e").has("b")).toBe(false);
+  });
+
+  it("reads a number written as text, which is how JSONB carries most of them", () => {
+    const shapes = [region("a", { e: "78" }), region("b", { e: "84" })];
+    expect(choroplethIntensity(shapes, "e").get("b")).toBe(1);
+  });
+
+  it("puts a uniform province in the middle, not at the top", () => {
+    const shapes = [region("a", { e: 80 }), region("b", { e: 80 })];
+    const t = choroplethIntensity(shapes, "e");
+    expect(t.get("a")).toBe(0.5);
+    expect(t.get("b")).toBe(0.5);
+  });
+
+  it("colours nothing when nothing carries the property", () => {
+    expect(choroplethIntensity([region("a", {})], "e").size).toBe(0);
+  });
+});
+
+describe("the legend the ramp needs", () => {
+  it("names both ends and counts what is missing", () => {
+    const shapes = [region("a", { e: 78 }), region("b", {}), region("c", { e: 84 })];
+    expect(choroplethRange(shapes, "e")).toEqual({
+      low: 78,
+      high: 84,
+      covered: 2,
+      missing: 1,
+    });
+  });
+
+  it("says nothing rather than inventing a range", () => {
+    expect(choroplethRange([region("a", {})], "e")).toBeNull();
   });
 });
