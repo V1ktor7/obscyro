@@ -31,15 +31,15 @@ describe("refusing a card that could not draw", () => {
 
   it("refuses a chart with no measure", () => {
     // Stored, this draws an empty frame and says nothing about why.
-    assert.throws(() => validateCard({ ...base, config: { x: "Nom_installation" } }), /mesure/);
+    assert.throws(() => validateCard({ ...base, config: { x: "Nom_installation" } }), /measure/);
   });
 
   it("refuses a chart with no axis", () => {
-    assert.throws(() => validateCard({ ...base, config: { y: "n" } }), /axe/);
+    assert.throws(() => validateCard({ ...base, config: { y: "n" } }), /axis/);
   });
 
   it("refuses a number card with no measure", () => {
-    assert.throws(() => validateCard({ ...base, kind: "number", config: {} }), /mesure/);
+    assert.throws(() => validateCard({ ...base, kind: "number", config: {} }), /measure/);
   });
 
   it("lets a table card carry no columns at all", () => {
@@ -49,13 +49,13 @@ describe("refusing a card that could not draw", () => {
   });
 
   it("refuses a chart type the renderer cannot draw", () => {
-    assert.throws(() => validateCard({ ...base, kind: "sankey" }), /inconnu/);
+    assert.throws(() => validateCard({ ...base, kind: "sankey" }), /[Uu]nknown card type/);
   });
 
   it("refuses an aggregate that does not exist", () => {
     assert.throws(
       () => validateCard({ ...base, config: { ...base.config, agg: "median" as never } }),
-      /Agregation/,
+      /Unknown aggregate/,
     );
   });
 
@@ -65,7 +65,7 @@ describe("refusing a card that could not draw", () => {
     // worse than one that is missing.
     assert.throws(
       () => validateCard({ ...base, config: { ...base.config, agg: "last" as never } }),
-      /Agregation/,
+      /Unknown aggregate/,
     );
   });
 
@@ -73,11 +73,11 @@ describe("refusing a card that could not draw", () => {
     // A bar chart over the twin has no columns to group by. Stored, it would
     // render an error on every open, which reads as broken software rather
     // than as a card somebody mis-configured.
-    assert.throws(() => validateCard({ ...base, sourceKind: "twin" }), /se lit depuis dataset/);
+    assert.throws(() => validateCard({ ...base, sourceKind: "twin" }), /reads from dataset/);
   });
 
   it("refuses a blank title", () => {
-    assert.throws(() => validateCard({ ...base, title: "   " }), /titre/);
+    assert.throws(() => validateCard({ ...base, title: "   " }), /title/);
   });
 
   it("trims the title it stores", () => {
@@ -165,7 +165,7 @@ describe("what a map, a series and a comparison have to be told", () => {
 
   it("refuses a map with nothing to colour", () => {
     // Every site would draw the same, which reads as a network in one state.
-    assert.throws(() => validateCard({ ...map, config: { state: "live" } }), /metrique/);
+    assert.throws(() => validateCard({ ...map, config: { state: "live" } }), /metric to colour/);
   });
 
   it("refuses a frozen map that does not say which day", () => {
@@ -173,7 +173,7 @@ describe("what a map, a series and a comparison have to be told", () => {
     // silently pick one end of it.
     assert.throws(
       () => validateCard({ ...map, config: { metric: "occupancy", state: "run", runId: "r1" } }),
-      /jour/,
+      /day/,
     );
     assert.equal(
       validateCard({
@@ -187,7 +187,7 @@ describe("what a map, a series and a comparison have to be told", () => {
   it("refuses a prediction map with no branch to read it from", () => {
     assert.throws(
       () => validateCard({ ...map, config: { metric: "occupancy", state: "scenario" } }),
-      /branche/,
+      /branch/,
     );
   });
 
@@ -202,7 +202,7 @@ describe("what a map, a series and a comparison have to be told", () => {
     assert.equal(validateCard(series).kind, "series");
     assert.throws(
       () => validateCard({ ...series, config: { measure: "beds" as never } }),
-      /Mesure inconnue/,
+      /Unknown measure/,
     );
   });
 
@@ -216,7 +216,7 @@ describe("what a map, a series and a comparison have to be told", () => {
       sourceId: "run1",
       config: { measure: "I" },
     };
-    assert.throws(() => validateCard(cmp), /serie observee/);
+    assert.throws(() => validateCard(cmp), /observed series/);
     assert.equal(
       validateCard({ ...cmp, config: { measure: "I", datasetId: "d1", x: "date", y: "cas" } })
         .kind,
@@ -242,11 +242,11 @@ describe("what a map, a series and a comparison have to be told", () => {
   it("keeps each kind on the source it can actually read", () => {
     assert.throws(
       () => validateCard({ ...map, kind: "series", sourceKind: "twin" }),
-      /se lit depuis simulation/,
+      /reads from simulation/,
     );
     assert.throws(
       () => validateCard({ ...map, kind: "map", sourceKind: "dataset" }),
-      /se lit depuis twin/,
+      /reads from twin/,
     );
   });
 });

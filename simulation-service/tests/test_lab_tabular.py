@@ -59,7 +59,7 @@ def test_the_baseline_is_reported_beside_the_score() -> None:
 
 def test_a_model_that_learns_nothing_says_so() -> None:
     out = tabular.train(noise_rows(), "cible", ["x", "y"], "linear")
-    assert any("moyenne" in w for w in out.warnings)
+    assert any("predicting the mean" in w for w in out.warnings)
 
 
 def test_text_columns_are_encoded_rather_than_refused() -> None:
@@ -94,7 +94,7 @@ def test_importances_come_back_named() -> None:
 
 def test_the_target_cannot_also_be_a_feature() -> None:
     # The classic way to get a perfect score and learn nothing.
-    with pytest.raises(ValueError, match="cible"):
+    with pytest.raises(ValueError, match="target"):
         tabular.train(linear_rows(), "occupees", ["capacite", "occupees"], "linear")
 
 
@@ -103,7 +103,7 @@ def test_a_random_split_on_time_ordered_rows_is_flagged() -> None:
         linear_rows(), "occupees", ["capacite"], "linear",
         split="random", time_column="date",
     )
-    assert any("gonfle le score" in w for w in out.warnings)
+    assert any("inflates the score" in w for w in out.warnings)
 
 
 def test_a_chronological_split_is_available_and_silent() -> None:
@@ -116,7 +116,7 @@ def test_a_chronological_split_is_available_and_silent() -> None:
 
 
 def test_a_chronological_split_needs_a_time_column() -> None:
-    with pytest.raises(ValueError, match="colonne de temps"):
+    with pytest.raises(ValueError, match="time column"):
         tabular.train(linear_rows(), "occupees", ["capacite"], "linear",
                       split="chronological")
 
@@ -131,12 +131,12 @@ def test_rows_with_no_target_are_counted_not_hidden() -> None:
 
 
 def test_too_few_rows_is_refused_rather_than_fitted() -> None:
-    with pytest.raises(ValueError, match="trop peu"):
+    with pytest.raises(ValueError, match="too few"):
         tabular.train(linear_rows(12), "occupees", ["capacite"], "linear")
 
 
 def test_an_unknown_column_is_named() -> None:
-    with pytest.raises(ValueError, match="Colonnes absentes"):
+    with pytest.raises(ValueError, match="[Cc]olumn"):
         tabular.train(linear_rows(), "occupees", ["inexistante"], "linear")
 
 

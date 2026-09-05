@@ -166,7 +166,7 @@ export function seriesFromTrajectories(
   const low = new Map((trajectories?.p5 ?? []).map((d) => [d.day, d[measure]]));
   const high = new Map((trajectories?.p95 ?? []).map((d) => [d.day, d[measure]]));
 
-  const points = mid.map((d) => ({ label: `J${d.day}`, value: Number(d[measure] ?? 0) }));
+  const points = mid.map((d) => ({ label: `D${d.day}`, value: Number(d[measure] ?? 0) }));
   const band: BandPoint[] = [];
   for (const d of mid) {
     const lo = low.get(d.day);
@@ -174,7 +174,7 @@ export function seriesFromTrajectories(
     // A band is only drawn where both edges exist. Substituting the median for
     // a missing edge would draw a zero-width band, which reads as certainty.
     if (lo == null || hi == null) continue;
-    band.push({ label: `J${d.day}`, low: Number(lo), high: Number(hi) });
+    band.push({ label: `D${d.day}`, low: Number(lo), high: Number(hi) });
   }
   return { points, band };
 }
@@ -182,7 +182,7 @@ export function seriesFromTrajectories(
 /** Day `d` of a run that started on `startISO`, as a calendar date. */
 export function dayToDate(startISO: string, day: number): string {
   const t = new Date(startISO);
-  if (Number.isNaN(t.getTime())) return `J${day}`;
+  if (Number.isNaN(t.getTime())) return `D${day}`;
   const out = new Date(t.getTime() + day * 86_400_000);
   return out.toISOString().slice(0, 10);
 }
@@ -359,14 +359,14 @@ export async function predictedOnBranch(
       const version = typeof p.version === "string" ? p.version : null;
       const runId = typeof p.run_id === "string" ? p.run_id.slice(0, 8) : null;
       if (version || runId) {
-        provenance = `modèle ${version ?? "—"} · exécution ${runId ?? "—"}`;
+        provenance = `model ${version ?? "—"} · run ${runId ?? "—"}`;
       }
     }
     if (!r.source_instance_id) continue;
     const raw = (r.predicted_properties ?? {})[property];
     const n = typeof raw === "number" ? raw : Number(raw);
     if (!Number.isFinite(n)) continue;
-    values.set(r.source_instance_id, { value: n, message: `prévu : ${n}` });
+    values.set(r.source_instance_id, { value: n, message: `predicted: ${n}` });
   }
   return { values, provenance };
 }
@@ -412,7 +412,7 @@ export function assertMeasure(measure: unknown): TrajectoryMeasure {
   if (typeof measure !== "string" || !MEASURES.includes(measure as TrajectoryMeasure)) {
     throw BadRequest(
       "UNKNOWN_MEASURE",
-      `Mesure inconnue : ${String(measure)}. Attendu ${MEASURES.join(", ")}.`,
+      `Unknown measure: ${String(measure)}. Expected ${MEASURES.join(", ")}.`,
     );
   }
   return measure as TrajectoryMeasure;

@@ -232,7 +232,7 @@ export async function listDashboards(db: DbClient, projectId: string): Promise<D
 
 export async function getDashboard(db: DbClient, id: string): Promise<DashboardRow> {
   const { rows } = await db.query<DashRow>(`${DASH_SELECT} WHERE d.id = $1`, [id]);
-  if (!rows[0]) throw NotFound("DASHBOARD_NOT_FOUND", "Tableau de bord introuvable.");
+  if (!rows[0]) throw NotFound("DASHBOARD_NOT_FOUND", "Dashboard not found.");
   return toDashboard(rows[0]);
 }
 
@@ -244,7 +244,7 @@ export async function createDashboard(
   userId: string | null,
 ): Promise<DashboardRow> {
   const trimmed = (name ?? "").trim();
-  if (!trimmed) throw BadRequest("DASHBOARD_NAME_REQUIRED", "Un tableau de bord a besoin d'un nom.");
+  if (!trimmed) throw BadRequest("DASHBOARD_NAME_REQUIRED", "A dashboard needs a name.");
   const { rows } = await db.query<{ id: string }>(
     `INSERT INTO app.dashboard (project_id, name, description, created_by)
      VALUES ($1, $2, $3, $4)
@@ -252,7 +252,7 @@ export async function createDashboard(
      RETURNING id`,
     [projectId, trimmed, description ?? "", userId],
   );
-  if (!rows[0]) throw Conflict("DASHBOARD_NAME_TAKEN", `Un tableau de bord nomme « ${trimmed} » existe deja.`);
+  if (!rows[0]) throw Conflict("DASHBOARD_NAME_TAKEN", `A dashboard named "${trimmed}" already exists.`);
   return getDashboard(db, rows[0].id);
 }
 
@@ -263,18 +263,18 @@ export async function renameDashboard(
   description: string,
 ): Promise<DashboardRow> {
   const trimmed = (name ?? "").trim();
-  if (!trimmed) throw BadRequest("DASHBOARD_NAME_REQUIRED", "Un tableau de bord a besoin d'un nom.");
+  if (!trimmed) throw BadRequest("DASHBOARD_NAME_REQUIRED", "A dashboard needs a name.");
   const { rowCount } = await db.query(
     `UPDATE app.dashboard SET name = $2, description = $3, updated_at = now() WHERE id = $1`,
     [id, trimmed, description ?? ""],
   );
-  if (!rowCount) throw NotFound("DASHBOARD_NOT_FOUND", "Tableau de bord introuvable.");
+  if (!rowCount) throw NotFound("DASHBOARD_NOT_FOUND", "Dashboard not found.");
   return getDashboard(db, id);
 }
 
 export async function deleteDashboard(db: DbClient, id: string): Promise<void> {
   const { rowCount } = await db.query(`DELETE FROM app.dashboard WHERE id = $1`, [id]);
-  if (!rowCount) throw NotFound("DASHBOARD_NOT_FOUND", "Tableau de bord introuvable.");
+  if (!rowCount) throw NotFound("DASHBOARD_NOT_FOUND", "Dashboard not found.");
 }
 
 // ---------------------------------------------------------------------------
@@ -336,7 +336,7 @@ export function validateCard(input: CardInput): {
   config: CardConfig;
 } {
   const kind = input.kind as CardKind;
-  if (!KINDS.includes(kind)) throw BadRequest("UNKNOWN_CARD_KIND", `Type de carte inconnu : ${input.kind}`);
+  if (!KINDS.includes(kind)) throw BadRequest("UNKNOWN_CARD_KIND", `Unknown card type: ${input.kind}`);
 
   const sourceKind = input.sourceKind as SourceKind;
   // Each kind reads exactly one sort of source. A `map` over a dataset would
@@ -354,34 +354,34 @@ export function validateCard(input: CardInput): {
   if (!EXPECTED[kind].includes(sourceKind)) {
     throw BadRequest(
       "UNSUPPORTED_CARD_SOURCE",
-      `Une carte « ${kind} » se lit depuis ${EXPECTED[kind].join(" ou ")}, pas depuis ${input.sourceKind}.`,
+      `A "${kind}" card reads from ${EXPECTED[kind].join(" or ")}, not from ${input.sourceKind}.`,
     );
   }
 
   const title = (input.title ?? "").trim();
-  if (!title) throw BadRequest("CARD_TITLE_REQUIRED", "Une carte a besoin d'un titre.");
+  if (!title) throw BadRequest("CARD_TITLE_REQUIRED", "A card needs a title.");
 
   const cfg = input.config ?? {};
   if (cfg.agg && !AGGREGATES.includes(cfg.agg)) {
-    throw BadRequest("UNKNOWN_AGGREGATE", `Agregation inconnue : ${cfg.agg}`);
+    throw BadRequest("UNKNOWN_AGGREGATE", `Unknown aggregate: ${cfg.agg}`);
   }
   if ((kind === "line" || kind === "bar") && (!cfg.x || !cfg.y)) {
-    throw BadRequest("CARD_AXES_REQUIRED", "Une courbe ou des barres ont besoin d'un axe et d'une mesure.");
+    throw BadRequest("CARD_AXES_REQUIRED", "A line or bars need an axis and a measure.");
   }
-  if (kind === "number" && !cfg.y) throw BadRequest("CARD_MEASURE_REQUIRED", "Un chiffre a besoin d'une mesure.");
+  if (kind === "number" && !cfg.y) throw BadRequest("CARD_MEASURE_REQUIRED", "A number needs a measure.");
 
   if (kind === "map") {
     if (!cfg.metric) {
-      throw BadRequest("CARD_METRIC_REQUIRED", "Une carte a besoin d'une metrique a colorer.");
+      throw BadRequest("CARD_METRIC_REQUIRED", "A map needs a metric to colour by.");
     }
     const state: MapState = cfg.state ?? "live";
     if (state === "run" && (!cfg.runId || cfg.step == null)) {
       // A run without a step is not "a given time"; it is the whole run, and
       // the card would silently pick one.
-      throw BadRequest("CARD_STEP_REQUIRED", "Une carte figee a besoin d'une execution et d'un jour.");
+      throw BadRequest("CARD_STEP_REQUIRED", "A frozen map needs a run and a day.");
     }
     if (state === "scenario" && !cfg.scenarioId) {
-      throw BadRequest("CARD_SCENARIO_REQUIRED", "Une carte de prevision a besoin d'une branche.");
+      throw BadRequest("CARD_SCENARIO_REQUIRED", "A prediction map needs a branch.");
     }
   }
   if (kind === "series") assertMeasure(cfg.measure);
@@ -391,7 +391,7 @@ export function validateCard(input: CardInput): {
       if (!cfg.datasetId || !cfg.x || !cfg.y) {
         throw BadRequest(
           "CARD_REAL_SERIES_REQUIRED",
-          "Comparer demande une serie observee : un jeu de donnees, sa colonne de temps et sa mesure.",
+          "Comparing needs an observed series: a dataset, its time column and its measure.",
         );
       }
     }
@@ -411,10 +411,10 @@ export async function addCard(
   if (sourceKind === "dataset") await getDataset(db, input.sourceId);
   if (sourceKind === "model") await getModel(db, input.sourceId);
   if (sourceKind === "simulation" && !(await getRun(db, board.projectId, input.sourceId))) {
-    throw NotFound("RUN_NOT_FOUND", "Cette execution n'existe pas dans ce projet.");
+    throw NotFound("RUN_NOT_FOUND", "That run does not exist in this project.");
   }
   if (config.runId && !(await getRun(db, board.projectId, config.runId))) {
-    throw NotFound("RUN_NOT_FOUND", "Cette execution n'existe pas dans ce projet.");
+    throw NotFound("RUN_NOT_FOUND", "That run does not exist in this project.");
   }
 
   const { rows } = await db.query<{ id: string }>(
@@ -427,13 +427,13 @@ export async function addCard(
   );
   await db.query(`UPDATE app.dashboard SET updated_at = now() WHERE id = $1`, [dashboardId]);
   const card = (await listCards(db, dashboardId)).find((c) => c.id === rows[0]!.id);
-  if (!card) throw NotFound("CARD_NOT_FOUND", "Carte introuvable.");
+  if (!card) throw NotFound("CARD_NOT_FOUND", "Card not found.");
   return card;
 }
 
 export async function deleteCard(db: DbClient, cardId: string): Promise<void> {
   const { rowCount } = await db.query(`DELETE FROM app.dashboard_card WHERE id = $1`, [cardId]);
-  if (!rowCount) throw NotFound("CARD_NOT_FOUND", "Carte introuvable.");
+  if (!rowCount) throw NotFound("CARD_NOT_FOUND", "Card not found.");
 }
 
 export async function moveCard(db: DbClient, cardId: string, position: number): Promise<void> {
@@ -441,7 +441,7 @@ export async function moveCard(db: DbClient, cardId: string, position: number): 
     `UPDATE app.dashboard_card SET position = $2, updated_at = now() WHERE id = $1`,
     [cardId, Math.max(0, Math.trunc(position))],
   );
-  if (!rowCount) throw NotFound("CARD_NOT_FOUND", "Carte introuvable.");
+  if (!rowCount) throw NotFound("CARD_NOT_FOUND", "Card not found.");
 }
 
 // ---------------------------------------------------------------------------
@@ -563,7 +563,7 @@ async function readMapCard(
       sitesUnread: placed.unread,
       sitesUnplaced: placed.unplaced,
       rowsRead: placed.sites.length,
-      note: `Etat courant, lu le ${net.computedAt.slice(0, 16).replace("T", " a ")}.`,
+      note: `Current state, read at ${net.computedAt.slice(0, 16).replace("T", " ")}.`,
     };
   }
 
@@ -579,13 +579,13 @@ async function readMapCard(
       sitesUnplaced: placed.unplaced,
       rowsRead: placed.sites.length,
       note: out.provenance
-        ? `Valeurs predites (${out.provenance}). Ce ne sont pas des mesures.`
-        : "Valeurs predites par une execution du modele. Ce ne sont pas des mesures.",
+        ? `Predicted values (${out.provenance}). These are not measurements.`
+        : "Predicted by a model run. These are not measurements.",
     };
   }
 
   const run = await getRun(db, projectId, cfg.runId!);
-  if (!run) return { ...EMPTY, error: "L'execution de cette carte n'existe plus." };
+  if (!run) return { ...EMPTY, error: "This card's run is gone." };
   const byScenarioInstance = valuesAtStep(run.alertTimeline, cfg.step ?? 0);
 
   // A run happens on a copy of the network, so its unit ids exist nowhere on
@@ -606,9 +606,9 @@ async function readMapCard(
     sitesUnplaced: placed.unplaced,
     rowsRead: placed.sites.length,
     note:
-      `Execution du ${run.createdAt.slice(0, 10)}, jour ${cfg.step ?? 0}. ` +
-      "Une execution enregistre les depassements de seuil, pas un releve par site et par jour : " +
-      "les sites sans lecture restent vides plutot que dessines a zero.",
+      `Run of ${run.createdAt.slice(0, 10)}, day ${cfg.step ?? 0}. ` +
+      "A run records threshold breaches, not a reading per site per day: sites with no " +
+      "reading are left empty rather than drawn at zero.",
   };
 }
 
@@ -619,11 +619,11 @@ async function readSeriesCard(
   card: CardRow,
 ): Promise<CardData> {
   const run = await getRun(db, projectId, card.sourceId);
-  if (!run) return { ...EMPTY, error: "L'execution de cette carte n'existe plus." };
+  if (!run) return { ...EMPTY, error: "This card's run is gone." };
   const measure = assertMeasure(card.config.measure);
   const { points, band } = seriesFromTrajectories(run.trajectories, measure);
   if (points.length === 0) {
-    return { ...EMPTY, error: "Cette execution n'a pas de trajectoire enregistree." };
+    return { ...EMPTY, error: "This run has no stored trajectory." };
   }
   return {
     ...EMPTY,
@@ -632,8 +632,8 @@ async function readSeriesCard(
     rowsRead: points.length,
     note:
       band.length === points.length
-        ? "Mediane des executions, avec l'intervalle p5 a p95."
-        : `Mediane des executions. Intervalle disponible sur ${band.length} jours sur ${points.length}.`,
+        ? "Median of the runs, with the p5 to p95 interval."
+        : `Median of the runs. Interval available on ${band.length} of ${points.length} days.`,
   };
 }
 
@@ -655,7 +655,7 @@ async function readCompareCard(
   if (card.sourceKind === "model") {
     const model = await getModel(db, card.sourceId);
     if (model.kind !== "timeseries" || !model.datasetId || !model.timeColumn) {
-      return { ...EMPTY, error: "Seul un modele de serie temporelle peut etre compare au reel." };
+      return { ...EMPTY, error: "Only a time series model can be compared against reality." };
     }
     const ds = await getDataset(db, model.datasetId);
     const observed = await observedByDate(
@@ -686,15 +686,15 @@ async function readCompareCard(
       worstGap: x.worstGap,
       rowsRead: real.length,
       note:
-        "Le reel s'arrete ou la prevision commence : les deux courbes ne se recouvrent pas. " +
+        "Reality stops where the forecast starts: the two curves do not overlap. " +
         (Number.isFinite(mase)
-          ? `Sur les fenetres deja evaluees, ce modele fait ${mase} fois l'erreur de repeter la derniere valeur.`
-          : "Ce modele n'a pas de score utilisable."),
+          ? `On the windows already scored, this model makes ${mase} times the error of repeating the last value.`
+          : "This model has no usable score."),
     };
   }
 
   const run = await getRun(db, projectId, card.sourceId);
-  if (!run) return { ...EMPTY, error: "L'execution de cette carte n'existe plus." };
+  if (!run) return { ...EMPTY, error: "This card's run is gone." };
   const measure = assertMeasure(cfg.measure);
   const mid = run.trajectories?.p50 ?? [];
   const predicted = mid.map((d) => ({
@@ -721,8 +721,8 @@ async function readCompareCard(
     rowsRead: real.length,
     note:
       x.overlap === 0
-        ? `Aucun jour commun : l'execution couvre ${predicted[0]?.label ?? "?"} a ${predicted.at(-1)?.label ?? "?"}, et ${ds.name} n'a rien sur cette periode.`
-        : `${x.overlap} jours compares sur ${predicted.length} simules.`,
+        ? `No day in common: the run covers ${predicted[0]?.label ?? "?"} to ${predicted.at(-1)?.label ?? "?"}, and ${ds.name} has nothing over that period.`
+        : `${x.overlap} days compared out of ${predicted.length} simulated.`,
   };
 }
 
@@ -742,7 +742,7 @@ export async function readCard(
   try {
     ds = await getDataset(db, card.sourceId);
   } catch {
-    return { ...empty, error: "Le jeu de donnees de cette carte n'existe plus." };
+    return { ...empty, error: "This card's dataset is gone." };
   }
 
   const schema = (ds.columnSchema ?? []) as Array<{ name: string }>;
@@ -754,7 +754,7 @@ export async function readCard(
   if (missing.length) {
     // The pipeline was edited and a column went. Naming it is the difference
     // between a fixable card and a blank rectangle.
-    return { ...empty, error: `Colonne absente du jeu de donnees : ${missing.join(", ")}` };
+    return { ...empty, error: `Column not in the dataset: ${missing.join(", ")}` };
   }
 
   const cte = rowsCte(ds.kind);
@@ -857,10 +857,10 @@ async function sourceNameOf(db: DbClient, card: CardRow): Promise<string> {
   try {
     if (card.sourceKind === "dataset") return (await getDataset(db, card.sourceId)).name;
     if (card.sourceKind === "model") return (await getModel(db, card.sourceId)).name;
-    if (card.sourceKind === "twin") return "Jumeau du reseau";
-    if (card.sourceKind === "simulation") return `Execution ${card.sourceId.slice(0, 8)}`;
+    if (card.sourceKind === "twin") return "Network twin";
+    if (card.sourceKind === "simulation") return `Run ${card.sourceId.slice(0, 8)}`;
   } catch {
-    return "(source supprimee)";
+    return "(source deleted)";
   }
   return card.sourceId;
 }
@@ -880,7 +880,7 @@ export async function readDashboard(
     try {
       data = await readCard(db, card, projectId, ctx);
     } catch (err) {
-      data = { ...EMPTY, error: err instanceof Error ? err.message : "Lecture impossible." };
+      data = { ...EMPTY, error: err instanceof Error ? err.message : "Could not read." };
     }
     out.push({ ...card, sourceName: await sourceNameOf(db, card), data });
   }

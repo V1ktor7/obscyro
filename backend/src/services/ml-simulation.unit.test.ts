@@ -15,7 +15,7 @@ import { test } from "node:test";
 process.env.SIM_SERVICE_URL = "http://sim.invalid";
 process.env.SIM_SERVICE_TIMEOUT_MS = "1000";
 
-const { proxyToSimService } = await import("./ml-simulation.js");
+const { proxyToSimService, upstreamDetail } = await import("./ml-simulation.js");
 const { AppError } = await import("../lib/errors.js");
 
 const realFetch = globalThis.fetch;
@@ -68,4 +68,81 @@ test("an upstream error keeps its own code rather than becoming a timeout", asyn
   } finally {
     globalThis.fetch = realFetch;
   }
+});
+
+// ---------------------------------------------------------------------------
+// A refusal is not an outage.
+
+function answering(status: number, body: unknown): typeof fetch {
+  return (() =>
+    Promise.resolve({
+      ok: status < 400,
+      status,
+      json: () => Promise.resolve(body),
+    })) as unknown as typeof fetch;
+}
+
+test("a 400 from the lab keeps its status and its sentence", async () => {
+  // The lab refuses with a sentence written for the person who chose the
+  // columns. Flattening it to 502 "Simulation service returned an error" turned
+  // a fixable configuration into what reads as an outage, and the sentence —
+  // the only part that says what to do — was thrown away.
+  globalThis.fetch = answering(400, { detail: "Two rows carry the same date." });
+  try {
+    await proxyToSimService("/lab/forecast/train", {});
+    assert.fail("should have thrown");
+  } catch (err) {
+    assert.ok(err instanceof AppError);
+    assert.equal(err.statusCode, 400);
+    assert.equal(err.message, "Two rows carry the same date.");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test("a 500 from the lab stays a 502, because that one is ours", async () => {
+  globalThis.fetch = answering(500, { detail: "Traceback (most recent call last)…" });
+  try {
+    await proxyToSimService("/lab/train", {});
+    assert.fail("should have thrown");
+  } catch (err) {
+    assert.ok(err instanceof AppError);
+    assert.equal(err.statusCode, 502);
+    assert.equal(err.code, "SIM_UPSTREAM_ERROR");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test("a 4xx with nothing readable in it falls back rather than showing blank", async () => {
+  globalThis.fetch = answering(404, null);
+  try {
+    await proxyToSimService("/lab/nowhere", {});
+    assert.fail("should have thrown");
+  } catch (err) {
+    assert.ok(err instanceof AppError);
+    assert.equal(err.statusCode, 502);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test("a validation array is made readable instead of dropped", () => {
+  // "Invalid request" sends the reader back to guessing which field.
+  assert.equal(
+    upstreamDetail({
+      detail: [
+        { loc: ["body", "lags"], msg: "must be >= 1" },
+        { loc: ["body", "horizon"], msg: "must be <= 90" },
+      ],
+    }),
+    "lags: must be >= 1 · horizon: must be <= 90",
+  );
+});
+
+test("nothing readable means nothing, not an invented sentence", () => {
+  assert.equal(upstreamDetail(null), null);
+  assert.equal(upstreamDetail({}), null);
+  assert.equal(upstreamDetail({ detail: "   " }), null);
+  assert.equal(upstreamDetail({ detail: [] }), null);
 });

@@ -55,7 +55,7 @@ export default function MapCard({ card }: { card: Card }) {
           read: t == null ? 0 : 1,
           label:
             s.value == null
-              ? "aucune lecture"
+              ? "no reading"
               : `${formatValue(s.value)}${s.from ? ` · ${s.from}` : ""}`,
         },
       };
@@ -140,7 +140,7 @@ export default function MapCard({ card }: { card: Card }) {
   if (!MAPBOX_TOKEN) {
     return (
       <div className="flex h-[260px] items-center justify-center px-6 text-center text-sm text-ink-faint">
-        NEXT_PUBLIC_MAPBOX_TOKEN n&apos;est pas configuré, donc cette carte ne peut rien afficher.
+        NEXT_PUBLIC_MAPBOX_TOKEN is not configured, so this card has nothing to draw with.
       </div>
     );
   }
@@ -148,9 +148,9 @@ export default function MapCard({ card }: { card: Card }) {
   if (sites.length === 0) {
     return (
       <div className="flex h-[260px] items-center justify-center px-6 text-center text-sm text-ink-faint">
-        Aucun site géolocalisé dans ce jumeau.
+        No geolocated site in this twin.
         {card.data.sitesUnplaced > 0
-          ? ` ${card.data.sitesUnplaced} site${card.data.sitesUnplaced > 1 ? "s ont" : " a"} été trouvé${card.data.sitesUnplaced > 1 ? "s" : ""} sans coordonnées.`
+          ? ` ${card.data.sitesUnplaced} site${card.data.sitesUnplaced > 1 ? "s were" : " was"} found without coordinates.`
           : ""}
       </div>
     );
@@ -164,11 +164,11 @@ export default function MapCard({ card }: { card: Card }) {
           {RAMP.map((c) => (
             <span key={c} className="h-2 w-4 rounded-sm" style={{ backgroundColor: c }} />
           ))}
-          <span className="ml-1">calme → saturé</span>
+          <span className="ml-1">quiet → saturated</span>
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full border border-ink-ghost bg-white" />
-          aucune lecture
+          no reading
         </span>
       </div>
     </div>

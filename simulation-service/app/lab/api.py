@@ -144,7 +144,7 @@ def predict(req: PredictRequest) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # pragma: no cover - corrupt artifact
-        raise HTTPException(status_code=400, detail="Modèle illisible.") from exc
+        raise HTTPException(status_code=400, detail="The model could not be read.") from exc
 
 
 @router.post("/cell")

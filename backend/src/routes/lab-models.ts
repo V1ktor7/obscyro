@@ -325,7 +325,7 @@ const labRoutes: FastifyPluginAsync = async (fastify) => {
       if (!req.body.rows?.length) {
         throw new AppError(
           "NOTHING_TO_PREDICT",
-          "Fournissez des lignes, ou un jeu de données.",
+          "Give it rows, or a dataset.",
           400,
         );
       }

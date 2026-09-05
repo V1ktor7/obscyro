@@ -54,37 +54,37 @@ class EstimatorInfo:
 
 ESTIMATORS: dict[str, EstimatorInfo] = {
     "linear": EstimatorInfo(
-        "linear", "Régression linéaire", "regression",
+        "linear", "Linear regression", "regression",
         {},
-        "Le point de départ. Si un modèle plus lourd ne la bat pas, la relation est linéaire.",
+        "The starting point. If a heavier model does not beat it, the relationship is linear.",
     ),
     "ridge": EstimatorInfo(
         "ridge", "Ridge", "regression",
         {"alpha": 1.0},
-        "Linéaire, mais qui résiste aux variables corrélées entre elles.",
+        "Linear, but holds up when features are correlated with each other.",
     ),
     "lasso": EstimatorInfo(
         "lasso", "Lasso", "regression",
         {"alpha": 0.1},
-        "Linéaire, et met à zéro les variables inutiles — utile pour savoir lesquelles comptent.",
+        "Linear, and zeroes out useless features — useful for finding which ones matter.",
     ),
     "random_forest": EstimatorInfo(
-        "random_forest", "Forêt aléatoire", "regression",
+        "random_forest", "Random forest", "regression",
         {"n_estimators": 200, "max_depth": None, "min_samples_leaf": 1},
-        "Capte les effets non linéaires et les interactions sans qu'on les déclare.",
+        "Catches non-linear effects and interactions without being told about them.",
     ),
     "gradient_boosting": EstimatorInfo(
         "gradient_boosting", "Gradient boosting", "regression",
         {"n_estimators": 200, "learning_rate": 0.1, "max_depth": 3},
-        "Souvent le plus précis sur des tableaux, au prix d'un temps d'entraînement plus long.",
+        "Often the most accurate on tables, at the cost of a longer fit.",
     ),
     "logistic": EstimatorInfo(
-        "logistic", "Régression logistique", "classification",
+        "logistic", "Logistic regression", "classification",
         {"C": 1.0, "max_iter": 1000},
-        "Le point de départ en classification, et le plus facile à expliquer.",
+        "The starting point for classification, and the easiest to explain.",
     ),
     "random_forest_clf": EstimatorInfo(
-        "random_forest_clf", "Forêt aléatoire", "classification",
+        "random_forest_clf", "Random forest", "classification",
         {"n_estimators": 200, "max_depth": None, "min_samples_leaf": 1},
     ),
     "gradient_boosting_clf": EstimatorInfo(
@@ -289,21 +289,21 @@ def train(
         raise ValueError("Il faut au moins une variable explicative.")
     if target in features:
         raise ValueError(
-            f"« {target} » est à la fois la cible et une variable explicative. "
-            "Un modèle qui voit sa réponse obtient un score parfait et ne prédit rien."
+            f"\"{target}\" is both the target and a feature. A model that can see its "
+            "own answer scores perfectly and predicts nothing."
         )
 
     frame = pd.DataFrame(rows)
     missing = [c for c in [target, *features] if c not in frame.columns]
     if missing:
-        raise ValueError("Colonnes absentes : " + ", ".join(missing))
+        raise ValueError("Columns not found: " + ", ".join(missing))
 
     before = len(frame)
     frame = frame[frame[target].notna() & (frame[target].astype(str) != "")]
     dropped = before - len(frame)
     if len(frame) < 20:
         raise ValueError(
-            f"{len(frame)} lignes utilisables : trop peu pour séparer entraînement et test."
+            f"{len(frame)} usable rows: too few to split into training and test."
         )
 
     task = ESTIMATORS[estimator].task
@@ -322,7 +322,7 @@ def train(
     if split == "chronological":
         if not time_column or time_column not in frame.columns:
             raise ValueError(
-                "Une séparation chronologique demande une colonne de temps."
+                "A chronological split needs a time column."
             )
         order = frame[time_column].astype(str).argsort()
         frame, y = frame.iloc[order], y.iloc[order]
@@ -332,8 +332,8 @@ def train(
     else:
         if time_column and time_column in frame.columns:
             warnings.append(
-                "Séparation aléatoire alors qu'une colonne de temps existe : le modèle "
-                "s'entraîne sur l'avenir et se teste sur le passé, ce qui gonfle le score."
+                "Random split with a time column present: the model trains on the future "
+                "and tests on the past, which inflates the score."
             )
         stratify = y if task == "classification" and y.value_counts().min() >= 2 else None
         X_train, X_test, y_train, y_test = train_test_split(
@@ -362,8 +362,8 @@ def train(
         }
         if metrics["mae"] >= baseline["mae"]:
             warnings.append(
-                "Le modèle ne fait pas mieux que prédire la moyenne. Les variables "
-                "choisies ne portent pas d'information sur la cible."
+                "The model does no better than predicting the mean. The features chosen "
+                "carry no information about the target."
             )
         classes: list[str] = []
     else:
@@ -379,7 +379,7 @@ def train(
         }
         if metrics["accuracy"] <= baseline["accuracy"]:
             warnings.append(
-                "Le modèle ne fait pas mieux que toujours répondre la classe majoritaire."
+                "The model does no better than always answering the majority class."
             )
         classes = [str(c) for c in getattr(pipe.named_steps["model"], "classes_", [])]
 
@@ -388,8 +388,8 @@ def train(
     blob = buf.getvalue()
     if len(blob) > MAX_ARTIFACT_BYTES:
         raise ValueError(
-            f"Le modèle entraîné pèse {len(blob) // (1024 * 1024)} Mo, au-delà de la "
-            "limite de stockage. Réduisez le nombre d'arbres ou la profondeur."
+            f"The trained model is {len(blob) // (1024 * 1024)} MB, past the storage "
+            "limit. Use fewer trees or less depth."
         )
 
     return TrainOutcome(
@@ -427,6 +427,6 @@ def predict(artifact_b64: str, rows: list[dict[str, Any]]) -> list[Any]:
     features = bundle["features"]
     missing = [c for c in features if c not in frame.columns]
     if missing:
-        raise ValueError("Colonnes absentes pour la prédiction : " + ", ".join(missing))
+        raise ValueError("Columns not found for prediction: " + ", ".join(missing))
     out = bundle["pipeline"].predict(frame[features])
     return [o.item() if hasattr(o, "item") else o for o in out]

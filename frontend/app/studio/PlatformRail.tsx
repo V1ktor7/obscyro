@@ -25,7 +25,7 @@ import {
 
 import { cn } from "@/lib/cn";
 
-import { NAV_SECTIONS, sectionForPath, type NavSection } from "./platform-nav";
+import { NAV_SECTIONS, navItemActive, sectionForPath, type NavSection } from "./platform-nav";
 
 const ICONS: Record<string, LucideIcon> = {
   Home,
@@ -43,7 +43,6 @@ const ICONS: Record<string, LucideIcon> = {
 export default function PlatformRail({ capabilities }: { capabilities: string[] | null }) {
   const pathname = usePathname() ?? "";
   const searchParams = useSearchParams();
-  const view = searchParams?.get("view") ?? null;
   const active = sectionForPath(pathname);
 
   // Until identity resolves, show everything rather than flashing an empty
@@ -82,7 +81,7 @@ export default function PlatformRail({ capabilities }: { capabilities: string[] 
         })}
       </nav>
 
-      {active ? <SubNav section={active} pathname={pathname} view={view} /> : null}
+      {active ? <SubNav section={active} pathname={pathname} params={searchParams} /> : null}
     </>
   );
 }
@@ -90,11 +89,11 @@ export default function PlatformRail({ capabilities }: { capabilities: string[] 
 function SubNav({
   section,
   pathname,
-  view,
+  params,
 }: {
   section: NavSection;
   pathname: string;
-  view: string | null;
+  params: URLSearchParams | null;
 }) {
   return (
     <aside
@@ -109,12 +108,7 @@ function SubNav({
             </p>
           ) : null}
           {g.items.map((item) => {
-            const itemPath = item.href.split("?")[0];
-            // A view-scoped item matches on ?view=; a plain item matches on path.
-            const on = item.view
-              ? pathname.startsWith(itemPath) && view === item.view
-              : pathname.startsWith(itemPath) &&
-                !section.groups.some((gg) => gg.items.some((x) => x.view === view && view));
+            const on = navItemActive(item, pathname, params, g.items);
             return (
               <Link
                 key={item.href}

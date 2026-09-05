@@ -87,25 +87,25 @@ function Footprint({
   return (
     <div className="flex flex-wrap items-center gap-2 border-t border-line-faint px-4 py-2 text-[11px] text-ink-faint">
       <span>
-        {read.toLocaleString("fr-CA")} ligne{read > 1 ? "s" : ""} lue{read > 1 ? "s" : ""}
+        {read.toLocaleString("en-CA")} row{read > 1 ? "s" : ""} read
       </span>
       {skipped > 0 && (
         <span className="rounded bg-warn-soft px-1.5 py-0.5 text-warn-ink">
-          {skipped.toLocaleString("fr-CA")} sans mesure
+          {skipped.toLocaleString("en-CA")} with no measure
         </span>
       )}
       {/* A chart of the thirty largest out of a hundred and twenty is useful
           and dishonest unless it admits the ninety. */}
       {hidden > 0 && (
         <span className="rounded bg-warn-soft px-1.5 py-0.5 text-warn-ink">
-          {hidden.toLocaleString("fr-CA")} de plus hors du graphique
+          {hidden.toLocaleString("en-CA")} more outside the chart
         </span>
       )}
       {/* The curve covers the whole window; it just does not draw every day.
           Saying so is what stops a reader counting points as observations. */}
       {every > 1 && (
         <span className="rounded bg-canvas-raised px-1.5 py-0.5 text-ink-muted">
-          1 point sur {every} — fenêtre entière
+          1 point in {every} — whole window
         </span>
       )}
       {/* A run records threshold breaches, not a reading per site per day, so a
@@ -113,12 +113,12 @@ function Footprint({
           Counting that is what stops the empty sites reading as calm ones. */}
       {unread > 0 && (
         <span className="rounded bg-canvas-raised px-1.5 py-0.5 text-ink-muted">
-          {unread.toLocaleString("fr-CA")} site{unread > 1 ? "s" : ""} sans lecture
+          {unread.toLocaleString("en-CA")} site{unread > 1 ? "s" : ""} with no reading
         </span>
       )}
       {unplaced > 0 && (
         <span className="rounded bg-warn-soft px-1.5 py-0.5 text-warn-ink">
-          {unplaced.toLocaleString("fr-CA")} sans coordonnées
+          {unplaced.toLocaleString("en-CA")} with no coordinates
         </span>
       )}
       {note && <span className="w-full leading-relaxed">{note}</span>}
@@ -129,7 +129,7 @@ function Footprint({
 function LineCard({ card }: { card: Card }) {
   const clip = useId();
   const pts = card.data.points;
-  if (pts.length === 0) return <Empty note="Aucun point à tracer." />;
+  if (pts.length === 0) return <Empty note="No points to draw." />;
 
   const scale = scaleFor(
     pts.map((p) => p.value),
@@ -145,7 +145,7 @@ function LineCard({ card }: { card: Card }) {
       viewBox={`0 0 ${PLOT.width} ${PLOT.height}`}
       className="h-auto w-full"
       role="img"
-      aria-label={`${card.title} : ${pts.length} points`}
+      aria-label={`${card.title}: ${pts.length} points`}
     >
       <defs>
         <clipPath id={clip}>
@@ -209,7 +209,7 @@ function LineCard({ card }: { card: Card }) {
           shape of the curve imply a bigger movement than there was. */}
       {!scale.zeroBased && scale.min > 0 && (
         <text x={PLOT.padLeft} y={PLOT.padTop - 4} fontSize={9} fill={AXIS}>
-          axe tronqué à {formatValue(scale.min)}
+          axis starts at {formatValue(scale.min)}
         </text>
       )}
     </svg>
@@ -218,7 +218,7 @@ function LineCard({ card }: { card: Card }) {
 
 function BarCard({ card }: { card: Card }) {
   const pts = card.data.points;
-  if (pts.length === 0) return <Empty note="Aucune barre à tracer." />;
+  if (pts.length === 0) return <Empty note="No bars to draw." />;
 
   // Always zero-based: bar length is read as a ratio.
   const scale = scaleFor(
@@ -279,9 +279,9 @@ function BarCard({ card }: { card: Card }) {
       {bars.length > 12 && (
         <text x={PLOT.padLeft} y={PLOT.height - 12} fontSize={10} fill={AXIS}>
           {card.data.categoriesHidden > 0
-            ? `les ${bars.length} plus élevées sur ${bars.length + card.data.categoriesHidden}`
-            : `${bars.length} catégories`}{" "}
-          — survolez une barre pour la lire
+            ? `the ${bars.length} highest of ${bars.length + card.data.categoriesHidden}`
+            : `${bars.length} categories`}{" "}
+          — hover a bar to read it
         </text>
       )}
     </svg>
@@ -290,7 +290,7 @@ function BarCard({ card }: { card: Card }) {
 
 function NumberCard({ card }: { card: Card }) {
   const p = card.data.points[0];
-  if (!p) return <Empty note="Aucune valeur." />;
+  if (!p) return <Empty note="No value." />;
   const agg = card.config.agg ?? "sum";
   const AGG_LABEL: Record<string, string> = {
     sum: "somme",
@@ -313,7 +313,7 @@ function NumberCard({ card }: { card: Card }) {
 
 function TableCard({ card }: { card: Card }) {
   const { rows, columns } = card.data;
-  if (rows.length === 0) return <Empty note="Aucune ligne." />;
+  if (rows.length === 0) return <Empty note="No rows." />;
   const cols = columns.length ? columns : Object.keys(rows[0] ?? {});
   return (
     <div className="max-h-[220px] overflow-auto">
@@ -412,7 +412,7 @@ function AxisLabels({ labels }: { labels: string[] }) {
 function SeriesCard({ card }: { card: Card }) {
   const pts = card.data.points;
   const band = card.data.band;
-  if (pts.length === 0) return <Empty note="Cette exécution n'a pas de trajectoire." />;
+  if (pts.length === 0) return <Empty note="This run has no trajectory." />;
 
   const labels = pts.map((p) => p.label);
   const scale = scaleFor(
@@ -428,7 +428,7 @@ function SeriesCard({ card }: { card: Card }) {
       viewBox={`0 0 ${PLOT.width} ${PLOT.height}`}
       className="h-auto w-full"
       role="img"
-      aria-label={`${card.title} : ${pts.length} jours simulés`}
+      aria-label={`${card.title}: ${pts.length} simulated days`}
     >
       <Grid ticks={niceTicks(scale)} scale={scale} />
       <path d={bandPath(lo, hi)} fill={BAND} fillOpacity={0.75} stroke="none" />
@@ -449,7 +449,7 @@ function SeriesCard({ card }: { card: Card }) {
 function CompareCard({ card }: { card: Card }) {
   const { predicted, real } = card.data;
   if (predicted.length === 0 && real.length === 0) {
-    return <Empty note="Ni prévision ni observation à tracer." />;
+    return <Empty note="Neither a forecast nor an observation to draw." />;
   }
 
   const labels = sharedAxis(predicted, real);
@@ -463,7 +463,7 @@ function CompareCard({ card }: { card: Card }) {
         viewBox={`0 0 ${PLOT.width} ${PLOT.height}`}
         className="h-auto w-full"
         role="img"
-        aria-label={`${card.title} : ${card.data.overlap} jours comparables`}
+        aria-label={`${card.title}: ${card.data.overlap} comparable days`}
       >
         <Grid ticks={niceTicks(scale)} scale={scale} />
         <path d={pathWithGaps(r)} fill="none" stroke={REAL} strokeWidth={1.75} />
@@ -479,23 +479,23 @@ function CompareCard({ card }: { card: Card }) {
 
       <div className="flex flex-wrap items-center gap-3 px-4 pb-1 text-[11px] text-ink-faint">
         <span className="flex items-center gap-1.5">
-          <span className="h-[3px] w-4 rounded" style={{ backgroundColor: REAL }} /> observé
+          <span className="h-[3px] w-4 rounded" style={{ backgroundColor: REAL }} /> observed
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-[3px] w-4 rounded" style={{ backgroundColor: SERIES }} /> prédit
+          <span className="h-[3px] w-4 rounded" style={{ backgroundColor: SERIES }} /> predicted
         </span>
         {/* The count is the honest part. Two curves on one axis invite a
             comparison, and this says how much of one there is to make. */}
         <span className={card.data.overlap === 0 ? "text-warn-ink" : ""}>
           {card.data.overlap === 0
-            ? "aucun jour comparable"
-            : `${card.data.overlap} jours comparables`}
+            ? "no comparable day"
+            : `${card.data.overlap} comparable days`}
         </span>
-        {card.data.meanGap !== null && <span>écart moyen {formatValue(card.data.meanGap)}</span>}
+        {card.data.meanGap !== null && <span>mean gap {formatValue(card.data.meanGap)}</span>}
         {card.data.worstGap && (
           <span className="rounded bg-warn-soft px-1.5 py-0.5 text-warn-ink">
-            pire jour {shortLabel(card.data.worstGap.label, 10)} :{" "}
-            {formatValue(card.data.worstGap.predicted)} contre{" "}
+            worst day {shortLabel(card.data.worstGap.label, 10)}:{" "}
+            {formatValue(card.data.worstGap.predicted)} against{" "}
             {formatValue(card.data.worstGap.observed)}
           </span>
         )}

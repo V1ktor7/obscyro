@@ -55,26 +55,26 @@ const card = (over: Partial<Card> = {}): Card => ({
 describe("what a bar card says about what it left out", () => {
   it("says how many categories are outside the chart", () => {
     render(<CardChart card={card()} />);
-    expect(screen.getByText(/90 de plus hors du graphique/)).toBeTruthy();
+    expect(screen.getByText(/90 more outside the chart/)).toBeTruthy();
   });
 
   it("says it is showing the highest ones, not all of them", () => {
     // "30 catégories" reads as the size of the network. It was not.
     const { container } = render(<CardChart card={card()} />);
-    expect(container.textContent).toMatch(/les 30 plus élevées sur 120/);
+    expect(container.textContent).toMatch(/the 30 highest of 120/);
   });
 
   it("says plainly how many categories there are when none are hidden", () => {
     const { container } = render(
       <CardChart card={card({ data: { ...card().data, categoriesHidden: 0 } })} />,
     );
-    expect(container.textContent).toMatch(/30 catégories/);
+    expect(container.textContent).toMatch(/30 categories/);
     expect(container.textContent).not.toMatch(/plus élevées/);
   });
 
   it("names the rows that carried no measure", () => {
     render(<CardChart card={card()} />);
-    expect(screen.getByText(/12 sans mesure/)).toBeTruthy();
+    expect(screen.getByText(/12 with no measure/)).toBeTruthy();
   });
 
   it("stays quiet when nothing was dropped", () => {
@@ -119,7 +119,7 @@ describe("a curve longer than the card is wide", () => {
         })}
       />,
     );
-    expect(screen.getByText(/1 point sur 3/)).toBeTruthy();
+    expect(screen.getByText(/1 point in 3/)).toBeTruthy();
   });
 
   it("stays quiet when every point is drawn", () => {
@@ -146,7 +146,7 @@ describe("a curve that does not start at zero", () => {
       />,
     );
     // Without this the shape of the curve implies a movement from nothing.
-    expect(container.textContent).toMatch(/axe tronqué/);
+    expect(container.textContent).toMatch(/axis starts at/);
   });
 });
 
@@ -173,7 +173,7 @@ describe("a simulated trajectory", () => {
         ],
         categoriesHidden: 0,
         rowsSkipped: 0,
-        note: "Médiane des exécutions, avec l'intervalle p5 à p95.",
+        note: "Median of the runs, with the p5 to p95 interval.",
       },
     });
 
@@ -189,7 +189,7 @@ describe("a simulated trajectory", () => {
 
   it("prints the sentence the reader sent with it", () => {
     render(<CardChart card={series()} />);
-    expect(screen.getByText(/intervalle p5 à p95/)).toBeTruthy();
+    expect(screen.getByText(/p5 to p95/)).toBeTruthy();
   });
 });
 
@@ -221,7 +221,7 @@ describe("a prediction against what happened", () => {
     // Two lines on one axis invite a comparison. Where there is none to make,
     // the card has to say so rather than let the picture imply one.
     render(<CardChart card={compare()} />);
-    expect(screen.getByText("aucun jour comparable")).toBeTruthy();
+    expect(screen.getByText("no comparable day")).toBeTruthy();
   });
 
   it("never joins the last observation to the first prediction", () => {
@@ -249,8 +249,8 @@ describe("a prediction against what happened", () => {
         })}
       />,
     );
-    expect(screen.getByText(/pire jour/)).toBeTruthy();
-    expect(screen.getByText(/2 jours comparables/)).toBeTruthy();
+    expect(screen.getByText(/worst day/)).toBeTruthy();
+    expect(screen.getByText(/2 comparable days/)).toBeTruthy();
   });
 });
 
@@ -267,7 +267,7 @@ describe("what a map card admits", () => {
         })}
       />,
     );
-    expect(screen.getByText(/16 sites sans lecture/)).toBeTruthy();
+    expect(screen.getByText(/16 sites with no reading/)).toBeTruthy();
   });
 
   it("counts the sites it could not place at all", () => {
@@ -280,6 +280,6 @@ describe("what a map card admits", () => {
         })}
       />,
     );
-    expect(screen.getByText(/3 sans coordonnées/)).toBeTruthy();
+    expect(screen.getByText(/3 with no coordinates/)).toBeTruthy();
   });
 });

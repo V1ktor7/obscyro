@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import {
   AlertTriangle,
@@ -55,6 +56,20 @@ import { useStudio } from "../StudioShell";
 
 type Tab = "models" | "notebook" | "forecast" | "causality" | "train" | "compare" | "feed";
 
+const TABS: readonly Tab[] = [
+  "models",
+  "notebook",
+  "forecast",
+  "causality",
+  "train",
+  "compare",
+  "feed",
+];
+
+function tabFrom(value: string | null): Tab | null {
+  return value && (TABS as readonly string[]).includes(value) ? (value as Tab) : null;
+}
+
 const FIELD =
   "rounded border border-[#d3d8de] bg-[#f6f7f9] px-2 py-1 text-xs text-[#1c2127] focus:border-[#2d72d2] focus:outline-none";
 const LABEL = "mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-[#8f99a8]";
@@ -67,7 +82,29 @@ export default function LabView() {
   const { hasKey, selectedEnv } = useStudio();
   const env = selectedEnv;
 
-  const [tab, setTab] = useState<Tab>("models");
+  // The tab lives in the URL.
+  //
+  // The rail links to `/studio/lab?tab=causality` and this screen used to
+  // ignore the parameter entirely: every one of those links opened Models, and
+  // the rail highlighted all of them at once because none of them changed
+  // anything. Reading it here is what makes them links; writing it back on a
+  // click is what keeps the highlight honest, and what makes a lab tab
+  // something you can send to somebody.
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const tab = tabFrom(params?.get("tab") ?? null) ?? "models";
+
+  const setTab = useCallback(
+    (next: Tab) => {
+      const q = new URLSearchParams(params?.toString() ?? "");
+      q.set("tab", next);
+      // Replace rather than push: seven tabs would otherwise bury the page the
+      // reader came from under seven back-button steps.
+      router.replace(`${pathname}?${q.toString()}`, { scroll: false });
+    },
+    [router, pathname, params],
+  );
   const [error, setError] = useState<string | null>(null);
 
   // Context

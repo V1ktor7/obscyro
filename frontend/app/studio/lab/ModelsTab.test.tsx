@@ -68,10 +68,10 @@ beforeEach(() => {
   api.liftOverBaseline.mockReturnValue(0.42);
 });
 
-const fitButton = () => screen.getByRole("button", { name: /Entraîner/ }) as HTMLButtonElement;
+const fitButton = () => screen.getByRole("button", { name: /^Train$/ }) as HTMLButtonElement;
 
 async function pickDataset(user: ReturnType<typeof userEvent.setup>, label: RegExp) {
-  await user.selectOptions(await screen.findByLabelText(/Jeu de données/), [
+  await user.selectOptions(await screen.findByLabelText(/Dataset/), [
     screen.getByRole("option", { name: label }),
   ]);
 }
@@ -79,7 +79,7 @@ async function pickDataset(user: ReturnType<typeof userEvent.setup>, label: RegE
 describe("what has to be chosen before a fit can run", () => {
   it("refuses to fit with nothing chosen", async () => {
     render(<ModelsTab env="e" onError={() => {}} />);
-    await screen.findByLabelText(/Jeu de données/);
+    await screen.findByLabelText(/Dataset/);
     expect(fitButton().disabled).toBe(true);
   });
 
@@ -94,9 +94,9 @@ describe("what has to be chosen before a fit can run", () => {
     const user = userEvent.setup();
     render(<ModelsTab env="e" onError={() => {}} />);
     await pickDataset(user, /MSSS/);
-    await user.selectOptions(screen.getByLabelText(/Cible/), "occupees");
+    await user.selectOptions(screen.getByLabelText(/Target/), "occupees");
     await user.click(screen.getByRole("checkbox", { name: /capacite/ }));
-    await user.type(screen.getByLabelText(/Nom du modèle/), "essai");
+    await user.type(screen.getByLabelText(/Model name/), "essai");
     await waitFor(() => expect(fitButton().disabled).toBe(false));
   });
 });
@@ -108,7 +108,7 @@ describe("the target and the features", () => {
     const user = userEvent.setup();
     render(<ModelsTab env="e" onError={() => {}} />);
     await pickDataset(user, /MSSS/);
-    await user.selectOptions(screen.getByLabelText(/Cible/), "occupees");
+    await user.selectOptions(screen.getByLabelText(/Target/), "occupees");
     expect(screen.queryByRole("checkbox", { name: /^occupees$/ })).toBeNull();
     expect(screen.getByRole("checkbox", { name: /capacite/ })).toBeTruthy();
   });
@@ -118,8 +118,8 @@ describe("the target and the features", () => {
     render(<ModelsTab env="e" onError={() => {}} />);
     await pickDataset(user, /MSSS/);
     await user.click(screen.getByRole("checkbox", { name: /occupees/ }));
-    await user.selectOptions(screen.getByLabelText(/Cible/), "occupees");
-    await user.type(screen.getByLabelText(/Nom du modèle/), "essai");
+    await user.selectOptions(screen.getByLabelText(/Target/), "occupees");
+    await user.type(screen.getByLabelText(/Model name/), "essai");
     // The only feature was taken as the target, so there is nothing left to fit on.
     await waitFor(() => expect(fitButton().disabled).toBe(true));
   });
@@ -129,11 +129,11 @@ describe("the target and the features", () => {
     const user = userEvent.setup();
     render(<ModelsTab env="e" onError={() => {}} />);
     await pickDataset(user, /MSSS/);
-    await user.selectOptions(screen.getByLabelText(/Cible/), "occupees");
+    await user.selectOptions(screen.getByLabelText(/Target/), "occupees");
     await user.click(screen.getByRole("checkbox", { name: /capacite/ }));
     await pickDataset(user, /INSPQ/);
-    expect((screen.getByLabelText(/Cible/) as HTMLSelectElement).value).toBe("");
-    expect(screen.getByText(/Variables explicatives \(0\)/)).toBeTruthy();
+    expect((screen.getByLabelText(/Target/) as HTMLSelectElement).value).toBe("");
+    expect(screen.getByText(/Features \(0\)/)).toBeTruthy();
   });
 });
 
@@ -142,13 +142,13 @@ describe("the split", () => {
     const user = userEvent.setup();
     render(<ModelsTab env="e" onError={() => {}} />);
     await pickDataset(user, /MSSS/);
-    await user.selectOptions(screen.getByLabelText(/Cible/), "occupees");
+    await user.selectOptions(screen.getByLabelText(/Target/), "occupees");
     await user.click(screen.getByRole("checkbox", { name: /capacite/ }));
-    await user.type(screen.getByLabelText(/Nom du modèle/), "essai");
-    await user.selectOptions(screen.getByLabelText(/Comment séparer/), "chronological");
+    await user.type(screen.getByLabelText(/Model name/), "essai");
+    await user.selectOptions(screen.getByLabelText(/How to split/), "chronological");
     await waitFor(() => expect(fitButton().disabled).toBe(true));
 
-    await user.selectOptions(screen.getByLabelText(/Colonne de temps/), "date");
+    await user.selectOptions(screen.getByLabelText(/Time column/), "date");
     await waitFor(() => expect(fitButton().disabled).toBe(false));
   });
 
@@ -164,11 +164,11 @@ describe("the split", () => {
     });
     render(<ModelsTab env="e" onError={() => {}} />);
     await pickDataset(user, /MSSS/);
-    await user.selectOptions(screen.getByLabelText(/Cible/), "occupees");
+    await user.selectOptions(screen.getByLabelText(/Target/), "occupees");
     await user.click(screen.getByRole("checkbox", { name: /capacite/ }));
-    await user.type(screen.getByLabelText(/Nom du modèle/), "essai");
-    await user.selectOptions(screen.getByLabelText(/Comment séparer/), "chronological");
-    await user.selectOptions(screen.getByLabelText(/Colonne de temps/), "date");
+    await user.type(screen.getByLabelText(/Model name/), "essai");
+    await user.selectOptions(screen.getByLabelText(/How to split/), "chronological");
+    await user.selectOptions(screen.getByLabelText(/Time column/), "date");
     await user.click(fitButton());
 
     await waitFor(() => expect(api.trainLabModel).toHaveBeenCalled());
@@ -199,8 +199,8 @@ describe("what the result says", () => {
     const user = userEvent.setup();
     render(<ModelsTab env="e" onError={() => {}} />);
     await user.click(await screen.findByText("déjà là"));
-    expect(screen.getByText(/ligne de base : 0.11/)).toBeTruthy();
-    expect(screen.getByText(/4 lignes écartées/)).toBeTruthy();
+    expect(screen.getByText(/baseline: 0.11/)).toBeTruthy();
+    expect(screen.getByText(/4 rows dropped/)).toBeTruthy();
   });
 
   it("shows a warning above the numbers it invalidates", async () => {

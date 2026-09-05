@@ -172,8 +172,8 @@ export async function readAllRows(
   if (rows.length > MAX_TRAINING_ROWS) {
     throw BadRequest(
       "DATASET_TOO_LARGE",
-      `Ce jeu dépasse ${MAX_TRAINING_ROWS.toLocaleString("fr-CA")} lignes. ` +
-        "Filtrez-le par un pipeline avant d'entraîner.",
+      `This dataset is over ${MAX_TRAINING_ROWS.toLocaleString("en-CA")} rows. ` +
+        "Filter it through a pipeline before training.",
     );
   }
   return rows.map((r) => r.data);
@@ -216,7 +216,7 @@ export async function trainAndStore(
   userId: string | null,
 ): Promise<LabModelRow> {
   const name = (input.name ?? "").trim();
-  if (!name) throw BadRequest("MODEL_NAME_REQUIRED", "Un modèle a besoin d'un nom.");
+  if (!name) throw BadRequest("MODEL_NAME_REQUIRED", "A model needs a name.");
 
   const ds = await getDataset(db, input.datasetId);
   const rows = await readAllRows(db, input.datasetId);
@@ -315,7 +315,7 @@ export async function forecastAndStore(
   userId: string | null,
 ): Promise<LabModelRow> {
   const name = (input.name ?? "").trim();
-  if (!name) throw BadRequest("MODEL_NAME_REQUIRED", "Un modèle a besoin d'un nom.");
+  if (!name) throw BadRequest("MODEL_NAME_REQUIRED", "A model needs a name.");
 
   const ds = await getDataset(db, input.datasetId);
   const rows = await readAllRows(db, input.datasetId);
@@ -384,20 +384,20 @@ export async function runForecast(
   if (model.kind !== "timeseries") {
     throw BadRequest(
       "NOT_A_FORECASTER",
-      "Ce modèle n'est pas un modèle de série temporelle.",
+      "This model is not a time series model.",
     );
   }
   if (!model.datasetId) {
     throw BadRequest(
       "SOURCE_GONE",
-      "Le jeu de données de ce modèle n'existe plus, donc son historique non plus.",
+      "This model's dataset is gone, and with it the history it would continue.",
     );
   }
   const { rows: found } = await db.query<{ artifact: Buffer }>(
     `SELECT artifact FROM app.lab_model WHERE id = $1`,
     [id],
   );
-  if (!found[0]) throw NotFound("MODEL_NOT_FOUND", "Modèle introuvable.");
+  if (!found[0]) throw NotFound("MODEL_NOT_FOUND", "Model not found.");
   const rows = await readAllRows(db, model.datasetId);
   return proxyToSimService("/lab/forecast/run", {
     artifact_b64: found[0].artifact.toString("base64"),
@@ -416,13 +416,13 @@ export async function listModels(db: DbClient, projectId: string): Promise<LabMo
 
 export async function getModel(db: DbClient, id: string): Promise<LabModelRow> {
   const { rows } = await db.query<Raw>(`${SELECT} WHERE id = $1`, [id]);
-  if (!rows[0]) throw NotFound("MODEL_NOT_FOUND", "Modèle introuvable.");
+  if (!rows[0]) throw NotFound("MODEL_NOT_FOUND", "Model not found.");
   return toModel(rows[0]);
 }
 
 export async function deleteModel(db: DbClient, id: string): Promise<void> {
   const { rowCount } = await db.query(`DELETE FROM app.lab_model WHERE id = $1`, [id]);
-  if (!rowCount) throw NotFound("MODEL_NOT_FOUND", "Modèle introuvable.");
+  if (!rowCount) throw NotFound("MODEL_NOT_FOUND", "Model not found.");
 }
 
 /**
@@ -441,7 +441,7 @@ export async function predictWith(
     `SELECT artifact FROM app.lab_model WHERE id = $1`,
     [id],
   );
-  if (!found[0]) throw NotFound("MODEL_NOT_FOUND", "Modèle introuvable.");
+  if (!found[0]) throw NotFound("MODEL_NOT_FOUND", "Model not found.");
   const out = await proxyToSimService<{ predictions: unknown[] }>("/lab/predict", {
     artifact_b64: found[0].artifact.toString("base64"),
     rows,

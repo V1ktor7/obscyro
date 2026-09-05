@@ -66,18 +66,18 @@ const KIND_ICON: Record<CardKind, typeof TrendingUp> = {
 type Family = "dataset" | "twin" | "simulation" | "model";
 
 const FAMILIES: { key: Family; label: string; hint: string }[] = [
-  { key: "dataset", label: "Jeux de données", hint: "Courbes, barres, chiffres, tables" },
-  { key: "twin", label: "Jumeau", hint: "Le réseau sur une carte" },
-  { key: "simulation", label: "Simulation", hint: "Une trajectoire, ou le simulé contre l'observé" },
-  { key: "model", label: "Modèle", hint: "Le prédit contre le réel" },
+  { key: "dataset", label: "Datasets", hint: "Lines, bars, numbers, tables" },
+  { key: "twin", label: "Twin", hint: "The network on a map" },
+  { key: "simulation", label: "Simulation", hint: "A trajectory, or simulated against observed" },
+  { key: "model", label: "Model", hint: "Predicted against real" },
 ];
 
 const ROLE_LABEL: Record<string, string> = {
-  time: "temps",
-  quantity: "mesure",
-  category: "catégorie",
-  identifier: "identifiant",
-  unusable: "vide",
+  time: "time",
+  quantity: "measure",
+  category: "category",
+  identifier: "identifier",
+  unusable: "empty",
 };
 
 const ROLE_STYLE: Record<string, string> = {
@@ -89,11 +89,11 @@ const ROLE_STYLE: Record<string, string> = {
 };
 
 const AGGREGATES: { value: Aggregate; label: string }[] = [
-  { value: "sum", label: "Somme" },
-  { value: "avg", label: "Moyenne" },
-  { value: "max", label: "Maximum" },
-  { value: "min", label: "Minimum" },
-  { value: "count", label: "Nombre de valeurs" },
+  { value: "sum", label: "Sum" },
+  { value: "avg", label: "Mean" },
+  { value: "max", label: "Max" },
+  { value: "min", label: "Min" },
+  { value: "count", label: "Count of values" },
 ];
 
 export default function DashboardsView() {
@@ -127,7 +127,7 @@ export default function DashboardsView() {
       setBoards(dashboards);
       setOpenId((cur) => cur ?? dashboards[0]?.id ?? null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Chargement impossible");
+      setError(e instanceof Error ? e.message : "Could not load");
     } finally {
       setLoading(false);
     }
@@ -139,7 +139,7 @@ export default function DashboardsView() {
       const { cards: c } = await readDashboard(id);
       setCards(c);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Lecture impossible");
+      setError(e instanceof Error ? e.message : "Could not read");
     } finally {
       setLoading(false);
     }
@@ -172,7 +172,7 @@ export default function DashboardsView() {
         setChartable(datasets);
         setSources(src);
       } catch (e) {
-        if (live) setError(e instanceof Error ? e.message : "Catalogue indisponible");
+        if (live) setError(e instanceof Error ? e.message : "Catalogue unavailable");
       }
     })();
     return () => {
@@ -189,7 +189,7 @@ export default function DashboardsView() {
       setOpenId(d.id);
       setNewName(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Création impossible");
+      setError(e instanceof Error ? e.message : "Create failed");
     } finally {
       setBusy(false);
     }
@@ -203,7 +203,7 @@ export default function DashboardsView() {
       setOpenId((cur) => (cur === id ? null : cur));
       setConfirmDelete(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Suppression impossible");
+      setError(e instanceof Error ? e.message : "Delete failed");
     } finally {
       setBusy(false);
     }
@@ -224,7 +224,7 @@ export default function DashboardsView() {
       await loadCards(openId);
       await loadBoards();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Ajout impossible");
+      setError(e instanceof Error ? e.message : "Add failed");
     } finally {
       setBusy(false);
     }
@@ -237,7 +237,7 @@ export default function DashboardsView() {
       await deleteCard(openId, cardId);
       setCards((c) => c.filter((x) => x.id !== cardId));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Retrait impossible");
+      setError(e instanceof Error ? e.message : "Remove failed");
     } finally {
       setBusy(false);
     }
@@ -246,7 +246,7 @@ export default function DashboardsView() {
   if (!hasKey) {
     return (
       <div className="p-8 text-sm text-ink-muted">
-        Connectez-vous pour voir les tableaux de bord.
+        Sign in to see the dashboards.
       </div>
     );
   }
@@ -257,14 +257,14 @@ export default function DashboardsView() {
       <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-white">
         <div className="flex items-center justify-between border-b border-line-soft px-3 py-2.5">
           <span className="text-xs font-medium uppercase tracking-wide text-ink-faint">
-            Tableaux de bord
+            Dashboards
           </span>
           <button
             type="button"
             onClick={() => setNewName("")}
             disabled={busy || !env}
             className="rounded p-1 text-ink-muted hover:bg-canvas hover:text-ink disabled:opacity-40"
-            title="Nouveau tableau de bord"
+            title="New dashboard"
           >
             <Plus className="h-4 w-4" />
           </button>
@@ -275,8 +275,8 @@ export default function DashboardsView() {
             <input
               autoFocus
               value={newName}
-              placeholder="Nom du tableau de bord"
-              aria-label="Nom du tableau de bord"
+              placeholder="Dashboard name"
+              aria-label="Dashboard name"
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") void onCreateBoard(newName);
@@ -291,14 +291,14 @@ export default function DashboardsView() {
                 onClick={() => void onCreateBoard(newName)}
                 className="rounded border border-brand bg-brand px-2 py-1 text-[11px] font-medium text-white hover:bg-brand-deep disabled:opacity-40"
               >
-                Créer
+                Create
               </button>
               <button
                 type="button"
                 onClick={() => setNewName(null)}
                 className="rounded border border-line px-2 py-1 text-[11px] text-ink-muted hover:bg-canvas"
               >
-                Annuler
+                Cancel
               </button>
             </div>
           </div>
@@ -307,8 +307,8 @@ export default function DashboardsView() {
         <div className="min-h-0 flex-1 overflow-auto py-1">
           {boards.length === 0 && !loading && newName === null && (
             <p className="px-3 py-6 text-center text-xs text-ink-faint">
-              Aucun tableau de bord. Créez-en un pour composer des cartes à partir de vos jeux de
-              données.
+              No dashboards yet. Create one to compose cards from this project&apos;s
+              data.
             </p>
           )}
           {boards.map((b) => (
@@ -336,12 +336,12 @@ export default function DashboardsView() {
         <header className="flex items-center justify-between gap-4 border-b border-line bg-white px-5 py-3">
           <div className="min-w-0">
             <h1 className="truncate text-base font-semibold text-ink">
-              {open?.name ?? "Tableaux de bord"}
+              {open?.name ?? "Dashboards"}
             </h1>
             <p className="text-xs text-ink-faint">
               {open
-                ? "Les valeurs sont lues maintenant — une synchronisation qui arrive apparaît ici sans toucher aux cartes."
-                : "Choisissez ou créez un tableau de bord."}
+                ? "Values are read now, not stored — a sync that lands shows up here without anyone editing a card."
+                : "Choose or create a dashboard."}
             </p>
           </div>
           {open && (
@@ -352,7 +352,7 @@ export default function DashboardsView() {
                 disabled={busy}
                 className="rounded border border-brand bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-deep disabled:opacity-40"
               >
-                Ajouter une carte
+                Add a card
               </button>
               {/* Two steps rather than a native confirm: the second click says
                   what it destroys, which a browser dialog cannot. */}
@@ -369,8 +369,8 @@ export default function DashboardsView() {
                 )}
               >
                 {confirmDelete
-                  ? `Supprimer « ${open.name} » et ses ${open.cardCount} carte${open.cardCount > 1 ? "s" : ""} ?`
-                  : "Supprimer"}
+                  ? `Delete “${open.name}” and its ${open.cardCount} card${open.cardCount > 1 ? "s" : ""}?`
+                  : "Delete"}
               </button>
             </div>
           )}
@@ -392,10 +392,10 @@ export default function DashboardsView() {
           {!loading && open && cards.length === 0 && (
             <div className="mx-auto max-w-md rounded-md border border-dashed border-line bg-white px-6 py-10 text-center">
               <LayoutGrid className="mx-auto mb-3 h-6 w-6 text-ink-ghost" />
-              <p className="text-sm text-ink-body">Ce tableau de bord est vide.</p>
+              <p className="text-sm text-ink-body">This dashboard is empty.</p>
               <p className="mt-1 text-xs text-ink-faint">
-                « Ajouter une carte » lit vos jeux de données et propose les graphiques qu&apos;ils
-                peuvent porter.
+                &ldquo;Add a card&rdquo; reads this project&apos;s data and offers the charts
+                it can carry.
               </p>
             </div>
           )}
@@ -579,9 +579,9 @@ function CardPicker({
         onClick={(e) => e.stopPropagation()}
       >
         <header className="border-b border-line px-5 py-3">
-          <h2 className="text-sm font-semibold text-ink">Ajouter une carte</h2>
+          <h2 className="text-sm font-semibold text-ink">Add a card</h2>
           <p className="text-xs text-ink-faint">
-            Les options proposées dépendent de ce que ce projet contient réellement.
+            The options offered depend on what this project actually holds.
           </p>
         </header>
 
@@ -612,7 +612,7 @@ function CardPicker({
             <>
               {datasets.length === 0 && (
                 <p className="text-sm text-ink-faint">
-                  Aucun jeu de données lisible dans ce projet.
+                  No readable dataset in this project.
                 </p>
               )}
 
@@ -637,7 +637,7 @@ function CardPicker({
                     <span className="min-w-0">
                       <span className="block truncate text-sm text-ink">{d.name}</span>
                       <span className="block text-[11px] text-ink-faint">
-                        {d.rowCount.toLocaleString("fr-CA")} lignes · {d.columns.length} colonnes
+                        {d.rowCount.toLocaleString("en-CA")} rows · {d.columns.length} columns
                       </span>
                     </span>
                     <span className="flex shrink-0 gap-1">
@@ -653,7 +653,7 @@ function CardPicker({
               {ds && (
                 <div className="mt-5 border-t border-line-soft pt-4">
                   <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-faint">
-                    Ce que ces données peuvent porter
+                    What this data can carry
                   </h3>
 
                   <div className="mb-3 flex flex-wrap gap-1">
@@ -709,7 +709,7 @@ function CardPicker({
                   {(kind === "line" || kind === "bar") && (
                     <label className="block">
                       <span className="mb-1 block text-xs text-ink-muted">
-                        {kind === "line" ? "Axe du temps" : "Catégorie"}
+                        {kind === "line" ? "Time axis" : "Category"}
                       </span>
                       <select
                         value={x ?? ""}
@@ -728,7 +728,7 @@ function CardPicker({
                   {kind !== "table" && (
                     <>
                       <label className="block">
-                        <span className="mb-1 block text-xs text-ink-muted">Mesure</span>
+                        <span className="mb-1 block text-xs text-ink-muted">Measure</span>
                         <select
                           value={y ?? ""}
                           onChange={(e) => setY(e.target.value)}
@@ -743,7 +743,7 @@ function CardPicker({
                       </label>
 
                       <label className="block">
-                        <span className="mb-1 block text-xs text-ink-muted">Agrégation</span>
+                        <span className="mb-1 block text-xs text-ink-muted">Aggregate</span>
                         <select
                           value={agg}
                           onChange={(e) => setAgg(e.target.value as Aggregate)}
@@ -815,7 +815,7 @@ function CardPicker({
           )}
 
           <label className="mt-5 block border-t border-line-soft pt-4">
-            <span className="mb-1 block text-xs text-ink-muted">Titre</span>
+            <span className="mb-1 block text-xs text-ink-muted">Title</span>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -830,7 +830,7 @@ function CardPicker({
             onClick={onClose}
             className="rounded border border-line px-3 py-1.5 text-xs text-ink-muted hover:bg-canvas"
           >
-            Annuler
+            Cancel
           </button>
           <button
             type="button"
@@ -838,7 +838,7 @@ function CardPicker({
             onClick={submit}
             className="rounded border border-brand bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-deep disabled:opacity-40"
           >
-            Ajouter
+            Add
           </button>
         </footer>
       </div>
@@ -892,15 +892,15 @@ function TwinPanel({
   setBranchId: (v: string) => void;
   chosenRun: DashboardSources["runs"][number] | null;
 }) {
-  if (!sources) return <p className="text-sm text-ink-faint">Lecture des sources…</p>;
+  if (!sources) return <p className="text-sm text-ink-faint">Reading sources…</p>;
   if (sources.sitesWithCoordinates === 0) {
     return (
-      <Missing what="Aucun site de ce jumeau ne porte de coordonnées, donc rien ne peut être placé sur une carte. Ajoutez une latitude et une longitude aux installations dans l'ontologie." />
+      <Missing what="No site in this twin carries coordinates, so nothing can be placed on a map. Add a latitude and a longitude to the facilities in the ontology." />
     );
   }
   if (sources.metrics.length === 0) {
     return (
-      <Missing what="Aucune métrique n'est définie pour ce jumeau, donc les sites n'auraient rien à afficher. Définissez-en une dans le centre de commande." />
+      <Missing what="No metric is defined for this twin, so the sites would have nothing to show. Define one in the command centre." />
     );
   }
 
@@ -914,9 +914,9 @@ function TwinPanel({
         <div className="grid gap-2 sm:grid-cols-3">
           {(
             [
-              ["live", "Maintenant", "La mesure courante"],
-              ["run", "Un jour d'exécution", "Figé au pas choisi"],
-              ["scenario", "Prévision", "Ce qu'un modèle a écrit"],
+              ["live", "Now", "The current measurement"],
+              ["run", "A day of a run", "Frozen at the step you pick"],
+              ["scenario", "Prediction", "What a model wrote"],
             ] as const
           ).map(([key, label, hint]) => (
             <button
@@ -945,13 +945,13 @@ function TwinPanel({
 
       {state !== "scenario" && (
         <label className="block">
-          <span className="mb-1 block text-xs text-ink-muted">Métrique</span>
+          <span className="mb-1 block text-xs text-ink-muted">Metric</span>
           <select
             value={metric}
             onChange={(e) => setMetric(e.target.value)}
             className="w-full rounded border border-line px-2 py-1.5 text-sm"
           >
-            <option value="">Choisir…</option>
+            <option value="">Choose…</option>
             {sources.metrics.map((m) => (
               <option key={m.key} value={m.key}>
                 {m.label} ({m.unit})
@@ -963,11 +963,11 @@ function TwinPanel({
 
       {state === "run" &&
         (runsWithSteps.length === 0 ? (
-          <Missing what="Aucune exécution enregistrée ne contient de relevé par unité. Une exécution n'en produit que si des règles d'alerte sont définies sur le jumeau." />
+          <Missing what="No stored run holds a per-unit reading. A run only produces those when alert rules are defined on the twin." />
         ) : (
           <>
             <label className="block">
-              <span className="mb-1 block text-xs text-ink-muted">Exécution</span>
+              <span className="mb-1 block text-xs text-ink-muted">Run</span>
               <select
                 value={runId}
                 onChange={(e) => {
@@ -976,10 +976,10 @@ function TwinPanel({
                 }}
                 className="w-full rounded border border-line px-2 py-1.5 text-sm"
               >
-                <option value="">Choisir…</option>
+                <option value="">Choose…</option>
                 {runsWithSteps.map((r) => (
                   <option key={r.id} value={r.id}>
-                    {r.scenarioName} — {r.createdAt.slice(0, 10)} ({r.steps.length} jours relevés)
+                    {r.scenarioName} — {r.createdAt.slice(0, 10)} ({r.steps.length} days recorded)
                   </option>
                 ))}
               </select>
@@ -988,17 +988,17 @@ function TwinPanel({
             {chosenRun && (
               <label className="block">
                 <span className="mb-1 block text-xs text-ink-muted">
-                  Jour — seuls les jours relevés sont proposés
+                  Day — only the days the run recorded
                 </span>
                 <select
                   value={step ?? ""}
                   onChange={(e) => setStep(e.target.value === "" ? null : Number(e.target.value))}
                   className="w-full rounded border border-line px-2 py-1.5 text-sm"
                 >
-                  <option value="">Choisir…</option>
+                  <option value="">Choose…</option>
                   {chosenRun.steps.map((d) => (
                     <option key={d} value={d}>
-                      Jour {d}
+                      Day {d}
                     </option>
                   ))}
                 </select>
@@ -1009,11 +1009,11 @@ function TwinPanel({
 
       {state === "scenario" &&
         (sources.scenarios.length === 0 ? (
-          <Missing what="Aucune branche ne porte de valeurs prédites. Lancez une simulation de modèle sur un scénario, puis revenez." />
+          <Missing what="No branch carries predicted values. Run a model simulation on a scenario, then come back." />
         ) : (
           <>
             <label className="block">
-              <span className="mb-1 block text-xs text-ink-muted">Branche</span>
+              <span className="mb-1 block text-xs text-ink-muted">Branch</span>
               <select
                 value={branchId}
                 onChange={(e) => {
@@ -1022,10 +1022,10 @@ function TwinPanel({
                 }}
                 className="w-full rounded border border-line px-2 py-1.5 text-sm"
               >
-                <option value="">Choisir…</option>
+                <option value="">Choose…</option>
                 {sources.scenarios.map((sc) => (
                   <option key={sc.id} value={sc.id}>
-                    {sc.name} ({sc.predictedUnits} unités prédites)
+                    {sc.name} ({sc.predictedUnits} units predicted)
                   </option>
                 ))}
               </select>
@@ -1037,14 +1037,14 @@ function TwinPanel({
             {branch && (
               <label className="block">
                 <span className="mb-1 block text-xs text-ink-muted">
-                  Propriété prédite — écrite par l&apos;exécution sur cette branche
+                  Predicted property — written by the run onto this branch
                 </span>
                 <select
                   value={metric}
                   onChange={(e) => setMetric(e.target.value)}
                   className="w-full rounded border border-line px-2 py-1.5 text-sm"
                 >
-                  <option value="">Choisir…</option>
+                  <option value="">Choose…</option>
                   {branch.properties.map((k) => (
                     <option key={k} value={k}>
                       {k}
@@ -1060,11 +1060,11 @@ function TwinPanel({
 }
 
 const MEASURE_LABEL: Record<TrajectoryMeasure, string> = {
-  S: "Susceptibles",
-  E: "Exposés",
-  I: "Infectieux",
-  R: "Rétablis",
-  isolationDemand: "Demande d'isolement",
+  S: "Susceptible",
+  E: "Exposed",
+  I: "Infectious",
+  R: "Recovered",
+  isolationDemand: "Isolation demand",
 };
 
 /** A run's trajectory, on its own or against an observed series. */
@@ -1101,33 +1101,33 @@ function SimulationPanel({
   setRealY: (v: string) => void;
   realTable: DatasetOffers | null;
 }) {
-  if (!sources) return <p className="text-sm text-ink-faint">Lecture des sources…</p>;
+  if (!sources) return <p className="text-sm text-ink-faint">Reading sources…</p>;
   if (sources.runs.length === 0) {
     return (
-      <Missing what="Aucune exécution terminée dans ce projet. Lancez un scénario depuis le centre de commande, puis revenez." />
+      <Missing what="No completed run in this project. Run a scenario from the command centre, then come back." />
     );
   }
 
   return (
     <div className="space-y-3">
       <label className="block">
-        <span className="mb-1 block text-xs text-ink-muted">Exécution</span>
+        <span className="mb-1 block text-xs text-ink-muted">Run</span>
         <select
           value={runId}
           onChange={(e) => setRunId(e.target.value)}
           className="w-full rounded border border-line px-2 py-1.5 text-sm"
         >
-          <option value="">Choisir…</option>
+          <option value="">Choose…</option>
           {sources.runs.map((r) => (
             <option key={r.id} value={r.id}>
-              {r.scenarioName} — {r.createdAt.slice(0, 10)} ({r.horizonDays} jours)
+              {r.scenarioName} — {r.createdAt.slice(0, 10)} ({r.horizonDays} days)
             </option>
           ))}
         </select>
       </label>
 
       <label className="block">
-        <span className="mb-1 block text-xs text-ink-muted">Trajectoire</span>
+        <span className="mb-1 block text-xs text-ink-muted">Trajectory</span>
         <select
           value={measure}
           onChange={(e) => setMeasure(e.target.value as TrajectoryMeasure)}
@@ -1143,23 +1143,23 @@ function SimulationPanel({
 
       <label className="flex items-center gap-2 text-xs text-ink-body">
         <input type="checkbox" checked={against} onChange={(e) => setAgainst(e.target.checked)} />
-        Comparer à une série observée
+        Compare against an observed series
       </label>
 
       {against && (
         <>
           <p className="text-[11px] leading-relaxed text-ink-faint">
-            Les deux courbes sont alignées sur les dates : le jour 0 de l&apos;exécution est le jour
-            où elle a été lancée. La carte compte les jours réellement communs aux deux.
+            The two curves are aligned on dates: day 0 of the run is the day it was
+            started. The card counts the days the two actually share.
           </p>
           <label className="block">
-            <span className="mb-1 block text-xs text-ink-muted">Jeu de données observé</span>
+            <span className="mb-1 block text-xs text-ink-muted">Observed dataset</span>
             <select
               value={realDs}
               onChange={(e) => setRealDs(e.target.value)}
               className="w-full rounded border border-line px-2 py-1.5 text-sm"
             >
-              <option value="">Choisir…</option>
+              <option value="">Choose…</option>
               {datasets.map((d) => (
                 <option key={d.datasetId} value={d.datasetId}>
                   {d.name}
@@ -1171,13 +1171,13 @@ function SimulationPanel({
           {realTable && (
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
-                <span className="mb-1 block text-xs text-ink-muted">Colonne de temps</span>
+                <span className="mb-1 block text-xs text-ink-muted">Time column</span>
                 <select
                   value={realX}
                   onChange={(e) => setRealX(e.target.value)}
                   className="w-full rounded border border-line px-2 py-1.5 text-sm"
                 >
-                  <option value="">Choisir…</option>
+                  <option value="">Choose…</option>
                   {realTable.columns
                     .filter((c) => c.role === "time")
                     .map((c) => (
@@ -1188,13 +1188,13 @@ function SimulationPanel({
                 </select>
               </label>
               <label className="block">
-                <span className="mb-1 block text-xs text-ink-muted">Mesure observée</span>
+                <span className="mb-1 block text-xs text-ink-muted">Observed measure</span>
                 <select
                   value={realY}
                   onChange={(e) => setRealY(e.target.value)}
                   className="w-full rounded border border-line px-2 py-1.5 text-sm"
                 >
-                  <option value="">Choisir…</option>
+                  <option value="">Choose…</option>
                   {realTable.columns
                     .filter((c) => c.role === "quantity")
                     .map((c) => (
@@ -1232,23 +1232,23 @@ function ModelPanel({
   steps: number;
   setSteps: (v: number) => void;
 }) {
-  if (!sources) return <p className="text-sm text-ink-faint">Lecture des sources…</p>;
+  if (!sources) return <p className="text-sm text-ink-faint">Reading sources…</p>;
   if (sources.forecasters.length === 0) {
     return (
-      <Missing what="Aucun modèle de série temporelle dans ce projet. Entraînez-en un dans l'onglet Forecast du laboratoire, puis revenez." />
+      <Missing what="No time series model in this project. Train one in the lab's Forecast tab, then come back." />
     );
   }
 
   return (
     <div className="space-y-3">
       <label className="block">
-        <span className="mb-1 block text-xs text-ink-muted">Modèle</span>
+        <span className="mb-1 block text-xs text-ink-muted">Model</span>
         <select
           value={modelId}
           onChange={(e) => setModelId(e.target.value)}
           className="w-full rounded border border-line px-2 py-1.5 text-sm"
         >
-          <option value="">Choisir…</option>
+          <option value="">Choose…</option>
           {sources.forecasters.map((m) => (
             <option key={m.id} value={m.id}>
               {m.name} — {m.target} ({m.datasetName})
@@ -1265,13 +1265,13 @@ function ModelPanel({
         if (!m || m.mase == null || m.mase < 1) return null;
         return (
           <Missing
-            what={`Ce modèle fait ${m.mase} fois l'erreur de répéter la dernière valeur connue : sur les fenêtres déjà évaluées, il n'apporte rien. La carte l'affichera quand même, avec ce score.`}
+            what={`This model makes ${m.mase} times the error of repeating the last known value: on the windows already scored it adds nothing. The card will still show it, with that score.`}
           />
         );
       })()}
 
       <label className="block">
-        <span className="mb-1 block text-xs text-ink-muted">Projeter sur {steps} pas</span>
+        <span className="mb-1 block text-xs text-ink-muted">Project {steps} steps ahead</span>
         <input
           type="range"
           min={1}

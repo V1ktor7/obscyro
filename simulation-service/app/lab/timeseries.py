@@ -74,14 +74,14 @@ def prepare(
     import pandas as pd
 
     if lags < 1:
-        raise ValueError("Il faut au moins un décalage.")
+        raise ValueError("At least one lag is required.")
     if horizon < 1:
-        raise ValueError("L'horizon doit valoir au moins un pas.")
+        raise ValueError("The horizon must be at least one step.")
 
     frame = pd.DataFrame(rows)
     for col in [time_column, target, *(exog or [])]:
         if col not in frame.columns:
-            raise ValueError(f"Colonne absente : {col}")
+            raise ValueError(f"Column not found: {col}")
 
     frame = frame.assign(_t=_as_time(frame[time_column]))
     frame = frame.sort_values("_t").reset_index(drop=True)
@@ -99,10 +99,10 @@ def prepare(
         worst = frame["_t"].value_counts()
         first = worst.index[0]
         raise ValueError(
-            f"{int(dupes.sum())} lignes portent une date deja vue : « {time_column} » "
-            f"compte jusqu'a {int(worst.iloc[0])} lignes pour un meme pas (par exemple "
-            f"{first}). Une serie temporelle a une valeur par pas — filtrez sur une "
-            "seule entite, ou agregez la table avant de la prevoir."
+            f"{int(dupes.sum())} rows carry a date already seen: \"{time_column}\" has "
+            f"up to {int(worst.iloc[0])} rows for one step (for example {first}). A time "
+            "series has one value per step — filter to a single entity, or aggregate the "
+            "table before forecasting it."
         )
 
     y = pd.to_numeric(frame[target], errors="coerce")
@@ -135,8 +135,8 @@ def prepare(
     out = out.dropna(subset=[*names, "_y"]).reset_index(drop=True)
     if len(out) < MIN_ROWS:
         raise ValueError(
-            f"{len(out)} points utilisables après décalage : trop peu pour une "
-            "évaluation qui avance dans le temps."
+            f"{len(out)} usable points after shifting: too few for a walk-forward "
+            "evaluation."
         )
     return Prepared(
         frame=out,
@@ -206,7 +206,7 @@ def backtest_and_fit(
 
     if estimator not in ESTIMATORS or ESTIMATORS[estimator].task != "regression":
         raise ValueError(
-            "Une prévision se fait avec un estimateur de régression : "
+            "A forecast needs a regression estimator: "
             + ", ".join(REGRESSORS)
         )
 
@@ -256,10 +256,10 @@ def backtest_and_fit(
     if not scored:
         if unscorable:
             raise ValueError(
-                "La série ne bouge pas sur les fenêtres évaluées : répéter la "
-                "dernière valeur est déjà exact, il n'y a rien à prévoir."
+                "The series does not move over the windows evaluated: repeating the "
+                "last value is already exact, so there is nothing to forecast."
             )
-        raise ValueError("La série est trop courte pour être évaluée par fenêtres.")
+        raise ValueError("The series is too short to evaluate by walking windows.")
 
     metrics = {
         "mase": round(float(np.mean([f.mase for f in scored])), 4),
@@ -271,24 +271,24 @@ def backtest_and_fit(
     warnings: list[str] = []
     if unscorable:
         warnings.append(
-            f"{unscorable} fenêtre(s) sur {unscorable + len(scored)} n'ont pas pu être "
-            "notées : la série y est constante. Le score porte sur les autres."
+            f"{unscorable} of {unscorable + len(scored)} windows could not be scored: "
+            "the series is constant there. The score covers the others."
         )
     if metrics["mase"] >= 1:
         warnings.append(
-            "Le modèle ne bat pas la prévision naïve — répéter la dernière valeur "
-            "connue ferait aussi bien ou mieux. Sur une série lisse c'est courant, "
-            "et cela veut dire qu'il n'y a rien à déployer."
+            "The model does not beat the naive forecast — repeating the last known "
+            "value would do as well or better. On a smooth series this is common, and "
+            "it means there is nothing here worth deploying."
         )
     if exog:
         warnings.append(
-            "Des variables exogènes sont utilisées : la prévision ne peut pas aller "
-            "au-delà du dernier point où elles sont connues."
+            "Exogenous inputs are in use: the forecast cannot go past the last point "
+            "where their values are known."
         )
     if horizon > 1:
         warnings.append(
-            f"Le modèle est entraîné directement pour un horizon de {horizon} pas. "
-            "Le score ci-dessus est celui de cet horizon, pas celui du pas suivant."
+            f"The model is trained directly for a horizon of {horizon} steps. The "
+            "score above belongs to that horizon, not to the next step."
         )
 
     # Refit on everything for the model that will actually be used.
@@ -314,7 +314,7 @@ def backtest_and_fit(
     )
     blob = buf.getvalue()
     if len(blob) > MAX_ARTIFACT_BYTES:
-        raise ValueError("Le modèle entraîné dépasse la limite de stockage.")
+        raise ValueError("The trained model is larger than the storage limit.")
 
     return ForecastOutcome(
         estimator=estimator,
@@ -349,7 +349,7 @@ def forecast(
 
     bundle = pickle.loads(base64.b64decode(artifact_b64))
     if bundle.get("kind") != "timeseries":
-        raise ValueError("Ce modèle n'est pas un modèle de série temporelle.")
+        raise ValueError("This model is not a time series model.")
 
     target = bundle["target"]
     time_column = bundle["time_column"]
@@ -357,15 +357,15 @@ def forecast(
     exog = list(bundle.get("exog") or [])
     if exog:
         raise ValueError(
-            "Ce modèle utilise des variables exogènes : leurs valeurs futures ne "
-            "sont pas connues, donc il ne peut pas prolonger la série."
+            "This model uses exogenous inputs: their future values are not known, so "
+            "it cannot extend the series."
         )
 
     frame = pd.DataFrame(rows)
     frame = frame.assign(_t=_as_time(frame[time_column])).sort_values("_t")
     history = pd.to_numeric(frame[target], errors="coerce").dropna().tolist()
     if len(history) < lags:
-        raise ValueError(f"Il faut au moins {lags} points d'historique.")
+        raise ValueError(f"At least {lags} points of history are needed.")
 
     times = list(frame["_t"])
     is_dates = pd.api.types.is_datetime64_any_dtype(frame["_t"])
@@ -399,9 +399,9 @@ def forecast(
     return {
         "points": out,
         "note": (
-            "Prévision récursive : chaque point prédit sert de passé au suivant, "
-            "donc l'erreur s'accumule à mesure qu'on s'éloigne. Le score de "
-            "l'évaluation vaut pour l'horizon entraîné, pas pour le dernier point "
-            "de cette courbe."
+            "Recursive forecast: each predicted point becomes the history of the "
+            "next, so the error compounds the further out it goes. The evaluation "
+            "score belongs to the trained horizon, not to the last point of this "
+            "curve."
         ),
     }

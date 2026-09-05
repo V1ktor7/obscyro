@@ -153,10 +153,10 @@ describe("a trajectory and the spread it came from", () => {
       "I",
     );
     assert.deepEqual(out.points, [
-      { label: "J0", value: 3 },
-      { label: "J1", value: 5 },
+      { label: "D0", value: 3 },
+      { label: "D1", value: 5 },
     ]);
-    assert.deepEqual(out.band[1], { label: "J1", low: 2, high: 9 });
+    assert.deepEqual(out.band[1], { label: "D1", low: 2, high: 9 });
   });
 
   it("draws no band where an edge is missing rather than a flat one", () => {
@@ -169,7 +169,7 @@ describe("a trajectory and the spread it came from", () => {
     assert.equal(out.points.length, 2, "both days are still drawn");
     assert.deepEqual(
       out.band.map((b) => b.label),
-      ["J0"],
+      ["D0"],
       "only the day with both edges gets a band",
     );
   });
@@ -186,7 +186,7 @@ describe("lining a run up with the calendar", () => {
   });
 
   it("falls back to the step number rather than inventing a date", () => {
-    assert.equal(dayToDate("not a date", 4), "J4");
+    assert.equal(dayToDate("not a date", 4), "D4");
   });
 });
 

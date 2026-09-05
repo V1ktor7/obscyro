@@ -21,8 +21,8 @@ import { runCell, type CellResult } from "../lab-models-api";
  * internet should be able to read what that means before they do.
  */
 
-const STARTER = `# df contient les lignes du jeu choisi. pd est déjà importé.
-# Ce que vous mettez dans « result » revient dans le panneau du bas.
+const STARTER = `# df holds the rows of the dataset you picked. pd is already imported.
+# Whatever you put in "result" comes back in the panel below.
 
 print(df.shape)
 print(df.dtypes)
@@ -63,7 +63,7 @@ export default function NotebookTab({
     try {
       setOut(await runCell(env, { code, datasetId: datasetId || null, timeoutS }));
     } catch (e) {
-      onError(e instanceof Error ? e.message : "Exécution impossible");
+      onError(e instanceof Error ? e.message : "Run failed");
     } finally {
       setBusy(false);
     }
@@ -92,7 +92,7 @@ export default function NotebookTab({
       <div className="flex flex-wrap items-end gap-3 rounded border border-[#d3d8de] bg-white px-3 py-2">
         <label className="block">
           <span className="mb-1 block text-[11px] text-[#5f6b7c]">
-            Jeu de données lié à <code className="font-mono">df</code>
+            Dataset bound to <code className="font-mono">df</code>
           </span>
           <select
             value={datasetId}
@@ -109,7 +109,7 @@ export default function NotebookTab({
         </label>
 
         <label className="block">
-          <span className="mb-1 block text-[11px] text-[#5f6b7c]">Délai (s)</span>
+          <span className="mb-1 block text-[11px] text-[#5f6b7c]">Timeout (s)</span>
           <input
             type="number"
             min={1}
@@ -127,9 +127,9 @@ export default function NotebookTab({
           className="ml-auto flex items-center gap-1.5 rounded bg-[#2d72d2] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#215db0] disabled:opacity-40"
         >
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-          {busy ? "Exécution…" : "Exécuter"}
+          {busy ? "Running…" : "Run"}
         </button>
-        <span className="text-[10px] text-[#8f99a8]">Ctrl + Entrée</span>
+        <span className="text-[10px] text-[#8f99a8]">Ctrl + Enter</span>
       </div>
 
       <textarea
@@ -150,7 +150,7 @@ export default function NotebookTab({
                 out.ok ? "font-medium text-[#1c6e42]" : "font-medium text-[#c23030]"
               }
             >
-              {out.timedOut ? "Interrompu" : out.ok ? "Terminé" : "Erreur"}
+              {out.timedOut ? "Interrompu" : out.ok ? "Done" : "Erreur"}
             </span>
             <span className="text-[#8f99a8]">{out.durationMs} ms</span>
           </div>
@@ -159,14 +159,14 @@ export default function NotebookTab({
             <Pane label="Sortie" body={out.stdout} />
           ) : null}
           {out.stderr ? (
-            <Pane label="Erreur" body={out.stderr} tone="error" />
+            <Pane label="Error" body={out.stderr} tone="error" />
           ) : null}
           {out.result !== null && out.result !== undefined ? (
             <Pane label="result" body={JSON.stringify(out.result, null, 2)} />
           ) : null}
           {!out.stdout && !out.stderr && out.result == null ? (
             <p className="px-3 py-4 text-[11px] text-[#8f99a8]">
-              La cellule s&apos;est exécutée sans rien afficher ni assigner à{" "}
+              The cell ran without printing anything or assigning to{" "}
               <code className="font-mono">result</code>.
             </p>
           ) : null}
@@ -178,11 +178,10 @@ export default function NotebookTab({
       <div className="flex items-start gap-2 rounded border border-[#f0d9b5] bg-[#fdf6ec] px-3 py-2 text-[11px] leading-relaxed text-[#935610]">
         <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <span>
-          La cellule tourne dans un processus séparé dont l&apos;environnement est
-          reconstruit à zéro : elle ne peut pas lire les identifiants de la base. Elle
-          partage en revanche le réseau et le système de fichiers du conteneur. Traitez-la
-          comme un territoire d&apos;opérateur de confiance — n&apos;y collez pas du code
-          que vous n&apos;avez pas lu.
+          The cell runs in a separate process whose environment is rebuilt from nothing:
+          it cannot read the database credentials. It does share the container&apos;s
+          network and filesystem. Treat it as trusted-operator ground — do not paste code
+          into it that you have not read.
         </span>
       </div>
     </div>

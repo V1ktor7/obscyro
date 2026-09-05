@@ -67,7 +67,7 @@ export default function ModelsTab({
       setDatasets(d.datasets);
       setModels(m.models);
     } catch (e) {
-      onError(e instanceof Error ? e.message : "Lecture impossible");
+      onError(e instanceof Error ? e.message : "Could not read");
     }
   }, [env, onError]);
 
@@ -84,8 +84,8 @@ export default function ModelsTab({
       } catch (e) {
         onError(
           e instanceof Error
-            ? `Le service de simulation ne répond pas : ${e.message}`
-            : "Le service de simulation ne répond pas.",
+            ? `The simulation service is not answering: ${e.message}`
+            : "The simulation service is not answering.",
         );
       }
     })();
@@ -134,7 +134,7 @@ export default function ModelsTab({
       setLast(model);
       await refresh();
     } catch (e) {
-      onError(e instanceof Error ? e.message : "Entraînement impossible");
+      onError(e instanceof Error ? e.message : "Training failed");
     } finally {
       setBusy(false);
     }
@@ -146,7 +146,7 @@ export default function ModelsTab({
       setModels((m) => m.filter((x) => x.id !== id));
       setLast((l) => (l?.id === id ? null : l));
     } catch (e) {
-      onError(e instanceof Error ? e.message : "Suppression impossible");
+      onError(e instanceof Error ? e.message : "Delete failed");
     }
   }
 
@@ -154,8 +154,8 @@ export default function ModelsTab({
     <div className="grid gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
       {/* ---- The choices, in the order they are made ---- */}
       <div className="flex flex-col gap-3">
-        <Panel title="1 · Les données">
-          <Field label="Jeu de données" htmlFor="lab-dataset">
+        <Panel title="1 · The data">
+          <Field label="Dataset" htmlFor="lab-dataset">
             <select
               id="lab-dataset"
               value={datasetId}
@@ -171,7 +171,7 @@ export default function ModelsTab({
             </select>
           </Field>
 
-          <Field label="Cible — ce qu'on cherche à prédire" htmlFor="lab-target">
+          <Field label="Target — what you are predicting" htmlFor="lab-target">
             <select
               id="lab-target"
               value={target}
@@ -191,11 +191,11 @@ export default function ModelsTab({
             </select>
           </Field>
 
-          <Field label={`Variables explicatives (${features.length})`}>
+          <Field label={`Features (${features.length})`}>
             <div className="max-h-52 overflow-y-auto rounded border border-[#d3d8de]">
               {columns.length === 0 ? (
                 <p className="px-2 py-3 text-center text-[11px] text-[#8f99a8]">
-                  Choisissez d&apos;abord un jeu de données.
+                  Choose a dataset first.
                 </p>
               ) : (
                 columns
@@ -223,7 +223,7 @@ export default function ModelsTab({
           </Field>
         </Panel>
 
-        <Panel title="2 · Le modèle">
+        <Panel title="2 · The model">
           <Field label="Estimateur" htmlFor="lab-estimator">
             <select
               id="lab-estimator"
@@ -231,7 +231,7 @@ export default function ModelsTab({
               onChange={(e) => setEstimator(e.target.value)}
               className="w-full rounded border border-[#d3d8de] px-2 py-1 text-xs"
             >
-              <optgroup label="Régression — prédire un nombre">
+              <optgroup label="Regression — predict a number">
                 {estimators
                   .filter((e) => e.task === "regression")
                   .map((e) => (
@@ -240,7 +240,7 @@ export default function ModelsTab({
                     </option>
                   ))}
               </optgroup>
-              <optgroup label="Classification — prédire une catégorie">
+              <optgroup label="Classification — predict a category">
                 {estimators
                   .filter((e) => e.task === "classification")
                   .map((e) => (
@@ -256,7 +256,7 @@ export default function ModelsTab({
           </Field>
 
           {Object.keys(chosen?.params ?? {}).length > 0 ? (
-            <Field label="Hyperparamètres">
+            <Field label="Hyperparameters">
               <div className="flex flex-col gap-1.5">
                 {Object.entries(chosen?.params ?? {}).map(([key, def]) => (
                   <label key={key} className="flex items-center gap-2">
@@ -283,25 +283,25 @@ export default function ModelsTab({
           ) : null}
         </Panel>
 
-        <Panel title="3 · La séparation">
-          <Field label="Comment séparer entraînement et test" htmlFor="lab-split">
+        <Panel title="3 · The split">
+          <Field label="How to split training from test" htmlFor="lab-split">
             <select
               id="lab-split"
               value={split}
               onChange={(e) => setSplit(e.target.value as SplitMode)}
               className="w-full rounded border border-[#d3d8de] px-2 py-1 text-xs"
             >
-              <option value="random">Aléatoire</option>
-              <option value="chronological">Chronologique</option>
+              <option value="random">Random</option>
+              <option value="chronological">Chronological</option>
             </select>
             <p className="mt-1 text-[11px] leading-relaxed text-[#5f6b7c]">
-              Sur des données ordonnées dans le temps, une séparation aléatoire entraîne
-              sur l&apos;avenir et teste sur le passé. Le score monte et rien ne le montre.
+              On data ordered in time, a random split trains on the future and tests on
+              the past. The score goes up and nothing on screen says why.
             </p>
           </Field>
 
           {split === "chronological" ? (
-            <Field label="Colonne de temps" htmlFor="lab-time">
+            <Field label="Time column" htmlFor="lab-time">
               <select
                 id="lab-time"
                 value={timeColumn}
@@ -317,7 +317,7 @@ export default function ModelsTab({
               </select>
             </Field>
           ) : (
-            <Field label="Colonne de temps (facultatif)" htmlFor="lab-time">
+            <Field label="Time column (optional)" htmlFor="lab-time">
               <select
                 id="lab-time"
                 value={timeColumn}
@@ -332,13 +332,13 @@ export default function ModelsTab({
                 ))}
               </select>
               <p className="mt-1 text-[11px] text-[#8f99a8]">
-                Si vous en nommez une, le lab vous avertira que la séparation aléatoire
-                gonfle le score.
+                Name one and the lab will warn you that a random split inflates the
+                score.
               </p>
             </Field>
           )}
 
-          <Field label={`Part de test — ${Math.round(testSize * 100)} %`}>
+          <Field label={`Test share — ${Math.round(testSize * 100)}%`}>
             <input
               type="range"
               min={10}
@@ -351,13 +351,13 @@ export default function ModelsTab({
           </Field>
         </Panel>
 
-        <Panel title="4 · Entraîner">
-          <Field label="Nom du modèle" htmlFor="lab-name">
+        <Panel title="4 · Train">
+          <Field label="Model name" htmlFor="lab-name">
             <input
               id="lab-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Occupation à partir de la capacité"
+              placeholder="Occupancy from capacity"
               className="w-full rounded border border-[#d3d8de] px-2 py-1 text-xs"
             />
           </Field>
@@ -368,7 +368,7 @@ export default function ModelsTab({
             className="flex w-full items-center justify-center gap-2 rounded bg-[#2d72d2] px-3 py-2 text-xs font-medium text-white hover:bg-[#215db0] disabled:opacity-40"
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-            {busy ? "Entraînement…" : "Entraîner"}
+            {busy ? "Training…" : "Train"}
           </button>
         </Panel>
       </div>
@@ -379,20 +379,20 @@ export default function ModelsTab({
 
         <div className="rounded border border-[#d3d8de] bg-white">
           <div className="border-b border-[#d3d8de] px-3 py-2 text-xs font-medium text-[#1c2127]">
-            Modèles entraînés
+            Trained models
           </div>
           {models.length === 0 ? (
             <p className="px-3 py-8 text-center text-[11px] text-[#8f99a8]">
-              Aucun modèle. Le panneau de gauche en construit un.
+              No models yet. The panel on the left builds one.
             </p>
           ) : (
             <table className="w-full text-left text-[11px]">
               <thead className="bg-[#f6f7f9] text-[#5f6b7c]">
                 <tr>
-                  <th className="px-3 py-1.5 font-medium">Nom</th>
-                  <th className="px-3 py-1.5 font-medium">Cible</th>
-                  <th className="px-3 py-1.5 font-medium">Estimateur</th>
-                  <th className="px-3 py-1.5 font-medium">Gain sur la base</th>
+                  <th className="px-3 py-1.5 font-medium">Name</th>
+                  <th className="px-3 py-1.5 font-medium">Target</th>
+                  <th className="px-3 py-1.5 font-medium">Estimator</th>
+                  <th className="px-3 py-1.5 font-medium">Lift over baseline</th>
                   <th className="px-3 py-1.5" />
                 </tr>
               </thead>
@@ -428,7 +428,7 @@ export default function ModelsTab({
                             void remove(m.id);
                           }}
                           className="text-[#8f99a8] hover:text-[#c23030]"
-                          aria-label={`Supprimer ${m.name}`}
+                          aria-label={`Delete ${m.name}`}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -461,11 +461,11 @@ function Result({ model }: { model: LabModel }) {
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[#d3d8de] px-3 py-2">
         <span className="text-xs font-medium text-[#1c2127]">{model.name}</span>
         <span className="text-[11px] text-[#5f6b7c]">
-          {model.estimator} · {model.task === "regression" ? "régression" : "classification"} ·{" "}
-          {model.nTrain.toLocaleString("fr-CA")} entraînement /{" "}
+          {model.estimator} · {model.task === "regression" ? "regression" : "classification"} ·{" "}
+          {model.nTrain.toLocaleString("en-CA")} train /{" "}
           {model.nTest.toLocaleString("fr-CA")} test
           {model.droppedRows > 0
-            ? ` · ${model.droppedRows.toLocaleString("fr-CA")} lignes écartées`
+            ? ` · ${model.droppedRows.toLocaleString("en-CA")} rows dropped`
             : ""}
         </span>
       </div>
@@ -483,7 +483,7 @@ function Result({ model }: { model: LabModel }) {
       <div className="grid gap-px bg-[#eef1f4] sm:grid-cols-3">
         <div className="bg-white p-3">
           <p className="text-[10px] uppercase tracking-wide text-[#8f99a8]">
-            Gain sur la ligne de base
+            Lift over baseline
           </p>
           <p
             className={cn(
@@ -494,8 +494,8 @@ function Result({ model }: { model: LabModel }) {
             {lift == null ? "—" : `${Math.round(lift * 100)} %`}
           </p>
           <p className="mt-1 text-[10px] leading-relaxed text-[#8f99a8]">
-            Part de l&apos;erreur qu&apos;un modèle ignorant les variables aurait faite, et
-            que celui-ci retire.
+            The share of the error a model ignoring every feature would have made, and
+            that this one removes.
           </p>
         </div>
         {keys.map((k) => (
@@ -505,7 +505,7 @@ function Result({ model }: { model: LabModel }) {
               {model.metrics[k]}
             </p>
             <p className="mt-1 text-[10px] text-[#8f99a8]">
-              ligne de base : {model.baseline[k] ?? "—"}
+              baseline: {model.baseline[k] ?? "—"}
             </p>
           </div>
         ))}
@@ -514,7 +514,7 @@ function Result({ model }: { model: LabModel }) {
       {model.importances.length > 0 ? (
         <div className="border-t border-[#d3d8de] p-3">
           <p className="mb-2 text-[10px] uppercase tracking-wide text-[#8f99a8]">
-            Ce sur quoi le modèle s&apos;appuie
+            What the model leans on
           </p>
           <div className="flex flex-col gap-1">
             {model.importances.slice(0, 12).map((i) => (

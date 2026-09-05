@@ -104,15 +104,15 @@ beforeEach(() => {
 });
 
 const fitButton = () =>
-  screen.getByRole("button", { name: /Évaluer et entraîner/ }) as HTMLButtonElement;
+  screen.getByRole("button", { name: /Score and train/ }) as HTMLButtonElement;
 
 async function setUpSeries(user: ReturnType<typeof userEvent.setup>) {
-  await user.selectOptions(await screen.findByLabelText(/Jeu de données/), [
+  await user.selectOptions(await screen.findByLabelText(/Dataset/), [
     screen.getByRole("option", { name: /MSSS/ }),
   ]);
-  await user.selectOptions(screen.getByLabelText(/Colonne de temps/), "date");
-  await user.selectOptions(screen.getByLabelText(/Série à prévoir/), "admissions");
-  await user.type(screen.getByLabelText(/Nom du modèle/), "essai");
+  await user.selectOptions(screen.getByLabelText(/Time column/), "date");
+  await user.selectOptions(screen.getByLabelText(/Series to forecast/), "admissions");
+  await user.type(screen.getByLabelText(/Model name/), "essai");
 }
 
 describe("what can be asked of a forecast", () => {
@@ -128,18 +128,18 @@ describe("what can be asked of a forecast", () => {
   it("will not forecast the time column against itself", async () => {
     const user = userEvent.setup();
     render(<ForecastTab env="e" onError={() => {}} />);
-    await user.selectOptions(await screen.findByLabelText(/Jeu de données/), [
+    await user.selectOptions(await screen.findByLabelText(/Dataset/), [
       screen.getByRole("option", { name: /MSSS/ }),
     ]);
-    await user.selectOptions(screen.getByLabelText(/Colonne de temps/), "date");
-    const targets = screen.getByLabelText(/Série à prévoir/) as HTMLSelectElement;
+    await user.selectOptions(screen.getByLabelText(/Time column/), "date");
+    const targets = screen.getByLabelText(/Series to forecast/) as HTMLSelectElement;
     expect(Array.from(targets.options).map((o) => o.value)).not.toContain("date");
   });
 
   it("refuses to fit until a series and a name are chosen", async () => {
     const user = userEvent.setup();
     render(<ForecastTab env="e" onError={() => {}} />);
-    await screen.findByLabelText(/Jeu de données/);
+    await screen.findByLabelText(/Dataset/);
     expect(fitButton().disabled).toBe(true);
     await setUpSeries(user);
     await waitFor(() => expect(fitButton().disabled).toBe(false));
@@ -150,11 +150,11 @@ describe("what can be asked of a forecast", () => {
     const user = userEvent.setup();
     render(<ForecastTab env="e" onError={() => {}} />);
     await setUpSeries(user);
-    await user.selectOptions(screen.getByLabelText(/Jeu de données/), [
+    await user.selectOptions(screen.getByLabelText(/Dataset/), [
       screen.getByRole("option", { name: /INSPQ/ }),
     ]);
-    expect((screen.getByLabelText(/Colonne de temps/) as HTMLSelectElement).value).toBe("");
-    expect((screen.getByLabelText(/Série à prévoir/) as HTMLSelectElement).value).toBe("");
+    expect((screen.getByLabelText(/Time column/) as HTMLSelectElement).value).toBe("");
+    expect((screen.getByLabelText(/Series to forecast/) as HTMLSelectElement).value).toBe("");
   });
 
   it("sends the lags, the horizon and the explanatory columns it was given", async () => {
@@ -201,7 +201,7 @@ describe("what the result is allowed to claim", () => {
     await user.click(fitButton());
 
     await screen.findByText("0.62");
-    expect(screen.getByText(/naïve : 5/)).toBeTruthy();
+    expect(screen.getByText(/naive: 5/)).toBeTruthy();
   });
 
   it("passes the service's warnings through untouched", async () => {
@@ -228,7 +228,7 @@ describe("what the result is allowed to claim", () => {
     await setUpSeries(user);
     await user.click(fitButton());
 
-    const extend = await screen.findByRole("button", { name: /Prolonger la série/ });
+    const extend = await screen.findByRole("button", { name: /Extend the series/ });
     expect((extend as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -245,7 +245,7 @@ describe("what the result is allowed to claim", () => {
     render(<ForecastTab env="e" onError={() => {}} />);
     await setUpSeries(user);
     await user.click(fitButton());
-    await user.click(await screen.findByRole("button", { name: /Prolonger la série/ }));
+    await user.click(await screen.findByRole("button", { name: /Extend the series/ }));
 
     await screen.findByText(/l'erreur s'accumule/);
     expect(api.runForecast).toHaveBeenCalledWith("f1", 14);

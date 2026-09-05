@@ -76,12 +76,12 @@ def test_rows_lost_to_shifting_are_counted() -> None:
 
 
 def test_a_missing_column_is_named() -> None:
-    with pytest.raises(ValueError, match="Colonne absente"):
+    with pytest.raises(ValueError, match="Column not found"):
         ts.prepare(daily(), "date", "inexistante", lags=3, horizon=1)
 
 
 def test_a_series_too_short_to_walk_is_refused() -> None:
-    with pytest.raises(ValueError, match="trop peu"):
+    with pytest.raises(ValueError, match="too few"):
         ts.prepare(daily(30), "date", "admissions", lags=7, horizon=1)
 
 
@@ -106,7 +106,7 @@ def test_a_random_walk_is_not_and_the_lab_says_so() -> None:
     # claims to is the most expensive kind of wrong.
     out = ts.backtest_and_fit(random_walk(), "date", "admissions", "ridge", lags=7)
     assert out.metrics["mase"] >= 1
-    assert any("naïve" in w for w in out.warnings)
+    assert any("naive forecast" in w for w in out.warnings)
 
 
 # -------------------------------------------------------------- l évaluation
@@ -134,14 +134,14 @@ def test_several_estimators_can_forecast() -> None:
 
 
 def test_a_classifier_is_refused_for_a_forecast() -> None:
-    with pytest.raises(ValueError, match="régression"):
+    with pytest.raises(ValueError, match="regression estimator"):
         ts.backtest_and_fit(daily(), "date", "admissions", "logistic", lags=7)
 
 
 def test_a_longer_horizon_says_which_horizon_the_score_belongs_to() -> None:
     out = ts.backtest_and_fit(daily(), "date", "admissions", "ridge", lags=7, horizon=7)
     assert out.horizon == 7
-    assert any("horizon de 7" in w for w in out.warnings)
+    assert any("horizon of 7" in w for w in out.warnings)
 
 
 # -------------------------------------------------------------- la prévision
@@ -158,7 +158,7 @@ def test_a_forecast_says_that_its_error_compounds() -> None:
     # A smooth line implies a confidence the fit does not support.
     out = ts.backtest_and_fit(daily(), "date", "admissions", "ridge", lags=7)
     got = ts.forecast(out.artifact_b64, daily(), steps=5)
-    assert "s'accumule" in got["note"]
+    assert "compounds" in got["note"]
 
 
 def test_a_forecast_dates_its_points() -> None:
@@ -175,8 +175,8 @@ def test_exogenous_inputs_block_extrapolation_rather_than_being_faked() -> None:
     out = ts.backtest_and_fit(
         rows, "date", "admissions", "ridge", lags=5, exog=["eaux_usees"]
     )
-    assert any("exogènes" in w for w in out.warnings)
-    with pytest.raises(ValueError, match="exogènes"):
+    assert any("Exogenous" in w for w in out.warnings)
+    with pytest.raises(ValueError, match="[Ee]xogenous"):
         ts.forecast(out.artifact_b64, rows, steps=5)
 
 
@@ -185,13 +185,13 @@ def test_a_tabular_model_cannot_be_used_as_a_forecaster() -> None:
 
     rows = [{"x": i, "y": i * 2 + 1} for i in range(60)]
     fitted = tabular.train(rows, "y", ["x"], "linear")
-    with pytest.raises(ValueError, match="série temporelle"):
+    with pytest.raises(ValueError, match="not a time series model"):
         ts.forecast(fitted.artifact_b64, rows, steps=3)
 
 
 def test_forecasting_without_enough_history_is_refused() -> None:
     out = ts.backtest_and_fit(daily(), "date", "admissions", "ridge", lags=7)
-    with pytest.raises(ValueError, match="historique"):
+    with pytest.raises(ValueError, match="points of history"):
         ts.forecast(out.artifact_b64, daily(4), steps=3)
 
 
@@ -213,7 +213,7 @@ def test_a_flat_series_is_refused_instead_of_scored_against_zero() -> None:
     # MASE divides by the naive forecast's error, which on a constant series is
     # zero. The old code produced NaN, and NaN is not JSON: the response layer
     # raised on it and the caller got a 500 with nothing to read.
-    with pytest.raises(ValueError, match="ne bouge pas"):
+    with pytest.raises(ValueError, match="does not move"):
         ts.backtest_and_fit(flat(), "date", "admissions", "ridge", lags=7)
 
 
@@ -254,7 +254,7 @@ def test_windows_that_could_not_be_scored_are_counted_out_loud() -> None:
 
     out = ts.backtest_and_fit(rows, "date", "admissions", "ridge", lags=7)
     assert len(out.folds) < 4
-    assert any("constante" in w for w in out.warnings)
+    assert any("constant" in w for w in out.warnings)
 
 
 # --------------------------------------------------- une valeur par pas
@@ -278,7 +278,7 @@ def test_a_panel_is_refused_rather_than_shifted_across_entities() -> None:
     # the other region on the same day. The model learns across places, the
     # naive baseline is scrambled the same way, and the MASE that comes out
     # looks entirely reasonable. Nothing would raise.
-    with pytest.raises(ValueError, match="date deja vue"):
+    with pytest.raises(ValueError, match="already seen"):
         ts.prepare(two_regions(), "date", "admissions", lags=7, horizon=1)
 
 
@@ -287,7 +287,7 @@ def test_the_refusal_says_how_many_and_which_day() -> None:
     # date point straight at the filter they are missing.
     with pytest.raises(ValueError) as e:
         ts.prepare(two_regions(20), "date", "admissions", lags=3, horizon=1)
-    assert "2 lignes pour un meme pas" in str(e.value)
+    assert "up to 2 rows for one step" in str(e.value)
     assert "2026-01-01" in str(e.value)
 
 

@@ -17,6 +17,53 @@ export interface NavItem {
   view?: string;
 }
 
+/**
+ * Whether a sub-navigation entry is the one the reader is looking at.
+ *
+ * The rule has to read the query string, not only the path. Three entries under
+ * Models all point at `/studio/lab` and differ only by `?tab=`, so a
+ * path-prefix test lit all three at once — a sub-navigation whose highlight
+ * says "you are in all of these" tells the reader nothing about where they are.
+ *
+ * Every parameter the entry names must match. An entry that names none is the
+ * section's landing page, and it yields to any sibling whose parameters do
+ * match, so `/studio/lab?tab=causality` highlights Causality rather than both.
+ */
+export function navItemActive(
+  item: NavItem,
+  pathname: string,
+  params: URLSearchParams | null,
+  siblings: NavItem[] = [],
+): boolean {
+  const wanted = itemParams(item);
+  if (!pathname.startsWith(path(item))) return false;
+  for (const [key, value] of wanted) {
+    if ((params?.get(key) ?? null) !== value) return false;
+  }
+  if (wanted.length > 0) return true;
+  return !siblings.some(
+    (other) =>
+      other !== item && itemParams(other).length > 0 && navItemActive(other, pathname, params),
+  );
+}
+
+function path(item: NavItem): string {
+  return item.href.split("?")[0]!;
+}
+
+/**
+ * The parameters an entry claims — from its own href, plus the legacy `view`
+ * field, so entries written either way behave the same.
+ */
+function itemParams(item: NavItem): [string, string][] {
+  const query = item.href.split("?")[1];
+  const out: [string, string][] = query
+    ? Array.from(new URLSearchParams(query).entries())
+    : [];
+  if (item.view && !out.some(([k]) => k === "view")) out.push(["view", item.view]);
+  return out;
+}
+
 export interface NavSection {
   id: string;
   label: string;
@@ -139,10 +186,16 @@ export const NAV_SECTIONS: NavSection[] = [
     href: "/studio/lab",
     groups: [
       {
+        // One entry per tab the lab actually has. Three of the seven were
+        // listed and four were reachable only by clicking inside the page.
         items: [
+          { label: "Models", href: "/studio/lab?tab=models" },
+          { label: "Notebook", href: "/studio/lab?tab=notebook" },
+          { label: "Forecast", href: "/studio/lab?tab=forecast" },
           { label: "Causality", href: "/studio/lab?tab=causality" },
-          { label: "Train", href: "/studio/lab?tab=train" },
-          { label: "Simulate", href: "/studio/lab?tab=compare" },
+          { label: "Signal model", href: "/studio/lab?tab=train" },
+          { label: "Simulate vs reality", href: "/studio/lab?tab=compare" },
+          { label: "Feed simulator", href: "/studio/lab?tab=feed" },
         ],
       },
     ],

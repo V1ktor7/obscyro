@@ -130,6 +130,36 @@ function parseDefaultGraph(): GraphSpec | null {
 }
 
 /** POST to the simulation-service. Throws AppError on config/transport errors. */
+/**
+ * The sentence FastAPI put in the body, if there is one.
+ *
+ * `HTTPException` gives `{ detail: "…" }`. Request validation gives
+ * `{ detail: [{ msg, loc, … }] }`, which is machine-shaped — it is joined into
+ * something readable rather than dropped, because "invalid request" sends the
+ * reader back to guessing which field.
+ */
+export function upstreamDetail(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const detail = (data as { detail?: unknown }).detail;
+  if (typeof detail === "string" && detail.trim()) return detail.trim();
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((d) => {
+        if (typeof d === "string") return d;
+        if (d && typeof d === "object") {
+          const msg = (d as { msg?: unknown }).msg;
+          const loc = (d as { loc?: unknown }).loc;
+          const where = Array.isArray(loc) ? loc.filter((x) => x !== "body").join(".") : "";
+          if (typeof msg === "string") return where ? `${where}: ${msg}` : msg;
+        }
+        return null;
+      })
+      .filter((x): x is string => Boolean(x));
+    return parts.length ? parts.join(" · ") : null;
+  }
+  return null;
+}
+
 export async function proxyToSimService<T>(
   path: string,
   body: unknown,
@@ -171,6 +201,16 @@ export async function proxyToSimService<T>(
       data = null;
     }
     if (!upstream.ok) {
+      // A 4xx from the lab is not an upstream failure. It is a refusal written
+      // for the person who chose the columns — "two rows carry the same date",
+      // "the target is among its own features" — and flattening it to 502
+      // "Simulation service returned an error" turned a fixable configuration
+      // into what reads as an outage. The status and the sentence both come
+      // through; 5xx stays a 502, because that one really is our problem.
+      const detail = upstreamDetail(data);
+      if (upstream.status >= 400 && upstream.status < 500 && detail) {
+        throw new AppError("SIM_REFUSED", detail, upstream.status);
+      }
       throw new AppError(
         "SIM_UPSTREAM_ERROR",
         "Simulation service returned an error.",
