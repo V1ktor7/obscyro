@@ -37,6 +37,16 @@ const card = (over: Partial<Card> = {}): Card => ({
     rowsSkipped: 12,
     categoriesHidden: 90,
     sampledEvery: 1,
+    sites: [],
+    sitesUnread: 0,
+    sitesUnplaced: 0,
+    band: [],
+    predicted: [],
+    real: [],
+    overlap: 0,
+    meanGap: null,
+    worstGap: null,
+    note: null,
     error: null,
   },
   ...over,
@@ -137,5 +147,139 @@ describe("a curve that does not start at zero", () => {
     );
     // Without this the shape of the curve implies a movement from nothing.
     expect(container.textContent).toMatch(/axe tronqué/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The twin, a run, and a model
+
+describe("a simulated trajectory", () => {
+  const series = () =>
+    card({
+      kind: "series",
+      sourceKind: "simulation",
+      title: "Infectieux",
+      data: {
+        ...card().data,
+        points: [
+          { label: "J0", value: 4 },
+          { label: "J1", value: 9 },
+          { label: "J2", value: 14 },
+        ],
+        band: [
+          { label: "J0", low: 2, high: 7 },
+          { label: "J1", low: 5, high: 15 },
+          { label: "J2", low: 8, high: 22 },
+        ],
+        categoriesHidden: 0,
+        rowsSkipped: 0,
+        note: "Médiane des exécutions, avec l'intervalle p5 à p95.",
+      },
+    });
+
+  it("draws the spread, not only the median", () => {
+    // Ten stochastic runs shown as one line is a claim the engine never makes.
+    const { container } = render(<CardChart card={series()} />);
+    const filled = Array.from(container.querySelectorAll("path")).filter(
+      (p) => p.getAttribute("fill") && p.getAttribute("fill") !== "none",
+    );
+    expect(filled.length).toBe(1);
+    expect(filled[0]!.getAttribute("d")!.endsWith("Z")).toBe(true);
+  });
+
+  it("prints the sentence the reader sent with it", () => {
+    render(<CardChart card={series()} />);
+    expect(screen.getByText(/intervalle p5 à p95/)).toBeTruthy();
+  });
+});
+
+describe("a prediction against what happened", () => {
+  const compare = (over: Partial<ReturnType<typeof card>["data"]> = {}) =>
+    card({
+      kind: "compare",
+      sourceKind: "model",
+      title: "Prévu contre réel",
+      data: {
+        ...card().data,
+        points: [],
+        categoriesHidden: 0,
+        rowsSkipped: 0,
+        real: [
+          { label: "2026-03-01", value: 10 },
+          { label: "2026-03-02", value: 12 },
+        ],
+        predicted: [
+          { label: "2026-03-03", value: 14 },
+          { label: "2026-03-04", value: 15 },
+        ],
+        overlap: 0,
+        ...over,
+      },
+    });
+
+  it("says plainly when the two curves never meet", () => {
+    // Two lines on one axis invite a comparison. Where there is none to make,
+    // the card has to say so rather than let the picture imply one.
+    render(<CardChart card={compare()} />);
+    expect(screen.getByText("aucun jour comparable")).toBeTruthy();
+  });
+
+  it("never joins the last observation to the first prediction", () => {
+    // A single line across the gap claims readings on the days between.
+    const { container } = render(<CardChart card={compare()} />);
+    const strokes = Array.from(container.querySelectorAll("path")).filter(
+      (p) => p.getAttribute("fill") === "none",
+    );
+    for (const p of strokes) {
+      expect((p.getAttribute("d") ?? "").match(/M/g) ?? []).toHaveLength(1);
+    }
+  });
+
+  it("names the worst day when the two do overlap", () => {
+    render(
+      <CardChart
+        card={compare({
+          predicted: [
+            { label: "2026-03-01", value: 10 },
+            { label: "2026-03-02", value: 40 },
+          ],
+          overlap: 2,
+          meanGap: 15,
+          worstGap: { label: "2026-03-02", predicted: 40, observed: 12 },
+        })}
+      />,
+    );
+    expect(screen.getByText(/pire jour/)).toBeTruthy();
+    expect(screen.getByText(/2 jours comparables/)).toBeTruthy();
+  });
+});
+
+describe("what a map card admits", () => {
+  it("counts the sites it had no reading for", () => {
+    // Drawn at the bottom of the ramp they read as empty hospitals; dropped,
+    // the network looks smaller than it is.
+    render(
+      <CardChart
+        card={card({
+          kind: "map",
+          sourceKind: "twin",
+          data: { ...card().data, categoriesHidden: 0, rowsSkipped: 0, sitesUnread: 16 },
+        })}
+      />,
+    );
+    expect(screen.getByText(/16 sites sans lecture/)).toBeTruthy();
+  });
+
+  it("counts the sites it could not place at all", () => {
+    render(
+      <CardChart
+        card={card({
+          kind: "map",
+          sourceKind: "twin",
+          data: { ...card().data, categoriesHidden: 0, rowsSkipped: 0, sitesUnplaced: 3 },
+        })}
+      />,
+    );
+    expect(screen.getByText(/3 sans coordonnées/)).toBeTruthy();
   });
 });

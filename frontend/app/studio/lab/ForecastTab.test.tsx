@@ -133,7 +133,7 @@ describe("what can be asked of a forecast", () => {
     ]);
     await user.selectOptions(screen.getByLabelText(/Colonne de temps/), "date");
     const targets = screen.getByLabelText(/Série à prévoir/) as HTMLSelectElement;
-    expect([...targets.options].map((o) => o.value)).not.toContain("date");
+    expect(Array.from(targets.options).map((o) => o.value)).not.toContain("date");
   });
 
   it("refuses to fit until a series and a name are chosen", async () => {

@@ -6,6 +6,10 @@ import type { DbClient } from "../lib/db.js";
 import { AppError, NotFound } from "../lib/errors.js";
 import { recordAudit } from "../services/audit.js";
 import { listDatasets } from "../services/datasets.js";
+import { listRuns } from "../services/dashboard-twin.js";
+import { listModels } from "../services/lab-models.js";
+import { listTwinMetrics } from "../services/twin-metrics.js";
+import { getTwinNetwork } from "../services/twin.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
 import { resolveEnvironment } from "../services/ontology.js";
 import {
@@ -53,15 +57,26 @@ const cardConfig = z.object({
   y: z.string().nullable().optional(),
   agg: z.enum(["sum", "avg", "max", "min", "count"]).optional(),
   limit: z.number().int().positive().optional(),
+  metric: z.string().optional(),
+  state: z.enum(["live", "run", "scenario"]).optional(),
+  runId: z.string().uuid().optional(),
+  step: z.number().int().min(0).optional(),
+  scenarioId: z.string().uuid().optional(),
+  measure: z.enum(["S", "E", "I", "R", "isolationDemand"]).optional(),
+  datasetId: z.string().uuid().optional(),
+  steps: z.number().int().min(1).max(365).optional(),
 });
+
+const CARD_KINDS = ["line", "bar", "number", "table", "map", "series", "compare"] as const;
+const SOURCE_KINDS = ["dataset", "twin", "ontology", "simulation", "model"] as const;
 
 const cardOut = z.object({
   id: z.string(),
   dashboardId: z.string(),
   position: z.number(),
   title: z.string(),
-  kind: z.enum(["line", "bar", "number", "table"]),
-  sourceKind: z.enum(["dataset", "twin", "ontology"]),
+  kind: z.enum(CARD_KINDS),
+  sourceKind: z.enum(SOURCE_KINDS),
   sourceId: z.string(),
   config: cardConfig,
 });
@@ -76,8 +91,77 @@ const cardWithData = cardOut.extend({
     rowsSkipped: z.number(),
     categoriesHidden: z.number(),
     sampledEvery: z.number(),
+    sites: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        latitude: z.number(),
+        longitude: z.number(),
+        value: z.number().nullable(),
+        from: z.string().nullable(),
+      }),
+    ),
+    sitesUnread: z.number(),
+    sitesUnplaced: z.number(),
+    band: z.array(z.object({ label: z.string(), low: z.number(), high: z.number() })),
+    predicted: z.array(z.object({ label: z.string(), value: z.number() })),
+    real: z.array(z.object({ label: z.string(), value: z.number() })),
+    overlap: z.number(),
+    meanGap: z.number().nullable(),
+    worstGap: z
+      .object({ label: z.string(), predicted: z.number(), observed: z.number() })
+      .nullable(),
+    note: z.string().nullable(),
     error: z.string().nullable(),
   }),
+});
+
+/**
+ * What a board can be built from, besides tables.
+ *
+ * The picker cannot offer a map without knowing which metrics the institution
+ * defined, nor a run without knowing which ones completed. Offering the card
+ * type and letting somebody find out afterwards that there is nothing to point
+ * it at is the thing this avoids.
+ */
+const sourcesOut = z.object({
+  metrics: z.array(z.object({ key: z.string(), label: z.string(), unit: z.string() })),
+  scenarios: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      predictedUnits: z.number(),
+      /**
+       * The numeric properties a run actually wrote onto this branch.
+       *
+       * Not the twin's metric keys. A metric is computed over instances; a
+       * prediction is a property written onto one. Offering the metric list
+       * here would offer names that are not in the data, and every site would
+       * come back unread on a card that looked correctly configured.
+       */
+      properties: z.array(z.string()),
+    }),
+  ),
+  runs: z.array(
+    z.object({
+      id: z.string(),
+      scenarioId: z.string(),
+      scenarioName: z.string(),
+      createdAt: z.string(),
+      horizonDays: z.number(),
+      steps: z.array(z.number()),
+    }),
+  ),
+  forecasters: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      target: z.string(),
+      datasetName: z.string(),
+      mase: z.number().nullable(),
+    }),
+  ),
+  sitesWithCoordinates: z.number(),
 });
 
 const offersOut = z.object({
@@ -121,6 +205,86 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
 
   // -------------------------------------------------------------------------
   // What can be drawn
+
+  app.get(
+    "/ontology/:env/dashboard-sources",
+    {
+      schema: {
+        summary: "What a board can be built from besides tables",
+        description:
+          "The twin metrics a map can be coloured by, the completed runs a series can be " +
+          "drawn from, the branches carrying predictions, and the forecasters that can be " +
+          "checked against reality. Read before a card exists, so the picker offers only " +
+          "what this project actually has.",
+        tags: ["dashboards"],
+        params: z.object({ env: z.string().min(1) }),
+        response: { 200: sourcesOut, 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+
+      const [metrics, runs, models, network, branches] = await Promise.all([
+        listTwinMetrics(req.db, env.organizationId),
+        listRuns(req.db, env.id),
+        listModels(req.db, env.id),
+        getTwinNetwork(req.db, env.id),
+        req.db.query<{ id: string; name: string; predicted: string; properties: string[] | null }>(
+          `SELECT s.id, s.name,
+                  count(*) FILTER (WHERE i.predicted_properties <> '{}'::jsonb) AS predicted,
+                  (SELECT array_agg(DISTINCT e.k)
+                     FROM app.scenario_instance i2,
+                          jsonb_each(i2.predicted_properties) AS e(k, v)
+                    WHERE i2.scenario_id = s.id
+                      AND jsonb_typeof(e.v) = 'number') AS properties
+             FROM app.scenario s
+             LEFT JOIN app.scenario_instance i ON i.scenario_id = s.id
+            WHERE s.project_id = $1
+            GROUP BY s.id, s.name
+            ORDER BY s.created_at DESC
+            LIMIT 50`,
+          [env.id],
+        ),
+      ]);
+
+      return {
+        metrics: metrics.map((m) => ({ key: m.key, label: m.label, unit: m.unit })),
+        // Only branches that actually carry a prediction can back a prediction
+        // map; the others are offered nowhere rather than offered and empty.
+        scenarios: branches.rows
+          .map((r) => ({
+            id: r.id,
+            name: r.name,
+            predictedUnits: Number(r.predicted),
+            properties: (r.properties ?? []).sort(),
+          }))
+          // A branch whose predictions hold no number has nothing a map could
+          // colour by, so it is offered nowhere rather than offered and empty.
+          .filter((r) => r.predictedUnits > 0 && r.properties.length > 0),
+        runs: runs.map((r) => ({
+          id: r.id,
+          scenarioId: r.scenarioId,
+          scenarioName: r.scenarioName,
+          createdAt: r.createdAt,
+          horizonDays: r.horizonDays,
+          steps: r.steps,
+        })),
+        forecasters: models
+          .filter((m) => m.kind === "timeseries")
+          .map((m) => ({
+            id: m.id,
+            name: m.name,
+            target: m.target,
+            datasetName: m.datasetName,
+            mase: Number.isFinite(m.metrics.mase) ? m.metrics.mase : null,
+          })),
+        sitesWithCoordinates: network.sites.filter(
+          (s) => s.latitude != null && s.longitude != null,
+        ).length,
+      };
+    },
+  );
 
   app.get(
     "/ontology/:env/chartable",
@@ -230,7 +394,10 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
     async (req) => {
       await requireUserId(req);
       const dashboard = await getDashboard(req.db, req.params.id);
-      return { dashboard, cards: await readDashboard(req.db, req.params.id) };
+      return {
+        dashboard,
+        cards: await readDashboard(req.db, req.params.id, dashboard.projectId),
+      };
     },
   );
 

@@ -1,13 +1,18 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  alignTo,
+  bandPath,
   barLayout,
   formatValue,
   linePath,
   linePoints,
   niceTicks,
+  pathWithGaps,
   scaleFor,
+  sharedAxis,
   shortLabel,
+  siteRamp,
   thinLabels,
   type PlotBox,
 } from "./chart-geometry";
@@ -205,5 +210,91 @@ describe("what a reader sees", () => {
 
   it("keeps every label when they fit", () => {
     expect(thinLabels(5, 8)).toEqual([0, 1, 2, 3, 4]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Two series on one axis
+
+describe("putting a prediction and an observation on the same axis", () => {
+  const box: PlotBox = {
+    width: 100,
+    height: 100,
+    padLeft: 0,
+    padRight: 0,
+    padTop: 0,
+    padBottom: 0,
+  };
+
+  it("orders the axis by label, not by which series is longer", () => {
+    // Placing each series on its own index would put day 1 of the forecast
+    // above day 1 of reality whatever the dates said.
+    expect(
+      sharedAxis(
+        [{ label: "2026-03-03", value: 1 }],
+        [
+          { label: "2026-03-01", value: 1 },
+          { label: "2026-03-02", value: 1 },
+        ],
+      ),
+    ).toEqual(["2026-03-01", "2026-03-02", "2026-03-03"]);
+  });
+
+  it("leaves a hole where a series has nothing", () => {
+    const labels = ["a", "b", "c"];
+    const scale = scaleFor([0, 10], true);
+    const coords = alignTo(labels, [{ label: "a", value: 5 }, { label: "c", value: 5 }], scale, box);
+    expect(coords.map((c) => c === null)).toEqual([false, true, false]);
+  });
+
+  it("lifts the pen over the hole instead of drawing across it", () => {
+    // A line joining the last observation to the first prediction claims a
+    // reading on the days between them.
+    const labels = ["a", "b", "c"];
+    const scale = scaleFor([0, 10], true);
+    const coords = alignTo(labels, [{ label: "a", value: 5 }, { label: "c", value: 5 }], scale, box);
+    const d = pathWithGaps(coords);
+    expect(d.match(/M/g)).toHaveLength(2);
+    expect(d).not.toContain("L");
+  });
+
+  it("draws no band at all where only one edge exists", () => {
+    // An area from one edge down to the axis is a filled curve, not an
+    // interval, and reads as a quantity rather than as uncertainty.
+    const labels = ["a", "b"];
+    const scale = scaleFor([0, 10], true);
+    const low = alignTo(labels, [{ label: "a", value: 1 }], scale, box);
+    const high = alignTo(labels, [{ label: "a", value: 9 }], scale, box);
+    expect(bandPath(low, high)).toBe("");
+  });
+
+  it("closes the band when both edges are there", () => {
+    const labels = ["a", "b"];
+    const scale = scaleFor([0, 10], true);
+    const low = alignTo(labels, [{ label: "a", value: 1 }, { label: "b", value: 2 }], scale, box);
+    const high = alignTo(labels, [{ label: "a", value: 9 }, { label: "b", value: 8 }], scale, box);
+    expect(bandPath(low, high).endsWith("Z")).toBe(true);
+  });
+});
+
+describe("colouring sites by how busy they are", () => {
+  it("says nothing for a site with no reading", () => {
+    // The bottom of a ramp is "empty hospital". "No reading" is a different
+    // statement and has to look different.
+    const ramp = siteRamp([1, 5, null]);
+    expect(ramp(null)).toBeNull();
+    expect(ramp(1)).toBe(0);
+    expect(ramp(5)).toBe(1);
+  });
+
+  it("does not paint a uniform network as a network in crisis", () => {
+    // Every site reading the same would otherwise divide by a zero range and
+    // land every one of them at the top of the ramp.
+    const ramp = siteRamp([7, 7, 7]);
+    expect(ramp(7)).toBe(0.5);
+  });
+
+  it("says nothing at all when nothing was read", () => {
+    expect(siteRamp([null, null])(null)).toBeNull();
   });
 });

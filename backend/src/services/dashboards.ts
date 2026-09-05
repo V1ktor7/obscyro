@@ -5,10 +5,29 @@ import {
   offersFor,
   readColumns,
   whyNoChart,
-  type CardKind,
+  type CardKind as ChartKind,
   type ChartOffer,
   type ColumnFit,
 } from "./chartable.js";
+import {
+  assertMeasure,
+  crossReference,
+  getRun,
+  liveIdsFor,
+  observedByDate,
+  placeSites,
+  predictedOnBranch,
+  seriesFromTrajectories,
+  siteValueFromUnits,
+  valuesAtStep,
+  dayToDate,
+  type BandPoint,
+  type MapSite,
+  type MapState,
+  type TrajectoryMeasure,
+} from "./dashboard-twin.js";
+import { getModel, runForecast } from "./lab-models.js";
+import { getTwinNetwork } from "./twin.js";
 
 /**
  * Dashboards, and the values that fill them.
@@ -39,8 +58,19 @@ import {
  */
 export type Aggregate = "sum" | "avg" | "max" | "min" | "count";
 
+/**
+ * What a card can be drawn as.
+ *
+ * The first four read a table. The last three read the rest of the platform —
+ * the geolocated twin, a stored simulation run, a model from the lab — and are
+ * kept in the same list because a board mixes them freely: an occupancy map
+ * beside the curve that predicts it is the whole point.
+ */
+export type CardKind = ChartKind | "map" | "series" | "compare";
+export type SourceKind = "dataset" | "twin" | "ontology" | "simulation" | "model";
+
 const AGGREGATES: readonly Aggregate[] = ["sum", "avg", "max", "min", "count"];
-const KINDS: readonly CardKind[] = ["line", "bar", "number", "table"];
+const KINDS: readonly CardKind[] = ["line", "bar", "number", "table", "map", "series", "compare"];
 
 /** Past this a line is drawing more points than the card has pixels. */
 const MAX_POINTS = 500;
@@ -64,6 +94,26 @@ export interface CardConfig {
   y?: string | null;
   agg?: Aggregate;
   limit?: number;
+
+  // --- map ---------------------------------------------------------------
+  /** The twin metric each site is coloured by. */
+  metric?: string;
+  /** Now, a step of a run, or the prediction written onto a branch. */
+  state?: MapState;
+  /** Which run, when the state is `run`. */
+  runId?: string;
+  /** Which day of it. */
+  step?: number;
+  /** Which branch, when the state is `scenario`. */
+  scenarioId?: string;
+
+  // --- series / compare --------------------------------------------------
+  /** Which trajectory of a run. */
+  measure?: TrajectoryMeasure;
+  /** The observed series a prediction is checked against. */
+  datasetId?: string;
+  /** How far a model is asked to project. */
+  steps?: number;
 }
 
 export interface CardRow {
@@ -72,7 +122,7 @@ export interface CardRow {
   position: number;
   title: string;
   kind: CardKind;
-  sourceKind: "dataset" | "twin" | "ontology";
+  sourceKind: SourceKind;
   sourceId: string;
   config: CardConfig;
 }
@@ -106,6 +156,33 @@ export interface CardData {
    * 1 means nothing was dropped.
    */
   sampledEvery: number;
+
+  /** Map cards: the sites, placed. Empty for every other kind. */
+  sites: MapSite[];
+  /**
+   * Sites the source said nothing about.
+   *
+   * A run's alert timeline holds breaches, not a reading per unit per day, so a
+   * map frozen at a step legitimately knows nothing about most sites. Drawing
+   * those as zero would invent calm; this counts them and the card says so.
+   */
+  sitesUnread: number;
+  /** Sites with no coordinates, which cannot be drawn at all. */
+  sitesUnplaced: number;
+
+  /** Series cards: the p5–p95 envelope the median came out of. */
+  band: BandPoint[];
+
+  /** Compare cards: the two series, and how far apart they are where both exist. */
+  predicted: Array<{ label: string; value: number }>;
+  real: Array<{ label: string; value: number }>;
+  overlap: number;
+  meanGap: number | null;
+  worstGap: { label: string; predicted: number; observed: number } | null;
+
+  /** A sentence the card prints as-is: provenance, coverage, or a caveat. */
+  note: string | null;
+
   /** Set when the source is gone or the columns no longer exist. */
   error: string | null;
 }
@@ -209,7 +286,7 @@ interface RawCard {
   position: number;
   title: string;
   kind: CardKind;
-  source_kind: "dataset" | "twin" | "ontology";
+  source_kind: SourceKind;
   source_id: string;
   config: CardConfig;
 }
@@ -252,14 +329,35 @@ export interface CardInput {
  * of these would otherwise be stored happily and render as a blank rectangle,
  * which reads as "no data" rather than "not configured".
  */
-export function validateCard(input: CardInput): { kind: CardKind; title: string; config: CardConfig } {
+export function validateCard(input: CardInput): {
+  kind: CardKind;
+  sourceKind: SourceKind;
+  title: string;
+  config: CardConfig;
+} {
   const kind = input.kind as CardKind;
   if (!KINDS.includes(kind)) throw BadRequest("UNKNOWN_CARD_KIND", `Type de carte inconnu : ${input.kind}`);
-  if (input.sourceKind !== "dataset") {
-    // Only one source is wired. Accepting the others would store a card that
-    // renders an error forever, which reads as broken rather than as unbuilt.
-    throw BadRequest("UNSUPPORTED_CARD_SOURCE", "Seuls les jeux de donnees peuvent alimenter une carte pour l'instant.");
+
+  const sourceKind = input.sourceKind as SourceKind;
+  // Each kind reads exactly one sort of source. A `map` over a dataset would
+  // store happily and render an error forever, which reads as broken rather
+  // than as misconfigured.
+  const EXPECTED: Record<CardKind, SourceKind[]> = {
+    line: ["dataset"],
+    bar: ["dataset"],
+    number: ["dataset"],
+    table: ["dataset"],
+    map: ["twin"],
+    series: ["simulation"],
+    compare: ["model", "simulation"],
+  };
+  if (!EXPECTED[kind].includes(sourceKind)) {
+    throw BadRequest(
+      "UNSUPPORTED_CARD_SOURCE",
+      `Une carte « ${kind} » se lit depuis ${EXPECTED[kind].join(" ou ")}, pas depuis ${input.sourceKind}.`,
+    );
   }
+
   const title = (input.title ?? "").trim();
   if (!title) throw BadRequest("CARD_TITLE_REQUIRED", "Une carte a besoin d'un titre.");
 
@@ -271,7 +369,34 @@ export function validateCard(input: CardInput): { kind: CardKind; title: string;
     throw BadRequest("CARD_AXES_REQUIRED", "Une courbe ou des barres ont besoin d'un axe et d'une mesure.");
   }
   if (kind === "number" && !cfg.y) throw BadRequest("CARD_MEASURE_REQUIRED", "Un chiffre a besoin d'une mesure.");
-  return { kind, title, config: cfg };
+
+  if (kind === "map") {
+    if (!cfg.metric) {
+      throw BadRequest("CARD_METRIC_REQUIRED", "Une carte a besoin d'une metrique a colorer.");
+    }
+    const state: MapState = cfg.state ?? "live";
+    if (state === "run" && (!cfg.runId || cfg.step == null)) {
+      // A run without a step is not "a given time"; it is the whole run, and
+      // the card would silently pick one.
+      throw BadRequest("CARD_STEP_REQUIRED", "Une carte figee a besoin d'une execution et d'un jour.");
+    }
+    if (state === "scenario" && !cfg.scenarioId) {
+      throw BadRequest("CARD_SCENARIO_REQUIRED", "Une carte de prevision a besoin d'une branche.");
+    }
+  }
+  if (kind === "series") assertMeasure(cfg.measure);
+  if (kind === "compare") {
+    if (sourceKind === "simulation") {
+      assertMeasure(cfg.measure);
+      if (!cfg.datasetId || !cfg.x || !cfg.y) {
+        throw BadRequest(
+          "CARD_REAL_SERIES_REQUIRED",
+          "Comparer demande une serie observee : un jeu de donnees, sa colonne de temps et sa mesure.",
+        );
+      }
+    }
+  }
+  return { kind, sourceKind, title, config: cfg };
 }
 
 export async function addCard(
@@ -279,8 +404,18 @@ export async function addCard(
   dashboardId: string,
   input: CardInput,
 ): Promise<CardRow> {
-  const { kind, title, config } = validateCard(input);
-  await getDataset(db, input.sourceId); // 404s here rather than at render time
+  const { kind, sourceKind, title, config } = validateCard(input);
+  // Fail here rather than at render time: a card naming a deleted dataset or a
+  // run from another project should never be storable in the first place.
+  const board = await getDashboard(db, dashboardId);
+  if (sourceKind === "dataset") await getDataset(db, input.sourceId);
+  if (sourceKind === "model") await getModel(db, input.sourceId);
+  if (sourceKind === "simulation" && !(await getRun(db, board.projectId, input.sourceId))) {
+    throw NotFound("RUN_NOT_FOUND", "Cette execution n'existe pas dans ce projet.");
+  }
+  if (config.runId && !(await getRun(db, board.projectId, config.runId))) {
+    throw NotFound("RUN_NOT_FOUND", "Cette execution n'existe pas dans ce projet.");
+  }
 
   const { rows } = await db.query<{ id: string }>(
     `INSERT INTO app.dashboard_card (dashboard_id, position, title, kind, source_kind, source_id, config)
@@ -359,17 +494,249 @@ export function aggExpr(agg: Aggregate, valueSql: string): string {
   }
 }
 
-export async function readCard(db: DbClient, card: CardRow): Promise<CardData> {
-  const empty: CardData = {
-    points: [],
-    rows: [],
-    columns: [],
-    rowsRead: 0,
-    rowsSkipped: 0,
-    categoriesHidden: 0,
-    sampledEvery: 1,
-    error: null,
+const EMPTY: CardData = {
+  points: [],
+  rows: [],
+  columns: [],
+  rowsRead: 0,
+  rowsSkipped: 0,
+  categoriesHidden: 0,
+  sampledEvery: 1,
+  sites: [],
+  sitesUnread: 0,
+  sitesUnplaced: 0,
+  band: [],
+  predicted: [],
+  real: [],
+  overlap: 0,
+  meanGap: null,
+  worstGap: null,
+  note: null,
+  error: null,
+};
+
+/**
+ * The twin on a map, at one of three moments.
+ *
+ * `live` is the metric as it stands. `run` is one day of a stored run, and
+ * `scenario` is what a model wrote onto a branch. The geography is always the
+ * live network — a run happens on a copy, and the copy has no coordinates — so
+ * every number is joined back through the instance it was cloned from.
+ */
+/**
+ * State shared by the cards of one read.
+ *
+ * The network roll-up walks every instance and link in the project, and three
+ * map cards on one board asked for it three times. It cannot be cached beyond
+ * the read — the whole design rests on the values being current — so it is
+ * memoised for exactly as long as one page takes to build.
+ */
+export interface ReadContext {
+  network: () => Promise<Awaited<ReturnType<typeof getTwinNetwork>>>;
+}
+
+export function readContext(db: DbClient, projectId: string): ReadContext {
+  let pending: Promise<Awaited<ReturnType<typeof getTwinNetwork>>> | null = null;
+  return {
+    network: () => (pending ??= getTwinNetwork(db, projectId)),
   };
+}
+
+async function readMapCard(
+  db: DbClient,
+  projectId: string,
+  cfg: CardConfig,
+  ctx: ReadContext,
+): Promise<CardData> {
+  const metric = cfg.metric!;
+  const net = await ctx.network();
+  const state: MapState = cfg.state ?? "live";
+
+  if (state === "live") {
+    const placed = placeSites(net.sites, (site) => {
+      const v = site.metrics?.values?.[metric];
+      return { value: typeof v === "number" ? v : null, from: null };
+    });
+    return {
+      ...EMPTY,
+      sites: placed.sites,
+      sitesUnread: placed.unread,
+      sitesUnplaced: placed.unplaced,
+      rowsRead: placed.sites.length,
+      note: `Etat courant, lu le ${net.computedAt.slice(0, 16).replace("T", " a ")}.`,
+    };
+  }
+
+  if (state === "scenario") {
+    const out = await predictedOnBranch(db, cfg.scenarioId!, metric);
+    // Predicted properties are already keyed by the live instance they were
+    // cloned from, so this state needs no translation step.
+    const placed = placeSites(net.sites, (site) => siteValueFromUnits(site, out.values));
+    return {
+      ...EMPTY,
+      sites: placed.sites,
+      sitesUnread: placed.unread,
+      sitesUnplaced: placed.unplaced,
+      rowsRead: placed.sites.length,
+      note: out.provenance
+        ? `Valeurs predites (${out.provenance}). Ce ne sont pas des mesures.`
+        : "Valeurs predites par une execution du modele. Ce ne sont pas des mesures.",
+    };
+  }
+
+  const run = await getRun(db, projectId, cfg.runId!);
+  if (!run) return { ...EMPTY, error: "L'execution de cette carte n'existe plus." };
+  const byScenarioInstance = valuesAtStep(run.alertTimeline, cfg.step ?? 0);
+
+  // A run happens on a copy of the network, so its unit ids exist nowhere on
+  // the map. Matching them directly would leave every site unread while the
+  // run plainly has readings.
+  const live = await liveIdsFor(db, run.scenarioId);
+  const byLiveId = new Map<string, { value: number; message: string }>();
+  for (const [scenarioInstanceId, hit] of byScenarioInstance) {
+    const liveId = live.get(scenarioInstanceId);
+    if (liveId) byLiveId.set(liveId, hit);
+  }
+
+  const placed = placeSites(net.sites, (site) => siteValueFromUnits(site, byLiveId));
+  return {
+    ...EMPTY,
+    sites: placed.sites,
+    sitesUnread: placed.unread,
+    sitesUnplaced: placed.unplaced,
+    rowsRead: placed.sites.length,
+    note:
+      `Execution du ${run.createdAt.slice(0, 10)}, jour ${cfg.step ?? 0}. ` +
+      "Une execution enregistre les depassements de seuil, pas un releve par site et par jour : " +
+      "les sites sans lecture restent vides plutot que dessines a zero.",
+  };
+}
+
+/** One trajectory of a stored run, with the spread it came out of. */
+async function readSeriesCard(
+  db: DbClient,
+  projectId: string,
+  card: CardRow,
+): Promise<CardData> {
+  const run = await getRun(db, projectId, card.sourceId);
+  if (!run) return { ...EMPTY, error: "L'execution de cette carte n'existe plus." };
+  const measure = assertMeasure(card.config.measure);
+  const { points, band } = seriesFromTrajectories(run.trajectories, measure);
+  if (points.length === 0) {
+    return { ...EMPTY, error: "Cette execution n'a pas de trajectoire enregistree." };
+  }
+  return {
+    ...EMPTY,
+    points,
+    band,
+    rowsRead: points.length,
+    note:
+      band.length === points.length
+        ? "Mediane des executions, avec l'intervalle p5 a p95."
+        : `Mediane des executions. Intervalle disponible sur ${band.length} jours sur ${points.length}.`,
+  };
+}
+
+/**
+ * A prediction against what actually happened.
+ *
+ * Two series on one axis invite the reader to compare them, so the card counts
+ * the days where both exist and prints that count. Where they never overlap —
+ * a forecast projects past the last observation, by construction — the count is
+ * zero and the card says so rather than printing a gap computed over nothing.
+ */
+async function readCompareCard(
+  db: DbClient,
+  projectId: string,
+  card: CardRow,
+): Promise<CardData> {
+  const cfg = card.config;
+
+  if (card.sourceKind === "model") {
+    const model = await getModel(db, card.sourceId);
+    if (model.kind !== "timeseries" || !model.datasetId || !model.timeColumn) {
+      return { ...EMPTY, error: "Seul un modele de serie temporelle peut etre compare au reel." };
+    }
+    const ds = await getDataset(db, model.datasetId);
+    const observed = await observedByDate(
+      db,
+      model.datasetId,
+      ds.kind,
+      model.timeColumn,
+      model.target,
+    );
+    const real = [...observed.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-90)
+      .map(([label, value]) => ({ label, value }));
+
+    const forecast = await runForecast(db, card.sourceId, Math.min(cfg.steps ?? 14, 120));
+    const predicted = forecast.points.map((pt) => ({
+      label: String(pt.t).slice(0, 10),
+      value: pt.value,
+    }));
+    const x = crossReference(predicted, real);
+    const mase = model.metrics.mase;
+    return {
+      ...EMPTY,
+      real,
+      predicted,
+      overlap: x.overlap,
+      meanGap: x.meanGap,
+      worstGap: x.worstGap,
+      rowsRead: real.length,
+      note:
+        "Le reel s'arrete ou la prevision commence : les deux courbes ne se recouvrent pas. " +
+        (Number.isFinite(mase)
+          ? `Sur les fenetres deja evaluees, ce modele fait ${mase} fois l'erreur de repeter la derniere valeur.`
+          : "Ce modele n'a pas de score utilisable."),
+    };
+  }
+
+  const run = await getRun(db, projectId, card.sourceId);
+  if (!run) return { ...EMPTY, error: "L'execution de cette carte n'existe plus." };
+  const measure = assertMeasure(cfg.measure);
+  const mid = run.trajectories?.p50 ?? [];
+  const predicted = mid.map((d) => ({
+    label: dayToDate(run.createdAt, d.day),
+    value: Number(d[measure] ?? 0),
+  }));
+
+  const ds = await getDataset(db, cfg.datasetId!);
+  const observed = await observedByDate(db, cfg.datasetId!, ds.kind, cfg.x!, cfg.y!);
+  const window = new Set(predicted.map((pt) => pt.label));
+  const real = [...observed.entries()]
+    .filter(([d]) => window.has(d))
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([label, value]) => ({ label, value }));
+
+  const x = crossReference(predicted, real);
+  return {
+    ...EMPTY,
+    predicted,
+    real,
+    overlap: x.overlap,
+    meanGap: x.meanGap,
+    worstGap: x.worstGap,
+    rowsRead: real.length,
+    note:
+      x.overlap === 0
+        ? `Aucun jour commun : l'execution couvre ${predicted[0]?.label ?? "?"} a ${predicted.at(-1)?.label ?? "?"}, et ${ds.name} n'a rien sur cette periode.`
+        : `${x.overlap} jours compares sur ${predicted.length} simules.`,
+  };
+}
+
+export async function readCard(
+  db: DbClient,
+  card: CardRow,
+  projectId: string,
+  ctx: ReadContext = readContext(db, projectId),
+): Promise<CardData> {
+  const empty = EMPTY;
+
+  if (card.kind === "map") return readMapCard(db, projectId, card.config, ctx);
+  if (card.kind === "series") return readSeriesCard(db, projectId, card);
+  if (card.kind === "compare") return readCompareCard(db, projectId, card);
 
   let ds: Awaited<ReturnType<typeof getDataset>>;
   try {
@@ -485,17 +852,37 @@ export async function readCard(db: DbClient, card: CardRow): Promise<CardData> {
   };
 }
 
-export async function readDashboard(db: DbClient, dashboardId: string): Promise<CardWithData[]> {
+/** What a card's source is called, whichever sort of source it is. */
+async function sourceNameOf(db: DbClient, card: CardRow): Promise<string> {
+  try {
+    if (card.sourceKind === "dataset") return (await getDataset(db, card.sourceId)).name;
+    if (card.sourceKind === "model") return (await getModel(db, card.sourceId)).name;
+    if (card.sourceKind === "twin") return "Jumeau du reseau";
+    if (card.sourceKind === "simulation") return `Execution ${card.sourceId.slice(0, 8)}`;
+  } catch {
+    return "(source supprimee)";
+  }
+  return card.sourceId;
+}
+
+export async function readDashboard(
+  db: DbClient,
+  dashboardId: string,
+  projectId: string,
+): Promise<CardWithData[]> {
   const cards = await listCards(db, dashboardId);
+  const ctx = readContext(db, projectId);
   const out: CardWithData[] = [];
   for (const card of cards) {
-    let sourceName = card.sourceId;
+    // One card failing must not take the board down with it: a map whose
+    // scenario was deleted is one broken rectangle, not an empty page.
+    let data: CardData;
     try {
-      sourceName = (await getDataset(db, card.sourceId)).name;
-    } catch {
-      sourceName = "(jeu de donnees supprime)";
+      data = await readCard(db, card, projectId, ctx);
+    } catch (err) {
+      data = { ...EMPTY, error: err instanceof Error ? err.message : "Lecture impossible." };
     }
-    out.push({ ...card, sourceName, data: await readCard(db, card) });
+    out.push({ ...card, sourceName: await sourceNameOf(db, card), data });
   }
   return out;
 }

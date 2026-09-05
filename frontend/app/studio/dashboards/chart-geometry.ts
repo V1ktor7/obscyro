@@ -206,3 +206,114 @@ export function thinLabels(count: number, room: number): number[] {
   keep.add(count - 1);
   return Array.from(keep).sort((a, b) => a - b);
 }
+
+// ---------------------------------------------------------------------------
+// Two series on one axis
+
+/**
+ * The x-axis two partly-overlapping series share.
+ *
+ * A forecast and an observation are not the same length and rarely start on the
+ * same day. Drawing each on its own index would put day 1 of the prediction
+ * above day 1 of reality regardless of the dates, which is the one thing a
+ * comparison card must not do. Labels are sorted, so dates line up as dates.
+ */
+export function sharedAxis(...series: readonly (readonly Point[])[]): string[] {
+  const all = new Set<string>();
+  for (const s of series) for (const p of s) all.add(p.label);
+  return Array.from(all).sort();
+}
+
+export interface Coord {
+  x: number;
+  y: number;
+  point: Point;
+}
+
+/**
+ * A series placed on a shared axis, with a hole where it has no value.
+ *
+ * The holes matter: a prediction that stops on the 14th and an observation that
+ * starts on the 15th must not be joined by a line implying a reading between
+ * them.
+ */
+export function alignTo(
+  labels: readonly string[],
+  points: readonly Point[],
+  scale: Scale,
+  box: PlotBox,
+): (Coord | null)[] {
+  const at = new Map(points.map((p) => [p.label, p]));
+  const w = box.width - box.padLeft - box.padRight;
+  const h = box.height - box.padTop - box.padBottom;
+  const n = labels.length;
+  return labels.map((label, i) => {
+    const p = at.get(label);
+    if (!p) return null;
+    return {
+      x: box.padLeft + (n === 1 ? w / 2 : (i / (n - 1)) * w),
+      y: box.padTop + h - scale.norm(p.value) * h,
+      point: p,
+    };
+  });
+}
+
+/** An SVG path that lifts the pen over every hole rather than drawing across it. */
+export function pathWithGaps(coords: readonly (Coord | null)[]): string {
+  const parts: string[] = [];
+  let pen = false;
+  for (const c of coords) {
+    if (!c) {
+      pen = false;
+      continue;
+    }
+    parts.push(`${pen ? "L" : "M"}${c.x.toFixed(2)},${c.y.toFixed(2)}`);
+    pen = true;
+  }
+  return parts.join(" ");
+}
+
+/**
+ * A closed area between two edges of the same axis.
+ *
+ * Used for a simulation's p5–p95 band. Both edges are required: an area drawn
+ * from one edge to the axis is a filled curve, not an interval, and reads as a
+ * quantity rather than as uncertainty.
+ */
+export function bandPath(
+  low: readonly (Coord | null)[],
+  high: readonly (Coord | null)[],
+): string {
+  const pairs: { lo: Coord; hi: Coord }[] = [];
+  for (let i = 0; i < low.length; i++) {
+    const lo = low[i];
+    const hi = high[i];
+    if (lo && hi) pairs.push({ lo, hi });
+  }
+  if (pairs.length < 2) return "";
+  const top = pairs.map((p, i) => `${i === 0 ? "M" : "L"}${p.hi.x.toFixed(2)},${p.hi.y.toFixed(2)}`);
+  const bottom = [...pairs]
+    .reverse()
+    .map((p) => `L${p.lo.x.toFixed(2)},${p.lo.y.toFixed(2)}`);
+  return `${top.join(" ")} ${bottom.join(" ")} Z`;
+}
+
+/**
+ * Where a site's value sits between the quietest and the busiest, 0 to 1.
+ *
+ * Returns null for a site nothing was read for, so the caller draws it as
+ * unread rather than as the bottom of the scale — which is the difference
+ * between "no reading" and "empty hospital".
+ */
+export function siteRamp(values: readonly (number | null)[]): (v: number | null) => number | null {
+  const finite = values.filter((v): v is number => v != null && Number.isFinite(v));
+  if (finite.length === 0) return () => null;
+  const lo = Math.min(...finite);
+  const hi = Math.max(...finite);
+  if (lo === hi) {
+    // Every site reads the same. Putting them all at the top of a colour ramp
+    // would paint a uniform network as a network in crisis.
+    return (v) => (v == null ? null : 0.5);
+  }
+  return (v) => (v == null ? null : (v - lo) / (hi - lo));
+}

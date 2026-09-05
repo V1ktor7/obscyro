@@ -69,8 +69,11 @@ describe("refusing a card that could not draw", () => {
     );
   });
 
-  it("refuses a source that is not wired yet, rather than storing a broken card", () => {
-    assert.throws(() => validateCard({ ...base, sourceKind: "twin" }), /jeux de donnees/);
+  it("refuses a source the kind cannot read, rather than storing a broken card", () => {
+    // A bar chart over the twin has no columns to group by. Stored, it would
+    // render an error on every open, which reads as broken software rather
+    // than as a card somebody mis-configured.
+    assert.throws(() => validateCard({ ...base, sourceKind: "twin" }), /se lit depuis dataset/);
   });
 
   it("refuses a blank title", () => {
@@ -141,5 +144,109 @@ describe("which rows a card reads", () => {
     for (const k of ["table", "stream"]) {
       assert.match(rowsCte(k), /dataset_id = \$1/);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cards that read the twin, a run, and a model
+
+describe("what a map, a series and a comparison have to be told", () => {
+  const map: CardInput = {
+    title: "Occupation du reseau",
+    kind: "map",
+    sourceKind: "twin",
+    sourceId: "twin",
+    config: { metric: "occupancy", state: "live" },
+  };
+
+  it("accepts a live map of one metric", () => {
+    assert.equal(validateCard(map).kind, "map");
+  });
+
+  it("refuses a map with nothing to colour", () => {
+    // Every site would draw the same, which reads as a network in one state.
+    assert.throws(() => validateCard({ ...map, config: { state: "live" } }), /metrique/);
+  });
+
+  it("refuses a frozen map that does not say which day", () => {
+    // "At a given time" without the time is the whole run, and the card would
+    // silently pick one end of it.
+    assert.throws(
+      () => validateCard({ ...map, config: { metric: "occupancy", state: "run", runId: "r1" } }),
+      /jour/,
+    );
+    assert.equal(
+      validateCard({
+        ...map,
+        config: { metric: "occupancy", state: "run", runId: "r1", step: 0 },
+      }).kind,
+      "map",
+    );
+  });
+
+  it("refuses a prediction map with no branch to read it from", () => {
+    assert.throws(
+      () => validateCard({ ...map, config: { metric: "occupancy", state: "scenario" } }),
+      /branche/,
+    );
+  });
+
+  it("refuses a trajectory the engine does not produce", () => {
+    const series: CardInput = {
+      title: "Isolement",
+      kind: "series",
+      sourceKind: "simulation",
+      sourceId: "run1",
+      config: { measure: "isolationDemand" },
+    };
+    assert.equal(validateCard(series).kind, "series");
+    assert.throws(
+      () => validateCard({ ...series, config: { measure: "beds" as never } }),
+      /Mesure inconnue/,
+    );
+  });
+
+  it("refuses to compare a run against nothing", () => {
+    // A simulated curve drawn alone under the title "predicted vs real" is the
+    // exact claim the card exists to check.
+    const cmp: CardInput = {
+      title: "Simule contre observe",
+      kind: "compare",
+      sourceKind: "simulation",
+      sourceId: "run1",
+      config: { measure: "I" },
+    };
+    assert.throws(() => validateCard(cmp), /serie observee/);
+    assert.equal(
+      validateCard({ ...cmp, config: { measure: "I", datasetId: "d1", x: "date", y: "cas" } })
+        .kind,
+      "compare",
+    );
+  });
+
+  it("lets a forecaster be compared without naming a second series", () => {
+    // A model already carries its own dataset, time column and target; asking
+    // for them again would be asking the reader to repeat the model.
+    assert.equal(
+      validateCard({
+        title: "Prevu contre reel",
+        kind: "compare",
+        sourceKind: "model",
+        sourceId: "m1",
+        config: { steps: 14 },
+      }).sourceKind,
+      "model",
+    );
+  });
+
+  it("keeps each kind on the source it can actually read", () => {
+    assert.throws(
+      () => validateCard({ ...map, kind: "series", sourceKind: "twin" }),
+      /se lit depuis simulation/,
+    );
+    assert.throws(
+      () => validateCard({ ...map, kind: "map", sourceKind: "dataset" }),
+      /se lit depuis twin/,
+    );
   });
 });

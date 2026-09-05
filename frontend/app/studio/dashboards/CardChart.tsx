@@ -19,13 +19,18 @@ import { useId } from "react";
 import { cn } from "@/lib/cn";
 
 import type { Card } from "../dashboards-api";
+import MapCard from "./MapCard";
 import {
+  alignTo,
+  bandPath,
   barLayout,
   formatValue,
   linePath,
   linePoints,
   niceTicks,
+  pathWithGaps,
   scaleFor,
+  sharedAxis,
   shortLabel,
   thinLabels,
   type PlotBox,
@@ -64,14 +69,23 @@ function Footprint({
   skipped,
   hidden,
   every,
+  unread = 0,
+  unplaced = 0,
+  note = null,
 }: {
   read: number;
   skipped: number;
   hidden: number;
   every: number;
+  /** Map cards: sites drawn but with no reading from this source. */
+  unread?: number;
+  /** Map cards: sites that could not be drawn at all. */
+  unplaced?: number;
+  /** A sentence from the reader — provenance, coverage, or a caveat. */
+  note?: string | null;
 }) {
   return (
-    <div className="flex items-center gap-2 border-t border-line-faint px-4 py-2 text-[11px] text-ink-faint">
+    <div className="flex flex-wrap items-center gap-2 border-t border-line-faint px-4 py-2 text-[11px] text-ink-faint">
       <span>
         {read.toLocaleString("fr-CA")} ligne{read > 1 ? "s" : ""} lue{read > 1 ? "s" : ""}
       </span>
@@ -94,6 +108,20 @@ function Footprint({
           1 point sur {every} — fenêtre entière
         </span>
       )}
+      {/* A run records threshold breaches, not a reading per site per day, so a
+          frozen map legitimately knows nothing about most of the network.
+          Counting that is what stops the empty sites reading as calm ones. */}
+      {unread > 0 && (
+        <span className="rounded bg-canvas-raised px-1.5 py-0.5 text-ink-muted">
+          {unread.toLocaleString("fr-CA")} site{unread > 1 ? "s" : ""} sans lecture
+        </span>
+      )}
+      {unplaced > 0 && (
+        <span className="rounded bg-warn-soft px-1.5 py-0.5 text-warn-ink">
+          {unplaced.toLocaleString("fr-CA")} sans coordonnées
+        </span>
+      )}
+      {note && <span className="w-full leading-relaxed">{note}</span>}
     </div>
   );
 }
@@ -319,6 +347,163 @@ function TableCard({ card }: { card: Card }) {
   );
 }
 
+
+const BAND = "#c6dbf5";
+const REAL = "#1c2127";
+
+/** The horizontal grid and its labels, shared by the two time-axis cards. */
+function Grid({ ticks, scale }: { ticks: number[]; scale: ReturnType<typeof scaleFor> }) {
+  const plotH = PLOT.height - PLOT.padTop - PLOT.padBottom;
+  return (
+    <>
+      {ticks.map((t) => {
+        const y = PLOT.padTop + plotH - scale.norm(t) * plotH;
+        return (
+          <g key={t}>
+            <line
+              x1={PLOT.padLeft}
+              x2={PLOT.width - PLOT.padRight}
+              y1={y}
+              y2={y}
+              stroke={GRID}
+              strokeWidth={1}
+            />
+            <text x={PLOT.padLeft - 6} y={y + 3} textAnchor="end" fontSize={10} fill={AXIS}>
+              {formatValue(t)}
+            </text>
+          </g>
+        );
+      })}
+    </>
+  );
+}
+
+function AxisLabels({ labels }: { labels: string[] }) {
+  const keep = new Set(thinLabels(labels.length, 6));
+  const w = PLOT.width - PLOT.padLeft - PLOT.padRight;
+  const n = labels.length;
+  return (
+    <>
+      {labels.map((label, i) =>
+        keep.has(i) ? (
+          <text
+            key={`${label}-${i}`}
+            x={PLOT.padLeft + (n === 1 ? w / 2 : (i / (n - 1)) * w)}
+            y={PLOT.height - 12}
+            textAnchor="middle"
+            fontSize={10}
+            fill={AXIS}
+          >
+            {shortLabel(label, 10)}
+          </text>
+        ) : null,
+      )}
+    </>
+  );
+}
+
+/**
+ * A simulated trajectory, with the spread it came out of.
+ *
+ * The band is drawn first and the median on top of it. Drawing the median alone
+ * would show ten stochastic runs as one prediction, which is the claim the
+ * engine never makes.
+ */
+function SeriesCard({ card }: { card: Card }) {
+  const pts = card.data.points;
+  const band = card.data.band;
+  if (pts.length === 0) return <Empty note="Cette exécution n'a pas de trajectoire." />;
+
+  const labels = pts.map((p) => p.label);
+  const scale = scaleFor(
+    [...pts.map((p) => p.value), ...band.map((b) => b.low), ...band.map((b) => b.high)],
+    true,
+  );
+  const mid = alignTo(labels, pts, scale, PLOT);
+  const lo = alignTo(labels, band.map((b) => ({ label: b.label, value: b.low })), scale, PLOT);
+  const hi = alignTo(labels, band.map((b) => ({ label: b.label, value: b.high })), scale, PLOT);
+
+  return (
+    <svg
+      viewBox={`0 0 ${PLOT.width} ${PLOT.height}`}
+      className="h-auto w-full"
+      role="img"
+      aria-label={`${card.title} : ${pts.length} jours simulés`}
+    >
+      <Grid ticks={niceTicks(scale)} scale={scale} />
+      <path d={bandPath(lo, hi)} fill={BAND} fillOpacity={0.75} stroke="none" />
+      <path d={pathWithGaps(mid)} fill="none" stroke={SERIES} strokeWidth={1.75} />
+      <AxisLabels labels={labels} />
+    </svg>
+  );
+}
+
+/**
+ * A prediction against what actually happened.
+ *
+ * Both series sit on one axis built from their labels, so a date lines up with
+ * the same date. Where one of them has nothing, the line stops rather than
+ * running on to the next point it does have — a line joining the last
+ * observation to the first prediction claims readings on the days between.
+ */
+function CompareCard({ card }: { card: Card }) {
+  const { predicted, real } = card.data;
+  if (predicted.length === 0 && real.length === 0) {
+    return <Empty note="Ni prévision ni observation à tracer." />;
+  }
+
+  const labels = sharedAxis(predicted, real);
+  const scale = scaleFor([...predicted.map((p) => p.value), ...real.map((p) => p.value)], true);
+  const p = alignTo(labels, predicted, scale, PLOT);
+  const r = alignTo(labels, real, scale, PLOT);
+
+  return (
+    <div>
+      <svg
+        viewBox={`0 0 ${PLOT.width} ${PLOT.height}`}
+        className="h-auto w-full"
+        role="img"
+        aria-label={`${card.title} : ${card.data.overlap} jours comparables`}
+      >
+        <Grid ticks={niceTicks(scale)} scale={scale} />
+        <path d={pathWithGaps(r)} fill="none" stroke={REAL} strokeWidth={1.75} />
+        <path
+          d={pathWithGaps(p)}
+          fill="none"
+          stroke={SERIES}
+          strokeWidth={1.75}
+          strokeDasharray="5 3"
+        />
+        <AxisLabels labels={labels} />
+      </svg>
+
+      <div className="flex flex-wrap items-center gap-3 px-4 pb-1 text-[11px] text-ink-faint">
+        <span className="flex items-center gap-1.5">
+          <span className="h-[3px] w-4 rounded" style={{ backgroundColor: REAL }} /> observé
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-[3px] w-4 rounded" style={{ backgroundColor: SERIES }} /> prédit
+        </span>
+        {/* The count is the honest part. Two curves on one axis invite a
+            comparison, and this says how much of one there is to make. */}
+        <span className={card.data.overlap === 0 ? "text-warn-ink" : ""}>
+          {card.data.overlap === 0
+            ? "aucun jour comparable"
+            : `${card.data.overlap} jours comparables`}
+        </span>
+        {card.data.meanGap !== null && <span>écart moyen {formatValue(card.data.meanGap)}</span>}
+        {card.data.worstGap && (
+          <span className="rounded bg-warn-soft px-1.5 py-0.5 text-warn-ink">
+            pire jour {shortLabel(card.data.worstGap.label, 10)} :{" "}
+            {formatValue(card.data.worstGap.predicted)} contre{" "}
+            {formatValue(card.data.worstGap.observed)}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function CardChart({
   card,
   onRemove,
@@ -363,6 +548,12 @@ export default function CardChart({
         <BarCard card={card} />
       ) : card.kind === "number" ? (
         <NumberCard card={card} />
+      ) : card.kind === "map" ? (
+        <MapCard card={card} />
+      ) : card.kind === "series" ? (
+        <SeriesCard card={card} />
+      ) : card.kind === "compare" ? (
+        <CompareCard card={card} />
       ) : (
         <TableCard card={card} />
       )}
@@ -373,6 +564,9 @@ export default function CardChart({
           skipped={card.data.rowsSkipped}
           hidden={card.data.categoriesHidden}
           every={card.data.sampledEvery}
+          unread={card.data.sitesUnread}
+          unplaced={card.data.sitesUnplaced}
+          note={card.data.note}
         />
       )}
     </section>
