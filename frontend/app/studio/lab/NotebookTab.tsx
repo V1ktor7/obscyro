@@ -99,7 +99,7 @@ export default function NotebookTab({
             onChange={(e) => setDatasetId(e.target.value)}
             className="rounded border border-[#d3d8de] px-2 py-1 text-xs"
           >
-            <option value="">Aucun — df sera vide</option>
+            <option value="">None — df will be empty</option>
             {datasets.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.name} ({d.rowCount.toLocaleString("fr-CA")} lignes)

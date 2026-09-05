@@ -297,7 +297,7 @@ function NumberCard({ card }: { card: Card }) {
     avg: "moyenne",
     max: "maximum",
     min: "minimum",
-    count: "nombre de valeurs",
+    count: "count of values",
   };
   return (
     <div className="flex h-[220px] flex-col items-center justify-center gap-2 px-6">

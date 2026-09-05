@@ -49,7 +49,7 @@ describe("reading what is actually in a column", () => {
     // arithmetic that runs and means nothing.
     const f = of("No_permis_installation");
     assert.equal(f.role, "identifier");
-    assert.match(f.reason, /identifiant/);
+    assert.match(f.reason, /identifier/);
   });
 
   it("keeps names as a category", () => {
@@ -88,7 +88,7 @@ describe("what the picker offers", () => {
   it("offers bars when a category is short enough to read", () => {
     const bar = offersFor(readColumns(URGENCES, URGENCES_ROWS)).find((o) => o.kind === "bar")!;
     assert.equal(bar.x, "Nom_installation");
-    assert.match(bar.why, /8 barres/);
+    assert.match(bar.why, /8 bars/);
   });
 
   it("does not offer bars over a category nobody could read", () => {
@@ -112,7 +112,7 @@ describe("what the picker offers", () => {
       [{ name: "code", type: "string" }],
       Array.from({ length: 10 }, (_, i) => ({ code: String(51000000 + i) })),
     );
-    assert.match(String(whyNoChart(fits)), /identifiant/);
+    assert.match(String(whyNoChart(fits)), /identifier/);
   });
 
   it("says nothing when a measure exists", () => {
@@ -120,7 +120,7 @@ describe("what the picker offers", () => {
   });
 
   it("blames the empty preview when the table has no rows", () => {
-    assert.match(String(whyNoChart(readColumns([{ name: "a", type: "string" }], []))), /vide/);
+    assert.match(String(whyNoChart(readColumns([{ name: "a", type: "string" }], []))), /preview is empty/);
   });
 });
 
@@ -146,22 +146,22 @@ describe("a column that has the shape of a date but not the meaning", () => {
     // missing chart type.
     const f = readColumns(RT, rows)[0]!;
     assert.equal(f.role, "unusable");
-    assert.match(f.reason, /forme d'une date/);
+    assert.match(f.reason, /shape of a date/);
   });
 
   it("counts how many are impossible and shows one", () => {
     const f = readColumns(RT, rows)[0]!;
-    assert.match(f.reason, /^4 valeurs/);
+    assert.match(f.reason, /^4 values/);
     assert.match(f.reason, /2020-13-07/);
   });
 
   it("names the likely cause without asserting it", () => {
-    assert.match(readColumns(RT, rows)[0]!.reason, /jour et mois inversés \?/);
+    assert.match(readColumns(RT, rows)[0]!.reason, /day and month the wrong way round\?/);
   });
 
   it("carries the finding up into the picker", () => {
     // The one place somebody is looking when they wonder why there is no curve.
-    assert.match(String(whyNoChart(readColumns(RT, rows))), /date/);
+    assert.match(String(whyNoChart(readColumns(RT, rows))), /date|measure/);
   });
 
   it("still accepts a column where every date is real", () => {
@@ -190,7 +190,7 @@ describe("a date column whose day and month could be swapped", () => {
   });
 
   it("says the two fields cannot be told apart", () => {
-    assert.match(readColumns(COL, rows(swapped))[0]!.reason, /indistinguables/);
+    assert.match(readColumns(COL, rows(swapped))[0]!.reason, /cannot be told apart/);
   });
 
   it("stays quiet on a real daily series", () => {
@@ -199,7 +199,7 @@ describe("a date column whose day and month could be swapped", () => {
       const d = new Date(Date.UTC(2021, 0, 1 + i));
       return d.toISOString().slice(0, 10);
     });
-    assert.equal(readColumns(COL, rows(jours))[0]!.reason, "des dates");
+    assert.equal(readColumns(COL, rows(jours))[0]!.reason, "dates");
   });
 
   it("stays quiet on monthly data stamped on the first", () => {
@@ -208,14 +208,38 @@ describe("a date column whose day and month could be swapped", () => {
     const mois = Array.from({ length: 36 }, (_, i) =>
       `${2020 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}-01`,
     );
-    assert.equal(readColumns(COL, rows(mois))[0]!.reason, "des dates");
+    assert.equal(readColumns(COL, rows(mois))[0]!.reason, "dates");
   });
 
   it("stays quiet when there is too little to judge", () => {
     // Four dates prove nothing, and a warning nobody can act on is noise.
     assert.equal(
       readColumns(COL, rows(["2021-01-02", "2021-02-03", "2021-03-04", "2021-04-05"]))[0]!.reason,
-      "des dates",
+      "dates",
     );
+  });
+});
+
+describe("recognising a finding without reading its sentence", () => {
+  it("carries the broken-date column up into the picker", () => {
+    // This branch used to be selected by searching `reason` for a French
+    // fragment. Translating the sentence killed it silently: the picker
+    // stopped naming the column and claimed the dataset had no rows.
+    const RT = [{ name: "date", type: "string" as const }];
+    const rows = [
+      ...["2020-01-07", "2020-02-07"].map((date) => ({ date })),
+      ...["2020-13-07", "2020-31-12"].map((date) => ({ date })),
+    ];
+    const fits = readColumns(RT, rows);
+    assert.equal(fits[0]!.fault, "date-shape");
+    const why = String(whyNoChart(fits));
+    assert.match(why, /^date:/, "the column is named");
+    assert.match(why, /2020-13-07/, "with the value that gave it away");
+  });
+
+  it("does not claim an empty preview for a table that has rows", () => {
+    const RT = [{ name: "date", type: "string" as const }];
+    const rows = [{ date: "2020-13-07" }, { date: "2020-31-12" }];
+    assert.ok(!String(whyNoChart(readColumns(RT, rows))).includes("no rows yet"));
   });
 });

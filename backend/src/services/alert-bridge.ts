@@ -125,7 +125,7 @@ export async function noteClearedAlerts(db: DbClient, limit = BATCH): Promise<nu
         [
           r.signal_id,
           r.next,
-          "La condition qui a levé ce signal ne se déclenche plus. À confirmer avant de clore.",
+          "The condition that raised this signal no longer fires. Confirm before closing.",
           JSON.stringify({ reason: "alert_cleared" }),
         ],
       )

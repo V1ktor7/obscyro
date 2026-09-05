@@ -53,13 +53,13 @@ const SEV: Record<Severity, { dot: string; border: string; chip: string; label: 
 
 function ago(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
-  if (!Number.isFinite(ms) || ms < 0) return "à l'instant";
+  if (!Number.isFinite(ms) || ms < 0) return "just now";
   const m = Math.round(ms / 60000);
-  if (m < 1) return "à l'instant";
+  if (m < 1) return "just now";
   if (m < 60) return `${m} min`;
   const h = Math.round(m / 60);
   if (h < 48) return `${h} h`;
-  return `${Math.round(h / 24)} j`;
+  return `${Math.round(h / 24)} d`;
 }
 
 export default function ResponseView() {
@@ -190,10 +190,10 @@ export default function ResponseView() {
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-white px-4 py-2">
         <span className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">
-          Réponse
+          Response
         </span>
         <span className="text-[11px] text-ink-muted">
-          {board ? `${board.signals.filter((s) => !s.closedAt).length} signaux ouverts` : "…"}
+          {board ? `${board.signals.filter((s) => !s.closedAt).length} open signals` : "…"}
         </span>
         {error ? (
           <span className="max-w-[46ch] truncate text-[11px] text-danger-ink" title={error}>
@@ -205,7 +205,7 @@ export default function ResponseView() {
           onClick={() => void load()}
           className="ml-auto flex items-center gap-1.5 rounded border border-line px-2 py-1 text-[11px] text-ink-body"
         >
-          <RefreshCw className="h-3 w-3" /> Rafraîchir
+          <RefreshCw className="h-3 w-3" /> Refresh
         </button>
       </header>
 
@@ -276,8 +276,8 @@ export default function ResponseView() {
             ),
           )}
           <p className="mt-auto border-t border-line-soft px-3 py-2 text-[10.5px] leading-snug text-ink-faint">
-            Un domaine est le nom que ses types de signaux partagent. Le renommer les déplace tous;
-            un domaine sans type cesse d&apos;exister.
+            A domain is the name its signal types share. Renaming it moves all of them; a
+            domain with no type stops existing.
           </p>
         </aside>
 
@@ -326,7 +326,7 @@ export default function ResponseView() {
                       </span>
                       {st.requiresApproval ? (
                         <span
-                          title="Franchir cette étape exige une approbation nominative"
+                          title="Passing this stage requires a named approval"
                           className="rounded bg-scenario-soft px-1 text-[9px] font-semibold text-scenario"
                         >
                           ✓
@@ -435,10 +435,10 @@ function NewDomainDialog({
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/20 pt-[12vh]">
       <div className="w-[380px] rounded-md border border-line bg-white shadow-lg">
         <div className="border-b border-line-soft px-4 py-2.5">
-          <p className="text-xs font-medium text-ink">Nouveau domaine</p>
+          <p className="text-xs font-medium text-ink">New domain</p>
           <p className="mt-1 text-[10.5px] leading-snug text-ink-faint">
-            Un domaine est le nom que ses types de signaux partagent. Définis le premier type et le
-            domaine existe.
+            A domain is the name its signal types share. Define the first type and the domain
+            exists.
           </p>
         </div>
         <div className="space-y-2.5 px-4 py-3">
@@ -448,16 +448,16 @@ function NewDomainDialog({
               autoFocus
               value={domain}
               onChange={(e) => setDomainName(e.target.value)}
-              placeholder="Bloc opératoire"
+              placeholder="Operating theatre"
               className={field}
             />
           </div>
           <div>
-            <span className={label}>Premier type de signal</span>
+            <span className={label}>First signal type</span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Salle non libérée"
+              placeholder="Room not released"
               className={field}
             />
             {key ? <p className="mt-1 text-[10px] text-ink-faint">clé · {key}</p> : null}
@@ -478,7 +478,7 @@ function NewDomainDialog({
               </select>
             </div>
             <div className="w-[110px] shrink-0">
-              <span className={label}>Gravité</span>
+              <span className={label}>Severity</span>
               <select
                 value={severity}
                 onChange={(e) => setSeverity(e.target.value as Severity)}
@@ -585,7 +585,7 @@ function Detail({
           </span>
           {signal.originKind === "twin_alert" ? (
             <span className="ml-auto rounded bg-[#f1f3f5] px-1.5 py-0.5 text-[9px] text-ink-muted">
-              levé automatiquement
+              raised automatically
             </span>
           ) : null}
           <button
@@ -612,7 +612,7 @@ function Detail({
 
       {/* étapes */}
       <div className="border-b border-line-soft px-3 py-2.5">
-        <p className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">Étape</p>
+        <p className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">Stage</p>
         <div className="mt-1.5 flex flex-wrap gap-1">
           {stages.map((s, i) => (
             <span
@@ -649,7 +649,7 @@ function Detail({
       {/* journal */}
       <div className="border-b border-line-soft px-3 py-2.5">
         <p className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">
-          Journal de décision
+          Decision log
         </p>
         {detail === null ? (
           <p className="mt-1 text-[10.5px] text-ink-faint">…</p>
@@ -692,7 +692,7 @@ function Detail({
             disabled={busy !== null}
             onClick={() => {
               const reason = window.prompt(
-                "Pourquoi ce signal n'aurait-il pas dû se déclencher ?\nLe motif est ce qui permet de mesurer le taux de fausses alertes.",
+                "Why should this signal not have fired?\nThe reason is what makes the false-alarm rate measurable.",
               );
               if (reason?.trim()) onDismiss(reason.trim());
             }}

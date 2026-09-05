@@ -30,6 +30,16 @@ export interface ColumnFit {
   distinct: number;
   /** Said in the picker, so a choice can be argued with. */
   reason: string;
+  /**
+   * Why the column is unusable, as a code rather than as prose.
+   *
+   * `whyNoChart` used to recognise the broken-date case by searching `reason`
+   * for a French fragment. Translating that sentence silently killed the
+   * branch: the picker stopped naming the broken column and claimed the
+   * dataset had no rows. A sentence is for the reader; code that has to branch
+   * on a finding needs the finding itself.
+   */
+  fault?: "date-shape";
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}([T ]|$)/;
@@ -103,7 +113,7 @@ export function readColumns(
     const distinct = seen.size;
 
     if (filled === 0) {
-      return { name: c.name, role: "unusable", filled, distinct, reason: "aucune valeur dans l'aperçu" };
+      return { name: c.name, role: "unusable", filled, distinct, reason: "no value in the preview" };
     }
 
     const shaped = raw.filter((v) => typeof v === "string" && hasDateShape(v));
@@ -122,8 +132,8 @@ export function readColumns(
           filled,
           distinct,
           reason: unsure
-            ? "des dates, mais jour et mois y sont indistinguables — aucun jour ne dépasse 12"
-            : "des dates",
+            ? "dates, but day and month cannot be told apart — no day is over 12"
+            : "dates",
         };
       }
       // The shape is a date and the value is not one. This is worth naming
@@ -140,9 +150,10 @@ export function readColumns(
         role: "unusable",
         filled,
         distinct,
+        fault: "date-shape",
         reason:
-          `${bad} valeur${bad > 1 ? "s ont" : " a"} la forme d'une date sans en être une ` +
-          `(${String(example)}) — jour et mois inversés ?`,
+          `${bad} value${bad > 1 ? "s have" : " has"} the shape of a date without being one ` +
+          `(${String(example)}) — day and month the wrong way round?`,
       };
     }
 
@@ -167,10 +178,10 @@ export function readColumns(
           role: "identifier",
           filled,
           distinct,
-          reason: "des entiers tous différents — un identifiant, pas une mesure",
+          reason: "whole numbers, all different — an identifier, not a measure",
         };
       }
-      return { name: c.name, role: "quantity", filled, distinct, reason: "des nombres" };
+      return { name: c.name, role: "quantity", filled, distinct, reason: "numbers" };
     }
 
     return {
@@ -178,7 +189,7 @@ export function readColumns(
       role: "category",
       filled,
       distinct,
-      reason: `du texte, ${distinct} valeur${distinct > 1 ? "s" : ""} distincte${distinct > 1 ? "s" : ""}`,
+      reason: `text, ${distinct} distinct value${distinct > 1 ? "s" : ""}`,
     };
   });
 }
@@ -216,30 +227,30 @@ export function offersFor(fits: readonly ColumnFit[]): ChartOffer[] {
   if (time.length && qty.length) {
     offers.push({
       kind: "line",
-      label: "Courbe dans le temps",
+      label: "Line over time",
       x: time[0]!.name,
       y: qty[0]!.name,
-      why: `${qty[0]!.name} suivi par ${time[0]!.name}`,
+      why: `${qty[0]!.name} tracked by ${time[0]!.name}`,
     });
   }
 
   if (cat.length && qty.length) {
     offers.push({
       kind: "bar",
-      label: "Barres par catégorie",
+      label: "Bars by category",
       x: cat[0]!.name,
       y: qty[0]!.name,
-      why: `${qty[0]!.name} par ${cat[0]!.name} — ${cat[0]!.distinct} barres`,
+      why: `${qty[0]!.name} by ${cat[0]!.name} — ${cat[0]!.distinct} bars`,
     });
   }
 
   if (qty.length) {
     offers.push({
       kind: "number",
-      label: "Chiffre unique",
+      label: "Single number",
       x: null,
       y: qty[0]!.name,
-      why: `la somme, la moyenne ou le maximum de ${qty[0]!.name}`,
+      why: `the sum, mean or maximum of ${qty[0]!.name}`,
     });
   }
 
@@ -250,7 +261,7 @@ export function offersFor(fits: readonly ColumnFit[]): ChartOffer[] {
     label: "Table",
     x: null,
     y: null,
-    why: "les lignes telles quelles",
+    why: "the rows as they are",
   });
 
   return offers;
@@ -268,17 +279,17 @@ export function whyNoChart(fits: readonly ColumnFit[]): string | null {
   const ids = fits.filter((f) => f.role === "identifier");
   if (ids.length) {
     return (
-      `Aucune colonne ne porte de mesure. ${ids.map((f) => f.name).join(", ")} ` +
-      `ressemble${ids.length > 1 ? "nt" : ""} à des identifiants : des entiers tous ` +
-      `différents, qu'additionner ne voudrait rien dire.`
+      `No column carries a measure. ${ids.map((f) => f.name).join(", ")} ` +
+      `look${ids.length > 1 ? "" : "s"} like identifiers: whole numbers, all different, ` +
+      `which adding up would mean nothing.`
     );
   }
-  const broken = fits.filter((f) => f.role === "unusable" && f.reason.includes("forme d'une date"));
+  const broken = fits.filter((f) => f.fault === "date-shape");
   if (broken.length) {
-    return `${broken.map((f) => f.name).join(", ")} : ${broken[0]!.reason}`;
+    return `${broken.map((f) => f.name).join(", ")}: ${broken[0]!.reason}`;
   }
   if (fits.every((f) => f.role === "unusable")) {
-    return "L'aperçu est vide — le jeu de données n'a pas encore de lignes.";
+    return "The preview is empty — the dataset has no rows yet.";
   }
-  return "Aucune colonne ne contient de nombres, donc il n'y a rien à mesurer.";
+  return "No column holds numbers, so there is nothing to measure.";
 }

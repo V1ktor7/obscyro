@@ -580,9 +580,11 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
       const row = await createSimEvent(req.db, env.id, userId, {
         name: req.body.name,
         description:
-          `Observé : ${built.total.toLocaleString("fr-CA")} arrivées entre ${built.first} ` +
-          `et ${built.last}, depuis « ${ds.name} »` +
-          (built.skipped > 0 ? `. ${built.skipped} ligne(s) sans date ou sans compte utilisable.` : "."),
+          `Observed: ${built.total.toLocaleString("en-CA")} arrivals between ${built.first} ` +
+          `and ${built.last}, from "${ds.name}"` +
+          (built.skipped > 0
+            ? `. ${built.skipped} row(s) with no date or no usable count.`
+            : "."),
         horizon: built.horizon,
         effects: built.effects,
         twinScenarioId: req.body.twinScenarioId,
