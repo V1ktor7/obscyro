@@ -50,7 +50,20 @@ export interface RestConfig {
 }
 
 const MAX_PAGES = 50;
-const MAX_ROWS = 50_000;
+/**
+ * The ceiling on one pull.
+ *
+ * It is a loop guard: a misconfigured cursor that never advances would page for
+ * ever, and this stops it. That is a statement about pagination, not about how
+ * much data a source is allowed to have — and applied to a single-request CSV
+ * it was cutting good files in half for no safety it was buying. The federal
+ * wastewater aggregate is 61 099 rows and the MSSS capacities file is 97 249;
+ * both were landing at 50 000.
+ *
+ * Raised to fit them with headroom. What actually protects a dataset now is the
+ * refusal in `runPullSync` to replace a complete snapshot with a partial read.
+ */
+const MAX_ROWS = 150_000;
 const TIMEOUT_MS = 30_000;
 const MAX_FLATTEN_DEPTH = 4;
 

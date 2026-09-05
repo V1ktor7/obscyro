@@ -321,6 +321,21 @@ const PULLABLE = new Set<string>(["rest", "http_poll"]);
  * lives in rest-connector so both connector kinds behave identically and the
  * pipeline can reuse the same reader later.
  */
+/**
+ * Whether a short read must be refused rather than written.
+ *
+ * A snapshot replaces the whole table. Replacing a complete one with a read we
+ * already know is short is data loss wearing the clothes of a refresh: the run
+ * log says "may be incomplete" while the dataset quietly becomes the truncated
+ * version, and everything downstream reads it as the whole thing.
+ *
+ * An incremental run appends and carries a watermark, so a short read there is
+ * a pause, not a loss — the next run continues from where this one stopped.
+ */
+export function refusesPartialReplace(mode: string, truncated: boolean): boolean {
+  return truncated && mode === "snapshot";
+}
+
 export async function runPullSync(db: DbClient, syncId: string): Promise<SyncOutcome> {
   const sync = await getSync(db, syncId);
   const { rows: srcRows } = await db.query<{
@@ -352,6 +367,25 @@ export async function runPullSync(db: DbClient, syncId: string): Promise<SyncOut
         const v = String(r[col] ?? "");
         if (v && (!nextWatermark || v > nextWatermark)) nextWatermark = v;
       }
+    }
+
+    // A snapshot replaces the whole table. Replacing a complete one with a
+    // read we already know is short is data loss wearing the clothes of a
+    // refresh: the run log says "may be incomplete" while the dataset quietly
+    // becomes the truncated version, and everything downstream reads it as the
+    // whole thing. An incremental run is different — it appends, and the next
+    // run carries on from the watermark — so only the replace is refused.
+    if (refusesPartialReplace(sync.mode, truncated)) {
+      const outcome = {
+        rowsRead,
+        rowsWritten: 0,
+        error:
+          `Read stopped at the ${rowsRead.toLocaleString("en-CA")}-row cap, so this is ` +
+          `not the whole file. The previous version is kept rather than replaced by a ` +
+          `partial one.`,
+      };
+      await recordSyncRun(db, syncId, outcome);
+      return outcome;
     }
 
     if (records.length > 0) {
