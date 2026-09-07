@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { DbClient } from "../lib/db.js";
-import { noteClearedAlerts, raiseSignalsForOpenAlerts } from "./alert-bridge.js";
+import { noteClearedAlerts, raiseSignalsForOpenAlerts, signalTitle } from "./alert-bridge.js";
 
 /** Records every statement and returns queued results in order. */
 function scriptDb(results: unknown[][] = []): {
@@ -123,6 +123,29 @@ test("the unit name is folded into the title when there is one", async () => {
     params[i]!.some((v) => typeof v === "string" && v.includes("HSL Ward 2B")),
     "a card reading only 'Occupation ≥ 80 %' says nothing about where",
   );
+});
+
+test("a message that already names the unit does not name it twice", () => {
+  // The rule editor pre-fills "{unit} — {value}" for every new rule, and the
+  // twin's toast needs that: it prints the message and, beneath it, eight
+  // characters of a UUID. Appending the name again gave the Response card
+  // "HÔPITAL ROYAL VICTORIA — 200 % · HÔPITAL ROYAL VICTORIA". A signal is
+  // titled once, at creation, so there is no second chance to tidy it.
+  assert.equal(
+    signalTitle("HÔPITAL ROYAL VICTORIA — civières à 200 %", "HÔPITAL ROYAL VICTORIA"),
+    "HÔPITAL ROYAL VICTORIA — civières à 200 %",
+  );
+});
+
+test("a message that does not name the unit still gets told where", () => {
+  assert.equal(
+    signalTitle("Occupation ≥ 95 %", "HSL Ward 2B"),
+    "Occupation ≥ 95 % · HSL Ward 2B",
+  );
+});
+
+test("an alert on a nameless unit keeps its own sentence", () => {
+  assert.equal(signalTitle("Occupation ≥ 95 %", null), "Occupation ≥ 95 %");
 });
 
 test("one failing alert does not stop the batch", async () => {

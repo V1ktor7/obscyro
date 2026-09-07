@@ -25,6 +25,25 @@ export interface BridgeResult {
 }
 
 /**
+ * The signal's title: the alert's sentence, plus where it happened when the
+ * sentence does not already say.
+ *
+ * A rule's message template may name the unit, and in practice it must: the
+ * toast in the twin prints the message and, under it, eight characters of a
+ * UUID. `{unit} — {value}` is what the rule editor pre-fills for a new rule.
+ * Appending the name unconditionally then produced
+ * "HÔPITAL ROYAL VICTORIA — 200 % · HÔPITAL ROYAL VICTORIA", and a signal is
+ * titled once, at creation, so that stays on the card forever.
+ *
+ * Named or not, the unit is still the signal's subject, so the panel finds it
+ * either way — this only decides what the sentence reads like.
+ */
+export function signalTitle(message: string, unitName: string | null): string {
+  if (!unitName) return message;
+  return message.includes(unitName) ? message : `${message} · ${unitName}`;
+}
+
+/**
  * Open alerts whose metric a signal type claims, and that have not produced a
  * signal yet. The NOT EXISTS is the whole dedupe: one signal per alert, ever.
  */
@@ -67,11 +86,10 @@ export async function raiseSignalsForOpenAlerts(
   let raised = 0;
   for (const r of rows) {
     try {
-      const where = r.unit_name ? ` · ${r.unit_name}` : "";
       await raiseSignal(db, {
         projectId: r.project_id,
         signalTypeId: r.signal_type_id,
-        title: `${r.message}${where}`,
+        title: signalTitle(r.message, r.unit_name),
         detail: r.recommendation || null,
         // The alert's own severity wins over the type's default: the same
         // metric at 80% and at 95% are not the same problem.
