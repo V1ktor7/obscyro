@@ -937,6 +937,42 @@ export async function ackAlert(
   if (!rowCount) throw NotFound("ALERT_NOT_FOUND", "Twin alert not found.");
 }
 
+/**
+ * The alert state of a building, taken from the units standing in it.
+ *
+ * Alerts are raised on org units. As soon as a twin tags its buildings
+ * physical, the map's sites stop being units — `nodeById` misses every one of
+ * them — and each site was handed `worstAlertSeverity: null`. The effect was
+ * silent and total: the moment a network became a map of real addresses, every
+ * ring on it went out, with the alerts still open in the database and still
+ * listed in the panel beside it.
+ *
+ * The worst severity rather than the commonest, for the reason a collapsed
+ * parent shows its worst child: a building holding a calm clinic and an
+ * overflowing emergency ward is not, on average, fine.
+ */
+export function alertStateOfPlace(
+  units: { id: string }[],
+  unitById: Map<string, { worstAlertSeverity: TwinAlertSeverity | null; openAlertCount: number }>,
+): { worstAlertSeverity: TwinAlertSeverity | null; openAlertCount: number } {
+  const order: TwinAlertSeverity[] = ["critical", "warn", "info"];
+  let worst: TwinAlertSeverity | null = null;
+  let openAlertCount = 0;
+  const seen = new Set<string>();
+  for (const u of units) {
+    // Two placements onto one building must not count the same ward twice.
+    if (seen.has(u.id)) continue;
+    seen.add(u.id);
+    const node = unitById.get(u.id);
+    if (!node) continue;
+    openAlertCount += node.openAlertCount;
+    const sev = node.worstAlertSeverity;
+    if (!sev) continue;
+    if (worst === null || order.indexOf(sev) < order.indexOf(worst)) worst = sev;
+  }
+  return { worstAlertSeverity: worst, openAlertCount };
+}
+
 export function worstSeverity(
   alerts: TwinAlertRow[],
 ): TwinAlertSeverity | null {
@@ -1192,8 +1228,7 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
       // A building's own numbers come from what is placed in it, not from a
       // tree it does not belong to.
       metrics: place?.metrics ?? emptyMetrics(id),
-      worstAlertSeverity: null,
-      openAlertCount: 0,
+      ...alertStateOfPlace(place?.contributingUnits ?? [], nodeById),
     };
     return {
       ...base,
