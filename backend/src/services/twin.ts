@@ -84,7 +84,13 @@ export const BED_SCHEMA: PropertyDef[] = [
 
 export type TwinAlertSeverity = "info" | "warn" | "critical";
 export type TwinAlertOp = "<" | ">" | ">=" | "<=" | "==";
-export type TwinAlertStatus = "open" | "ack";
+/**
+ * 'resolved' is what the background evaluator writes when a condition stops
+ * firing. It is deliberately not 'ack': the signal bridge separates "somebody
+ * handled it" from "it went away on its own", and only a human produces the
+ * first.
+ */
+export type TwinAlertStatus = "open" | "ack" | "resolved";
 
 export interface TwinUnitNode {
   id: string;
@@ -679,7 +685,14 @@ export async function rollupUnit(
   return m;
 }
 
-function metricValue(metrics: UnitMetrics, metric: string): number | null {
+/**
+ * The number a rule thresholds on, or null when this unit has none.
+ *
+ * Exported because closing an alert needs the same reading that opened it. A
+ * caller that re-derived the value its own way could resolve an alert the
+ * rule would still raise.
+ */
+export function metricValue(metrics: UnitMetrics, metric: string): number | null {
   // A user-defined metric wins: an alert rule that names `occupancy` should
   // follow the definition the institution edited, not a built-in of the same
   // name.
@@ -698,7 +711,7 @@ function metricValue(metrics: UnitMetrics, metric: string): number | null {
   return metrics.numericMeans[metric] ?? null;
 }
 
-function compareOp(op: TwinAlertOp, value: number, threshold: number): boolean {
+export function compareOp(op: TwinAlertOp, value: number, threshold: number): boolean {
   switch (op) {
     case "<":
       return value < threshold;

@@ -1013,7 +1013,12 @@ export interface TwinAlert {
   value: number;
   message: string;
   recommendation: string;
-  status: "open" | "ack";
+  /**
+   * `resolved` is written by the background evaluator when a condition stops
+   * firing. The list endpoints only ever return open alerts, so it should not
+   * arrive here — it is named so the two ends agree on what the states are.
+   */
+  status: "open" | "ack" | "resolved";
   createdAt?: string;
   ackedAt?: string | null;
 }

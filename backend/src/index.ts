@@ -24,6 +24,7 @@ import { startFeedScheduler } from "./services/feed-sim.js";
 import { startSyncScheduler } from "./services/connectivity.js";
 import { startAlertBridge } from "./services/alert-bridge.js";
 import { startPipelineScheduler } from "./services/pipeline.js";
+import { startTwinAlertScheduler } from "./services/twin-alert-scheduler.js";
 import authRoutes from "./routes/auth.js";
 import batchRoutes from "./routes/batch.js";
 import channelsRoutes, { reviewRoutes } from "./routes/channels.js";
@@ -198,6 +199,7 @@ try {
   startFeedScheduler(pool, app.log);
 startSyncScheduler(pool, app.log);
 startPipelineScheduler(pool, app.log);
+startTwinAlertScheduler(pool, app.log);
 startAlertBridge(pool, app.log);
   startChannelJobWorker(pool, app.log);
 } catch (err) {
