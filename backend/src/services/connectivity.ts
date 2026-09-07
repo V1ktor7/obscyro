@@ -110,6 +110,15 @@ export interface SyncRow {
   status: string;
   lastRunAt: string | null;
   lastError: string | null;
+  /**
+   * How many runs in a row have failed.
+   *
+   * Zero after any success. It spaces the next attempts and, on screen,
+   * separates "failed once, will retry shortly" from "has been failing for
+   * days" — which the status alone could never say, because the status is an
+   * interrupteur and not a health report.
+   */
+  consecutiveFailures: number;
 }
 
 interface SyncDbRow {
@@ -125,6 +134,7 @@ interface SyncDbRow {
   status: string;
   last_run_at: Date | null;
   last_error: string | null;
+  consecutive_failures: number | string | null;
 }
 
 function out(r: SyncDbRow): SyncRow {
@@ -141,12 +151,14 @@ function out(r: SyncDbRow): SyncRow {
     status: r.status,
     lastRunAt: r.last_run_at ? r.last_run_at.toISOString() : null,
     lastError: r.last_error,
+    consecutiveFailures: Number(r.consecutive_failures ?? 0),
   };
 }
 
 const SYNC_SELECT = `
   SELECT id, project_id, source_id, dataset_id, name, mode, interval_seconds,
-         incremental_column, watermark, status, last_run_at, last_error
+         incremental_column, watermark, status, last_run_at, last_error,
+         consecutive_failures
     FROM app.sync`;
 
 export async function listSyncs(db: DbClient, projectId: string): Promise<SyncRow[]> {
@@ -205,7 +217,8 @@ export async function createSync(
                            interval_seconds, incremental_column, created_by)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING id, project_id, source_id, dataset_id, name, mode, interval_seconds,
-               incremental_column, watermark, status, last_run_at, last_error`,
+               incremental_column, watermark, status, last_run_at, last_error,
+         consecutive_failures`,
     [
       input.projectId,
       input.sourceId,
@@ -265,9 +278,16 @@ export async function recordSyncRun(
       // null, the scheduler reads "(last_run_at IS NULL OR ...)" as due, and an
       // hourly sync called the source every thirty seconds instead. A failing
       // sync was never marked in error either.
+      // The status is not touched. It says whether somebody switched this feed
+      // on, and a failed run is not somebody. Flipping it to 'error' meant the
+      // scheduler — which only reads 'active' — stopped picking the sync up:
+      // one transient 502 from the MSSS file killed an hourly feed for good.
+      // The failure lands in `last_error`, where it is visible, and in the
+      // counter, which spaces the next attempts without ever giving up.
       `UPDATE app.sync
           SET last_run_at = now(), last_error = $2::text,
-              status = CASE WHEN $2::text IS NULL THEN 'active' ELSE 'error' END,
+              consecutive_failures =
+                CASE WHEN $2::text IS NULL THEN 0 ELSE consecutive_failures + 1 END,
               updated_at = now()
         WHERE id = $1`,
       [syncId, outcome.error],
@@ -427,6 +447,40 @@ let started = false;
  * sync hits an external system — being late is cheaper than hammering it.
  * Set SYNC_SCHEDULER_DISABLED=1 to turn it off.
  */
+/**
+ * The most a repeated failure may stretch the interval.
+ *
+ * Doubling without a ceiling turns a long outage into a feed that retries once
+ * a fortnight and looks abandoned. Twelve keeps an hourly sync trying at least
+ * twice a day however long the source has been down, and a daily one within a
+ * fortnight.
+ */
+const BACKOFF_CAP = 12;
+
+/**
+ * The syncs the scheduler should run now.
+ *
+ * Exported so a test can read it. What matters here is visible in the text and
+ * invisible at runtime until a source breaks: a failing sync is still selected,
+ * it just waits longer. Losing that clause is how a feed goes quiet for good.
+ */
+export const DUE_SYNCS_SQL = `
+  SELECT s.id FROM app.sync s
+   WHERE s.mode <> 'stream'
+     AND s.status = 'active'
+     AND s.interval_seconds IS NOT NULL
+     AND (s.last_run_at IS NULL
+          OR s.last_run_at < now() - make_interval(
+               secs => s.interval_seconds
+                     * LEAST(POWER(2, s.consecutive_failures)::int, ${BACKOFF_CAP})))
+     AND NOT EXISTS (
+       SELECT 1 FROM app.sync_run r
+        WHERE r.sync_id = s.id
+          AND r.started_at > now() - make_interval(secs => s.interval_seconds)
+     )
+   ORDER BY s.last_run_at ASC NULLS FIRST
+   LIMIT 5`;
+
 export function startSyncScheduler(
   pool: { query: DbClient["query"] },
   log: { info: (o: unknown, m?: string) => void; warn: (o: unknown, m?: string) => void },
@@ -445,19 +499,14 @@ export function startSyncScheduler(
           // and turns an hourly sync into one that fires every tick. The log
           // cannot lie about that: a row is written before the column is
           // touched, so the second test holds even when the first is stale.
-          `SELECT s.id FROM app.sync s
-            WHERE s.mode <> 'stream'
-              AND s.status = 'active'
-              AND s.interval_seconds IS NOT NULL
-              AND (s.last_run_at IS NULL
-                   OR s.last_run_at < now() - make_interval(secs => s.interval_seconds))
-              AND NOT EXISTS (
-                SELECT 1 FROM app.sync_run r
-                 WHERE r.sync_id = s.id
-                   AND r.started_at > now() - make_interval(secs => s.interval_seconds)
-              )
-            ORDER BY s.last_run_at ASC NULLS FIRST
-            LIMIT 5`,
+          // A failing sync keeps its place in the queue; it just waits longer
+          // between attempts. The wait doubles with each consecutive failure
+          // and stops doubling at BACKOFF_CAP, so a source that is down for a
+          // day is not called every hour, and a source that comes back is
+          // picked up within one of its own intervals. Nothing here ever gives
+          // up: a feed switched off by an outage is a feed nobody notices is
+          // off.
+          DUE_SYNCS_SQL,
         );
         for (const r of rows) {
           await runPullSync(pool as DbClient, r.id);

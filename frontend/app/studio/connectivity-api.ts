@@ -92,9 +92,18 @@ export interface Sync {
   intervalSeconds: number | null;
   incrementalColumn: string | null;
   watermark: string | null;
+  /** Whether somebody switched this feed on: active or paused. Never health. */
   status: string;
   lastRunAt: string | null;
   lastError: string | null;
+  /**
+   * Runs failed in a row, zero after any success.
+   *
+   * A failed run used to flip `status` to "error", which the scheduler reads as
+   * off — one transient 502 killed an hourly feed for good. Health lives here
+   * now, beside the switch rather than instead of it.
+   */
+  consecutiveFailures: number;
 }
 
 export interface SyncRun {

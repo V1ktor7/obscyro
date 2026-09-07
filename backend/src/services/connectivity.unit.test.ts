@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { refusesPartialReplace } from "./connectivity.js";
+import { DUE_SYNCS_SQL, refusesPartialReplace } from "./connectivity.js";
 
 /**
  * What a pull is allowed to write when it did not read everything.
@@ -33,5 +33,36 @@ describe("a short read must not replace a complete table", () => {
 
   it("lets a stream through, which never replaces anything", () => {
     assert.equal(refusesPartialReplace("stream", true), false);
+  });
+});
+
+describe("a failing sync keeps its place in the queue", () => {
+  it("still selects a sync whose last run failed", () => {
+    // The bug this replaces: `recordSyncRun` set status to 'error' and the
+    // scheduler reads only 'active', so one transient 502 from the MSSS hourly
+    // file killed the feed permanently. Nothing retried it and nothing said so.
+    assert.ok(!DUE_SYNCS_SQL.includes("'error'"));
+    assert.match(DUE_SYNCS_SQL, /status = 'active'/);
+  });
+
+  it("spaces the attempts by the number of consecutive failures", () => {
+    assert.match(DUE_SYNCS_SQL, /POWER\(2, s\.consecutive_failures\)/);
+  });
+
+  it("caps the wait, so a long outage does not read as abandoned", () => {
+    // Doubling without a ceiling turns a week of downtime into a sync that
+    // retries once a fortnight.
+    assert.match(DUE_SYNCS_SQL, /LEAST\(POWER\(2, s\.consecutive_failures\)::int, \d+\)/);
+  });
+
+  it("never stops selecting a sync somebody switched on", () => {
+    // There is no clause anywhere that removes a sync from the queue for
+    // failing. A feed switched off by an outage is a feed nobody notices.
+    assert.ok(!/consecutive_failures\s*[<>]=?\s*\d+\s*(AND|\))/.test(DUE_SYNCS_SQL));
+  });
+
+  it("still refuses to run one twice inside its own interval", () => {
+    assert.match(DUE_SYNCS_SQL, /NOT EXISTS/);
+    assert.match(DUE_SYNCS_SQL, /app\.sync_run/);
   });
 });

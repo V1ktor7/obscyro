@@ -48,9 +48,12 @@ const syncOut = z.object({
   intervalSeconds: z.number().nullable(),
   incrementalColumn: z.string().nullable(),
   watermark: z.string().nullable(),
+  /** Whether somebody switched this feed on: active or paused. Never a health report. */
   status: z.string(),
   lastRunAt: z.string().nullable(),
   lastError: z.string().nullable(),
+  /** Runs failed in a row, zero after any success. Spaces the retries. */
+  consecutiveFailures: z.number(),
 });
 
 const sourceOut = z.object({

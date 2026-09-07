@@ -60,6 +60,7 @@ function ago(iso: string | null): string {
 const STATUS_TONE: Record<string, string> = {
   active: "bg-[#e8f4ec] text-[#1c6e42]",
   paused: "bg-[#f6f7f9] text-[#5f6b7c]",
+  // Kept for sources, which still carry an error status of their own.
   error: "bg-[#fceaef] text-[#a82255]",
 };
 
@@ -281,6 +282,20 @@ export default function SourcesView() {
                     >
                       {y.status}
                     </span>
+                    {/* Health, beside the switch and not instead of it. A run
+                        that failed does not turn a feed off — it keeps
+                        retrying, further apart each time — so the chip has to
+                        say "failing", which is a different word from "off". */}
+                    {y.consecutiveFailures > 0 ? (
+                      <span
+                        className="rounded bg-[#fceaef] px-1.5 py-0.5 text-[10px] font-medium text-[#a82255]"
+                        title={`Still scheduled. The wait between attempts doubles with each failure.`}
+                      >
+                        {y.consecutiveFailures === 1
+                          ? "last run failed"
+                          : `${y.consecutiveFailures} runs failed in a row`}
+                      </span>
+                    ) : null}
                     <span className="text-[11px] text-[#5f6b7c]">
                       {src?.name ?? "source"} → {ds?.name ?? "dataset"}
                     </span>
