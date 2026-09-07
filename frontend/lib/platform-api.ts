@@ -1195,6 +1195,14 @@ export interface TwinNetworkSnapshot {
   sites: TwinNetworkSite[];
   flows: TwinNetworkFlow[];
   layers: TwinNetworkLayer[];
+  /**
+   * Sites past the map's ceiling.
+   *
+   * Counted rather than dropped in silence: a reader has to be able to tell a
+   * small network from a truncated one, and the old cap of 500 would have shown
+   * a third of the provincial registry with nothing on screen to say so.
+   */
+  sitesOmitted?: number;
 }
 
 export async function fetchTwinNetwork(env: string): Promise<TwinNetworkSnapshot> {

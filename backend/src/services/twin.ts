@@ -1069,6 +1069,17 @@ export async function getTwinTreeSnapshot(db: DbClient, environmentId: string, l
  * institution put in its ontology, and `layers` reports them so the client
  * does not have to infer the list from the flows it happens to have received.
  */
+/**
+ * How many sites the network map will draw.
+ *
+ * The old ceiling was 500, taken silently. Syncing the MSSS registry produces
+ * 1 590 installations, and a map that draws the first third of a province while
+ * its legend counts what it drew is the same lie a bar chart of the thirty
+ * largest tells when it calls itself "30 categories". One more than the cap is
+ * fetched so the overflow can be counted rather than inferred from a full page.
+ */
+const MAX_SITES = 2_000;
+
 export async function getTwinNetwork(db: DbClient, environmentId: string) {
   const snapshot = await getTwinTreeSnapshot(db, environmentId);
   const nodeById = new Map(snapshot.nodes.map((n) => [n.id, n]));
@@ -1083,7 +1094,7 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
        JOIN app.ontology_object_types t ON t.id = oi.object_type_id
       WHERE t.organization_id = (SELECT organization_id FROM app.project WHERE id = $1) AND t.nature = 'physical'
       ORDER BY oi.created_at ASC
-      LIMIT 500`,
+      LIMIT ${MAX_SITES + 1}`,
     [environmentId],
   );
   const physicalById = new Map(physical.rows.map((r) => [r.id, r]));
@@ -1099,8 +1110,12 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
   //
   // Roots are used only when nothing is tagged physical, which is what the
   // fallback was always for.
-  const siteIds =
+  const allSiteIds =
     physicalById.size > 0 ? Array.from(physicalById.keys()) : Array.from(snapshot.roots);
+  // Counted, never dropped in silence: a reader has to be able to tell a small
+  // network from a truncated one.
+  const sitesOmitted = Math.max(0, allSiteIds.length - MAX_SITES);
+  const siteIds = allSiteIds.slice(0, MAX_SITES);
 
   // Numbers on the place axis: what is *in* this building, however many
   // organisational units that spans.
@@ -1225,7 +1240,7 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
     (a, b) => a.linkType.localeCompare(b.linkType),
   );
 
-  return { computedAt: snapshot.computedAt, sites, flows, layers };
+  return { computedAt: snapshot.computedAt, sites, flows, layers, sitesOmitted };
 }
 
 export async function seedTwinDemo(

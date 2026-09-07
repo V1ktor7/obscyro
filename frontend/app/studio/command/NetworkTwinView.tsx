@@ -1723,6 +1723,12 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
             </>
           )}
 
+          {network?.sitesOmitted ? (
+            <p className="mx-2 mt-3 rounded border border-warn-line bg-warn-soft px-2 py-1.5 text-[10px] leading-snug text-warn-ink">
+              {network.sitesOmitted.toLocaleString("en-CA")} more sites exist than this map
+              draws. What you see is the oldest {network.sites.length.toLocaleString("en-CA")}.
+            </p>
+          ) : null}
           <p className="px-2 pt-3 text-[10px] leading-relaxed text-[#8f99a8]">
             node ring = alert severity · badge = occupancy · arcs = flows between sites
           </p>
