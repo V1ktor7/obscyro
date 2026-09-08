@@ -333,7 +333,7 @@ export async function fetchRecords(cfg: RestConfig, maxRows = MAX_ROWS): Promise
     pages++;
 
     const ctype = res.headers.get("content-type") ?? "";
-    const text = await res.text();
+    const { text } = decodeBody(await res.arrayBuffer(), ctype);
     const isCsv =
       cfg.format === "csv" ||
       (cfg.format !== "json" && (ctype.includes("csv") || ctype.includes("text/tab")));
@@ -370,6 +370,49 @@ export async function fetchRecords(cfg: RestConfig, maxRows = MAX_ROWS): Promise
   }
 
   return { records: all, pages, truncated };
+}
+
+/**
+ * Turn a downloaded body into text, using the encoding it is actually in.
+ *
+ * `res.text()` decodes UTF-8 unconditionally — the fetch specification says so,
+ * and a charset in the Content-Type header does not change it. Quebec's health
+ * ministry serves `text/csv` with no charset at all and Latin-1 bytes, so every
+ * accented hospital name arrived as U+FFFD. That is not mojibake that could be
+ * repaired afterwards: the replacement character destroys the original byte on
+ * the way in, and 125 160 stored rows could only be fixed by downloading again.
+ *
+ * The order is what keeps this safe:
+ *
+ *   declared    a charset in the header is the server asserting something, and
+ *               it wins
+ *   utf-8       tried strictly, so valid UTF-8 is never second-guessed
+ *   cp1252      only for bytes UTF-8 has already refused, which is what a
+ *               French-language government CSV without a charset nearly always
+ *               is
+ *
+ * Guessing exclusively where UTF-8 has failed means a correct file cannot be
+ * mis-decoded by this function — the fallback is unreachable for anything that
+ * decodes cleanly.
+ */
+export function decodeBody(
+  bytes: ArrayBuffer,
+  contentType: string,
+): { text: string; charset: string } {
+  const declared = /charset\s*=\s*["']?([\w-]+)/i.exec(contentType)?.[1]?.toLowerCase();
+  if (declared) {
+    try {
+      return { text: new TextDecoder(declared).decode(bytes), charset: declared };
+    } catch {
+      // An encoding label Node does not know is not a reason to fail the sync;
+      // fall through and work it out from the bytes.
+    }
+  }
+  try {
+    return { text: new TextDecoder("utf-8", { fatal: true }).decode(bytes), charset: "utf-8" };
+  } catch {
+    return { text: new TextDecoder("windows-1252").decode(bytes), charset: "windows-1252" };
+  }
 }
 
 /** Fields that must never be returned to a client once stored. */
