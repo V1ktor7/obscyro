@@ -730,16 +730,38 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         attributionControl: true,
       });
       mapRef.current = map;
+      // Everything this component draws is gated on `mapReady`, so whatever
+      // sets it decides whether the map has any content at all.
+      //
+      // `load` alone is the wrong gate. It waits for every source, sprite and
+      // style import to settle, and a single one that never resolves leaves it
+      // pending for good: the basemap still paints, because tiles arrive
+      // progressively, while `mapReady` stays false and not one marker, shape
+      // or arc is ever added. That is exactly what was seen in production —
+      // a map reading "1590 sites" in its own header with nothing on it, no
+      // error on screen and none in the console.
+      //
+      // `style.load` is the honest precondition. It fires when layers can be
+      // added, which is all the rest of this component needs, and it is already
+      // trusted here to add the shape layers.
+      const ready = () => {
+        if (!cancelled) setMapReady(true);
+      };
       map.on("load", () => {
         if (cancelled) return;
         map.setProjection("globe");
-        setMapReady(true);
+        ready();
       });
       map.on("style.load", () => {
         // Shapes first so the arcs land on top of them: `setStyle` drops every
         // source and layer, and insertion order is what decides who covers whom.
         ensureShapeLayers(map);
         ensureFlowLayers(map);
+        ready();
+      });
+      // A style that fails to settle used to do it in silence. Say so.
+      map.on("error", (e: { error?: { message?: string } }) => {
+        console.error("[twin map]", e?.error?.message ?? e);
       });
       map.on("click", (e) => {
         mapClickRef.current?.(e.lngLat.lng, e.lngLat.lat);
