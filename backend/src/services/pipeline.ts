@@ -47,6 +47,7 @@ export const NODE_KINDS = [
   "cast",
   "expand",
   "join",
+  "latest",
   "text_field",
   "extract_snomed",
   "validate_confidence",
@@ -341,6 +342,20 @@ export function validate(p: Pick<Pipeline, "nodes" | "edges">): ValidationIssue[
       if (!n.config.leftKey || !n.config.rightKey) {
         issues.push({ nodeId: n.id, message: "A join needs a key column on each side." });
       }
+    } else if (n.kind === "latest") {
+      if (ins.length > 1) {
+        issues.push({ nodeId: n.id, message: "This node takes a single input." });
+      }
+      // Caught here rather than at run time: a `latest` with no key silently
+      // becomes a pass-through, and the series it was meant to reduce arrives
+      // whole at the object writer.
+      const keys = Array.isArray(n.config.keys) ? (n.config.keys as unknown[]) : [];
+      if (keys.length === 0 || !n.config.orderBy) {
+        issues.push({
+          nodeId: n.id,
+          message: "Keeping the latest row needs key columns and the column that orders them.",
+        });
+      }
     } else if (ins.length > 1) {
       issues.push({ nodeId: n.id, message: "This node takes a single input." });
     }
@@ -440,6 +455,80 @@ function compare(a: unknown, op: string, b: unknown): boolean {
     default:
       return false;
   }
+}
+
+/**
+ * One row per entity: the most recent, and only that one.
+ *
+ * Sources publish series, not snapshots. Montreal's air quality file carries a
+ * row per station per hour of the day; the federal wastewater aggregate carries
+ * three hundred weeks per site and measure. Everything downstream — an object
+ * keyed by station, a metric, a threshold — wants the current reading, and
+ * until now the only way to get one was to write every row and let the last
+ * one in file order win. That works exactly as long as the publisher keeps
+ * sorting the file the way it happens to sort it today.
+ *
+ * Two rules make the result trustworthy rather than merely plausible:
+ *
+ *   comparison   a column whose every value reads as a number is compared as
+ *                numbers, everything else as text. Mixing the two is what
+ *                makes hour "11" sort below hour "9", and an off-by-one-hour
+ *                reading is the kind of wrong that never announces itself.
+ *
+ *   absence      a row that carries a readable order value always beats one
+ *                that does not, but a key whose rows *all* lack it still keeps
+ *                one. An entity must never vanish because its timestamp is
+ *                missing — that would turn a reporting gap into a hospital
+ *                that does not exist.
+ *
+ * Ties are resolved by input order, deterministically, because two rows the
+ * declared order cannot separate have to resolve the same way on every run.
+ */
+export function applyLatest(rows: Row[], cfg: Record<string, unknown>): Row[] {
+  const keys = (Array.isArray(cfg.keys) ? (cfg.keys as unknown[]) : [])
+    .map((k) => String(k))
+    .filter((k) => k.length > 0);
+  const orderBy = String(cfg.orderBy ?? "").trim();
+  // Misconfigured, this node would pass the whole series through — the exact
+  // failure it exists to prevent, and a silent one. Refuse instead.
+  if (keys.length === 0 || !orderBy) {
+    throw BadRequest(
+      "LATEST_INCOMPLETE",
+      "Keeping the latest row needs at least one key column and the column that orders them.",
+    );
+  }
+
+  const missing = (v: unknown) => v === null || v === undefined || v === "";
+  // Decided once over the whole column, not per pair: a column that is numeric
+  // apart from one stray value must not silently switch comparison halfway.
+  const numeric = rows.every((r) => missing(r[orderBy]) || !Number.isNaN(Number(r[orderBy])));
+
+  const newer = (a: unknown, b: unknown): boolean => {
+    const am = missing(a);
+    const bm = missing(b);
+    if (am) return false;
+    if (bm) return true;
+    if (numeric) return Number(a) > Number(b);
+    return String(a) > String(b);
+  };
+
+  const best = new Map<string, Row>();
+  const seen: string[] = [];
+  for (const r of rows) {
+    // A missing key part is its own value, so two entities are never merged
+    // just because one of them is unlabelled.
+    const k = keys
+      .map((c) => (r[c] === null || r[c] === undefined ? " " : String(r[c])))
+      .join("");
+    const held = best.get(k);
+    if (!held) {
+      best.set(k, r);
+      seen.push(k);
+    } else if (newer(r[orderBy], held[orderBy])) {
+      best.set(k, r);
+    }
+  }
+  return seen.map((k) => best.get(k)!);
 }
 
 export function applyFilter(rows: Row[], cfg: Record<string, unknown>): Row[] {
@@ -969,6 +1058,9 @@ export async function execute(
           rowsIn += out.length;
           break;
         }
+        case "latest":
+          out = applyLatest(inRows, node.config);
+          break;
         case "filter":
           out = applyFilter(inRows, node.config);
           dropped = inRows.length - out.length;
