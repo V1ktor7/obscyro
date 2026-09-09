@@ -80,6 +80,7 @@ import {
   choroplethRange,
   numericProperties,
   shapeFeatures,
+  SHAPE_FILL_OPACITY,
   WAVE_RAMP,
 } from "./map-shapes";
 import { AXES, missionsIn, treeForAxis, type GroupingAxis } from "./units-axes";
@@ -861,17 +862,9 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               ],
               ["get", "couleur"],
             ],
-            // A played run is the subject, so its fill holds at every zoom
-            // rather than fading out — reading the wave means reading the fill,
-            // and a boundary tint that disappears is only ever context.
-            "fill-opacity": [
-              "case",
-              ["get", "dimmed"],
-              0.02,
-              ["get", "wave"],
-              ["interpolate", ["linear"], ["get", "intensity"], 0, 0.18, 1, 0.72],
-              ["interpolate", ["linear"], ["zoom"], 8, 0.2, 11, 0.12, 14, 0.04],
-            ],
+            // Zoom has to be the outer expression here; see SHAPE_FILL_OPACITY
+            // for what nesting it cost.
+            "fill-opacity": SHAPE_FILL_OPACITY as never,
           },
         },
         firstFlow,

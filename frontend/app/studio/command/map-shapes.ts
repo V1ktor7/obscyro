@@ -402,3 +402,39 @@ export function choroplethRange(
   if (nums.length === 0) return null;
   return { low: Math.min(...nums), high: Math.max(...nums), covered: nums.length, missing };
 }
+
+/**
+ * Opacity of a territory's fill, as a Mapbox paint expression.
+ *
+ * The zoom interpolation has to be the OUTER expression. Mapbox refuses a
+ * `["zoom"]` input anywhere except as the direct input of a top-level `step` or
+ * `interpolate`, and this was written the other way round: a `case` whose last
+ * branch faded with zoom. `addLayer` threw on every attempt.
+ *
+ * The layer therefore never got added, and the throw surfaced only as an
+ * uncaught error in the console: nothing on screen said the map was missing a
+ * layer. It was found while chasing a worse symptom — the map showing zero
+ * markers while its own header read "1590 sites" — and the two were observed
+ * together, on and off, over several loads. `ensureShapeLayers` is called both
+ * from the `style.load` handler and from React effects declared ahead of the
+ * one that builds the markers, which is the likely path from one to the other,
+ * but the marker count is what to watch: it is what a reader of this map
+ * actually loses.
+ *
+ * Same three rules as before, evaluated at each zoom stop instead of around
+ * them: dimmed stays faint, a played run holds its fill at every zoom because
+ * reading the wave means reading the fill, and only a plain territory fades as
+ * the installation becomes the subject.
+ */
+export const SHAPE_FILL_OPACITY = (() => {
+  const wave = ["interpolate", ["linear"], ["get", "intensity"], 0, 0.18, 1, 0.72];
+  const at = (plain: number) => [
+    "case",
+    ["get", "dimmed"],
+    0.02,
+    ["get", "wave"],
+    wave,
+    plain,
+  ];
+  return ["interpolate", ["linear"], ["zoom"], 8, at(0.2), 11, at(0.12), 14, at(0.04)];
+})() as unknown[];
