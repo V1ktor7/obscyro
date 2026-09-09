@@ -112,3 +112,18 @@ test("a two-part identity produces SQL Postgres can parse", async () => {
 test("a one-part identity is unchanged by the fix", () => {
   assert.equal(identityKeyOf({ code: "A" }, ["code"]), '["a"]');
 });
+
+test("the key is rendered the way the trigger renders it", () => {
+  // `to_jsonb(ARRAY['a','b'])::text` in Postgres is `["a", "b"]` — the space
+  // after the comma is part of the value the primary key is built on. Matching
+  // it here is the whole point of writing the rule twice.
+  assert.equal(identityKeyOf({ a: "A", b: "B" }, ["a", "b"]), '["a", "b"]');
+});
+
+test("a single-property key is unaffected, which is why this hid so long", () => {
+  assert.equal(identityKeyOf({ a: "A" }, ["a"]), '["a"]');
+});
+
+test("three parts keep the same separator throughout", () => {
+  assert.equal(identityKeyOf({ a: "1", b: "2", c: "3" }, ["a", "b", "c"]), '["1", "2", "3"]');
+});

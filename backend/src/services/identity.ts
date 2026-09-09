@@ -58,7 +58,17 @@ export function identityKeyOf(
     if (v === "") return null;
     parts.push(v);
   }
-  return JSON.stringify(parts);
+  // Rendered the way Postgres renders it, separator included.
+  //
+  // The trigger stores `to_jsonb(parts)::text`, and Postgres puts a space after
+  // the comma: `["montreal north", "covn2"]`. `JSON.stringify` does not:
+  // `["montreal north","covn2"]`. With a single property there is no comma and
+  // the two agree, which is why every identity in use hid this. With two, the
+  // lookup matched nothing, so every write inserted a new instance and the
+  // trigger refused it against the row already there —
+  // `duplicate key value violates unique constraint "instance_identity_pkey"`,
+  // on data that was not duplicated at all.
+  return `[${parts.map((v) => JSON.stringify(v)).join(", ")}]`;
 }
 
 function normalizeProps(props: string[]): string[] {
