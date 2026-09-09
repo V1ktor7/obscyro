@@ -92,6 +92,12 @@ export interface NodeStat {
   out: number;
   dropped: number;
   ms: number;
+  /**
+   * Rows this node produced beyond the run's ceiling and therefore did not
+   * pass on. Present only when it happened, so a small result and a truncated
+   * one cannot be mistaken for each other.
+   */
+  truncated?: number;
   /** Links created, on an object output that has link rules. */
   linked?: number;
   /** Rows whose link target could not be found — reported, never silent. */
@@ -151,7 +157,12 @@ export interface RunResult {
 }
 
 const PREVIEW_ROWS = 25;
-const MAX_ROWS = 50_000;
+// Enough for the whole of a national weekly aggregate — the federal wastewater
+// file is 61 098 rows and was being cut to 50 000 before a single filter ran.
+// The cut is not the danger on its own; the danger is that it happened in
+// silence, so a run could serve last month's figures the day the current week
+// fell past the ceiling and nothing would say so.
+const MAX_ROWS = 150_000;
 
 export interface NodeMeta {
   kind: NodeKind;
@@ -1137,13 +1148,17 @@ export async function execute(
         }
       }
 
-      if (out.length > limit) out = out.slice(0, limit);
+      // Counted, never dropped in silence: a reader has to be able to tell a
+      // small result from a truncated one.
+      const overflow = Math.max(0, out.length - limit);
+      if (overflow > 0) out = out.slice(0, limit);
       produced.set(node.id, out);
       nodeStats[node.id] = {
         in: node.kind === "dataset_input" ? 0 : inRows.length,
         out: out.length,
         dropped,
         ms: Date.now() - started,
+        ...(overflow > 0 ? { truncated: overflow } : {}),
         ...(linkCounts ?? {}),
       };
       if (preview) samples[node.id] = out.slice(0, 5);
