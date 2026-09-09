@@ -130,7 +130,16 @@ export async function identityReadiness(
     `SELECT ${keyExpr} AS key,
             count(*)::text AS n,
             (array_agg(id ORDER BY created_at))[1:5] AS ids,
-            (array_agg(${props.map((_, i) => `properties ->> $${i + 2}`).join(" || ' · ' || ")}
+            (array_agg(${props
+              // Parenthesised, one per property. Without them a two-part
+              // identity builds `properties ->> $2 || ' · ' || properties ->> $3`,
+              // and `||` shares its precedence with `->>` and binds
+              // left-to-right, so Postgres reads `((properties ->> $2) || ' · '
+              // || properties) ->> $3` — text ->> text, an operator that does
+              // not exist. Every composite identity failed at 42883 before the
+              // type could be declared at all.
+              .map((_, i) => `(properties ->> $${i + 2})`)
+              .join(" || ' · ' || ")}
                        ORDER BY created_at))[1:1] AS vals
        FROM app.ontology_object_instances
       WHERE object_type_id = $1 AND ${presentExpr}

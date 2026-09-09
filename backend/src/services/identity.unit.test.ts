@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { describeIdentityViolation, identityKeyOf } from "./identity.js";
+import { describeIdentityViolation, identityKeyOf, identityReadiness } from "./identity.js";
 
 // ---------------------------------------------------------------------------
 // `identityKeyOf` has to agree with the SQL in migration 043 exactly. It is the
@@ -68,4 +68,47 @@ test("passes unrelated errors through untouched", () => {
   assert.equal(describeIdentityViolation({ code: "23505", constraint: "users_email_key" }), null);
   assert.equal(describeIdentityViolation(new Error("boom")), null);
   assert.equal(describeIdentityViolation(null), null);
+});
+
+// ---------------------------------------------------------------------------
+// An identity made of two properties.
+//
+// `identityReadiness` builds its SQL by joining one fragment per property. The
+// sample-value fragment was `properties ->> $2 || ' · ' || properties ->> $3`,
+// and in Postgres `||` shares precedence with `->>` and binds left to right —
+// so that reads `((properties ->> $2) || ' · ' || properties) ->> $3`, which is
+// `text ->> text`. No such operator: 42883, every time, for every type whose
+// identity needed more than one column. A wastewater reading is identified by
+// its site *and* its target; neither alone says what was measured.
+// ---------------------------------------------------------------------------
+
+test("a two-part identity produces SQL Postgres can parse", async () => {
+  const seen: string[] = [];
+  const db = {
+    query: async (sql: string) => {
+      seen.push(sql);
+      if (sql.includes("property_schema")) {
+        return { rows: [{ property_schema: [{ key: "site" }, { key: "mesure" }] }], rowCount: 1 };
+      }
+      if (sql.includes("count(*)::text AS total")) {
+        return { rows: [{ total: "0", missing: "0" }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    },
+  } as unknown as Parameters<typeof identityReadiness>[0];
+
+  await identityReadiness(db, "type-1", ["site", "mesure"]);
+
+  const dupes = seen.find((s) => s.includes("AS vals"));
+  assert.ok(dupes, "the duplicate scan ran");
+  // Each extraction stands alone, so `||` can only ever join two texts.
+  assert.match(dupes!, /\(properties ->> \$2\) \|\| ' · ' \|\| \(properties ->> \$3\)/);
+  assert.ok(
+    !/properties ->> \$\d+ \|\|/.test(dupes!),
+    "an unparenthesised extraction beside a concatenation is the 42883 bug",
+  );
+});
+
+test("a one-part identity is unchanged by the fix", () => {
+  assert.equal(identityKeyOf({ code: "A" }, ["code"]), '["a"]');
 });
