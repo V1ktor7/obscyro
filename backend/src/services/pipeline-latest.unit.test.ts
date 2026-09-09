@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { applyLatest } from "./pipeline.js";
+import { applyLatest, validate } from "./pipeline.js";
 
 /**
  * Reducing a published series to the current reading.
@@ -168,5 +168,48 @@ describe("the shape of the real files", () => {
     assert.equal(out.length, 8);
     assert.ok(out.every((r) => r.h === 11), "every station on the current hour");
     assert.ok(out.every((r) => r.iqa === 9));
+  });
+});
+
+
+/**
+ * A node that quietly does nothing is worse than one that fails.
+ *
+ * `applyCast` reads `cfg.casts`. Every pipeline provisioned here was written
+ * with `rules`, which the engine ignores in silence: nothing is converted,
+ * nothing is dropped, the run reports success, and the rows reach the object
+ * writer exactly as they left the source. It surfaced as two air quality
+ * stations for one building — the source writes the id as "03" at midnight and
+ * as "3" for the rest of the day, and the cast that was supposed to reconcile
+ * them had never run.
+ */
+describe("a cast that converts nothing is refused", () => {
+  const wire = (config: Record<string, unknown>) => ({
+    nodes: [
+      { id: "in", kind: "dataset_input" as const, name: "in", x: 0, y: 0, config: { datasetId: "d" } },
+      { id: "c", kind: "cast" as const, name: "cast", x: 1, y: 0, config },
+    ],
+    edges: [{ from: "in", to: "c" }],
+  });
+
+  it("flags rules written under the wrong name", () => {
+    const issues = validate(wire({ onError: "drop_row", rules: [{ column: "a", to: "number" }] }));
+    assert.ok(issues.some((i) => /casts/.test(i.message)), "the message names the key it wants");
+  });
+
+  it("accepts a cast that actually casts", () => {
+    const issues = validate(wire({ casts: [{ column: "a", to: "number" }] }));
+    assert.deepEqual(issues.filter((i) => i.nodeId === "c"), []);
+  });
+
+  it("accepts a node that only trims", () => {
+    assert.deepEqual(validate(wire({ trim: ["a"] })).filter((i) => i.nodeId === "c"), []);
+  });
+
+  it("accepts a node that only fills nulls", () => {
+    assert.deepEqual(
+      validate(wire({ fillNulls: { a: 0 } })).filter((i) => i.nodeId === "c"),
+      [],
+    );
   });
 });

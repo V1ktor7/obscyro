@@ -353,6 +353,24 @@ export function validate(p: Pick<Pipeline, "nodes" | "edges">): ValidationIssue[
       if (!n.config.leftKey || !n.config.rightKey) {
         issues.push({ nodeId: n.id, message: "A join needs a key column on each side." });
       }
+    } else if (n.kind === "cast") {
+      if (ins.length > 1) {
+        issues.push({ nodeId: n.id, message: "This node takes a single input." });
+      }
+      // A cast node reads `casts`. Configured under any other name it converts
+      // nothing, drops nothing, and reports success — the rows arrive at the
+      // object writer exactly as they left the source, and the only sign is a
+      // type coercion failing somewhere further down that nobody connects back
+      // to here. Say it at validation instead.
+      const casts = Array.isArray(n.config.casts) ? (n.config.casts as unknown[]) : [];
+      const trim = Array.isArray(n.config.trim) ? (n.config.trim as unknown[]) : [];
+      const fill = Object.keys((n.config.fillNulls ?? {}) as object);
+      if (casts.length === 0 && trim.length === 0 && fill.length === 0) {
+        issues.push({
+          nodeId: n.id,
+          message: "This cast converts nothing. Its rules belong under `casts`.",
+        });
+      }
     } else if (n.kind === "latest") {
       if (ins.length > 1) {
         issues.push({ nodeId: n.id, message: "This node takes a single input." });
