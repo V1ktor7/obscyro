@@ -55,6 +55,10 @@ import {
   listGeoShapes,
   listIngestEvents,
   listTwinAlerts,
+  listTwinAlertRules,
+  listTwinMetrics,
+  type TwinAlertRule,
+  type TwinMetric,
   saveGeoShape,
   updateEnvObject,
   updateEnvType,
@@ -75,6 +79,13 @@ import SpreadPanel from "./SpreadPanel";
 
 import CoverageDialog from "./CoverageDialog";
 import { capacityOf, isSiteHidden } from "./units-tree";
+import {
+  bandColour,
+  bandFor,
+  formatValue,
+  ruleForMetric,
+  siteValue,
+} from "./site-metric";
 import {
   choroplethIntensity,
   choroplethRange,
@@ -347,6 +358,11 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  // Which measure the badges paint. Occupancy stays the default so the map
+  // opens on what people already read.
+  const [badgeMetric, setBadgeMetric] = useState("occupancy");
+  const [twinMetrics, setTwinMetrics] = useState<TwinMetric[]>([]);
+  const [alertRules, setAlertRules] = useState<TwinAlertRule[]>([]);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapboxMap | null>(null);
@@ -594,12 +610,18 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     }
     setLoading(true);
     try {
-      const [net, al, ev, schema] = await Promise.all([
+      const [net, al, ev, schema, mets, rules] = await Promise.all([
         fetchTwinNetwork(env),
         listTwinAlerts(env, { limit: 100 }).catch(() => ({ alerts: [] as TwinAlert[] })),
         listIngestEvents().catch(() => ({ events: [] })),
         listEnvTypes(env).catch(() => ({ linkTypes: [] as EnvLinkType[] })),
+        // The badge is banded on the rule's own threshold, so the map needs the
+        // rules. Losing either costs the colouring, never the map.
+        listTwinMetrics(env).catch(() => ({ metrics: [] as TwinMetric[] })),
+        listTwinAlertRules(env).catch(() => ({ rules: [] as TwinAlertRule[] })),
       ]);
+      setTwinMetrics(mets.metrics ?? []);
+      setAlertRules(rules.rules ?? []);
       setNetwork(net);
       // The map reads a flat list of sites; the tree needs the parent/child
       // edges, which only the tree endpoint carries. A failure here costs the
@@ -1017,6 +1039,20 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     }
   }
 
+  /** The rule that watches the selected measure, or null when nobody watches it. */
+  const badgeRule = useMemo(
+    () => ruleForMetric(alertRules, badgeMetric),
+    [alertRules, badgeMetric],
+  );
+  const badgeUnit = useMemo(
+    () => twinMetrics.find((m) => m.key === badgeMetric)?.unit,
+    [twinMetrics, badgeMetric],
+  );
+  const badgeLabel = useMemo(
+    () => twinMetrics.find((m) => m.key === badgeMetric)?.label ?? badgeMetric,
+    [twinMetrics, badgeMetric],
+  );
+
   const positions = useMemo(() => {
     const m = new Map<string, [number, number]>();
     network?.sites.forEach((s, i) => m.set(s.id, sitePosition(s, i)));
@@ -1138,7 +1174,6 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         if (replayFrame) continue;
         const pos = positions.get(site.id)!;
         const el = document.createElement("div");
-        const occ = site.metrics.occupancyPct;
         const sev = site.worstAlertSeverity;
         const ring =
           sev === "critical" ? "#e11d48" : sev === "warn" ? "#d97706" : "#059669";
@@ -1157,14 +1192,19 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         // demand.
         const cap = capacityOf(site);
         const size = Math.round(10 + Math.sqrt(Math.min(cap, 900)) * 0.9);
-        const fill =
-          occ === null ? "#c5cbd3" : occ >= 100 ? "#e11d48" : occ >= 85 ? "#d97706" : "#059669";
+        // Banded on the rule's own threshold rather than on numbers written
+        // here. 85 and 100 only ever meant something for occupancy; air quality
+        // runs to 50 and a wastewater index sits at 1. Reading the threshold
+        // from the rule makes the colour and the alert say the same thing, and
+        // leaves that number defined once, where a person can edit it.
+        const shown = siteValue(site, badgeMetric);
+        const fill = bandColour(bandFor(shown, badgeRule));
         const alerted = site.openAlertCount > 0;
         el.style.cursor = "pointer";
         el.innerHTML = `
           <div style="position:relative;display:flex;flex-direction:column;align-items:center;">
             <div class="site-dot" style="width:${size}px;height:${size}px;border-radius:50%;background:${fill};opacity:.85;border:${alerted ? `2px solid ${ring}` : "1px solid rgba(255,255,255,.9)"};box-shadow:0 1px 3px rgba(0,0,0,.3);"></div>
-            <div class="site-name" style="display:none;position:absolute;bottom:${size + 4}px;font-size:11px;font-weight:600;color:#1c2127;background:rgba(255,255,255,.94);padding:1px 6px;border-radius:4px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.2);">${site.name}${cap ? ` · ${cap}` : ""}${occ !== null ? ` · ${Math.round(occ)}%` : ""}</div>
+            <div class="site-name" style="display:none;position:absolute;bottom:${size + 4}px;font-size:11px;font-weight:600;color:#1c2127;background:rgba(255,255,255,.94);padding:1px 6px;border-radius:4px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.2);">${site.name}${cap ? ` · ${cap}` : ""}${shown !== null ? ` · ${formatValue(shown, badgeUnit)}` : ""}</div>
           </div>`;
         const nameEl = el.querySelector<HTMLElement>(".site-name");
         const showName = (on: boolean) => {
@@ -1193,7 +1233,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     return () => {
       mounted = false;
     };
-  }, [network, mapReady, positions, hiddenIds, replayFrame]);
+  }, [network, mapReady, positions, hiddenIds, replayFrame, badgeMetric, badgeRule, badgeUnit]);
 
   // Flow arcs: update sources when flows or toggles change.
   useEffect(() => {
@@ -1744,8 +1784,45 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               draws. What you see is the oldest {network.sites.length.toLocaleString("en-CA")}.
             </p>
           ) : null}
+          <div className="mt-4 border-t border-line-soft px-2 pt-3">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">
+              Badge measure
+            </p>
+            <select
+              value={badgeMetric}
+              onChange={(e) => setBadgeMetric(e.target.value)}
+              className="mt-1.5 w-full rounded border border-line bg-white px-2 py-1.5 text-[11.5px] text-ink focus:border-brand focus:outline-none"
+            >
+              {twinMetrics.length === 0 ? (
+                <option value="occupancy">Occupancy</option>
+              ) : (
+                twinMetrics.map((m) => (
+                  <option key={m.key} value={m.key}>
+                    {m.label}
+                  </option>
+                ))
+              )}
+            </select>
+            {badgeRule ? (
+              <p className="mt-1.5 text-[10px] leading-snug text-ink-faint">
+                Red where the alert on this measure fires — {badgeMetric} {badgeRule.op}{" "}
+                {badgeRule.threshold}. Amber approaching it. The colour and the alert read the
+                same threshold, so changing the rule changes the map.
+              </p>
+            ) : (
+              <p className="mt-1.5 text-[10px] leading-snug text-warn-ink">
+                No alert rule watches this measure, so there is no threshold to colour by. Sites
+                carrying a value are drawn in a neutral tint rather than judged against a number
+                nobody set.
+              </p>
+            )}
+            <p className="mt-2 text-[10px] leading-snug text-ink-faint">
+              Grey means no reading — not a calm one.
+            </p>
+          </div>
           <p className="px-2 pt-3 text-[10px] leading-relaxed text-[#8f99a8]">
-            node ring = alert severity · badge = occupancy · arcs = flows between sites
+            node ring = alert severity · badge = {badgeLabel.toLowerCase()} · arcs = flows between
+            sites
           </p>
           </>
           ) : null}
