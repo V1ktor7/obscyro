@@ -938,7 +938,9 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         id: SHAPES_LABEL,
         type: "symbol",
         source: SHAPES_SRC,
-        filter: ["==", ["get", "kind"], "territoire"],
+        // Territories and basins both carry a name worth reading. Anything else
+        // with a geometry stays unlabelled rather than crowding the island.
+        filter: ["in", ["get", "kind"], ["literal", ["territoire", "bassin"]]],
         layout: {
           "text-field": ["get", "label"],
           // Spaced small caps is how an atlas names an area rather than a

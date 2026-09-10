@@ -78,3 +78,53 @@ describe("the three rules the fade has to keep", () => {
     for (const s of stops()) expect((s.value as unknown[])[2]).toBe(0.02);
   });
 });
+
+import { shapeFeatures } from "./map-shapes";
+
+/**
+ * A boundary that was drawn rather than surveyed has to say so.
+ *
+ * Montreal's sewer catchments are not published anywhere. The two basins on
+ * this map are unions of real, published borough outlines, split by a rule
+ * this project chose — which makes the shape plausible and the division a
+ * guess. A viewer reading a polygon on a public health map has no way to tell
+ * those apart unless the map tells them.
+ */
+describe("an approximate outline is labelled as one", () => {
+  const shape = (props: Record<string, unknown>) => ({
+    instanceId: "i1",
+    instanceName: "BASSIN D'EGOUT DE MONTREAL-NORD",
+    objectType: "OrgUnit",
+    kind: "bassin",
+    geometry: { type: "Polygon" as const, coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+    areaM2: 1,
+    properties: props,
+  });
+
+  it("appends the caveat when the instance declares one", () => {
+    const fc = shapeFeatures([shape({ trace: "approximation" })], { axis: "etablissement" });
+    expect(fc.features[0]!.properties.label).toBe(
+      "BASSIN D'EGOUT DE MONTREAL-NORD (tracé approché)",
+    );
+  });
+
+  it("leaves a surveyed outline's name alone", () => {
+    const fc = shapeFeatures([shape({})], { axis: "etablissement" });
+    expect(fc.features[0]!.properties.label).toBe("BASSIN D'EGOUT DE MONTREAL-NORD");
+  });
+
+  it("keeps the caveat out of the instance name itself", () => {
+    // The name is what alert messages and the unit list use. "HÔPITAL X (tracé
+    // approché)" in a clinician's alert would be nonsense.
+    const s = shape({ trace: "approximation" });
+    shapeFeatures([s], { axis: "etablissement" });
+    expect(s.instanceName).toBe("BASSIN D'EGOUT DE MONTREAL-NORD");
+  });
+
+  it("draws a basin whatever the grouping axis, unlike a territory", () => {
+    // Territories answer an organisational question and are hidden when the map
+    // is grouped by something else. A catchment is not an organisational axis.
+    const fc = shapeFeatures([shape({ trace: "approximation" })], { axis: "mission" });
+    expect(fc.features).toHaveLength(1);
+  });
+});

@@ -300,7 +300,12 @@ export function shapeFeatures(
     // would suggest the missions follow them.
     if (isTerritory && !boundaries) continue;
 
-    const label = s.instanceName || "";
+    // A shape whose outline is an approximation says so on the map itself.
+    // The caveat lives in the instance's properties, so it travels with the
+    // data; putting it in the instance *name* instead would leak into the alert
+    // messages and the unit list, where it is not what is being said.
+    const approx = (s.properties ?? {}).trace === "approximation";
+    const label = (s.instanceName || "") + (approx ? " (tracé approché)" : "");
     features.push({
       type: "Feature",
       properties: {
