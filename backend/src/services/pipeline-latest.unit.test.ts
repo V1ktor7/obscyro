@@ -213,3 +213,70 @@ describe("a cast that converts nothing is refused", () => {
     );
   });
 });
+
+/**
+ * The same silence, one node over.
+ *
+ * `applyDerive` returns its rows untouched when `as` is empty — no column, no
+ * error, a run that reports success. Written by hand into a production
+ * pipeline to give air quality stations a readable name, a typo in `as` would
+ * have produced eight map markers labelled "StationAirQualite" and nothing to
+ * say why.
+ */
+describe("a derivation that names no column is refused", () => {
+  const wire = (config: Record<string, unknown>) => ({
+    nodes: [
+      { id: "in", kind: "dataset_input" as const, name: "in", x: 0, y: 0, config: { datasetId: "d" } },
+      { id: "d", kind: "derive" as const, name: "derive", x: 1, y: 0, config },
+    ],
+    edges: [{ from: "in", to: "d" }],
+  });
+
+  it("flags a derivation with no output column", () => {
+    const issues = validate(wire({ op: "concat", columns: ["a", "b"], separator: " " }));
+    assert.ok(
+      issues.some((i) => i.nodeId === "d" && /name/i.test(i.message)),
+      "the message says the column has no name",
+    );
+  });
+
+  it("flags a derivation whose output column is only whitespace", () => {
+    const issues = validate(wire({ as: "   ", op: "constant", value: "x" }));
+    assert.ok(issues.some((i) => i.nodeId === "d"));
+  });
+
+  it("flags an op that reads columns but was given none", () => {
+    // concat over nothing writes an empty string into every row, which looks
+    // like a source that published blanks.
+    const issues = validate(wire({ as: "name", op: "concat", columns: [] }));
+    assert.ok(
+      issues.some((i) => i.nodeId === "d" && /column/i.test(i.message)),
+      "the message names what is missing",
+    );
+  });
+
+  it("accepts a constant, which reads no column by definition", () => {
+    assert.deepEqual(
+      validate(wire({ as: "prefixe", op: "constant", value: "Station" })).filter(
+        (i) => i.nodeId === "d",
+      ),
+      [],
+    );
+  });
+
+  it("accepts the concat this was written for", () => {
+    assert.deepEqual(
+      validate(wire({ as: "name", op: "concat", columns: ["a", "b"], separator: " — " })).filter(
+        (i) => i.nodeId === "d",
+      ),
+      [],
+    );
+  });
+
+  it("treats a missing op as the constant it defaults to", () => {
+    assert.deepEqual(
+      validate(wire({ as: "x", value: 1 })).filter((i) => i.nodeId === "d"),
+      [],
+    );
+  });
+});

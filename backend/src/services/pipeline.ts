@@ -371,6 +371,28 @@ export function validate(p: Pick<Pipeline, "nodes" | "edges">): ValidationIssue[
           message: "This cast converts nothing. Its rules belong under `casts`.",
         });
       }
+    } else if (n.kind === "derive") {
+      if (ins.length > 1) {
+        issues.push({ nodeId: n.id, message: "This node takes a single input." });
+      }
+      // `applyDerive` returns its rows untouched when `as` is empty: no column,
+      // no error, a run that reports success. The same silence as a cast
+      // configured under the wrong key, and it costs the same — a column
+      // everything downstream reads as simply absent from the source.
+      if (!String(n.config.as ?? "").trim()) {
+        issues.push({
+          nodeId: n.id,
+          message: "Name the column this writes, otherwise the value is computed and dropped.",
+        });
+      }
+      const op = String(n.config.op ?? "constant");
+      const cols = Array.isArray(n.config.columns) ? (n.config.columns as unknown[]) : [];
+      if (op !== "constant" && cols.length === 0) {
+        issues.push({
+          nodeId: n.id,
+          message: `"${op}" reads columns, and none are named — every row would get the same empty value.`,
+        });
+      }
     } else if (n.kind === "latest") {
       if (ins.length > 1) {
         issues.push({ nodeId: n.id, message: "This node takes a single input." });
