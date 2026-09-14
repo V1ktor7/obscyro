@@ -213,3 +213,34 @@ test("a role nobody declared is rejected instead of matching nothing", () => {
   assert.equal(issues.length, 1);
   assert.match(issues[0]!.message, /is not a role/);
 });
+
+test("a property that is there but empty is absent, not zero", () => {
+  // Found while giving an air quality station its own reading. `Number(null)`
+  // is 0 and 0 is finite, so a source that publishes an empty cell — a station
+  // offline for the hour, an emergency room that did not report — was summed
+  // as a real zero. Occupancy over a night of missing returns read as a ward
+  // with nobody in it.
+  const rows = [
+    { typeName: "Releve", properties: { civieres: 12 } },
+    { typeName: "Releve", properties: { civieres: null } },
+    { typeName: "Releve", properties: { civieres: "" } },
+    { typeName: "Releve", properties: { civieres: "   " } },
+  ];
+  assert.equal(aggregate(rows, { ofType: "Releve", agg: "sum", property: "civieres" }), 12);
+  assert.equal(aggregate(rows, { ofType: "Releve", agg: "mean", property: "civieres" }), 12);
+  assert.equal(aggregate(rows, { ofType: "Releve", agg: "min", property: "civieres" }), 12);
+});
+
+test("a real zero is still a real zero", () => {
+  const rows = [
+    { typeName: "Releve", properties: { civieres: 0 } },
+    { typeName: "Releve", properties: { civieres: "0" } },
+  ];
+  assert.equal(aggregate(rows, { ofType: "Releve", agg: "min", property: "civieres" }), 0);
+  assert.equal(aggregate(rows, { ofType: "Releve", agg: "mean", property: "civieres" }), 0);
+});
+
+test("nothing readable at all is null, which is not the same as a sum of zero", () => {
+  const rows = [{ typeName: "Releve", properties: { civieres: null } }];
+  assert.equal(aggregate(rows, { ofType: "Releve", agg: "sum", property: "civieres" }), null);
+});

@@ -90,6 +90,20 @@ function matches(inst: MetricInstance, sel: MetricSelector): boolean {
 }
 
 /**
+ * Is this instance one of the things the metric reads?
+ *
+ * Not the same question as "did the metric produce a number". A `count`
+ * answers 0 over an empty match — a real answer, and the right one — so a
+ * non-null result proves nothing about whether the instance was ever looked
+ * at. Anything deciding *whether a metric applies here* has to ask about the
+ * selector, not about its output.
+ */
+export function metricReads(def: MetricDef, inst: MetricInstance): boolean {
+  if (matches(inst, def.numerator)) return true;
+  return def.denominator ? matches(inst, def.denominator) : false;
+}
+
+/**
  * Aggregate one selector over a subtree.
  *
  * `count` returns 0 for an empty match — none is a real answer. The others
@@ -106,7 +120,14 @@ export function aggregate(
   if (!prop) return null;
   const nums: number[] = [];
   for (const inst of kept) {
-    const v = Number(inst.properties[prop]);
+    const raw = inst.properties[prop];
+    // `Number(null)` is 0, and 0 is finite. Without this an emergency room
+    // that did not report for an hour, or a station that was offline, was
+    // summed as a real zero — a ward with nobody in it, which is the one
+    // reading a missing one must never become.
+    if (raw === null || raw === undefined) continue;
+    if (typeof raw === "string" && raw.trim() === "") continue;
+    const v = Number(raw);
     if (Number.isFinite(v)) nums.push(v);
   }
   if (nums.length === 0) return null;
