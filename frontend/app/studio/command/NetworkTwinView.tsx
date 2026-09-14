@@ -78,7 +78,7 @@ import ReplayPanel from "./ReplayPanel";
 import SpreadPanel from "./SpreadPanel";
 
 import CoverageDialog from "./CoverageDialog";
-import { capacityOf, isSiteHidden } from "./units-tree";
+import { alertsForSite, capacityOf, isSiteHidden } from "./units-tree";
 import {
   bandColour,
   bandFor,
@@ -1414,9 +1414,12 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     () => shapes.find((s) => s.instanceId === selectedId) ?? null,
     [shapes, selectedId],
   );
+  // Matched through the site's units, not against its own id: an alert names
+  // the unit it fired on, and the two are different id spaces. See
+  // `alertsForSite`.
   const selectedAlerts = useMemo(
-    () => alerts.filter((a) => a.unitInstanceId === selectedId),
-    [alerts, selectedId],
+    () => (selected ? alertsForSite(selected, alerts) : []),
+    [alerts, selected],
   );
   /** Flows touching the selected site, one row per link type it actually uses. */
   const selectedFlows = useMemo(() => {
@@ -2251,8 +2254,12 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               ))
             )}
 
+            {/* The count the ring is drawn from, so the panel and the dot
+                beside it cannot disagree. The list below can be shorter — only
+                the most recent alerts are fetched — and says so rather than
+                leaving the difference to be noticed. */}
             <p className="mb-1 mt-3 text-[10px] font-medium uppercase tracking-[0.12em] text-[#8f99a8]">
-              Open alerts · {selectedAlerts.length}
+              Open alerts · {selected.openAlertCount}
             </p>
             {selectedAlerts.slice(0, 4).map((a) => (
               <div
@@ -2275,7 +2282,15 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               </div>
             ))}
             {selectedAlerts.length === 0 ? (
-              <p className="text-[10.5px] text-[#8f99a8]">none</p>
+              <p className="text-[10.5px] text-[#8f99a8]">
+                {selected.openAlertCount > 0
+                  ? "Open, but not in the alerts fetched for this window."
+                  : "none"}
+              </p>
+            ) : selectedAlerts.length > 4 ? (
+              <p className="text-[10px] text-[#8f99a8]">
+                {selectedAlerts.length - 4} more, not shown.
+              </p>
             ) : null}
 
             <div className="mt-auto flex flex-col gap-1.5 pt-3">

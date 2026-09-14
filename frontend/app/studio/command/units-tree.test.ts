@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isSiteHidden } from "./units-tree";
+import { alertsForSite, isSiteHidden } from "./units-tree";
 
 /**
  * The map and the tree do not share identifiers, and forgetting that is what
@@ -43,5 +43,34 @@ describe("isSiteHidden", () => {
 
   it("survives a payload with no contributingUnits field at all", () => {
     expect(isSiteHidden({ id: "s" }, new Set(["a"]))).toBe(false);
+  });
+});
+
+describe("alertsForSite", () => {
+  const alert = (unitInstanceId: string, id = unitInstanceId) => ({ id, unitInstanceId });
+
+  it("finds the alert raised on the unit standing on this site", () => {
+    // The bug, pinned: the inspector compared an alert's unit id to the site's
+    // own id and never matched, so a hospital ringed red on the map read
+    // "Open alerts · 0" in the panel beside it.
+    const site = { id: "site-1", contributingUnits: [{ id: "unit-1" }] };
+    expect(alertsForSite(site, [alert("unit-1"), alert("unit-2")])).toEqual([alert("unit-1")]);
+  });
+
+  it("gathers every tenant's alerts at a shared address", () => {
+    const site = { id: "s", contributingUnits: [{ id: "a" }, { id: "b" }] };
+    expect(alertsForSite(site, [alert("a"), alert("b"), alert("c")]).length).toBe(2);
+  });
+
+  it("still matches a site that is itself a unit", () => {
+    expect(alertsForSite({ id: "u", contributingUnits: [] }, [alert("u")]).length).toBe(1);
+  });
+
+  it("claims nothing for a sensor nothing stands on", () => {
+    expect(alertsForSite({ id: "station", contributingUnits: [] }, [alert("unit-1")])).toEqual([]);
+  });
+
+  it("survives a payload with no contributingUnits field", () => {
+    expect(alertsForSite({ id: "s" }, [alert("s"), alert("x")]).length).toBe(1);
   });
 });

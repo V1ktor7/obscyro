@@ -103,6 +103,28 @@ export function isSiteHidden(
   return units.every((u) => hidden.has(u.id));
 }
 
+/**
+ * The alerts raised on a site.
+ *
+ * The same trap as `isSiteHidden`, one panel over. An alert names the unit it
+ * fired on, and a site is not a unit: comparing `unitInstanceId` to `site.id`
+ * compares two id spaces that share nothing. So the inspector read "Open
+ * alerts · 0" under a hospital the map was ringing in red at 165% occupancy —
+ * one panel contradicting the dot beside it, on the screen where somebody
+ * decides whether to divert an ambulance.
+ *
+ * Matched against the site's contributing units, which is the same list the
+ * server counts to decide whether to draw the ring. A site that is itself a
+ * unit — an environment with no placement links — matches on its own id.
+ */
+export function alertsForSite<T extends { unitInstanceId: string }>(
+  site: { id: string; contributingUnits?: Array<{ id: string }> | null },
+  alerts: readonly T[],
+): T[] {
+  const ids = new Set<string>([site.id, ...(site.contributingUnits ?? []).map((u) => u.id)]);
+  return alerts.filter((a) => ids.has(a.unitInstanceId));
+}
+
 export function unitsTree(snapshot: TwinTreeSnapshot | null): TreeItem[] {
   if (!snapshot) return [];
   const items = buildForest(snapshot).map(toItem);
