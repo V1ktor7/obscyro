@@ -119,3 +119,43 @@ export function formatValue(value: number | null, unit?: string): string {
   if (unit === "ratio") return value.toFixed(2);
   return Math.abs(value) >= 100 ? String(Math.round(value)) : String(Math.round(value * 100) / 100);
 }
+
+export interface PanelMetric {
+  key: string;
+  label: string;
+  value: number | null;
+  unit?: string;
+}
+
+/**
+ * The measures worth showing for one site.
+ *
+ * The inspector used to show exactly one number — occupancy — whatever the
+ * site was. A station of the air quality network has no stretchers, so it read
+ * "—" while the map beside it painted that same station green at an index of
+ * 19. Two panes of one screen contradicting each other about the same dot.
+ *
+ * So: everything the site carries, and always the measure the badges are
+ * painting. The second half is what keeps a dash meaningful — it answers the
+ * question the viewer asked rather than a different one they did not.
+ */
+export function panelMetrics(
+  site: { metrics?: { values?: Record<string, number | null> } },
+  metrics: { key: string; label: string; unit?: string }[],
+  badgeMetric: string,
+): PanelMetric[] {
+  const carried = metrics.filter(
+    (m) => m.key === badgeMetric || siteValue(site, m.key) !== null,
+  );
+  // The painted measure leads, because it is the one being asked about.
+  const ordered = [
+    ...carried.filter((m) => m.key === badgeMetric),
+    ...carried.filter((m) => m.key !== badgeMetric),
+  ];
+  return ordered.map((m) => ({
+    key: m.key,
+    label: m.label,
+    unit: m.unit,
+    value: siteValue(site, m.key),
+  }));
+}

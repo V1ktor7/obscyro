@@ -83,6 +83,7 @@ import {
   bandColour,
   bandFor,
   formatValue,
+  panelMetrics,
   ruleForMetric,
   siteValue,
 } from "./site-metric";
@@ -2161,15 +2162,26 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               </button>
             </div>
             <p className="mb-2 text-[10.5px] text-[#8f99a8]">{selected.kind}</p>
-            <MetricRow
-              label="Occupancy"
-              value={
-                selected.metrics.occupancyPct !== null
-                  ? `${Math.round(selected.metrics.occupancyPct)}%`
-                  : "—"
-              }
-              danger={(selected.metrics.occupancyPct ?? 0) >= 95}
-            />
+            {/* What this site carries, not one measure chosen for everybody.
+                A station of the air quality network has no stretchers, so the
+                single occupancy row read "—" while the map beside it painted
+                that same station green at an index of 19: two panes of one
+                screen contradicting each other about the same dot. The row
+                for the measure being painted always appears, so a dash
+                answers the question the viewer asked. */}
+            {panelMetrics(selected, twinMetrics, badgeMetric).map((m) => (
+              <MetricRow
+                key={m.key}
+                label={m.label}
+                value={formatValue(m.value, m.unit)}
+                // The same band the badge uses, from the same rule, so the
+                // colour on the map and the emphasis in the panel cannot come
+                // to disagree.
+                danger={
+                  bandFor(m.value, ruleForMetric(alertRules, m.key)) === "over"
+                }
+              />
+            ))}
             <MetricRow
               label="Linked instances"
               value={selected.metrics.linkedInstanceCount.toLocaleString()}

@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { bandFor, formatValue, ruleForMetric, siteValue, wouldFire } from "./site-metric";
+import {
+  bandFor,
+  formatValue,
+  panelMetrics,
+  ruleForMetric,
+  siteValue,
+  wouldFire,
+} from "./site-metric";
 
 /**
  * The map's colour and the alert have to agree.
@@ -148,5 +155,48 @@ describe("wouldFire is the alert engine's own test", () => {
     expect(wouldFire(4, { op: "<=", threshold: 4 })).toBe(true);
     expect(wouldFire(4, { op: "==", threshold: 4 })).toBe(true);
     expect(wouldFire(4, { op: ">", threshold: 4 })).toBe(false);
+  });
+});
+
+describe("what the inspector shows for a site", () => {
+  const METRICS = [
+    { key: "occupancy", label: "Occupation des civières", unit: "percent" },
+    { key: "iqa", label: "Indice de la qualité de l'air", unit: "number" },
+    { key: "charge_eaux_usees", label: "Charge virale, eaux usées", unit: "ratio" },
+  ];
+  const site = (values: Record<string, number | null>) => ({ metrics: { values } });
+
+  it("shows a station its own reading instead of somebody else's occupancy", () => {
+    const rows = panelMetrics(site({ iqa: 19 }), METRICS, "iqa");
+    expect(rows.map((r) => r.key)).toEqual(["iqa"]);
+    expect(rows[0].value).toBe(19);
+  });
+
+  it("keeps the measure being painted even when this site has none of it", () => {
+    // A dash has to answer the question asked. Dropping the row would leave a
+    // green dot on the map and no line in the panel saying what is green.
+    const rows = panelMetrics(site({ iqa: 19 }), METRICS, "occupancy");
+    expect(rows.map((r) => r.key)).toEqual(["occupancy", "iqa"]);
+    expect(rows[0].value).toBe(null);
+  });
+
+  it("leads with the painted measure", () => {
+    const rows = panelMetrics(site({ occupancy: 88, iqa: 19 }), METRICS, "iqa");
+    expect(rows.map((r) => r.key)).toEqual(["iqa", "occupancy"]);
+  });
+
+  it("leaves out measures this site carries nothing of", () => {
+    const rows = panelMetrics(site({ occupancy: 88 }), METRICS, "occupancy");
+    expect(rows.map((r) => r.key)).toEqual(["occupancy"]);
+  });
+
+  it("does not turn a real zero into an absence", () => {
+    const rows = panelMetrics(site({ occupancy: 0, iqa: 19 }), METRICS, "iqa");
+    expect(rows.map((r) => r.key)).toEqual(["iqa", "occupancy"]);
+    expect(rows[1].value).toBe(0);
+  });
+
+  it("shows nothing rather than inventing rows when no measure is declared", () => {
+    expect(panelMetrics(site({ occupancy: 88 }), [], "occupancy")).toEqual([]);
   });
 });
