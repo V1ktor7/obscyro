@@ -3,7 +3,12 @@ import { freshnessOf, type FreshnessBasis } from "./observed-at.js";
 import type { DbClient } from "../lib/db.js";
 import { NotFound } from "../lib/errors.js";
 import type { ReadLens } from "./ontology-lens.js";
-import { evaluateMetric, metricsForRollup } from "./twin-metrics.js";
+import {
+  evaluateMetric,
+  metricReads,
+  metricsForRollup,
+  type MetricDef,
+} from "./twin-metrics.js";
 import {
   getOrCreateLinkType,
   getOrCreateObjectType,
@@ -335,6 +340,65 @@ function emptyMetrics(unitId: string): UnitMetrics {
     fetchedAgeSeconds: null,
     linkedInstanceCount: 0,
   };
+}
+
+/** A site's own instance, as the roll-up would see any other instance. */
+export interface SiteInstance {
+  typeName: string;
+  properties: Record<string, unknown>;
+  propertySchema: PropertyDef[];
+  updatedAt: Date;
+}
+
+/**
+ * A site that is itself the reading.
+ *
+ * The place axis answers "what is in this building", and for a hospital that
+ * is the right question: its numbers belong to the services standing in it,
+ * not to the address. An air quality station is not a building with tenants.
+ * Nothing is placed in it, it holds no beds, and the measurement is the
+ * station — so the same question returns nothing, and the map paints the
+ * sensor grey. Grey means "no reading". The station is holding one.
+ *
+ * So a site nothing stands on measures itself. The bound is deliberately
+ * narrow in two ways:
+ *
+ *   - Only when nothing is placed here. A site with tenants reports its
+ *     tenants; that contract is what the place axis means, and a building does
+ *     not get to speak over the services inside it.
+ *   - Only when a metric actually reads this type. Asked instead whether a
+ *     metric *produced* a value, every one of 1 590 installations would
+ *     qualify: a `count` answers 0 over an empty match, which is a true answer
+ *     and not evidence that the instance was read at all.
+ *
+ * Returns null when neither holds, which leaves the site exactly as it was.
+ */
+export function selfRollup(
+  siteId: string,
+  inst: SiteInstance,
+  defs: readonly MetricDef[],
+  now: number,
+): UnitMetrics | null {
+  const linked = [inst];
+  if (!defs.some((d) => metricReads(d, inst))) return null;
+
+  const m = emptyMetrics(siteId);
+  for (const def of defs) m.values[def.key] = evaluateMetric(def, linked);
+  m.occupancyPct = m.values.occupancy ?? null;
+  m.instanceCountByType = { [inst.typeName]: 1 };
+  m.linkedInstanceCount = 1;
+  m.fetchedAgeSeconds = Math.round((now - inst.updatedAt.getTime()) / 1000);
+  // The same freshness path the roll-up uses, so a sensor's age and a ward's
+  // age cannot come to mean different things.
+  const fresh = freshnessOf({ property: observedProperty(linked), instances: linked, now });
+  m.freshnessSeconds = fresh.seconds;
+  m.freshnessBasis = fresh.basis;
+  for (const prop of inst.propertySchema) {
+    if (prop.type !== "number") continue;
+    const v = Number(inst.properties[prop.key]);
+    if (Number.isFinite(v)) m.numericMeans[prop.key] = v;
+  }
+  return m;
 }
 
 
@@ -1177,13 +1241,18 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
   // "ward"), and only the physical fallback puts a type name there. Anything
   // deciding which link types may connect two sites needs the real type.
   const typeById = new Map<string, string>();
+  // Each site as an instance in its own right, for the sites that are
+  // themselves the reading. See `selfRollup`.
+  const selfById = new Map<string, SiteInstance>();
   if (siteIds.length > 0) {
     const { rows } = await db.query<{
       id: string;
       properties: Record<string, unknown>;
       type_name: string;
+      property_schema: PropertyDef[] | null;
+      updated_at: Date;
     }>(
-      `SELECT oi.id, oi.properties, t.name AS type_name
+      `SELECT oi.id, oi.properties, t.name AS type_name, t.property_schema, oi.updated_at
          FROM app.ontology_object_instances oi
          JOIN app.ontology_object_types t ON t.id = oi.object_type_id
         WHERE oi.id = ANY($1::uuid[])`,
@@ -1193,6 +1262,12 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
       const p = r.properties ?? {};
       propsById.set(r.id, p);
       typeById.set(r.id, r.type_name);
+      selfById.set(r.id, {
+        typeName: r.type_name,
+        properties: p,
+        propertySchema: r.property_schema ?? [],
+        updatedAt: r.updated_at,
+      });
       const num = (...keys: string[]): number | null => {
         for (const k of keys) {
           const v = Number(p[k]);
@@ -1215,10 +1290,29 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
     return physicalById.get(id)?.type_name ?? "Site";
   };
 
+  // Metric definitions, for the sites nothing stands on. Read once: they are
+  // the same definitions the place roll-up just used, and a second definition
+  // of occupancy is how two parts of one map come to disagree.
+  const { rows: orgRows } = await db.query<{ organization_id: string }>(
+    `SELECT organization_id FROM app.project WHERE id = $1`,
+    [environmentId],
+  );
+  const metricDefs = orgRows[0]?.organization_id
+    ? await metricsForRollup(db, orgRows[0].organization_id)
+    : [];
+  const now = Date.now();
+
   const sites = siteIds.map((id) => {
     const node = nodeById.get(id);
     const phys = physicalById.get(id);
     const place = places.get(id);
+    const self =
+      node || place
+        ? null
+        : (() => {
+            const inst = selfById.get(id);
+            return inst ? selfRollup(id, inst, metricDefs, now) : null;
+          })();
     const base = node ?? {
       id,
       name: siteName(id),
@@ -1226,13 +1320,19 @@ export async function getTwinNetwork(db: DbClient, environmentId: string) {
       code: "",
       parentId: null,
       // A building's own numbers come from what is placed in it, not from a
-      // tree it does not belong to.
-      metrics: place?.metrics ?? emptyMetrics(id),
+      // tree it does not belong to — unless nothing is placed in it and the
+      // site is itself what gets measured, which is what a sensor is.
+      metrics: place?.metrics ?? self ?? emptyMetrics(id),
       ...alertStateOfPlace(place?.contributingUnits ?? [], nodeById),
     };
     return {
       ...base,
       objectType: typeById.get(id) ?? null,
+      // Where the reading comes from, so the map can draw the difference. A
+      // sensor and a hospital drawn as the same dot in the same colour say the
+      // reading means the same thing in both, and it does not: one is the air
+      // at a street corner, the other is the state of a service.
+      selfMeasured: self !== null,
       latitude: coords.get(id)?.latitude ?? null,
       longitude: coords.get(id)?.longitude ?? null,
       // Where the number came from. A configurable aggregation that cannot show

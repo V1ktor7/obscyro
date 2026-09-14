@@ -1193,7 +1193,16 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         // made the map unreadable, and it is the one thing you can ask for on
         // demand.
         const cap = capacityOf(site);
-        const size = Math.round(10 + Math.sqrt(Math.min(cap, 900)) * 0.9);
+        // A sensor is not a small hospital.
+        //
+        // Size means capacity here, and an air quality station has none — not
+        // zero beds, none: the question does not apply to it. Drawn as the
+        // smallest circle it would answer that question anyway, and sit on the
+        // same scale as a nine-place group home. A square says "other kind of
+        // thing" without touching either axis already spoken for: the colour is
+        // the reading, the ring is an alert.
+        const sensor = site.selfMeasured === true;
+        const size = sensor ? 12 : Math.round(10 + Math.sqrt(Math.min(cap, 900)) * 0.9);
         // Banded on the rule's own threshold rather than on numbers written
         // here. 85 and 100 only ever meant something for occupancy; air quality
         // runs to 50 and a wastewater index sits at 1. Reading the threshold
@@ -1205,7 +1214,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         el.style.cursor = "pointer";
         el.innerHTML = `
           <div style="position:relative;display:flex;flex-direction:column;align-items:center;">
-            <div class="site-dot" style="width:${size}px;height:${size}px;border-radius:50%;background:${fill};opacity:.85;border:${alerted ? `2px solid ${ring}` : "1px solid rgba(255,255,255,.9)"};box-shadow:0 1px 3px rgba(0,0,0,.3);"></div>
+            <div class="site-dot" style="width:${size}px;height:${size}px;border-radius:${sensor ? "2px" : "50%"};background:${fill};opacity:.85;border:${alerted ? `2px solid ${ring}` : "1px solid rgba(255,255,255,.9)"};box-shadow:0 1px 3px rgba(0,0,0,.3);"></div>
             <div class="site-name" style="display:none;position:absolute;bottom:${size + 4}px;font-size:11px;font-weight:600;color:#1c2127;background:rgba(255,255,255,.94);padding:1px 6px;border-radius:4px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.2);">${site.name}${cap ? ` · ${cap}` : ""}${shown !== null ? ` · ${formatValue(shown, badgeUnit)}` : ""}</div>
           </div>`;
         const nameEl = el.querySelector<HTMLElement>(".site-name");
@@ -1819,7 +1828,9 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               </p>
             )}
             <p className="mt-2 text-[10px] leading-snug text-ink-faint">
-              Grey means no reading — not a calm one.
+              Grey means no reading — not a calm one. Square markers are sensors: the reading is
+              the measurement at that spot, not the state of a service. Their size carries nothing,
+              because capacity is not a question a sensor has an answer to.
             </p>
           </div>
           <p className="px-2 pt-3 text-[10px] leading-relaxed text-[#8f99a8]">

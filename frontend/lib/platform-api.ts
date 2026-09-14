@@ -1172,6 +1172,13 @@ export interface TwinNetworkSite extends TwinUnitNode {
    * needs the type, not the property.
    */
   objectType: string | null;
+  /**
+   * True when the site's numbers are its own reading rather than the reading of
+   * whatever stands on it — a sensor, not a building. The two mean different
+   * things and the map draws them differently: an index measured at a street
+   * corner is not the state of a service.
+   */
+  selfMeasured?: boolean;
   latitude: number | null;
   longitude: number | null;
   /**
