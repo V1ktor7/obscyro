@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  formatReadingAge,
   formatTwinMetric,
   kindIconName,
   severityDotClass,
@@ -51,5 +52,22 @@ describe("twin-ui", () => {
   it("kindIconName maps kinds", () => {
     expect(kindIconName("ward")).toBe("BedDouble");
     expect(kindIconName("lab")).toBe("FlaskConical");
+  });
+});
+
+describe("formatReadingAge", () => {
+  it("reads as an age when one source answered", () => {
+    expect(formatReadingAge(3600, "observed")).toBe("1h ago");
+  });
+
+  it("marks a floor as a floor, in the text and not only in a tooltip", () => {
+    // A reader repeats the number, not the tooltip. "2h ago" under a unit
+    // whose other feed went quiet is a claim nobody can stand behind.
+    expect(formatReadingAge(7200, "partial")).toBe("≥ 2h ago");
+  });
+
+  it("says unknown rather than showing a dash", () => {
+    expect(formatReadingAge(null, "undeclared")).toBe("unknown");
+    expect(formatReadingAge(null, "partial")).toBe("unknown");
   });
 });

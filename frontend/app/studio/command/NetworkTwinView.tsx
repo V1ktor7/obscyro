@@ -70,7 +70,7 @@ import {
   type TwinNetworkSite,
   type TwinNetworkSnapshot,
 } from "@/lib/platform-api";
-import { explainFreshness, formatFreshness } from "../twin-ui";
+import { explainFreshness, formatFreshness, formatReadingAge } from "../twin-ui";
 import { useStudio } from "../StudioShell";
 import TreeExplorer, { type TreeItem } from "../TreeExplorer";
 import { BAND_COLOUR, bandOf, type Frame } from "../events/replay-frames";
@@ -2194,11 +2194,10 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                 nothing while the census under it stayed an hour old. */}
             <MetricRow
               label="Reading age"
-              value={
-                selected.metrics.freshnessSeconds !== null
-                  ? formatFreshness(selected.metrics.freshnessSeconds)
-                  : "unknown"
-              }
+              value={formatReadingAge(
+                selected.metrics.freshnessSeconds,
+                selected.metrics.freshnessBasis,
+              )}
               title={explainFreshness(selected.metrics.freshnessBasis)}
               danger={(selected.metrics.freshnessSeconds ?? 0) > 3 * 3600}
             />

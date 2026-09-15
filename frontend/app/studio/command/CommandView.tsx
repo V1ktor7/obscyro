@@ -62,6 +62,7 @@ import {
 import {
   DISPLAY_METRIC_OPTIONS,
   formatFreshness,
+  formatReadingAge,
   formatTwinMetric,
 } from "../twin-ui";
 import {
@@ -1040,10 +1041,10 @@ function InspectorPanel({
               <div className="rounded border border-[#d3d8de] bg-[#f6f7f9]/60 px-2 py-1.5">
                 <MicroLabel>Freshness</MicroLabel>
                 <p className="text-sm font-semibold text-[#1c2127]">
-                  {formatFreshness(detail.metrics.freshnessSeconds).replace(
-                    " ago",
-                    "",
-                  )}
+                  {formatReadingAge(
+                    detail.metrics.freshnessSeconds,
+                    detail.metrics.freshnessBasis,
+                  ).replace(" ago", "")}
                 </p>
               </div>
             </div>

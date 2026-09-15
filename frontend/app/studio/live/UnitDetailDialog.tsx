@@ -7,7 +7,7 @@ import { cn } from "@/lib/cn";
 import type { TwinUnitDetail } from "@/lib/platform-api";
 
 import { StatusChip } from "../StatusChip";
-import { formatFreshness, formatTwinMetric, severityBadgeTone } from "../twin-ui";
+import { formatReadingAge, formatTwinMetric, severityBadgeTone } from "../twin-ui";
 
 // ---------------------------------------------------------------------------
 // A unit, in full.
@@ -75,7 +75,10 @@ export default function UnitDetailDialog({
                 <Stat label="Linked" value={String(detail.metrics.linkedInstanceCount)} />
                 <Stat
                   label="Freshness"
-                  value={formatFreshness(detail.metrics.freshnessSeconds)}
+                  value={formatReadingAge(
+                    detail.metrics.freshnessSeconds,
+                    detail.metrics.freshnessBasis,
+                  )}
                 />
               </div>
 

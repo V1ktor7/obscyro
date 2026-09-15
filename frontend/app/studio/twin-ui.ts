@@ -117,6 +117,20 @@ export function formatFreshness(seconds: number | null): string {
 }
 
 /**
+ * The age of a reading, including when the number is only a floor.
+ *
+ * A unit fed by two sources where one has gone quiet has an age that is a lower
+ * bound, not an answer. Printing "2h ago" and hiding the caveat in a tooltip
+ * gives a reader a number they will repeat without it, so the qualifier is in
+ * the text.
+ */
+export function formatReadingAge(seconds: number | null, basis: FreshnessBasis): string {
+  if (seconds == null) return "unknown";
+  const age = formatFreshness(seconds);
+  return basis === "partial" ? `≥ ${age}` : age;
+}
+
+/**
  * Why there is no age, in a sentence.
  *
  * "—" and "unknown" are not the same thing on a screen somebody decides from.
