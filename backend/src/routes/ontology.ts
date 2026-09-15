@@ -57,14 +57,27 @@ const propertyDefFields = {
     .optional(),
   behaviour: z.enum(PROPERTY_BEHAVIOURS).optional(),
   mechanic: z.enum(MECHANICS).optional(),
+  // The same omission as `required` above, and it costs the same. These two
+  // are what let the twin say how old a reading is; absent from this schema
+  // they were stripped on the way out and on the way back, so a declaration
+  // made in the database survived until somebody saved the type from the UI
+  // and then quietly did not.
+  observedAt: z.boolean().optional(),
+  observedAtZone: z.string().trim().min(1).max(64).optional(),
 };
 
 const propertyDefOut = z.object(propertyDefFields);
 
-const propertyDef = propertyDefOut.superRefine((def, ctx) => {
+/**
+ * The inbound declaration, refusing what an author would otherwise fill in and
+ * believe. Exported for the tests that pin what survives a round trip.
+ */
+export const propertyDefWire = propertyDefOut.superRefine((def, ctx) => {
   const problem = propertyProblem(def);
   if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem });
 });
+
+const propertyDef = propertyDefWire;
 
 const errorEnvelope = z.object({
   error: z.object({

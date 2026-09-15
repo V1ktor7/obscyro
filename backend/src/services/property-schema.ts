@@ -259,6 +259,20 @@ export function propertyProblem(def: PropertyDef): string | null {
     return `"${b}" means the value gets multiplied or added to, and "${key}" holds ${def.type}. A non-numeric property can only be set, which is "state".`;
   }
 
+  if (def.observedAtZone !== undefined) {
+    if (!def.observedAt) {
+      return `"${key}" names a clock but is not declared as carrying the time of the reading. Either declare it, or drop the clock.`;
+    }
+    // Checked against the platform's own zone table. An unknown name is
+    // reported as unreadable at read time, which looks exactly like a source
+    // that stopped publishing — a wrong diagnosis for a typo.
+    try {
+      new Intl.DateTimeFormat("en-US", { timeZone: def.observedAtZone });
+    } catch {
+      return `"${def.observedAtZone}" is not a time zone this platform knows. Use an IANA name such as "America/Toronto".`;
+    }
+  }
+
   if (def.mechanic) {
     const kind = MECHANIC_KIND[def.mechanic];
     if (kind === "quantity" && !numeric) {
