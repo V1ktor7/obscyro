@@ -1,5 +1,5 @@
 import { clampLimit, clampOffset, config } from "../lib/config.js";
-import { freshnessOf, type FreshnessBasis } from "./observed-at.js";
+import { freshnessAcross, type FreshnessBasis } from "./observed-at.js";
 import type { DbClient } from "../lib/db.js";
 import { NotFound } from "../lib/errors.js";
 import type { ReadLens } from "./ontology-lens.js";
@@ -310,22 +310,35 @@ function buildDescendantMap(
 }
 
 /**
- * The property the institution declared as carrying the time of the reading.
+ * Every property the institution declared as carrying the time of a reading.
  *
- * Taken from the schemas of the instances actually rolled up, so a unit whose
- * parts come from two feeds uses whichever of them declared one. Two different
- * declarations under one unit is not a case worth inventing a rule for: the
- * first wins and both are the institution's own.
+ * Taken from the schemas of the instances actually rolled up. This used to
+ * return the first one and stop, on the grounds that two declarations under one
+ * unit was not a case worth a rule. It became one: twenty-three emergency
+ * departments receive an hourly stretcher census and an hourly air quality
+ * reading, each with its own stamp, and "first" meant first by link insertion
+ * order — invisible to a reader and guaranteed by nothing.
+ *
+ * `freshnessAcross` decides what to do with more than one. Deduplicated,
+ * because a hundred instances of one type declare the same property a hundred
+ * times.
  */
-function observedProperty(
+function observedProperties(
   instances: readonly { propertySchema: { key: string; observedAt?: boolean; observedAtZone?: string }[] }[],
-): { key: string; zone?: string | null } | null {
+): { key: string; zone?: string | null }[] {
+  const out: { key: string; zone?: string | null }[] = [];
+  const seen = new Set<string>();
   for (const inst of instances) {
     for (const prop of inst.propertySchema) {
-      if (prop.observedAt) return { key: prop.key, zone: prop.observedAtZone ?? null };
+      if (!prop.observedAt) continue;
+      const zone = prop.observedAtZone ?? null;
+      const id = `${prop.key}|${zone ?? ""}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push({ key: prop.key, zone });
     }
   }
-  return null;
+  return out;
 }
 
 function emptyMetrics(unitId: string): UnitMetrics {
@@ -390,7 +403,7 @@ export function selfRollup(
   m.fetchedAgeSeconds = Math.round((now - inst.updatedAt.getTime()) / 1000);
   // The same freshness path the roll-up uses, so a sensor's age and a ward's
   // age cannot come to mean different things.
-  const fresh = freshnessOf({ property: observedProperty(linked), instances: linked, now });
+  const fresh = freshnessAcross(observedProperties(linked), linked, now);
   m.freshnessSeconds = fresh.seconds;
   m.freshnessBasis = fresh.basis;
   for (const prop of inst.propertySchema) {
@@ -482,7 +495,7 @@ export async function rollupAllUnits(
     m.occupancyPct = m.values.occupancy ?? null;
 
     if (newest) m.fetchedAgeSeconds = Math.round((now - newest.getTime()) / 1000);
-    const fresh = freshnessOf({ property: observedProperty(linked), instances: linked, now });
+    const fresh = freshnessAcross(observedProperties(linked), linked, now);
     m.freshnessSeconds = fresh.seconds;
     m.freshnessBasis = fresh.basis;
     for (const [key, acc] of numericAcc) {
@@ -664,7 +677,7 @@ export async function rollupPlaces(
     for (const def of metricDefs) m.values[def.key] = evaluateMetric(def, linked);
     m.occupancyPct = m.values.occupancy ?? null;
     if (newest) m.fetchedAgeSeconds = Math.round((now - newest.getTime()) / 1000);
-    const fresh = freshnessOf({ property: observedProperty(linked), instances: linked, now });
+    const fresh = freshnessAcross(observedProperties(linked), linked, now);
     m.freshnessSeconds = fresh.seconds;
     m.freshnessBasis = fresh.basis;
     for (const [key, acc] of numericAcc) m.numericMeans[key] = acc.sum / acc.count;

@@ -133,6 +133,8 @@ export function explainFreshness(basis: FreshnessBasis): string {
       return "Unknown — the declared timestamp property carries nothing readable.";
     case "zone-unknown":
       return "Unknown — the timestamp names a wall clock and no zone is declared for it.";
+    case "partial":
+      return "At least this old — one of the sources feeding this unit published no readable time.";
     case "empty":
       return "Nothing is linked to this unit.";
   }

@@ -863,6 +863,8 @@ export type FreshnessBasis =
   | "undeclared"
   | "unreadable"
   | "zone-unknown"
+  /** Several sources feed this unit; not all published a readable time. */
+  | "partial"
   | "empty";
 
 export type TwinMetricUnit = "percent" | "ratio" | "count" | "number";

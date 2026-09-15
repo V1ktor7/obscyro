@@ -27,6 +27,12 @@ export type FreshnessBasis =
   | "unreadable"
   /** A naive stamp with no zone declared for it — an age would be a guess. */
   | "zone-unknown"
+  /**
+   * Several sources feed this unit and not all of them published a readable
+   * time. The age is the oldest of the ones that did, which is a floor rather
+   * than an answer.
+   */
+  | "partial"
   /** Nothing is linked to this unit at all. */
   | "empty";
 
@@ -153,6 +159,41 @@ export function freshnessOf(input: FreshnessInput): Freshness {
   return { seconds: Math.round((input.now - newest.getTime()) / 1000), basis: "observed" };
 }
 
+/**
+ * How old the data under a unit is when several sources declare a stamp.
+ *
+ * Twenty-three emergency departments receive both an hourly stretcher census
+ * and an hourly air quality reading, each publishing its own time under its own
+ * property. The rule until then was "the first declaration wins" — written when
+ * only one type had ever declared one, and meaning, in practice, first by link
+ * insertion order: invisible to any reader and guaranteed by nothing.
+ *
+ * The stalest wins instead. "Reading age" answers whether the numbers here can
+ * be trusted now, and two feeds make that answer no better than the older of
+ * them. Nothing can come out looking fresher than it is, and a unit with one
+ * declared stamp — every unit in production today — is untouched.
+ */
+export function freshnessAcross(
+  properties: readonly { key: string; zone?: string | null }[],
+  instances: readonly { properties: Record<string, unknown> }[],
+  now: number,
+): Freshness {
+  if (instances.length === 0) return { seconds: null, basis: "empty" };
+  if (properties.length === 0) return { seconds: null, basis: "undeclared" };
+
+  const results = properties.map((property) => freshnessOf({ property, instances, now }));
+  const read = results.filter((r) => r.basis === "observed" && r.seconds !== null);
+  // Whichever reason the first unreadable one gives, kept as it is: a stamp
+  // nobody can parse and a stamp on an undeclared clock are different problems
+  // with different fixes.
+  if (read.length === 0) return results[0]!;
+
+  const stalest = read.reduce((a, b) => (b.seconds! > a.seconds! ? b : a));
+  return read.length === results.length
+    ? stalest
+    : { seconds: stalest.seconds, basis: "partial" };
+}
+
 /** A sentence for the screen, so "—" never has to be interpreted. */
 export function explainBasis(basis: FreshnessBasis): string {
   switch (basis) {
@@ -164,6 +205,8 @@ export function explainBasis(basis: FreshnessBasis): string {
       return "Unknown — the declared timestamp property carries nothing this can read.";
     case "zone-unknown":
       return "Unknown — the timestamp names a wall clock with no zone, and no zone is declared for it.";
+    case "partial":
+      return "At least this old — one of the sources feeding this unit published no readable time.";
     case "empty":
       return "Nothing is linked to this unit.";
   }

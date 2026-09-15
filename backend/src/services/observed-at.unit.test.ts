@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { freshnessOf, readStamp } from "./observed-at.js";
+import { freshnessAcross, freshnessOf, readStamp } from "./observed-at.js";
 
 /**
  * The difference between when a number was true and when we wrote it down.
@@ -140,5 +140,95 @@ describe("how old the reading under a unit is", () => {
       now,
     });
     assert.ok(out.seconds !== null && out.seconds < 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// More than one source under one unit.
+//
+// Twenty-three emergency departments receive both an hourly stretcher census
+// and an hourly air quality reading. Each publishes its own stamp, under its
+// own property, and the rule was "the first one wins" — written when only one
+// type had ever declared one. First by link insertion order, which no reader
+// can see and nothing guarantees.
+//
+// The stalest wins instead: "Reading age" answers whether the numbers here can
+// be trusted now, and two feeds make that answer no better than the older one.
+// ---------------------------------------------------------------------------
+
+const CENSUS = { key: "mise_a_jour", zone: "America/Toronto" };
+const AIR = { key: "releve_a", zone: "America/Toronto" };
+
+describe("freshness across several declared stamps", () => {
+  const now = Date.parse("2026-09-15T17:00:00Z");
+  const both = (census: string, air: string) => [
+    { properties: { mise_a_jour: census } },
+    { properties: { releve_a: air } },
+  ];
+
+  it("reports the older of the two, whichever was declared first", () => {
+    // census 1 h old, air 4 h old
+    const rows = both("2026-09-15T12:00", "2026-09-15T09:00");
+    assert.deepEqual(freshnessAcross([CENSUS, AIR], rows, now), {
+      seconds: 4 * 3600,
+      basis: "observed",
+    });
+    assert.deepEqual(freshnessAcross([AIR, CENSUS], rows, now), {
+      seconds: 4 * 3600,
+      basis: "observed",
+    });
+  });
+
+  it("is exactly freshnessOf when one source declares a stamp", () => {
+    // Every unit in production is in this case today; it must not move.
+    const rows = [{ properties: { mise_a_jour: "2026-09-15T12:00" } }];
+    assert.deepEqual(
+      freshnessAcross([CENSUS], rows, now),
+      freshnessOf({ property: CENSUS, instances: rows, now }),
+    );
+  });
+
+  it("still takes the newest row within one source", () => {
+    const rows = [
+      { properties: { mise_a_jour: "2026-09-15T09:00" } },
+      { properties: { mise_a_jour: "2026-09-15T12:00" } },
+    ];
+    assert.equal(freshnessAcross([CENSUS], rows, now).seconds, 3600);
+  });
+
+  it("says so when one source publishes nothing readable", () => {
+    // Reporting the other one's age alone would quietly claim the whole unit
+    // is an hour old while half of it has gone silent.
+    const rows = [
+      { properties: { mise_a_jour: "2026-09-15T12:00" } },
+      { properties: { releve_a: null } },
+    ];
+    const out = freshnessAcross([CENSUS, AIR], rows, now);
+    assert.equal(out.basis, "partial");
+    assert.equal(out.seconds, 3600);
+  });
+
+  it("keeps the reason when nothing at all is readable", () => {
+    const rows = [{ properties: { mise_a_jour: "hier matin" } }];
+    assert.deepEqual(freshnessAcross([CENSUS, AIR], rows, now), {
+      seconds: null,
+      basis: "unreadable",
+    });
+  });
+
+  it("keeps zone-unknown, which is a different problem from unreadable", () => {
+    const rows = [{ properties: { mise_a_jour: "2026-09-15T12:00" } }];
+    assert.equal(freshnessAcross([{ key: "mise_a_jour" }], rows, now).basis, "zone-unknown");
+  });
+
+  it("is undeclared when nobody declared one", () => {
+    assert.deepEqual(freshnessAcross([], [{ properties: {} }], now), {
+      seconds: null,
+      basis: "undeclared",
+    });
+  });
+
+  it("is empty when nothing is linked, before asking about stamps", () => {
+    assert.deepEqual(freshnessAcross([CENSUS], [], now), { seconds: null, basis: "empty" });
   });
 });
