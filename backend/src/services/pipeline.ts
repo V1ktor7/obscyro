@@ -387,7 +387,27 @@ export function validate(p: Pick<Pipeline, "nodes" | "edges">): ValidationIssue[
       }
       const op = String(n.config.op ?? "constant");
       const cols = Array.isArray(n.config.columns) ? (n.config.columns as unknown[]) : [];
-      if (op !== "constant" && cols.length === 0) {
+      if (op === "format") {
+        // `format` names its columns inside the template, so the check below
+        // would reject every correct one. The template itself is static
+        // config, which means a malformed one can be read here rather than
+        // discovered as a column of nulls three nodes downstream.
+        const template = String(n.config.template ?? "");
+        if (!template) {
+          issues.push({ nodeId: n.id, message: "Write the template this fills in." });
+        } else {
+          const read = templateParts(template);
+          if (!read.ok) {
+            issues.push({ nodeId: n.id, message: read.message });
+          } else if (read.columns.length === 0) {
+            issues.push({
+              nodeId: n.id,
+              message:
+                "This template names no column, so every row would get the same text. A constant says that more plainly.",
+            });
+          }
+        }
+      } else if (op !== "constant" && cols.length === 0) {
         issues.push({
           nodeId: n.id,
           message: `"${op}" reads columns, and none are named — every row would get the same empty value.`,
@@ -665,6 +685,121 @@ export function applySelect(rows: Row[], cfg: Record<string, unknown>): Row[] {
   });
 }
 
+/**
+ * One piece of a template: literal text, or a column with an optional width.
+ */
+export type TemplatePart = { text: string } | { column: string; pad: number };
+
+export type TemplateRead =
+  | { ok: true; parts: TemplatePart[]; columns: string[] }
+  | { ok: false; message: string };
+
+/**
+ * Read a template like `{date}T{heure:02}:00`.
+ *
+ * Written for a real shape: the RSQA publishes the day in one column and the
+ * hour in another, as 9 rather than "09". Nothing in the ontology could carry
+ * that as an observation stamp — the parser wants two digits — so eight air
+ * quality stations reported an unknown reading age, and a figure taken nine
+ * hours ago was painted exactly like one taken ten minutes ago.
+ *
+ * `{{` and `}}` write a literal brace. `:0N` pads on the left with zeros to
+ * width N, which is the only spec there is; anything else is refused here
+ * rather than ignored, because ignoring it produces `2026-09-14T9:00`, a
+ * string the stamp parser rejects — and the failure then surfaces as "reading
+ * age unknown" with nothing pointing back at the template.
+ */
+export function templateParts(template: string): TemplateRead {
+  const parts: TemplatePart[] = [];
+  const columns: string[] = [];
+  let text = "";
+  const flush = () => {
+    if (text) parts.push({ text });
+    text = "";
+  };
+
+  for (let i = 0; i < template.length; i++) {
+    const c = template[i];
+    if (c === "{" && template[i + 1] === "{") {
+      text += "{";
+      i++;
+      continue;
+    }
+    if (c === "}" && template[i + 1] === "}") {
+      text += "}";
+      i++;
+      continue;
+    }
+    if (c === "}") {
+      return {
+        ok: false,
+        message: `A "}" at position ${i + 1} closes nothing — write "}}" for a literal brace.`,
+      };
+    }
+    if (c !== "{") {
+      text += c;
+      continue;
+    }
+    const end = template.indexOf("}", i + 1);
+    if (end === -1) {
+      return { ok: false, message: `A "{" at position ${i + 1} is never closed.` };
+    }
+    const body = template.slice(i + 1, end);
+    i = end;
+    const colon = body.indexOf(":");
+    const column = (colon === -1 ? body : body.slice(0, colon)).trim();
+    const spec = colon === -1 ? "" : body.slice(colon + 1).trim();
+    if (!column) {
+      return { ok: false, message: `An empty placeholder "{${body}}" names no column.` };
+    }
+    let pad = 0;
+    if (spec) {
+      // `:02` reads like %02d on purpose. It is the one spec, so an
+      // unrecognised one is a mistake rather than a feature nobody wrote yet.
+      const m = /^0(\d+)$/.exec(spec);
+      const width = m ? Number(m[1]) : 0;
+      if (!m || width < 1 || width > 20) {
+        return {
+          ok: false,
+          message: `"{${body}}" — "${spec}" is not a width. Write ":02" to pad with zeros to two characters.`,
+        };
+      }
+      pad = width;
+    }
+    flush();
+    parts.push({ column, pad });
+    if (!columns.includes(column)) columns.push(column);
+  }
+  flush();
+  return { ok: true, parts, columns };
+}
+
+/**
+ * Fill a template from one row, or write nothing.
+ *
+ * Strict where `concat` is lenient, and the difference is the point. `concat`
+ * joins things that happen to sit together, so a missing one leaves a shorter
+ * string. A template composes a single value out of parts — a timestamp, an
+ * identifier — and a value with a hole in it is not a shorter value. Padding
+ * an absent hour would write "00" and publish a midnight reading nobody took.
+ */
+export function renderTemplate(parts: TemplatePart[], row: Row): string | null {
+  let out = "";
+  for (const part of parts) {
+    if ("text" in part) {
+      out += part.text;
+      continue;
+    }
+    const raw = row[part.column];
+    // Absent, not falsy: hour 0 is midnight and has to survive this.
+    if (raw === null || raw === undefined) return null;
+    const v = String(raw);
+    if (v.trim() === "") return null;
+    out += part.pad > 0 ? v.padStart(part.pad, "0") : v;
+  }
+  return out;
+}
+
 function datePart(value: unknown, part: string): unknown {
   const d = new Date(String(value));
   if (Number.isNaN(d.getTime())) return null;
@@ -696,6 +831,9 @@ export function applyDerive(rows: Row[], cfg: Record<string, unknown>): Row[] {
   const cols = Array.isArray(cfg.columns) ? (cfg.columns as string[]) : [];
   const sep = String(cfg.separator ?? "");
   const literal = cfg.value;
+  // Read once for the whole file rather than per row. A template that cannot
+  // be read writes nothing, and validation refuses it before a run gets here.
+  const tmpl = op === "format" ? templateParts(String(cfg.template ?? "")) : null;
 
   return rows.map((r) => {
     let v: unknown = null;
@@ -705,6 +843,9 @@ export function applyDerive(rows: Row[], cfg: Record<string, unknown>): Row[] {
         break;
       case "concat":
         v = cols.map((c) => (r[c] === null || r[c] === undefined ? "" : String(r[c]))).join(sep);
+        break;
+      case "format":
+        v = tmpl && tmpl.ok ? renderTemplate(tmpl.parts, r) : null;
         break;
       case "coalesce":
         v = cols.map((c) => r[c]).find((x) => x !== null && x !== undefined && x !== "") ?? null;

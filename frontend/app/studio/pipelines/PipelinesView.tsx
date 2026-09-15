@@ -929,9 +929,10 @@ function Inspector({
               <option value="coalesce">first non-blank</option>
               <option value="date_part">part of a date</option>
               <option value="conditional">if / else</option>
+              <option value="format">build a value from a pattern</option>
               <option value="constant">a fixed value</option>
             </select>
-            {cfg.op !== "constant" ? (
+            {cfg.op !== "constant" && cfg.op !== "format" ? (
               <>
                 <label className={L}>From columns</label>
                 <div className="mt-1 max-h-28 space-y-0.5 overflow-y-auto rounded border border-[#e5e8eb] p-1.5">
@@ -1010,6 +1011,30 @@ function Inspector({
                   <option value="day">day</option>
                   <option value="hour">hour</option>
                 </select>
+              </>
+            ) : null}
+            {cfg.op === "format" ? (
+              <>
+                <label className={L}>Pattern</label>
+                <input
+                  value={String(cfg.template ?? "")}
+                  onChange={(e) => onConfig({ template: e.target.value })}
+                  placeholder="{date}T{heure:02}:00"
+                  className={F}
+                />
+                <p className="mt-1 text-[10px] leading-relaxed text-[#8f99a8]">
+                  {"{column}"} drops a column in. {"{column:02}"} pads it on the left with zeros
+                  to two characters — which is how a source publishing the hour as 9 becomes a
+                  timestamp something can read. A row missing any part of the pattern gets
+                  nothing rather than a value with a hole in it.
+                </p>
+                {columns.length > 0 ? (
+                  <p className="mt-1 text-[10px] leading-relaxed text-[#8f99a8]">
+                    Columns here: {columns.join(", ")}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-[10.5px] text-[#8f99a8]">Preview to see the columns.</p>
+                )}
               </>
             ) : null}
             {cfg.op === "constant" ? (
