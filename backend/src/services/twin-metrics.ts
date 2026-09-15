@@ -67,6 +67,19 @@ export interface MetricDef {
   numerator: MetricSelector;
   /** Omitted for a plain aggregate: "available staff" is a count, not a ratio. */
   denominator?: MetricSelector | null;
+  /**
+   * The property saying what the number is about.
+   *
+   * Eight air quality stations, one reading 7 and the others 14. That is a real
+   * spatial difference — and the 7 is an index driven by fine particles while
+   * the 14s are driven by ozone. Comparable as indices; not the same thing to
+   * do about them, because particles and ozone reach different patients.
+   *
+   * Not a second metric: a property of the instances this one already reads,
+   * named by the institution in its own vocabulary. Nothing here knows what a
+   * pollutant is.
+   */
+  qualifiedBy?: string | null;
 }
 
 /** The shape the roll-up already has on hand for every instance in a subtree. */
@@ -104,6 +117,23 @@ export function metricReads(def: MetricDef, inst: MetricInstance): boolean {
 }
 
 /**
+ * One instance's value for a numeric property, or null when it has none.
+ *
+ * `Number(null)` is 0, and 0 is finite. Without this an emergency room that did
+ * not report for an hour, or a station that was offline, was summed as a real
+ * zero — a ward with nobody in it, which is the one reading a missing one must
+ * never become. Shared with `qualifiersOf` so the number and the label saying
+ * what it is about cannot come from different instances.
+ */
+function numberAt(inst: MetricInstance, property: string): number | null {
+  const raw = inst.properties[property];
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === "string" && raw.trim() === "") return null;
+  const v = Number(raw);
+  return Number.isFinite(v) ? v : null;
+}
+
+/**
  * Aggregate one selector over a subtree.
  *
  * `count` returns 0 for an empty match — none is a real answer. The others
@@ -120,15 +150,8 @@ export function aggregate(
   if (!prop) return null;
   const nums: number[] = [];
   for (const inst of kept) {
-    const raw = inst.properties[prop];
-    // `Number(null)` is 0, and 0 is finite. Without this an emergency room
-    // that did not report for an hour, or a station that was offline, was
-    // summed as a real zero — a ward with nobody in it, which is the one
-    // reading a missing one must never become.
-    if (raw === null || raw === undefined) continue;
-    if (typeof raw === "string" && raw.trim() === "") continue;
-    const v = Number(raw);
-    if (Number.isFinite(v)) nums.push(v);
+    const v = numberAt(inst, prop);
+    if (v !== null) nums.push(v);
   }
   if (nums.length === 0) return null;
 
@@ -164,6 +187,53 @@ export function evaluateMetric(
   if (den === null || den === 0) return null;
   const ratio = num / den;
   return def.unit === "percent" ? ratio * 100 : ratio;
+}
+
+/**
+ * What the number is about, read off the instances that made it.
+ *
+ * An extremum has one author: a `max` is one station's reading, and labelling
+ * it with every pollutant in the neighbourhood would name one that had nothing
+ * to do with it. A sum or a count is made of all of them, so all of them
+ * qualify it. The rule follows what the aggregate actually did.
+ */
+export function qualifiersOf(
+  def: MetricDef,
+  instances: readonly MetricInstance[],
+): string[] {
+  const prop = (def.qualifiedBy ?? "").trim();
+  if (!prop) return [];
+  const kept = instances.filter((i) => matches(i, def.numerator));
+  const label = (inst: MetricInstance): string | null => {
+    const raw = inst.properties[prop];
+    if (raw === null || raw === undefined) return null;
+    const v = String(raw).trim();
+    return v === "" ? null : v;
+  };
+
+  const agg = def.numerator.agg;
+  const on = def.numerator.property;
+  if ((agg === "max" || agg === "min") && on) {
+    let best: { value: number; inst: MetricInstance } | null = null;
+    for (const inst of kept) {
+      const v = numberAt(inst, on);
+      if (v === null) continue;
+      // Strictly better, so a tie keeps the first — the order the aggregate
+      // saw them in.
+      if (!best || (agg === "max" ? v > best.value : v < best.value)) {
+        best = { value: v, inst };
+      }
+    }
+    const one = best ? label(best.inst) : null;
+    return one ? [one] : [];
+  }
+
+  const seen = new Set<string>();
+  for (const inst of kept) {
+    const v = label(inst);
+    if (v) seen.add(v);
+  }
+  return Array.from(seen).sort();
 }
 
 export interface MetricIssue {
@@ -233,6 +303,7 @@ interface MetricRow {
   unit: MetricUnit;
   numerator: MetricSelector;
   denominator: MetricSelector | null;
+  qualified_by: string | null;
   active: boolean;
 }
 
@@ -246,12 +317,14 @@ function toMetric(r: MetricRow): StoredMetric {
     unit: r.unit,
     numerator: r.numerator,
     denominator: r.denominator,
+    qualifiedBy: r.qualified_by,
     active: r.active,
   };
 }
 
 const M_SELECT = `
-  SELECT id, organization_id, key, label, object_type, unit, numerator, denominator, active
+  SELECT id, organization_id, key, label, object_type, unit, numerator, denominator,
+         qualified_by, active
     FROM app.twin_metric`;
 
 export async function listTwinMetrics(
@@ -276,13 +349,15 @@ export async function upsertTwinMetric(
   }
   const { rows } = await db.query<MetricRow>(
     `INSERT INTO app.twin_metric
-            (organization_id, key, label, object_type, unit, numerator, denominator)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb)
+            (organization_id, key, label, object_type, unit, numerator, denominator, qualified_by)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8)
      ON CONFLICT (organization_id, key) DO UPDATE
         SET label = EXCLUDED.label, object_type = EXCLUDED.object_type,
             unit = EXCLUDED.unit, numerator = EXCLUDED.numerator,
-            denominator = EXCLUDED.denominator, active = TRUE, updated_at = NOW()
-     RETURNING id, organization_id, key, label, object_type, unit, numerator, denominator, active`,
+            denominator = EXCLUDED.denominator, qualified_by = EXCLUDED.qualified_by,
+            active = TRUE, updated_at = NOW()
+     RETURNING id, organization_id, key, label, object_type, unit, numerator, denominator,
+               qualified_by, active`,
     [
       organizationId,
       def.key.trim(),
@@ -291,6 +366,7 @@ export async function upsertTwinMetric(
       def.unit,
       JSON.stringify(def.numerator),
       def.denominator ? JSON.stringify(def.denominator) : null,
+      (def.qualifiedBy ?? "").trim() || null,
     ],
   );
   return toMetric(rows[0]!);

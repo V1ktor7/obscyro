@@ -75,6 +75,7 @@ export default function MetricEditor({
   const [unit, setUnit] = useState<TwinMetricUnit>("count");
   const [numerator, setNumerator] = useState<TwinMetricSelector>(emptySelector);
   const [denominator, setDenominator] = useState<TwinMetricSelector | null>(null);
+  const [qualifiedBy, setQualifiedBy] = useState("");
 
   const reload = useMemo(
     () => async () => {
@@ -103,6 +104,7 @@ export default function MetricEditor({
     setUnit("count");
     setNumerator(emptySelector());
     setDenominator(null);
+    setQualifiedBy("");
     setError(null);
   }
 
@@ -115,6 +117,7 @@ export default function MetricEditor({
     setDenominator(
       m.denominator ? { ...emptySelector(), ...m.denominator, where: m.denominator.where ?? [] } : null,
     );
+    setQualifiedBy(m.qualifiedBy ?? "");
     setError(null);
   }
 
@@ -138,6 +141,7 @@ export default function MetricEditor({
         unit,
         numerator,
         denominator,
+        qualifiedBy: qualifiedBy.trim() || null,
       });
       await reload();
       setEditing(null);
@@ -295,6 +299,24 @@ export default function MetricEditor({
                     onChange={(v) => setDenominator(v)}
                   />
                 ) : null}
+
+                {/* Not a second measure. An air index of 7 driven by fine
+                    particles and one of 14 driven by ozone are comparable as
+                    indices, and are not the same thing to act on. */}
+                <label className="mt-3 block text-[10px] font-medium uppercase tracking-wide text-ink-faint">
+                  What the reading is about
+                </label>
+                <input
+                  value={qualifiedBy}
+                  onChange={(e) => setQualifiedBy(e.target.value)}
+                  placeholder="property name — optional"
+                  className="mt-1 w-full rounded border border-line bg-surface px-2 py-1.5 text-[11.5px] text-ink focus:border-brand focus:outline-none"
+                />
+                <p className="mt-1 text-[10px] leading-relaxed text-ink-faint">
+                  A property of the things this measure reads, shown beside the number: the
+                  pollutant behind an air index, the target of an assay. Leave it empty when the
+                  measure is about exactly one thing.
+                </p>
               </div>
 
               {error ? (

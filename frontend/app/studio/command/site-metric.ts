@@ -125,6 +125,11 @@ export interface PanelMetric {
   label: string;
   value: number | null;
   unit?: string;
+  /**
+   * What this number is about, when the measure declares it — the pollutant
+   * behind an air index. Empty when the measure is about one thing only.
+   */
+  about: string[];
 }
 
 /**
@@ -140,7 +145,12 @@ export interface PanelMetric {
  * question the viewer asked rather than a different one they did not.
  */
 export function panelMetrics(
-  site: { metrics?: { values?: Record<string, number | null> } },
+  site: {
+    metrics?: {
+      values?: Record<string, number | null>;
+      qualifiers?: Record<string, string[]>;
+    };
+  },
   metrics: { key: string; label: string; unit?: string }[],
   badgeMetric: string,
 ): PanelMetric[] {
@@ -157,5 +167,8 @@ export function panelMetrics(
     label: m.label,
     unit: m.unit,
     value: siteValue(site, m.key),
+    // Only alongside a number. A pollutant printed next to a dash would name
+    // what a reading that does not exist would have been about.
+    about: siteValue(site, m.key) === null ? [] : (site.metrics?.qualifiers?.[m.key] ?? []),
   }));
 }

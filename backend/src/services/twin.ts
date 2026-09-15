@@ -7,6 +7,7 @@ import {
   evaluateMetric,
   metricReads,
   metricsForRollup,
+  qualifiersOf,
   type MetricDef,
 } from "./twin-metrics.js";
 import {
@@ -115,6 +116,12 @@ export interface UnitMetrics {
   instanceCountByType: Record<string, number>;
   /** Every metric the organization has defined, by key. */
   values: Record<string, number | null>;
+  /**
+   * What each number is about, when the measure declares it: the pollutant
+   * behind an air index, the target of a wastewater assay. Keyed by metric,
+   * and absent for the measures that are about exactly one thing.
+   */
+  qualifiers: Record<string, string[]>;
   /** Kept for callers that name it directly; it is `values.occupancy`. */
   occupancyPct: number | null;
   numericMeans: Record<string, number>;
@@ -346,6 +353,7 @@ function emptyMetrics(unitId: string): UnitMetrics {
     unitId,
     instanceCountByType: {},
     values: {},
+    qualifiers: {},
     occupancyPct: null,
     numericMeans: {},
     freshnessSeconds: null,
@@ -396,7 +404,11 @@ export function selfRollup(
   if (!defs.some((d) => metricReads(d, inst))) return null;
 
   const m = emptyMetrics(siteId);
-  for (const def of defs) m.values[def.key] = evaluateMetric(def, linked);
+  for (const def of defs) {
+    m.values[def.key] = evaluateMetric(def, linked);
+    const about = qualifiersOf(def, linked);
+    if (about.length > 0) m.qualifiers[def.key] = about;
+  }
   m.occupancyPct = m.values.occupancy ?? null;
   m.instanceCountByType = { [inst.typeName]: 1 };
   m.linkedInstanceCount = 1;
@@ -491,6 +503,9 @@ export async function rollupAllUnits(
     // beds over its wards' total beds. No second pass, and nothing to average.
     for (const def of metricDefs) {
       m.values[def.key] = evaluateMetric(def, linked);
+      // What the number is about, read off the same instances that made it.
+      const about = qualifiersOf(def, linked);
+      if (about.length > 0) m.qualifiers[def.key] = about;
     }
     m.occupancyPct = m.values.occupancy ?? null;
 
@@ -674,7 +689,11 @@ export async function rollupPlaces(
       }
     }
 
-    for (const def of metricDefs) m.values[def.key] = evaluateMetric(def, linked);
+    for (const def of metricDefs) {
+      m.values[def.key] = evaluateMetric(def, linked);
+      const about = qualifiersOf(def, linked);
+      if (about.length > 0) m.qualifiers[def.key] = about;
+    }
     m.occupancyPct = m.values.occupancy ?? null;
     if (newest) m.fetchedAgeSeconds = Math.round((now - newest.getTime()) / 1000);
     const fresh = freshnessAcross(observedProperties(linked), linked, now);

@@ -1,0 +1,12 @@
+-- A number on the twin says how much. It did not say what of.
+--
+-- Eight air quality stations: one reads 7, the others 14. A real spatial
+-- difference — and the 7 is an index driven by fine particles while the 14s are
+-- driven by ozone. Comparable as indices, and not the same thing to do about
+-- them, because particles and ozone reach different patients.
+--
+-- The answer is already in the data: every reading names its own dominant
+-- pollutant, every wastewater assay names its target. What was missing was a
+-- place for the institution to say which property that is. Nullable, because
+-- most measures are about exactly one thing and have nothing to add.
+ALTER TABLE app.twin_metric ADD COLUMN IF NOT EXISTS qualified_by text;

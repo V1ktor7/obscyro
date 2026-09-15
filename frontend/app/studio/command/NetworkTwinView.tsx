@@ -2176,6 +2176,10 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               <MetricRow
                 key={m.key}
                 label={m.label}
+                // What the number is about, when the measure declares it. An
+                // index of 7 on fine particles and one of 14 on ozone are
+                // comparable as indices and are not the same thing to act on.
+                note={m.about.join(", ")}
                 value={formatValue(m.value, m.unit)}
                 // The same band the badge uses, from the same rule, so the
                 // colour on the map and the emphasis in the panel cannot come
@@ -2349,6 +2353,7 @@ function MetricRow({
   danger,
   last,
   title,
+  note,
 }: {
   label: string;
   value: string;
@@ -2356,18 +2361,23 @@ function MetricRow({
   last?: boolean;
   /** Hovered explanation — why a value is unknown, when it is. */
   title?: string;
+  /** What the number is about, beside the number rather than in a tooltip. */
+  note?: string;
 }) {
   return (
     <div
       title={title}
       className={cn(
-        "flex items-center justify-between py-1 text-[11px]",
+        "flex items-center justify-between gap-2 py-1 text-[11px]",
         !last && "border-b border-[#eef1f4]",
       )}
     >
-      <span className="text-[#8f99a8]">{label}</span>
-      <span className={cn("font-medium", danger ? "text-rose-600" : "text-[#1c2127]")}>
-        {value}
+      <span className="min-w-0 truncate text-[#8f99a8]">{label}</span>
+      <span className="flex shrink-0 items-baseline gap-1.5">
+        {note ? <span className="text-[10px] text-[#8f99a8]">{note}</span> : null}
+        <span className={cn("font-medium", danger ? "text-rose-600" : "text-[#1c2127]")}>
+          {value}
+        </span>
       </span>
     </div>
   );

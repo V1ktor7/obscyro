@@ -842,6 +842,12 @@ export interface TwinUnitMetrics {
   instanceCountByType: Record<string, number>;
   /** Every metric the organization has defined, by key. */
   values: Record<string, number | null>;
+  /**
+   * What each number is about, when the measure declares it: the pollutant
+   * behind an air index, the target of a wastewater assay. Absent for the
+   * measures that are about exactly one thing.
+   */
+  qualifiers?: Record<string, string[]>;
   /** `values.occupancy`, kept for callers that name it directly. */
   occupancyPct: number | null;
   numericMeans: Record<string, number>;
@@ -896,6 +902,13 @@ export interface TwinMetric {
   unit: TwinMetricUnit;
   numerator: TwinMetricSelector;
   denominator?: TwinMetricSelector | null;
+  /**
+   * The property on the instances this measure reads that says what the number
+   * is about. Not a second measure: an air index of 7 driven by fine particles
+   * and one of 14 driven by ozone are comparable as indices and are not the
+   * same thing to act on.
+   */
+  qualifiedBy?: string | null;
   active: boolean;
 }
 
@@ -968,6 +981,7 @@ export async function saveTwinMetric(
     unit: TwinMetricUnit;
     numerator: TwinMetricSelector;
     denominator?: TwinMetricSelector | null;
+    qualifiedBy?: string | null;
   },
 ): Promise<TwinMetric> {
   return apiFetch(`/v1/ontology/${encEnv(env)}/twin/metrics/${encodeURIComponent(key)}`, {

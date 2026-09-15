@@ -957,6 +957,8 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
     unit: z.enum(["percent", "ratio", "count", "number"]),
     numerator: metricSelector,
     denominator: metricSelector.nullish(),
+    /** The property saying what the reading is about — a pollutant, an assay. */
+    qualifiedBy: z.string().nullish(),
     active: z.boolean(),
   });
 
@@ -990,6 +992,7 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
           unit: z.enum(["percent", "ratio", "count", "number"]),
           numerator: metricSelector,
           denominator: metricSelector.nullable().optional(),
+          qualifiedBy: z.string().trim().max(64).nullable().optional(),
         }),
         response: { 200: metricOut, 400: errorEnvelope, 404: errorEnvelope },
       },
@@ -1004,6 +1007,7 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
         unit: req.body.unit,
         numerator: req.body.numerator,
         denominator: req.body.denominator ?? null,
+        qualifiedBy: req.body.qualifiedBy ?? null,
       });
       await recordAudit(req.db, {
         projectId: env.id,

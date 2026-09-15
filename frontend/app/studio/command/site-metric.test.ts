@@ -200,3 +200,36 @@ describe("what the inspector shows for a site", () => {
     expect(panelMetrics(site({ occupancy: 88 }), [], "occupancy")).toEqual([]);
   });
 });
+
+describe("what a number in the panel is about", () => {
+  const METRICS = [
+    { key: "iqa", label: "Indice de la qualité de l'air", unit: "number" },
+    { key: "occupancy", label: "Occupation des civières", unit: "percent" },
+  ];
+
+  it("carries the pollutant beside the index", () => {
+    // Station 31 reads 7 on fine particles while its neighbours read 14 on
+    // ozone. Same scale, different thing to do about it.
+    const site = { metrics: { values: { iqa: 7 }, qualifiers: { iqa: ["PM2.5"] } } };
+    expect(panelMetrics(site, METRICS, "iqa")[0].about).toEqual(["PM2.5"]);
+  });
+
+  it("says nothing beside a measure that declares no qualifier", () => {
+    const site = { metrics: { values: { occupancy: 88 }, qualifiers: {} } };
+    expect(panelMetrics(site, METRICS, "occupancy")[0].about).toEqual([]);
+  });
+
+  it("does not label a reading that does not exist", () => {
+    // The badge measure's row is shown even when the site carries none of it.
+    // Printing a pollutant there would name what an absent reading was about.
+    const site = { metrics: { values: {}, qualifiers: { iqa: ["O3"] } } };
+    const row = panelMetrics(site, METRICS, "iqa")[0];
+    expect(row.value).toBe(null);
+    expect(row.about).toEqual([]);
+  });
+
+  it("survives a payload from a server that does not send qualifiers", () => {
+    const site = { metrics: { values: { iqa: 7 } } };
+    expect(panelMetrics(site, METRICS, "iqa")[0].about).toEqual([]);
+  });
+});
