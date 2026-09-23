@@ -100,6 +100,13 @@ export interface NodeStat {
   truncated?: number;
   /** Links created, on an object output that has link rules. */
   linked?: number;
+  /**
+   * Instances an output declared complete removed because this run did not
+   * write them. See `retireDecision`.
+   */
+  retired?: number;
+  /** Why an output declared complete removed nothing, when it had candidates. */
+  retireRefused?: string;
   /** Rows whose link target could not be found — reported, never silent. */
   unresolved?: number;
   /**
@@ -1315,7 +1322,10 @@ export async function execute(
           break;
         }
         case "object_output": {
-          const r = await writeObjects(db, pipeline, node, inRows, preview);
+          // A run cut at the ceiling anywhere upstream is not the complete set,
+          // and an output that retires what it did not write has to know.
+          const truncatedUpstream = Object.values(nodeStats).some((st) => (st.truncated ?? 0) > 0);
+          const r = await writeObjects(db, pipeline, node, inRows, preview, truncatedUpstream);
           out = inRows;
           dropped = r.skipped;
           rowsOut += r.written;
@@ -1324,7 +1334,10 @@ export async function execute(
             unresolved: r.unresolved,
             ambiguous: r.ambiguous,
             ambiguousKeys: r.ambiguousKeys,
+            ...(r.retired !== undefined ? { retired: r.retired } : {}),
+            ...(r.retireRefused ? { retireRefused: r.retireRefused } : {}),
           };
+          if (r.retireRefused) issues.push({ nodeId: node.id, message: r.retireRefused });
           break;
         }
       }
@@ -1354,12 +1367,78 @@ export async function execute(
   return { runId, status: "succeeded", rowsIn, rowsOut, nodeStats, samples, issues, error: null };
 }
 
+/**
+ * Whether an object output declared complete may remove what it did not write.
+ *
+ * The MSSS publishes, every hour, how many stretchers each emergency room has
+ * in service, and a pipeline turns the count into one instance per stretcher.
+ * Writing only ever adds, so a room that went from 54 stretchers to 50 kept the
+ * last four, frozen in their state from an hour before. Every hour after that,
+ * each room climbs towards the most stretchers it has ever had, and the
+ * simulation starts from capacity that is not there.
+ *
+ * The refusals are the part that matters. This same pipeline died once by
+ * writing nothing: the source renamed its columns, every row fell through a
+ * filter, the run reported success. Retiring on that run would have emptied the
+ * type and reported success a second time. So a run may retire only when it is
+ * plainly the whole current set: it wrote something, it wrote every row it was
+ * given, nothing upstream was cut at the ceiling, and it is not about to remove
+ * half of what exists. A feed that changes does not lose half of itself in an
+ * hour; a truncated file does.
+ */
+export const RETIRE_MAX_SHARE = 0.5;
+
+export function retireDecision(input: {
+  written: number;
+  skipped: number;
+  unwritten: number;
+  truncated: boolean;
+}): { retire: true } | { retire: false; reason: string | null } {
+  const { written, skipped, unwritten, truncated } = input;
+  if (unwritten <= 0) return { retire: false, reason: null };
+  if (written <= 0) {
+    return {
+      retire: false,
+      reason:
+        `This run wrote nothing, which is a broken source rather than an empty one. ` +
+        `None of the ${unwritten} existing instances were removed.`,
+    };
+  }
+  if (skipped > 0) {
+    return {
+      retire: false,
+      reason:
+        `${skipped} row(s) could not be written, and their instances cannot be told apart ` +
+        `from ones that stopped existing. Nothing was removed.`,
+    };
+  }
+  if (truncated) {
+    return {
+      retire: false,
+      reason: `Rows were truncated upstream, so this run is not the complete set. Nothing was removed.`,
+    };
+  }
+  const share = unwritten / (written + unwritten);
+  if (share > RETIRE_MAX_SHARE) {
+    return {
+      retire: false,
+      reason:
+        `This run would remove ${unwritten} of ${written + unwritten} instances ` +
+        `(${Math.round(share * 100)}%). A feed that changes does not lose that much at once; ` +
+        `a truncated file does. Nothing was removed.`,
+    };
+  }
+  return { retire: true };
+}
+
 async function writeObjects(
   db: DbClient,
   pipeline: Pipeline,
   node: PipelineNode,
   rows: Row[],
   preview: boolean,
+  /** True when some node upstream cut rows at the run's ceiling. */
+  truncatedUpstream = false,
 ): Promise<{
   written: number;
   skipped: number;
@@ -1368,6 +1447,8 @@ async function writeObjects(
   /** Link keys that matched more than one instance; the oldest was taken. */
   ambiguous: number;
   ambiguousKeys: string[];
+  retired?: number;
+  retireRefused?: string;
 }> {
   const typeName = String(node.config.objectTypeName ?? "");
   const identity = (node.config.identityProperties ?? []) as string[];
@@ -1472,6 +1553,7 @@ async function writeObjects(
   let unresolved = 0;
   let ambiguous = 0;
   const ambiguousKeys = new Set<string>();
+  const writtenIds = new Set<string>();
 
   for (const row of rows) {
     const { properties, issues, missingRequired } = buildMapProperties(row, rules, schema);
@@ -1488,6 +1570,7 @@ async function writeObjects(
         nodeId: node.id,
       });
       instanceId = up.id;
+      writtenIds.add(up.id);
     }
     written++;
 
@@ -1530,7 +1613,41 @@ async function writeObjects(
       linked++;
     }
   }
-  return { written, skipped, linked, unresolved, ambiguous, ambiguousKeys: Array.from(ambiguousKeys) };
+  const base = {
+    written,
+    skipped,
+    linked,
+    unresolved,
+    ambiguous,
+    ambiguousKeys: Array.from(ambiguousKeys),
+  };
+  if (preview || node.config.retireUnwritten !== true) return base;
+
+  // Distinct instances, not rows: two rows upserting one identity are one
+  // instance written, and counting them twice would understate the share a
+  // retirement removes.
+  const ids = Array.from(writtenIds);
+  const { rows: cnt } = await db.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM app.ontology_object_instances
+      WHERE object_type_id = $1 AND NOT (id = ANY($2::uuid[]))`,
+    [objectTypeId, ids],
+  );
+  const decision = retireDecision({
+    written: ids.length,
+    skipped,
+    unwritten: cnt[0]?.n ?? 0,
+    truncated: truncatedUpstream,
+  });
+  if (!decision.retire) {
+    return decision.reason ? { ...base, retired: 0, retireRefused: decision.reason } : base;
+  }
+  // Their links go with them: link instances cascade on delete.
+  const del = await db.query(
+    `DELETE FROM app.ontology_object_instances
+      WHERE object_type_id = $1 AND NOT (id = ANY($2::uuid[]))`,
+    [objectTypeId, ids],
+  );
+  return { ...base, retired: del.rowCount ?? 0 };
 }
 
 async function finishRun(

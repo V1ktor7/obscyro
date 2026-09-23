@@ -1355,6 +1355,23 @@ function Inspector({
               The key has to be unique per row. Pick too few columns and every run overwrites the
               same instance — 294 rows quietly become 6.
             </p>
+            {/* An hourly count turned into instances only ever grows: a room
+                that drops from 54 stretchers to 50 keeps the last four. */}
+            <label className="mt-3 flex items-start gap-1.5 text-[11px] text-[#1c2127]">
+              <input
+                type="checkbox"
+                checked={cfg.retireUnwritten === true}
+                onChange={(e) => onConfig({ retireUnwritten: e.target.checked })}
+                className="mt-0.5 h-3 w-3 accent-[#2d72d2]"
+              />
+              <span>Each run is the complete set — remove what it did not write</span>
+            </label>
+            <p className="mt-1 text-[10px] leading-relaxed text-[#8f99a8]">
+              For a feed that publishes everything that exists right now. Removes nothing when the
+              run wrote nothing, skipped a row, was truncated, or would remove more than half of
+              what exists — a feed that changes does not lose half of itself at once; a broken file
+              does.
+            </p>
             <label className={L}>Column → property</label>
             <div className="mt-1 space-y-1">
               {((cfg.columnMapping as { from: string; to: string }[] | undefined) ?? []).map(
