@@ -1385,6 +1385,15 @@ export async function execute(
  * given, nothing upstream was cut at the ceiling, and it is not about to remove
  * half of what exists. A feed that changes does not lose half of itself in an
  * hour; a truncated file does.
+ *
+ * And a run is complete only for the parents it speaks about. Fourteen
+ * emergency rooms — the CHUM, Sainte-Justine, the Montreal Heart Institute
+ * among them — publish "pas d'information disponible" for an hour a week and
+ * figures the rest of the time. A room missing from one hour's file has not
+ * lost its stretchers; the ministry has lost its reading. So when an output
+ * links its rows to a parent, only the parents this run linked to have their
+ * unwritten instances retired, and every other parent is left exactly as it
+ * was. Without that, the CHUM would leave the simulation for an hour every week.
  */
 export const RETIRE_MAX_SHARE = 0.5;
 
@@ -1554,6 +1563,9 @@ async function writeObjects(
   let ambiguous = 0;
   const ambiguousKeys = new Set<string>();
   const writtenIds = new Set<string>();
+  // The parents this run spoke about, on the first link rule. Retirement is
+  // confined to them: a parent missing from this run is silent, not empty.
+  const touchedParents = new Set<string>();
 
   for (const row of rows) {
     const { properties, issues, missingRequired } = buildMapProperties(row, rules, schema);
@@ -1600,6 +1612,7 @@ async function writeObjects(
         unresolved++;
         continue;
       }
+      if (r === resolved[0]) touchedParents.add(targetId);
       if (!preview && instanceId) {
         const out = (r.rule.direction ?? "out") === "out";
         await insertLinkInstance(
@@ -1627,10 +1640,24 @@ async function writeObjects(
   // instance written, and counting them twice would understate the share a
   // retirement removes.
   const ids = Array.from(writtenIds);
+  // With a link rule, only instances hanging off a parent this run linked to are
+  // candidates. Without one there is no parent to confine to, and the output is
+  // complete for the whole type — a registry, not a per-room feed.
+  const parentRule = resolved[0];
+  const scope = parentRule
+    ? (parentRule.rule.direction ?? "out") === "out"
+      ? `AND EXISTS (SELECT 1 FROM app.ontology_link_instances li
+                      WHERE li.link_type_id = $3 AND li.from_instance_id = o.id
+                        AND li.to_instance_id = ANY($4::uuid[]))`
+      : `AND EXISTS (SELECT 1 FROM app.ontology_link_instances li
+                      WHERE li.link_type_id = $3 AND li.to_instance_id = o.id
+                        AND li.from_instance_id = ANY($4::uuid[]))`
+    : "";
+  const scopeArgs = parentRule ? [parentRule.linkTypeId, Array.from(touchedParents)] : [];
   const { rows: cnt } = await db.query<{ n: number }>(
-    `SELECT count(*)::int AS n FROM app.ontology_object_instances
-      WHERE object_type_id = $1 AND NOT (id = ANY($2::uuid[]))`,
-    [objectTypeId, ids],
+    `SELECT count(*)::int AS n FROM app.ontology_object_instances o
+      WHERE o.object_type_id = $1 AND NOT (o.id = ANY($2::uuid[])) ${scope}`,
+    [objectTypeId, ids, ...scopeArgs],
   );
   const decision = retireDecision({
     written: ids.length,
@@ -1643,9 +1670,9 @@ async function writeObjects(
   }
   // Their links go with them: link instances cascade on delete.
   const del = await db.query(
-    `DELETE FROM app.ontology_object_instances
-      WHERE object_type_id = $1 AND NOT (id = ANY($2::uuid[]))`,
-    [objectTypeId, ids],
+    `DELETE FROM app.ontology_object_instances o
+      WHERE o.object_type_id = $1 AND NOT (o.id = ANY($2::uuid[])) ${scope}`,
+    [objectTypeId, ids, ...scopeArgs],
   );
   return { ...base, retired: del.rowCount ?? 0 };
 }
