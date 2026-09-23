@@ -1640,6 +1640,25 @@ async function writeObjects(
   // instance written, and counting them twice would understate the share a
   // retirement removes.
   const ids = Array.from(writtenIds);
+  // A run that wrote nothing touched no parent, so the scoped count below is
+  // zero and nothing could be removed — correctly. But it would also say
+  // nothing, and a silent empty run is exactly how this pipeline died the first
+  // time: a renamed column, every row filtered out, "succeeded". So the empty
+  // case counts the whole type, and refuses out loud when there was anything
+  // to lose.
+  if (ids.length === 0) {
+    const { rows: all } = await db.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM app.ontology_object_instances WHERE object_type_id = $1`,
+      [objectTypeId],
+    );
+    const empty = retireDecision({
+      written: 0,
+      skipped,
+      unwritten: all[0]?.n ?? 0,
+      truncated: truncatedUpstream,
+    });
+    return !empty.retire && empty.reason ? { ...base, retired: 0, retireRefused: empty.reason } : base;
+  }
   // With a link rule, only instances hanging off a parent this run linked to are
   // candidates. Without one there is no parent to confine to, and the output is
   // complete for the whole type — a registry, not a per-room feed.
