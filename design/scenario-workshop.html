@@ -1,0 +1,883 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Obscyro — Scenarios (Workshop-style mockup)</title>
+<!--
+  Workshop-style scenario module, mapped onto Obscyro's own objects.
+
+  Scenario manager (left)  → overlay scenarios (scenarios-api.ts): parentScenarioId, status, overrides.
+  Action buttons            → overrides applied to the ACTIVE scenario only. With no scenario active they are
+                              disabled: this module never writes to the live ontology.
+  Object table              → OrgUnit instances resolved twice (scenario, base) and shown as "scenario / base".
+  Chart                     → the compared scenarios against the same world with nothing done to it.
+  Object view (right)       → the selected unit: properties, links, the edits that touch it, its sources.
+  Resolved at               → resolveScenario(id, atOffsetHours): what the scenario amounts to at that moment.
+
+  Mock data only. Unit sizes are the post-merge figures from design/IDENTITY.md.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg0:#14181d;--bg1:#1c2127;--bg2:#252a31;--bg3:#2f343c;--bg4:#383e47;--bg5:#404854;
+    --line:#383e47;--line2:#2f343c;
+    --t1:#f6f7f9;--t2:#d3d8de;--t3:#abb3bf;--t4:#8f99a8;--t5:#738091;
+    --blue:#2d72d2;--blued:#215db0;--blue4:#4c90f0;--blue5:#8abbff;
+    --green:#238551;--greend:#1c6e42;--green5:#72ca9b;
+    --orange:#c87619;--orange5:#fbb360;
+    --red:#cd4246;--red5:#fa999c;
+    --scen:#7961db;--scen5:#bdadff;
+    --mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg1);color:var(--t2);font:12.5px/1.45 Inter,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;overflow:hidden}
+  button{font:inherit}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .lbl{font-size:10.5px;font-weight:600;letter-spacing:.045em;text-transform:uppercase;color:var(--t4)}
+  .mt{font-size:11px;color:var(--t4)}
+
+  /* ---------- shell ---------- */
+  .app{display:grid;grid-template-columns:48px minmax(0,1fr);height:100vh}
+  .rail{background:var(--bg0);border-right:1px solid #0b0e11;display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:2px}
+  .rbtn{width:34px;height:32px;display:grid;place-items:center;border-radius:4px;color:var(--t4);cursor:pointer}
+  .rbtn:hover{background:var(--bg3);color:var(--t1)}
+  .rbtn.on{background:var(--bg4)}
+  .rapp{width:22px;height:22px;border-radius:4px;display:grid;place-items:center;color:#fff}
+  .rsep{width:24px;height:1px;background:var(--bg4);margin:6px 0}
+  .main{display:grid;grid-template-rows:48px minmax(0,1fr) auto;min-width:0}
+
+  .top{display:flex;align-items:center;gap:12px;padding:0 14px;background:var(--bg2);border-bottom:1px solid var(--line)}
+  .modic{width:28px;height:28px;border-radius:4px;background:#634dbf;display:grid;place-items:center;color:#fff;flex:none}
+  .crumb{display:flex;align-items:center;gap:6px;color:var(--t4);font-size:12.5px}
+  .crumb b{color:var(--t1);font-weight:600;font-size:14px}
+  .top .r{margin-left:auto;display:flex;align-items:center;gap:8px}
+
+  /* ---------- controls ---------- */
+  .btn{height:28px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border-radius:3px;border:0;
+    font-size:12px;font-weight:500;cursor:pointer;background:var(--bg4);color:var(--t1);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);white-space:nowrap}
+  .btn:hover{background:var(--bg5)}
+  .btn.p{background:var(--blue);box-shadow:inset 0 0 0 1px rgba(0,0,0,.25)}
+  .btn.p:hover{background:var(--blued)}
+  .btn.g{background:var(--green);box-shadow:inset 0 0 0 1px rgba(0,0,0,.25)}
+  .btn.g:hover{background:var(--greend)}
+  .btn.min{background:transparent;box-shadow:none;color:var(--t3)}
+  .btn.min:hover{background:var(--bg4);color:var(--t1)}
+  .btn:disabled{opacity:.42;cursor:not-allowed}
+  .btn:disabled:hover{background:var(--bg4)}
+  .btn.p:disabled:hover{background:var(--blue)}
+  .ibtn{width:26px;height:26px;padding:0;justify-content:center}
+  .btn svg{flex:none}
+  .grp{display:inline-flex;border-radius:3px;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+  .grp button{height:26px;padding:0 9px;border:0;background:var(--bg3);color:var(--t3);font-size:11.5px;cursor:pointer}
+  .grp button+button{border-left:1px solid var(--bg1)}
+  .grp button.on{background:var(--bg5);color:var(--t1)}
+  .tag{display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;border-radius:3px;font-size:11px;
+    font-weight:500;background:var(--bg4);color:var(--t2);white-space:nowrap}
+  .tag.o{background:transparent;box-shadow:inset 0 0 0 1px currentColor}
+  .tag.ok{color:var(--green5)} .tag.warn{color:var(--orange5)} .tag.bad{color:var(--red5)}
+  .tag.scen{background:rgba(121,97,219,.22);color:var(--scen5)}
+  .tag.blue{background:rgba(45,114,210,.28);color:var(--blue5)}
+  .tag.green{background:rgba(35,133,81,.28);color:var(--green5)}
+  input[type=checkbox]{accent-color:var(--blue4);width:14px;height:14px;margin:0;cursor:pointer}
+  input[type=range]{accent-color:var(--scen5);width:150px}
+
+  /* ---------- module ---------- */
+  .module{display:grid;grid-template-columns:272px minmax(0,1fr) 322px;gap:1px;background:var(--line);min-height:0;
+    margin:10px 10px 0;border:1px solid var(--line);border-radius:3px;overflow:hidden}
+  .sec{background:var(--bg2);display:flex;flex-direction:column;min-height:0;min-width:0}
+  .sh{display:flex;align-items:center;gap:8px;height:42px;padding:0 12px;border-bottom:1px solid var(--line);flex:none}
+  .sh h2{margin:0;font-size:13px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sb{overflow:auto;min-height:0;flex:1}
+  .otic{width:20px;height:20px;border-radius:3px;background:#1c6e42;color:#c4f0d8;display:grid;place-items:center;flex:none}
+
+  /* scenario manager */
+  .grouplbl{display:flex;align-items:center;padding:12px 12px 5px}
+  .grouplbl .lbl+span{margin-left:auto}
+  .srow{display:flex;align-items:center;gap:8px;margin:0 8px 3px;padding:7px 8px;border-radius:3px;cursor:pointer;background:var(--bg3)}
+  .srow:hover{background:var(--bg4)}
+  .srow.on{background:var(--blue)}
+  .srow.child{margin-left:24px}
+  .srow .sw{width:10px;height:10px;border-radius:2px;flex:none}
+  .srow .tx{min-width:0;flex:1}
+  .srow .nm{font-weight:500;color:var(--t1);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .srow .nm input{width:100%;background:var(--bg1);border:0;color:var(--t1);font:inherit;padding:1px 4px;border-radius:2px;
+    box-shadow:inset 0 0 0 1px var(--blue4)}
+  .srow .sm{font-size:10.5px;color:var(--t4);display:flex;gap:6px;align-items:center}
+  .srow.on .sm{color:rgba(255,255,255,.78)}
+  .srow .acts{display:none;gap:1px}
+  .srow:hover .acts{display:flex}
+  .srow .acts button{width:20px;height:20px;border:0;border-radius:2px;background:transparent;color:inherit;display:grid;place-items:center;cursor:pointer;opacity:.75}
+  .srow .acts button:hover{background:rgba(255,255,255,.14);opacity:1}
+  .srow.on .tag{background:rgba(255,255,255,.2);color:#fff}
+  .acard{margin:0 8px 6px;padding:8px 9px;border-radius:3px;background:var(--bg1);box-shadow:inset 0 0 0 1px var(--line)}
+  .acard.idle{opacity:.55}
+  .acard.inh{background:transparent;box-shadow:inset 0 0 0 1px var(--line2)}
+  .acard .ah{display:flex;align-items:center;gap:6px;color:var(--t1);font-weight:500}
+  .acard .ah .when{margin-left:auto;font-size:10.5px;color:var(--t4)}
+  .acard .ah button{border:0;background:none;color:var(--t4);cursor:pointer;padding:0 0 0 4px;display:grid;place-items:center}
+  .acard .ah button:hover{color:var(--red5)}
+  .acard .ad{margin-top:3px;font-size:11.5px;color:var(--t3)}
+  .acard .ao{margin-top:5px;font-size:10px;color:var(--scen5)}
+  .acard .from{margin-top:4px;font-size:10.5px;color:var(--t5)}
+  .empty{padding:26px 16px;text-align:center;color:var(--t4)}
+  .empty b{display:block;color:var(--t1);font-size:15px;font-weight:600;margin:12px 0 6px}
+  .empty p{margin:0 0 14px;font-size:12px;line-height:1.5}
+  .sfoot{border-top:1px solid var(--line);padding:10px 12px;display:grid;gap:8px;flex:none}
+  .sfoot .btn{width:100%;justify-content:center;height:30px}
+  .hint{margin:0 8px 8px;padding:8px 9px;font-size:11px;line-height:1.5;color:var(--t4);border-radius:3px;background:rgba(255,255,255,.02)}
+
+  /* center */
+  .toolbar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--bg2);flex:none;flex-wrap:wrap}
+  .toolbar .sep{width:1px;height:20px;background:var(--line);margin:0 2px}
+  .apply{display:flex;align-items:center;gap:6px;min-width:0}
+  .tclock{display:flex;align-items:center;gap:8px;margin-left:auto}
+  .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:12px 12px 0}
+  .kpi{background:var(--bg1);border-radius:3px;box-shadow:inset 0 0 0 1px var(--line);padding:9px 11px}
+  .kpi .v{display:flex;align-items:baseline;gap:7px;margin-top:3px}
+  .kpi .v b{font-family:var(--mono);font-size:19px;font-weight:500;color:var(--t1);letter-spacing:-.02em}
+  .kpi .d{font-family:var(--mono);font-size:11px}
+  .worse{color:var(--red5)} .better{color:var(--green5)} .same{color:var(--t5)}
+  .card{margin:12px 12px 0;border-radius:3px;background:var(--bg1);box-shadow:inset 0 0 0 1px var(--line)}
+  .card:last-child{margin-bottom:12px}
+  .ch{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--line2);flex-wrap:wrap}
+  .legend{display:flex;gap:12px;margin-left:auto;flex-wrap:wrap}
+  .legend span{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--t3)}
+  .legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+  #chart{height:214px;padding:4px 6px 0}
+  #chart svg text{font-family:Inter,sans-serif}
+  .tbl{overflow:auto}
+  table{width:100%;border-collapse:collapse}
+  th{position:sticky;top:0;background:var(--bg3);text-align:left;font-size:11px;font-weight:600;color:var(--t3);
+    padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;z-index:1}
+  th.num{text-align:right}
+  td{padding:0 10px;height:34px;border-bottom:1px solid var(--line2);white-space:nowrap;color:var(--t2)}
+  tr:last-child td{border-bottom:0}
+  tr.r{cursor:pointer}
+  tr.r:hover td{background:rgba(255,255,255,.03)}
+  tr.r.sel td{background:rgba(45,114,210,.16)}
+  tr.r.sel td:first-child{box-shadow:inset 2px 0 0 var(--blue4)}
+  td.num{text-align:right;font-family:var(--mono);font-size:12px}
+  td.chg{background:rgba(121,97,219,.13)}
+  tr.r.sel td.chg{background:rgba(121,97,219,.24)}
+  .base{color:var(--t5);font-size:11px}
+  .olink{display:inline-flex;align-items:center;gap:6px;color:var(--blue5);font-weight:500}
+  .olink .otic{width:16px;height:16px}
+  tr.r:hover .olink span{text-decoration:underline}
+  .fresh{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px}
+  .dot{width:6px;height:6px;border-radius:50%;display:inline-block;flex:none}
+
+  /* inspector */
+  .ohead{padding:12px;border-bottom:1px solid var(--line2);display:grid;gap:4px}
+  .banner{margin:10px 12px 0;padding:8px 10px;border-radius:3px;background:rgba(121,97,219,.14);color:var(--scen5);font-size:11.5px;line-height:1.45;
+    box-shadow:inset 3px 0 0 var(--scen)}
+  .banner.real{background:rgba(255,255,255,.03);color:var(--t3);box-shadow:inset 3px 0 0 var(--t5)}
+  .isec{padding:14px 12px 4px}
+  .props td,.props th{height:28px;padding:0 8px;font-size:11.5px;position:static;background:none}
+  .props th{font-size:10.5px;color:var(--t4);height:24px}
+  .props td:first-child{font-family:var(--mono);color:var(--t3);font-size:11px}
+  .props td.v{color:var(--t1)}
+  .props td.chg{background:rgba(121,97,219,.13)}
+  .lk{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:3px;font-size:11.5px}
+  .lk:hover{background:rgba(255,255,255,.03)}
+  .lk .ln{font-family:var(--mono);font-size:10.5px;color:var(--t4);width:92px;flex:none}
+  .lk .nw{margin-left:auto}
+  .src{display:flex;align-items:center;gap:8px;padding:7px 8px;border-bottom:1px solid var(--line2)}
+  .src:last-child{border-bottom:0}
+  .src .tx{flex:1;min-width:0}
+  .src .tx div:first-child{color:var(--t1);font-weight:500;font-size:12px}
+  .warnbox{margin:8px 0 4px;padding:8px 9px;border-radius:3px;background:rgba(200,118,25,.13);color:var(--orange5);font-size:11px;line-height:1.5}
+
+  /* variables */
+  .vars{margin:8px auto 10px;width:min(760px,74%);background:var(--bg3);border-radius:4px;box-shadow:0 0 0 1px var(--line),0 4px 16px rgba(0,0,0,.3)}
+  .vh{display:flex;align-items:center;gap:8px;height:34px;padding:0 12px;cursor:pointer;color:var(--t1);font-weight:600}
+  .vh .x{font-family:var(--mono);font-style:italic;color:var(--t3)}
+  .vh svg{margin-left:auto;color:var(--t4);transition:transform .15s}
+  .vars.open .vh svg{transform:rotate(180deg)}
+  .vb{display:none;border-top:1px solid var(--bg4);max-height:210px;overflow:auto}
+  .vars.open .vb{display:block}
+  .vb td,.vb th{height:28px;font-size:11.5px;background:none;position:static}
+  .vb .vn{font-family:var(--mono);color:var(--blue5)}
+  .vb .vt{color:var(--t4)}
+
+  /* dialog + toast */
+  .scrim{position:fixed;inset:0;background:rgba(14,17,21,.62);display:none;place-items:center;z-index:50}
+  .scrim.on{display:grid}
+  .dlg{width:480px;max-width:calc(100vw - 32px);background:var(--bg3);border-radius:4px;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 12px 40px rgba(0,0,0,.55)}
+  .dh{display:flex;align-items:center;gap:8px;height:44px;padding:0 10px 0 14px;border-bottom:1px solid var(--bg4);font-weight:600;color:var(--t1);font-size:14px}
+  .dh .btn{margin-left:auto}
+  .dbody{padding:12px 14px 14px;display:grid;gap:13px;max-height:62vh;overflow:auto}
+  .df{display:flex;align-items:center;gap:8px;padding:10px 14px;border-top:1px solid var(--bg4)}
+  .df .sp{flex:1}
+  .fl>label{display:flex;align-items:center;gap:6px;font-weight:600;color:var(--t1);font-size:12.5px;margin-bottom:6px}
+  .fl>label .ed{margin-left:auto;display:none}
+  .fl.edited>label .ed{display:inline-flex}
+  .req{color:var(--red5)}
+  .inp{width:100%;height:30px;background:var(--bg1);border:0;border-radius:3px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.13);
+    color:var(--t1);padding:0 8px;font:inherit;font-size:12.5px}
+  select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23abb3bf' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 8px center;padding-right:26px}
+  .inp:focus{outline:none;box-shadow:inset 0 0 0 1px var(--blue4),0 0 0 2px rgba(76,144,240,.35)}
+  .fl .fh{margin-top:5px;font-size:11px;color:var(--t4)}
+  .fl .fe{margin-top:5px;font-size:11px;color:var(--red5);display:none}
+  .fl.err .fe{display:block}
+  .fl.err .inp{box-shadow:inset 0 0 0 1px var(--red)}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .ulist{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;padding:8px;border-radius:3px;background:var(--bg1);box-shadow:inset 0 0 0 1px rgba(255,255,255,.13)}
+  .ulist label{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--t2);cursor:pointer;padding:3px 0}
+  .dlg .banner{margin:0}
+  .toast{position:fixed;left:50%;bottom:64px;transform:translateX(-50%) translateY(12px);background:var(--bg5);color:var(--t1);
+    padding:9px 14px;border-radius:4px;box-shadow:0 6px 24px rgba(0,0,0,.45);font-size:12px;opacity:0;pointer-events:none;
+    transition:.18s;display:flex;align-items:center;gap:8px;max-width:640px;z-index:60}
+  .toast.on{opacity:1;transform:translateX(-50%)}
+  .toast.bad{background:#8e292c}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="rail" id="rail"></nav>
+  <div class="main">
+    <header class="top" id="top"></header>
+    <div class="module">
+      <section class="sec" id="scen"></section>
+      <section class="sec" id="center"></section>
+      <section class="sec" id="insp"></section>
+    </div>
+    <div class="vars" id="vars"></div>
+  </div>
+</div>
+<div class="scrim" id="scrim"><div class="dlg" id="dlg" role="dialog" aria-modal="true"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================== icons (lucide) ============================== */
+const I = {
+  menu:'<path d="M4 6h16M4 12h16M4 18h16"/>',
+  home:'<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  clock:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  star:'<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  folder:'<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  network:'<rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/>',
+  merge:'<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/>',
+  activity:'<path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>',
+  layers:'<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>',
+  flask:'<path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/>',
+  help:'<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
+  plus:'<path d="M5 12h14"/><path d="M12 5v14"/>',
+  x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  chev:'<path d="m18 15-6-6-6 6"/>',
+  trash:'<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+  branch:'<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
+  lock:'<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  ban:'<circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/>',
+  bed:'<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/>',
+  swap:'<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>',
+  users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  ext:'<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  undo:'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+  share:'<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/>',
+  send:'<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
+  box:'<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
+  db:'<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/>',
+  alert:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  pencil:'<path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/>',
+};
+const ico = (n, s = 14) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${I[n]}</svg>`;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const $ = s => document.querySelector(s);
+
+/* ============================== world ============================== */
+const HORIZON = 30;
+const DAY0 = new Date(2026, 8, 24);          // d0 = 24 Sep 2026
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const dayLabel = t => { const d = new Date(DAY0); d.setDate(d.getDate() + t); return `${d.getDate()} ${MONTHS[d.getMonth()]}`; };
+const SERIES = ['#3FA6DA', '#F0B726', '#13C9BA', '#BDADFF', '#F5498B', '#43BF4D'];
+const BASE_COLOR = '#8f99a8';
+const SITES = { HND: 'Hôpital Notre-Dame', HSL: 'HSL', HCS: 'HCS' };
+
+// OrgUnit instances. Beds / occupied are the figures after the 10 Aug merge.
+const UNITS = [
+  { id:'u1', name:'HND Emergency',  code:'HND-EMERG', site:'HND', beds:48, occ0:45, iso:4, staff:22, growth:.006, roster:26 },
+  { id:'u2', name:'HND Ward 3A',    code:'HND-3A',    site:'HND', beds:30, occ0:19, iso:2, staff:11, growth:.004, roster:26 },
+  { id:'u3', name:'HSL Ward 2B',    code:'HSL-2B',    site:'HSL', beds:30, occ0:25, iso:3, staff:12, growth:.004, roster:3 },
+  { id:'u4', name:'HSL ICU',        code:'HSL-ICU',   site:'HSL', beds:18, occ0:14, iso:6, staff:16, growth:.003, roster:3 },
+  { id:'u5', name:'HCS Med-Surg A', code:'HCS-MSA',   site:'HCS', beds:24, occ0:10, iso:2, staff:9,  growth:.004, roster:3 },
+];
+const U = id => UNITS.find(u => u.id === id);
+const un = id => U(id)?.name ?? '—';
+
+/* ============================== actions ============================== */
+/* Each action is an override an event writes into the ACTIVE scenario.
+   op is the OverrideOp it becomes; phase orders them when resolving. */
+const F_UNIT = { k:'unit', label:'Unit', type:'unit', req:true };
+const F_FROM = (def, label = 'Effective from') => ({ k:'from', label, type:'day', def, req:true });
+const F_DUR = def => ({ k:'dur', label:'Duration (days)', type:'int', def, min:1, hint:'Empty = to the end of the horizon' });
+const ACT = {
+  close_unit: { label:'Close unit', icon:'ban', op:'set_property', phase:3,
+    fields:[F_UNIT, F_FROM(3), F_DUR(7), { k:'to', label:'Redistribute patients to', type:'units', req:true, hint:'Split by free beds at the moment of closure' }],
+    text:a => `${un(a.unit)} closed · patients → ${a.to.length} unit${a.to.length > 1 ? 's' : ''}`,
+    ov:a => `set_property · OrgUnit·${U(a.unit).code}.status = closed` },
+  add_beds: { label:'Add beds', icon:'bed', op:'create', phase:0,
+    fields:[F_UNIT, { k:'n', label:'Beds to add', type:'int', def:8, min:1, req:true }, { k:'kind', label:'Bed type', type:'select', opts:['Standard','Isolation'], def:'Standard' }, F_FROM(3), F_DUR(null)],
+    text:a => `+${a.n} ${a.kind.toLowerCase()} beds at ${un(a.unit)}`,
+    ov:a => `create · Bed ×${a.n} · contains ← ${U(a.unit).code}` },
+  transfer: { label:'Transfer patients', icon:'swap', op:'link', phase:2,
+    fields:[{ ...F_UNIT, label:'From unit' }, { k:'target', label:'To unit', type:'unit', req:true }, { k:'n', label:'Patients', type:'int', def:6, min:1, req:true }, F_FROM(5, 'On day')],
+    text:a => `${a.n} patients ${un(a.unit)} → ${un(a.target)}`,
+    ov:a => `link · ${U(a.unit).code} transfer_to ${U(a.target).code}` },
+  introduce: { label:'Introduce cases', icon:'activity', op:'set_param', phase:1,
+    fields:[F_UNIT, { k:'n', label:'Index cases', type:'int', def:3, min:1, req:true }, F_FROM(2, 'On day')],
+    text:a => `${a.n} index cases at ${un(a.unit)}`,
+    ov:a => `set_param · sim.seir.index_cases[${U(a.unit).code}] = ${a.n}` },
+  set_staff: { label:'Set staffing', icon:'users', op:'set_property', phase:0,
+    fields:[F_UNIT, { k:'n', label:'Staff on shift', type:'int', def:10, min:0, req:true }, F_FROM(3), F_DUR(7)],
+    text:a => `Staff at ${un(a.unit)} = ${a.n}`,
+    ov:a => `set_property · OrgUnit·${U(a.unit).code}.staff_on_shift = ${a.n}` },
+};
+const isActive = (a, t) => t >= a.from && (a.dur == null || t < a.from + a.dur);
+const window_ = a => a.dur == null ? `d${a.from} →` : `d${a.from} → d${a.from + a.dur}`;
+
+/* ============================== state ============================== */
+let uid = 100;
+const S = {
+  scenarios: [
+    { id:'s1', name:'A · Close HND Emergency', color:SERIES[0], parent:null, status:'draft', compare:true, actions:[
+      { id:'a1', type:'close_unit', unit:'u1', from:3, dur:7, to:['u2','u3','u4','u5'] },
+      { id:'a2', type:'add_beds', unit:'u2', n:8, kind:'Standard', from:3, dur:null },
+    ]},
+    { id:'s2', name:'B · Outbreak on HSL Ward 2B', color:SERIES[1], parent:null, status:'ready', compare:true, actions:[
+      { id:'a3', type:'introduce', unit:'u3', n:4, from:2 },
+      { id:'a4', type:'add_beds', unit:'u4', n:6, kind:'Isolation', from:5, dur:null },
+    ]},
+    { id:'s3', name:'B2 · B + transfer to HCS', color:SERIES[2], parent:'s2', status:'draft', compare:false, actions:[
+      { id:'a5', type:'transfer', unit:'u3', target:'u5', n:8, from:9 },
+    ]},
+  ],
+  active:'s1', unit:'u1', t:7, chart:'units', mode:'both', varsOpen:false,
+};
+const scen = id => S.scenarios.find(s => s.id === id) || null;
+const lineage = s => { const out = []; while (s) { out.unshift(s); s = scen(s.parent); } return out; };
+const children = id => S.scenarios.filter(s => s.parent === id);
+const compared = () => {
+  const list = S.scenarios.filter(s => s.compare || s.id === S.active);
+  return [{ id:null, name:'Live ontology', color:BASE_COLOR }, ...list];
+};
+
+/* ============================== resolve ============================== */
+/* The same tree, resolved twice and subtracted. Base grows a little each day
+   (winter); a scenario is the base plus its lineage's overrides active at t. */
+function resolve(sid, t) {
+  const us = UNITS.map(u => ({ ...u, occ: u.occ0 * (1 + u.growth * t), status:'Open', transferTo:[], displaced:0 }));
+  const by = Object.fromEntries(us.map(u => [u.id, u]));
+  const s = scen(sid);
+  if (!s) return us;
+  const acts = lineage(s).flatMap(x => x.actions).slice().sort((a, b) => ACT[a.type].phase - ACT[b.type].phase);
+  for (const a of acts) {
+    if (!isActive(a, t)) continue;
+    const u = by[a.unit];
+    if (a.type === 'add_beds') { u.beds += a.n; if (a.kind === 'Isolation') u.iso += a.n; }
+    else if (a.type === 'set_staff') u.staff = a.n;
+    else if (a.type === 'introduce') u.occ += a.n * 2.6 * Math.exp(-Math.pow((t - a.from - 8) / 5, 2));
+    else if (a.type === 'transfer') {
+      if (u.status === 'Open') { const m = Math.min(a.n, u.occ); u.occ -= m; by[a.target].occ += m; u.transferTo.push(a.target); }
+    } else if (a.type === 'close_unit') {
+      const d = u.occ; u.occ = 0; u.status = 'Closed'; u.displaced = d;
+      const tg = a.to.map(id => by[id]).filter(x => x && x.status === 'Open' && x.id !== u.id);
+      const free = tg.map(x => Math.max(0, x.beds - x.occ));
+      const tot = free.reduce((p, c) => p + c, 0);
+      const bedsTot = tg.reduce((p, x) => p + x.beds, 0);
+      tg.forEach((x, i) => { x.occ += d * (tot > 0 ? free[i] / tot : x.beds / bedsTot); });
+    }
+  }
+  return us;
+}
+const pct = u => u.status === 'Closed' ? null : (u.occ / u.beds) * 100;
+function network(us) {
+  const open = us.filter(u => u.status === 'Open');
+  const beds = open.reduce((p, u) => p + u.beds, 0);
+  const occ = us.reduce((p, u) => p + u.occ, 0);
+  return { pct: beds ? occ / beds * 100 : 0, beds, over: open.filter(u => pct(u) >= 95).length,
+    displaced: us.reduce((p, u) => p + u.displaced, 0) };
+}
+const occTag = p => p == null ? '<span class="tag o bad">closed</span>'
+  : `<span class="tag o ${p >= 95 ? 'bad' : p >= 85 ? 'warn' : 'ok'} mono">${Math.round(p)} %</span>`;
+
+/* ============================== rail + top ============================== */
+function renderRail() {
+  const b = (n, on) => `<div class="rbtn${on ? ' on' : ''}">${ico(n, 17)}</div>`;
+  const app = (n, c, on, title) => `<div class="rbtn${on ? ' on' : ''}" title="${title}"><span class="rapp" style="background:${c}">${ico(n, 13)}</span></div>`;
+  $('#rail').innerHTML = b('menu') + '<div class="rsep"></div>' + b('home') + b('search') + b('bell') +
+    '<div class="rsep"></div>' + b('clock') + b('star') + b('folder') + '<div class="rsep"></div>' +
+    app('network', '#1c6e42', false, 'Ontology') + app('merge', '#215db0', false, 'Pipelines') +
+    app('activity', '#935610', false, 'Live twin') + app('layers', '#634dbf', true, 'Scenarios') + app('flask', '#5f6b7c', false, 'Lab') +
+    '<div style="flex:1"></div>' + b('help') +
+    '<div class="rbtn"><span class="mono" style="font-size:10.5px;color:var(--t3)">VM</span></div>';
+}
+function renderTop() {
+  const s = scen(S.active);
+  $('#top').innerHTML = `
+    <span class="modic">${ico('layers', 15)}</span>
+    <div style="display:grid;gap:1px;min-width:0">
+      <div class="crumb">Scenarios ${ico('chev', 12).replace('m18 15-6-6-6 6', 'm9 18 6-6-6-6')} <b>Winter capacity — East network</b> <span style="color:var(--t5)">${ico('star', 13)}</span></div>
+      <div class="mt">chum-lab · base: live ontology as of 24 Sep 2026, 08:00 · model: occupancy forecast (SEIR v2)</div>
+    </div>
+    <div class="r">
+      <span class="mt">Saved 2 min ago</span>
+      <button class="btn min ibtn" title="History">${ico('clock')}</button>
+      <button class="btn">${ico('share')}Share</button>
+      <button class="btn p" id="submit" ${!s || s.status === 'submitted' ? 'disabled' : ''}>${ico('send')}${s ? (s.status === 'submitted' ? 'Submitted' : `Submit ${esc(s.name.split(' · ')[0])} for review`) : 'Submit for review'}</button>
+    </div>`;
+}
+
+/* ============================== scenario manager ============================== */
+function statusTag(st) {
+  return st === 'ready' ? '<span class="tag blue">ready</span>' : st === 'submitted' ? '<span class="tag green">submitted</span>' : '<span class="tag">draft</span>';
+}
+function scenRow(s, depth) {
+  const own = s.actions.length, inh = lineage(s).slice(0, -1).reduce((p, x) => p + x.actions.length, 0);
+  return `<div class="srow${S.active === s.id ? ' on' : ''}${depth ? ' child' : ''}" data-s="${s.id}">
+    <span class="sw" style="background:${s.color}"></span>
+    <div class="tx">
+      <div class="nm" data-rename="${s.id}" title="Double-click to rename">${esc(s.name)}</div>
+      <div class="sm">${statusTag(s.status)}<span>${own} action${own === 1 ? '' : 's'}${inh ? ` + ${inh} inherited` : ''}</span></div>
+    </div>
+    <span class="acts">
+      <button data-child="${s.id}" title="Build a scenario on this one">${ico('branch', 12)}</button>
+      <button data-dels="${s.id}" title="Delete">${ico('trash', 12)}</button>
+    </span>
+    <input type="checkbox" data-cmp="${s.id}" ${s.compare || S.active === s.id ? 'checked' : ''} ${S.active === s.id ? 'disabled' : ''} title="Compare against this scenario" />
+  </div>`;
+}
+function renderScen() {
+  const roots = S.scenarios.filter(s => !s.parent);
+  const walk = (s, d) => scenRow(s, d) + children(s.id).map(c => walk(c, d + 1)).join('');
+  const s = scen(S.active);
+  let acts = '';
+  if (s) {
+    const lin = lineage(s);
+    const cards = lin.flatMap(x => x.actions.map(a => ({ a, via:x }))).map(({ a, via }) => {
+      const d = ACT[a.type], inherited = via.id !== s.id;
+      return `<div class="acard${isActive(a, S.t) ? '' : ' idle'}${inherited ? ' inh' : ''}">
+        <div class="ah">${ico(d.icon, 13)}<span>${d.label}</span><span class="when mono">${window_(a)}</span>
+          ${inherited ? '' : `<button data-dela="${a.id}" title="Remove from scenario">${ico('x', 12)}</button>`}</div>
+        <div class="ad">${esc(d.text(a))}</div>
+        <div class="ao mono">${esc(d.ov(a))}</div>
+        ${inherited ? `<div class="from">inherited from ${esc(via.name)}</div>` : ''}
+      </div>`;
+    }).join('');
+    acts = `<div class="grouplbl"><span class="lbl">Actions in ${esc(s.name.split(' · ')[0])}</span><span class="mt">at d${S.t}: ${lin.flatMap(x => x.actions).filter(a => isActive(a, S.t)).length} active</span></div>
+      ${cards || `<div class="hint">No actions yet. The buttons above the table write into <b style="color:var(--t2)">${esc(s.name)}</b> — never into the live ontology.</div>`}`;
+  }
+  const body = S.scenarios.length ? `
+      <div class="grouplbl"><span class="lbl">Reality</span></div>
+      <div class="srow${S.active ? '' : ' on'}" data-s="">
+        <span class="sw" style="background:${BASE_COLOR}"></span>
+        <div class="tx"><div class="nm">Live ontology</div><div class="sm">${ico('lock', 10)} read-only · always the baseline</div></div>
+      </div>
+      <div class="grouplbl"><span class="lbl">Scenarios</span><span class="mt">compare</span></div>
+      ${roots.map(r => walk(r, 0)).join('')}
+      ${acts}` : `
+      <div class="empty">
+        <svg width="54" height="46" viewBox="0 0 54 46" fill="none" stroke="#5f6b7c" stroke-width="3"><path d="M12 3H4v40h8M42 3h8v40h-8"/><circle cx="19" cy="23" r="1.6" fill="#5f6b7c"/><circle cx="27" cy="23" r="1.6" fill="#5f6b7c"/><circle cx="35" cy="23" r="1.6" fill="#5f6b7c"/></svg>
+        <b>Create a scenario</b>
+        <p>No scenarios yet. A scenario is a set of proposed edits resolved over the live ontology — reality is never touched.</p>
+        <button class="btn p" data-create="1">Create</button>
+      </div>`;
+  $('#scen').innerHTML = `
+    <div class="sh"><h2>Scenarios</h2><span class="tag">${S.scenarios.length}</span>
+      <button class="btn min ibtn" style="margin-left:auto" data-create="1" title="New scenario">${ico('plus')}</button></div>
+    <div class="sb">${body}</div>
+    <div class="sfoot">
+      <div class="mt">Saving: drafts saved to the project · same seed across scenarios</div>
+      <button class="btn p" data-create="1">${ico('plus')}Create</button>
+    </div>`;
+}
+
+/* ============================== center ============================== */
+function renderCenter() {
+  const s = scen(S.active);
+  const base = resolve(null, S.t), cur = resolve(S.active, S.t);
+  const nb = network(base), nc = network(cur);
+  const btns = Object.entries(ACT).map(([k, d], i) =>
+    `<button class="btn${i === 0 ? ' p' : ''}" data-act="${k}" ${s ? '' : 'disabled'} title="${s ? `${d.label} — applies to ${esc(s.name)}` : `${d.label} — select a scenario first`}">${ico(d.icon, 13)}${d.label}</button>`).join('');
+  const kpi = (label, v, b, fmt, worseIfUp) => {
+    let d = '';
+    if (s) {
+      const diff = v - b, r = Math.abs(diff) < 0.5 ? 'same' : (diff > 0) === worseIfUp ? 'worse' : 'better';
+      d = `<span class="d ${r}">${diff > 0 ? '+' : diff < 0 ? '−' : '±'}${fmt(Math.abs(diff))}</span>`;
+    }
+    return `<div class="kpi"><div class="lbl">${label}</div><div class="v"><b>${fmt(v)}</b>${d}</div>
+      <div class="mt">${s ? `base ${fmt(b)}` : `live · d${S.t}`}</div></div>`;
+  };
+  const cols = compared();
+  $('#center').innerHTML = `
+    <div class="sh">
+      <span class="otic">${ico('box', 12)}</span><h2>Units</h2><span class="tag">OrgUnit</span>
+      <span class="mt">5 objects · contained by East network</span>
+      <div class="tclock"><span class="lbl">Resolved at</span>
+        <input type="range" min="0" max="${HORIZON}" value="${S.t}" id="trange" />
+        <span class="mono" style="color:var(--scen5);width:92px">d${S.t} · ${dayLabel(S.t)}</span></div>
+    </div>
+    <div class="toolbar">
+      <div class="apply"><span class="lbl">Apply to</span>
+        ${s ? `<span class="tag scen" title="${esc(s.name)}"><i class="dot" style="background:${s.color};border-radius:2px"></i>${esc(s.name.split(' · ')[0])}</span>`
+            : '<span class="tag">Live ontology — read-only</span>'}</div>
+      <span class="sep"></span>${btns}
+    </div>
+    <div class="sb">
+      <div class="kpis">
+        ${kpi('Network occupancy', nc.pct, nb.pct, v => `${Math.round(v)} %`, true)}
+        ${kpi('Units ≥ 95 %', nc.over, nb.over, v => `${Math.round(v)}`, true)}
+        ${kpi('Open beds', nc.beds, nb.beds, v => `${Math.round(v)}`, false)}
+        ${kpi('Patients displaced', nc.displaced, nb.displaced, v => `${Math.round(v)}`, true)}
+      </div>
+      <div class="card">
+        <div class="ch">
+          <div class="grp">
+            <button data-chart="units" class="${S.chart === 'units' ? 'on' : ''}">Occupancy by unit · d${S.t}</button>
+            <button data-chart="time" class="${S.chart === 'time' ? 'on' : ''}">Network occupancy · 30 days</button>
+          </div>
+          <div class="legend">${cols.map(c => `<span><i style="background:${c.color}"></i>${esc(c.name.split(' · ')[0])}</span>`).join('')}</div>
+        </div>
+        <div id="chart"></div>
+      </div>
+      <div class="card">
+        <div class="ch">
+          <span style="color:var(--t1);font-weight:600">Units at d${S.t}</span>
+          <span class="mt">${s ? '<i class="dot" style="background:var(--scen);border-radius:2px"></i> tinted cells differ from the live ontology' : 'live ontology, forecast with nothing done'}</span>
+          <div class="grp" style="margin-left:auto" title="How changed values are shown">
+            <button data-mode="both" class="${S.mode === 'both' ? 'on' : ''}">Scenario / base</button>
+            <button data-mode="delta" class="${S.mode === 'delta' ? 'on' : ''}">Δ</button>
+            <button data-mode="scenario" class="${S.mode === 'scenario' ? 'on' : ''}">Scenario</button>
+          </div>
+        </div>
+        <div class="tbl">${tableHtml(cur, base, !!s)}</div>
+      </div>
+    </div>`;
+  renderChart();
+}
+function cell(v, b, on, fmt) {
+  const changed = on && Math.round(v) !== Math.round(b);
+  if (!changed) return `<td class="num">${fmt(v)}</td>`;
+  if (S.mode === 'scenario') return `<td class="num chg">${fmt(v)}</td>`;
+  if (S.mode === 'delta') { const d = v - b; return `<td class="num chg">${fmt(v)} <span class="${d > 0 ? 'worse' : 'better'}" style="font-size:11px">${d > 0 ? '+' : '−'}${fmt(Math.abs(d))}</span></td>`; }
+  return `<td class="num chg">${fmt(v)} <span class="base">/ ${fmt(b)}</span></td>`;
+}
+function tableHtml(cur, base, on) {
+  const r0 = n => `${Math.round(n)}`;
+  const rows = cur.map((u, i) => {
+    const b = base[i], p = pct(u), pb = pct(b);
+    const occChanged = on && Math.round(p ?? -1) !== Math.round(pb ?? -1);
+    const occCell = occChanged && S.mode !== 'scenario'
+      ? `<td class="chg">${occTag(p)} <span class="base">/ ${pb == null ? 'closed' : Math.round(pb) + ' %'}</span></td>`
+      : `<td class="${occChanged ? 'chg' : ''}">${occTag(p)}</td>`;
+    const stChanged = on && u.status !== b.status;
+    return `<tr class="r${S.unit === u.id ? ' sel' : ''}" data-u="${u.id}">
+      <td><span class="olink"><span class="otic">${ico('box', 10)}</span><span>${esc(u.name)}</span></span></td>
+      <td class="mono" style="font-size:11px;color:var(--t3)">${u.site}</td>
+      <td class="${stChanged ? 'chg' : ''}">${u.status === 'Open' ? '<span class="tag o ok">open</span>' : '<span class="tag o bad">closed</span>'}</td>
+      ${cell(u.status === 'Open' ? u.beds : 0, b.beds, on, r0)}
+      ${cell(u.occ, b.occ, on, r0)}
+      ${occCell}
+      ${cell(u.iso, b.iso, on, r0)}
+      ${cell(u.staff, b.staff, on, r0)}
+      <td><span class="fresh"><span class="dot" style="background:${u.roster > 12 ? 'var(--orange5)' : 'var(--green5)'}"></span>${u.roster} h</span></td>
+    </tr>`;
+  }).join('');
+  return `<table><thead><tr><th>Unit</th><th>Site</th><th>Status</th><th class="num">Beds open</th><th class="num">Occupied</th>
+    <th>Occupancy</th><th class="num">Isolation beds</th><th class="num">Staff</th><th title="A reading is as fresh as its oldest source">Freshness</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+
+/* ============================== chart ============================== */
+function renderChart() {
+  const el = $('#chart'); if (!el) return;
+  const W = Math.max(360, el.clientWidth - 12), H = 206, L = 38, R = 70, T = 14, B = 26;
+  const cols = compared();
+  const pw = W - L - R, ph = H - T - B;
+  let svg = '', maxY;
+  const yOf = v => T + ph - (v / maxY) * ph;
+  const hline = (v, color, label, dash) => `<line x1="${L}" x2="${L + pw}" y1="${yOf(v)}" y2="${yOf(v)}" stroke="${color}" stroke-dasharray="${dash}" />
+    <text x="${L + pw + 6}" y="${yOf(v) + 3.5}" font-size="10" fill="${color}">${label}</text>`;
+
+  if (S.chart === 'units') {
+    const data = cols.map(c => resolve(c.id, S.t).map(pct));
+    maxY = Math.max(120, Math.ceil(Math.max(...data.flat().map(v => v ?? 0)) / 20) * 20);
+    for (let v = 0; v <= maxY; v += 20) svg += `<line x1="${L}" x2="${L + pw}" y1="${yOf(v)}" y2="${yOf(v)}" stroke="#2f343c" />
+      <text x="${L - 6}" y="${yOf(v) + 3.5}" font-size="10" fill="#738091" text-anchor="end">${v}%</text>`;
+    const gw = pw / UNITS.length, bw = Math.min(26, gw * 0.72 / cols.length);
+    UNITS.forEach((u, i) => {
+      const x0 = L + gw * i + (gw - bw * cols.length) / 2;
+      cols.forEach((c, j) => {
+        const v = data[j][i], x = x0 + j * bw;
+        if (v == null) {
+          svg += `<rect x="${x + 1}" y="${T + ph - 2}" width="${bw - 2}" height="2" fill="${c.color}" />
+            <text x="${x + bw / 2}" y="${T + ph - 6}" font-size="9" fill="#fa999c" text-anchor="middle" transform="rotate(-90 ${x + bw / 2} ${T + ph - 6})">closed</text>`;
+        } else {
+          svg += `<rect x="${x + 1}" y="${yOf(v)}" width="${bw - 2}" height="${T + ph - yOf(v)}" rx="1.5" fill="${c.color}" fill-opacity="${c.id === S.active || (c.id === null && !S.active) ? 1 : 0.72}" />`;
+          if (bw >= 17) svg += `<text x="${x + bw / 2}" y="${yOf(v) - 4}" font-size="9.5" fill="#abb3bf" text-anchor="middle" font-family="JetBrains Mono,monospace">${Math.round(v)}</text>`;
+        }
+      });
+      svg += `<text x="${L + gw * i + gw / 2}" y="${H - 8}" font-size="11" fill="#abb3bf" text-anchor="middle">${esc(u.name)}</text>`;
+    });
+  } else {
+    const series = cols.map(c => Array.from({ length: HORIZON + 1 }, (_, t) => network(resolve(c.id, t)).pct));
+    maxY = Math.max(120, Math.ceil(Math.max(...series.flat()) / 20) * 20);
+    for (let v = 0; v <= maxY; v += 20) svg += `<line x1="${L}" x2="${L + pw}" y1="${yOf(v)}" y2="${yOf(v)}" stroke="#2f343c" />
+      <text x="${L - 6}" y="${yOf(v) + 3.5}" font-size="10" fill="#738091" text-anchor="end">${v}%</text>`;
+    const xOf = t => L + (t / HORIZON) * pw;
+    for (let t = 0; t <= HORIZON; t += 5) svg += `<text x="${xOf(t)}" y="${H - 8}" font-size="10" fill="#738091" text-anchor="middle">d${t}</text>`;
+    series.forEach((ys, j) => {
+      const c = cols[j];
+      svg += `<polyline fill="none" stroke="${c.color}" stroke-width="${c.id === S.active ? 2.4 : 1.6}" ${c.id === null ? 'stroke-dasharray="4 3"' : ''}
+        points="${ys.map((v, t) => `${xOf(t).toFixed(1)},${yOf(v).toFixed(1)}`).join(' ')}" />`;
+    });
+    svg += `<line x1="${xOf(S.t)}" x2="${xOf(S.t)}" y1="${T}" y2="${T + ph}" stroke="#bdadff" stroke-width="1" />
+      <rect x="${xOf(S.t) - 15}" y="${T - 12}" width="30" height="13" rx="2" fill="#7961db" />
+      <text x="${xOf(S.t)}" y="${T - 2.5}" font-size="9.5" fill="#fff" text-anchor="middle" font-family="JetBrains Mono,monospace">d${S.t}</text>`;
+  }
+  svg += hline(85, '#fbb360', '85 % alert', '4 3') + hline(100, '#fa999c', 'capacity', '2 3');
+  el.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${svg}</svg>`;
+}
+
+/* ============================== object view ============================== */
+function renderInsp() {
+  const s = scen(S.active), u0 = U(S.unit);
+  const cur = resolve(S.active, S.t).find(u => u.id === S.unit), base = resolve(null, S.t).find(u => u.id === S.unit);
+  const r = n => Math.round(n);
+  const props = [
+    ['status', cur.status.toLowerCase(), base.status.toLowerCase()],
+    ['beds_open', cur.status === 'Open' ? cur.beds : 0, base.beds],
+    ['occupied', r(cur.occ), r(base.occ)],
+    ['occupancy', pct(cur) == null ? '—' : `${r(pct(cur))} %`, `${r(pct(base))} %`],
+    ['isolation_beds', cur.iso, base.iso],
+    ['staff_on_shift', cur.staff, base.staff],
+    ['accepts_admissions', cur.status === 'Open' ? 'true' : 'false', 'true'],
+  ];
+  const edits = s ? lineage(s).flatMap(x => x.actions.map(a => ({ a, via:x })))
+    .filter(({ a }) => a.unit === S.unit || a.target === S.unit || (a.to || []).includes(S.unit)) : [];
+  const transferTo = [...new Set(cur.transferTo)];
+  $('#insp').innerHTML = `
+    <div class="sh"><span class="otic">${ico('box', 12)}</span><h2>${esc(u0.name)}</h2>
+      <button class="btn min ibtn" style="margin-left:auto" title="Open in Ontology">${ico('ext', 13)}</button></div>
+    <div class="sb">
+      <div class="ohead">
+        <div class="mono mt">OrgUnit · identity code = <span style="color:var(--t2)">${u0.code}</span></div>
+        <div class="mt">located_at ${esc(SITES[u0.site])} · 150 beds in the network tree</div>
+      </div>
+      ${s ? `<div class="banner">Viewing <b>${esc(s.name)}</b> at d${S.t}. ${edits.length ? `${edits.length} edit${edits.length > 1 ? 's touch' : ' touches'} this unit.` : 'No edit touches this unit directly — changes come from elsewhere in the network.'}</div>`
+          : `<div class="banner real">Live ontology at d${S.t} — what the forecast expects with nothing done.</div>`}
+      <div class="isec"><div class="lbl" style="margin-bottom:6px">Properties</div>
+        <table class="props"><thead><tr><th>Property</th><th>${s ? 'Scenario' : 'Value'}</th>${s ? '<th>Base</th>' : ''}</tr></thead><tbody>
+        ${props.map(([k, v, b]) => `<tr><td>${k}</td><td class="v mono${s && String(v) !== String(b) ? ' chg' : ''}">${v}</td>${s ? `<td class="mono base">${b}</td>` : ''}</tr>`).join('')}
+        </tbody></table></div>
+      <div class="isec"><div class="lbl" style="margin-bottom:4px">Links</div>
+        <div class="lk"><span class="ln">contains</span>${ico('bed', 12)}<span>${u0.beds} Bed</span>${cur.beds > u0.beds ? `<span class="tag scen nw">+${cur.beds - u0.beds} in scenario</span>` : ''}</div>
+        <div class="lk"><span class="ln">located_at</span>${ico('box', 12)}<span>Institution · ${esc(SITES[u0.site])}</span></div>
+        <div class="lk"><span class="ln">has_patient</span>${ico('users', 12)}<span>${r(base.occ)} Patient</span></div>
+        ${transferTo.map(id => `<div class="lk"><span class="ln">transfer_to</span>${ico('swap', 12)}<span>${esc(un(id))}</span><span class="tag scen nw">added</span></div>`).join('')}
+      </div>
+      ${s ? `<div class="isec"><div class="lbl" style="margin-bottom:6px">Edits touching this unit</div>
+        ${edits.length ? edits.map(({ a, via }) => `<div class="acard${isActive(a, S.t) ? '' : ' idle'}" style="margin:0 0 6px">
+          <div class="ah">${ico(ACT[a.type].icon, 13)}<span>${ACT[a.type].label}</span><span class="when mono">${window_(a)}</span></div>
+          <div class="ad">${esc(ACT[a.type].text(a))}</div>${via.id !== s.id ? `<div class="from">inherited from ${esc(via.name)}</div>` : ''}</div>`).join('')
+          : '<div class="mt" style="padding:0 0 4px">None.</div>'}</div>` : ''}
+      <div class="isec" style="padding-bottom:14px"><div class="lbl" style="margin-bottom:4px">Sources</div>
+        <div class="src"><span class="dot" style="background:var(--green5)"></span><div class="tx"><div>HL7 v2 ADT feed</div><div class="mt">A01 · A02 · A03 → Encounter, Bed</div></div><span class="mono mt" style="color:var(--green5)">12 s</span></div>
+        <div class="src"><span class="dot" style="background:var(--green5)"></span><div class="tx"><div>FHIR R4 · Location, Bed</div><div class="mt">sync pipeline · ${u0.code}</div></div><span class="mono mt" style="color:var(--green5)">4 min</span></div>
+        <div class="src"><span class="dot" style="background:${u0.roster > 12 ? 'var(--orange5)' : 'var(--green5)'}"></span><div class="tx"><div>Staffing roster</div><div class="mt">CSV drop → staff_on_shift</div></div><span class="mono mt" style="color:${u0.roster > 12 ? 'var(--orange5)' : 'var(--green5)'}">${u0.roster} h</span></div>
+        ${u0.roster > 12 ? `<div class="warnbox">${ico('alert', 12)} The roster is ${u0.roster} h old, so this unit's reading is too: a reading is as fresh as its oldest source. Staffing-dependent results may lag reality.</div>` : ''}
+      </div>
+    </div>`;
+}
+
+/* ============================== variables ============================== */
+function renderVars() {
+  const s = scen(S.active), cmp = S.scenarios.filter(x => x.compare);
+  const rows = [
+    ['activeScenario', 'Scenario', s ? `"${s.name}" with ${lineage(s).flatMap(x => x.actions).length} actions applied` : 'none — live ontology'],
+    ['compareScenarios', 'Scenario[]', `[${cmp.map(x => `"${x.name.split(' · ')[0]}"`).join(', ')}]`],
+    ['units', 'Object set<OrgUnit>', '5 objects · East network'],
+    ['selectedUnit', 'OrgUnit', `${U(S.unit).name} (${U(S.unit).code})`],
+    ['resolvedAtHours', 'Integer', `${S.t * 24}  (d${S.t})`],
+    ['compareMode', 'String', `"${S.mode}"`],
+  ];
+  $('#vars').className = 'vars' + (S.varsOpen ? ' open' : '');
+  $('#vars').innerHTML = `<div class="vh" id="varsT"><span class="x">(x)</span>Variables (${rows.length})<span class="mt" style="font-weight:400">— how the widgets are wired</span>${ico('chev', 14)}</div>
+    <div class="vb"><table><thead><tr><th>Variable</th><th>Type</th><th>Current value</th></tr></thead><tbody>
+    ${rows.map(([n, t, v]) => `<tr><td class="vn">${n}</td><td class="vt">${t}</td><td class="mono" style="font-size:11px">${esc(v)}</td></tr>`).join('')}
+    </tbody></table></div>`;
+}
+
+/* ============================== action form ============================== */
+let D = null;
+function openAct(type) {
+  const s = scen(S.active); if (!s) return;
+  const d = ACT[type], vals = {};
+  for (const f of d.fields) {
+    if (f.k === 'unit') vals.unit = S.unit;
+    else if (f.k === 'target') vals.target = UNITS.find(u => u.id !== S.unit).id;
+    else if (f.type === 'units') vals[f.k] = UNITS.filter(u => u.id !== S.unit).map(u => u.id);
+    else vals[f.k] = f.def ?? '';
+  }
+  D = { type, vals, defs: JSON.parse(JSON.stringify(vals)), errs: {} };
+  renderDlg();
+  $('#scrim').classList.add('on');
+}
+function fieldHtml(f) {
+  const v = D.vals[f.k];
+  let ctl;
+  const id = `f-${f.k}`;
+  if (f.type === 'unit') ctl = `<select class="inp" id="${id}" data-f="${f.k}">${UNITS.map(u => `<option value="${u.id}" ${u.id === v ? 'selected' : ''}>${esc(u.name)} · ${u.code}</option>`).join('')}</select>`;
+  else if (f.type === 'select') ctl = `<select class="inp" id="${id}" data-f="${f.k}">${f.opts.map(o => `<option ${o === v ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
+  else if (f.type === 'units') ctl = `<div class="ulist" role="group" aria-labelledby="${id}-l">${UNITS.filter(u => u.id !== D.vals.unit).map(u =>
+      `<label><input type="checkbox" data-f="${f.k}" value="${u.id}" ${v.includes(u.id) ? 'checked' : ''} />${esc(u.name)}</label>`).join('')}</div>`;
+  else ctl = `<input class="inp mono" id="${id}" type="number" data-f="${f.k}" value="${v ?? ''}" ${f.type === 'day' ? `min="0" max="${HORIZON}"` : `min="${f.min ?? 0}"`} />`;
+  const hint = f.type === 'day' ? `d${v} = ${v === '' ? '—' : dayLabel(+v)} 2026` : (f.hint || '');
+  const edited = JSON.stringify(v) !== JSON.stringify(D.defs[f.k]);
+  return `<div class="fl${edited ? ' edited' : ''}${D.errs[f.k] ? ' err' : ''}" data-fl="${f.k}">
+    <label ${f.type === 'units' ? `id="${id}-l"` : `for="${id}"`}>${f.label}${f.req ? '<span class="req">*</span>' : ''}<span class="tag ed">Edited</span></label>
+    ${ctl}<div class="fh" data-fh="${f.k}">${hint}</div><div class="fe">${D.errs[f.k] || ''}</div></div>`;
+}
+function renderDlg() {
+  const s = scen(S.active), d = ACT[D.type];
+  const fs = d.fields.map(fieldHtml);
+  // pair the two timing fields on one row when both exist
+  const iFrom = d.fields.findIndex(f => f.k === 'from'), iDur = d.fields.findIndex(f => f.k === 'dur');
+  let body = fs.map((h, i) => i === iDur ? '' : i === iFrom && iDur > -1 ? `<div class="row2">${h}${fs[iDur]}</div>` : h).join('');
+  $('#dlg').innerHTML = `
+    <div class="dh">${ico(d.icon, 15)}${d.label}<button class="btn min ibtn" data-close="1" title="Close">${ico('x')}</button></div>
+    <div class="dbody">
+      <div class="banner">Applies to <b>${esc(s.name)}</b>. The live ontology is not modified — reads through this scenario see the edit as <span class="mono">${d.op}</span>.</div>
+      ${body}
+    </div>
+    <div class="df"><button class="btn min" data-reset="1">${ico('undo', 13)}Reset</button><span class="sp"></span>
+      <button class="btn" data-close="1">Cancel</button><button class="btn g" data-submit="1">Submit</button></div>`;
+}
+function syncField(k) {
+  const f = ACT[D.type].fields.find(x => x.k === k), el = document.querySelector(`[data-fl="${k}"]`);
+  if (!el) return;
+  el.classList.toggle('edited', JSON.stringify(D.vals[k]) !== JSON.stringify(D.defs[k]));
+  el.classList.remove('err');
+  if (f.type === 'day') el.querySelector('[data-fh]').textContent = D.vals[k] === '' ? '—' : `d${D.vals[k]} = ${dayLabel(+D.vals[k])} 2026`;
+}
+function submitAct() {
+  const d = ACT[D.type], v = D.vals, errs = {};
+  for (const f of d.fields) {
+    const x = v[f.k];
+    if (f.type === 'units') { if (f.req && !x.length) errs[f.k] = 'Choose at least one unit.'; continue; }
+    if (f.type === 'int' || f.type === 'day') {
+      if (x === '' || x == null) { if (f.req) errs[f.k] = 'Required.'; continue; }
+      if (+x < (f.type === 'day' ? 0 : f.min ?? 0)) errs[f.k] = `Must be at least ${f.type === 'day' ? 0 : f.min}.`;
+      if (f.type === 'day' && +x > HORIZON) errs[f.k] = `The horizon ends at d${HORIZON}.`;
+    }
+  }
+  if (D.type === 'transfer' && v.target === v.unit) errs.target = 'Pick a different unit.';
+  D.errs = errs;
+  if (Object.keys(errs).length) { renderDlg(); return; }
+  const a = { id: 'a' + (++uid), type: D.type };
+  for (const f of d.fields) {
+    const x = v[f.k];
+    a[f.k] = f.type === 'int' || f.type === 'day' ? (x === '' ? null : +x) : f.type === 'units' ? [...x] : x;
+  }
+  if (D.type === 'close_unit') a.to = a.to.filter(id => id !== a.unit);
+  const s = scen(S.active);
+  s.actions.push(a);
+  if (s.status === 'submitted') s.status = 'draft';
+  S.unit = a.unit;
+  closeDlg();
+  toast(`${d.label} applied to ${s.name} — the live ontology is unchanged.`);
+  renderAll();
+}
+function closeDlg() { $('#scrim').classList.remove('on'); D = null; }
+
+/* ============================== toast ============================== */
+let toastT;
+function toast(msg, bad) {
+  const el = $('#toast');
+  el.className = 'toast on' + (bad ? ' bad' : '');
+  el.innerHTML = (bad ? ico('alert', 14) : ico('check', 14)) + `<span>${esc(msg)}</span>`;
+  clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 3200);
+}
+
+/* ============================== events ============================== */
+function createScenario(parent) {
+  const n = S.scenarios.length;
+  const p = scen(parent);
+  const short = p && p.name.split(' · ')[0];
+  const s = { id: 's' + (++uid), name: p ? `${short}.${children(p.id).length + 1} · built on ${short}` : `Scenario ${n + 1}`,
+    color: SERIES[n % SERIES.length], parent: parent || null, status: 'draft', compare: true, actions: [] };
+  S.scenarios.push(s); S.active = s.id;
+  toast(p ? `${s.name} created — it inherits ${lineage(p).flatMap(x => x.actions).length} actions and stays in step with them.` : `${s.name} created. Its edits start empty; reality is its baseline.`);
+  renderAll();
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-create],[data-child],[data-dels],[data-dela],[data-cmp],[data-s],[data-act],[data-u],[data-mode],[data-chart],[data-close],[data-reset],[data-submit],#submit,#varsT');
+  if (!t) return;
+  const ds = t.dataset;
+  if (ds.cmp !== undefined) { const s = scen(ds.cmp); s.compare = t.checked; renderAll(); return; }
+  if (ds.create) return createScenario(null);
+  if (ds.child) { e.stopPropagation(); return createScenario(ds.child); }
+  if (ds.dels) {
+    const s = scen(ds.dels), kids = children(s.id);
+    if (kids.length) return toast(`${kids[0].name} is built on ${s.name.split(' · ')[0]} — delete it first.`, true);
+    S.scenarios = S.scenarios.filter(x => x.id !== s.id);
+    if (S.active === s.id) S.active = s.parent || null;
+    toast(`${s.name} deleted with its ${s.actions.length} action${s.actions.length === 1 ? '' : 's'}.`);
+    return renderAll();
+  }
+  if (ds.dela) {
+    const s = scen(S.active); s.actions = s.actions.filter(a => a.id !== ds.dela);
+    toast('Action removed from the scenario.'); return renderAll();
+  }
+  if (ds.s !== undefined) { if (e.target.closest('input')) return; S.active = ds.s || null; return renderAll(); }
+  if (ds.act) return openAct(ds.act);
+  if (ds.u) { S.unit = ds.u; renderCenterKeepScroll(); renderInsp(); renderVars(); return; }
+  if (ds.mode) { S.mode = ds.mode; renderCenterKeepScroll(); renderVars(); return; }
+  if (ds.chart) { S.chart = ds.chart; renderCenterKeepScroll(); return; }
+  if (ds.close) return closeDlg();
+  if (ds.reset) { D.vals = JSON.parse(JSON.stringify(D.defs)); D.errs = {}; return renderDlg(); }
+  if (ds.submit) return submitAct();
+  if (t.id === 'submit') { const s = scen(S.active); s.status = 'submitted'; toast(`${s.name} submitted for review. Its edits stay proposed until someone applies them.`); return renderAll(); }
+  if (t.id === 'varsT') { S.varsOpen = !S.varsOpen; return renderVars(); }
+});
+document.addEventListener('input', e => {
+  if (e.target.id === 'trange') { S.t = +e.target.value; renderScen(); renderCenterKeepScroll(true); renderInsp(); renderVars(); return; }
+  const k = e.target.dataset.f; if (!k || !D) return;
+  const f = ACT[D.type].fields.find(x => x.k === k);
+  if (f.type === 'units') D.vals[k] = [...document.querySelectorAll(`input[data-f="${k}"]:checked`)].map(x => x.value);
+  else D.vals[k] = e.target.value;
+  if (k === 'unit') { if (D.vals.to) D.vals.to = D.vals.to.filter(id => id !== D.vals.unit); renderDlg(); return; }
+  syncField(k);
+});
+document.addEventListener('dblclick', e => {
+  const nm = e.target.closest('[data-rename]'); if (!nm) return;
+  const s = scen(nm.dataset.rename);
+  nm.innerHTML = `<input value="${esc(s.name)}" />`;
+  const inp = nm.querySelector('input'); inp.focus(); inp.select();
+  const done = save => { if (save && inp.value.trim()) s.name = inp.value.trim(); renderAll(); };
+  inp.addEventListener('keydown', k => { if (k.key === 'Enter') done(true); if (k.key === 'Escape') done(false); });
+  inp.addEventListener('blur', () => done(true));
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && D) closeDlg(); });
+$('#scrim').addEventListener('mousedown', e => { if (e.target.id === 'scrim') closeDlg(); });
+window.addEventListener('resize', () => renderChart());
+
+function renderCenterKeepScroll(keepFocus) {
+  const sb = $('#center .sb'), y = sb ? sb.scrollTop : 0;
+  renderCenter();
+  const nsb = $('#center .sb'); if (nsb) nsb.scrollTop = y;
+  if (keepFocus) $('#trange').focus();
+}
+function renderAll() { renderRail(); renderTop(); renderScen(); renderCenterKeepScroll(); renderInsp(); renderVars(); }
+renderAll();
+</script>
+</body>
+</html>
