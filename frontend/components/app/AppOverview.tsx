@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight, BookOpen, KeyRound, LineChart } from "lucide-react";
+import { ArrowUpRight, BookOpen, KeyRound } from "lucide-react";
 
-import TestPhaseNotice from "@/components/site/TestPhaseNotice";
 import { useT } from "@/lib/i18n/context";
 import { cn } from "@/lib/cn";
 
@@ -13,12 +12,6 @@ const cards = [
     titleKey: "app.overview.card.keys.title" as const,
     descKey: "app.overview.card.keys.desc" as const,
     icon: KeyRound,
-  },
-  {
-    href: "/app/usage",
-    titleKey: "app.overview.card.usage.title" as const,
-    descKey: "app.overview.card.usage.desc" as const,
-    icon: LineChart,
   },
   {
     href: "/docs",
@@ -45,9 +38,7 @@ export default function AppOverview() {
         </p>
       </header>
 
-      <TestPhaseNotice variant="panel" />
-
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <section className="grid gap-4 sm:grid-cols-2">
         {cards.map(({ href, titleKey, descKey, icon: Icon }) => (
           <Link
             key={href}

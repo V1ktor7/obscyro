@@ -5,21 +5,11 @@ export const DEFAULT_LOCALE: Locale = "en";
 export const dict = {
   en: {
     "nav.docs": "Docs",
-    "nav.pricing": "Contact",
+    "nav.pricing": "Offer",
     "nav.signin": "Sign in",
     "nav.getKey": "Get API key",
     "nav.toggleMenu": "Toggle menu",
 
-    "beta.label": "Test phase only",
-    "beta.message":
-      "No uptime or accuracy SLA. Responses may be wrong, slow, or change without notice — not for clinical decisions.",
-    "beta.unstableApisIntro":
-      "These endpoints are more likely to show bugs or rough edges during the test period:",
-    "beta.unstableApisDetails": "Affected endpoints",
-
-    "hero.pill.beta": "Beta",
-    "hero.pill.body":
-      "· Test phase — feedback welcome at obscyro-team@obscyro.com",
     "hero.title": "Decision Systems for Health Networks",
     "hero.subtitle":
       "Obscyro connects published health data into one ontology, runs the network as a digital twin, and compares the responses to a surge on what each one actually costs — never on a single blended score.",
@@ -30,8 +20,6 @@ export const dict = {
     "hero.stat.editionValue": "Deterministic",
     "hero.stat.translate": "Terminology",
     "hero.stat.translateValue": "SNOMED IE Feb 2026",
-    "hero.stat.phase": "Phase",
-    "hero.stat.phaseValue": "Public beta",
     "hero.responseLabel": "↓ response",
     "hero.scroll": "Scroll to explore",
     "hero.chain.title": "Source to decision",
@@ -122,8 +110,6 @@ export const dict = {
 
     "contact.eyebrow": "Get in touch",
     "contact.title": "Interested? Tell us about your network.",
-    "contact.subtitle":
-      "Obscyro is in its test phase and is not being sold yet. If it looks useful for the system you run, write to us — we would rather hear the problem than pitch the product.",
     "contact.what": "Useful to include",
     "contact.p1": "The network you are responsible for, and roughly its size.",
     "contact.p2": "The decision you cannot currently defend with data.",
@@ -132,8 +118,6 @@ export const dict = {
     "contact.orExplore": "Or look first, without talking to anyone:",
     "contact.exploreStudio": "Open the Studio",
     "contact.exploreDocs": "Read the docs",
-    "contact.noSales":
-      "No pricing, no sales call, no form. One address, read by the people who build it.",
 
     "interop.eyebrow": "Interoperability",
     "interop.title": "Two sources. One region they agree on.",
@@ -187,9 +171,34 @@ export const dict = {
     "sources.note":
       "One of these arrived with its day and month written the wrong way round. The platform caught it, named it, and it was corrected — which is the point of reading values instead of trusting a schema.",
 
+    "offer.title": "Two layers. One offer, on request.",
+    "offer.subtitle":
+      "Obscyro is deployed for health networks, on their own data. Everything listed below is in the product today.",
+    "offer.a.eyebrow": "Data interoperability",
+    "offer.a.title": "One ontology for everything your network publishes.",
+    "offer.a.body":
+      "Your sources connected, typed and modelled once, in your own vocabulary — with a trace from every figure back to the file it came from.",
+    "offer.a.i1": "Connectors for files, REST APIs and streams, synchronised on a schedule",
+    "offer.a.i2": "Visual pipelines from rows to objects, every step recorded",
+    "offer.a.i3":
+      "An ontology of what the network holds — types, links, measures — declared by your institution",
+    "offer.a.i4": "Clinical coding over HTTP: SNOMED CT to ICD-10, ICD-O and CTV3",
+    "offer.b.eyebrow": "Decision support",
+    "offer.b.title": "A digital twin of the network, to compare a response before choosing it.",
+    "offer.b.body":
+      "The modelled network, live and under load, so that a surge plan is weighed against its alternatives rather than defended after the fact.",
+    "offer.b.i1": "A live map of sites, occupancy and the age of every reading",
+    "offer.b.i2": "Alerts on thresholds your teams set",
+    "offer.b.i3": "Scenario and epidemic simulations, run on your own network",
+    "offer.b.i4": "Responses ranked by dominance on lives, waiting and cost",
+    "offer.dependency":
+      "The decision layer reads what the interoperability layer has connected: it is built on it, not beside it.",
+    "offer.pricing":
+      "Pricing on request. Every engagement starts with a working session on your data.",
+
     "demo.cta": "Request a demo",
     "demo.blurb":
-      "Obscyro is in its test phase and is not being sold. A demo is a working session on your data or on ours — we would rather understand the decision you cannot defend today than present slides.",
+      "A demonstration is a working session on your data or on ours. We would rather understand the decision you cannot defend today than present slides.",
     "demo.eyebrow": "Contact / demo request",
     "demo.title": "See it on your own network.",
     "demo.drawerTitle": "Tell us about the network you run.",
@@ -245,7 +254,7 @@ export const dict = {
     "signup.useCase.clinical": "Clinician / health system",
     "signup.useCase.other": "Other",
     "signup.terms":
-      "I understand Obscyro is in beta and endpoints, schemas, and pricing may change without notice.",
+      "I have read the terms of use and agree to them.",
     "signup.next": "Continue",
     "signup.back": "Back",
     "signup.submit": "Generate my API key",
@@ -285,7 +294,6 @@ export const dict = {
     "signin.copyKey": "Copy key",
     "signin.continueStudio": "Open Studio",
     "signin.noAccount": "No account?",
-    "signin.signupHere": "Sign up free",
 
     "app.welcome": "Welcome",
     "app.signOut": "Sign out",
@@ -305,24 +313,17 @@ export const dict = {
     "app.keys.copy": "Copy",
     "app.keys.copied": "Copied!",
     "app.keys.regenerate": "Regenerate",
-    "app.keys.regenerateSoon": "Self-serve key regeneration coming soon. Email us to rotate.",
     "app.keys.plan": "Plan",
-    "app.keys.upgrade": "Upgrade soon.",
     "app.keys.usage": "Usage this month",
     "app.keys.usageLimit": "of 1,000 calls",
-    "app.keys.usageQuotaNote":
-      "Usage is tracked for visibility during the test phase. Monthly quota is not enforced yet.",
     "app.keys.manage": "Manage keys",
     "app.keys.create": "Create key",
     "app.keys.revoke": "Revoke",
     "app.keys.revokeConfirm": "Revoke this API key? Apps using it will stop working.",
     "app.keys.empty": "No active keys yet.",
     "app.keys.lastUsed": "Last used",
-    "app.comingSoon.title": "Coming soon",
     "app.usage.body":
       "Per-endpoint usage breakdowns, daily charts, and quota alerts will live here.",
-    "app.billing.body":
-      "Plan upgrades, invoices, and payment methods will live here once we leave beta.",
     "app.settings.body":
       "Profile, team members, and webhook configuration will live here.",
     "app.guard.signinRequired":
@@ -333,12 +334,9 @@ export const dict = {
 
     "app.overview.eyebrow": "Console",
     "app.overview.title": "Overview",
-    "app.overview.subtitle":
-      "Quick links and reminders while Obscyro is in public test. Production polish comes later.",
+    "app.overview.subtitle": "Your API keys and the documentation, in one place.",
     "app.overview.card.keys.title": "API keys",
     "app.overview.card.keys.desc": "View, copy, and protect your bearer token.",
-    "app.overview.card.usage.title": "Usage",
-    "app.overview.card.usage.desc": "Monthly quota and usage trends (more soon).",
     "app.overview.card.docs.title": "Documentation",
     "app.overview.card.docs.desc": "HTTP examples, parameters, and response shapes.",
     "app.overview.quickStart.eyebrow": "Quick start",
@@ -353,21 +351,11 @@ export const dict = {
   },
   fr: {
     "nav.docs": "Docs",
-    "nav.pricing": "Nous joindre",
+    "nav.pricing": "Offre",
     "nav.signin": "Connexion",
     "nav.getKey": "Obtenir une clé",
     "nav.toggleMenu": "Ouvrir le menu",
 
-    "beta.label": "Phase de test uniquement",
-    "beta.message":
-      "Aucun SLA de disponibilité ni de justesse. Les réponses peuvent être incorrectes, lentes ou changer sans préavis — pas pour des décisions cliniques.",
-    "beta.unstableApisIntro":
-      "Ces endpoints sont les plus susceptibles de bugs ou de comportements perfectibles pendant la test :",
-    "beta.unstableApisDetails": "Endpoints concernés",
-
-    "hero.pill.beta": "Beta",
-    "hero.pill.body":
-      "· Phase de test — vos retours à obscyro-team@obscyro.com",
     "hero.title": "Des systèmes de décision pour les réseaux de santé",
     "hero.subtitle":
       "Obscyro relie les données publiées en une seule ontologie, fait tourner le réseau comme un jumeau numérique, et compare les réponses à une poussée sur ce que chacune coûte réellement — jamais sur un score unique.",
@@ -378,8 +366,6 @@ export const dict = {
     "hero.stat.editionValue": "Déterministe",
     "hero.stat.translate": "Terminologie",
     "hero.stat.translateValue": "SNOMED IE fév. 2026",
-    "hero.stat.phase": "Phase",
-    "hero.stat.phaseValue": "Bêta publique",
     "hero.responseLabel": "↓ réponse",
     "hero.scroll": "Faites défiler",
     "hero.chain.title": "De la source à la décision",
@@ -470,8 +456,6 @@ export const dict = {
 
     "contact.eyebrow": "Nous joindre",
     "contact.title": "Intéressé ? Parlez-nous de votre réseau.",
-    "contact.subtitle":
-      "Obscyro est en phase de test et n’est pas encore vendu. Si cela paraît utile pour le système dont vous avez la charge, écrivez-nous — nous préférons entendre le problème que vendre le produit.",
     "contact.what": "Utile à préciser",
     "contact.p1": "Le réseau dont vous avez la charge, et son ordre de grandeur.",
     "contact.p2": "La décision que vous ne pouvez pas défendre avec vos données aujourd’hui.",
@@ -480,8 +464,6 @@ export const dict = {
     "contact.orExplore": "Ou regardez d’abord, sans parler à personne :",
     "contact.exploreStudio": "Ouvrir le Studio",
     "contact.exploreDocs": "Lire la documentation",
-    "contact.noSales":
-      "Pas de tarif, pas d’appel commercial, pas de formulaire. Une adresse, lue par ceux qui construisent.",
 
     "interop.eyebrow": "Interopérabilité",
     "interop.title": "Deux sources. Une région où elles s’accordent.",
@@ -535,9 +517,35 @@ export const dict = {
     "sources.note":
       "L’un d’eux est arrivé avec le jour et le mois écrits à l’envers. La plateforme l’a attrapé, l’a nommé, et il a été corrigé — c’est tout l’intérêt de lire les valeurs plutôt que de faire confiance à un schéma.",
 
+    "offer.title": "Deux volets. Une offre, sur demande.",
+    "offer.subtitle":
+      "Obscyro se déploie pour des réseaux de santé, sur leurs propres données. Tout ce qui est décrit ci-dessous fait partie du produit aujourd’hui.",
+    "offer.a.eyebrow": "Interopérabilité des données",
+    "offer.a.title": "Une ontologie pour tout ce que votre réseau publie.",
+    "offer.a.body":
+      "Vos sources reliées, typées et modélisées une fois, dans votre propre vocabulaire — avec la trace de chaque chiffre jusqu’au fichier d’où il vient.",
+    "offer.a.i1": "Connecteurs pour fichiers, API REST et flux, synchronisés à intervalle",
+    "offer.a.i2": "Pipelines visuels des lignes vers les objets, chaque étape tracée",
+    "offer.a.i3":
+      "Une ontologie de ce que le réseau possède — types, liens, mesures — déclarée par votre institution",
+    "offer.a.i4": "Codage clinique en HTTP : SNOMED CT vers CIM-10, CIM-O et CTV3",
+    "offer.b.eyebrow": "Aide à la décision",
+    "offer.b.title":
+      "Un jumeau numérique du réseau, pour comparer une réponse avant de la choisir.",
+    "offer.b.body":
+      "Le réseau modélisé, en direct et sous charge, pour qu’un plan de délestage soit pesé contre ses alternatives plutôt que défendu après coup.",
+    "offer.b.i1": "Une carte en direct des sites, de l’occupation et de l’âge de chaque lecture",
+    "offer.b.i2": "Des alertes sur les seuils que vos équipes fixent",
+    "offer.b.i3": "Des simulations de scénarios et d’épidémies, sur votre propre réseau",
+    "offer.b.i4": "Des réponses classées par dominance sur les vies, l’attente et le coût",
+    "offer.dependency":
+      "Le volet décision lit ce que le volet interopérabilité a relié : il repose sur lui, il ne s’y ajoute pas.",
+    "offer.pricing":
+      "Tarif sur demande. Chaque engagement commence par une séance de travail sur vos données.",
+
     "demo.cta": "Demander une démonstration",
     "demo.blurb":
-      "Obscyro est en phase de test et n’est pas vendu. Une démonstration est une séance de travail sur vos données ou sur les nôtres — nous préférons comprendre la décision que vous ne pouvez pas défendre aujourd’hui que présenter des diapositives.",
+      "Une démonstration est une séance de travail sur vos données ou sur les nôtres. Nous préférons comprendre la décision que vous ne pouvez pas défendre aujourd’hui que présenter des diapositives.",
     "demo.eyebrow": "Contact / demande de démonstration",
     "demo.title": "Voyez-le sur votre propre réseau.",
     "demo.drawerTitle": "Parlez-nous du réseau dont vous avez la charge.",
@@ -593,7 +601,7 @@ export const dict = {
     "signup.useCase.clinical": "Clinicien / établissement de santé",
     "signup.useCase.other": "Autre",
     "signup.terms":
-      "Je comprends qu'Obscyro est en beta et que les endpoints, schémas et tarifs peuvent changer sans préavis.",
+      "J’ai lu les conditions d’utilisation et je les accepte.",
     "signup.next": "Continuer",
     "signup.back": "Retour",
     "signup.submit": "Générer ma clé API",
@@ -633,7 +641,6 @@ export const dict = {
     "signin.copyKey": "Copier la clé",
     "signin.continueStudio": "Ouvrir Studio",
     "signin.noAccount": "Pas de compte ?",
-    "signin.signupHere": "Inscrivez-vous gratuitement",
 
     "app.welcome": "Bienvenue",
     "app.signOut": "Se déconnecter",
@@ -653,25 +660,17 @@ export const dict = {
     "app.keys.copy": "Copier",
     "app.keys.copied": "Copié !",
     "app.keys.regenerate": "Régénérer",
-    "app.keys.regenerateSoon":
-      "La régénération en libre-service arrive bientôt. Écrivez-nous pour rotation.",
     "app.keys.plan": "Plan",
-    "app.keys.upgrade": "Mise à niveau bientôt.",
     "app.keys.usage": "Usage ce mois-ci",
     "app.keys.usageLimit": "sur 1 000 appels",
-    "app.keys.usageQuotaNote":
-      "L'usage est suivi à titre indicatif pendant la phase de test. Le quota mensuel n'est pas encore appliqué.",
     "app.keys.manage": "Gérer les clés",
     "app.keys.create": "Créer une clé",
     "app.keys.revoke": "Révoquer",
     "app.keys.revokeConfirm": "Révoquer cette clé ? Les apps qui l'utilisent cesseront de fonctionner.",
     "app.keys.empty": "Aucune clé active.",
     "app.keys.lastUsed": "Dernière utilisation",
-    "app.comingSoon.title": "Bientôt disponible",
     "app.usage.body":
       "Les détails d'usage par endpoint, graphiques quotidiens et alertes de quota apparaîtront ici.",
-    "app.billing.body":
-      "Les changements de plan, factures et moyens de paiement apparaîtront ici à la sortie de beta.",
     "app.settings.body":
       "Profil, membres d'équipe et configuration des webhooks apparaîtront ici.",
     "app.guard.signinRequired":
@@ -682,12 +681,9 @@ export const dict = {
 
     "app.overview.eyebrow": "Console",
     "app.overview.title": "Vue d'ensemble",
-    "app.overview.subtitle":
-      "Raccourcis et rappels pendant la phase de test publique. Le reste arrive plus tard.",
+    "app.overview.subtitle": "Vos clés API et la documentation, au même endroit.",
     "app.overview.card.keys.title": "Clés API",
     "app.overview.card.keys.desc": "Consulter, copier et protéger votre jeton bearer.",
-    "app.overview.card.usage.title": "Usage",
-    "app.overview.card.usage.desc": "Quota mensuel et tendances (bientôt plus de détail).",
     "app.overview.card.docs.title": "Documentation",
     "app.overview.card.docs.desc": "Exemples HTTP, paramètres et formes de réponse.",
     "app.overview.quickStart.eyebrow": "Démarrage rapide",

@@ -16,7 +16,7 @@ curl https://api.obscyro.com/v1/concepts/22298006 \
 
 ## Minting a key
 
-In production, mint keys via [self-serve sign-up](/sign-up). For local development, use the CLI bundled with the backend:
+In production, keys are issued to your organisation when its access is set up — write to [obscyro-team@obscyro.com](mailto:obscyro-team@obscyro.com). For local development, use the CLI bundled with the backend:
 
 ```bash
 npm run create-key -- --name "dev" --email "you@example.com" --plan starter
@@ -51,4 +51,4 @@ with HTTP status `401`. See [Errors](/docs/getting-started/errors) for the full 
 
 ## Key rotation
 
-To revoke a key, contact us at [obscyro-team@obscyro.com](mailto:obscyro-team@obscyro.com). Self-serve revocation in the dashboard is coming soon. Active sessions tolerate a soft 60-second TTL while the in-memory cache expires; after that, requests return `401 INVALID_API_KEY`.
+To revoke a key, contact us at [obscyro-team@obscyro.com](mailto:obscyro-team@obscyro.com). Active sessions tolerate a soft 60-second TTL while the in-memory cache expires; after that, requests return `401 INVALID_API_KEY`.

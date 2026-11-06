@@ -4,13 +4,10 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  CreditCard,
   Key,
   LayoutDashboard,
-  LineChart,
   LogOut,
   Menu,
-  Settings,
   ShieldCheck,
   X,
 } from "lucide-react";
@@ -127,9 +124,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const navItems: NavItem[] = [
     { href: "/app", label: t("app.nav.overview"), icon: LayoutDashboard },
     { href: "/app/keys", label: t("app.nav.keys"), icon: Key },
-    { href: "/app/usage", label: t("app.nav.usage"), icon: LineChart },
-    { href: "/app/billing", label: t("app.nav.billing"), icon: CreditCard },
-    { href: "/app/settings", label: t("app.nav.settings"), icon: Settings },
   ];
 
   const firstName = me?.user?.name ? me.user.name.split(" ")[0] : "";

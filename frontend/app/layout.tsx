@@ -38,7 +38,7 @@ export const metadata: Metadata = {
     template: "%s · Obscyro",
   },
   description:
-    "Connect a health network's published data into one ontology, run it as a digital twin, and compare the responses on what each one costs. Public beta.",
+    "Connect a health network's published data into one ontology, run it as a digital twin, and compare the responses on what each one costs.",
   keywords: [
     "health data interoperability",
     "health system operations",
@@ -55,7 +55,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Obscyro — Decision Systems for Health Networks",
     description:
-      "Connect a health network's published data into one ontology, run it as a digital twin, and compare the responses on what each one costs. Public beta.",
+      "Connect a health network's published data into one ontology, run it as a digital twin, and compare the responses on what each one costs.",
     url: SITE_URL,
     siteName: "Obscyro",
     locale: "en_US",
@@ -65,7 +65,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Obscyro — Decision Systems for Health Networks",
     description:
-      "One ontology for a health network, a digital twin on top, and responses ranked by dominance. Public beta.",
+      "One ontology for a health network, a digital twin on top, and responses ranked by dominance.",
   },
   robots: {
     index: true,

@@ -3,7 +3,7 @@ import AppShell from "./AppShell";
 
 export const metadata: Metadata = {
   title: "Console",
-  description: "Manage your Obscyro API keys, usage, and account.",
+  description: "Manage your Obscyro API keys."
 };
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

@@ -1,7 +1,7 @@
 export interface DocLink {
   title: string;
   slug: string[];
-  badge?: "soon" | "new" | "beta";
+  badge?: "new";
 }
 
 export interface DocSection {
@@ -38,19 +38,16 @@ export const DOC_NAV: DocSection[] = [
     title: "Standards",
     items: [
       { title: "SNOMED CT", slug: ["standards", "snomed"] },
-      { title: "ICD-10", slug: ["standards", "icd10"], badge: "beta" },
-      { title: "RxNorm", slug: ["standards", "rxnorm"], badge: "soon" },
-      { title: "LOINC", slug: ["standards", "loinc"], badge: "soon" },
-      { title: "FHIR", slug: ["standards", "fhir"], badge: "soon" },
-      { title: "HL7", slug: ["standards", "hl7"], badge: "soon" },
+      { title: "ICD-10", slug: ["standards", "icd10"] },
+      { title: "FHIR", slug: ["standards", "fhir"] },
+      { title: "HL7", slug: ["standards", "hl7"] },
     ],
   },
   {
     title: "Resources",
     items: [
-      { title: "SDKs", slug: ["resources", "sdks"], badge: "soon" },
       { title: "Changelog", slug: ["resources", "changelog"] },
-      { title: "Status", slug: ["resources", "status"], badge: "soon" },
+      { title: "Status", slug: ["resources", "status"] },
     ],
   },
 ];

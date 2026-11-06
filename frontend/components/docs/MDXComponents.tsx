@@ -7,7 +7,6 @@ import EndpointHeader from "./EndpointHeader";
 import { Param, Parameters } from "./Parameters";
 import ResponseExample from "./ResponseExample";
 import ErrorTable, { ErrorRow } from "./ErrorTable";
-import ComingSoon from "./ComingSoon";
 import CodeTabs, { CodeTab } from "@/components/ui/CodeTabs";
 import CodeBlock from "@/components/ui/CodeBlock";
 import { Badge } from "@/components/ui/Badge";
@@ -63,7 +62,6 @@ export const mdxComponents: MDXRemoteProps["components"] = {
   ResponseExample,
   ErrorTable,
   ErrorRow,
-  ComingSoon,
   CodeTabs,
   CodeTab,
   CodeBlock,

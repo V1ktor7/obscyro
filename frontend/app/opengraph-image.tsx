@@ -49,7 +49,7 @@ export default function Image() {
             for Health Networks
           </h1>
           <p style={{ fontSize: 28, color: "#a1a1aa", margin: 0, maxWidth: 900 }}>
-One ontology, a digital twin, and responses ranked by dominance. Public beta.
+One ontology, a digital twin, and responses ranked by dominance.
           </p>
         </div>
 

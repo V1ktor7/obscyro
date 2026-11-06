@@ -4,6 +4,7 @@ import Capabilities from "@/components/landing/Capabilities";
 import Interop from "@/components/landing/Interop";
 import Optimisation from "@/components/landing/Optimisation";
 import Sources from "@/components/landing/Sources";
+import Offer from "@/components/landing/Offer";
 import DemoRequest from "@/components/landing/DemoRequest";
 
 export default function Home() {
@@ -15,6 +16,7 @@ export default function Home() {
       <Interop />
       <Optimisation />
       <Sources />
+      <Offer />
       <DemoRequest />
     </>
   );

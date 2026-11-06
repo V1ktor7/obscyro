@@ -25,7 +25,6 @@ const AUTH_TYPES: { value: AuthType; label: string; disabled?: boolean }[] = [
   { value: "header", label: "Header" },
   { value: "queryAuth", label: "Query param" },
   { value: "oauth2", label: "Bearer token" },
-  { value: "predefinedCredential", label: "Stored credential (coming soon)", disabled: true },
 ];
 const BODY_TYPES: BodyType[] = ["json", "form-urlencoded", "form-data", "raw", "binary"];
 const PAGINATION_MODES: PaginationMode[] = [
