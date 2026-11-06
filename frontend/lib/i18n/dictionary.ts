@@ -348,6 +348,88 @@ export const dict = {
     "docs.menu": "Documentation menu",
     "docs.openMenu": "Open documentation menu",
     "docs.closeMenu": "Close menu",
+    "nav.features": "Features",
+    "footer.features": "Features",
+    "product.title": "Six screens. One product.",
+    "product.subtitle":
+      "Every panel below is a screen that exists today, and each one has a page of its own.",
+    "product.explore": "Explore",
+    "feat.eyebrow": "Feature",
+    "feat.prev": "Previous",
+    "feat.next": "Next",
+    "feat.data.title": "Every source, read as it was published.",
+    "feat.data.lead":
+      "Connect files, REST APIs and streams. Obscyro reads what each one actually holds — dates, measures, identifiers, encodings — before anything is built on it.",
+    "feat.data.p1.title": "Files, APIs and streams",
+    "feat.data.p1.body":
+      "Upload a CSV, point at a REST endpoint or receive a stream. Syncs run on a schedule, and every version of a dataset is kept.",
+    "feat.data.p2.title": "Read, not declared",
+    "feat.data.p2.body":
+      "Columns are typed from their values, not their headers. A permit number is never offered as a quantity, and a date column written the wrong way round is caught rather than charted.",
+    "feat.data.p3.title": "The file that arrives is the one published",
+    "feat.data.p3.body":
+      "A file published in Windows-1252 with no declared charset is decoded as what it is. Fixing it first in a spreadsheet would make its provenance impossible to defend.",
+    "feat.pipelines.title": "From rows to objects, every step on the canvas.",
+    "feat.pipelines.lead":
+      "A visual graph turns the rows a publisher writes into the units a network reasons about. Each step can be previewed, and the whole graph runs again when its source changes.",
+    "feat.pipelines.p1.title": "Visible at every step",
+    "feat.pipelines.p1.body":
+      "Filter, join, derive, cast, expand, keep the latest reading. Each node shows what goes in and what comes out before anything is written.",
+    "feat.pipelines.p2.title": "Runs on its own",
+    "feat.pipelines.p2.body":
+      "A live pipeline runs again each time its source is updated, so the model follows an hourly file without anyone pressing a button.",
+    "feat.pipelines.p3.title": "Refuses to fail in silence",
+    "feat.pipelines.p3.body":
+      "A step that would convert nothing, name no column or write nothing is refused, and a run that would remove most of what exists stops and says why.",
+    "feat.ontology.title": "One model of what the network holds.",
+    "feat.ontology.lead":
+      "Object types, their properties and the links between them, declared in your institution’s own vocabulary. Nothing in the engine knows what a bed is.",
+    "feat.ontology.p1.title": "Your vocabulary",
+    "feat.ontology.p1.body":
+      "A site, a ward, a stretcher, an air quality station: the types are yours. The platform reads what each one declares instead of matching on names.",
+    "feat.ontology.p2.title": "Measured or assumed, on the record",
+    "feat.ontology.p2.body":
+      "A property can say where its value comes from, when it was observed and what it is about — and the screen shows that next to the number.",
+    "feat.ontology.p3.title": "Clinical terminologies",
+    "feat.ontology.p3.body":
+      "SNOMED CT concepts translated to ICD-10, ICD-O and CTV3 over HTTP, for data that arrives coded differently from one source to the next.",
+    "feat.twin.title": "The network, live, on one map.",
+    "feat.twin.lead":
+      "Sites, units and sensors placed on a map. Every figure carries how old it is and where it came from.",
+    "feat.twin.p1.title": "Live readings",
+    "feat.twin.p1.body":
+      "Occupancy, air quality and wastewater signals refresh as their sources publish, and each reading shows its age.",
+    "feat.twin.p2.title": "Alerts on your thresholds",
+    "feat.twin.p2.body":
+      "Rules your teams set raise an alert when a measure crosses its threshold, and close it when the measure comes back.",
+    "feat.twin.p3.title": "Absent is not calm",
+    "feat.twin.p3.body":
+      "A site with no reading is drawn as having none, not as fine. A boundary that is approximate says so, on the map.",
+    "feat.dashboards.title": "Charts offered from what the columns hold.",
+    "feat.dashboards.lead":
+      "Dashboards on your datasets, the live twin and simulation runs. The platform reads each column and offers only the charts its values can support.",
+    "feat.dashboards.p1.title": "The right chart, or a reason",
+    "feat.dashboards.p1.body":
+      "A date stored as text is drawn as time, and a permit number is never summed. A column that cannot be charted says why instead of producing nonsense.",
+    "feat.dashboards.p2.title": "Always current",
+    "feat.dashboards.p2.body":
+      "A card stores no values. Its numbers are read when the page opens, so an hourly sync reaches the dashboard without anyone touching it.",
+    "feat.dashboards.p3.title": "The twin and its runs",
+    "feat.dashboards.p3.body":
+      "Map cards show the network live, in a scenario or frozen at a step of a run. Series cards put a simulated trajectory beside the observed one.",
+    "feat.responses.title": "Compare a response before choosing it.",
+    "feat.responses.lead":
+      "Run an event — an epidemic wave, a surge, a closure — against the modelled network, try responses, and see what each one costs.",
+    "feat.responses.p1.title": "Scenarios and epidemics",
+    "feat.responses.p1.body":
+      "Replay an observed wave on today’s network, or seed an epidemic in one territory and watch it spread to the others.",
+    "feat.responses.p2.title": "Ranked by dominance",
+    "feat.responses.p2.body":
+      "Responses are compared on lives, waiting and cost. One worse on every axis is named dominated, and no exchange rate between a death and a dollar is invented.",
+    "feat.responses.p3.title": "Deterministic",
+    "feat.responses.p3.body":
+      "The same inputs give the same result, so asking what acting on day 42 would have changed is a rerun, not a guess.",
+
   },
   fr: {
     "nav.docs": "Docs",
@@ -695,6 +777,88 @@ export const dict = {
     "docs.menu": "Menu de documentation",
     "docs.openMenu": "Ouvrir le menu de documentation",
     "docs.closeMenu": "Fermer le menu",
+    "nav.features": "Fonctionnalités",
+    "footer.features": "Fonctionnalités",
+    "product.title": "Six écrans. Un seul produit.",
+    "product.subtitle":
+      "Chaque panneau ci-dessous est un écran qui existe aujourd’hui, et chacun a sa propre page.",
+    "product.explore": "Découvrir",
+    "feat.eyebrow": "Fonctionnalité",
+    "feat.prev": "Précédente",
+    "feat.next": "Suivante",
+    "feat.data.title": "Chaque source, lue telle qu’elle a été publiée.",
+    "feat.data.lead":
+      "Reliez des fichiers, des API REST et des flux. Obscyro lit ce que chacun contient vraiment — dates, mesures, identifiants, encodages — avant que quoi que ce soit ne soit construit dessus.",
+    "feat.data.p1.title": "Fichiers, API et flux",
+    "feat.data.p1.body":
+      "Téléversez un CSV, pointez une API REST ou recevez un flux. Les synchronisations tournent à intervalle, et chaque version d’un jeu de données est conservée.",
+    "feat.data.p2.title": "Lu, pas déclaré",
+    "feat.data.p2.body":
+      "Les colonnes sont typées d’après leurs valeurs, pas leurs en-têtes. Un numéro de permis n’est jamais proposé comme quantité, et une colonne de dates écrite à l’envers est attrapée au lieu d’être tracée.",
+    "feat.data.p3.title": "Le fichier qui arrive est celui qui a été publié",
+    "feat.data.p3.body":
+      "Un fichier publié en Windows-1252 sans encodage déclaré est décodé pour ce qu’il est. Le corriger d’abord dans un tableur rendrait sa provenance indéfendable.",
+    "feat.pipelines.title": "Des lignes aux objets, chaque étape sur le canevas.",
+    "feat.pipelines.lead":
+      "Un graphe visuel transforme les lignes qu’un éditeur publie en unités sur lesquelles un réseau raisonne. Chaque étape se prévisualise, et le graphe entier tourne à nouveau quand sa source change.",
+    "feat.pipelines.p1.title": "Visible à chaque étape",
+    "feat.pipelines.p1.body":
+      "Filtrer, joindre, dériver, convertir, déplier, garder le relevé le plus récent. Chaque nœud montre ce qui entre et ce qui sort avant que rien ne soit écrit.",
+    "feat.pipelines.p2.title": "Tourne tout seul",
+    "feat.pipelines.p2.body":
+      "Un pipeline actif tourne à nouveau chaque fois que sa source est mise à jour : le modèle suit un fichier horaire sans que personne n’appuie sur un bouton.",
+    "feat.pipelines.p3.title": "Refuse d’échouer en silence",
+    "feat.pipelines.p3.body":
+      "Une étape qui ne convertirait rien, ne nommerait aucune colonne ou n’écrirait rien est refusée, et un passage qui retirerait la plupart de ce qui existe s’arrête et dit pourquoi.",
+    "feat.ontology.title": "Un seul modèle de ce que le réseau possède.",
+    "feat.ontology.lead":
+      "Des types d’objets, leurs propriétés et les liens entre eux, déclarés dans le vocabulaire de votre institution. Rien dans le moteur ne sait ce qu’est un lit.",
+    "feat.ontology.p1.title": "Votre vocabulaire",
+    "feat.ontology.p1.body":
+      "Un site, une unité, une civière, une station de qualité de l’air : les types sont les vôtres. La plateforme lit ce que chacun déclare au lieu de se fier aux noms.",
+    "feat.ontology.p2.title": "Mesuré ou supposé, au dossier",
+    "feat.ontology.p2.body":
+      "Une propriété peut dire d’où vient sa valeur, quand elle a été observée et de quoi elle parle — et l’écran l’affiche à côté du chiffre.",
+    "feat.ontology.p3.title": "Terminologies cliniques",
+    "feat.ontology.p3.body":
+      "Des concepts SNOMED CT traduits vers la CIM-10, la CIM-O et CTV3 en HTTP, pour des données qui arrivent codées différemment d’une source à l’autre.",
+    "feat.twin.title": "Le réseau, en direct, sur une seule carte.",
+    "feat.twin.lead":
+      "Des sites, des unités et des capteurs placés sur une carte. Chaque chiffre porte son âge et sa provenance.",
+    "feat.twin.p1.title": "Des lectures en direct",
+    "feat.twin.p1.body":
+      "L’occupation, la qualité de l’air et les signaux d’eaux usées se rafraîchissent au rythme de leurs sources, et chaque lecture affiche son âge.",
+    "feat.twin.p2.title": "Des alertes sur vos seuils",
+    "feat.twin.p2.body":
+      "Les règles que vos équipes fixent lèvent une alerte quand une mesure franchit son seuil, et la ferment quand la mesure revient.",
+    "feat.twin.p3.title": "Absent n’est pas calme",
+    "feat.twin.p3.body":
+      "Un site sans lecture est dessiné comme n’en ayant pas, pas comme allant bien. Une limite approximative le dit, sur la carte.",
+    "feat.dashboards.title": "Des graphiques proposés d’après le contenu des colonnes.",
+    "feat.dashboards.lead":
+      "Des tableaux de bord sur vos jeux de données, le jumeau en direct et les simulations. La plateforme lit chaque colonne et ne propose que les graphiques que ses valeurs permettent.",
+    "feat.dashboards.p1.title": "Le bon graphique, ou une raison",
+    "feat.dashboards.p1.body":
+      "Une date stockée en texte est tracée comme du temps, et un numéro de permis n’est jamais additionné. Une colonne qui ne se trace pas dit pourquoi au lieu de produire n’importe quoi.",
+    "feat.dashboards.p2.title": "Toujours à jour",
+    "feat.dashboards.p2.body":
+      "Une carte ne stocke aucune valeur. Ses chiffres sont lus à l’ouverture de la page : une synchronisation horaire atteint le tableau de bord sans que personne n’y touche.",
+    "feat.dashboards.p3.title": "Le jumeau et ses simulations",
+    "feat.dashboards.p3.body":
+      "Les cartes géographiques montrent le réseau en direct, dans un scénario ou figé à une étape d’une simulation. Les séries posent une trajectoire simulée à côté de celle observée.",
+    "feat.responses.title": "Comparer une réponse avant de la choisir.",
+    "feat.responses.lead":
+      "Lancez un évènement — une vague épidémique, une poussée, une fermeture — sur le réseau modélisé, essayez des réponses, et voyez ce que chacune coûte.",
+    "feat.responses.p1.title": "Scénarios et épidémies",
+    "feat.responses.p1.body":
+      "Rejouez une vague observée sur le réseau d’aujourd’hui, ou semez une épidémie dans un territoire et regardez-la gagner les autres.",
+    "feat.responses.p2.title": "Classées par dominance",
+    "feat.responses.p2.body":
+      "Les réponses sont comparées sur les vies, l’attente et le coût. Une option pire sur tous les axes est nommée dominée, et aucun taux de change entre un décès et un dollar n’est inventé.",
+    "feat.responses.p3.title": "Déterministe",
+    "feat.responses.p3.body":
+      "Les mêmes entrées donnent le même résultat : se demander ce qu’agir au jour 42 aurait changé, c’est relancer, pas deviner.",
+
   },
 } as const;
 

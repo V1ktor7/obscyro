@@ -21,7 +21,7 @@ export default function Header() {
   }, []);
 
   const navItems = [
-    { label: t("nav.docs"), href: "/docs" },
+    { label: t("nav.features"), href: "/#features" },
     { label: t("nav.pricing"), href: "/#offer" },
   ];
 

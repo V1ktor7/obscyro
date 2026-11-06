@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Mark from "@/components/brand/Mark";
+import { FEATURES, featureHref } from "@/lib/features";
 import { useT } from "@/lib/i18n/context";
 
 export default function Footer() {
@@ -9,21 +10,15 @@ export default function Footer() {
 
   const columns = [
     {
-      title: t("footer.product"),
-      links: [
-        { label: t("nav.docs"), href: "/docs" },
-        { label: t("nav.pricing"), href: "/#offer" },
-        { label: t("nav.signin"), href: "/sign-in" },
-        { label: t("footer.status"), href: "/docs/resources/status" },
-      ],
+      title: t("footer.features"),
+      links: FEATURES.map((f) => ({ label: t(f.name), href: featureHref(f.slug) })),
     },
     {
-      title: t("footer.standards"),
+      title: t("footer.product"),
       links: [
-        { label: "SNOMED CT", href: "/docs/standards/snomed" },
-        { label: "ICD-10", href: "/docs/standards/icd10" },
-        { label: "FHIR", href: "/docs/standards/fhir" },
-        { label: "HL7", href: "/docs/standards/hl7" },
+        { label: t("nav.pricing"), href: "/#offer" },
+        { label: t("demo.cta"), href: "/#contact" },
+        { label: t("nav.signin"), href: "/sign-in" },
       ],
     },
     {

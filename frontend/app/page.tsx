@@ -1,4 +1,5 @@
 import HeroShell from "@/components/landing/HeroShell";
+import ProductSection from "@/components/landing/ProductSection";
 import Statement from "@/components/landing/Statement";
 import Capabilities from "@/components/landing/Capabilities";
 import Interop from "@/components/landing/Interop";
@@ -11,6 +12,7 @@ export default function Home() {
   return (
     <>
       <HeroShell />
+      <ProductSection />
       <Statement />
       <Capabilities />
       <Interop />

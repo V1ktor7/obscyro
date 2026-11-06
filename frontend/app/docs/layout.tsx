@@ -1,6 +1,14 @@
+import type { Metadata } from "next";
 import { type ReactNode } from "react";
 import MobileNav from "@/components/docs/MobileNav";
 import Sidebar from "@/components/docs/Sidebar";
+
+// The documentation is no longer linked from the site, and is kept out of
+// search results too: it is still reachable by its address for whoever already
+// has it, but it is not what the site offers to someone arriving.
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 export default function DocsLayout({ children }: { children: ReactNode }) {
   return (

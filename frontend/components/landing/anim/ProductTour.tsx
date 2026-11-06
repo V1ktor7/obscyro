@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
   Activity,
+  ArrowRight,
   BarChart3,
   Box,
   Database,
@@ -38,11 +40,26 @@ const RAIL = [Database, Workflow, Box, MapIcon, BarChart3, Activity];
 export default function ProductTour({
   labels,
   className,
+  only,
+  links,
+  exploreLabel,
 }: {
   labels: string[];
   className?: string;
+  /**
+   * Show one screen and keep replaying it, for the page that screen has of its
+   * own. The rail then leads to the other pages instead of switching screens:
+   * on a page about Pipelines, a click on the map icon should go to the Twin's
+   * page, not swap the picture under a heading that still says Pipelines.
+   */
+  only?: number;
+  /** The page of each screen, in tour order. */
+  links?: readonly string[];
+  /** Shown before the current screen's name on the link to its page. */
+  exploreLabel?: string;
 }) {
-  const [step, setStep] = useState(0);
+  const single = only !== undefined;
+  const [step, setStep] = useState(only ?? 0);
   const [t, setT] = useState(0);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const raf = useRef(0);
@@ -64,7 +81,8 @@ export default function ProductTour({
       setT(p * p * (3 - 2 * p));
       if (elapsed >= DWELL && !held.current) {
         start = now;
-        setStep((s) => (s + 1) % SCREENS);
+        // A single screen replays its own animation rather than moving on.
+        if (!single) setStep((s) => (s + 1) % SCREENS);
       }
       raf.current = requestAnimationFrame(frame);
     };
@@ -86,7 +104,7 @@ export default function ProductTour({
       io.disconnect();
       cancelAnimationFrame(raf.current);
     };
-  }, []);
+  }, [single]);
 
   function pick(i: number) {
     held.current = true;
@@ -112,21 +130,33 @@ export default function ProductTour({
 
         <div className="flex">
           <div className="flex w-11 shrink-0 flex-col items-center gap-1 border-r border-line bg-white py-3 sm:w-14">
-            {RAIL.map((Icon, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => pick(i)}
-                aria-label={labels[i]}
-                aria-current={i === step}
-                className={
-                  "flex h-8 w-8 items-center justify-center transition-colors sm:h-9 sm:w-9 " +
-                  (i === step ? "bg-brand-soft text-brand-deep" : "text-ink-faint hover:text-ink")
-                }
-              >
-                <Icon className="h-4 w-4" />
-              </button>
-            ))}
+            {RAIL.map((Icon, i) => {
+              const cls =
+                "flex h-8 w-8 items-center justify-center transition-colors sm:h-9 sm:w-9 " +
+                (i === step ? "bg-brand-soft text-brand-deep" : "text-ink-faint hover:text-ink");
+              return single && links ? (
+                <Link
+                  key={i}
+                  href={links[i]}
+                  aria-label={labels[i]}
+                  aria-current={i === step ? "page" : undefined}
+                  className={cls}
+                >
+                  <Icon className="h-4 w-4" />
+                </Link>
+              ) : (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => pick(i)}
+                  aria-label={labels[i]}
+                  aria-current={i === step}
+                  className={cls}
+                >
+                  <Icon className="h-4 w-4" />
+                </button>
+              );
+            })}
           </div>
 
           <div className="min-w-0 flex-1 bg-canvas p-3 sm:p-4">
@@ -142,6 +172,7 @@ export default function ProductTour({
         </div>
       </div>
 
+      {single ? null : (
       <div className="mt-3 grid grid-cols-3 gap-px bg-line sm:grid-cols-6">
         {labels.slice(0, SCREENS).map((label, i) => (
           <button
@@ -158,6 +189,25 @@ export default function ProductTour({
           </button>
         ))}
       </div>
+      )}
+
+      {/* Under the tour, the page of whichever screen is showing. It follows
+          the tour as it plays, so the way in is always to the thing on screen. */}
+      {!single && links ? (
+        <div className="mt-5 flex justify-center">
+          <Link
+            href={links[step]}
+            className="group inline-flex items-center gap-1.5 text-[0.875rem] font-medium text-accent transition-colors hover:text-[#1f5fbd]"
+          >
+            {exploreLabel ? `${exploreLabel} ` : ""}
+            {labels[step]}
+            <ArrowRight
+              className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
+              aria-hidden
+            />
+          </Link>
+        </div>
+      ) : null}
     </div>
   );
 }
