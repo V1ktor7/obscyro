@@ -79,6 +79,10 @@ class ExportedPopulation(BaseModel):
     # Empty for a twin with no spreading model, which is the honest state — a
     # set of zeros would make every coupled transition inert while looking set.
     couples: dict[str, float] = Field(default_factory=dict)
+    # Where this catchment's contact happens outside it, per coupling:
+    # {"travail": {"<other catchment id>": 0.18}}. Empty means every coupling
+    # stays inside, which is how every twin ran before mixing existed.
+    mixes_with: dict[str, dict[str, float]] = Field(default_factory=dict)
 
 
 class Gap(BaseModel):

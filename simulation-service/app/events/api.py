@@ -31,9 +31,11 @@ from app.events.objects import PropertySchema
 from app.events.policy import Policy
 from app.events.spread import (
     ContradictorySpreadModel,
+    InvalidMixing,
     LayerChange,
     declares_spread,
     incidence_effects,
+    mixing_of,
     run_spread,
     spread_model_from,
 )
@@ -157,8 +159,18 @@ def spread_route(req: SpreadRequest) -> SpreadResponse:
         )
 
     gaps: list[dict[str, Any]] = []
+    try:
+        mixing_of(list(ex.populations))
+    except InvalidMixing as exc:
+        raise HTTPException(422, f"The declared mixing between catchments cannot run: {exc}") from exc
     populations = [
-        {"id": p.id, "name": p.name, "size": p.size, "couples": p.couples}
+        {
+            "id": p.id,
+            "name": p.name,
+            "size": p.size,
+            "couples": p.couples,
+            "mixes_with": p.mixes_with,
+        }
         for p in ex.populations
     ]
     if req.probe:
@@ -181,17 +193,18 @@ def spread_route(req: SpreadRequest) -> SpreadResponse:
             f"Put units in a state for at least one catchment; the states declared "
             f"here are {', '.join(model.states)}.",
         )
-    # Stated rather than discovered while reading a map: every declared coupling
-    # is inside a catchment, so a wave seeded in one never reaches the next.
+    # Stated rather than discovered while reading a map. A catchment with no
+    # units in any state has nobody for a wave to reach — declared mixing
+    # included, since mixing carries exposure, not people — so it stays empty.
     quiet = [p.id for p in ex.populations if p.id not in seeded]
     if quiet:
         gaps.append(
             {
                 "code": "CATCHMENT_NOT_SEEDED",
                 "message": (
-                    f"{len(quiet)} catchment(s) start empty, and nothing crosses between "
-                    "them: every declared coupling is internal. They will stay empty for "
-                    "the whole run."
+                    f"{len(quiet)} catchment(s) start with nobody in any state, so "
+                    "nothing can happen to them, whatever they mix with. Put their "
+                    "head count in a state to let a wave reach them."
                 ),
                 "subjects": quiet[:20],
             }

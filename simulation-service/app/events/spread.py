@@ -19,11 +19,24 @@ So this file knows three shapes of transition and no vocabulary:
 Nothing below knows what "susceptible" or "school" means. It reads which state a
 transition leaves, which it enters, how fast, and what makes it go.
 
-What it does *not* model, and what the caller has to be told: mixing between
-catchments. Every coupling declared on a catchment is inside it, so an epidemic
-seeded in one territory never reaches the next on its own. That is a real gap
-rather than an approximation — seed each catchment, or declare the mixing when
-there is somewhere to declare it.
+Mixing between catchments is declared, per coupling, on the catchment that
+travels: `mixes_with = {"travail": {"0641": 0.18}}` says that 18 % of this
+catchment's work contact happens in 0641, among 0641's residents. A transition
+along `travail` then reads a blend of the two prevalences instead of its own
+alone. With nothing declared, every coupling stays inside its catchment and an
+epidemic seeded in one territory never reaches the next on its own — the
+behaviour before mixing existed, kept bit-exact.
+
+Per coupling rather than per catchment because that is how people move: a
+commute carries work contact across a boundary and leaves household contact at
+home. The origin–destination surveys that supply these numbers already split
+trips by purpose, so the declaration matches the data rather than averaging it.
+
+The approximation, stated so nobody mistakes it for more: a visitor meets the
+residents of the place they visit, at those residents' prevalence. Who else is
+visiting at the same time is not counted. That under-weights a hub where many
+catchments meet, and it is the price of a model whose arithmetic a reader can
+still check by hand.
 """
 
 from __future__ import annotations
@@ -48,6 +61,58 @@ class ContradictorySpreadModel(ValueError):
     and answers a question nobody asked, and the author never learns which of
     their two numbers was used.
     """
+
+
+class InvalidMixing(ValueError):
+    """A catchment declares mixing that cannot be run as written.
+
+    Refused rather than repaired. Renormalising shares that sum past one, or
+    dropping a destination nobody exported, each gives a run that finishes and
+    spreads at a rate nobody declared — and a wave that reaches the wrong
+    territory looks exactly like one that reached the right one.
+    """
+
+
+def mixing_of(populations: list) -> dict[str, dict[str, dict[str, float]]]:
+    """Validated mixing: catchment -> coupling -> other catchment -> share.
+
+    Zero shares are dropped, so an exported row of zeros reads as no mixing,
+    which is what it means.
+    """
+    known = {p.id for p in populations}
+    out: dict[str, dict[str, dict[str, float]]] = {}
+    for p in populations:
+        declared = getattr(p, "mixes_with", None) or {}
+        for layer, shares in declared.items():
+            row: dict[str, float] = {}
+            for other, share in (shares or {}).items():
+                if other == p.id:
+                    raise InvalidMixing(
+                        f"{p.id!r} mixes with itself along {layer!r}. Contact at home is "
+                        f"what is left after the shares elsewhere; declare only the others."
+                    )
+                if other not in known:
+                    raise InvalidMixing(
+                        f"{p.id!r} mixes along {layer!r} with {other!r}, which is not a "
+                        f"catchment in this twin. Dropping it would keep the share at home "
+                        f"and spread less than declared."
+                    )
+                if not isinstance(share, (int, float)) or isinstance(share, bool) or share < 0:
+                    raise InvalidMixing(
+                        f"{p.id!r} gives {other!r} a share of {share!r} along {layer!r}; a "
+                        f"share of contact is a number from 0 to 1."
+                    )
+                if share > 0:
+                    row[other] = float(share)
+            total = sum(row.values())
+            if total > 1 + 1e-9:
+                raise InvalidMixing(
+                    f"{p.id!r} spends {total:.0%} of its {layer!r} contact elsewhere. The "
+                    f"shares are of one whole and cannot pass 100 %."
+                )
+            if row:
+                out.setdefault(p.id, {})[layer] = row
+    return out
 
 
 @dataclass(frozen=True)
@@ -264,6 +329,11 @@ def run_spread(
     if not model.transitions or horizon <= 0:
         return out
 
+    # Validated before anything moves, so a bad declaration fails the run rather
+    # than half of it.
+    mixing = mixing_of(populations)
+    drivers = sorted({t.driven_by for t in model.transitions if t.driven_by})
+
     states = model.states
     # Everything starts where the caller put it. A state nobody seeded is empty,
     # which is the honest reading of silence.
@@ -282,6 +352,18 @@ def run_spread(
         for ch in changes:
             if ch.active(tick):
                 scaled[ch.layer] = scaled.get(ch.layer, 1.0) * ch.factor
+        # Every catchment's prevalence as it stood when the tick began. Read from
+        # this snapshot, not from `stock`, because catchments are updated one
+        # after another: reading live, a catchment late in the list would see its
+        # neighbours' new cases and one early in the list would not, and the
+        # wave would depend on the order the export happened to list them.
+        prevalence = {
+            pid: {
+                d: (stock[pid].get(d, 0.0) / size[pid] if size[pid] > 0 else 0.0)
+                for d in drivers
+            }
+            for pid in stock
+        }
         for p in populations:
             pid = p.id
             here = stock[pid]
@@ -294,7 +376,17 @@ def run_spread(
                     n = size[pid]
                     if n <= 0:
                         continue
-                    share = here.get(t.driven_by or "", 0.0) / n
+                    driver = t.driven_by or ""
+                    share = prevalence[pid].get(driver, 0.0)
+                    elsewhere = mixing.get(pid, {}).get(t.along or "") if t.along else None
+                    if elsewhere:
+                        # What is left stays home; each share meets the residents
+                        # of where it goes. A transition with no layer reaches
+                        # the whole catchment by definition and never travels.
+                        away = sum(elsewhere.values())
+                        share = (1.0 - away) * share + sum(
+                            m * prevalence[q].get(driver, 0.0) for q, m in elsewhere.items()
+                        )
                     # No layer named means the transition reaches the whole
                     # catchment: the rate is then the whole contact-and-
                     # transmission product, and there is nothing to look up.

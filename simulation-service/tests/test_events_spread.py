@@ -179,7 +179,7 @@ def test_two_transitions_drawing_on_one_state_are_scaled_together() -> None:
 
 
 def test_catchments_do_not_infect_each_other() -> None:
-    # Stated rather than hidden: every declared coupling is inside a catchment,
+    # With no mixing declared, every coupling is inside a catchment,
     # so a wave seeded in one territory stays there. A reader who expects it to
     # travel has to be told, and the caller has to seed each one.
     model = spread_model_from(
@@ -386,7 +386,7 @@ def test_the_endpoint_writes_the_run_as_an_event() -> None:
 
 
 def test_an_unseeded_catchment_is_named_rather_than_left_to_be_noticed() -> None:
-    # Every declared coupling is internal, so B stays empty for the whole run.
+    # B has nobody in any state, so it stays empty for the whole run.
     # A reader who expects a wave to travel has to be told here, not by squinting
     # at a map.
     from app.events.api import SpreadRequest, spread_route
@@ -668,3 +668,145 @@ def test_arrivals_are_split_by_size_not_evenly() -> None:
     # Sixty arrivals against sixty-six places. Split evenly, thirty went to the
     # six-bed site and twenty-four of them waited every single tick.
     assert unmet < 1.0, f"{unmet} patient-days unserved when there was room for everyone"
+
+
+# --- mixing between catchments ---------------------------------------------
+#
+# The vocabulary is a network of institutions on purpose: a compromise that
+# travels along shared vendors, not a virus along a commute, because nothing in
+# the mixing code may know which of the two it is carrying.
+
+
+class Mixed(Pop):
+    def __init__(self, pid: str, size: float, couples: dict | None = None, mixes: dict | None = None):
+        super().__init__(pid, size, couples)
+        self.mixes_with = mixes or {}
+
+
+def _vendor_model():
+    return spread_model_from(
+        [
+            tr("t", de="sain", vers="compromis", taux=0.4, pousse="compromis", voie="fournisseur"),
+            tr("l", de="sain", vers="compromis", taux=0.4, pousse="compromis", voie="local"),
+        ],
+        SCHEMA,
+    )
+
+
+def _quiet(steps, pid, state="compromis"):
+    return [s.states[state] for s in steps if s.population == pid]
+
+
+SEEDS = {"a": {"sain": 900, "compromis": 100}, "b": {"sain": 1000}}
+
+
+def test_declared_mixing_carries_the_wave_into_a_catchment_that_started_empty() -> None:
+    model = _vendor_model()
+    pops = [
+        Mixed("a", 1000, {"fournisseur": 1.0}),
+        Mixed("b", 1000, {"fournisseur": 1.0}, mixes={"fournisseur": {"a": 0.3}}),
+    ]
+    steps = run_spread(model, pops, SEEDS, horizon=5)
+    assert _quiet(steps, "b")[0] > 0
+    # The arithmetic, by hand, for the first step: b meets a's prevalence (0.1)
+    # for 30 % of its vendor contact and its own (0) for the rest.
+    assert _quiet(steps, "b")[0] == pytest.approx(0.4 * 1.0 * (0.3 * 0.1) * 1000, abs=1e-6)
+
+
+def test_no_mixing_declared_is_the_old_run_exactly() -> None:
+    model = _vendor_model()
+    plain = run_spread(
+        model, [Pop("a", 1000, {"fournisseur": 1.0}), Pop("b", 1000, {"fournisseur": 1.0})], SEEDS, horizon=10
+    )
+    empty = run_spread(
+        model,
+        [Mixed("a", 1000, {"fournisseur": 1.0}, {}), Mixed("b", 1000, {"fournisseur": 1.0}, {"fournisseur": {}})],
+        SEEDS,
+        horizon=10,
+    )
+    assert [s.states for s in plain] == [s.states for s in empty]
+
+
+def test_mixing_travels_only_the_coupling_it_was_declared_on() -> None:
+    # Shared vendors do not make two networks share a local area network.
+    model = _vendor_model()
+    pops = [
+        Mixed("a", 1000, {"local": 1.0}),
+        Mixed("b", 1000, {"local": 1.0}, mixes={"fournisseur": {"a": 0.5}}),
+    ]
+    assert all(v == 0 for v in _quiet(run_spread(model, pops, SEEDS, horizon=5), "b"))
+
+
+def test_the_listing_order_of_catchments_does_not_change_the_run() -> None:
+    # Updated one after another, a catchment late in the list would otherwise
+    # read neighbours who had already moved this step.
+    model = _vendor_model()
+
+    def pops():
+        return [
+            Mixed("a", 1000, {"fournisseur": 1.0}, mixes={"fournisseur": {"b": 0.2}}),
+            Mixed("b", 1000, {"fournisseur": 1.0}, mixes={"fournisseur": {"a": 0.3}}),
+        ]
+
+    forward = run_spread(model, pops(), SEEDS, horizon=8)
+    backward = run_spread(model, list(reversed(pops())), SEEDS, horizon=8)
+    key = lambda s: (s.tick, s.population)
+    assert [s.states for s in sorted(forward, key=key)] == [s.states for s in sorted(backward, key=key)]
+
+
+def test_closing_the_coupling_also_closes_the_crossing() -> None:
+    # The measure on the layer is the measure on the commute: nothing separate
+    # to close, and nothing that could be forgotten.
+    from app.events.spread import LayerChange
+
+    model = _vendor_model()
+    pops = [
+        Mixed("a", 1000, {"fournisseur": 1.0}),
+        Mixed("b", 1000, {"fournisseur": 1.0}, mixes={"fournisseur": {"a": 0.3}}),
+    ]
+    steps = run_spread(model, pops, SEEDS, horizon=5, changes=[LayerChange(layer="fournisseur", factor=0.0)])
+    assert all(v == 0 for v in _quiet(steps, "b"))
+
+
+@pytest.mark.parametrize(
+    "mixes, says",
+    [
+        ({"fournisseur": {"b": 0.2}}, "itself"),
+        ({"fournisseur": {"z": 0.2}}, "not a catchment"),
+        ({"fournisseur": {"a": -0.1}}, "0 to 1"),
+        ({"fournisseur": {"a": True}}, "0 to 1"),
+        ({"fournisseur": {"a": 0.7, "c": 0.6}}, "100 %"),
+    ],
+)
+def test_mixing_that_cannot_run_as_written_is_refused(mixes, says) -> None:
+    from app.events.spread import InvalidMixing
+
+    pops = [Mixed("a", 1000), Mixed("b", 1000, mixes=mixes), Mixed("c", 1000)]
+    with pytest.raises(InvalidMixing, match=says):
+        run_spread(_vendor_model(), pops, SEEDS, horizon=1)
+
+
+def test_the_endpoint_carries_a_wave_across_declared_mixing() -> None:
+    # B is filled but carries nothing; only the mixing can bring it the wave.
+    from app.events.api import SpreadRequest, spread_route
+
+    body = _request(seeds={"pop:a": {"sain": 9_900, "malade": 100}, "pop:b": {"sain": 8_000}})
+    body["system"]["populations"][1]["mixes_with"] = {"ecole": {"pop:a": 0.25}}
+    out = spread_route(SpreadRequest.model_validate(body))
+    assert "CATCHMENT_NOT_SEEDED" not in [g["code"] for g in out.gaps]
+    reached = [s for s in out.states if s["population"] == "pop:b"]
+    assert reached[-1]["states"]["malade"] > 0
+    assert out.populations[1]["mixes_with"] == {"ecole": {"pop:a": 0.25}}
+
+
+def test_the_endpoint_refuses_mixing_it_cannot_run() -> None:
+    from fastapi import HTTPException
+
+    from app.events.api import SpreadRequest, spread_route
+
+    body = _request()
+    body["system"]["populations"][1]["mixes_with"] = {"ecole": {"pop:nowhere": 0.25}}
+    with pytest.raises(HTTPException) as caught:
+        spread_route(SpreadRequest.model_validate(body))
+    assert caught.value.status_code == 422
+    assert "pop:nowhere" in str(caught.value.detail)
