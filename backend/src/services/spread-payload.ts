@@ -18,13 +18,21 @@ export interface SpreadChange {
   factor: number;
   fromStep: number;
   toStep: number | null;
+  /** Catchments whose residents the measure covers. Absent means all of them. */
+  populations?: string[];
 }
 
 export interface SpreadPayload {
   system: unknown;
   seeds: Record<string, Record<string, number>>;
   horizon: number;
-  changes: { layer: string; factor: number; from_step: number; to_step: number | null }[];
+  changes: {
+    layer: string;
+    factor: number;
+    from_step: number;
+    to_step: number | null;
+    populations?: string[];
+  }[];
   probe: boolean;
 }
 
@@ -49,6 +57,10 @@ export function spreadPayload(
       factor: c.factor,
       from_step: c.fromStep,
       to_step: c.toStep,
+      // Only when scoped. Sent as an empty list it would scope the measure to
+      // no catchment at all, and a measure that covers nobody looks like a
+      // measure that did nothing.
+      ...(c.populations && c.populations.length > 0 ? { populations: c.populations } : {}),
     })),
     probe: input.probe ?? false,
   };

@@ -66,4 +66,21 @@ describe("what the API sends the spreading engine", () => {
     // `states`. One vocabulary across the round trip.
     assert.deepEqual(payload.seeds, { "pop:a": { malade: 5 } });
   });
+
+  it("sends a scope only when there is one, under the engine's own name", () => {
+    // The engine reads `populations` on LayerChange. An unscoped measure keeps
+    // its old shape exactly, so nothing that ran before changes on the wire.
+    const change = ENGINE("spread.py").split("class LayerChange")[1]!.split("@dataclass")[0]!;
+    assert.ok(change.includes("populations"), "LayerChange no longer has populations");
+    const [scoped, open] = spreadPayload(null, {
+      seeds: {},
+      horizon: 10,
+      changes: [
+        { layer: "ecole", factor: 0, fromStep: 1, toStep: 5, populations: ["pop:a"] },
+        { layer: "ecole", factor: 0, fromStep: 1, toStep: 5, populations: [] },
+      ],
+    }).changes;
+    assert.deepEqual(scoped!.populations, ["pop:a"]);
+    assert.ok(!("populations" in open!), "an empty scope must not be sent as one");
+  });
 });

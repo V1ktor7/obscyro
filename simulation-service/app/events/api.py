@@ -236,6 +236,18 @@ def spread_route(req: SpreadRequest) -> SpreadResponse:
             }
         )
 
+    # A measure scoped to a catchment the twin does not have would reach nobody
+    # and read as a measure that did nothing. Refused, like an effect aimed at
+    # an absent population.
+    known_pops = {p.id for p in ex.populations}
+    stray = sorted({q for c in req.changes for q in (c.populations or ()) if q not in known_pops})
+    if stray:
+        raise HTTPException(
+            422,
+            f"A measure names catchment(s) the twin does not have: {', '.join(stray[:10])}. "
+            "Scope it to catchments from this export, or leave the scope out to cover all.",
+        )
+
     unknown = sorted({c.layer for c in req.changes} - set(model.couplings))
     if unknown:
         gaps.append(

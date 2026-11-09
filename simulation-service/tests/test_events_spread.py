@@ -810,3 +810,62 @@ def test_the_endpoint_refuses_mixing_it_cannot_run() -> None:
         spread_route(SpreadRequest.model_validate(body))
     assert caught.value.status_code == 422
     assert "pop:nowhere" in str(caught.value.detail)
+
+
+# --- a measure scoped to some catchments -----------------------------------
+
+
+def _two_seeded():
+    return [Pop("a", 1000, {"ecole": 1.0}), Pop("b", 1000, {"ecole": 1.0})], {
+        "a": {"sain": 900, "malade": 100},
+        "b": {"sain": 900, "malade": 100},
+    }
+
+
+def test_a_scoped_measure_slows_only_the_catchments_it_names() -> None:
+    from app.events.spread import LayerChange
+
+    pops, seeds = _two_seeded()
+    plain = run_spread(_sir(), pops, seeds, horizon=6)
+    scoped = run_spread(
+        _sir(), pops, seeds, horizon=6,
+        changes=[LayerChange(layer="ecole", factor=0.0, populations=("a",))],
+    )
+    sick = lambda steps, pid: [s.states["malade"] for s in steps if s.population == pid]
+    assert sick(scoped, "b") == sick(plain, "b")
+    assert sick(scoped, "a")[-1] < sick(plain, "a")[-1]
+
+
+def test_no_scope_still_means_every_catchment() -> None:
+    from app.events.spread import LayerChange
+
+    pops, seeds = _two_seeded()
+    everywhere = run_spread(_sir(), pops, seeds, horizon=6, changes=[LayerChange(layer="ecole", factor=0.0)])
+    named = run_spread(
+        _sir(), pops, seeds, horizon=6,
+        changes=[LayerChange(layer="ecole", factor=0.0, populations=("a", "b"))],
+    )
+    assert [s.states for s in everywhere] == [s.states for s in named]
+
+
+def test_the_endpoint_refuses_a_measure_scoped_to_an_absent_catchment() -> None:
+    from fastapi import HTTPException
+
+    from app.events.api import SpreadRequest, spread_route
+
+    body = _request(changes=[{"layer": "ecole", "factor": 0.0, "populations": ["pop:nowhere"]}])
+    with pytest.raises(HTTPException) as caught:
+        spread_route(SpreadRequest.model_validate(body))
+    assert caught.value.status_code == 422
+    assert "pop:nowhere" in str(caught.value.detail)
+
+
+def test_the_endpoint_accepts_a_scope_it_knows() -> None:
+    from app.events.api import SpreadRequest, spread_route
+
+    body = _request(
+        seeds={"pop:a": {"sain": 9_900, "malade": 100}, "pop:b": {"sain": 7_900, "malade": 100}},
+        changes=[{"layer": "ecole", "factor": 0.0, "populations": ["pop:b"]}],
+    )
+    out = spread_route(SpreadRequest.model_validate(body))
+    assert out.event["effects"]

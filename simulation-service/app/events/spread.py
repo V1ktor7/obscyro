@@ -281,11 +281,23 @@ class LayerChange:
     from_step: int = 0
     #: None runs to the end. A window that closes puts the coupling back.
     to_step: int | None = None
+    #: The catchments whose residents it applies to. None means every one.
+    #:
+    #: A measure is rarely island-wide: schools close in one district, a
+    #: curfew covers one region. Scoped by the residents' catchment rather than
+    #: by where contact happens, so a resident of an open catchment who
+    #: commutes into a closed one keeps that contact. That is the one-line
+    #: approximation; the alternative needs contact by place, which the model
+    #: does not hold.
+    populations: tuple[str, ...] | None = None
 
     def active(self, tick: int) -> bool:
         if tick < self.from_step:
             return False
         return self.to_step is None or tick <= self.to_step
+
+    def applies_to(self, population: str) -> bool:
+        return self.populations is None or population in self.populations
 
 
 @dataclass
@@ -348,10 +360,7 @@ def run_spread(
         # Recomputed per tick rather than per transition: the same layer is read
         # by every transition that travels it, and scaling it twelve times would
         # be twelve chances to drift.
-        scaled: dict[str, float] = {}
-        for ch in changes:
-            if ch.active(tick):
-                scaled[ch.layer] = scaled.get(ch.layer, 1.0) * ch.factor
+        live = [ch for ch in changes if ch.active(tick)]
         # Every catchment's prevalence as it stood when the tick began. Read from
         # this snapshot, not from `stock`, because catchments are updated one
         # after another: reading live, a catchment late in the list would see its
@@ -367,6 +376,11 @@ def run_spread(
         for p in populations:
             pid = p.id
             here = stock[pid]
+            # Per catchment, because a measure may name only some of them.
+            scaled: dict[str, float] = {}
+            for ch in live:
+                if ch.applies_to(pid):
+                    scaled[ch.layer] = scaled.get(ch.layer, 1.0) * ch.factor
             flows: list[tuple[Transition, float]] = []
             for t in model.transitions:
                 available = here.get(t.leaves, 0.0)

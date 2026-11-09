@@ -643,6 +643,11 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
                 fromStep: z.number().int().min(0).default(0),
                 /** Null runs to the end. A window that closes puts it back. */
                 toStep: z.number().int().min(0).nullable().default(null),
+                /**
+                 * The catchments, by export population id, whose residents the
+                 * measure covers. Left out, it covers every catchment.
+                 */
+                populations: z.array(z.string().min(1).max(200)).min(1).max(5000).optional(),
               }),
             )
             .default([]),

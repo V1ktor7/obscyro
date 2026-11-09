@@ -2071,6 +2071,8 @@ export async function runSpread(
       factor: number;
       fromStep?: number;
       toStep?: number | null;
+      /** Export population ids whose residents it covers. Left out: every catchment. */
+      populations?: string[];
     }[];
     /** Keep the run as a composed event under this name. */
     saveAs?: string;
