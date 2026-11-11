@@ -132,6 +132,7 @@ describe("what the twin declares", () => {
   it("keeps only located facilities and adds up capacity per activity", () => {
     expect(ctx.facilities.map((f) => f.id)).toEqual(["f:west"]);
     expect(ctx.facilities[0]!.capacity).toEqual({ civiere: 16, lit: 4 });
+    expect(ctx.facilities[0]!.inUse).toEqual({ civiere: 3, lit: 1 });
   });
 
   it("offers a preset only when its layer exists", () => {

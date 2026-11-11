@@ -1,10 +1,10 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { cn } from "@/lib/cn";
-import { fetchSimExport, listGeoShapes } from "@/lib/platform-api";
+import { fetchSimExport, fetchTwinTree, listGeoShapes, listTwinMetrics } from "@/lib/platform-api";
 
 import { useStudio } from "../../StudioShell";
 import {
@@ -16,6 +16,7 @@ import {
   updateOverlayScenario,
   type OverlayScenario,
 } from "../../scenarios-api";
+import AddDataPanel from "./AddDataPanel";
 import { engineMessage, runScenario, type RunOutput } from "./engine";
 import {
   buildHexGrid,
@@ -40,6 +41,17 @@ import {
   type StampBody,
   type TwinContext,
 } from "./stamps";
+import { ROLES } from "./add-data";
+import {
+  cellValues,
+  fmtNumber,
+  looksLikeOccupancy,
+  nearestValues,
+  quantileRamp,
+  readingsOf,
+  type Reading,
+} from "./layers";
+import { listTwinLayers, type TwinLayer } from "./layers-api";
 
 // ---------------------------------------------------------------------------
 // The Scenarios page: one map, three verbs.
@@ -51,7 +63,17 @@ import {
 // ---------------------------------------------------------------------------
 
 type Tool = "inspect" | "seed" | "heat" | "measure" | "capacity";
-type LensKey = "occupancy" | "sick" | "residents";
+/** The three built in, plus `layer:<type>\u0000<key>` for added data and `reading:<key>` for live measures. */
+type LensKey = "occupancy" | "sick" | "residents" | `layer:${string}` | `reading:${string}`;
+
+interface ActiveLayer {
+  name: string;
+  unit: string | null;
+  values: (number | null)[];
+  colourOf: (v: number | null) => string;
+  legend: { colour: string; label: string }[];
+  format: (v: number) => string;
+}
 
 const TOOLS: { key: Tool; label: string; lane: Lane | "Look"; hint: string }[] = [
   { key: "inspect", label: "Inspect", lane: "Look", hint: "Tap a cell to read it." },
@@ -145,8 +167,19 @@ export default function HexTwinView() {
   const [stamps, setStamps] = useState<Stamp[]>([]);
   const [renaming, setRenaming] = useState<string | null>(null);
 
+  const [layers, setLayers] = useState<TwinLayer[]>([]);
+  const [layersError, setLayersError] = useState<string | null>(null);
+  const [readings, setReadings] = useState<Reading[]>([]);
+  const [adding, setAdding] = useState(false);
+
   const [tool, setTool] = useState<Tool>("inspect");
-  const [lens, setLens] = useState<LensKey>("occupancy");
+  const [lens, setLensState] = useState<LensKey>("occupancy");
+  // Until someone picks a layer, the page may pick a better one for them.
+  const [lensTouched, setLensTouched] = useState(false);
+  const setLens = (k: LensKey) => {
+    setLensTouched(true);
+    setLensState(k);
+  };
   const [day, setDay] = useState(0);
   const [horizon, setHorizon] = useState(60);
   const [activity, setActivity] = useState<string>("");
@@ -199,6 +232,30 @@ export default function HexTwinView() {
     }
   }, [env]);
 
+  // Added data and live readings are extra layers: failing to read them never
+  // stops the map, it is said where the layers are listed.
+  const loadLayers = useCallback(async () => {
+    if (!env) return;
+    try {
+      const { layers: list } = await listTwinLayers(env);
+      setLayers(list);
+      setLayersError(null);
+    } catch (err) {
+      setLayers([]);
+      setLayersError(engineMessage(err));
+    }
+  }, [env]);
+
+  const loadReadings = useCallback(async () => {
+    if (!env) return;
+    try {
+      const [{ metrics }, tree] = await Promise.all([listTwinMetrics(env), fetchTwinTree(env)]);
+      setReadings(readingsOf(metrics, tree.nodes));
+    } catch {
+      setReadings([]);
+    }
+  }, [env]);
+
   const loadScenarios = useCallback(async () => {
     if (!env) return;
     const { scenarios: list } = await listOverlayScenarios(env);
@@ -222,9 +279,13 @@ export default function HexTwinView() {
 
   useEffect(() => {
     setRun(null);
+    setLensTouched(false);
+    setLensState("occupancy");
     void loadTwin();
+    void loadLayers();
+    void loadReadings();
     void loadScenarios().catch((err) => setMessage(engineMessage(err)));
-  }, [loadTwin, loadScenarios]);
+  }, [loadTwin, loadLayers, loadReadings, loadScenarios]);
 
   useEffect(() => {
     setRun(null);
@@ -258,14 +319,25 @@ export default function HexTwinView() {
     return grid.hexes.map((h) => siteFor(grid, ctx, h.index, activity));
   }, [grid, ctx, activity]);
 
-  const liveOccupancy = useMemo(
-    () =>
-      (ctx?.facilities ?? []).map((f) => {
-        const cap = f.capacity[activity] ?? 0;
-        return cap > 0 && activity in f.census ? (f.census[activity] ?? 0) / cap : Number.NaN;
-      }),
-    [ctx, activity],
-  );
+  // Today's occupancy: patients counted against capacity when the twin counts
+  // patients; otherwise units marked in use, when the twin marks any anywhere.
+  // Neither is a reading of zero — a grey cell, not a green one.
+  const { liveOccupancy, occupancySource } = useMemo(() => {
+    const fs = ctx?.facilities ?? [];
+    const census = fs.some((f) => activity in f.census);
+    const marked = !census && fs.some((f) => (f.inUse[activity] ?? 0) > 0);
+    const values = fs.map((f) => {
+      const cap = f.capacity[activity] ?? 0;
+      if (cap <= 0) return Number.NaN;
+      if (census) return activity in f.census ? (f.census[activity] ?? 0) / cap : Number.NaN;
+      if (marked) return (f.inUse[activity] ?? 0) / cap;
+      return Number.NaN;
+    });
+    return {
+      liveOccupancy: values,
+      occupancySource: census ? "Today, from the census" : marked ? "Today, from units marked in use" : "No reading today",
+    };
+  }, [ctx, activity]);
 
   const occupancyAt = useCallback(
     (site: number) => {
@@ -275,6 +347,54 @@ export default function HexTwinView() {
     },
     [run, stale, d, liveOccupancy],
   );
+
+  const active = useMemo((): ActiveLayer | null => {
+    if (!grid || !ctx) return null;
+    if (lens.startsWith("layer:")) {
+      const l = layers.find((x) => `layer:${x.type}\u0000${x.key}` === lens);
+      if (!l) return null;
+      const { values } = cellValues(grid, { points: l.points, catchments: l.catchments, aggregate: l.layer.aggregate });
+      const r = quantileRamp(values, l.unit);
+      const u = l.unit ? ` ${l.unit}` : "";
+      return { name: l.label, unit: l.unit, values, colourOf: r.colourOf, legend: r.legend, format: (v) => `${fmtNumber(v)}${u}` };
+    }
+    if (lens.startsWith("reading:")) {
+      const m = readings.find((x) => `reading:${x.key}` === lens);
+      if (!m) return null;
+      const sites = ctx.facilities.filter((f) => f.id in m.values).map((f) => ({ lat: f.lat, lon: f.lon, value: m.values[f.id]! }));
+      const values = nearestValues(grid, sites);
+      const unit = m.unit === "percent" ? "%" : null;
+      const format = (v: number) => (m.unit === "percent" ? `${Math.round(v)} %` : fmtNumber(v));
+      if (looksLikeOccupancy(m)) {
+        return {
+          name: m.label,
+          unit,
+          values,
+          colourOf: (v) => (v === null ? NO_DATA : ramp(v / 100, OCC_STEPS)),
+          legend: OCC_STEPS.map(([, colour, label]) => ({ colour, label })),
+          format,
+        };
+      }
+      const r = quantileRamp(values, unit);
+      return { name: m.label, unit, values, colourOf: r.colourOf, legend: r.legend, format };
+    }
+    return null;
+  }, [grid, ctx, lens, layers, readings]);
+
+  // Census-based occupancy reads nothing in a twin that counts no patients and
+  // marks no unit in use. Rather than open on a grey map, open on the twin's
+  // own occupancy reading when it has one.
+  useEffect(() => {
+    if (lensTouched || run || lens !== "occupancy" || liveOccupancy.some(Number.isFinite)) return;
+    const pick = readings.find(looksLikeOccupancy) ?? readings.find((m) => m.unit === "percent");
+    if (pick) setLensState(`reading:${pick.key}`);
+  }, [lensTouched, run, lens, liveOccupancy, readings]);
+
+  async function layerAdded(id: string) {
+    setAdding(false);
+    await loadLayers();
+    setLens(`layer:${id}`);
+  }
 
   // --- writing stamps -----------------------------------------------------
 
@@ -472,11 +592,17 @@ export default function HexTwinView() {
 
   const fillFor = (i: number): string => {
     const h = grid.hexes[i]!;
+    if (active) return active.colourOf(active.values[i] ?? null);
+    if (lens.startsWith("layer:") || lens.startsWith("reading:")) return NO_DATA;
     if (lens === "residents") return ramp(h.residents / hexArea, DENSITY_STEPS);
     if (lens === "sick") return sick && h.population ? ramp(sick[h.population]?.[d] ?? Number.NaN, SICK_STEPS) : NO_DATA;
     return ramp(occupancyAt(siteOfCell[i] ?? -1), OCC_STEPS);
   };
-  const legend = lens === "residents" ? DENSITY_STEPS : lens === "sick" ? SICK_STEPS : OCC_STEPS;
+  const legend = active
+    ? active.legend
+    : (lens === "residents" ? DENSITY_STEPS : lens === "sick" ? SICK_STEPS : OCC_STEPS).map(([, colour, label]) => ({ colour, label }));
+  const emptyColour = active ? active.colourOf(null) : NO_DATA;
+  const occupancyEmpty = !(run && !stale) && !liveOccupancy.some(Number.isFinite);
   const shownSites = ctx.facilities
     .map((f, i) => ({ f, i, p: grid.project(f.lat, f.lon) }))
     .filter(({ f }) => (f.capacity[activity] ?? 0) > 0);
@@ -582,7 +708,14 @@ export default function HexTwinView() {
           </>
         )}
         <span className="rounded bg-scenario-soft px-2 py-0.5 text-[11px] font-semibold text-scenario">Scenario · not reality</span>
-        <span className="ml-auto flex items-center gap-2">
+        <span className="ml-auto flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="flex items-center gap-1 rounded border border-line bg-white px-2.5 py-1.5 text-[12px] font-semibold text-ink hover:bg-canvas-raised"
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden="true" /> Add data
+          </button>
           <label htmlFor="horizon" className={LABEL}>Days</label>
           <select id="horizon" value={horizon} onChange={(e) => setHorizon(Number(e.target.value))} className={FIELD}>
             {[30, 60, 90].map((n) => (
@@ -619,7 +752,15 @@ export default function HexTwinView() {
             <span className={LABEL}>Layers</span>
             {(
               [
-                ["occupancy", `${activity || "Capacity"} occupancy`, run && !stale ? "Projected by the last run" : "Today, from the census"],
+                [
+                  "occupancy",
+                  `${activity || "Capacity"} occupancy`,
+                  run && !stale
+                    ? "Projected by the last run"
+                    : occupancyEmpty
+                      ? `No reading today: the twin counts no patients or ${activity || "units"} in use. Run, or use a live reading below.`
+                      : occupancySource,
+                ],
                 ["sick", "Sick per 1,000", run && !stale ? "Projected by the last run" : "Run to see it"],
                 ["residents", "Residents per km²", grid.placement === "polygons" ? "Catchment sizes over their outlines" : "Catchment sizes, spread over their nearest cells"],
               ] as [LensKey, string, string][]
@@ -638,18 +779,80 @@ export default function HexTwinView() {
                 <span className="text-[11px] text-ink-muted">{src}</span>
               </button>
             ))}
+
+            {readings.length ? (
+              <>
+                <span className={cn(LABEL, "mt-1.5")}>Live readings</span>
+                {readings.map((m) => {
+                  const key = `reading:${m.key}` as LensKey;
+                  const n = ctx.facilities.filter((f) => f.id in m.values).length;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      aria-pressed={lens === key}
+                      onClick={() => setLens(key)}
+                      className={cn(
+                        "flex flex-col gap-0.5 rounded-md border px-2.5 py-2 text-left",
+                        lens === key ? "border-brand bg-brand-soft" : "border-line bg-white hover:bg-canvas-raised",
+                      )}
+                    >
+                      <span className="text-[12.5px] font-semibold text-ink">{m.label}</span>
+                      <span className="text-[11px] text-ink-muted">
+                        From the twin’s sources · {n} site{n === 1 ? "" : "s"} on the map, each cell reads its nearest
+                      </span>
+                    </button>
+                  );
+                })}
+              </>
+            ) : null}
+
+            {layers.length ? <span className={cn(LABEL, "mt-1.5")}>Added data</span> : null}
+            {layers.map((l) => {
+              const key = `layer:${l.type}\u0000${l.key}` as LensKey;
+              const role = ROLES.find((r) => r.key === l.layer.role)?.title ?? l.layer.role;
+              const places = l.points.length + l.catchments.length;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={lens === key}
+                  onClick={() => setLens(key)}
+                  className={cn(
+                    "flex flex-col gap-0.5 rounded-md border px-2.5 py-2 text-left",
+                    lens === key ? "border-[#0f6b6b] bg-[#e6f4f4]" : "border-line bg-white hover:bg-canvas-raised",
+                  )}
+                >
+                  <span className="text-[12.5px] font-semibold text-ink">{l.label}</span>
+                  <span className="text-[11px] text-ink-muted">
+                    {role} · {places.toLocaleString("en-CA")} place{places === 1 ? "" : "s"}
+                    {l.layer.source?.file ? ` · ${l.layer.source.file}` : ""}
+                    {l.unplaced ? ` · ${l.unplaced.toLocaleString("en-CA")} with no position` : ""}
+                  </span>
+                </button>
+              );
+            })}
+            {layersError ? <span className="text-[11px] text-danger-ink">Added layers could not be read: {layersError}</span> : null}
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              className="mt-1 flex items-center justify-center gap-1 rounded-md border border-dashed border-[#8fa8d6] bg-[#f4f8fd] px-2.5 py-2 text-[12.5px] font-semibold text-brand-deep hover:bg-brand-soft"
+            >
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" /> Add data as a layer
+            </button>
           </div>
           <div className="flex flex-col gap-1 rounded-lg border border-line bg-white p-3">
             <span className={LABEL}>Legend</span>
-            {legend.map(([, colour, label]) => (
+            {active ? <span className="text-[12px] font-semibold text-ink">{active.name}</span> : null}
+            {legend.map(({ colour, label }) => (
               <span key={label} className="flex items-center gap-2 text-[11.5px] text-ink-body">
                 <span className="h-3.5 w-3.5 rounded-sm border border-line" style={{ background: colour }} />
                 {label}
               </span>
             ))}
             <span className="flex items-center gap-2 text-[11.5px] text-ink-body">
-              <span className="h-3.5 w-3.5 rounded-sm border border-line" style={{ background: NO_DATA }} />
-              no reading
+              <span className="h-3.5 w-3.5 rounded-sm border border-line" style={{ background: emptyColour }} />
+              {lens.startsWith("layer:") ? "nothing from this file here" : "no reading"}
             </span>
             <span className="mt-1 text-[11px] text-ink-faint">
               {grid.hexes.length} cells of {grid.radiusKm.toFixed(1)} km ·{" "}
@@ -786,8 +989,14 @@ export default function HexTwinView() {
               {shownSites.map(({ f, i, p }) => {
                 const occ = occupancyAt(i);
                 const boosted = stamps.some((s) => s.kind === "capacity" && s.facility === f.id && d >= s.start);
-                if (!labelSites)
-                  return <circle key={f.id} cx={px(p.x)} cy={py(p.y)} r={3} fill="#1c2127" pointerEvents="none" />;
+                // Occupancy boxes belong to the occupancy lens; over another
+                // layer they would read as that layer's numbers.
+                if (!labelSites || active)
+                  return (
+                    <circle key={f.id} cx={px(p.x)} cy={py(p.y)} r={3} fill="#1c2127" stroke="#ffffff" strokeWidth={1} pointerEvents="none">
+                      <title>{f.name}</title>
+                    </circle>
+                  );
                 const dark = Number.isFinite(occ) && occ >= 1.5;
                 return (
                   <g key={f.id} pointerEvents="none">
@@ -824,6 +1033,14 @@ export default function HexTwinView() {
               <span>{ctx.facilities[inspectedSite]?.name ?? "no site"}</span>
               <span className="text-ink-muted">That site, day {d}</span>
               <span className="tabular-nums">{pct(occupancyAt(inspectedSite))}</span>
+              {active && cell !== null ? (
+                <>
+                  <span className="text-ink-muted">{active.name}</span>
+                  <span className="tabular-nums">
+                    {active.values[cell] !== null && active.values[cell] !== undefined ? active.format(active.values[cell]!) : "nothing here"}
+                  </span>
+                </>
+              ) : null}
             </div>
           ) : null}
         </section>
@@ -986,6 +1203,8 @@ export default function HexTwinView() {
           </div>
         </div>
       </section>
+
+      {adding ? <AddDataPanel env={env} onClose={() => setAdding(false)} onAdded={(id) => void layerAdded(id)} /> : null}
     </div>
   );
 }

@@ -104,6 +104,12 @@ export interface PropertyDefinition {
   bounds?: PropertyBounds | null;
   behaviour?: PropertyBehaviour;
   mechanic?: Mechanic;
+  /** Added as a map layer. Kept on every save so the layer is not lost. */
+  layer?: {
+    role: "capacity" | "population" | "reading" | "exposure" | "outcome";
+    aggregate: "sum" | "mean" | "max" | "count";
+    source?: { file?: string; column?: string; filter?: string; datasetId?: string | null; rows?: number; loadedAt?: string };
+  };
 }
 
 /**

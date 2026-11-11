@@ -52,3 +52,18 @@ describe("a property declaration survives the wire", () => {
     assert.equal(parsed.observedAtZone, undefined);
   });
 });
+
+describe("a map layer survives the wire", () => {
+  it("keeps what it is and where it came from", () => {
+    const parsed = propertyDefWire.parse({
+      key: "layer_lits",
+      type: "number",
+      layer: { role: "capacity", aggregate: "sum", source: { file: "capacites.csv", rows: 88 } },
+    });
+    assert.deepEqual(parsed.layer, { role: "capacity", aggregate: "sum", source: { file: "capacites.csv", rows: 88 } });
+  });
+
+  it("refuses a way of combining nobody declared", () => {
+    assert.throws(() => propertyDefWire.parse({ key: "x", type: "number", layer: { role: "capacity", aggregate: "median" } }));
+  });
+});

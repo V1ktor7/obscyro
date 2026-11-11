@@ -55,6 +55,7 @@ import ontologyRoutes from "./routes/ontology.js";
 import sourceRoutes from "./routes/source.js";
 import twinRoutes from "./routes/twin.js";
 import twinSimRoutes from "./routes/twin-sim.js";
+import twinLayerRoutes from "./routes/twin-layers.js";
 import synonymsRoutes from "./routes/synonyms.js";
 import translateRoutes from "./routes/translate.js";
 
@@ -191,6 +192,7 @@ await app.register(disambiguateRoutes, { prefix: "/v1" });
 await app.register(extractRoutes, { prefix: "/v1" });
 await app.register(twinRoutes, { prefix: "/v1" });
 await app.register(twinSimRoutes, { prefix: "/v1" });
+await app.register(twinLayerRoutes, { prefix: "/v1" });
 await app.register(liveRoutes, { prefix: "/v1" });
 await app.register(dataQualityRoutes, { prefix: "/v1" });
 

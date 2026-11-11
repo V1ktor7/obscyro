@@ -22,6 +22,8 @@ import {
   type EnvironmentType,
 } from "../services/ontology.js";
 import {
+  LAYER_AGGREGATES,
+  LAYER_ROLES,
   MECHANICS,
   PROPERTY_BEHAVIOURS,
   PROPERTY_TYPES,
@@ -64,6 +66,25 @@ const propertyDefFields = {
   // and then quietly did not.
   observedAt: z.boolean().optional(),
   observedAtZone: z.string().trim().min(1).max(64).optional(),
+  // The map layer this property is, when it was added as one. Here for the
+  // reason the two above learned the hard way: a field missing from this
+  // schema is stripped on every save from the type editor.
+  layer: z
+    .object({
+      role: z.enum(LAYER_ROLES),
+      aggregate: z.enum(LAYER_AGGREGATES),
+      source: z
+        .object({
+          file: z.string().max(240).optional(),
+          column: z.string().max(240).optional(),
+          filter: z.string().max(500).optional(),
+          datasetId: z.string().uuid().nullable().optional(),
+          rows: z.number().int().min(0).optional(),
+          loadedAt: z.string().max(40).optional(),
+        })
+        .optional(),
+    })
+    .optional(),
 };
 
 const propertyDefOut = z.object(propertyDefFields);

@@ -28,6 +28,12 @@ export interface TwinFacility {
   capacity: Record<string, number>;
   /** What is in use now, per activity, as the export read it. */
   census: Record<string, number>;
+  /**
+   * Units marked in use, per activity: capacity less what is free. Zero both
+   * when everything is free and when the twin never marks status, so it is a
+   * reading only where some site somewhere has a unit in use.
+   */
+  inUse: Record<string, number>;
 }
 
 export interface TwinContext {
@@ -54,9 +60,14 @@ export function twinContext(ex: SimExport): TwinContext {
   for (const f of ex.facilities) {
     if (!f.location) continue;
     const capacity: Record<string, number> = {};
+    const inUse: Record<string, number> = {};
     for (const r of Object.values(f.resources)) {
+      const cap = Number(r.capacity) || 0;
+      const free = Number(r.quantity);
       for (const a of r.enables) {
-        capacity[a] = (capacity[a] ?? 0) + (Number(r.capacity) || 0);
+        capacity[a] = (capacity[a] ?? 0) + cap;
+        // A missing quantity is not "none free": it would read as a full site.
+        if (Number.isFinite(free)) inUse[a] = (inUse[a] ?? 0) + Math.max(0, cap - free);
         activities.add(a);
       }
     }
@@ -67,6 +78,7 @@ export function twinContext(ex: SimExport): TwinContext {
       lon: f.location[1],
       capacity,
       census: { ...f.census },
+      inUse,
     });
   }
 

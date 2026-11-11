@@ -195,6 +195,42 @@ export interface PropertyDef {
    * Without this the stamp is reported as unreadable rather than guessed at.
    */
   observedAtZone?: string;
+  /**
+   * This property is a map layer: added as data, read on the twin's hexes.
+   *
+   * Declared on the property rather than kept in a list beside the ontology,
+   * so the layer is wherever the number is. Deleting the property deletes the
+   * layer; renaming the type carries it along; nothing can point at a column
+   * that no longer exists.
+   */
+  layer?: LayerDecl;
+}
+
+export const LAYER_ROLES = ["capacity", "population", "reading", "exposure", "outcome"] as const;
+export type LayerRole = (typeof LAYER_ROLES)[number];
+
+/**
+ * How several values meeting on one place become one.
+ *
+ * Declared because it cannot be guessed. Beds add up; a temperature does not;
+ * a count of sites is neither. Choosing wrong is invisible on a map — every
+ * cell gets a plausible colour — so the person adding the data says which.
+ */
+export const LAYER_AGGREGATES = ["sum", "mean", "max", "count"] as const;
+export type LayerAggregate = (typeof LAYER_AGGREGATES)[number];
+
+export interface LayerDecl {
+  role: LayerRole;
+  aggregate: LayerAggregate;
+  /** Where the numbers came from, kept so the layer can say it. */
+  source?: {
+    file?: string;
+    column?: string;
+    filter?: string;
+    datasetId?: string | null;
+    rows?: number;
+    loadedAt?: string;
+  };
 }
 
 /**
