@@ -21,6 +21,8 @@ import type { Map as MapboxMap, Marker } from "mapbox-gl";
 
 import {
   Building2,
+  ChevronDown,
+  Earth,
   Eye,
   Globe2,
   HeartPulse,
@@ -35,6 +37,7 @@ import {
   RefreshCw,
   Satellite,
   Save,
+  Scan,
   Shapes,
   Spline,
   X,
@@ -71,6 +74,8 @@ import {
   type TwinNetworkSnapshot,
 } from "@/lib/platform-api";
 import { explainFreshness, formatFreshness, formatReadingAge } from "../twin-ui";
+import { OVERLAY_BAR } from "../map-overlay";
+import { GLOBE_ZOOM, MAPBOX_TOKEN, STYLE_SATELLITE, STYLE_STANDARD } from "../map-style";
 import { useStudio } from "../StudioShell";
 import TreeExplorer, { type TreeItem } from "../TreeExplorer";
 import { BAND_COLOUR, bandOf, type Frame } from "../events/replay-frames";
@@ -104,14 +109,7 @@ import {
   ringBounds,
 } from "./polygon-draw";
 
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
-
-// Obscyro's own Standard basemap: land and water desaturated to the app's
-// canvas so the flow arcs and site markers are the only saturated things on
-// screen. Edited in Mapbox Studio, not here — publishing a new version there
-// reaches this map without a redeploy. Owned by the same account as the token.
-const STYLE_STANDARD = "mapbox://styles/victormorency7/cmsddjrmc002c01s99df7adnp";
-const STYLE_SATELLITE = "mapbox://styles/mapbox/satellite-streets-v12";
+// The token and basemaps are shared with the Scenarios globe: ../map-style.
 const MONTREAL: [number, number] = [-73.5673, 45.5017];
 
 /**
@@ -311,7 +309,8 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // The map is why this screen exists; on a laptop the panel costs it a fifth
   // of its width, so it folds away.
-  const [railOpen, setRailOpen] = useState(true);
+  // Folded on arrival, like every panel over a map: the first thing seen is the map.
+  const [railOpen, setRailOpen] = useState(false);
   // Ids the map is *not* drawing. Empty means everything, which is the state
   // you start in — hiding one site should be one click, not a list you first
   // have to build.
@@ -748,8 +747,8 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         container: containerRef.current,
         style: STYLE_STANDARD,
         center: MONTREAL,
-        zoom: 9,
-        pitch: 45,
+        zoom: GLOBE_ZOOM,
+        pitch: 0,
         attributionControl: true,
       });
       mapRef.current = map;
@@ -1235,11 +1234,21 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
           .addTo(map);
         markersRef.current.push(marker);
       }
+      // The globe turns to face the network and stays at that height. It
+      // used to dive onto the sites on arrival; the reader now goes down when
+      // they choose to, with "Fit the network" or the wheel.
       if (!fittedRef.current && network.sites.length > 0) {
         fittedRef.current = true;
-        const bounds = new mapboxgl.LngLatBounds();
-        network.sites.forEach((s) => bounds.extend(positions.get(s.id)!));
-        map.fitBounds(bounds, { padding: 90, maxZoom: 11 });
+        if (map.getZoom() <= 3) {
+          const pts = network.sites.map((s) => positions.get(s.id)!);
+          map.easeTo({
+            center: [
+              pts.reduce((a, p) => a + p[0], 0) / pts.length,
+              pts.reduce((a, p) => a + p[1], 0) / pts.length,
+            ],
+            duration: 800,
+          });
+        }
       }
     })();
     return () => {
@@ -1325,6 +1334,30 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     const next = projection === "globe" ? "mercator" : "globe";
     setProjection(next);
     mapRef.current?.setProjection(next);
+  }
+
+  function wholeGlobe() {
+    const map = mapRef.current;
+    if (!map) return;
+    map.flyTo({ center: map.getCenter(), zoom: GLOBE_ZOOM, pitch: 0, bearing: 0, duration: 1400 });
+  }
+
+  function fitNetwork() {
+    const map = mapRef.current;
+    const pts = (network?.sites ?? [])
+      .filter((s) => !isSiteHidden(s, hiddenIds))
+      .map((s) => positions.get(s.id))
+      .filter((p): p is [number, number] => !!p);
+    if (!map || pts.length === 0) return;
+    const lons = pts.map((p) => p[0]);
+    const lats = pts.map((p) => p[1]);
+    map.fitBounds(
+      [
+        [Math.min(...lons), Math.min(...lats)],
+        [Math.max(...lons), Math.max(...lats)],
+      ],
+      { padding: 120, maxZoom: 11, duration: 1400 },
+    );
   }
 
   function toggleStyle() {
@@ -1452,9 +1485,33 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#f6f7f9]">
-      {/* Top bar */}
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#d3d8de] bg-white px-4 py-2">
+    <div className="relative min-h-0 flex-1 overflow-hidden bg-[#f6f7f9]">
+      {/* The map is the page. Everything else floats on it: the layer above
+          lets clicks through to the map, each panel takes them back. */}
+      <div className="absolute inset-0">
+        {!MAPBOX_TOKEN ? (
+            <div className="flex h-full items-center justify-center p-6">
+              <div className="max-w-md rounded-md border border-[#d3d8de] bg-white p-5 text-sm text-[#404854]">
+                <p className="mb-2 font-semibold text-[#1c2127]">Mapbox token missing</p>
+                <p className="mb-2 text-xs leading-relaxed">
+                  Add <code className="rounded bg-[#f6f7f9] px-1">NEXT_PUBLIC_MAPBOX_TOKEN</code>{" "}
+                  to <code className="rounded bg-[#f6f7f9] px-1">frontend/.env.local</code> and to
+                  the Vercel project environment variables, then restart / redeploy.
+                </p>
+                <p className="text-xs text-[#8f99a8]">
+                  Create a public token at mapbox.com → Access tokens (default public scopes).
+                </p>
+              </div>
+            </div>
+        ) : (
+          // Sized directly: mapbox-gl.css forces position:relative on this
+          // element, which would defeat absolute/inset positioning.
+          <div ref={containerRef} className="h-full w-full" />
+        )}
+      </div>
+
+      <div className="pointer-events-none absolute inset-0 flex flex-col gap-2 p-3">
+        <div className={cn(OVERLAY_BAR, "flex shrink-0 flex-wrap items-center gap-2 px-3 py-2")}>
         <span className="flex h-6 w-6 items-center justify-center rounded bg-[#e7f2fd] text-[#2d72d2]">
           <Globe2 className="h-3.5 w-3.5" />
         </span>
@@ -1605,10 +1662,10 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
             </span>
           ) : null}
         </button>
-      </div>
+        </div>
 
-      {error ? (
-        <div className="flex items-center gap-2 border-b border-rose-200 bg-rose-50 px-4 py-1.5 text-[11px] text-rose-700">
+        {error ? (
+        <div className="pointer-events-auto flex shrink-0 items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-[11px] text-rose-700 shadow-sm">
           <span className="min-w-0 flex-1 truncate">{error}</span>
           <button type="button" onClick={() => setError(null)} aria-label="Dismiss error">
             <X className="h-3 w-3" />
@@ -1616,28 +1673,25 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         </div>
       ) : null}
 
-      <div className="flex min-h-[440px] flex-1">
-        {/* Collapsed: a rail wide enough for one button. The map is the reason
-            this screen exists, and on a laptop the panel costs it a fifth of
-            its width. */}
-        {!railOpen ? (
-          <div className="flex w-8 shrink-0 flex-col items-center border-r border-[#d3d8de] bg-white pt-2">
-            <button
-              type="button"
-              onClick={() => setRailOpen(true)}
-              aria-label="Show the panel"
-              title="Show layers, saved views and the explorer"
-              className="rounded p-1 text-[#5f6b7c] hover:bg-[#f6f7f9] hover:text-[#2d72d2]"
-            >
-              <PanelLeftOpen className="h-4 w-4" />
-            </button>
-          </div>
+        <div className="relative flex min-h-0 flex-1 items-start gap-2">
+          {!railOpen ? (
+          <button
+            type="button"
+            onClick={() => setRailOpen(true)}
+            aria-label="Show the panel"
+            title="Show layers, saved views and the explorer"
+            className={cn(OVERLAY_BAR, "flex shrink-0 items-center gap-2 px-3 py-2 text-[12px] font-semibold text-ink hover:text-[#2d72d2]")}
+          >
+            <PanelLeftOpen className="h-4 w-4" />
+            Explorer · layers · views
+          </button>
         ) : null}
 
-        {/* Layers rail */}
+          {/* Layers rail */}
         <aside
           className={cn(
-            "shrink-0 flex-col border-r border-[#d3d8de] bg-white",
+            OVERLAY_BAR,
+            "max-h-full min-h-0 shrink-0 flex-col overflow-hidden",
             railOpen ? "flex w-72" : "hidden",
           )}
         >
@@ -1955,55 +2009,9 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
           </div>
         </aside>
 
-        {/* Map */}
-        <div className="relative min-h-[440px] min-w-0 flex-1">
-          {!MAPBOX_TOKEN ? (
-            <div className="flex h-full items-center justify-center p-6">
-              <div className="max-w-md rounded-md border border-[#d3d8de] bg-white p-5 text-sm text-[#404854]">
-                <p className="mb-2 font-semibold text-[#1c2127]">Mapbox token missing</p>
-                <p className="mb-2 text-xs leading-relaxed">
-                  Add <code className="rounded bg-[#f6f7f9] px-1">NEXT_PUBLIC_MAPBOX_TOKEN</code>{" "}
-                  to <code className="rounded bg-[#f6f7f9] px-1">frontend/.env.local</code> and to
-                  the Vercel project environment variables, then restart / redeploy.
-                </p>
-                <p className="text-xs text-[#8f99a8]">
-                  Create a public token at mapbox.com → Access tokens (default public scopes).
-                </p>
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* Sized directly: mapbox-gl.css forces position:relative on this
-                  element, which would defeat absolute/inset positioning. */}
-              <div ref={containerRef} className="h-full w-full" style={{ minHeight: 440 }} />
-              <div className="absolute right-2 top-2 flex flex-col gap-1">
-                <button
-                  type="button"
-                  onClick={toggleProjection}
-                  title={projection === "globe" ? "Switch to flat map" : "Switch to globe"}
-                  className="flex h-8 w-8 items-center justify-center rounded border border-[#d3d8de] bg-white text-[#404854] shadow-sm hover:border-[#2d72d2]"
-                >
-                  {projection === "globe" ? (
-                    <MapIcon className="h-4 w-4" />
-                  ) : (
-                    <Globe2 className="h-4 w-4" />
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={toggleStyle}
-                  title={styleMode === "standard" ? "Satellite imagery" : "3D standard style"}
-                  className="flex h-8 w-8 items-center justify-center rounded border border-[#d3d8de] bg-white text-[#404854] shadow-sm hover:border-[#2d72d2]"
-                >
-                  {styleMode === "standard" ? (
-                    <Satellite className="h-4 w-4" />
-                  ) : (
-                    <Mountain className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-              {pendingPos ? (
-                <div className="absolute left-1/2 top-6 z-20 w-72 -translate-x-1/2 rounded-md border border-[#d3d8de] bg-white p-3 shadow-lg">
+          {/* The dialogs a click on the map opens, over the middle of it. */}
+                {pendingPos ? (
+                <div className="pointer-events-auto absolute left-1/2 top-6 z-20 w-72 -translate-x-1/2 rounded-md border border-[#d3d8de] bg-white p-3 shadow-lg">
                   <p className="mb-2 text-xs font-semibold text-[#1c2127]">New site</p>
                   <input
                     value={siteName}
@@ -2050,7 +2058,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               ) : null}
 
               {drawArea ? (
-                <div className="absolute left-1/2 top-6 z-20 w-80 -translate-x-1/2 rounded-md border border-line bg-white p-3 shadow-lg">
+                <div className="pointer-events-auto absolute left-1/2 top-6 z-20 w-80 -translate-x-1/2 rounded-md border border-line bg-white p-3 shadow-lg">
                   <p className="mb-1 text-xs font-semibold text-ink">
                     Area for {drawArea.instanceName}
                   </p>
@@ -2115,34 +2123,56 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                   onSave={(name, createType) => void saveFlow(name, createType)}
                 />
               ) : null}
-              {/* The legend used to name patients / supplies / data — the three
-                  lanes the server once matched by regex. Lanes are the
-                  ontology's link types now, and they are listed in the rail
-                  with their own colours, so naming three fixed ones here was
-                  simply wrong. */}
-              <div className="absolute bottom-2 left-2 flex gap-3 rounded border border-line bg-white/90 px-2.5 py-1 text-[10px] text-ink-muted">
-                <span className="flex items-center gap-1">
-                  <span className="h-2.5 w-2.5 rounded-full border-2 border-ok" />
-                  site
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="h-[3px] w-3 rounded bg-ink-faint" />
-                  flow · see rail
-                </span>
-                {shapes.length > 0 ? (
-                  <span className="flex items-center gap-1">
-                    <span className="h-2.5 w-3 rounded-sm border border-ink-body bg-ink-muted/10" />
-                    area
-                  </span>
-                ) : null}
-              </div>
-            </>
-          )}
-        </div>
 
-        {/* Inspector */}
+          <div className="ml-auto flex max-h-full min-h-0 items-start gap-2">
+                <div className="pointer-events-auto flex shrink-0 flex-col gap-1">
+                <button
+                  type="button"
+                  onClick={toggleProjection}
+                  title={projection === "globe" ? "Switch to flat map" : "Switch to globe"}
+                  className="flex h-8 w-8 items-center justify-center rounded border border-[#d3d8de] bg-white text-[#404854] shadow-sm hover:border-[#2d72d2]"
+                >
+                  {projection === "globe" ? (
+                    <MapIcon className="h-4 w-4" />
+                  ) : (
+                    <Globe2 className="h-4 w-4" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleStyle}
+                  title={styleMode === "standard" ? "Satellite imagery" : "3D standard style"}
+                  className="flex h-8 w-8 items-center justify-center rounded border border-[#d3d8de] bg-white text-[#404854] shadow-sm hover:border-[#2d72d2]"
+                >
+                  {styleMode === "standard" ? (
+                    <Satellite className="h-4 w-4" />
+                  ) : (
+                    <Mountain className="h-4 w-4" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={wholeGlobe}
+                  aria-label="Whole globe"
+                  title="Whole globe"
+                  className="flex h-8 w-8 items-center justify-center rounded border border-[#d3d8de] bg-white text-[#404854] shadow-sm hover:border-[#2d72d2]"
+                >
+                  <Earth className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={fitNetwork}
+                  disabled={!network?.sites.length}
+                  aria-label="Fit the network"
+                  title="Fit the network"
+                  className="flex h-8 w-8 items-center justify-center rounded border border-[#d3d8de] bg-white text-[#404854] shadow-sm hover:border-[#2d72d2] disabled:text-[#c5cbd3]"
+                >
+                  <Scan className="h-4 w-4" />
+                </button>
+              </div>
+          {/* Inspector */}
         {selected ? (
-          <aside className="flex w-56 shrink-0 flex-col overflow-y-auto border-l border-[#d3d8de] bg-white p-3">
+          <aside className={cn(OVERLAY_BAR, "flex max-h-full w-64 shrink-0 flex-col overflow-y-auto p-3")}>
             <div className="flex items-center gap-2">
               <span
                 className={cn(
@@ -2323,6 +2353,39 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
             </div>
           </aside>
         ) : null}
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-end gap-2">
+                {/* The legend used to name patients / supplies / data — the three
+                  lanes the server once matched by regex. Lanes are the
+                  ontology's link types now, and they are listed in the rail
+                  with their own colours, so naming three fixed ones here was
+                  simply wrong. */}
+              <div className={cn(OVERLAY_BAR, "flex shrink-0 gap-3 px-2.5 py-1.5 text-[10px] text-ink-muted")}>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full border-2 border-ok" />
+                  site
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-[3px] w-3 rounded bg-ink-faint" />
+                  flow · see rail
+                </span>
+                {shapes.length > 0 ? (
+                  <span className="flex items-center gap-1">
+                    <span className="h-2.5 w-3 rounded-sm border border-ink-body bg-ink-muted/10" />
+                    area
+                  </span>
+                ) : null}
+              </div>
+          <EventTimeline
+          className="min-w-0 flex-1"
+        alerts={alerts}
+        feedEvents={feedEvents}
+        windowHours={windowHours}
+        onWindow={setWindowHours}
+      />
+        </div>
       </div>
 
       {showCoverage && env ? (
@@ -2335,14 +2398,6 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
           onClose={() => setShowCoverage(false)}
         />
       ) : null}
-
-      {/* Event timeline */}
-      <EventTimeline
-        alerts={alerts}
-        feedEvents={feedEvents}
-        windowHours={windowHours}
-        onWindow={setWindowHours}
-      />
     </div>
   );
 }
@@ -2392,12 +2447,16 @@ function EventTimeline({
   feedEvents,
   windowHours,
   onWindow,
+  className,
 }: {
   alerts: TwinAlert[];
   feedEvents: { id: string; receivedAt: string }[];
   windowHours: number;
   onWindow: (h: number) => void;
+  className?: string;
 }) {
+  // Folded to its counts on arrival; the lanes open on demand.
+  const [open, setOpen] = useState(false);
   const now = Date.now();
   const start = now - windowHours * 3_600_000;
   const W = 900;
@@ -2412,9 +2471,17 @@ function EventTimeline({
   const feeds = feedEvents.filter((e) => new Date(e.receivedAt).getTime() >= start);
 
   return (
-    <div className="shrink-0 border-t border-[#d3d8de] bg-white px-4 py-2">
-      <div className="mb-1 flex items-center gap-2">
-        <span className="text-[11px] font-semibold text-[#1c2127]">Event timeline</span>
+    <div className={cn(OVERLAY_BAR, "px-3 py-1.5", className)}>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          className="flex items-center gap-1 text-[11px] font-semibold text-[#1c2127] hover:text-[#2d72d2]"
+        >
+          Event timeline
+          <ChevronDown className={cn("h-3.5 w-3.5 text-[#8f99a8] transition-transform", open && "rotate-180")} aria-hidden="true" />
+        </button>
         {[24, 72].map((h) => (
           <button
             key={h}
@@ -2434,9 +2501,10 @@ function EventTimeline({
           {alertEvents.length} alerts · {feeds.length} feed events in window
         </span>
       </div>
+      {open ? (
       <svg
         viewBox={`0 0 ${W} 64`}
-        className="w-full"
+        className="mt-1 w-full"
         role="img"
         aria-label="Timeline lanes for alerts and feed events"
       >
@@ -2478,6 +2546,7 @@ function EventTimeline({
           </rect>
         ))}
       </svg>
+      ) : null}
     </div>
   );
 }
@@ -2527,7 +2596,7 @@ function FlowPanel({
     "w-full rounded border border-[#d3d8de] bg-[#f6f7f9] px-2 py-1.5 text-xs text-[#1c2127] focus:border-[#2d72d2] focus:outline-none";
 
   return (
-    <div className="absolute left-1/2 top-6 z-20 w-80 -translate-x-1/2 rounded-md border border-[#d3d8de] bg-white p-3 shadow-lg">
+    <div className="pointer-events-auto absolute left-1/2 top-6 z-20 w-80 -translate-x-1/2 rounded-md border border-[#d3d8de] bg-white p-3 shadow-lg">
       <p className="text-xs font-semibold text-[#1c2127]">New flow</p>
       <p className="mb-2 mt-0.5 text-[11px] leading-snug text-[#5f6b7c]">
         {fromName} → {toName}

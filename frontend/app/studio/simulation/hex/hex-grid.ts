@@ -9,7 +9,15 @@
  * sites the export locates and, when the geo service has them, the catchment
  * polygons. Its cell size follows the extent, so a city gets city blocks and a
  * province gets districts, at roughly the same number of cells on screen.
+ *
+ * The cells are H3's: one hexagonal tiling of the whole planet, the same at
+ * every scale. A grid drawn on its own flat projection ended where the twin
+ * ended, and could only be shown as a picture of a region; on H3 the twin's
+ * cells are a patch of a tiling that covers the globe, so the map can be the
+ * globe, and two layers built separately still land on the same cells.
  */
+import { cellToLatLng, getHexagonEdgeLengthAvg, polygonToCells } from "h3-js";
+
 
 export interface GridSite {
   id: string;
@@ -34,6 +42,8 @@ export interface GridPolygon {
 
 export interface Hex {
   index: number;
+  /** The H3 cell this hex is. */
+  h3: string;
   /** Kilometres from the grid's north-west corner. */
   x: number;
   y: number;
@@ -47,6 +57,9 @@ export interface Hex {
 
 export interface HexGrid {
   hexes: Hex[];
+  /** The H3 resolution of every cell in the grid. */
+  res: number;
+  /** H3's average edge length at that resolution, which is also its circumradius. */
   radiusKm: number;
   widthKm: number;
   heightKm: number;
@@ -57,6 +70,7 @@ export interface HexGrid {
 
 const EMPTY: HexGrid = {
   hexes: [],
+  res: 0,
   radiusKm: 1,
   widthKm: 0,
   heightKm: 0,
@@ -86,6 +100,25 @@ export function insidePolygons(
     return true;
   }
   return false;
+}
+
+/**
+ * The H3 resolution whose cells are closest in size to the radius wanted.
+ *
+ * Compared on a log scale: each resolution is about 2.6 times finer than the
+ * last, so "closest" means closest in ratio, not in kilometres.
+ */
+export function resolutionFor(radiusKm: number): number {
+  let best = 0;
+  let bd = Infinity;
+  for (let r = 0; r <= 12; r++) {
+    const d = Math.abs(Math.log(getHexagonEdgeLengthAvg(r, "km") / radiusKm));
+    if (d < bd) {
+      bd = d;
+      best = r;
+    }
+  }
+  return best;
 }
 
 /** GeoJSON Polygon or MultiPolygon coordinates, as the geo service returns them. */
@@ -130,8 +163,11 @@ export function buildHexGrid(
   const heightKm = Math.max((latMax - latMin) * ky, 1);
   // Cell size from the area the grid has to cover. Masking removes most cells
   // of a sparse network, so the target is generous rather than tight.
-  const radiusKm = Math.min(50, Math.max(0.3, Math.sqrt((widthKm * heightKm) / (2.598 * target))));
-  const w = Math.sqrt(3) * radiusKm;
+  // The radius the extent asks for, rounded to the nearest H3 resolution. The
+  // cells are then exactly H3's, so `radiusKm` is H3's edge for that level.
+  const wanted = Math.min(50, Math.max(0.3, Math.sqrt((widthKm * heightKm) / (2.598 * target))));
+  const res = resolutionFor(wanted);
+  const radiusKm = getHexagonEdgeLengthAvg(res, "km");
   const reach = Math.max(2.2 * radiusKm, 1.5);
 
   const projected = sites.map((s) => ({ s, ...project(s.lat, s.lon) }));
@@ -154,32 +190,50 @@ export function buildHexGrid(
   for (const p of [...populations].sort((a, b) => b.size - a.size))
     for (const f of p.servedBy) if (!servingPop.has(f)) servingPop.set(f, p);
 
+  // Every cell whose centre falls in the extent, padded by one reach so a site
+  // on the edge still has its neighbourhood. Sorted so the indexes are stable
+  // from one render to the next.
+  const pad = reach + radiusKm;
+  const nw = unproject(-pad, -pad);
+  const se = unproject(widthKm + pad, heightKm + pad);
+  const candidates = polygonToCells(
+    [
+      [
+        [nw.lat, nw.lon],
+        [nw.lat, se.lon],
+        [se.lat, se.lon],
+        [se.lat, nw.lon],
+        [nw.lat, nw.lon],
+      ],
+    ],
+    res,
+  ).sort();
+
   const hexes: Hex[] = [];
-  let row = 0;
-  for (let y = 0; y <= heightKm + radiusKm; y += 1.5 * radiusKm, row++) {
-    for (let x = row % 2 ? w / 2 : 0; x <= widthKm + w; x += w) {
-      const { lat, lon } = unproject(x, y);
-      const near = nearest(x, y);
-      let population: string | null = null;
-      if (polygons.length > 0) {
-        const hit = polygons.find((p) => insidePolygons(lon, lat, p.polygons));
-        if (!hit) continue;
-        population = hit.populationId;
-      } else {
-        if (!near || near.km > reach) continue;
-        population = servingPop.get(near.site.id)?.id ?? null;
-      }
-      hexes.push({
-        index: hexes.length,
-        x,
-        y,
-        lat,
-        lon,
-        population,
-        residents: 0,
-        nearestSite: near?.site.id ?? null,
-      });
+  for (const id of candidates) {
+    const [lat, lon] = cellToLatLng(id);
+    const { x, y } = project(lat, lon);
+    const near = nearest(x, y);
+    let population: string | null = null;
+    if (polygons.length > 0) {
+      const hit = polygons.find((p) => insidePolygons(lon, lat, p.polygons));
+      if (!hit) continue;
+      population = hit.populationId;
+    } else {
+      if (!near || near.km > reach) continue;
+      population = servingPop.get(near.site.id)?.id ?? null;
     }
+    hexes.push({
+      index: hexes.length,
+      h3: id,
+      x,
+      y,
+      lat,
+      lon,
+      population,
+      residents: 0,
+      nearestSite: near?.site.id ?? null,
+    });
   }
 
   const cells = new Map<string, number>();
@@ -190,6 +244,7 @@ export function buildHexGrid(
 
   return {
     hexes,
+    res,
     radiusKm,
     widthKm,
     heightKm,

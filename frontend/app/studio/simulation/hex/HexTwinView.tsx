@@ -1,11 +1,12 @@
 "use client";
 
-import { Loader2, Plus } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Loader2, Plus, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@/lib/cn";
 import { fetchSimExport, fetchTwinTree, listGeoShapes, listTwinMetrics } from "@/lib/platform-api";
 
+import { OVERLAY_BAR, OverlayPanel } from "../../map-overlay";
 import { useStudio } from "../../StudioShell";
 import {
   addScenarioOverride,
@@ -18,6 +19,7 @@ import {
 } from "../../scenarios-api";
 import AddDataPanel from "./AddDataPanel";
 import { engineMessage, runScenario, type RunOutput } from "./engine";
+import HexGlobe, { GlobeControls, type GlobeArea, type GlobeHandle, type GlobeSeed, type GlobeSite } from "./HexGlobe";
 import {
   buildHexGrid,
   cellsWithin,
@@ -199,6 +201,11 @@ export default function HexTwinView() {
   const [running, setRunning] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Folded on arrival: the first thing seen is the map.
+  const [layersOpen, setLayersOpen] = useState(false);
+  const [recipeOpen, setRecipeOpen] = useState(false);
+  const [timelineOpen, setTimelineOpen] = useState(false);
+  const globeRef = useRef<GlobeHandle>(null);
 
   // --- loading ------------------------------------------------------------
 
@@ -528,6 +535,7 @@ export default function HexTwinView() {
       });
       setRun(out);
       setRunKey(stampKey);
+      setRecipeOpen(true);
     } catch (err) {
       setMessage(engineMessage(err));
     } finally {
@@ -577,16 +585,6 @@ export default function HexTwinView() {
 
   // --- the map ------------------------------------------------------------
 
-  const W = 820;
-  const scale = Math.min((W - 40) / grid.widthKm, 620 / grid.heightKm);
-  const H = Math.round(grid.heightKm * scale + 40);
-  const r = grid.radiusKm * scale;
-  const corner = Array.from({ length: 6 }, (_, k) => {
-    const a = ((60 * k - 30) * Math.PI) / 180;
-    return [Math.cos(a) * r, Math.sin(a) * r] as const;
-  });
-  const px = (x: number) => 20 + x * scale;
-  const py = (y: number) => 20 + y * scale;
   const hexArea = 2.598 * grid.radiusKm ** 2;
   const sick = run && !stale ? run.full.sick : null;
 
@@ -604,7 +602,7 @@ export default function HexTwinView() {
   const emptyColour = active ? active.colourOf(null) : NO_DATA;
   const occupancyEmpty = !(run && !stale) && !liveOccupancy.some(Number.isFinite);
   const shownSites = ctx.facilities
-    .map((f, i) => ({ f, i, p: grid.project(f.lat, f.lon) }))
+    .map((f, i) => ({ f, i }))
     .filter(({ f }) => (f.capacity[activity] ?? 0) > 0);
   const labelSites = shownSites.length <= 60;
 
@@ -613,6 +611,40 @@ export default function HexTwinView() {
   );
   const seeds = stamps.filter((s): s is Stamp & { kind: "seed" } => s.kind === "seed");
   const islandNow = stamps.filter((s) => s.kind === "heat" && d >= s.start && d < s.start + s.days);
+
+  // What the globe draws. Sites carry their occupancy as a colour and a label
+  // only on the occupancy lens, and only when they are few enough to read;
+  // over another layer a coloured site would read as that layer's number.
+  const colours = grid.hexes.map((h) => fillFor(h.index));
+  const plainSites = !labelSites || active !== null;
+  const globeSites: GlobeSite[] = shownSites.map(({ f, i }) => {
+    const occ = occupancyAt(i);
+    const boosted = stamps.some((s) => s.kind === "capacity" && s.facility === f.id && d >= s.start);
+    return {
+      id: f.id,
+      name: f.name,
+      lat: f.lat,
+      lon: f.lon,
+      colour: plainSites ? "#1c2127" : Number.isFinite(occ) ? ramp(occ, OCC_STEPS) : "#ffffff",
+      label: plainSites ? null : `${pct(occ)}${boosted ? " +" : ""}`,
+    };
+  });
+  const globeAreas: GlobeArea[] = areas.map((s) => ({
+    id: s.id,
+    lat: s.at!.lat,
+    lon: s.at!.lon,
+    radiusKm: s.radiusKm!,
+    label: `${s.label} · d${s.start}–${s.start + s.days - 1}`,
+    active: d >= s.start && d < s.start + s.days,
+  }));
+  const globeSeeds: GlobeSeed[] = seeds.map((s) => ({ id: s.id, lat: s.at.lat, lon: s.at.lon }));
+  const lensName = active
+    ? active.name
+    : lens === "residents"
+      ? "Residents per km²"
+      : lens === "sick"
+        ? "Sick per 1,000"
+        : `${activity || "Capacity"} occupancy`;
 
   const inspected = cell !== null ? grid.hexes[cell] : undefined;
   const inspectedSite = cell !== null ? (siteOfCell[cell] ?? -1) : -1;
@@ -660,8 +692,24 @@ export default function HexTwinView() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-auto bg-canvas">
-      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-white px-4 py-2">
+    <div className="relative min-h-0 flex-1 overflow-hidden bg-canvas">
+      <HexGlobe
+        ref={globeRef}
+        className="absolute inset-0"
+        grid={grid}
+        colours={colours}
+        emptyColour={emptyColour}
+        selected={cell}
+        sites={globeSites}
+        areas={globeAreas}
+        seeds={globeSeeds}
+        onTap={tap}
+      />
+
+      {/* Everything else floats on the map. The layer lets clicks through to
+          the globe; each panel takes them back. */}
+      <div className="pointer-events-none absolute inset-0 flex flex-col gap-2 p-3">
+        <header className={cn(OVERLAY_BAR, "flex shrink-0 flex-wrap items-center gap-2 px-3 py-2")}>
         <span className={LABEL}>Scenario</span>
         {renaming !== null && scenario ? (
           <form
@@ -740,16 +788,119 @@ export default function HexTwinView() {
         </span>
       </header>
 
-      {message ? (
-        <div role="alert" className="mx-4 mt-3 rounded border border-danger/40 bg-danger-soft px-3 py-2 text-[12px] text-danger-ink">
+        <div className={cn(OVERLAY_BAR, "mx-auto flex max-w-full shrink-0 flex-col overflow-hidden")}>
+          <div role="toolbar" aria-label="Stamp tools" className="flex flex-wrap items-center justify-center gap-1.5 px-2 py-1.5">
+            {TOOLS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                aria-pressed={tool === t.key}
+                onClick={() => setTool(t.key)}
+                className={cn(
+                  "rounded-md border px-2.5 py-1.5 text-[12px] font-semibold",
+                  tool === t.key ? "border-ink bg-ink text-white" : cn("border-line bg-white hover:bg-canvas-raised", LANE_INK[t.lane]),
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 border-t border-line-soft px-3 py-1.5 text-[12px] text-ink-body">
+            <span>{TOOLS.find((t) => t.key === tool)!.hint}</span>
+            {tool === "seed" ? (
+              <label className="ml-auto flex items-center gap-1">
+                Sick at start
+                <input type="number" min={1} value={seedCount} onChange={(e) => setSeedCount(Math.max(1, Number(e.target.value) || 1))} className={cn(FIELD, "w-20")} />
+              </label>
+            ) : null}
+            {tool === "heat" ? (
+              <label className="ml-auto flex items-center gap-1">
+                Days
+                <input type="number" min={1} max={horizon} value={heatDays} onChange={(e) => setHeatDays(Math.max(1, Number(e.target.value) || 1))} className={cn(FIELD, "w-16")} />
+              </label>
+            ) : null}
+            {tool === "measure" ? (
+              <span className="ml-auto flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-1">
+                  Measure
+                  <select value={presetKey} onChange={(e) => setPresetKey(e.target.value)} className={FIELD}>
+                    {presets.map((p) => (
+                      <option key={p.key} value={p.key}>{p.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex items-center gap-1">
+                  Where
+                  <select value={scope} onChange={(e) => setScope(e.target.value as typeof scope)} className={FIELD}>
+                    <option value="5">Within 5 km</option>
+                    <option value="catchment">This catchment</option>
+                    <option value="everywhere">Everywhere</option>
+                  </select>
+                </label>
+                <label className="flex items-center gap-1">
+                  Days
+                  <input type="number" min={1} max={horizon} value={measureDays} onChange={(e) => setMeasureDays(Math.max(1, Number(e.target.value) || 1))} className={cn(FIELD, "w-16")} />
+                </label>
+              </span>
+            ) : null}
+            {tool === "capacity" ? (
+              <label className="ml-auto flex items-center gap-1">
+                Add
+                <input type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value) || 0)} className={cn(FIELD, "w-16")} />
+                {activity}
+              </label>
+            ) : null}
+            {tool !== "inspect" ? (
+              <span className="flex items-center gap-1">
+                <label htmlFor="pick-catchment" className="sr-only">Or apply to a catchment</label>
+                <select id="pick-catchment" value={pickCatchment} onChange={(e) => setPickCatchment(e.target.value)} className={FIELD}>
+                  <option value="">or pick a catchment…</option>
+                  {ctx.populations.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={!pickCatchment || busy}
+                  onClick={() => {
+                    const first = grid.hexes.find((h) => h.population === pickCatchment);
+                    if (first) tap(first.index);
+                  }}
+                  className="rounded border border-line px-2 py-1 disabled:opacity-50"
+                >
+                  Apply
+                </button>
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        {islandNow.length ? (
+          <div className="mx-auto flex shrink-0 flex-wrap gap-1.5">
+            {islandNow.map((s) => (
+              <span key={s.id} className="rounded bg-[#a82255] px-2 py-0.5 text-[11.5px] font-bold text-white shadow-sm">
+                Heat wave · day {d - s.start + 1} of {s.days}
+              </span>
+            ))}
+          </div>
+        ) : null}
+
+        {message ? (
+        <div role="alert" className="pointer-events-auto mx-auto max-w-2xl shrink-0 rounded border border-danger/40 bg-danger-soft px-3 py-2 text-[12px] text-danger-ink shadow-sm">
           {message}
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-start gap-3 p-4">
-        <aside aria-label="Layers" className="flex min-w-0 max-w-[260px] flex-[1_1_200px] flex-col gap-3">
-          <div className="flex flex-col gap-1.5 rounded-lg border border-line bg-white p-3">
-            <span className={LABEL}>Layers</span>
+        <div className="flex min-h-0 flex-1 items-start justify-between gap-2">
+          <div className="flex max-h-full min-h-0 flex-col gap-2">
+            <OverlayPanel
+              title="Layers"
+              meta={lensName}
+              open={layersOpen}
+              onToggle={() => setLayersOpen((o) => !o)}
+              className={layersOpen ? "w-[280px]" : "max-w-[280px]"}
+            >
+          <div className="flex flex-col gap-1.5 p-3">
             {(
               [
                 [
@@ -841,7 +992,7 @@ export default function HexTwinView() {
               <Plus className="h-3.5 w-3.5" aria-hidden="true" /> Add data as a layer
             </button>
           </div>
-          <div className="flex flex-col gap-1 rounded-lg border border-line bg-white p-3">
+          <div className="flex flex-col gap-1 border-t border-line-soft p-3">
             <span className={LABEL}>Legend</span>
             {active ? <span className="text-[12px] font-semibold text-ink">{active.name}</span> : null}
             {legend.map(({ colour, label }) => (
@@ -859,172 +1010,15 @@ export default function HexTwinView() {
               {grid.placement === "polygons" ? "placed by catchment outline" : "placed by nearest site"}
             </span>
           </div>
-        </aside>
-
-        <section aria-label="Map" className="flex min-w-0 flex-[999_1_560px] flex-col overflow-hidden rounded-lg border border-line bg-white">
-          <div role="toolbar" aria-label="Stamp tools" className="flex flex-wrap items-center gap-1.5 border-b border-line-soft px-3 py-2">
-            {TOOLS.map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                aria-pressed={tool === t.key}
-                onClick={() => setTool(t.key)}
-                className={cn(
-                  "rounded-md border px-2.5 py-1.5 text-[12px] font-semibold",
-                  tool === t.key ? "border-ink bg-ink text-white" : cn("border-line bg-white hover:bg-canvas-raised", LANE_INK[t.lane]),
-                )}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex flex-wrap items-center gap-2 border-b border-line-soft bg-canvas-raised px-3 py-1.5 text-[12px] text-ink-body">
-            <span>{TOOLS.find((t) => t.key === tool)!.hint}</span>
-            {tool === "seed" ? (
-              <label className="ml-auto flex items-center gap-1">
-                Sick at start
-                <input type="number" min={1} value={seedCount} onChange={(e) => setSeedCount(Math.max(1, Number(e.target.value) || 1))} className={cn(FIELD, "w-20")} />
-              </label>
-            ) : null}
-            {tool === "heat" ? (
-              <label className="ml-auto flex items-center gap-1">
-                Days
-                <input type="number" min={1} max={horizon} value={heatDays} onChange={(e) => setHeatDays(Math.max(1, Number(e.target.value) || 1))} className={cn(FIELD, "w-16")} />
-              </label>
-            ) : null}
-            {tool === "measure" ? (
-              <span className="ml-auto flex flex-wrap items-center gap-2">
-                <label className="flex items-center gap-1">
-                  Measure
-                  <select value={presetKey} onChange={(e) => setPresetKey(e.target.value)} className={FIELD}>
-                    {presets.map((p) => (
-                      <option key={p.key} value={p.key}>{p.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex items-center gap-1">
-                  Where
-                  <select value={scope} onChange={(e) => setScope(e.target.value as typeof scope)} className={FIELD}>
-                    <option value="5">Within 5 km</option>
-                    <option value="catchment">This catchment</option>
-                    <option value="everywhere">Everywhere</option>
-                  </select>
-                </label>
-                <label className="flex items-center gap-1">
-                  Days
-                  <input type="number" min={1} max={horizon} value={measureDays} onChange={(e) => setMeasureDays(Math.max(1, Number(e.target.value) || 1))} className={cn(FIELD, "w-16")} />
-                </label>
-              </span>
-            ) : null}
-            {tool === "capacity" ? (
-              <label className="ml-auto flex items-center gap-1">
-                Add
-                <input type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value) || 0)} className={cn(FIELD, "w-16")} />
-                {activity}
-              </label>
-            ) : null}
-            {tool !== "inspect" ? (
-              <span className="flex items-center gap-1">
-                <label htmlFor="pick-catchment" className="sr-only">Or apply to a catchment</label>
-                <select id="pick-catchment" value={pickCatchment} onChange={(e) => setPickCatchment(e.target.value)} className={FIELD}>
-                  <option value="">or pick a catchment…</option>
-                  {ctx.populations.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  disabled={!pickCatchment || busy}
-                  onClick={() => {
-                    const first = grid.hexes.find((h) => h.population === pickCatchment);
-                    if (first) tap(first.index);
-                  }}
-                  className="rounded border border-line px-2 py-1 disabled:opacity-50"
-                >
-                  Apply
+        </OverlayPanel>
+            {inspected ? (
+            <div aria-live="polite" className={cn(OVERLAY_BAR, "grid w-[280px] shrink-0 grid-cols-2 gap-x-4 gap-y-0.5 px-3 py-2 text-[12px]")}>
+              <span className="col-span-2 flex items-center justify-between gap-2 font-semibold text-ink">
+                {popName(inspected.population)}
+                <button type="button" onClick={() => setCell(null)} aria-label="Close" className="rounded p-0.5 text-ink-muted hover:bg-canvas-raised">
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
               </span>
-            ) : null}
-          </div>
-
-          <div className="overflow-auto">
-            <svg
-              viewBox={`0 0 ${W} ${H}`}
-              width={W}
-              height={H}
-              className="mx-auto block max-w-full"
-              role="img"
-              aria-label="Map of the twin's catchments as hexagonal cells, coloured by the chosen layer"
-            >
-              <rect width={W} height={H} fill="#eaf0f6" />
-              {grid.hexes.map((h) => (
-                <polygon
-                  key={h.index}
-                  points={corner.map(([cx, cy]) => `${px(h.x) + cx},${py(h.y) + cy}`).join(" ")}
-                  fill={fillFor(h.index)}
-                  stroke={cell === h.index ? "#1c2127" : "#ffffff"}
-                  strokeWidth={cell === h.index ? 2 : 0.6}
-                  onClick={() => tap(h.index)}
-                  className="cursor-pointer"
-                >
-                  <title>{popName(h.population)}</title>
-                </polygon>
-              ))}
-              {areas.map((s) => {
-                const p = grid.project(s.at!.lat, s.at!.lon);
-                const on = d >= s.start && d < s.start + s.days;
-                return (
-                  <g key={s.id} opacity={on ? 1 : 0.45} pointerEvents="none">
-                    <circle cx={px(p.x)} cy={py(p.y)} r={s.radiusKm! * scale} fill={on ? "rgba(91,74,134,0.10)" : "none"} stroke="#5b4a86" strokeWidth={2} strokeDasharray="6 4" />
-                    <text x={px(p.x)} y={py(p.y) - s.radiusKm! * scale - 6} textAnchor="middle" fontSize={11} fontWeight={700} fill="#5b4a86">
-                      {s.label} · d{s.start}–{s.start + s.days - 1}
-                    </text>
-                  </g>
-                );
-              })}
-              {seeds.map((s) => {
-                const p = grid.project(s.at.lat, s.at.lon);
-                return <circle key={s.id} cx={px(p.x)} cy={py(p.y)} r={7} fill="#a82255" stroke="#ffffff" strokeWidth={3} pointerEvents="none" />;
-              })}
-              {shownSites.map(({ f, i, p }) => {
-                const occ = occupancyAt(i);
-                const boosted = stamps.some((s) => s.kind === "capacity" && s.facility === f.id && d >= s.start);
-                // Occupancy boxes belong to the occupancy lens; over another
-                // layer they would read as that layer's numbers.
-                if (!labelSites || active)
-                  return (
-                    <circle key={f.id} cx={px(p.x)} cy={py(p.y)} r={3} fill="#1c2127" stroke="#ffffff" strokeWidth={1} pointerEvents="none">
-                      <title>{f.name}</title>
-                    </circle>
-                  );
-                const dark = Number.isFinite(occ) && occ >= 1.5;
-                return (
-                  <g key={f.id} pointerEvents="none">
-                    <rect x={px(p.x) - 20} y={py(p.y) - 9} width={40} height={18} rx={4} fill={Number.isFinite(occ) ? ramp(occ, OCC_STEPS) : "#ffffff"} stroke="#1c2127" />
-                    <text x={px(p.x)} y={py(p.y) + 4} textAnchor="middle" fontSize={10.5} fontWeight={700} fill={dark ? "#ffffff" : "#1c2127"}>
-                      {Number.isFinite(occ) ? pct(occ) : "—"}
-                    </text>
-                    {boosted ? (
-                      <text x={px(p.x) + 24} y={py(p.y) + 4} fontSize={10} fontWeight={700} fill="#215db0">+</text>
-                    ) : null}
-                    <title>{f.name}</title>
-                  </g>
-                );
-              })}
-              {islandNow.map((s, k) => (
-                <g key={s.id} pointerEvents="none">
-                  <rect x={12} y={12 + k * 24} width={170} height={20} rx={4} fill="#a82255" />
-                  <text x={20} y={26 + k * 24} fontSize={12} fontWeight={700} fill="#ffffff">
-                    Heat wave · day {d - s.start + 1} of {s.days}
-                  </text>
-                </g>
-              ))}
-            </svg>
-          </div>
-
-          {inspected ? (
-            <div aria-live="polite" className="grid grid-cols-2 gap-x-6 gap-y-0.5 border-t border-line-soft px-3 py-2 text-[12px] sm:grid-cols-4">
-              <span className="col-span-2 font-semibold text-ink sm:col-span-4">{popName(inspected.population)}</span>
               <span className="text-ink-muted">Residents (est.)</span>
               <span className="tabular-nums">{fmt(inspected.residents)}</span>
               <span className="text-ink-muted">Sick per 1,000 · day {d}</span>
@@ -1043,16 +1037,23 @@ export default function HexTwinView() {
               ) : null}
             </div>
           ) : null}
-        </section>
+          </div>
 
-        <aside aria-label="Recipe and result" className="flex min-w-0 max-w-[380px] flex-[1_1_300px] flex-col gap-3">
-          <div className="flex flex-col gap-2 rounded-lg border border-line bg-white p-3">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className={LABEL}>Recipe · {stamps.length} stamp{stamps.length === 1 ? "" : "s"}</span>
-              {tier ? <span className="rounded bg-warn-soft px-1.5 py-0.5 text-[10px] font-bold text-warn-ink">weakest · {tier}</span> : null}
-            </div>
+          <div className="flex max-h-full min-h-0 items-start gap-2">
+          <GlobeControls globe={globeRef} />
+          <OverlayPanel
+            title="Recipe"
+            meta={`${stamps.length} stamp${stamps.length === 1 ? "" : "s"}${run && pb ? ` · peak ${pct(pb.v)}` : ""}`}
+            open={recipeOpen}
+            onToggle={() => setRecipeOpen((o) => !o)}
+            className={recipeOpen ? "w-[360px]" : "max-w-[360px]"}
+          >
+          <div className="flex flex-col gap-2 p-3">
+            {tier ? (
+              <span className="self-start rounded bg-warn-soft px-1.5 py-0.5 text-[10px] font-bold text-warn-ink">weakest · {tier}</span>
+            ) : null}
             {sorted.length === 0 ? (
-              <p className="text-[12.5px] text-ink-muted">No stamps yet. Pick a tool above the map, move the timeline to a day, then tap the map.</p>
+              <p className="text-[12.5px] text-ink-muted">No stamps yet. Pick a tool at the top, move the timeline to a day, then tap the map.</p>
             ) : null}
             {sorted.map((s) => {
               const ds = describeStamp(s, ctx);
@@ -1096,7 +1097,7 @@ export default function HexTwinView() {
             })}
           </div>
 
-          <div className="flex flex-col gap-2 rounded-lg border border-line bg-white p-3">
+          <div className="flex flex-col gap-2 border-t border-line-soft p-3">
             <span className={LABEL}>Result · {activity} across every site</span>
             {!run ? (
               <p className="text-[12.5px] text-ink-muted">
@@ -1136,15 +1137,25 @@ export default function HexTwinView() {
               </>
             )}
           </div>
-        </aside>
-      </div>
+        </OverlayPanel>
+          </div>
+        </div>
 
-      <section aria-label="Timeline" className="mx-4 mb-4 flex flex-col gap-2 rounded-lg border border-line bg-white p-3">
+        <section aria-label="Timeline" className={cn(OVERLAY_BAR, "flex max-h-[45%] shrink-0 flex-col gap-2 overflow-y-auto p-3")}>
         <div className="flex flex-wrap items-center gap-3">
           <label htmlFor="day-scrub" className="text-[12.5px] font-semibold tabular-nums">Day {d} of {horizon - 1}</label>
           <input id="day-scrub" type="range" min={0} max={horizon - 1} value={d} onChange={(e) => setDay(Number(e.target.value))} className="min-w-0 flex-[1_1_240px] accent-brand" />
           <span className="text-[11.5px] text-ink-muted">Stamps land on the day shown here.</span>
+                  <button
+            type="button"
+            aria-expanded={timelineOpen}
+            onClick={() => setTimelineOpen((o) => !o)}
+            className="ml-auto rounded border border-line px-2 py-1 text-[11.5px] text-ink-body hover:bg-canvas-raised"
+          >
+            {timelineOpen ? "Hide lanes and curve" : "Show lanes and curve"}
+          </button>
         </div>
+        {timelineOpen ? (
         <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5">
           {(["Events", "Measures", "Resources"] as Lane[]).map((ln) => (
             <div key={ln} className="contents">
@@ -1202,7 +1213,9 @@ export default function HexTwinView() {
             ) : null}
           </div>
         </div>
+        ) : null}
       </section>
+      </div>
 
       {adding ? <AddDataPanel env={env} onClose={() => setAdding(false)} onAdded={(id) => void layerAdded(id)} /> : null}
     </div>
