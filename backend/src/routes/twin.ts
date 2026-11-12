@@ -22,6 +22,12 @@ import {
   listSimPolicies,
   updateSimPolicy,
 } from "../services/sim-policies.js";
+import {
+  createSimProfile,
+  deleteSimProfile,
+  listSimProfiles,
+  updateSimProfile,
+} from "../services/sim-profiles.js";
 import { getDataset, previewRows } from "../services/datasets.js";
 import {
   alignSeries,
@@ -946,6 +952,129 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
         projectId: env.id,
         action: "sim.policy.delete",
         resourceType: "sim_policy",
+        resourceId: req.params.id,
+        metadata: {},
+      });
+      return { ok: true as const };
+    },
+  );
+
+  // --- profiles ---------------------------------------------------------
+  //
+  // A profile is a reusable bundle of changes the Studio drops into an event:
+  // a series per 1,000 residents, an exposure and its published effect, or
+  // changes kept from another event. The engine never reads one; only the
+  // effects it produces, once they are in an event.
+
+  const simProfileBody = z.object({
+    name: z.string().trim().min(1).max(200),
+    description: z.string().max(4000).default(""),
+    body: z.record(z.unknown()),
+  });
+
+  const simProfileOut = z.object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string(),
+    body: z.record(z.unknown()),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  });
+
+  app.get(
+    "/ontology/:env/sim-profiles",
+    {
+      schema: {
+        summary: "Profiles saved by this organisation",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1) }),
+        response: { 200: z.object({ profiles: z.array(simProfileOut) }), 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      return { profiles: await listSimProfiles(req.db, env.id) };
+    },
+  );
+
+  app.post(
+    "/ontology/:env/sim-profiles",
+    {
+      schema: {
+        summary: "Save a profile",
+        description:
+          "A profile stores nothing of the twin it was made in, so it can be used on " +
+          "any network: a series is a rate per 1,000 residents, an exposure a " +
+          "coefficient and its values.",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1) }),
+        body: simProfileBody,
+        response: { 201: simProfileOut, 400: errorEnvelope, 409: errorEnvelope },
+      },
+    },
+    async (req, reply) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const created = await createSimProfile(req.db, env.id, userId, req.body);
+      await recordAudit(req.db, {
+        actorUserId: userId,
+        projectId: env.id,
+        action: "sim.profile.create",
+        resourceType: "sim_profile",
+        resourceId: created.id,
+        metadata: { name: created.name, kind: String(created.body.kind ?? "") },
+      });
+      return reply.code(201).send(created);
+    },
+  );
+
+  app.put(
+    "/ontology/:env/sim-profiles/:id",
+    {
+      schema: {
+        summary: "Replace a saved profile",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1), id: z.string().uuid() }),
+        body: simProfileBody,
+        response: { 200: simProfileOut, 400: errorEnvelope, 404: errorEnvelope, 409: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const updated = await updateSimProfile(req.db, env.id, req.params.id, req.body);
+      await recordAudit(req.db, {
+        actorUserId: userId,
+        projectId: env.id,
+        action: "sim.profile.update",
+        resourceType: "sim_profile",
+        resourceId: updated.id,
+        metadata: { name: updated.name, kind: String(updated.body.kind ?? "") },
+      });
+      return updated;
+    },
+  );
+
+  app.delete(
+    "/ontology/:env/sim-profiles/:id",
+    {
+      schema: {
+        summary: "Delete a saved profile",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1), id: z.string().uuid() }),
+        response: { 200: z.object({ ok: z.literal(true) }), 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      await deleteSimProfile(req.db, env.id, req.params.id);
+      await recordAudit(req.db, {
+        actorUserId: userId,
+        projectId: env.id,
+        action: "sim.profile.delete",
+        resourceType: "sim_profile",
         resourceId: req.params.id,
         metadata: {},
       });

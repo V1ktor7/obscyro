@@ -1886,7 +1886,34 @@ export interface SimEffect {
   property_key?: string | null;
   /** How many matching objects this reaches: all, a fraction, or a count. */
   reach?: number | null;
+  /**
+   * Where the effect starts on the map, how far it carries and how fast
+   * (simulation-service/app/events/geo.py). Only on targets that name a
+   * facility or a route; the engine refuses it elsewhere.
+   */
+  spatial?: SimSpatial | null;
   profile: TemporalProfile;
+  /**
+   * What the event builder needs to reopen a helper (an exposure, a profile)
+   * that produced this effect. The engine ignores it; the platform stores it
+   * with the effect.
+   */
+  builder?: BuilderTag;
+}
+
+export interface SimSpatial {
+  /** Latitude, longitude. */
+  epicentre: [number, number];
+  radius_km: number | null;
+  falloff: "none" | "linear" | "steep";
+  speed_km_per_step: number | null;
+}
+
+/** Marks the effects one builder helper produced, and carries its inputs on the first. */
+export interface BuilderTag {
+  group: string;
+  kind: "exposure" | "profile";
+  inputs?: Record<string, unknown>;
 }
 
 /**
@@ -2003,6 +2030,33 @@ export async function deleteSimPolicy(env: string, id: string): Promise<{ ok: tr
 
 export async function deleteSimEvent(env: string, id: string): Promise<{ ok: true }> {
   return apiFetch(`/v1/ontology/${encEnv(env)}/sim-events/${id}`, { method: "DELETE" });
+}
+
+/** A profile the organisation saved: a series, an exposure, or changes kept from an event. */
+export interface SimProfileRecord {
+  id: string;
+  name: string;
+  description: string;
+  body: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function listSimProfiles(env: string): Promise<{ profiles: SimProfileRecord[] }> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/sim-profiles`);
+}
+
+export async function saveSimProfile(
+  env: string,
+  body: { name: string; description?: string; body: Record<string, unknown> },
+  id?: string,
+): Promise<SimProfileRecord> {
+  const path = `/v1/ontology/${encEnv(env)}/sim-profiles${id ? `/${id}` : ""}`;
+  return apiFetch(path, { method: id ? "PUT" : "POST", body });
+}
+
+export async function deleteSimProfile(env: string, id: string): Promise<{ ok: true }> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/sim-profiles/${id}`, { method: "DELETE" });
 }
 
 export async function runSimulation(

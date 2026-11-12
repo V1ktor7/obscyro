@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   deleteSimEvent,
   fetchSimCatalogue,
+  listSimProfiles,
   fetchSimExport,
   listSimEvents,
   listScenarios,
@@ -43,10 +44,11 @@ import ReplayPlayer from "./ReplayPlayer";
 import { downloadText, slug, toCsv } from "./download";
 import { runBlockedBecause, unsizedPopulations } from "./run-gate";
 import { useStudio } from "../StudioShell";
-import EventWorkspace from "./EventWorkspace";
+import EventBuilder from "./builder/EventBuilder";
+import EventPreview from "./builder/EventPreview";
+import { BUILT_IN, profileFromSaved, type Profile, type SavedProfileBody } from "./builder/profiles";
 import EventLibrary from "./EventLibrary";
 import { downloadCsv } from "./csv";
-import EventTimeline from "./EventTimeline";
 
 /** Sentinel for "no scenario" so the select has a real value to hold. */
 const LIVE = "";
@@ -141,6 +143,9 @@ export default function EventsView() {
   const [composed, setComposed] = useState<SimEvent[]>([]);
   const [targets, setTargets] = useState<SimTarget[]>([]);
   const [composing, setComposing] = useState<SimEvent | "new" | null>(null);
+  // Arriving from the profile catalogue ("Start a new event with it"): the
+  // profile the new event starts from, read off ?profile= once the twin is in.
+  const [startWith, setStartWith] = useState<Profile | null>(null);
   const [policies, setPolicies] = useState<SimPolicy[]>([]);
   // A comparison over 241 facilities and 91 steps with every table collected
   // takes about ninety seconds. A button that says "Running…" and nothing else
@@ -175,6 +180,41 @@ export default function EventsView() {
       .then((r) => setScenarios(r.scenarios))
       .catch(() => setScenarios([]));
   }, [env]);
+
+  useEffect(() => {
+    if (!env || !snapshot || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const wanted = params.get("profile");
+    if (!wanted) return;
+    let cancelled = false;
+    const clear = () => {
+      params.delete("profile");
+      const q = params.toString();
+      window.history.replaceState(null, "", `${window.location.pathname}${q ? `?${q}` : ""}`);
+    };
+    (async () => {
+      let p: Profile | null = BUILT_IN.find((b) => b.id === wanted) ?? null;
+      if (!p) {
+        try {
+          const r = (await listSimProfiles(env)).profiles.find((x) => x.id === wanted);
+          if (r) p = profileFromSaved({ id: r.id, name: r.name, description: r.description, body: r.body as unknown as SavedProfileBody });
+        } catch {
+          p = null;
+        }
+      }
+      if (cancelled) return;
+      clear();
+      if (p) {
+        setStartWith(p);
+        setComposing("new");
+      } else {
+        setError("The profile this link points to no longer exists.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [env, snapshot]);
 
   const loadEvents = useCallback(async () => {
     if (!env) return;
@@ -347,10 +387,13 @@ export default function EventsView() {
 
   if (composing && snapshot) {
     return (
-      <EventWorkspace
+      <EventBuilder
+        key={composing === "new" ? `new-${startWith?.id ?? ""}` : composing.id}
+        env={env!}
         snapshot={snapshot}
         targets={targets}
         initial={composing === "new" ? null : composing}
+        startWith={composing === "new" ? startWith : null}
         twinScenarioId={world}
         onSave={async (body) => {
           const saved = await saveSimEvent(
@@ -360,6 +403,7 @@ export default function EventsView() {
           );
           await loadEvents();
           setEvent(`event:${saved.id}`);
+          setStartWith(null);
           setComposing(null);
         }}
         onDelete={
@@ -372,7 +416,10 @@ export default function EventsView() {
                 setComposing(null);
               }
         }
-        onClose={() => setComposing(null)}
+        onClose={() => {
+          setStartWith(null);
+          setComposing(null);
+        }}
       />
     );
   }
@@ -397,30 +444,11 @@ export default function EventsView() {
                 something — and nothing on the page said it existed. */}
             {!composing && selectedComposed ? (
               <>
-                <EventTimeline
-                  effects={selectedComposed.effects}
-                  targets={targets}
-                  horizon={selectedComposed.horizon}
-                  focused={null}
-                  onFocus={() => setComposing(selectedComposed)}
-                  onChangeProfile={(i, profile) => {
-                    // Dragging here edits the saved event, so it goes through
-                    // the composer rather than writing behind the user's back.
-                    // Opening it with the change already applied keeps the drag
-                    // from being lost, which is what makes it feel like one
-                    // gesture instead of two.
-                    setComposing({
-                      ...selectedComposed,
-                      effects: selectedComposed.effects.map((e, j) =>
-                        j === i ? { ...e, profile } : e,
-                      ),
-                    });
-                  }}
+                <EventPreview
+                  snapshot={snapshot}
+                  event={selectedComposed}
+                  onEdit={() => setComposing(selectedComposed)}
                 />
-                <p className="-mt-2 text-[11px] text-ink-faint">
-                  Dragging a bar opens “{selectedComposed.name}” for editing with
-                  that change applied.
-                </p>
               </>
             ) : null}
 
