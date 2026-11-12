@@ -4,6 +4,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 
 import { cellToBoundary, cellToChildren, cellToParent, getHexagonEdgeLengthAvg, getRes0Cells } from "h3-js";
 import { Globe2, Minus, Plus, Scan } from "lucide-react";
+import type { Feature, FeatureCollection } from "geojson";
 import type { GeoJSONSource, Map as MapboxMap } from "mapbox-gl";
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type RefObject } from "react";
 
@@ -57,7 +58,7 @@ export interface GlobeSeed {
 }
 
 type Ring = [number, number][];
-type Fc = GeoJSON.FeatureCollection;
+type Fc = FeatureCollection;
 
 const EMPTY_FC: Fc = { type: "FeatureCollection", features: [] };
 /** How many levels of regrouping the twin's cells get, at most. */
@@ -82,7 +83,7 @@ function ringOf(h3: string): Ring | null {
   return spread(shifted) <= 180 ? shifted : null;
 }
 
-function polygon(ring: Ring, properties: Record<string, unknown>): GeoJSON.Feature {
+function polygon(ring: Ring, properties: Record<string, unknown>): Feature {
   return { type: "Feature", properties, geometry: { type: "Polygon", coordinates: [ring] } };
 }
 
@@ -90,7 +91,7 @@ function polygon(ring: Ring, properties: Record<string, unknown>): GeoJSON.Featu
 let worldTiling: Fc | null = null;
 function world(): Fc {
   if (worldTiling) return worldTiling;
-  const features: GeoJSON.Feature[] = [];
+  const features: Feature[] = [];
   const roots = getRes0Cells();
   for (const r of [1, 2])
     for (const c of roots.flatMap((root) => cellToChildren(root, r))) {
@@ -175,7 +176,7 @@ const HexGlobe = forwardRef<GlobeHandle, {
   fineZoomRef.current = levels[0]?.min ?? 0;
 
   const cells = useMemo((): Fc => {
-    const features: GeoJSON.Feature[] = [];
+    const features: Feature[] = [];
     for (const h of grid.hexes) {
       const ring = ringOf(h.h3);
       if (ring) features.push(polygon(ring, { i: h.index, l: 0, c: colours[h.index] ?? emptyColour }));
@@ -400,7 +401,7 @@ const HexGlobe = forwardRef<GlobeHandle, {
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) return;
-    const features: GeoJSON.Feature[] = [];
+    const features: Feature[] = [];
     for (const a of areas) {
       features.push(polygon(circle(a.lat, a.lon, a.radiusKm), { kind: "area", on: a.active }));
       const top = circle(a.lat, a.lon, a.radiusKm)[0]!;
