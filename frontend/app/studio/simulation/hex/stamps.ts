@@ -43,11 +43,19 @@ export interface TwinContext {
   susceptible: string | null;
   /** The state that drives coupled transitions: who passes it on. */
   infectious: string | null;
+  /**
+   * Where someone who cannot catch it sits: the state the infectious leave for
+   * without needing care, and that nothing leaves. Null when the model declares
+   * none, and prior immunity then has nowhere to be placed.
+   */
+  immune: string | null;
   couplings: string[];
   /** Severities the declared model produces, in order of first appearance. */
   acuities: string[];
   /** Activities some facility can provide. */
   activities: string[];
+  /** What each severity occupies, as the twin's care protocols declare it. */
+  care: { acuity: string; activity: string }[];
 }
 
 function text(v: unknown): string | null {
@@ -93,14 +101,26 @@ export function twinContext(ex: SimExport): TwinContext {
   const leaving = new Map<string, Map<string, number>>();
   const couplings = new Set<string>();
   const acuities: string[] = [];
+  const left = new Set<string>();
+  /** Quiet exits: a spontaneous passage that asks for no care. */
+  const quiet: { from: string; to: string }[] = [];
+  const care: TwinContext["care"] = [];
   for (const o of ex.objects) {
     const m = bound.get(o.type);
+    if (m?.has("serves_severity") && m.has("consumes_activity")) {
+      const acuity = text(o.properties[m.get("serves_severity")!]);
+      const activity = text(o.properties[m.get("consumes_activity")!]);
+      if (acuity && activity && !care.some((c) => c.acuity === acuity && c.activity === activity)) care.push({ acuity, activity });
+    }
     if (!m?.has("leaves_state") || !m.has("enters_state")) continue;
     const prop = (mech: string) => (m.has(mech) ? text(o.properties[m.get(mech)!]) : null);
     const leaves = prop("leaves_state");
+    const enters = prop("enters_state");
     const driven = prop("driven_by_state");
     const along = prop("couples_along");
     const produces = prop("produces_demand");
+    if (leaves) left.add(leaves);
+    if (leaves && enters && !driven && !produces) quiet.push({ from: leaves, to: enters });
     if (along) couplings.add(along);
     if (produces && !acuities.includes(produces)) acuities.push(produces);
     if (driven && leaves) {
@@ -113,14 +133,21 @@ export function twinContext(ex: SimExport): TwinContext {
   const top = (m: Map<string, number> | undefined) =>
     m ? Array.from(m.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? null : null;
   const infectious = top(drivers);
+  const immune =
+    quiet
+      .filter((q) => q.from === infectious && !left.has(q.to))
+      .map((q) => q.to)
+      .sort()[0] ?? null;
   return {
     facilities,
     populations: ex.populations.map((p) => ({ id: p.id, name: p.name || p.id, size: p.size, servedBy: p.served_by })),
     susceptible: infectious ? top(leaving.get(infectious)) : null,
     infectious,
+    immune,
     couplings: Array.from(couplings).sort(),
     acuities,
     activities: Array.from(activities).sort(),
+    care,
   };
 }
 
@@ -145,7 +172,13 @@ export type StampBody =
       /** Null covers every catchment. */
       populations: string[] | null;
     }
-  | { kind: "capacity"; facility: string; activity: string; amount: number };
+  | { kind: "capacity"; facility: string; activity: string; amount: number }
+  /** Share of the units providing an activity already in use, at every site, for the whole run. */
+  | { kind: "occupancy"; activity: string; share: number }
+  /** Share of every catchment that cannot catch it when the run starts. */
+  | { kind: "immunity"; share: number }
+  /** Every contact layer scaled for the whole run: a variant that passes on more, or less, easily. */
+  | { kind: "variant"; factor: number };
 
 export type Stamp = StampBody & {
   /** The override's id once saved; a temporary id before. */
@@ -156,9 +189,25 @@ export type Stamp = StampBody & {
   days: number;
 };
 
-export type Lane = "Events" | "Measures" | "Resources";
+/**
+ * `Conditions` are what the network and the population look like before
+ * anything is stamped: how full the beds usually are, who is already immune,
+ * how easily this variant passes on. Not events on a day and not choices — both
+ * runs start from them.
+ */
+export type Lane = "Conditions" | "Events" | "Measures" | "Resources";
+
+export function isCondition(s: Pick<Stamp, "kind">): boolean {
+  return s.kind === "occupancy" || s.kind === "immunity" || s.kind === "variant";
+}
+
+/** What the planner decided, as opposed to what happens to the city. */
+export function isChoice(s: Pick<Stamp, "kind">): boolean {
+  return s.kind === "measure" || s.kind === "capacity";
+}
 
 export function laneOf(s: Pick<Stamp, "kind">): Lane {
+  if (isCondition(s)) return "Conditions";
   return s.kind === "seed" || s.kind === "heat" ? "Events" : s.kind === "measure" ? "Measures" : "Resources";
 }
 
@@ -221,6 +270,8 @@ export interface Described {
 /** INRS–INSPQ hottest-5 %-of-days ER total, per person per day, half on a stretcher. */
 export const HEAT_PER_THOUSAND = 0.08;
 
+const share = (x: number) => `${Math.round(x * 1000) / 10} %`;
+
 export function describe(s: Stamp, ctx: Pick<TwinContext, "populations" | "facilities">): Described {
   const last = s.start + s.days - 1;
   const span = s.days > 1 ? `days ${s.start}–${last}` : `day ${s.start}`;
@@ -268,6 +319,34 @@ export function describe(s: Stamp, ctx: Pick<TwinContext, "populations" | "facil
         why: "A choice, not evidence: it changes capacity directly.",
       };
     }
+    case "occupancy":
+      return {
+        title: `Usual occupancy: ${share(s.share)} of ${s.activity} already in use`,
+        when: "whole run",
+        tier: "Assumption",
+        why:
+          "Held at every site for the whole run by the patients this scenario is not about, so a wave meets hospitals as " +
+          "full as they usually are rather than empty. A site whose own units already show more in use keeps its own " +
+          "figure. Replace it with your own usual occupancy.",
+      };
+    case "immunity":
+      return {
+        title: `${share(s.share)} already immune, everywhere`,
+        when: "at the start",
+        tier: "Assumption",
+        why:
+          "Vaccination and earlier infection, as one share of every catchment that cannot catch it when the run starts. " +
+          "An effective figure: fitted against an observed wave, it also absorbs whatever else slowed that wave down.",
+      };
+    case "variant":
+      return {
+        title: `Variant: contact passes it on ×${Math.round(s.factor * 100) / 100}`,
+        when: "whole run",
+        tier: "Assumption",
+        why:
+          "Every contact layer the twin declares is scaled by this factor for the whole run, in both runs: the variant is " +
+          "part of what happens, not a choice.",
+      };
   }
 }
 
@@ -295,6 +374,8 @@ export interface EngineInput {
   spread: SpreadInput | null;
   /** Effects that do not come from the spreading model. */
   effects: SimEffect[];
+  /** Usual occupancy by activity, as a share: where the network starts, in both runs. */
+  occupancy: Record<string, number>;
   /** Said on screen, never solved silently. */
   notes: string[];
 }
@@ -308,7 +389,7 @@ export interface EngineInput {
  */
 export function engineInput(
   stamps: Stamp[],
-  ctx: Pick<TwinContext, "populations" | "susceptible" | "infectious">,
+  ctx: Pick<TwinContext, "populations" | "susceptible" | "infectious"> & Partial<Pick<TwinContext, "immune" | "couplings">>,
   variant: Variant,
   horizon: number,
 ): EngineInput {
@@ -316,6 +397,20 @@ export function engineInput(
   const effects: SimEffect[] = [];
   const seeds = stamps.filter((s): s is Stamp & { kind: "seed" } => s.kind === "seed");
   let spread: SpreadInput | null = null;
+
+  // Conditions hold in both runs: they describe where things start, not a choice.
+  const occupancy: Record<string, number> = {};
+  for (const s of stamps) {
+    if (s.kind !== "occupancy") continue;
+    const v = Math.max(0, Math.min(1, s.share));
+    if (s.activity in occupancy && occupancy[s.activity] !== v)
+      notes.push(`Two usual occupancies are set for ${s.activity}; the higher one is used.`);
+    occupancy[s.activity] = Math.max(occupancy[s.activity] ?? 0, v);
+  }
+  const immunities = stamps.filter((s): s is Stamp & { kind: "immunity" } => s.kind === "immunity");
+  const immuneShare = immunities.length ? Math.max(0, Math.min(1, Math.max(...immunities.map((s) => s.share)))) : 0;
+  if (immunities.length > 1) notes.push("Two prior immunities are set; the higher one is used.");
+  const variants = stamps.filter((s): s is Stamp & { kind: "variant" } => s.kind === "variant");
 
   if (seeds.length > 0) {
     if (!ctx.susceptible || !ctx.infectious) {
@@ -328,13 +423,30 @@ export function engineInput(
         notes.push(`The engine seeds once, so every outbreak starts on day ${offset}, the earliest one.`);
       const seeded = new Map<string, number>();
       for (const s of seeds) seeded.set(s.population, (seeded.get(s.population) ?? 0) + s.count);
+      const placeImmune = immuneShare > 0 && !!ctx.immune;
+      if (immuneShare > 0 && !ctx.immune)
+        notes.push(
+          "The twin's model declares no state for people who recovered without care, so prior immunity has nowhere to be placed and is left out.",
+        );
       const out: SpreadInput["seeds"] = {};
       for (const p of ctx.populations) {
         if (p.size <= 0) continue;
         const sick = Math.min(p.size, seeded.get(p.id) ?? 0);
-        out[p.id] = { [ctx.susceptible]: p.size - sick, ...(sick > 0 ? { [ctx.infectious]: sick } : {}) };
+        // Whole people: a share of a head count is rounded, and never takes the sick.
+        const immune = placeImmune ? Math.min(p.size - sick, Math.round(p.size * immuneShare)) : 0;
+        out[p.id] = {
+          [ctx.susceptible]: p.size - sick - immune,
+          ...(sick > 0 ? { [ctx.infectious]: sick } : {}),
+          ...(immune > 0 ? { [ctx.immune!]: immune } : {}),
+        };
       }
       const changes: SpreadInput["changes"] = [];
+      // The variant first, in both runs: it is what happens, and a measure
+      // then scales what is left of each layer.
+      for (const v of variants) {
+        if (!(v.factor > 0) || v.factor === 1) continue;
+        for (const layer of ctx.couplings ?? []) changes.push({ layer, factor: v.factor, fromStep: 0, toStep: null });
+      }
       if (variant === "full") {
         for (const m of stamps) {
           if (m.kind !== "measure") continue;
@@ -356,8 +468,11 @@ export function engineInput(
       }
       spread = { seeds: out, changes, offset, horizon: Math.max(1, horizon - offset) };
     }
-  } else if (variant === "full" && stamps.some((s) => s.kind === "measure")) {
-    notes.push("Measures act on how an outbreak spreads. With no outbreak stamped, they change nothing.");
+  } else {
+    if (variant === "full" && stamps.some((s) => s.kind === "measure"))
+      notes.push("Measures act on how an outbreak spreads. With no outbreak stamped, they change nothing.");
+    if (immunities.length || variants.length)
+      notes.push("Prior immunity and the variant act on an outbreak. With no outbreak stamped, they change nothing.");
   }
 
   for (const s of stamps) {
@@ -382,7 +497,7 @@ export function engineInput(
       });
     }
   }
-  return { spread, effects, notes };
+  return { spread, effects, occupancy, notes };
 }
 
 /** Moves a spread run's effects to the day it actually started. */

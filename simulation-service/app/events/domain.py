@@ -53,6 +53,12 @@ class Resource(BaseModel):
     # them makes a bed the ontology frees stay locked for the whole run: an
     # event that reopens a wing then does nothing at all.
     reserved: NonNegativeFloat = 0.0
+    # Units held for the whole run by people the event is not about: the usual
+    # occupancy of a ward, declared as a share when the twin marks no bed in
+    # use. Kept apart from `reserved` because nothing here ever releases them —
+    # they are not admitted by the run, so they are not discharged by it — and
+    # apart from the objects because no instance says which bed it is.
+    held: NonNegativeFloat = 0.0
     # Which care activities this resource makes possible. Demand is matched
     # against activities, never against resource ids, so two facilities can name
     # the same capability differently and still be comparable.

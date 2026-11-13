@@ -78,6 +78,9 @@ class CompareRequest(BaseModel):
     # should be visible to whoever reads the answer.
     mortality: float = 0.15
     census_acuity: str | None = None
+    # How full each kind of unit usually is, as a share by activity. For a twin
+    # that marks no bed in use: without it every hospital meets the event empty.
+    baseline_occupancy: dict[str, float] = Field(default_factory=dict)
     replicates: int = 1
     # Which tables of the run to hand back. Empty means none, which is the
     # default because a trajectory is far larger than the summary and most
@@ -492,6 +495,7 @@ def compare_route(req: CompareRequest) -> CompareResponse:
             population_sizes=req.population_sizes,
             route_capacity=req.route_capacity or None,
             census_acuity=req.census_acuity,
+            baseline_occupancy=req.baseline_occupancy or None,
         )
     except ContradictoryCareModel as exc:
         # Listed before the bare ValueError it inherits from, so the message

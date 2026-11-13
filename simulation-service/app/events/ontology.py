@@ -175,6 +175,37 @@ def _reserve_held(facility: Facility, requirement: CareRequirement | None, held:
             remaining -= take
 
 
+def _hold_usual_occupancy(
+    facilities: dict[str, Facility], shares: dict[str, float] | None
+) -> None:
+    """Take the usual occupancy out of what is free, site by site.
+
+    Refused rather than repaired when it cannot mean anything: a share outside
+    0–1 is a typo, and an activity no site provides would hold nothing and read
+    as a network with room to spare.
+    """
+    for activity, share in (shares or {}).items():
+        if not isinstance(share, (int, float)) or isinstance(share, bool) or not 0 <= share <= 1:
+            raise ValueError(
+                f"The usual occupancy of {activity!r} is {share!r}; a share of units "
+                f"in use is a number from 0 to 1."
+            )
+        touched = False
+        for facility in facilities.values():
+            for r in facility.enabling(activity):
+                touched = True
+                # A floor, not an addition: units the twin already shows in use
+                # count toward it.
+                extra = max(0.0, share * r.capacity - (r.capacity - r.quantity))
+                r.held += extra
+                r.quantity -= extra
+        if not touched:
+            raise ValueError(
+                f"A usual occupancy is given for {activity!r}, which no site provides. "
+                f"Holding nothing would read as a network with room to spare."
+            )
+
+
 def load(
     export: OntologyExport | dict[str, Any],
     care_model: dict[str, CareRequirement],
@@ -182,6 +213,7 @@ def load(
     population_sizes: dict[str, float] | None = None,
     route_capacity: float | None = None,
     census_acuity: str | None = None,
+    baseline_occupancy: dict[str, float] | None = None,
 ) -> SystemState:
     """Turn a platform export into a runnable world.
 
@@ -197,6 +229,14 @@ def load(
     acuity instead admits them as patients, so they occupy a bed, then leave and
     free it. The second is more realistic and needs an assumption about who they
     are, so it is the caller's to make, not this module's.
+
+    `baseline_occupancy` is the third hole: how full each kind of unit usually
+    is, as a share by activity, for a twin that marks no bed in use. A hospital
+    does not meet a wave empty — its beds are already nine-tenths taken by
+    everyone the event is not about — and a run that starts from zero reports a
+    comfortable 49 % where the real network overflowed. The share is held at
+    every site for the whole run, never discharged, and read as a floor: a site
+    whose own units already show more in use keeps its own figure.
     """
     ex = export if isinstance(export, OntologyExport) else OntologyExport.model_validate(export)
     sizes = population_sizes or {}
@@ -233,6 +273,8 @@ def load(
                 # nobody waiting — a straight line that looked like a crisis and
                 # was an artefact of loading.
                 _reserve_held(facilities[f.id], care_model.get(census_acuity), held)
+
+    _hold_usual_occupancy(facilities, baseline_occupancy)
 
     network = NetworkxBackend()
     for fid in facilities:

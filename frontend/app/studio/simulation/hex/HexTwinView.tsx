@@ -18,6 +18,7 @@ import {
   type OverlayScenario,
 } from "../../scenarios-api";
 import AddDataPanel from "./AddDataPanel";
+import BreakList from "./BreakList";
 import { engineMessage, runScenario, type RunOutput } from "./engine";
 import HexGlobe, { GlobeControls, type GlobeArea, type GlobeHandle, type GlobeSeed, type GlobeSite } from "./HexGlobe";
 import {
@@ -28,10 +29,15 @@ import {
   type GridPolygon,
   type HexGrid,
 } from "./hex-grid";
+import RealityCheck from "./RealityCheck";
+import { realityFromOverrides, realityToOverride, type RealityConfig } from "./reality";
+import { breakRows, people, QUEUE, seriesOf, siteBreaks, summarise } from "./results";
 import {
   describe as describeStamp,
   engineInput,
   HEAT_PER_THOUSAND,
+  isChoice,
+  isCondition,
   laneOf,
   measurePresets,
   stampFromOverride,
@@ -64,7 +70,7 @@ import { listTwinLayers, type TwinLayer } from "./layers-api";
 // so what the choices did is built rather than inferred.
 // ---------------------------------------------------------------------------
 
-type Tool = "inspect" | "seed" | "heat" | "measure" | "capacity";
+type Tool = "inspect" | "conditions" | "seed" | "heat" | "measure" | "capacity";
 /** The three built in, plus `layer:<type>\u0000<key>` for added data and `reading:<key>` for live measures. */
 type LensKey = "occupancy" | "sick" | "residents" | `layer:${string}` | `reading:${string}`;
 
@@ -79,6 +85,7 @@ interface ActiveLayer {
 
 const TOOLS: { key: Tool; label: string; lane: Lane | "Look"; hint: string }[] = [
   { key: "inspect", label: "Inspect", lane: "Look", hint: "Tap a cell to read it." },
+  { key: "conditions", label: "Starting conditions", lane: "Conditions", hint: "Where both runs start from. Nothing to tap: set a figure and it holds for the whole run." },
   { key: "seed", label: "Seed outbreak", lane: "Events", hint: "Tap a cell: an outbreak starts in its catchment on the day shown on the timeline." },
   { key: "heat", label: "Heat wave", lane: "Events", hint: "Tap anywhere: a heat wave over every catchment, from the day shown." },
   { key: "measure", label: "Measure", lane: "Measures", hint: "Tap a cell: the measure applies around it, from the day shown." },
@@ -87,11 +94,12 @@ const TOOLS: { key: Tool; label: string; lane: Lane | "Look"; hint: string }[] =
 
 const LANE_INK: Record<Lane | "Look", string> = {
   Look: "text-ink-muted",
+  Conditions: "text-ink-body",
   Events: "text-danger-ink",
   Measures: "text-scenario",
   Resources: "text-brand-deep",
 };
-const LANE_BG: Record<Lane, string> = { Events: "bg-danger-ink", Measures: "bg-scenario", Resources: "bg-brand" };
+const LANE_BG: Record<Lane, string> = { Conditions: "bg-ink-muted", Events: "bg-danger-ink", Measures: "bg-scenario", Resources: "bg-brand" };
 
 const OCC_STEPS: [number, string, string][] = [
   [0.9, "#dcefe5", "under 90 %"],
@@ -167,6 +175,7 @@ export default function HexTwinView() {
   const [scenarios, setScenarios] = useState<OverlayScenario[]>([]);
   const [scenarioId, setScenarioId] = useState<string | null>(null);
   const [stamps, setStamps] = useState<Stamp[]>([]);
+  const [reality, setReality] = useState<{ id: string; config: RealityConfig } | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
 
   const [layers, setLayers] = useState<TwinLayer[]>([]);
@@ -184,8 +193,16 @@ export default function HexTwinView() {
   };
   const [day, setDay] = useState(0);
   const [horizon, setHorizon] = useState(60);
-  const [activity, setActivity] = useState<string>("");
+  const [activity, setActivityState] = useState<string>("");
+  // Until someone picks what to read, a scenario may open on what it is about.
+  const [activityTouched, setActivityTouched] = useState(false);
+  const setActivity = (a: string) => {
+    setActivityTouched(true);
+    setActivityState(a);
+  };
   const [cell, setCell] = useState<number | null>(null);
+  // The site whose own curve the timeline shows; null is every site together.
+  const [focus, setFocus] = useState<number | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
 
   const [seedCount, setSeedCount] = useState(100);
@@ -194,6 +211,9 @@ export default function HexTwinView() {
   const [scope, setScope] = useState<"catchment" | "5" | "everywhere">("5");
   const [measureDays, setMeasureDays] = useState(14);
   const [amount, setAmount] = useState(10);
+  const [occupancyPct, setOccupancyPct] = useState(85);
+  const [immunePct, setImmunePct] = useState(50);
+  const [variantFactor, setVariantFactor] = useState(1.5);
   const [pickCatchment, setPickCatchment] = useState("");
 
   const [run, setRun] = useState<RunOutput | null>(null);
@@ -217,7 +237,7 @@ export default function HexTwinView() {
       const ex = await fetchSimExport(env);
       const c = twinContext(ex);
       setCtx(c);
-      setActivity((a) => a || (c.activities.find((x) => /civi|stretch|urg|emerg/i.test(x)) ?? c.activities[0] ?? ""));
+      setActivityState((a) => a || (c.activities.find((x) => /civi|stretch|urg|emerg/i.test(x)) ?? c.activities[0] ?? ""));
       // Catchment outlines are optional: without PostGIS, or without shapes,
       // cells are placed by their nearest site and the page says so.
       try {
@@ -273,6 +293,7 @@ export default function HexTwinView() {
   const loadStamps = useCallback(async (id: string | null) => {
     if (!id) {
       setStamps([]);
+      setReality(null);
       return;
     }
     const { overrides } = await listScenarioOverrides(id);
@@ -282,6 +303,7 @@ export default function HexTwinView() {
         .filter((s): s is Stamp => s !== null)
         .sort((a, b) => a.start - b.start),
     );
+    setReality(realityFromOverrides(overrides));
   }, []);
 
   useEffect(() => {
@@ -297,8 +319,18 @@ export default function HexTwinView() {
   useEffect(() => {
     setRun(null);
     setSelected(null);
+    setFocus(null);
+    setActivityTouched(false);
     void loadStamps(scenarioId).catch((err) => setMessage(engineMessage(err)));
   }, [scenarioId, loadStamps]);
+
+  // A scenario that holds beds or adds them is about that kind of unit: open
+  // on it rather than on whatever the twin lists first.
+  useEffect(() => {
+    if (activityTouched || !ctx) return;
+    const about = stamps.find((s): s is Stamp & { kind: "occupancy" | "capacity" } => s.kind === "occupancy" || s.kind === "capacity");
+    if (about && ctx.activities.includes(about.activity)) setActivityState(about.activity);
+  }, [stamps, ctx, activityTouched]);
 
   // --- derived ------------------------------------------------------------
 
@@ -353,6 +385,32 @@ export default function HexTwinView() {
       return liveOccupancy[site] ?? Number.NaN;
     },
     [run, stale, d, liveOccupancy],
+  );
+
+  /** People still waiting at a site at the end of the day shown, in the planner's run. */
+  const waitingAt = useCallback(
+    (site: number) => {
+      if (site < 0 || !run || stale) return 0;
+      const w = run.full.waiting[d]?.[site];
+      return w !== undefined && Number.isFinite(w) && w >= QUEUE ? w : 0;
+    },
+    [run, stale, d],
+  );
+
+  /**
+   * What a site is asked for, against what it holds: the share in use plus the
+   * queue. Occupancy alone stops at 100 %, so a site with as many people waiting
+   * as it has beds would read the same as one that is merely full.
+   */
+  const pressureAt = useCallback(
+    (site: number) => {
+      const occ = occupancyAt(site);
+      const w = waitingAt(site);
+      if (!Number.isFinite(occ) || w <= 0) return occ;
+      const cap = run?.full.capacity[d]?.[site] ?? 0;
+      return cap > 0 ? occ + w / cap : occ;
+    },
+    [occupancyAt, waitingAt, run, d],
   );
 
   const active = useMemo((): ActiveLayer | null => {
@@ -469,12 +527,50 @@ export default function HexTwinView() {
     }
   }
 
+  /** A condition is one figure for the whole run: setting it again replaces it. */
+  function setCondition(body: StampBody) {
+    const old = stamps.find(
+      (s) => s.kind === body.kind && (s.kind !== "occupancy" || body.kind !== "occupancy" || s.activity === body.activity),
+    );
+    if (old) void replace(old, { ...body, id: old.id, start: 0, days: horizon } as Stamp);
+    else void save(body, 0, horizon);
+  }
+
+  async function saveReality(config: RealityConfig) {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const id = await ensureScenario();
+      if (!id) return;
+      await addScenarioOverride(id, realityToOverride(config));
+      if (reality) await deleteScenarioOverride(id, reality.id);
+      await loadStamps(id);
+    } catch (err) {
+      setMessage(engineMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function clearReality() {
+    if (!scenarioId || !reality) return;
+    setBusy(true);
+    try {
+      await deleteScenarioOverride(scenarioId, reality.id);
+      await loadStamps(scenarioId);
+    } catch (err) {
+      setMessage(engineMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function tap(index: number) {
     if (!grid || !ctx) return;
     const h = grid.hexes[index];
     if (!h) return;
     setCell(index);
-    if (tool === "inspect" || busy) return;
+    if (tool === "inspect" || tool === "conditions" || busy) return;
     const at = { lat: h.lat, lon: h.lon };
     if (tool === "seed") {
       if (!h.population) return setMessage("This cell belongs to no catchment, so nobody there can be seeded.");
@@ -594,7 +690,7 @@ export default function HexTwinView() {
     if (lens.startsWith("layer:") || lens.startsWith("reading:")) return NO_DATA;
     if (lens === "residents") return ramp(h.residents / hexArea, DENSITY_STEPS);
     if (lens === "sick") return sick && h.population ? ramp(sick[h.population]?.[d] ?? Number.NaN, SICK_STEPS) : NO_DATA;
-    return ramp(occupancyAt(siteOfCell[i] ?? -1), OCC_STEPS);
+    return ramp(pressureAt(siteOfCell[i] ?? -1), OCC_STEPS);
   };
   const legend = active
     ? active.legend
@@ -619,14 +715,15 @@ export default function HexTwinView() {
   const plainSites = !labelSites || active !== null;
   const globeSites: GlobeSite[] = shownSites.map(({ f, i }) => {
     const occ = occupancyAt(i);
+    const queue = waitingAt(i);
     const boosted = stamps.some((s) => s.kind === "capacity" && s.facility === f.id && d >= s.start);
     return {
       id: f.id,
       name: f.name,
       lat: f.lat,
       lon: f.lon,
-      colour: plainSites ? "#1c2127" : Number.isFinite(occ) ? ramp(occ, OCC_STEPS) : "#ffffff",
-      label: plainSites ? null : `${pct(occ)}${boosted ? " +" : ""}`,
+      colour: plainSites ? "#1c2127" : Number.isFinite(occ) ? ramp(pressureAt(i), OCC_STEPS) : "#ffffff",
+      label: plainSites ? null : `${pct(occ)}${queue > 0 ? ` · ${people(queue)} waiting` : ""}${boosted ? " +" : ""}`,
     };
   });
   const globeAreas: GlobeArea[] = areas.map((s) => ({
@@ -644,7 +741,7 @@ export default function HexTwinView() {
       ? "Residents per km²"
       : lens === "sick"
         ? "Sick per 1,000"
-        : `${activity || "Capacity"} occupancy`;
+        : `${activity || "Capacity"} occupancy${run && !stale ? ", queue included" : ""}`;
 
   const inspected = cell !== null ? grid.hexes[cell] : undefined;
   const inspectedSite = cell !== null ? (siteOfCell[cell] ?? -1) : -1;
@@ -656,12 +753,21 @@ export default function HexTwinView() {
     xs.reduce((b, v, t) => (Number.isFinite(v) && v > b.v ? { v, t } : b), { v: -Infinity, t: 0 });
   const pa = run ? peak(run.events.island) : null;
   const pb = run ? peak(run.full.island) : null;
-  const hasChoices = stamps.some((s) => laneOf(s) !== "Events");
+  const hasChoices = stamps.some(isChoice);
   const notes = run ? Array.from(new Set(run.events.notes.concat(run.full.notes))) : [];
 
-  const chartTop = run
-    ? Math.max(1.2, ...run.events.island.filter(Number.isFinite), ...run.full.island.filter(Number.isFinite)) * 1.05
-    : 2;
+  // Where it breaks, in each run, read off the engine's queue.
+  const breaksEvents = run ? siteBreaks(run.events, ctx.facilities, run.activity) : [];
+  const breaksFull = run ? siteBreaks(run.full, ctx.facilities, run.activity) : [];
+  const rows = breakRows(breaksEvents, breaksFull);
+  // A focus survives only while it names a site the run reported on.
+  const focused = run && focus !== null && ctx.facilities[focus] ? focus : null;
+  const curveEvents = run ? (focused === null ? run.events.island : seriesOf(run.events.occupancy, focused)) : [];
+  const curveFull = run ? (focused === null ? run.full.island : seriesOf(run.full.occupancy, focused)) : [];
+  const curveName = focused === null ? "every site" : ctx.facilities[focused]!.name;
+  const queueFull = run && focused !== null ? seriesOf(run.full.waiting, focused) : [];
+
+  const chartTop = run ? Math.max(1.2, ...curveEvents.filter(Number.isFinite), ...curveFull.filter(Number.isFinite)) * 1.05 : 2;
   const CH = 150;
   const CW = 1000;
   const yOf = (v: number) => CH - (v / chartTop) * CH;
@@ -672,10 +778,16 @@ export default function HexTwinView() {
       .join(" ");
 
   const tier = weakestTier(stamps, ctx);
-  const sorted = [...stamps].sort((a, b) => a.start - b.start);
+  // Conditions first: they are where everything else starts from.
+  const sorted = [...stamps].sort((a, b) => Number(isCondition(b)) - Number(isCondition(a)) || a.start - b.start);
 
   function payloadOf(s: Stamp): string {
     if (s.kind === "seed") return JSON.stringify({ seeds: { [s.population]: { [ctx!.infectious ?? "?"]: s.count } } }, null, 2);
+    if (s.kind === "occupancy") return JSON.stringify({ baselineOccupancy: { [s.activity]: s.share } }, null, 2);
+    if (s.kind === "immunity")
+      return JSON.stringify({ seeds: { "every catchment": { [ctx!.immune ?? "?"]: `${Math.round(s.share * 1000) / 10} % of its residents` } } }, null, 2);
+    if (s.kind === "variant")
+      return JSON.stringify(ctx!.couplings.map((layer) => ({ layer, factor: s.factor, fromStep: 0, toStep: null })), null, 2);
     if (s.kind === "measure")
       return JSON.stringify(
         s.layers.map((l) => ({
@@ -850,7 +962,28 @@ export default function HexTwinView() {
                 {activity}
               </label>
             ) : null}
-            {tool !== "inspect" ? (
+            {tool === "conditions" ? (
+              <span className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                <span className="flex items-center gap-1">
+                  <label htmlFor="cond-occupancy">Usual occupancy of {activity}</label>
+                  <input id="cond-occupancy" type="number" min={0} max={99} value={occupancyPct} onChange={(e) => setOccupancyPct(Math.max(0, Math.min(99, Number(e.target.value) || 0)))} className={cn(FIELD, "w-16")} />
+                  %
+                  <button type="button" disabled={busy || !activity} onClick={() => setCondition({ kind: "occupancy", activity, share: occupancyPct / 100 })} className="rounded border border-line px-2 py-1 font-semibold disabled:opacity-50">Set</button>
+                </span>
+                <span className="flex items-center gap-1">
+                  <label htmlFor="cond-immune">Already immune</label>
+                  <input id="cond-immune" type="number" min={0} max={99} step={0.5} value={immunePct} onChange={(e) => setImmunePct(Math.max(0, Math.min(99, Number(e.target.value) || 0)))} className={cn(FIELD, "w-16")} />
+                  %
+                  <button type="button" disabled={busy} onClick={() => setCondition({ kind: "immunity", share: immunePct / 100 })} className="rounded border border-line px-2 py-1 font-semibold disabled:opacity-50">Set</button>
+                </span>
+                <span className="flex items-center gap-1">
+                  <label htmlFor="cond-variant">Variant passes on ×</label>
+                  <input id="cond-variant" type="number" min={0.1} max={20} step={0.05} value={variantFactor} onChange={(e) => setVariantFactor(Math.max(0.1, Math.min(20, Number(e.target.value) || 1)))} className={cn(FIELD, "w-20")} />
+                  <button type="button" disabled={busy} onClick={() => setCondition({ kind: "variant", factor: variantFactor })} className="rounded border border-line px-2 py-1 font-semibold disabled:opacity-50">Set</button>
+                </span>
+              </span>
+            ) : null}
+            {tool !== "inspect" && tool !== "conditions" ? (
               <span className="flex items-center gap-1">
                 <label htmlFor="pick-catchment" className="sr-only">Or apply to a catchment</label>
                 <select id="pick-catchment" value={pickCatchment} onChange={(e) => setPickCatchment(e.target.value)} className={FIELD}>
@@ -1026,7 +1159,10 @@ export default function HexTwinView() {
               <span className="text-ink-muted">Sends {activity} patients to</span>
               <span>{ctx.facilities[inspectedSite]?.name ?? "no site"}</span>
               <span className="text-ink-muted">That site, day {d}</span>
-              <span className="tabular-nums">{pct(occupancyAt(inspectedSite))}</span>
+              <span className="tabular-nums">
+                {pct(occupancyAt(inspectedSite))}
+                {waitingAt(inspectedSite) > 0 ? ` · ${people(waitingAt(inspectedSite))} waiting` : ""}
+              </span>
               {active && cell !== null ? (
                 <>
                   <span className="text-ink-muted">{active.name}</span>
@@ -1075,8 +1211,12 @@ export default function HexTwinView() {
                   {open ? (
                     <div className="flex flex-col gap-2 px-2.5 pb-2.5">
                       <div className="flex flex-wrap gap-1">
-                        <button type="button" disabled={busy} onClick={() => shift(-1)} className="rounded border border-line bg-white px-2 py-1 text-[11.5px] disabled:opacity-50">− 1 day</button>
-                        <button type="button" disabled={busy} onClick={() => shift(1)} className="rounded border border-line bg-white px-2 py-1 text-[11.5px] disabled:opacity-50">+ 1 day</button>
+                        {isCondition(s) ? null : (
+                          <>
+                            <button type="button" disabled={busy} onClick={() => shift(-1)} className="rounded border border-line bg-white px-2 py-1 text-[11.5px] disabled:opacity-50">− 1 day</button>
+                            <button type="button" disabled={busy} onClick={() => shift(1)} className="rounded border border-line bg-white px-2 py-1 text-[11.5px] disabled:opacity-50">+ 1 day</button>
+                          </>
+                        )}
                         {resizable ? (
                           <>
                             <button type="button" disabled={busy || s.days <= 1} onClick={() => void replace(s, { ...s, days: s.days - 1 })} className="rounded border border-line bg-white px-2 py-1 text-[11.5px] disabled:opacity-50">Shorter</button>
@@ -1137,6 +1277,41 @@ export default function HexTwinView() {
               </>
             )}
           </div>
+
+          {run ? (
+            <div className="border-t border-line-soft p-3">
+              <BreakList
+                activity={run.activity}
+                rows={rows}
+                events={summarise(breaksEvents, run.events)}
+                full={summarise(breaksFull, run.full)}
+                hasChoices={hasChoices}
+                focus={focused}
+                onFocus={(i) => {
+                  setFocus(i);
+                  if (i !== null) setTimelineOpen(true);
+                }}
+              />
+            </div>
+          ) : null}
+
+          <div className="border-t border-line-soft p-3">
+            <RealityCheck
+              key={`${scenarioId ?? ""}:${reality?.id ?? ""}`}
+              env={env}
+              config={reality?.config ?? null}
+              acuities={ctx.acuities}
+              suggested={ctx.care.find((c) => c.activity === activity)?.acuity ?? null}
+              horizon={horizon}
+              day={d}
+              events={run ? run.events.arrivals : null}
+              full={run ? run.full.arrivals : null}
+              stale={stale}
+              busy={busy}
+              onSave={(c) => void saveReality(c)}
+              onClear={() => void clearReality()}
+            />
+          </div>
         </OverlayPanel>
           </div>
         </div>
@@ -1176,7 +1351,7 @@ export default function HexTwinView() {
                       )}
                       style={{ left: `${(s.start / horizon) * 100}%`, width: `${Math.max((s.days / horizon) * 100, 1.5)}%` }}
                     >
-                      {s.kind === "seed" ? "Outbreak" : s.kind === "heat" ? "Heat" : s.kind === "measure" ? s.label : `+${s.amount}`}
+                      {s.kind === "seed" ? "Outbreak" : s.kind === "heat" ? "Heat" : s.kind === "measure" ? s.label : s.kind === "capacity" ? `${s.amount > 0 ? "+" : ""}${s.amount}` : ""}
                     </button>
                   ))}
                 <div className="pointer-events-none absolute -bottom-1 -top-1 w-0.5 bg-ink" style={{ left: `${((d + 0.5) / horizon) * 100}%` }} />
@@ -1185,13 +1360,13 @@ export default function HexTwinView() {
           ))}
           <span className="text-[10.5px] font-bold uppercase tracking-wide text-ink-muted">{activity}</span>
           <div className="relative">
-            <svg viewBox={`0 0 ${CW} ${CH}`} preserveAspectRatio="none" className="block h-[150px] w-full" role="img" aria-label={`Occupancy of ${activity} across every site, by day`}>
+            <svg viewBox={`0 0 ${CW} ${CH}`} preserveAspectRatio="none" className="block h-[150px] w-full" role="img" aria-label={`Occupancy of ${activity} at ${curveName}, by day`}>
               <rect width={CW} height={CH} fill="#f6f7f9" />
               <line x1={0} x2={CW} y1={yOf(1)} y2={yOf(1)} stroke="#a82255" strokeDasharray="6 4" vectorEffect="non-scaling-stroke" />
               {run ? (
                 <>
-                  <polyline points={line(run.events.island)} fill="none" stroke="#8f99a8" strokeWidth={2.5} vectorEffect="non-scaling-stroke" />
-                  <polyline points={line(run.full.island)} fill="none" stroke="#2d72d2" strokeWidth={2.5} vectorEffect="non-scaling-stroke" />
+                  <polyline points={line(curveEvents)} fill="none" stroke="#8f99a8" strokeWidth={2.5} vectorEffect="non-scaling-stroke" />
+                  <polyline points={line(curveFull)} fill="none" stroke="#2d72d2" strokeWidth={2.5} vectorEffect="non-scaling-stroke" />
                 </>
               ) : null}
               <line x1={((d + 0.5) / horizon) * CW} x2={((d + 0.5) / horizon) * CW} y1={0} y2={CH} stroke="#1c2127" strokeWidth={2} vectorEffect="non-scaling-stroke" />
@@ -1208,9 +1383,18 @@ export default function HexTwinView() {
             <span className="flex items-center gap-1.5"><span className="h-[3px] w-4 bg-brand" />Your scenario</span>
             {run && !stale ? (
               <span>
-                Day {d}: <strong className="tabular-nums">{pct(run.events.island[d] ?? Number.NaN)} → {pct(run.full.island[d] ?? Number.NaN)}</strong>
+                Day {d}: <strong className="tabular-nums">{pct(curveEvents[d] ?? Number.NaN)} → {pct(curveFull[d] ?? Number.NaN)}</strong>
+                {focused !== null && (queueFull[d] ?? 0) >= QUEUE ? <span className="text-danger-ink"> · {people(queueFull[d]!)} waiting</span> : null}
               </span>
             ) : null}
+            <span className="ml-auto flex items-center gap-2 font-semibold text-ink">
+              {focused === null ? "Every site together" : curveName}
+              {focused !== null ? (
+                <button type="button" onClick={() => setFocus(null)} className="rounded border border-line px-1.5 py-0.5 text-[11px] font-normal text-ink-body hover:bg-canvas-raised">
+                  Back to every site
+                </button>
+              ) : null}
+            </span>
           </div>
         </div>
         ) : null}

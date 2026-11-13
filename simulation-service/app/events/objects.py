@@ -314,7 +314,10 @@ def rebuild(
         # with beds the ontology itself marked occupied, so an event that freed
         # them changed nothing and reopening a wing was impossible.
         existing.capacity = resource.capacity
-        existing.quantity = max(0.0, resource.quantity - existing.reserved)
+        # ...and minus what is held by people the run does not model, which no
+        # object records. Left out, any effect touching the ward would hand the
+        # usual occupancy back as free beds.
+        existing.quantity = max(0.0, resource.quantity - existing.reserved - existing.held)
     # An activity whose objects have all gone is not merely empty, it is absent;
     # leaving a stale zero-capacity resource behind would keep it in every
     # category total and in the composer's vocabulary.

@@ -2076,6 +2076,8 @@ export async function runSimulation(
     routeCapacity?: number;
     /** What to call the patients already in the beds when the run starts. */
     censusAcuity?: string;
+    /** How full each kind of unit usually is, as a share by activity. Held for the whole run. */
+    baselineOccupancy?: Record<string, number>;
     twinScenarioId?: string;
     /** Which tables of the run to bring back. Empty means the ranking only. */
     collect?: Array<"steps" | "facilities" | "decisions">;
@@ -2085,6 +2087,44 @@ export async function runSimulation(
     method: "POST",
     body,
   });
+}
+
+/** How far a simulated series sits from an observed one. Read the peak offset first. */
+export interface SeriesFit {
+  /** Steps where both series have a value. */
+  n: number;
+  meanAbsoluteError: number | null;
+  peakSimulated: { step: number; value: number } | null;
+  peakObserved: { step: number; value: number } | null;
+  /** Simulated peak minus observed peak, in steps. */
+  peakOffset: number | null;
+  correlation: number | null;
+}
+
+export interface ObservedSeries {
+  dataset: { id: string; name: string };
+  /** One value per step of the run; null where the file said nothing. */
+  series: Array<number | null>;
+  reported: number;
+  fit: SeriesFit | null;
+}
+
+/** A dataset column, placed on a run's own axis, and compared with the run when one is sent. */
+export async function fetchObservedSeries(
+  env: string,
+  body: {
+    datasetId: string;
+    /** Column holding the date. */
+    when: string;
+    /** Column holding the value. */
+    value: string;
+    /** The date step 0 is, YYYY-MM-DD. */
+    origin: string;
+    horizon: number;
+    simulated?: Array<number | null>;
+  },
+): Promise<ObservedSeries> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/observed-series`, { method: "POST", body });
 }
 
 /** One step of one catchment, as the spreading model left it. */

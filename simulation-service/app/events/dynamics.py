@@ -462,7 +462,18 @@ class Engine:
                 )
                 if cap != base:
                     break
+            # Capacity opened above what the facility normally holds arrives
+            # empty. Without this an event that added fifty beds raised the
+            # ceiling and left the free count where it was: the fifty read as
+            # occupied from the moment they opened, nobody was ever admitted to
+            # them, and "add capacity" changed the occupancy figure and nothing
+            # else. Only the part above the baseline, and only when it grows —
+            # a wing coming back after damage is a different question, about
+            # who was in it, and is left as it was.
+            gain = cap - max(r.capacity, base)
             r.capacity = cap
+            if gain > 0:
+                r.quantity += gain
             # Damage takes what is free first and the rest from what is in use —
             # a flooded wing does not politely wait for its beds to empty.
             r.quantity = min(r.quantity, cap)

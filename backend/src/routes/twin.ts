@@ -384,6 +384,16 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
            */
           censusAcuity: z.string().min(1).max(120).optional(),
           /**
+           * How full each kind of unit usually is, as a share by activity.
+           *
+           * For a twin that marks no bed in use. Without it every hospital meets
+           * the event empty, and a wave that overflowed the real network peaks
+           * at a comfortable half. Held at every site for the whole run and read
+           * as a floor: a site whose own units already show more in use keeps
+           * its own figure. An assumption, so it is the caller's to state.
+           */
+          baselineOccupancy: z.record(z.number().min(0).max(1)).default({}),
+          /**
            * Twin scenario to read the world through. Named `twinScenarioId`
            * rather than `scenarioId` because `scenario` above already means the
            * event, and two different things called scenario in one body is how
@@ -460,6 +470,7 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
         population_sizes: req.body.populationSizes,
         route_capacity: req.body.routeCapacity,
         census_acuity: req.body.censusAcuity ?? null,
+        baseline_occupancy: req.body.baselineOccupancy,
         collect: req.body.collect,
       });
     },
