@@ -224,6 +224,7 @@ export default function HexTwinView() {
   // Folded on arrival: the first thing seen is the map.
   const [layersOpen, setLayersOpen] = useState(false);
   const [recipeOpen, setRecipeOpen] = useState(false);
+  const [resultOpen, setResultOpen] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(false);
   const globeRef = useRef<GlobeHandle>(null);
 
@@ -631,7 +632,7 @@ export default function HexTwinView() {
       });
       setRun(out);
       setRunKey(stampKey);
-      setRecipeOpen(true);
+      setResultOpen(true);
     } catch (err) {
       setMessage(engineMessage(err));
     } finally {
@@ -760,6 +761,8 @@ export default function HexTwinView() {
   const breaksEvents = run ? siteBreaks(run.events, ctx.facilities, run.activity) : [];
   const breaksFull = run ? siteBreaks(run.full, ctx.facilities, run.activity) : [];
   const rows = breakRows(breaksEvents, breaksFull);
+  const sumEvents = run ? summarise(breaksEvents, run.events) : null;
+  const sumFull = run ? summarise(breaksFull, run.full) : null;
   // Catchments with no site for the activity. Named from the live twin, and
   // said only while somebody is in fact waiting nowhere: a scenario that links
   // such a catchment to a hospital has answered it.
@@ -1188,11 +1191,104 @@ export default function HexTwinView() {
           ) : null}
           </div>
 
-          <div className="flex max-h-full min-h-0 items-start gap-2">
+          {/* A height, not only a ceiling: a panel's own `max-h-full` is a share of
+              this box, and a share of a box sized by its content is no limit at
+              all. Without it a long recipe ran 2,700 px down a 700 px screen,
+              the page clipped it, and the result at its foot could not be
+              reached. */}
+          <div className="flex h-full min-h-0 items-start gap-2">
           <GlobeControls globe={globeRef} />
           <OverlayPanel
+            title="Result"
+            meta={
+              run && pb && sumFull
+                ? `peak ${pct(pb.v)} · ${sumFull.sites} of ${sumFull.of} site${sumFull.of === 1 ? "" : "s"} with a queue${stale ? " · out of date" : ""}`
+                : "run to see it"
+            }
+            open={resultOpen}
+            onToggle={() => setResultOpen((o) => !o)}
+            className={resultOpen ? "w-[360px]" : "max-w-[360px]"}
+          >
+          <div className="flex flex-col gap-2 p-3">
+            <span className={LABEL}>Result · {activity} across every site</span>
+            {!run ? (
+              <p className="text-[12.5px] text-ink-muted">
+                Run sends the recipe through the engine twice: with only the events, and with your measures and capacity as
+                well. The difference is what your choices did.
+              </p>
+            ) : (
+              <>
+                {stale ? (
+                  <p className="rounded bg-warn-soft px-2 py-1 text-[11.5px] text-warn-ink">The recipe changed since this run. Run again to update.</p>
+                ) : null}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex flex-col">
+                    <span className="text-[11.5px] text-ink-muted">Events only</span>
+                    <span className="text-[22px] font-bold tabular-nums text-ink-muted">{pct(pa!.v)}</span>
+                    <span className="text-[11.5px] text-ink-muted">peak, day {pa!.t}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[11.5px] font-semibold text-brand-deep">With your choices</span>
+                    <span className="text-[22px] font-bold tabular-nums text-brand-deep">{pct(pb!.v)}</span>
+                    <span className="text-[11.5px] text-ink-muted">peak, day {pb!.t}</span>
+                  </div>
+                </div>
+                <p className="text-[12.5px] text-ink-body">
+                  {!hasChoices
+                    ? "Add a measure or capacity to see what it changes."
+                    : pa!.v - pb!.v > 0.005
+                      ? `Your choices lower the peak by ${Math.round((pa!.v - pb!.v) * 100)} point${Math.round((pa!.v - pb!.v) * 100) === 1 ? "" : "s"}${pb!.t > pa!.t ? ` and push it ${pb!.t - pa!.t} days later` : ""}.`
+                      : "Your choices do not lower the peak."}
+                </p>
+                {notes.map((n) => (
+                  <p key={n} className="rounded bg-canvas-raised px-2 py-1 text-[11.5px] text-ink-body">{n}</p>
+                ))}
+                <p className="text-[11px] text-ink-faint">
+                  Stored as two events, “Hex twin · {scenario?.name} · events only” and “· with your measures”, rewritten on each run.
+                </p>
+              </>
+            )}
+          </div>
+
+          {run ? (
+            <div className="border-t border-line-soft p-3">
+              <BreakList
+                activity={run.activity}
+                rows={rows}
+                events={sumEvents!}
+                full={sumFull!}
+                hasChoices={hasChoices}
+                stranded={stranded}
+                focus={focused}
+                onFocus={(i) => {
+                  setFocus(i);
+                  if (i !== null) setTimelineOpen(true);
+                }}
+              />
+            </div>
+          ) : null}
+
+          <div className="border-t border-line-soft p-3">
+            <RealityCheck
+              key={`${scenarioId ?? ""}:${reality?.id ?? ""}`}
+              env={env}
+              config={reality?.config ?? null}
+              acuities={ctx.acuities}
+              suggested={ctx.care.find((c) => c.activity === activity)?.acuity ?? null}
+              horizon={horizon}
+              day={d}
+              events={run ? run.events.arrivals : null}
+              full={run ? run.full.arrivals : null}
+              stale={stale}
+              busy={busy}
+              onSave={(c) => void saveReality(c)}
+              onClear={() => void clearReality()}
+            />
+          </div>
+          </OverlayPanel>
+          <OverlayPanel
             title="Recipe"
-            meta={`${stamps.length} stamp${stamps.length === 1 ? "" : "s"}${run && pb ? ` · peak ${pct(pb.v)}` : ""}`}
+            meta={`${stamps.length} stamp${stamps.length === 1 ? "" : "s"}`}
             open={recipeOpen}
             onToggle={() => setRecipeOpen((o) => !o)}
             className={recipeOpen ? "w-[360px]" : "max-w-[360px]"}
@@ -1250,82 +1346,6 @@ export default function HexTwinView() {
             })}
           </div>
 
-          <div className="flex flex-col gap-2 border-t border-line-soft p-3">
-            <span className={LABEL}>Result · {activity} across every site</span>
-            {!run ? (
-              <p className="text-[12.5px] text-ink-muted">
-                Run sends the recipe through the engine twice: with only the events, and with your measures and capacity as
-                well. The difference is what your choices did.
-              </p>
-            ) : (
-              <>
-                {stale ? (
-                  <p className="rounded bg-warn-soft px-2 py-1 text-[11.5px] text-warn-ink">The recipe changed since this run. Run again to update.</p>
-                ) : null}
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="flex flex-col">
-                    <span className="text-[11.5px] text-ink-muted">Events only</span>
-                    <span className="text-[22px] font-bold tabular-nums text-ink-muted">{pct(pa!.v)}</span>
-                    <span className="text-[11.5px] text-ink-muted">peak, day {pa!.t}</span>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[11.5px] font-semibold text-brand-deep">With your choices</span>
-                    <span className="text-[22px] font-bold tabular-nums text-brand-deep">{pct(pb!.v)}</span>
-                    <span className="text-[11.5px] text-ink-muted">peak, day {pb!.t}</span>
-                  </div>
-                </div>
-                <p className="text-[12.5px] text-ink-body">
-                  {!hasChoices
-                    ? "Add a measure or capacity to see what it changes."
-                    : pa!.v - pb!.v > 0.005
-                      ? `Your choices lower the peak by ${Math.round((pa!.v - pb!.v) * 100)} points${pb!.t > pa!.t ? ` and push it ${pb!.t - pa!.t} days later` : ""}.`
-                      : "Your choices do not lower the peak."}
-                </p>
-                {notes.map((n) => (
-                  <p key={n} className="rounded bg-canvas-raised px-2 py-1 text-[11.5px] text-ink-body">{n}</p>
-                ))}
-                <p className="text-[11px] text-ink-faint">
-                  Stored as two events, “Hex twin · {scenario?.name} · events only” and “· with your measures”, rewritten on each run.
-                </p>
-              </>
-            )}
-          </div>
-
-          {run ? (
-            <div className="border-t border-line-soft p-3">
-              <BreakList
-                activity={run.activity}
-                rows={rows}
-                events={summarise(breaksEvents, run.events)}
-                full={summarise(breaksFull, run.full)}
-                hasChoices={hasChoices}
-                stranded={stranded}
-                focus={focused}
-                onFocus={(i) => {
-                  setFocus(i);
-                  if (i !== null) setTimelineOpen(true);
-                }}
-              />
-            </div>
-          ) : null}
-
-          <div className="border-t border-line-soft p-3">
-            <RealityCheck
-              key={`${scenarioId ?? ""}:${reality?.id ?? ""}`}
-              env={env}
-              config={reality?.config ?? null}
-              acuities={ctx.acuities}
-              suggested={ctx.care.find((c) => c.activity === activity)?.acuity ?? null}
-              horizon={horizon}
-              day={d}
-              events={run ? run.events.arrivals : null}
-              full={run ? run.full.arrivals : null}
-              stale={stale}
-              busy={busy}
-              onSave={(c) => void saveReality(c)}
-              onClear={() => void clearReality()}
-            />
-          </div>
         </OverlayPanel>
           </div>
         </div>

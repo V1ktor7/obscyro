@@ -87,7 +87,7 @@ export default function BreakList({
                   : "Your choices do not change how long people wait."}
             </p>
           ) : null}
-          <ul className="flex max-h-[260px] flex-col gap-1 overflow-y-auto">
+          <ul className="flex flex-col gap-1">
             {rows.map((r) => {
               const on = focus === r.index;
               const relieved = r.events.firstDay !== null && r.full.firstDay === null;

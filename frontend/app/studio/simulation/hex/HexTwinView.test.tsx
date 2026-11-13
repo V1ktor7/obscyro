@@ -182,6 +182,13 @@ describe("a scenario with starting conditions", () => {
     expect(within(panel).getByText("60 patient-days waiting")).toBeTruthy();
     expect(within(panel).getByText(/Your choices spare 600 patient-days of waiting \(91 %\)/)).toBeTruthy();
 
+    // The result has its own panel, and the column of panels has a height: a
+    // panel taller than the screen scrolls inside itself instead of leaving it.
+    const result = heading.closest("section")!;
+    expect(within(result).getByRole("button", { name: /^Result/ }).textContent).toContain("peak");
+    expect(result.parentElement!.className).toContain("h-full");
+    expect(within(result).queryByText(/Usual occupancy/)).toBeNull();
+
     const row = within(panel).getByRole("button", { name: /Hôpital Beta/ });
     expect(row.textContent).toContain("from day 5");
     fireEvent.click(row);
