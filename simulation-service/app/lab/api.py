@@ -13,7 +13,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.lab import sandbox, tabular, timeseries
+from app.lab import loop, sandbox, tabular, timeseries
 
 router = APIRouter(prefix="/lab", tags=["lab"])
 
@@ -100,6 +100,48 @@ def forecast_train(req: ForecastTrainRequest) -> dict[str, Any]:
 def forecast_run(req: ForecastRunRequest) -> dict[str, Any]:
     try:
         return timeseries.forecast(req.artifact_b64, req.rows, req.steps)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+class LoopSpec(BaseModel):
+    key: str = Field(..., min_length=1, max_length=20)
+    estimator: str
+    exog: list[str] = Field(default_factory=list)
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
+class ForecastLoopRequest(BaseModel):
+    rows: list[dict[str, Any]] = Field(..., max_length=200_000)
+    time_column: str
+    target: str
+    horizons: list[int] = Field(..., min_length=1, max_length=8)
+    lags: int = Field(14, ge=1, le=60)
+    specs: list[LoopSpec] = Field(..., min_length=1, max_length=3)
+    start: str
+    first: str
+    last: str
+    exog_delay: int = Field(1, ge=0, le=14)
+
+
+@router.post("/forecast/loop")
+def forecast_loop(req: ForecastLoopRequest) -> dict[str, Any]:
+    """Forecasts for a block of mornings, each from what was known that morning."""
+    if any(h < 1 or h > 60 for h in req.horizons):
+        raise HTTPException(status_code=400, detail="Horizons run from 1 to 60 days.")
+    try:
+        return loop.run_block(
+            rows=req.rows,
+            time_column=req.time_column,
+            target=req.target,
+            horizons=sorted(set(req.horizons)),
+            lags=req.lags,
+            specs=[loop.Spec(s.key, s.estimator, s.exog, s.params) for s in req.specs],
+            start=req.start,
+            first=req.first,
+            last=req.last,
+            exog_delay=req.exog_delay,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

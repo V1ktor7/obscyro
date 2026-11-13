@@ -192,6 +192,7 @@ export const NAV_SECTIONS: NavSection[] = [
           { label: "Models", href: "/studio/lab?tab=models" },
           { label: "Notebook", href: "/studio/lab?tab=notebook" },
           { label: "Forecast", href: "/studio/lab?tab=forecast" },
+          { label: "Live forecasts", href: "/studio/lab?tab=live" },
           { label: "Causality", href: "/studio/lab?tab=causality" },
           { label: "Signal model", href: "/studio/lab?tab=train" },
           { label: "Simulate vs reality", href: "/studio/lab?tab=compare" },

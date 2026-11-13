@@ -80,7 +80,7 @@ describe("the Models section lists what the lab has", () => {
       .flatMap((g) => g.items)
       .map((i) => new URLSearchParams(i.href.split("?")[1]).get("tab"));
     expect(tabs.sort()).toEqual(
-      ["causality", "compare", "feed", "forecast", "models", "notebook", "train"].sort(),
+      ["causality", "compare", "feed", "forecast", "live", "models", "notebook", "train"].sort(),
     );
   });
 

@@ -22,6 +22,7 @@ import {
   Code2,
   GraduationCap,
   Loader2,
+  Activity,
   Play,
   Plus,
   RadioTower,
@@ -37,6 +38,7 @@ import { listChannels, type DataChannel } from "../channels-api";
 import { numericColumns, parseCsvRows } from "../csv-parse";
 import FeedSimulatorTab from "./FeedSimulatorTab";
 import ForecastTab from "./ForecastTab";
+import LiveForecastTab from "./LiveForecastTab";
 import ModelsTab from "./ModelsTab";
 import NotebookTab from "./NotebookTab";
 import {
@@ -54,12 +56,13 @@ import {
 } from "../lab-api";
 import { useStudio } from "../StudioShell";
 
-type Tab = "models" | "notebook" | "forecast" | "causality" | "train" | "compare" | "feed";
+type Tab = "models" | "notebook" | "forecast" | "live" | "causality" | "train" | "compare" | "feed";
 
 const TABS: readonly Tab[] = [
   "models",
   "notebook",
   "forecast",
+  "live",
   "causality",
   "train",
   "compare",
@@ -296,6 +299,7 @@ export default function LabView() {
             ["models", "Models", GraduationCap],
             ["notebook", "Notebook", Code2],
             ["forecast", "Forecast", TrendingUp],
+            ["live", "Live forecasts", Activity],
             ["causality", "Causality", Brain],
             ["train", "Signal model (ARX)", ChartLine],
             ["compare", "Simulate vs reality", ChartLine],
@@ -335,6 +339,8 @@ export default function LabView() {
           <NotebookTab env={env} onError={setError} />
         ) : tab === "forecast" ? (
           <ForecastTab env={env} onError={setError} />
+        ) : tab === "live" ? (
+          <LiveForecastTab env={env} onError={setError} />
         ) : tab === "causality" ? (
           <CausalityTab
             edges={edges}
