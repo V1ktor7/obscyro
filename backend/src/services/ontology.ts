@@ -1,3 +1,4 @@
+import { config } from "../lib/config.js";
 import type { DbClient } from "../lib/db.js";
 
 import { BadRequest, NotFound } from "../lib/errors.js";
@@ -613,8 +614,15 @@ export async function listLinksForEnv(
   // Endpoints are needed for two things: the type names of links the scenario
   // creates, and dropping links whose endpoint the scenario deleted. Both need
   // the instances *after* overrides, not the base ones.
+  //
+  // The configured ceiling, not a literal. This read used to stop at 20 000,
+  // newest first, and the filter below drops every link whose endpoint is not
+  // in the read — so on a twin of 25 566 instances the oldest ones, the units
+  // themselves, fell off the end and took every bed and every route with them.
+  // Through a scenario the network had no capacity at all, and the engine
+  // refused to run.
   const instances = await listInstancesForEnv(db, environmentId, {
-    limit: 20000,
+    limit: config.rollupInstanceCap,
     ...lens,
   });
   const overrides = await resolveOverrides(db, lens.scenarioId, lens.atOffsetHours ?? 0);
