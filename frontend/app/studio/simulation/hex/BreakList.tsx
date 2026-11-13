@@ -11,7 +11,7 @@
 
 import { cn } from "@/lib/cn";
 
-import { people, type BreakRow, type SiteBreak, type Summary } from "./results";
+import { people, type BreakRow, type SiteBreak, type Stranded, type Summary } from "./results";
 
 const LABEL = "text-[10px] font-semibold uppercase tracking-wide text-ink-faint";
 
@@ -25,6 +25,7 @@ export default function BreakList({
   events,
   full,
   hasChoices,
+  stranded,
   focus,
   onFocus,
 }: {
@@ -33,6 +34,8 @@ export default function BreakList({
   events: Summary;
   full: Summary;
   hasChoices: boolean;
+  /** Catchments with no site for the activity, and how long their patients wait in each run. */
+  stranded: (Stranded & { events: number | null; full: number | null }) | null;
   focus: number | null;
   onFocus: (index: number | null) => void;
 }) {
@@ -60,6 +63,15 @@ export default function BreakList({
           </span>
         </div>
       </div>
+      {stranded ? (
+        <p role="alert" className="rounded bg-warn-soft px-2 py-1.5 text-[11.5px] text-warn-ink">
+          No site provides {activity} in {stranded.names.join(", ")} ({stranded.residents.toLocaleString("en-CA")} residents). Their
+          patients have nowhere to go and wait for the whole run
+          {stranded.full !== null ? `: ${people(stranded.full)} patient-days in your scenario` : ""}
+          {stranded.events !== null && stranded.full !== null && Math.abs(stranded.events - stranded.full) > 0.5 ? `, ${people(stranded.events)} with events only` : ""}
+          . They are not in the counts or the list here. Link the sites that take them to that catchment in the ontology.
+        </p>
+      ) : null}
       {events.sites === 0 && full.sites === 0 ? (
         <p className="text-[12.5px] text-ink-body">No site runs out of {activity} in either run: nobody waits.</p>
       ) : (

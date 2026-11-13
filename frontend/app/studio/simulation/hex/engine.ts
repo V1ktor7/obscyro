@@ -33,6 +33,8 @@ export interface VariantResult {
   capacity: number[][];
   /** Arrivals per step across every catchment, by severity, as the engine counted them. */
   arrivals: Record<string, number[]>;
+  /** People left unserved at the end of each step, by severity, wherever they are queued. */
+  unmet: Record<string, number[]>;
   /** Capacity-weighted occupancy over every facility that has the activity. */
   island: number[];
   /** Per catchment, per step: people in the infectious state per 1,000. */
@@ -110,6 +112,21 @@ export function capacityGrid(
 
 /** Rows of the `steps` table as arrivals per step, by severity. */
 export function arrivalsBySeverity(dataset: SimDataset | undefined, horizon: number): Record<string, number[]> {
+  return stepsBySeverity(dataset, horizon, "arrived_");
+}
+
+/**
+ * One family of columns of the `steps` table, per step and severity.
+ *
+ * `unmet_` is the one the facility table cannot give: it counts everyone left
+ * unserved, including people queued at a site that does not provide what they
+ * need — and those appear in no row of the other table.
+ */
+export function stepsBySeverity(
+  dataset: SimDataset | undefined,
+  horizon: number,
+  prefix: "arrived_" | "served_" | "unmet_",
+): Record<string, number[]> {
   const out: Record<string, number[]> = {};
   if (!dataset) return out;
   const cPolicy = dataset.columns.indexOf("policy");
@@ -117,8 +134,8 @@ export function arrivalsBySeverity(dataset: SimDataset | undefined, horizon: num
   if (cPolicy < 0 || cStep < 0) return out;
   const cols = dataset.columns
     .map((name, i) => ({ name, i }))
-    .filter((c) => c.name.startsWith("arrived_"))
-    .map((c) => ({ acuity: c.name.slice("arrived_".length), i: c.i }));
+    .filter((c) => c.name.startsWith(prefix))
+    .map((c) => ({ acuity: c.name.slice(prefix.length), i: c.i }));
   for (const c of cols) out[c.acuity] = new Array<number>(horizon).fill(0);
   const policy = dataset.rows[0]?.[cPolicy];
   for (const row of dataset.rows) {
@@ -245,13 +262,15 @@ export async function runScenario(args: {
       collect: ["facilities", "steps"],
     });
     const table = run.datasets?.find((d) => d.name === "facilities");
+    const steps = run.datasets?.find((d) => d.name === "steps");
     const grid = occupancyGrid(table, facilityIds, activity, horizon);
     const capacity = capacityGrid(ctx.facilities, stamps, variant, activity, horizon);
     return {
       occupancy: grid,
       waiting: occupancyGrid(table, facilityIds, activity, horizon, "waiting"),
       capacity,
-      arrivals: arrivalsBySeverity(run.datasets?.find((d) => d.name === "steps"), horizon),
+      arrivals: arrivalsBySeverity(steps, horizon),
+      unmet: stepsBySeverity(steps, horizon, "unmet_"),
       island: islandSeries(grid, capacity),
       sick,
       notes: input.notes,

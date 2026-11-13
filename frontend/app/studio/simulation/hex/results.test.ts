@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import type { ScenarioOverride } from "../../scenarios-api";
 import type { SimDataset, SimExport } from "@/lib/platform-api";
 
-import { arrivalsBySeverity, capacityGrid, islandSeries, occupancyGrid } from "./engine";
+import { arrivalsBySeverity, capacityGrid, islandSeries, occupancyGrid, stepsBySeverity } from "./engine";
 import { dateOfDay, realityFromOverrides, realityToOverride, type RealityConfig } from "./reality";
-import { breakRows, people, seriesOf, siteBreaks, summarise } from "./results";
+import { breakRows, people, seriesOf, siteBreaks, strandedCatchments, summarise, waitingElsewhere } from "./results";
 import { describe as describeStamp, engineInput, isChoice, isCondition, laneOf, twinContext, type Stamp } from "./stamps";
 
 const stamp = (s: Partial<Stamp> & Pick<Stamp, "kind">): Stamp => ({ id: "s", start: 0, days: 60, ...s }) as Stamp;
@@ -160,6 +160,7 @@ describe("reading a run back: the queue, the arrivals, the capacity", () => {
     };
     expect(arrivalsBySeverity(steps, 3)).toEqual({ hospitalisation: [25, 31.5, 0], urgence: [60, 70, 0] });
     expect(arrivalsBySeverity(undefined, 3)).toEqual({});
+    expect(stepsBySeverity(steps, 2, "unmet_")).toEqual({ hospitalisation: [0, 1.5], urgence: [0, 0] });
   });
 
   it("counts added beds from the day they open, in the planner's run only", () => {
@@ -196,6 +197,28 @@ describe("reading a run back: the queue, the arrivals, the capacity", () => {
       [b(0, "Held", null, 0), b(1, "Relieved", null, 0), b(2, "Late", 12, 20), b(3, "Early", 8, 40)],
     );
     expect(rows.map((r) => r.name)).toEqual(["Early", "Late", "Relieved"]);
+  });
+
+  it("names the catchments whose patients have no site to go to", () => {
+    const pops = [
+      { name: "West", size: 1000, servedBy: ["f:a"] },
+      { name: "North", size: 500, servedBy: ["f:c"] },
+      { name: "Empty", size: 0, servedBy: [] },
+    ];
+    expect(strandedCatchments(pops, ctx.facilities, "lit")).toEqual({ names: ["North"], residents: 500 });
+    expect(strandedCatchments(pops.slice(0, 1), ctx.facilities, "lit")).toBeNull();
+  });
+
+  it("counts the people waiting where no list shows them", () => {
+    const v = {
+      waiting: occupancyGrid(facilities, ids, "lit", 3, "waiting"),
+      // Everyone unserved, wherever they are: 3, 12.7 and 4 are at Alpha and Beta.
+      unmet: { hospitalisation: [8, 20.7, 4] },
+    };
+    const breaks = siteBreaks({ ...v, occupancy: occupancyGrid(facilities, ids, "lit", 3) }, ctx.facilities, "lit");
+    expect(waitingElsewhere(v, breaks, "hospitalisation")).toBeCloseTo(5 + 8 + 0);
+    expect(waitingElsewhere(v, breaks, null)).toBeNull();
+    expect(waitingElsewhere(v, breaks, "urgence")).toBeNull();
   });
 
   it("pulls one site's series out of a grid, and writes people as people", () => {

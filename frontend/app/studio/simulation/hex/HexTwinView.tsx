@@ -31,7 +31,7 @@ import {
 } from "./hex-grid";
 import RealityCheck from "./RealityCheck";
 import { realityFromOverrides, realityToOverride, type RealityConfig } from "./reality";
-import { breakRows, people, QUEUE, seriesOf, siteBreaks, summarise } from "./results";
+import { breakRows, people, QUEUE, seriesOf, siteBreaks, strandedCatchments, summarise, waitingElsewhere } from "./results";
 import {
   describe as describeStamp,
   engineInput,
@@ -760,6 +760,19 @@ export default function HexTwinView() {
   const breaksEvents = run ? siteBreaks(run.events, ctx.facilities, run.activity) : [];
   const breaksFull = run ? siteBreaks(run.full, ctx.facilities, run.activity) : [];
   const rows = breakRows(breaksEvents, breaksFull);
+  // Catchments with no site for the activity. Named from the live twin, and
+  // said only while somebody is in fact waiting nowhere: a scenario that links
+  // such a catchment to a hospital has answered it.
+  const acuityOfRun = run ? (ctx.care.find((c) => c.activity === run.activity)?.acuity ?? null) : null;
+  const nowhere = run ? strandedCatchments(ctx.populations, ctx.facilities, run.activity) : null;
+  const nowhereEvents = run && nowhere ? waitingElsewhere(run.events, breaksEvents, acuityOfRun) : null;
+  const nowhereFull = run && nowhere ? waitingElsewhere(run.full, breaksFull, acuityOfRun) : null;
+  const stranded =
+    // Five patient-days, not zero: the two tables round separately, and their
+    // difference over sixty days is not somebody waiting.
+    nowhere && (nowhereEvents === null || nowhereFull === null || nowhereEvents > 5 || nowhereFull > 5)
+      ? { ...nowhere, events: nowhereEvents, full: nowhereFull }
+      : null;
   // A focus survives only while it names a site the run reported on.
   const focused = run && focus !== null && ctx.facilities[focus] ? focus : null;
   const curveEvents = run ? (focused === null ? run.events.island : seriesOf(run.events.occupancy, focused)) : [];
@@ -1286,6 +1299,7 @@ export default function HexTwinView() {
                 events={summarise(breaksEvents, run.events)}
                 full={summarise(breaksFull, run.full)}
                 hasChoices={hasChoices}
+                stranded={stranded}
                 focus={focused}
                 onFocus={(i) => {
                   setFocus(i);

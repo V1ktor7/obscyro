@@ -104,6 +104,55 @@ export function summarise(breaks: SiteBreak[], v: Pick<VariantResult, "waiting">
   };
 }
 
+/**
+ * Catchments none of whose sites provides the activity.
+ *
+ * Their patients are queued where nothing can serve them, and the engine's
+ * facility table has no row for a site that does not offer what is asked of it
+ * — so they appear in no list above. Left unsaid, a tenth of the island could
+ * wait for the whole run under a panel reading "nobody waits".
+ */
+export interface Stranded {
+  names: string[];
+  residents: number;
+}
+
+export function strandedCatchments(
+  populations: { name: string; size: number; servedBy: string[] }[],
+  facilities: { id: string; capacity: Record<string, number> }[],
+  activity: string,
+): Stranded | null {
+  const able = new Set(facilities.filter((f) => (f.capacity[activity] ?? 0) > 0).map((f) => f.id));
+  const out = populations.filter((p) => p.size > 0 && !p.servedBy.some((id) => able.has(id)));
+  return out.length ? { names: out.map((p) => p.name), residents: out.reduce((a, p) => a + p.size, 0) } : null;
+}
+
+/**
+ * People waiting where no list shows them, summed over the days.
+ *
+ * Everyone the engine counts unserved for the severity, less the queues at
+ * sites that do provide the activity. Never below zero: the two tables round
+ * separately.
+ */
+export function waitingElsewhere(
+  v: Pick<VariantResult, "waiting" | "unmet">,
+  breaks: SiteBreak[],
+  acuity: string | null,
+): number | null {
+  const unmet = acuity ? v.unmet[acuity] : undefined;
+  if (!unmet) return null;
+  const watched = new Set(breaks.map((b) => b.index));
+  let total = 0;
+  v.waiting.forEach((row, t) => {
+    let seen = 0;
+    row.forEach((w, i) => {
+      if (watched.has(i) && Number.isFinite(w)) seen += w;
+    });
+    total += Math.max(0, (unmet[t] ?? 0) - seen);
+  });
+  return total;
+}
+
 export interface BreakRow {
   index: number;
   id: string;
