@@ -124,6 +124,38 @@ export function mergeSeries(
   return { rows, actual, lastDay };
 }
 
+/** Days of history a refit needs before the first morning, with room for the lags. */
+export const MIN_HISTORY_DAYS = 90;
+
+/**
+ * Refuse a table that is not a daily series before a loop is stored on it.
+ *
+ * Without this, a table of parameters or of contacts made a loop that was
+ * accepted, found no date to forecast from, and sat at "nothing frozen yet"
+ * for ever. Saying which column is wrong, at the moment it was chosen, is the
+ * only point where the person can still fix it.
+ */
+export function assertSeries(rows: Record<string, unknown>[], timeColumn: string, column: string, start: string): void {
+  const dated = rows.filter((r) => dayOf(r[timeColumn]) != null).length;
+  if (!dated) {
+    throw BadRequest(
+      "NOT_A_SERIES",
+      `"${timeColumn}" holds no dates in this table. A loop forecasts a daily series: pick a table with one date per row and the column with the number to forecast.`,
+    );
+  }
+  const { actual } = mergeSeries(rows, timeColumn, column);
+  const before = Object.keys(actual).filter((d) => d < start).length;
+  if (!Object.keys(actual).length) {
+    throw BadRequest("NOT_A_SERIES", `"${column}" holds no numbers in this table. Pick the column with the value to forecast.`);
+  }
+  if (before < MIN_HISTORY_DAYS) {
+    throw BadRequest(
+      "TOO_LITTLE_HISTORY",
+      `Only ${before} days of "${column}" come before the first morning (${start}); the models need at least ${MIN_HISTORY_DAYS} to learn from. Pick a later first morning.`,
+    );
+  }
+}
+
 /** The next mornings to freeze, or null once the loop has reached the morning after the data. */
 export function nextBlock(start: string, frozenThrough: string | null, lastDay: string | null): { first: string; last: string } | null {
   if (!lastDay) return null;
@@ -226,6 +258,7 @@ export async function createLoop(db: DbClient, projectId: string, userId: string
   }
   const start = dayOf(body.startDate);
   if (!start) throw BadRequest("INVALID_DATE", "The first morning must be a date, YYYY-MM-DD.");
+  assertSeries(await readAllRows(db, body.datasetId), body.timeColumn, body.target, start);
   const horizons = [...new Set(body.horizons?.length ? body.horizons : DEFAULT_HORIZONS)].sort((a, b) => a - b);
   const specs = defaultSpecs(body.target, body.driver?.column ?? null);
   try {

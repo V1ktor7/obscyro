@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   forecastLoopView: vi.fn(),
   createForecastLoop: vi.fn(),
   catchUpForecastLoop: vi.fn(),
+  deleteForecastLoop: vi.fn(),
 }));
 vi.mock("../forecast-loops-api", () => api);
 vi.mock("../datasets-api", () => ({
@@ -71,5 +72,21 @@ describe("Live forecasts", () => {
     expect(screen.getByRole("button", { name: /in 7 days/ }).textContent).toContain("96");
     expect(screen.getByText(/Model in force: Ridge · 14 days/)).toBeTruthy();
     expect(screen.getAllByText("pending").length).toBe(5);
+  });
+
+  it("deletes a loop only once its name and its frozen forecasts were confirmed", async () => {
+    const v = loopView();
+    api.listForecastLoops.mockResolvedValueOnce({ loops: [v.loop] }).mockResolvedValue({ loops: [] });
+    api.forecastLoopView.mockResolvedValue(v);
+    api.deleteForecastLoop.mockResolvedValue({ deleted: true });
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    render(<LiveForecastTab env="mtl" onError={vi.fn()} />);
+    await screen.findByText("This morning's forecast");
+    fireEvent.click(screen.getByRole("button", { name: "Delete this loop" }));
+    expect(api.deleteForecastLoop).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Delete this loop" }));
+    await waitFor(() => expect(api.deleteForecastLoop).toHaveBeenCalledWith("mtl", "l1"));
+    expect(confirm.mock.calls[1]![0]).toContain("“Hospital admissions” and the 400 forecasts it froze");
+    await screen.findByText("Start a daily forecasting loop");
   });
 });

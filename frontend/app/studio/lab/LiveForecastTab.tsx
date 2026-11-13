@@ -12,7 +12,7 @@
  */
 
 import Link from "next/link";
-import { Loader2, Pause, Play, Plus, TriangleAlert, CircleCheck } from "lucide-react";
+import { Loader2, Pause, Play, Plus, Trash2, TriangleAlert, CircleCheck } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@/lib/cn";
@@ -20,6 +20,7 @@ import { listDatasets, type Dataset } from "../datasets-api";
 import {
   catchUpForecastLoop,
   createForecastLoop,
+  deleteForecastLoop,
   forecastLoopView,
   listForecastLoops,
   type ForecastLoop,
@@ -311,6 +312,20 @@ export default function LiveForecastTab({ env, onError }: { env: string | null; 
   }
 
   const loop = view?.loop ?? loops.find((l) => l.id === loopId) ?? loops[0]!;
+
+  async function remove() {
+    const n = view?.loop.id === loop.id ? view.forecasts.length : null;
+    const what = n == null ? "and every forecast it froze" : `and the ${n.toLocaleString("en-CA")} forecast${n === 1 ? "" : "s"} it froze`;
+    if (!window.confirm(`Delete “${loop.name}” ${what}? This cannot be undone.`)) return;
+    try {
+      await deleteForecastLoop(env!, loop.id);
+      setView(null);
+      setLoopId(null);
+      await loadLoops();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    }
+  }
   const unit = loop.target;
   const total = view?.lastDay ? Math.max(1, Math.round((Date.parse(`${addDays(view.lastDay, 1)}T00:00:00Z`) - Date.parse(`${loop.startDate}T00:00:00Z`)) / 86_400_000) + 1) : null;
   const done = loop.frozenThrough ? Math.round((Date.parse(`${loop.frozenThrough}T00:00:00Z`) - Date.parse(`${loop.startDate}T00:00:00Z`)) / 86_400_000) + 1 : 0;
@@ -332,6 +347,7 @@ export default function LiveForecastTab({ env, onError }: { env: string | null; 
         {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}{playing ? "Pause" : "Replay the mornings"}
       </button>
       <button type="button" className={BTN} onClick={() => setCreating(true)}><Plus className="h-3.5 w-3.5" />New loop</button>
+      <button type="button" className={BTN} aria-label="Delete this loop" title="Delete this loop" onClick={() => void remove()}><Trash2 className="h-3.5 w-3.5" /></button>
       <Link href="/studio/events" className={BTN_P} title="The forecast is the expected future: an event is tested on top of it">Test an event on top of it</Link>
     </div>
   );
@@ -355,7 +371,12 @@ export default function LiveForecastTab({ env, onError }: { env: string | null; 
       <div>
         {header}
         {progress}
-        <p className="text-[12px] text-ink-muted">{view ? "No morning frozen yet. The first block takes about twenty seconds." : "Loading…"}</p>
+        <p className="text-[12px] text-ink-muted">
+          {!view ? "Loading…"
+            : loop.status === "live" && !loop.frozenThrough
+              ? `Nothing to forecast: "${loop.timeColumn}" in ${loop.datasetName} holds no daily series. Delete this loop (the bin above) and start one on a table with one date per row.`
+              : "No morning frozen yet. The first block takes about twenty seconds."}
+        </p>
       </div>
     );
   }
