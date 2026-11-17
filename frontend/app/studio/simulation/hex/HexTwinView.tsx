@@ -18,6 +18,7 @@ import {
   type OverlayScenario,
 } from "../../scenarios-api";
 import AddDataPanel from "./AddDataPanel";
+import AnalystPanel from "./AnalystPanel";
 import BreakList from "./BreakList";
 import { engineMessage, runScenario, type RunOutput } from "./engine";
 import HexGlobe, { GlobeControls, type GlobeArea, type GlobeHandle, type GlobeSeed, type GlobeSite } from "./HexGlobe";
@@ -32,6 +33,7 @@ import {
 import RealityCheck from "./RealityCheck";
 import { realityFromOverrides, realityToOverride, type RealityConfig } from "./reality";
 import { breakRows, people, QUEUE, seriesOf, siteBreaks, strandedCatchments, summarise, waitingElsewhere } from "./results";
+import { runDigest } from "./run-digest";
 import {
   describe as describeStamp,
   engineInput,
@@ -223,6 +225,7 @@ export default function HexTwinView() {
   const [busy, setBusy] = useState(false);
   // Folded on arrival: the first thing seen is the map.
   const [layersOpen, setLayersOpen] = useState(false);
+  const [analystOpen, setAnalystOpen] = useState(false);
   const [recipeOpen, setRecipeOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(false);
@@ -353,6 +356,10 @@ export default function HexTwinView() {
   const stampKey = JSON.stringify([stamps.map((s) => [s.id, s.start, s.days]), horizon, activity]);
   const stale = run !== null && runKey !== stampKey;
   const d = Math.min(day, horizon - 1);
+
+  // The run as the analyst is given it: the same figures the Result panel
+  // reads, reduced to what a question can be about.
+  const digest = useMemo(() => (run && ctx ? runDigest(run, ctx, stale) : null), [run, ctx, stale]);
 
   const siteOfCell = useMemo(() => {
     if (!grid || !ctx) return [] as number[];
@@ -613,6 +620,19 @@ export default function HexTwinView() {
       const f = ctx.facilities[site];
       if (!f) return setMessage(`No site nearby provides ${activity}.`);
       void save({ kind: "capacity", facility: f.id, activity, amount }, d, Math.max(1, horizon - d));
+    }
+  }
+
+  /** Point the map at a site the analyst named: its cell, and its curve when there is a run. */
+  function focusSite(id: string) {
+    if (!ctx) return;
+    const index = ctx.facilities.findIndex((f) => f.id === id);
+    if (index < 0) return;
+    const at = siteOfCell.findIndex((s) => s === index);
+    if (at >= 0) setCell(at);
+    if (run) {
+      setFocus(index);
+      setTimelineOpen(true);
     }
   }
 
@@ -1160,6 +1180,21 @@ export default function HexTwinView() {
             </span>
           </div>
         </OverlayPanel>
+            <OverlayPanel
+              title="Analyst"
+              meta="ask about what is on the map"
+              open={analystOpen}
+              onToggle={() => setAnalystOpen((o) => !o)}
+              className={analystOpen ? "w-[400px] max-w-[calc(100vw-1.5rem)]" : "max-w-[280px]"}
+            >
+              <AnalystPanel
+                env={env}
+                scenario={scenario ? { id: scenario.id, name: scenario.name } : null}
+                run={digest}
+                siteName={(id) => ctx.facilities.find((f) => f.id === id)?.name ?? null}
+                onFocusSite={focusSite}
+              />
+            </OverlayPanel>
             {inspected ? (
             <div aria-live="polite" className={cn(OVERLAY_BAR, "grid w-[280px] shrink-0 grid-cols-2 gap-x-4 gap-y-0.5 px-3 py-2 text-[12px]")}>
               <span className="col-span-2 flex items-center justify-between gap-2 font-semibold text-ink">

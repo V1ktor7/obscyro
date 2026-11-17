@@ -1,0 +1,475 @@
+import Anthropic from "@anthropic-ai/sdk";
+import { z } from "zod";
+
+import { READ_TOOLS, ToolError, type AnalystContext, type AnalystTool } from "./analyst-tools.js";
+import { Ledger, checkAnswer, type AnswerDraft, type Finding } from "./analyst-verify.js";
+
+/**
+ * The analyst: a language model that reads the twin through tools and explains
+ * what it read.
+ *
+ * What the model does here is narrow on purpose. It decides which tool to call
+ * next, and it writes sentences. It does not hold facts about the network, it
+ * does not do arithmetic, and it does not decide anything. Every figure in what
+ * it writes is looked up afterwards in the results it was given
+ * (`analyst-verify.ts`), and the whole exchange — each call, each result — is
+ * returned beside the answer so a person can check any sentence against what
+ * was actually read.
+ *
+ * The loop is written out rather than left to the SDK's runner because three
+ * things in it are ours: the record of every step, the check that sends a
+ * draft back when a figure cannot be traced, and the rule that an answer is
+ * delivered through one call (`give_answer`) so it arrives as paragraphs with
+ * their sources rather than as prose to be parsed.
+ */
+
+export const ANALYST_MODEL = "claude-opus-5-5";
+
+/** Requests to the model for one question. A question that needs more is asking too much at once. */
+const MAX_REQUESTS = 16;
+/** Drafts sent back for untraced figures before one is accepted with those figures struck. */
+const MAX_REJECTED_DRAFTS = 2;
+
+export interface Step {
+  /** "s1", "s2", …: what a paragraph cites. */
+  id: string;
+  tool: string;
+  input: unknown;
+  ok: boolean;
+  /** The tool's result, or `{ error }` when it refused. */
+  output: unknown;
+  ms: number;
+}
+
+export interface AnalystAnswer {
+  paragraphs: { text: string; sources: string[] }[];
+  assumptions: string[];
+  limits: string[];
+  followUps: string[];
+  /** Ids of the sites the answer is about, for the map. */
+  focusSites: string[];
+}
+
+export interface AnalystUsage {
+  requests: number;
+  inputTokens: number;
+  outputTokens: number;
+}
+
+export interface AnalystResult {
+  /**
+   * `answered`: an answer, checked. `declined`: the model or its safeguards
+   * would not answer. `incomplete`: the loop ended without an answer.
+   */
+  status: "answered" | "declined" | "incomplete";
+  answer: AnalystAnswer | null;
+  /** True when no figure had to be struck from the answer. */
+  verified: boolean;
+  /** Figures taken out because no step held them. */
+  struck: Finding[];
+  steps: Step[];
+  /** Why there is no answer, when there is none. */
+  message: string | null;
+  /** The model that wrote the answer; differs from the one asked for after a fallback. */
+  model: string;
+  usage: AnalystUsage;
+}
+
+export type AnalystEvent =
+  | { type: "status"; message: string }
+  | { type: "step"; step: Step }
+  | { type: "done"; result: AnalystResult };
+
+type Message = Anthropic.Beta.BetaMessage;
+type MessageParam = Anthropic.Beta.BetaMessageParam;
+type CreateParams = Anthropic.Beta.MessageCreateParamsNonStreaming;
+
+/** The one call the loop makes. Narrow, so a test can stand in for the API. */
+export interface AnalystModel {
+  create(params: CreateParams): Promise<Message>;
+}
+
+export function anthropicModel(client: Anthropic): AnalystModel {
+  return { create: (params) => client.beta.messages.create(params) };
+}
+
+// ---------------------------------------------------------------------------
+// What the model is told.
+// ---------------------------------------------------------------------------
+
+export const SYSTEM_PROMPT = `You are the analyst inside Obscyro, a decision-support tool built on the digital twin of a health network. The person asking is a planner or a manager looking at the Scenarios map. They are not a modeller. They need to understand what the twin and the last simulation run show, well enough to decide something and to defend the decision to someone else.
+
+# What you know
+
+Nothing, until you read it. You have no knowledge of this network: not its hospitals, not its bed counts, not its population. Everything you say about it must come from a tool result in this conversation. General knowledge about health systems may shape how you explain, but it is never the source of a figure and never a fact about this network.
+
+Each tool result comes back as {"step": "s3", "result": ...}. The step id is how you cite it.
+
+# Figures
+
+This is the rule the whole product rests on, so it is enforced by a program, not left to you:
+
+- Every figure in your answer must appear in the result of a step that the same paragraph cites, or in the person's own question.
+- A figure you derive (a difference, a ratio, a percentage, a total, a rate) must be computed with the calculate tool, and the paragraph must cite that step. Do not do arithmetic yourself, even when it is easy.
+- You may round a figure the way a person would (7,316 as "about 7,300"; 0.941 as "94 %"). You may not change it.
+- After you answer, a checker looks up every figure in the steps the paragraph cites. A figure it cannot find is sent back to you, and if it still cannot be found it is removed from the answer and replaced by a gap the person will see. A gap is worse than a sentence without a number: if you cannot source a figure, write the sentence without it.
+
+# How to work
+
+1. Read before you write. Start from what the person is looking at (given in the context block). If you do not know the names this twin uses, call describe_twin first.
+2. Read what the question needs and no more. Most questions take two to six calls. Do not call a tool twice with the same input.
+3. If a tool refuses (an unknown name, no run on screen), read its message: it says what to do instead.
+4. If the tools cannot answer the question, say exactly what is missing. Never fill the gap with an estimate.
+5. When you are done, call give_answer once, on its own, with nothing else in that turn. Do not write the answer as plain text.
+
+# What a good answer is
+
+- It answers the question in its first sentence, then gives the reasons.
+- It is in plain words, in the language the person wrote in. No jargon the person did not use; if a term from the twin needs explaining, explain it once.
+- It names sites and catchments as the twin names them.
+- It keeps three things apart: what the twin records (a fact about the network), what a run produced (the result of a model under stated conditions, not a forecast), and what is an assumption of the scenario.
+- It is short: two to five paragraphs, a few sentences each. One idea per paragraph, each citing the steps it rests on.
+- It states the mechanism, not only the number: why a site queues while its neighbour has room, what the added beds changed and where.
+
+# What you do not do
+
+- You do not decide. When asked what should be done, set out what the evidence supports, what each option would change according to what was read, and what would have to be run to test an option that has not been run. You cannot run a simulation yourself: tell the person what to place on the map and run.
+- You do not present a model result as a prediction of what will happen.
+- You follow the system, not people. The twin holds counts and capacities, never a person's record, and you never reason about an individual.
+- You do not claim an action was taken. Your tools only read.
+
+# give_answer
+
+- paragraphs: the answer. Each has its text and the step ids its figures and claims come from.
+- assumptions: what the answer depends on that is assumed rather than recorded, such as the scenario's starting conditions. One short sentence each. Empty if none.
+- limits: what the twin or the run cannot say that matters for this question, such as no staff, no stocks, no transfers between sites, a run that was edited since. One short sentence each. Empty if none.
+- follow_ups: up to three short questions the person could ask next and that your tools could answer.
+- focus_sites: ids of up to five sites the answer is about, so the map can point at them. Empty if the answer is not about particular sites.`;
+
+const GIVE_ANSWER: Anthropic.Beta.BetaTool = {
+  name: "give_answer",
+  description:
+    "Deliver your answer to the person. Call it once, on its own, when you have read everything you need. Every figure in a paragraph must be in the result of a step that paragraph cites, or in the question.",
+  strict: true,
+  input_schema: {
+    type: "object",
+    properties: {
+      paragraphs: {
+        type: "array",
+        description: "The answer, two to five short paragraphs, the direct answer first.",
+        items: {
+          type: "object",
+          properties: {
+            text: { type: "string", description: "Plain sentences. No markdown, no lists, no headings." },
+            sources: {
+              type: "array",
+              description: "Ids of the steps this paragraph's figures and claims come from, for example [\"s2\", \"s5\"].",
+              items: { type: "string" },
+            },
+          },
+          required: ["text", "sources"],
+          additionalProperties: false,
+        },
+      },
+      assumptions: { type: "array", items: { type: "string" }, description: "What the answer assumes rather than reads. May be empty." },
+      limits: { type: "array", items: { type: "string" }, description: "What the twin or the run cannot say that matters here. May be empty." },
+      follow_ups: { type: "array", items: { type: "string" }, description: "Up to three next questions the tools could answer." },
+      focus_sites: { type: "array", items: { type: "string" }, description: "Ids of up to five sites the answer is about." },
+    },
+    required: ["paragraphs", "assumptions", "limits", "follow_ups", "focus_sites"],
+    additionalProperties: false,
+  },
+};
+
+const answerInput = z.object({
+  paragraphs: z
+    .array(z.object({ text: z.string().trim().min(1).max(2400), sources: z.array(z.string().max(12)).max(40) }))
+    .min(1)
+    .max(8),
+  assumptions: z.array(z.string().trim().min(1).max(600)).max(10),
+  limits: z.array(z.string().trim().min(1).max(600)).max(10),
+  follow_ups: z.array(z.string().trim().min(1).max(300)).max(5),
+  focus_sites: z.array(z.string().max(80)).max(10),
+});
+
+export interface AskInput {
+  question: string;
+  /** What the person is looking at. */
+  looking: "reality" | "scenario";
+}
+
+function contextBlock(ctx: AnalystContext, input: AskInput): string {
+  const lines = [`Environment: ${ctx.environment}`];
+  if (ctx.scenario) {
+    lines.push(`Open scenario: "${ctx.scenario.name}"`);
+    lines.push(
+      input.looking === "scenario"
+        ? "The person is looking at the scenario world (the twin with this scenario's edits). Read that world unless they ask about reality."
+        : "The person is looking at reality (the twin as it stands), with the scenario set aside. Read that world unless they ask about the scenario.",
+    );
+  } else {
+    lines.push("No scenario is open. Only the 'reality' world exists.");
+  }
+  if (ctx.run) {
+    lines.push(
+      `A run is on screen: ${ctx.run.horizon} days, activity "${ctx.run.activity}", ran at ${ctx.run.ranAt}` +
+        (ctx.run.stale ? ". The scenario was edited after it, so it is out of date." : ", up to date with the scenario."),
+    );
+  } else {
+    lines.push("No run is on screen.");
+  }
+  return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// The loop.
+// ---------------------------------------------------------------------------
+
+type ContentBlock = Anthropic.Beta.BetaContentBlock;
+
+/**
+ * An assistant turn, as it must be sent back.
+ *
+ * Unchanged, except after a fallback: blocks the declining model produced
+ * before the handover (its thinking, its tool calls) belong to a model that is
+ * no longer in the conversation and must not be echoed. The `fallback` block
+ * itself stays where it was.
+ */
+export function echo(content: ContentBlock[]): ContentBlock[] {
+  let boundary = -1;
+  content.forEach((b, i) => {
+    if (b.type === "fallback") boundary = i;
+  });
+  if (boundary < 0) return content;
+  return content.filter(
+    (b, i) => i >= boundary || !(b.type === "thinking" || b.type === "redacted_thinking" || b.type === "tool_use"),
+  );
+}
+
+function describeFindings(findings: Finding[], draft: AnswerDraft): string {
+  const lines = findings.map((f) => {
+    const figures = f.figures.map((x) => `"${x}"`).join(", ");
+    if (f.where === "paragraph") {
+      const cited = draft.paragraphs[f.index]!.sources;
+      return `- Paragraph ${f.index + 1}: ${figures} ${f.figures.length === 1 ? "is" : "are"} not in the results of the steps it cites (${cited.join(", ") || "none cited"}) nor in the question.`;
+    }
+    return `- ${f.where === "assumption" ? "Assumption" : "Limit"} ${f.index + 1}: ${figures} ${f.figures.length === 1 ? "is" : "are"} not in any result read.`;
+  });
+  return (
+    "The answer was not delivered. These figures could not be traced:\n" +
+    lines.join("\n") +
+    "\nFor each one: cite the step that holds it, or compute it with calculate and cite that step, or rewrite the sentence without the figure. Then call give_answer again with the whole answer."
+  );
+}
+
+export async function ask(
+  model: AnalystModel,
+  ctx: AnalystContext,
+  input: AskInput,
+  onEvent: (e: AnalystEvent) => void = () => {},
+  tools: AnalystTool[] = READ_TOOLS,
+  /** Aborts when nobody is waiting for the answer any more. */
+  gone?: AbortSignal,
+): Promise<AnalystResult> {
+  const byName = new Map(tools.map((t) => [t.name, t]));
+  const steps: Step[] = [];
+  const ledgers = new Map<string, Ledger>();
+  const question = new Ledger();
+  question.addText(input.question);
+  ctx.known.absorb(question);
+
+  const usage: AnalystUsage = { requests: 0, inputTokens: 0, outputTokens: 0 };
+  let servedBy = ANALYST_MODEL;
+  let rejected = 0;
+  let nudged = false;
+
+  const finish = (r: Pick<AnalystResult, "status" | "answer" | "verified" | "struck" | "message">): AnalystResult => {
+    const result: AnalystResult = { ...r, steps, model: servedBy, usage };
+    onEvent({ type: "done", result });
+    return result;
+  };
+
+  const messages: MessageParam[] = [
+    {
+      role: "user",
+      content: `<context>\n${contextBlock(ctx, input)}\n</context>\n\n<question>\n${input.question}\n</question>`,
+    },
+  ];
+
+  for (let turn = 0; turn < MAX_REQUESTS; turn++) {
+    if (gone?.aborted) {
+      return finish({ status: "incomplete", answer: null, verified: false, struck: [], message: "Stopped before an answer was reached." });
+    }
+    onEvent({ type: "status", message: steps.length === 0 ? "Reading the question" : "Deciding what to read next" });
+    const res = await model.create({
+      model: ANALYST_MODEL,
+      max_tokens: 16000,
+      // Thinking is always on for this model; effort is the control. Medium is
+      // its default, set here so a change of default cannot change the product.
+      output_config: { effort: "medium" },
+      // A safeguard that misfires on a question about an epidemic should not
+      // take the analyst down: a declined request is retried on the model
+      // Anthropic recommends for that category.
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      // The system prompt and the tools never change, and each request repeats
+      // everything before it: cached, a long exchange costs a fraction.
+      cache_control: { type: "ephemeral" },
+      system: SYSTEM_PROMPT,
+      tools: [
+        ...tools.map((t): Anthropic.Beta.BetaTool => ({ name: t.name, description: t.description, input_schema: t.input_schema })),
+        GIVE_ANSWER,
+      ],
+      messages,
+    });
+    usage.requests += 1;
+    usage.inputTokens +=
+      res.usage.input_tokens + (res.usage.cache_read_input_tokens ?? 0) + (res.usage.cache_creation_input_tokens ?? 0);
+    usage.outputTokens += res.usage.output_tokens;
+    servedBy = res.model;
+
+    if (res.stop_reason === "refusal") {
+      return finish({
+        status: "declined",
+        answer: null,
+        verified: false,
+        struck: [],
+        message:
+          "The model declined to answer this question. Nothing was made up in its place. Try asking about what the twin or the run shows.",
+      });
+    }
+    if (res.stop_reason === "max_tokens" || res.stop_reason === "model_context_window_exceeded") {
+      return finish({
+        status: "incomplete",
+        answer: null,
+        verified: false,
+        struck: [],
+        message: "The question needed more reading than one answer allows. Ask about one site, one catchment or one part of the run at a time.",
+      });
+    }
+
+    messages.push({ role: "assistant", content: echo(res.content) });
+    const uses = res.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use");
+
+    if (uses.length === 0) {
+      // It answered in prose. Prose has no sources, so it cannot be checked
+      // paragraph by paragraph: ask once for the answer in its proper form.
+      if (!nudged) {
+        nudged = true;
+        messages.push({
+          role: "user",
+          content: "Deliver the answer by calling give_answer, with each paragraph citing the steps it rests on. Do not answer in plain text.",
+        });
+        continue;
+      }
+      return finish({
+        status: "incomplete",
+        answer: null,
+        verified: false,
+        struck: [],
+        message: "The analyst did not deliver an answer in a form that could be checked, so none is shown.",
+      });
+    }
+
+    const results: Anthropic.Beta.BetaToolResultBlockParam[] = [];
+    for (const use of uses) {
+      if (use.name === GIVE_ANSWER.name) {
+        if (uses.length > 1) {
+          results.push({
+            type: "tool_result",
+            tool_use_id: use.id,
+            is_error: true,
+            content: "give_answer must be called on its own, after you have read the results of your other calls. Read them, then call it again.",
+          });
+          continue;
+        }
+        const parsed = answerInput.safeParse(use.input);
+        if (!parsed.success) {
+          results.push({
+            type: "tool_result",
+            tool_use_id: use.id,
+            is_error: true,
+            content: `The answer was not delivered: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}.`,
+          });
+          continue;
+        }
+        const known = new Set(steps.map((s) => s.id));
+        const draft: AnswerDraft = {
+          // A source that names no step is dropped rather than trusted.
+          paragraphs: parsed.data.paragraphs.map((p) => ({ text: p.text, sources: [...new Set(p.sources)].filter((s) => known.has(s)) })),
+          assumptions: parsed.data.assumptions,
+          limits: parsed.data.limits,
+        };
+        onEvent({ type: "status", message: "Checking every figure against what was read" });
+        const checked = checkAnswer(draft, ledgers, question);
+        if (checked.findings.length > 0 && rejected < MAX_REJECTED_DRAFTS) {
+          rejected += 1;
+          results.push({ type: "tool_result", tool_use_id: use.id, is_error: true, content: describeFindings(checked.findings, draft) });
+          continue;
+        }
+        return finish({
+          status: "answered",
+          answer: {
+            paragraphs: checked.struck.paragraphs,
+            assumptions: checked.struck.assumptions,
+            limits: checked.struck.limits,
+            followUps: parsed.data.follow_ups.slice(0, 3),
+            focusSites: parsed.data.focus_sites.slice(0, 5),
+          },
+          verified: checked.findings.length === 0,
+          struck: checked.findings,
+          message: null,
+        });
+      }
+
+      const tool = byName.get(use.name);
+      const id = `s${steps.length + 1}`;
+      const started = Date.now();
+      let ok = true;
+      let output: unknown;
+      if (!tool) {
+        ok = false;
+        output = { error: `There is no tool called "${use.name}".` };
+      } else {
+        const parsed = tool.parse.safeParse(use.input);
+        if (!parsed.success) {
+          ok = false;
+          output = { error: `Invalid input: ${parsed.error.issues.map((i) => `${i.path.join(".") || "input"}: ${i.message}`).join("; ")}.` };
+        } else {
+          try {
+            output = await tool.run(ctx, parsed.data);
+          } catch (err) {
+            // A tool's refusal is information for the model. Anything else is
+            // a fault of ours and must not be dressed up as one.
+            if (!(err instanceof ToolError)) throw err;
+            ok = false;
+            output = { error: err.message };
+          }
+        }
+      }
+      const step: Step = { id, tool: use.name, input: use.input, ok, output, ms: Date.now() - started };
+      steps.push(step);
+      // A refusal carries no facts: only what a tool returned can be cited.
+      const ledger = new Ledger();
+      if (ok) ledger.addJson(output);
+      ledgers.set(id, ledger);
+      ctx.known.absorb(ledger);
+      onEvent({ type: "step", step });
+      results.push({
+        type: "tool_result",
+        tool_use_id: use.id,
+        ...(ok ? {} : { is_error: true }),
+        content: JSON.stringify({ step: id, result: output }),
+      });
+    }
+    messages.push({ role: "user", content: results });
+  }
+
+  return finish({
+    status: "incomplete",
+    answer: null,
+    verified: false,
+    struck: [],
+    message: "The analyst read for too long without reaching an answer. Ask a narrower question.",
+  });
+}

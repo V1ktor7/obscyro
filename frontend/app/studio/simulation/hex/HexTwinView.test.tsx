@@ -34,9 +34,11 @@ const scenarios = vi.hoisted(() => ({
   createOverlayScenario: vi.fn(),
   updateOverlayScenario: vi.fn(),
 }));
+const analyst = vi.hoisted(() => ({ fetchAnalyst: vi.fn(), askAnalyst: vi.fn() }));
 
 vi.mock("@/lib/platform-api", async (orig) => ({ ...(await orig<typeof import("@/lib/platform-api")>()), ...api }));
 vi.mock("../../scenarios-api", () => scenarios);
+vi.mock("../../analyst-api", async (orig) => ({ ...(await orig<typeof import("../../analyst-api")>()), ...analyst }));
 vi.mock("../../StudioShell", () => ({ useStudio: () => ({ hasKey: true, selectedEnv: "mtl" }) }));
 vi.mock("../../datasets-api", () => ({ listDatasets: vi.fn().mockResolvedValue({ datasets: [] }) }));
 vi.mock("./layers-api", () => ({ listTwinLayers: vi.fn().mockResolvedValue({ layers: [] }) }));
@@ -143,6 +145,7 @@ beforeEach(() => {
   scenarios.listScenarioOverrides.mockImplementation(async () => ({ overrides: overrides(), issues: [] }));
   scenarios.addScenarioOverride.mockResolvedValue({ id: "new" });
   scenarios.deleteScenarioOverride.mockResolvedValue({ deleted: true });
+  analyst.fetchAnalyst.mockResolvedValue({ configured: true, model: "claude-opus-5-5" });
 });
 
 async function opened() {
@@ -235,5 +238,45 @@ describe("a scenario with starting conditions", () => {
     expect(screen.getByText(/"baselineOccupancy"/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "+ 1 day" })).toBeNull();
     expect(screen.getByRole("button", { name: "Remove" })).toBeTruthy();
+  });
+
+  it("gives the analyst the run on screen, and points the map at the site it names", async () => {
+    analyst.askAnalyst.mockImplementation(async (_env: string, _body: unknown, onEvent: (e: unknown) => void) => {
+      const step = { id: "s1", tool: "read_run", input: { part: "sites" }, ok: true, output: { sites: 1 }, ms: 3 };
+      onEvent({ type: "step", step });
+      onEvent({
+        type: "done",
+        result: {
+          status: "answered", verified: true, struck: [], steps: [step], message: null, model: "claude-opus-5-5",
+          usage: { requests: 2, inputTokens: 900, outputTokens: 100 },
+          answer: { paragraphs: [{ text: "Hôpital Beta queues from day 5.", sources: ["s1"] }], assumptions: [], limits: [], followUps: [], focusSites: ["f:b"] },
+        },
+      });
+    });
+    await opened();
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    await screen.findByText(/Where it breaks/);
+
+    // Folded on arrival, like every panel on the map.
+    const fold = screen.getByRole("button", { name: /^Analyst/ });
+    expect(fold.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(fold);
+    fireEvent.click(await screen.findByRole("button", { name: "Where does it break first, and why there?" }));
+    await screen.findByText("Hôpital Beta queues from day 5.");
+
+    const [env, body] = analyst.askAnalyst.mock.calls[0]!;
+    expect(env).toBe("mtl");
+    expect(body).toMatchObject({ question: "Where does it break first, and why there?", scenarioId: "sc1", looking: "scenario" });
+    // The figures the Result panel shows: Beta queues 12 a day from day 5.
+    expect(body.run).toMatchObject({ horizon: 60, activity: "lit", stale: false });
+    expect(body.run.events).toMatchObject({ sitesWithQueue: 1, sitesWithActivity: 2, firstQueueDay: 5, waitingDays: 660 });
+    expect(body.run.full.waitingDays).toBe(60);
+    const sites = body.run.sites as { id: string; daily: { waitingEvents: number[] } | null }[];
+    expect(sites.find((x) => x.id === "f:b")!.daily!.waitingEvents.slice(4, 7)).toEqual([0, 12, 12]);
+    // A site that held sends no day-by-day series.
+    expect(sites.find((x) => x.id === "f:a")!.daily).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Hôpital Beta" }));
+    expect(await screen.findByRole("img", { name: /Occupancy of lit at Hôpital Beta/ })).toBeTruthy();
   });
 });

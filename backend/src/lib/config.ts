@@ -61,6 +61,12 @@ export const config = {
   /** Optional JSON graph spec (model DAG) used when a request omits one. */
   simDefaultGraph: (process.env.SIM_DEFAULT_GRAPH ?? "").trim(),
 
+  /**
+   * Key for the Claude API, which the analyst reads the twin with. Empty =>
+   * the analyst is off and says so; nothing else depends on it.
+   */
+  anthropicApiKey: (process.env.ANTHROPIC_API_KEY ?? "").trim(),
+
   /** Data-quality L6 ML/statistical anomaly layer. */
   dqAnomalyEnabled: boolEnv("DQ_ANOMALY_ENABLED", true),
   /** Tukey IQR fence multiplier for L6 anomaly detection. */

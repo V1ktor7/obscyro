@@ -1,0 +1,110 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+
+import { Ledger, STRUCK, checkAnswer, numbersIn, strike, unsourced } from "./analyst-verify.js";
+
+const values = (text: string) => numbersIn(text).map((t) => (t.kind === "date" ? t.date : t.value));
+
+test("figures are read the way people write them, in English and in French", () => {
+  assert.deepEqual(values("7,316 patient-days"), [7316]);
+  assert.deepEqual(values("225 710 résidents"), [225710]);
+  assert.deepEqual(values("225 710 résidents"), [225710]);
+  assert.deepEqual(values("1,234.5 and 1 234,5"), [1234.5, 1234.5]);
+  assert.deepEqual(values("7,3 par jour"), [7.3]);
+  assert.deepEqual(values("0,941 puis 0.941"), [0.941, 0.941]);
+  assert.deepEqual(values("day 17, up to 103 waiting"), [17, 103]);
+  assert.deepEqual(values("from 94 % to 93 %"), [94, 93]);
+  assert.deepEqual(values("about 225k residents and 2.1 million visits"), [225000, 2100000]);
+});
+
+test("a date is one thing, not three numbers", () => {
+  assert.deepEqual(values("from 2021-12-13 for 60 days"), ["2021-12-13", 60]);
+});
+
+test("digits that belong to a name are not figures", () => {
+  assert.deepEqual(values("COVID-19 and H1N1, see s3 and RLS6"), []);
+  assert.deepEqual(values("COVID-19 filled 34 sites"), [34]);
+});
+
+test("a figure may be rounded the way a person rounds, and not otherwise", () => {
+  const l = new Ledger();
+  l.addJson({ waiting: 7316.4, share: 0.9412, sick: 5999, beds: 60 });
+  const bad = (text: string) => unsourced(text, l).map((t) => t.raw);
+  assert.deepEqual(bad("7,316 patient-days"), []);
+  assert.deepEqual(bad("about 7,300 patient-days"), []);
+  assert.deepEqual(bad("94 % full, or 94.1 %"), []);
+  assert.deepEqual(bad("6,000 sick"), []);
+  assert.deepEqual(bad("60 beds"), []);
+  // Close is not the same: a transposition, a neighbour, a round figure too far.
+  assert.deepEqual(bad("7,361 patient-days"), ["7,361"]);
+  assert.deepEqual(bad("95 % full"), ["95 %"]);
+  assert.deepEqual(bad("100 beds"), ["100"]);
+  assert.deepEqual(bad("8,000 patient-days"), ["8,000"]);
+});
+
+test("a share is a percentage only when written as one", () => {
+  const l = new Ledger();
+  l.addNumber(0.83);
+  assert.equal(unsourced("83 % immune", l).length, 0);
+  assert.equal(unsourced("83 points", l).length, 0);
+  assert.equal(unsourced("83 beds", l).length, 1);
+});
+
+test("the ledger holds numbers inside strings, dates and their parts, and how long a list is", () => {
+  const l = new Ledger();
+  l.addJson({ note: "+60 beds from day 10", day_0_is: "2021-12-13", sites: [{ name: "a" }, { name: "b" }, { name: "c" }] });
+  const bad = (text: string) => unsourced(text, l).map((t) => t.raw);
+  assert.deepEqual(bad("60 beds from day 10"), []);
+  assert.deepEqual(bad("starting 2021-12-13"), []);
+  assert.deepEqual(bad("13 December 2021"), []);
+  assert.deepEqual(bad("the 3 sites listed"), []);
+  assert.deepEqual(bad("starting 2021-12-14"), ["2021-12-14"]);
+  assert.deepEqual(bad("the 4 sites listed"), ["4"]);
+});
+
+test("striking takes out exactly the figure and its unit sign", () => {
+  const l = new Ledger();
+  l.addNumber(34);
+  const text = "8 of 34 sites queue, 12 % of them early.";
+  assert.equal(strike(text, unsourced(text, l)), `${STRUCK} of 34 sites queue, ${STRUCK} of them early.`);
+});
+
+test("a paragraph is checked against the steps it cites, not against everything read", () => {
+  const s1 = new Ledger();
+  s1.addJson({ units: 234 });
+  const s2 = new Ledger();
+  s2.addJson({ residents: 225710 });
+  const question = new Ledger();
+  question.addText("What if we add 60 beds?");
+  const ledgers = new Map([
+    ["s1", s1],
+    ["s2", s2],
+  ]);
+
+  const ok = checkAnswer(
+    {
+      paragraphs: [
+        { text: "Lakeshore has 234 beds for 225,710 residents.", sources: ["s1", "s2"] },
+        { text: "Adding 60 beds is the option you asked about.", sources: [] },
+      ],
+      assumptions: ["The 234 beds are all staffed."],
+      limits: [],
+    },
+    ledgers,
+    question,
+  );
+  assert.deepEqual(ok.findings, []);
+
+  // 225,710 is in s2, which this paragraph does not cite.
+  const wrongSource = checkAnswer(
+    { paragraphs: [{ text: "Lakeshore has 234 beds for 225,710 residents.", sources: ["s1"] }], assumptions: [], limits: [] },
+    ledgers,
+    question,
+  );
+  assert.deepEqual(wrongSource.findings, [{ where: "paragraph", index: 0, figures: ["225,710"] }]);
+  assert.equal(wrongSource.struck.paragraphs[0]!.text, `Lakeshore has 234 beds for ${STRUCK} residents.`);
+
+  // An assumption cites nothing, so it may use anything that was read, and nothing else.
+  const loose = checkAnswer({ paragraphs: [{ text: "Fine.", sources: [] }], assumptions: ["Assumes 85 % occupancy."], limits: ["No staff."] }, ledgers, question);
+  assert.deepEqual(loose.findings, [{ where: "assumption", index: 0, figures: ["85 %"] }]);
+});
