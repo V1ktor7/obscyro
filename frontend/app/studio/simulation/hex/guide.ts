@@ -55,8 +55,8 @@ export function guideSteps(g: GuideInput): GuideStep[] {
           .filter(Boolean)
           .join(", ")
       : g.conditions > 0
-        ? `${plural(g.conditions, "starting condition")} set. Now add what happens: seed an outbreak or a heat wave on the map.`
-        : "Set where the network starts (how full it usually is), then seed an outbreak or a heat wave on the map.",
+        ? `${plural(g.conditions, "starting condition")} set. Now seed an outbreak or a heat wave.`
+        : "Set how full the network usually is, then seed an outbreak or a heat wave.",
   };
 
   const run: GuideStep = {
@@ -68,8 +68,8 @@ export function guideSteps(g: GuideInput): GuideStep[] {
       : ran
         ? "The result is on the map and in the Result panel."
         : g.hasRun && g.stale
-          ? "The scenario changed since the last run. Run again to bring the result up to date."
-          : "The engine runs the scenario twice: what happens on its own, and with your choices. The difference is what your choices do.",
+          ? "The scenario changed since the last run. Run again."
+          : "The engine runs it twice: with and without your choices.",
   };
 
   const ask: GuideStep = {
@@ -78,7 +78,7 @@ export function guideSteps(g: GuideInput): GuideStep[] {
     title: "Ask what it shows",
     detail: g.analystSeen
       ? "The analyst answers from what it reads in the twin and the run, and shows every step."
-      : "The analyst explains where it breaks and why, from what it reads in the twin and the run. Every figure is traced.",
+      : "The analyst explains where it breaks and why. Every figure is traced.",
   };
 
   return [describe, run, ask];

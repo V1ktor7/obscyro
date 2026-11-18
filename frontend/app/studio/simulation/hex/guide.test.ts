@@ -11,12 +11,12 @@ describe("the three steps of the Scenarios page", () => {
     const steps = guideSteps(base);
     expect(currentStep(steps)).toBe(1);
     expect(guideMeta(steps)).toBe("step 1 of 3: say what happens");
-    expect(steps[0]!.detail).toMatch(/Set where the network starts/);
+    expect(steps[0]!.detail).toMatch(/Set how full the network usually is/);
   });
 
   it("does not count conditions alone as something to run", () => {
     expect(states({ conditions: 3 })).toEqual(["now", "later", "later"]);
-    expect(guideSteps({ ...base, conditions: 3 })[0]!.detail).toMatch(/3 starting conditions set\. Now add what happens/);
+    expect(guideSteps({ ...base, conditions: 3 })[0]!.detail).toMatch(/3 starting conditions set\. Now seed an outbreak/);
   });
 
   it("moves to Run once something happens, and says what the scenario holds", () => {
