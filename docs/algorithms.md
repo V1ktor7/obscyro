@@ -102,7 +102,7 @@ sequenceDiagram
 
 ## A2. Vérificateur de chiffres
 
-**But.** Empêcher qu'un chiffre arrive à l'écran sans qu'un outil l'ait renvoyé. Chaque paragraphe est contrôlé contre les étapes qu'il cite lui-même, pas contre tout ce qui a été lu : c'est ce qui donne un sens à une puce de source.
+**But.** Empêcher qu'un chiffre arrive à l'écran sans qu'un outil l'ait renvoyé, ou à côté du mauvais nom. Chaque paragraphe est contrôlé contre les étapes qu'il cite lui-même, pas contre tout ce qui a été lu : c'est ce qui donne un sens à une puce de source.
 
 ```mermaid
 flowchart TD
@@ -111,9 +111,13 @@ flowchart TD
     C -->|"oui"| D["Ignoré : il fait partie d'un nom"]
     C -->|"non"| E["Registre du paragraphe :<br/>nombres des étapes citées, plus ceux de la question"]
     E --> F{"Le chiffre est-il dans le registre ?"}
-    F -->|"exact, arrondi, part écrite en pour cent,<br/>ou chiffre rond à 5 pour cent près"| G["Tracé"]
-    F -->|"non"| H{"Moins de deux brouillons<br/>déjà renvoyés ?"}
-    H -->|"oui"| I["Brouillon renvoyé au modèle,<br/>chiffres nommés"]
+    F -->|"exact, arrondi, part écrite en pour cent,<br/>ou chiffre rond à 5 pour cent près"| K{"Un nom de site ou de territoire<br/>dans le même énoncé ?"}
+    K -->|"non"| G["Tracé"]
+    K -->|"oui"| L{"Le chiffre est dans la ligne de ce nom,<br/>ou n'appartient à personne ?"}
+    L -->|"oui"| G
+    L -->|"non : il est dans la ligne d'un autre nom"| H{"Moins de deux brouillons<br/>déjà renvoyés ?"}
+    F -->|"non"| H
+    H -->|"oui"| I["Brouillon renvoyé au modèle :<br/>chiffres nommés, et à qui ils appartiennent"]
     H -->|"non"| J["Chiffre retiré du texte<br/>et listé à l'écran"]
 ```
 
@@ -121,7 +125,10 @@ flowchart TD
 - Le registre d'une étape contient : chaque nombre du résultat, chaque nombre écrit dans une chaîne, chaque date et ses parties (année, mois, jour), et la longueur de chaque liste.
 - Arrondi admis : « 94 » pour 93,6 ; « 94 % » pour une part de 0,941 ; « 6 000 » pour 5 999. Un chiffre rond ne peut pas s'écarter de plus de 5 % : « 100 » ne vaut pas pour 60.
 - Les hypothèses et les limites ne citent pas d'étape : elles sont contrôlées contre tout ce qui a été lu.
-- **Ce que le contrôle prouve :** le chiffre existe dans un résultat d'outil cité. **Ce qu'il ne prouve pas :** que la phrase autour est juste. C'est pourquoi chaque étape reste consultable sous la réponse.
+- **À qui est le chiffre.** Un résultat d'outil est fait de lignes qui portent un nom (un site, un territoire). Le texte est coupé en énoncés, aux fins de phrase, aux virgules et aux mots qui joignent deux énoncés. Un chiffre écrit dans le même énoncé qu'un nom est fautif quand trois choses sont vraies : aucune ligne de ce nom ne le contient, il n'est pas un chiffre qui n'appartient à personne (un total, la question, un calcul), et la ligne d'un autre nom le contient. Le contrôle attrape donc une interversion, et se tait quand il ne peut pas trancher.
+- Un nom se reconnaît à ses mots distinctifs (« lakeshore », « santa cabrini »), sans casse ni accents. Un nom fait seulement de mots communs à tous (« Hôpital général de Montréal ») n'attribue rien.
+- **Ce que le contrôle prouve :** le chiffre existe dans un résultat d'outil cité, et pas dans la ligne d'un autre nom que celui à côté duquel il est écrit. **Ce qu'il ne prouve pas :** que la phrase autour est juste. C'est pourquoi chaque étape reste consultable sous la réponse.
+- Origine de la règle d'attribution : la première réponse donnée en production, tous chiffres « trouvés », donnait à Lachine le jour de LaSalle.
 
 **Code.** `backend/src/services/analyst-verify.ts`. **Tests.** `analyst-verify.unit.test.ts`.
 

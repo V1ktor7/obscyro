@@ -150,6 +150,29 @@ test("a figure that still cannot be traced is taken out of the answer, and liste
   assert.equal(out.usage.requests, 4);
 });
 
+test("a figure beside the wrong name is sent back with whose it is", async () => {
+  const rows: AnalystTool = {
+    name: "rows",
+    description: "Two sites.",
+    input_schema: { type: "object", properties: {}, required: [], additionalProperties: false },
+    parse: z.object({}),
+    async run() {
+      return { sites: [{ name: "Hôpital de LaSalle", from_day: 18 }, { name: "Hôpital de Lachine", from_day: 19 }] };
+    },
+  };
+  const model = scripted([
+    reply([use("rows", {})]),
+    reply([answer([{ text: "Lachine queues from day 18, LaSalle from day 19.", sources: ["s1"] }])]),
+    reply([answer([{ text: "LaSalle queues from day 18, Lachine from day 19.", sources: ["s1"] }])]),
+  ]);
+  const out = await ask(model, ctx(), Q, undefined, [rows]);
+  const back = resultsOf(model, 2)[0]!;
+  assert.equal(back.error, true);
+  assert.match(back.text, /"18" is written about Hôpital de Lachine, but in the steps cited that figure is in the row of Hôpital de LaSalle/);
+  assert.equal(out.verified, true);
+  assert.equal(out.answer!.paragraphs[0]!.text, "LaSalle queues from day 18, Lachine from day 19.");
+});
+
 test("a figure from the question itself needs no step", async () => {
   const model = scripted([reply([answer([{ text: "You asked about adding 60 beds; nothing was read about that yet.", sources: [] }])])]);
   const out = await ask(model, ctx(), { question: "What if we add 60 beds?", looking: "reality" }, undefined, TOOLS);

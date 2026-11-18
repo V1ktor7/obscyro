@@ -59,6 +59,16 @@ test("an answer that read something has to cite it somewhere", () => {
   assert.deepEqual(judge(lakeshore, r), ["no paragraph cites a step"]);
 });
 
+test("a name and its figure have to be in the same statement", () => {
+  const e: Expectation = { id: "order", question: "?", looking: "scenario", pairs: [["LaSalle", "18"], ["Lachine", "19"]] };
+  assert.deepEqual(judge(e, answer({}, "LaSalle queues from day 18, Lachine from day 19.")), []);
+  // Both figures are there, each beside the other name: the swap the first real answer made.
+  assert.deepEqual(judge(e, answer({}, "Lachine queues from day 18, LaSalle from day 19.")), [
+    "does not give 18 for LaSalle",
+    "does not give 19 for Lachine",
+  ]);
+});
+
 test("the reference set is well formed", () => {
   const ids = QUESTIONS.map((q) => q.id);
   assert.equal(new Set(ids).size, ids.length, "two questions share an id");

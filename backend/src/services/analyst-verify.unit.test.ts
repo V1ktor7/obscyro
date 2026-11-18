@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { Ledger, STRUCK, checkAnswer, numbersIn, strike, unsourced } from "./analyst-verify.js";
+import { Ledger, STRUCK, checkAnswer, clausesOf, numbersIn, strike, unsourced } from "./analyst-verify.js";
 
 const values = (text: string) => numbersIn(text).map((t) => (t.kind === "date" ? t.date : t.value));
 
@@ -108,3 +108,99 @@ test("a paragraph is checked against the steps it cites, not against everything 
   const loose = checkAnswer({ paragraphs: [{ text: "Fine.", sources: [] }], assumptions: ["Assumes 85 % occupancy."], limits: ["No staff."] }, ledgers, question);
   assert.deepEqual(loose.findings, [{ where: "assumption", index: 0, figures: ["85 %"] }]);
 });
+
+// --- whose figure it is ---------------------------------------------------------------
+//
+// The first answer the analyst gave in production: every figure "found", and
+// Lachine given LaSalle's day. These are the rows it had read.
+
+const SITES = {
+  days: 60,
+  sites_where_somebody_waits_in_either_run: [
+    { order: 1, name: "HÔPITAL GÉNÉRAL DU LAKESHORE", usual_units: 234, events_only: { from_day: 17, most_waiting_at_once: 103, patient_days_waiting: 3012 } },
+    { order: 2, name: "HÔPITAL DE LASALLE", usual_units: 110, events_only: { from_day: 18, most_waiting_at_once: 37, patient_days_waiting: 1101 } },
+    { order: 3, name: "HÔPITAL DE LACHINE", usual_units: 56, events_only: { from_day: 19, most_waiting_at_once: 21, patient_days_waiting: 540 } },
+    { order: 4, name: "HÔPITAL SANTA CABRINI", usual_units: 305, events_only: { from_day: 22, most_waiting_at_once: 44, patient_days_waiting: 890 } },
+  ],
+};
+const CATCHMENTS = {
+  catchments: [
+    { name: "RLS de Pierrefonds - Lac Saint-Louis", residents: 225710, units: 234, units_per_1000_residents: 1.04 },
+    { name: "RLS de Dorval - Lachine - LaSalle", residents: 144500, units: 166, units_per_1000_residents: 1.15 },
+  ],
+  whole_network: { residents: 2050000, units: 6210, units_per_1000_residents: 3.03 },
+};
+
+function read(...results: unknown[]): Ledger {
+  const l = new Ledger();
+  for (const r of results) l.addJson(r);
+  return l;
+}
+const swaps = (text: string, l: Ledger) => l.misattributed(text).map((m) => `${m.token.raw} said of ${m.saidOf}, is ${m.belongsTo.join("/")}`);
+
+test("a text is cut into statements without cutting a figure", () => {
+  assert.deepEqual(
+    clausesOf("Lachine follows on day 18, LaSalle on day 19 and Verdun on day 21. About 7,316 wait.").map((c) => c.text.trim()),
+    ["Lachine follows on day 18", "LaSalle on day 19", "Verdun on day 21", "About 7,316 wait"],
+  );
+});
+
+test("a figure beside a name has to be in that name's row", () => {
+  const l = read(SITES);
+  assert.deepEqual(swaps("Lachine follows on day 18, LaSalle on day 19.", l), [
+    "18 said of HÔPITAL DE LACHINE, is HÔPITAL DE LASALLE",
+    "19 said of HÔPITAL DE LASALLE, is HÔPITAL DE LACHINE",
+  ]);
+  assert.deepEqual(swaps("LaSalle follows on day 18, Lachine on day 19 and Santa Cabrini on day 22.", l), []);
+  assert.deepEqual(swaps("Lakeshore is first, on day 17, with up to 103 people waiting.", l), []);
+});
+
+test("a figure that belongs to nobody is nobody's to swap", () => {
+  const l = read(SITES, CATCHMENTS);
+  // 60 is the length of the run and 3.03 the network's figure: said beside a name, still true.
+  assert.deepEqual(swaps("Lakeshore breaks on day 17 of a 60-day run.", l), []);
+  assert.deepEqual(swaps("Pierrefonds - Lac Saint-Louis has 1.04 per 1,000, against 3.03 for the network.", l), []);
+  // A figure in no row at all is the other check's business, not this one's.
+  assert.deepEqual(swaps("Lachine has 412 staff.", l), []);
+});
+
+test("a catchment and a site that share a word are told apart by the rest of the name", () => {
+  const l = read(SITES, CATCHMENTS);
+  // The catchment's own figure, said of the catchment: its three words are all there.
+  assert.deepEqual(swaps("Dorval - Lachine - LaSalle has 1.15 beds per 1,000.", l), []);
+  // The other catchment's figure, said of it: a swap.
+  assert.deepEqual(swaps("Dorval - Lachine - LaSalle has 1.04 beds per 1,000.", l), [
+    "1.04 said of RLS de Dorval - Lachine - LaSalle, is RLS de Pierrefonds - Lac Saint-Louis",
+  ]);
+});
+
+test("a rounded figure is still that row's figure", () => {
+  const l = read(SITES);
+  assert.deepEqual(swaps("Lakeshore accounts for about 3,000 patient-days.", l), []);
+});
+
+test("a swap sends the draft back with whose figure it is, and is struck if it stays", () => {
+  const ledgers = new Map([["s2", read(SITES)]]);
+  const checked = checkAnswer(
+    { paragraphs: [{ text: "Lachine follows on day 18, LaSalle on day 19.", sources: ["s2"] }], assumptions: [], limits: [] },
+    ledgers,
+    new Ledger(),
+  );
+  assert.equal(checked.findings.length, 1);
+  assert.deepEqual(checked.findings[0]!.figures, ["18", "19"]);
+  assert.deepEqual(checked.findings[0]!.misattributed![0], { figure: "18", saidOf: "HÔPITAL DE LACHINE", belongsTo: ["HÔPITAL DE LASALLE"] });
+  assert.equal(checked.struck.paragraphs[0]!.text, `Lachine follows on day ${STRUCK}, LaSalle on day ${STRUCK}.`);
+  // The right sentence passes.
+  const right = checkAnswer(
+    { paragraphs: [{ text: "LaSalle follows on day 18, Lachine on day 19.", sources: ["s2"] }], assumptions: [], limits: [] },
+    ledgers,
+    new Ledger(),
+  );
+  assert.deepEqual(right.findings, []);
+});
+
+test("a name made only of words every site has attributes nothing", () => {
+  const l = read({ sites: [{ name: "Hôpital général de Montréal", units: 400 }, { name: "Hôpital de Verdun", units: 244 }] });
+  assert.deepEqual(swaps("In Montréal, 244 beds are in use.", l), []);
+});
+

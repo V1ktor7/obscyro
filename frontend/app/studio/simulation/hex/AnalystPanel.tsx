@@ -387,8 +387,9 @@ function AskTab({
               ) : (
                 <p role="alert" className="flex items-start gap-1.5 rounded bg-warn-soft px-2 py-1.5 text-[11.5px] text-warn-ink">
                   <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  {removed} figure{removed === 1 ? " was" : "s were"} removed from this answer: no step it cites held{" "}
-                  {removed === 1 ? "it" : "them"}. Read the sentences around the gaps with care.
+                  {removed} figure{removed === 1 ? " was" : "s were"} removed from this answer: the steps it cites did not
+                  hold {removed === 1 ? "it" : "them"}, or held {removed === 1 ? "it" : "them"} for another site. Read the
+                  sentences around the gaps with care.
                 </p>
               )}
 

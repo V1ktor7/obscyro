@@ -118,9 +118,12 @@ Le suivi (« Compare with observed ») existe quand une série observée est li�
 1. Chaque paragraphe cite les étapes sur lesquelles il repose.
 2. Chaque chiffre du paragraphe doit se trouver dans les résultats de **ces** étapes, ou dans la question de la personne.
 3. Un chiffre dérivé (différence, part, taux) passe par `calculate`, qui devient une étape citée.
-4. Un chiffre introuvable renvoie le brouillon au modèle, deux fois au plus. Ensuite il est retiré, et l'écran montre l'endroit où il manquait.
+4. Un chiffre écrit à côté d'un nom de site ou de territoire doit être dans la ligne de ce nom. S'il est dans la ligne d'un autre, c'est une interversion.
+5. Un chiffre introuvable ou interverti renvoie le brouillon au modèle, deux fois au plus. Ensuite il est retiré, et l'écran montre l'endroit où il manquait.
 
-Ce que la règle garantit : aucun chiffre affiché n'a été inventé. Ce qu'elle ne garantit pas : que la phrase autour du chiffre est juste. Un chiffre peut exister dans l'étape citée et être mal étiqueté. C'est pourquoi chaque étape s'ouvre sous la réponse, avec ce que l'outil a renvoyé.
+Les outils rendent les comptes de personnes et les pourcentages arrondis une seule fois, comme l'écran les écrit (103, 93 %). Rendus avec une décimale, le modèle les arrondissait une seconde fois : 103,46 devenait 103,5 puis « environ 104 », à côté d'un panneau qui dit 103. Et la liste des sites où l'on attend arrive dans l'ordre où ils cassent, pour que « lequel d'abord » se lise au lieu de se calculer.
+
+Ce que la règle garantit : aucun chiffre affiché n'a été inventé, ni pris dans la ligne d'un autre site. Ce qu'elle ne garantit pas : que la phrase autour du chiffre est juste. C'est pourquoi chaque étape s'ouvre sous la réponse, avec ce que l'outil a renvoyé.
 
 ## Le journal
 

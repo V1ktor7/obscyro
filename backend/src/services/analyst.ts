@@ -163,7 +163,8 @@ This is the rule the whole product rests on, so it is enforced by a program, not
 
 - Every figure in your answer must appear in the result of a step that the same paragraph cites, or in the person's own question.
 - A figure you derive (a difference, a ratio, a percentage, a total, a rate) must be computed with the calculate tool, and the paragraph must cite that step. Do not do arithmetic yourself, even when it is easy.
-- You may round a figure the way a person would (7,316 as "about 7,300"; 0.941 as "94 %"). You may not change it.
+- You may round a figure the way a person would (7,316 as "about 7,300"; 0.941 as "94 %"). You may not change it. Counts of people and percentages come from the tools already rounded as the screen shows them: write them as given, do not round them again.
+- A figure belongs to the row it was read in. When you name several sites or catchments with a figure each, take each pair from the same row of the result, one row at a time. The checker also verifies that a figure written beside a name is in that name's row.
 - After you answer, a checker looks up every figure in the steps the paragraph cites. A figure it cannot find is sent back to you, and if it still cannot be found it is removed from the answer and replaced by a gap the person will see. A gap is worse than a sentence without a number: if you cannot source a figure, write the sentence without it.
 
 # How to work
@@ -301,6 +302,14 @@ export function echo(content: ContentBlock[]): ContentBlock[] {
 function describeFindings(findings: Finding[], draft: AnswerDraft): string {
   const lines = findings.map((f) => {
     const figures = f.figures.map((x) => `"${x}"`).join(", ");
+    if (f.misattributed) {
+      return f.misattributed
+        .map(
+          (m) =>
+            `- Paragraph ${f.index + 1}: "${m.figure}" is written about ${m.saidOf}, but in the steps cited that figure is in the row of ${m.belongsTo.join(" or ")}, not in ${m.saidOf}'s. Re-read the rows and correct the sentence.`,
+        )
+        .join("\n");
+    }
     if (f.where === "paragraph") {
       const cited = draft.paragraphs[f.index]!.sources;
       return `- Paragraph ${f.index + 1}: ${figures} ${f.figures.length === 1 ? "is" : "are"} not in the results of the steps it cites (${cited.join(", ") || "none cited"}) nor in the question.`;
@@ -308,9 +317,10 @@ function describeFindings(findings: Finding[], draft: AnswerDraft): string {
     return `- ${f.where === "assumption" ? "Assumption" : "Limit"} ${f.index + 1}: ${figures} ${f.figures.length === 1 ? "is" : "are"} not in any result read.`;
   });
   return (
-    "The answer was not delivered. These figures could not be traced:\n" +
+    "The answer was not delivered. These figures could not be traced, or are written beside the wrong name:\n" +
     lines.join("\n") +
-    "\nFor each one: cite the step that holds it, or compute it with calculate and cite that step, or rewrite the sentence without the figure. Then call give_answer again with the whole answer."
+    "\nFor a figure that could not be traced: cite the step that holds it, or compute it with calculate and cite that step, or rewrite the sentence without the figure. " +
+    "For a figure beside the wrong name: go back to the row of that name in the step and copy its own figure. Then call give_answer again with the whole answer."
   );
 }
 

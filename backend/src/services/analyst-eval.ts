@@ -1,4 +1,4 @@
-import { Ledger, numbersIn } from "./analyst-verify.js";
+import { Ledger, clausesOf, numbersIn } from "./analyst-verify.js";
 
 /**
  * The analyst's reference questions, and how an answer is judged.
@@ -40,6 +40,11 @@ export interface Expectation {
   figures?: string[];
   /** Words a right answer contains. Case and accents are ignored; `a|b` means either. */
   says?: string[];
+  /**
+   * A name and its figure, which a right answer gives in the same statement.
+   * This is what catches a swap: both figures present, each beside the other's name.
+   */
+  pairs?: [name: string, figure: string][];
 }
 
 /** As much of the analyst's result as the judging reads. */
@@ -101,6 +106,16 @@ export function judge(e: Expectation, r: AnswerLike): string[] {
   for (const words of e.says ?? []) {
     const any = words.split("|");
     if (!any.some((w) => folded.includes(fold(w)))) failures.push(`does not mention ${any.map((w) => `"${w}"`).join(" or ")}`);
+  }
+  for (const [name, figure] of e.pairs ?? []) {
+    const token = numbersIn(figure)[0];
+    const together = clausesOf(text).some((c) => {
+      if (!fold(c.text).includes(fold(name)) || !token) return false;
+      const here = new Ledger();
+      here.addText(c.text);
+      return here.has(token);
+    });
+    if (!together) failures.push(`does not give ${figure} for ${name}`);
   }
   // A paragraph with a figure and no source would have been struck; one with
   // neither is commentary. An answer made only of those read nothing.
@@ -187,6 +202,21 @@ export const QUESTIONS: Expectation[] = [
     looking: "scenario",
     needsRun: true,
     tools: ["read_run"],
+  },
+  {
+    id: "run-order",
+    question: "Without my choices, in what order do the sites start to queue, and on which day each?",
+    looking: "scenario",
+    needsRun: true,
+    tools: ["read_run"],
+    // The first answer in production gave Lachine day 18 and LaSalle day 19: the other way round.
+    pairs: [
+      ["Lakeshore", "17"],
+      ["LaSalle", "18"],
+      ["Lachine", "19"],
+      ["Verdun", "21"],
+      ["Santa Cabrini", "22"],
+    ],
   },
   {
     id: "run-sites",

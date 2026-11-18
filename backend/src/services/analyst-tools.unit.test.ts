@@ -318,6 +318,20 @@ test("the run is read as the engine counted it, both ways it was run", async () 
   assert.deepEqual(daily.with_choices.arrivals_by_day, { hospitalisation: [20, 30] });
 });
 
+test("the sites where somebody waits come in the order they break, counted once as the screen counts", async () => {
+  const late = { ...RUN.sites[0]!, id: "u9", name: "Hôpital tardif", events: { ...brk(4, 12.46), peakWaiting: 103.46 }, full: brk(null) };
+  const out = await call("read_run", { part: "sites" }, ctxOf({ run: { ...RUN, sites: [late, ...RUN.sites] } }));
+  const rows = out.sites_where_somebody_waits_in_either_run;
+  assert.deepEqual(rows.map((r: { order: number; name: string }) => [r.order, r.name]), [
+    [1, "Hôpital général du Lakeshore"],
+    [2, "Hôpital tardif"],
+  ]);
+  assert.match(out.ordered_by, /earliest first/);
+  // 103.46 is 103 on the Result panel. Handed over as 103.5 it became "about 104" in a sentence.
+  assert.equal(rows[1].events_only.most_waiting_at_once, 103);
+  assert.equal(rows[1].events_only.patient_days_waiting, 12);
+});
+
 test("a run that the scenario has moved on from says so", async () => {
   const summary = await call("read_run", { part: "summary" }, ctxOf({ run: { ...RUN, stale: true } }));
   assert.match(summary.warning, /edited after this run/);

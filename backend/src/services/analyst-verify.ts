@@ -131,52 +131,154 @@ export function numbersIn(text: string): NumberToken[] {
   return out;
 }
 
+/** A named thing in a tool result, and the figures in its own row. */
+interface NamedRow {
+  name: string;
+  /** The words that tell this name from another: "lakeshore", "santa cabrini". */
+  words: string[];
+  values: number[];
+  dates: Set<string>;
+}
+
+/** Keys whose value names the thing a row is about. */
+const NAME_KEYS = ["name", "site", "catchment"];
+
+/**
+ * Words that are in every name and tell none apart. A name made only of these
+ * ("Hôpital général de Montréal") is not used to attribute anything.
+ */
+const COMMON_WORDS = new Set(
+  (
+    "hopital hospital centre center hebergement general generale institut universitaire sante " +
+    "clsc chsld rls ciusss cisss site de du des la le les et and of the saint sainte st ste " +
+    "montreal quebec ile nord sud est ouest"
+  ).split(" "),
+);
+
+const fold = (s: string): string =>
+  s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+const wordsOf = (s: string): string[] => fold(s).split(/[^a-z0-9]+/).filter(Boolean);
+
+/** Units, not facts: per cent, per thousand, a week, a day. They belong to nobody. */
+const UNITS = new Set([0, 1, 2, 7, 10, 24, 100, 1000]);
+
+function holds(values: readonly number[], dates: ReadonlySet<string>, token: NumberToken): boolean {
+  if (token.kind === "date") return dates.has(token.date!);
+  const a = token.value;
+  const slack = 1e-9 * Math.max(1, a);
+  for (const v of values) {
+    // A share may be written out of 100: 0.94 is "94 %".
+    const forms = token.percent ? [v, v * 100] : [v];
+    for (const c of forms) {
+      const gap = Math.abs(c - a);
+      if (gap <= token.half + slack) return true;
+      // A round figure for a near one: "6,000" for 5,999, "7,300" for 7,316.
+      // Bounded both ways, so "100" cannot stand for 60.
+      if (token.zeros > 0 && gap <= 0.5 * 10 ** token.zeros + slack && gap <= 0.05 * a) return true;
+    }
+  }
+  return false;
+}
+
+/** A figure written beside a name it does not belong to. */
+export interface Misattribution {
+  token: NumberToken;
+  /** The name it was written beside. */
+  saidOf: string;
+  /** The names whose rows hold it. */
+  belongsTo: string[];
+}
+
 /**
  * What a set of tool results contains.
  *
  * Every number in the JSON, every number written inside a string, every date
  * and its parts, and the length of every list — counting the rows of a result
  * is reading it, not inventing.
+ *
+ * It also remembers whose each figure is. A result is mostly rows about named
+ * things — a site, a catchment — and "day 18" in LaSalle's row is not a fact
+ * about Lachine. The first answer the analyst gave in production swapped
+ * exactly those two, with every figure "found".
  */
 export class Ledger {
   private readonly values: number[] = [];
   private readonly dates = new Set<string>();
+  private readonly rows: NamedRow[] = [];
+  /** Figures outside any named row: totals, the question, a calculation. */
+  private readonly looseValues: number[] = [];
+  private readonly looseDates = new Set<string>();
 
   get size(): number {
     return this.values.length + this.dates.size;
   }
 
   addNumber(n: number): void {
-    if (Number.isFinite(n)) this.values.push(Math.abs(n));
+    this.put(n, []);
   }
 
   addText(text: string): void {
+    this.read(text, []);
+  }
+
+  addJson(value: unknown): void {
+    this.walk(value, []);
+  }
+
+  private put(n: number, within: NamedRow[]): void {
+    if (!Number.isFinite(n)) return;
+    const v = Math.abs(n);
+    this.values.push(v);
+    if (within.length === 0) this.looseValues.push(v);
+    for (const row of within) row.values.push(v);
+  }
+
+  private read(text: string, within: NamedRow[]): void {
     for (const t of numbersIn(text)) {
       if (t.kind === "date") {
         this.dates.add(t.date!);
+        if (within.length === 0) this.looseDates.add(t.date!);
+        for (const row of within) row.dates.add(t.date!);
         // "13 December 2021" is the same statement as 2021-12-13.
         const [y, mo, d] = t.date!.split("-").map(Number);
-        this.addNumber(y!);
-        this.addNumber(mo!);
-        this.addNumber(d!);
+        this.put(y!, within);
+        this.put(mo!, within);
+        this.put(d!, within);
       } else {
-        this.addNumber(t.value);
+        this.put(t.value, within);
       }
     }
   }
 
-  addJson(value: unknown): void {
-    if (typeof value === "number") return this.addNumber(value);
-    if (typeof value === "string") return this.addText(value);
+  private walk(value: unknown, within: NamedRow[]): void {
+    if (typeof value === "number") return this.put(value, within);
+    if (typeof value === "string") return this.read(value, within);
     if (Array.isArray(value)) {
-      this.addNumber(value.length);
-      for (const v of value) this.addJson(v);
+      this.put(value.length, within);
+      for (const v of value) this.walk(v, within);
       return;
     }
     if (value && typeof value === "object") {
-      for (const [k, v] of Object.entries(value)) {
-        this.addText(k);
-        this.addJson(v);
+      const record = value as Record<string, unknown>;
+      // An object that says what it is about starts a row; what is inside it,
+      // however deep, is that thing's.
+      const named = NAME_KEYS.map((k) => record[k]).find((v): v is string => typeof v === "string" && v.trim().length > 0);
+      let inside = within;
+      if (named !== undefined) {
+        const words = wordsOf(named).filter((w) => w.length >= 3 && !COMMON_WORDS.has(w) && !/^\d+$/.test(w));
+        if (words.length > 0) {
+          const row: NamedRow = { name: named, words, values: [], dates: new Set() };
+          this.rows.push(row);
+          inside = [...within, row];
+        }
+      }
+      for (const [k, v] of Object.entries(record)) {
+        this.read(k, inside);
+        this.walk(v, inside);
       }
     }
   }
@@ -185,25 +287,67 @@ export class Ledger {
   absorb(other: Ledger): void {
     for (const v of other.values) this.values.push(v);
     for (const d of other.dates) this.dates.add(d);
+    for (const v of other.looseValues) this.looseValues.push(v);
+    for (const d of other.looseDates) this.looseDates.add(d);
+    for (const r of other.rows) this.rows.push(r);
   }
 
   has(token: NumberToken): boolean {
-    if (token.kind === "date") return this.dates.has(token.date!);
-    const a = token.value;
-    const slack = 1e-9 * Math.max(1, a);
-    for (const v of this.values) {
-      // A share may be written out of 100: 0.94 is "94 %".
-      const forms = token.percent ? [v, v * 100] : [v];
-      for (const c of forms) {
-        const gap = Math.abs(c - a);
-        if (gap <= token.half + slack) return true;
-        // A round figure for a near one: "6,000" for 5,999, "7,300" for 7,316.
-        // Bounded both ways, so "100" cannot stand for 60.
-        if (token.zeros > 0 && gap <= 0.5 * 10 ** token.zeros + slack && gap <= 0.05 * a) return true;
+    return holds(this.values, this.dates, token);
+  }
+
+  /**
+   * The figures of a text written beside a name whose row does not hold them.
+   *
+   * Clause by clause: "Lachine follows on day 18, LaSalle on day 19" is two
+   * statements. In each, a figure is checked only when a name is in the same
+   * clause, and it is a fault only when all three hold: no row of that name has
+   * it, it is not a figure that belongs to nobody (a total, the question, a
+   * calculation), and the row of some other name does have it. So it catches a
+   * swap, and stays silent when it cannot tell.
+   */
+  misattributed(text: string): Misattribution[] {
+    if (this.rows.length === 0) return [];
+    const out: Misattribution[] = [];
+    for (const clause of clausesOf(text)) {
+      const tokens = numbersIn(clause.text).filter((t) => !(t.kind === "number" && UNITS.has(t.value)));
+      if (tokens.length === 0) continue;
+      const said = new Set(wordsOf(clause.text));
+      const about = this.rows.filter((r) => r.words.every((w) => said.has(w)));
+      if (about.length === 0) continue;
+      const others = this.rows.filter((r) => !about.includes(r));
+      for (const t of tokens) {
+        if (about.some((r) => holds(r.values, r.dates, t))) continue;
+        if (holds(this.looseValues, this.looseDates, t)) continue;
+        const owners = [...new Set(others.filter((r) => holds(r.values, r.dates, t)).map((r) => r.name))];
+        if (owners.length === 0) continue;
+        out.push({
+          token: { ...t, start: t.start + clause.start, end: t.end + clause.start },
+          // The longest name mentioned is the one the clause is about.
+          saidOf: [...about].sort((x, y) => y.words.length - x.words.length)[0]!.name,
+          belongsTo: owners.slice(0, 3),
+        });
       }
     }
-    return false;
+    return out;
   }
+}
+
+/**
+ * A text cut into statements: at sentence ends, at a comma followed by a
+ * space, and at the words that join two statements. A comma inside a number
+ * ("7,316") is not followed by a space, so figures stay whole.
+ */
+export function clausesOf(text: string): { text: string; start: number }[] {
+  const out: { text: string; start: number }[] = [];
+  const cut = /[.;:!?](?=\s|$)|,(?=\s)|\s(?:and|et|while|whereas|but|mais|puis|then)\s/g;
+  let from = 0;
+  for (let m = cut.exec(text); m; m = cut.exec(text)) {
+    if (m.index > from) out.push({ text: text.slice(from, m.index), start: from });
+    from = m.index + m[0].length;
+  }
+  if (from < text.length) out.push({ text: text.slice(from), start: from });
+  return out;
 }
 
 /** The figures of a text that the ledger does not hold. */
@@ -245,6 +389,11 @@ export interface Finding {
   index: number;
   /** The figures as written. */
   figures: string[];
+  /**
+   * Set when the figures exist but were written beside the wrong name: what
+   * each was said of, and whose row holds it.
+   */
+  misattributed?: { figure: string; saidOf: string; belongsTo: string[] }[];
 }
 
 export interface Checked {
@@ -276,7 +425,18 @@ export function checkAnswer(draft: AnswerDraft, ledgers: ReadonlyMap<string, Led
     }
     const bad = unsourced(p.text, own);
     if (bad.length) findings.push({ where: "paragraph", index, figures: bad.map((t) => t.raw) });
-    return { ...p, text: strike(p.text, bad) };
+    // Found, but beside the wrong name: the figure is real and the sentence is not.
+    const taken = new Set(bad.map((t) => t.start));
+    const swapped = own.misattributed(p.text).filter((m) => !taken.has(m.token.start));
+    if (swapped.length) {
+      findings.push({
+        where: "paragraph",
+        index,
+        figures: swapped.map((m) => m.token.raw),
+        misattributed: swapped.map((m) => ({ figure: m.token.raw, saidOf: m.saidOf, belongsTo: m.belongsTo })),
+      });
+    }
+    return { ...p, text: strike(p.text, [...bad, ...swapped.map((m) => m.token)]) };
   });
   const loose = (where: "assumption" | "limit", items: string[]) =>
     items.map((text, index) => {

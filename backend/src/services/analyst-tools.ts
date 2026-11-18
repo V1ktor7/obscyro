@@ -702,8 +702,20 @@ const scenarioRecipe: AnalystTool = {
   },
 };
 
+/**
+ * A count of people, as the screen writes it: rounded once, to a whole.
+ *
+ * It used to be handed over with one decimal. The model then rounded it again
+ * for the sentence, and 103.46 became 103.5 and then "about 104" beside a
+ * panel reading 103. Rounded here, from the figure itself, there is nothing
+ * left to round and the answer says what the screen says.
+ */
+export const whole = (n: number): number => (n > 0 && n < 1 ? round(n, 2) : Math.round(n));
+/** A share as a whole percentage, the way the Result panel writes it. */
+export const wholePct = (share: number): number => Math.round(share * 100);
+
 const pctSeries = (xs: (number | null)[], from: number, to: number) =>
-  xs.slice(from, to + 1).map((v) => (v === null ? null : round(v * 100)));
+  xs.slice(from, to + 1).map((v) => (v === null ? null : wholePct(v)));
 
 /** The highest value of a daily share, as a percentage and its day. */
 export function peakOf(xs: (number | null)[]): { occupancy_pct: number; on_day: number } | null {
@@ -711,7 +723,7 @@ export function peakOf(xs: (number | null)[]): { occupancy_pct: number; on_day: 
   xs.forEach((v, t) => {
     if (v !== null && v > best.v) best = { v, t };
   });
-  return best.v < 0 ? null : { occupancy_pct: round(best.v * 100), on_day: best.t };
+  return best.v < 0 ? null : { occupancy_pct: wholePct(best.v), on_day: best.t };
 }
 
 /**
@@ -721,16 +733,16 @@ export function peakOf(xs: (number | null)[]): { occupancy_pct: number; on_day: 
  * option are described in the same words and rounded the same way.
  */
 export function summariseVariant(v: RunDigest["events"]) {
-  const total = (xs: number[]) => round(xs.reduce((a, b) => a + b, 0));
+  const total = (xs: number[]) => whole(xs.reduce((a, b) => a + b, 0));
   return {
     peak_occupancy_across_all_sites: peakOf(v.island),
     sites_where_somebody_waits: v.sitesWithQueue,
     sites_providing_the_activity: v.sitesWithActivity,
     first_day_somebody_waits: v.firstQueueDay,
-    patient_days_waiting: round(v.waitingDays),
-    most_people_waiting_at_once: { people: round(v.peakWaiting), on_day: v.peakWaitingDay },
+    patient_days_waiting: whole(v.waitingDays),
+    most_people_waiting_at_once: { people: whole(v.peakWaiting), on_day: v.peakWaitingDay },
     ...(v.strandedWaitingDays !== null
-      ? { patient_days_waiting_in_catchments_no_site_serves: round(v.strandedWaitingDays) }
+      ? { patient_days_waiting_in_catchments_no_site_serves: whole(v.strandedWaitingDays) }
       : {}),
     arrivals_over_the_run: Object.fromEntries(Object.entries(v.arrivals).map(([k, xs]) => [k, total(xs)])),
     engine_notes: v.notes,
@@ -740,15 +752,15 @@ export function summariseVariant(v: RunDigest["events"]) {
 /** One site's queue in one pass, as a tool hands it to the model. */
 export function summariseBreak(b: RunDigest["sites"][number]["events"]) {
   return b.firstDay === null
-    ? { somebody_waits: false, peak_occupancy_pct: round(b.peakOccupancy * 100) }
+    ? { somebody_waits: false, peak_occupancy_pct: wholePct(b.peakOccupancy) }
     : {
         somebody_waits: true,
         from_day: b.firstDay,
         days_with_a_queue: b.days,
-        most_waiting_at_once: round(b.peakWaiting),
+        most_waiting_at_once: whole(b.peakWaiting),
         on_day: b.peakDay,
-        patient_days_waiting: round(b.waitingDays),
-        peak_occupancy_pct: round(b.peakOccupancy * 100),
+        patient_days_waiting: whole(b.waitingDays),
+        peak_occupancy_pct: wholePct(b.peakOccupancy),
       };
 }
 
@@ -807,9 +819,16 @@ const readRun: AnalystTool = {
           usual_units: s.capacity,
           events_only: summariseBreak(s.events),
           with_choices: summariseBreak(s.full),
-        }));
+          first: s.events.firstDay ?? s.full.firstDay ?? Number.POSITIVE_INFINITY,
+        }))
+        // In the order they break, so "which first, which next" is read off
+        // the list rather than worked out: sorting eight rows in its head is
+        // where the model swapped two neighbours.
+        .sort((a, b) => a.first - b.first || a.name.localeCompare(b.name))
+        .map(({ first: _first, ...row }, i) => ({ order: i + 1, ...row }));
       return {
         ...head,
+        ordered_by: "the first day somebody waits when the planner's choices are left out (events_only.from_day), earliest first",
         sites_where_somebody_waits_in_either_run: rows,
         sites_that_never_queue: run.sites.length - rows.length,
       };
@@ -824,7 +843,7 @@ const readRun: AnalystTool = {
           name: s.name,
           usual_units: s.capacity,
           somebody_waits: false,
-          peak_occupancy_pct: { events_only: round(s.events.peakOccupancy * 100), with_choices: round(s.full.peakOccupancy * 100) },
+          peak_occupancy_pct: { events_only: wholePct(s.events.peakOccupancy), with_choices: wholePct(s.full.peakOccupancy) },
           note: "Nobody waits at this site in either run, so the page kept no day-by-day series for it.",
         };
       }
@@ -836,11 +855,11 @@ const readRun: AnalystTool = {
         days: { from, to },
         events_only: {
           occupancy_pct_by_day: pctSeries(s.daily.occupancyEvents, from, to),
-          people_waiting_by_day: s.daily.waitingEvents.slice(from, to + 1).map((v) => (v === null ? null : round(v))),
+          people_waiting_by_day: s.daily.waitingEvents.slice(from, to + 1).map((v) => (v === null ? null : whole(v))),
         },
         with_choices: {
           occupancy_pct_by_day: pctSeries(s.daily.occupancyFull, from, to),
-          people_waiting_by_day: s.daily.waitingFull.slice(from, to + 1).map((v) => (v === null ? null : round(v))),
+          people_waiting_by_day: s.daily.waitingFull.slice(from, to + 1).map((v) => (v === null ? null : whole(v))),
         },
         note: `The first value of each list is day ${from}.`,
       };
