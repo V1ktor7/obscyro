@@ -1780,6 +1780,12 @@ export interface SimComparison {
   horizon: number;
   activities: string[];
   weights: Record<string, number>;
+  /**
+   * How the rows were ordered: the counts in priority order, the gap below
+   * which two rows are level, and the count that put the first row first.
+   * Absent from an engine older than the ranking on counts.
+   */
+  ranking?: { by: string[]; tie_below: number; decided_by: string | null };
   /** Present only when the run was asked to collect them. */
   datasets?: SimDataset[];
 }

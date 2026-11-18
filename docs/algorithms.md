@@ -297,11 +297,11 @@ flowchart TD
 - Une capacité se reconstruit depuis une ligne de base à chaque pas ; une file s'accumule. La façon de composer appartient à la quantité, pas à l'auteur de l'événement (voir `simulation-service/app/events/README.md`).
 - Un site plein reste le bon endroit où attendre ; un site qui n'offre pas l'activité ne le devient jamais.
 - Le poids d'un site est sa capacité habituelle pour la ressource la plus rare que la gravité consomme, pas ce qu'il lui reste de libre ce jour-là. Pondérer par le libre donnerait au réseau un équilibrage parfait et gratuit, c'est-à-dire exactement ce qu'une politique de transfert est censée acheter.
-- L'occupation habituelle d'un scénario est tenue à chaque site pour tout le run. La capacité ouverte au-dessus de la ligne de base arrive vide.
+- L'occupation habituelle d'un scénario est tenue à chaque site pour tout le run.
+- Un changement de capacité est un changement de ce qui est libre, du même montant, et rien d'autre. Des lits ouverts arrivent vides. Des lits fermés partent d'abord de ce qui est libre ; le reste, ce sont des lits encore occupés, portés en dépassement jusqu'à ce qu'assez de patients soient sortis : une fermeture n'admet ni ne renvoie personne. Quand elle se termine, les lits reviennent de la même façon.
 - Même système, même événement, même politique, même graine : même trajectoire.
-- **Défaut connu :** une baisse de capacité ne mord que sous le nombre d'unités libres et ne se rétablit pas (issue 5).
 
-**Code.** `simulation-service/app/events/dynamics.py` (`Engine.run`, `_deliver_care`), `domain.py`, `objects.py`, `ontology.py`, `mechanics.py`. **Tests.** `simulation-service/tests/`.
+**Code.** `simulation-service/app/events/dynamics.py` (`Engine.run`, `_apply_perturbations`, `_deliver_care`), `domain.py`, `objects.py`, `ontology.py`, `mechanics.py`. **Tests.** `simulation-service/tests/`, dont `test_events_occupancy.py` pour l'occupation habituelle et les changements de capacité.
 
 ## B3. Propagation
 
@@ -342,15 +342,23 @@ flowchart TD
     D --> F["Règle notée avec sa raison :<br/>occupation de tel site à 0,94, au-dessus de 0,90"]
     F --> G["Trajectoire"]
     E --> G
-    G --> H["Score : chaque objectif garde sa série par pas<br/>et son total"]
-    H --> I["Les poids sont des données, pas du code"]
-    I --> J["Plusieurs graines par politique,<br/>puis comparaison"]
+    G --> H["Comptes : chaque objectif garde sa série par pas<br/>et son total"]
+    H --> I["Plusieurs graines par politique, moyenne de chaque compte"]
+    I --> J{"Écart de plus d'une demi-personne<br/>sur les morts ?"}
+    J -->|"oui"| K["Moins de morts d'abord"]
+    J -->|"non"| L{"Sur les soins non rendus ?"}
+    L -->|"oui"| M["Moins de soins non rendus d'abord"]
+    L -->|"non"| N["Le moins coûteux d'abord.<br/>Égalité partout : l'ordre donné, la référence en tête"]
 ```
 
-**Règles.** Une condition est un arbre typé, pas une chaîne évaluée : on peut la montrer et la faire varier par programme. Ce que vaut une mort face à un coût n'est pas une question de modélisation : le fichier ne répond pas à la place de celui qui décide. Comparer sur une seule graine reviendrait à optimiser la graine.
-- **Défaut connu :** dans « Compare responses », « No response » se classe toujours premier, parce qu'un patient non servi ne coûte rien (issue 5).
+**Règles.**
+- Une condition est un arbre typé, pas une chaîne évaluée : on peut la montrer et la faire varier par programme.
+- Le classement se fait sur des comptes, dans l'ordre : morts, soins non rendus, coût. Un compte ne départage que les réponses à égalité sur les précédents, et un écart de moins d'une demi-personne est une égalité.
+- C'est un ordre de priorités, pas un prix : une somme pondérée demanderait un taux de change entre une vie, un soin non rendu et un dollar, et il n'y en a pas d'honnête. L'ordre reste un jugement, et l'écran le dit.
+- L'écran nomme le compte qui a décidé de la première place. Quand rien ne sépare les deux premières réponses, aucune n'est marquée meilleure.
+- Comparer sur une seule graine reviendrait à optimiser la graine.
 
-**Code.** `simulation-service/app/events/policy.py`, `scoring.py`, `harness.py`, `backend/src/services/sim-policies.ts`. **Tests.** `simulation-service/tests/`.
+**Code.** `simulation-service/app/events/policy.py`, `scoring.py`, `harness.py` (`rank`, `decided_by`), `api.py` (`RANK_BY`), `frontend/app/studio/events/ranking.ts`, `backend/src/services/sim-policies.ts`. **Tests.** `tests/test_events_ranking.py`, `ranking.test.ts`.
 
 ## B5. Scénario en surcouche
 

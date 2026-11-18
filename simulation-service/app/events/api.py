@@ -23,7 +23,7 @@ from app.events.domain import CareRequirement, SystemState
 from app.events.effects import Event
 from app.events.collect import Dataset, collect
 from app.events.dynamics import run
-from app.events.harness import compare
+from app.events.harness import TIE, compare, decided_by
 from app.events.mechanics import ContradictoryCareModel, care_model_from
 from app.events.ontology import OntologyExport, UnrunnableExport, load
 from app.events.scoring import Objective
@@ -88,6 +88,12 @@ class CompareRequest(BaseModel):
     collect: list[str] = Field(default_factory=list)
 
 
+#: What a comparison is ranked on, in order. Lives, then the care that was not
+#: delivered, then money. An order of priorities rather than a price for each:
+#: what a death is worth against a dollar is not this file's to say.
+RANK_BY = ["excess_deaths", "unmet_care", "response_cost"]
+
+
 class CompareResponse(BaseModel):
     event: dict[str, Any]
     rows: list[dict[str, Any]]
@@ -95,6 +101,10 @@ class CompareResponse(BaseModel):
     horizon: int
     activities: list[str]
     weights: dict[str, float]
+    # How the rows were ordered: the counts in priority order, the gap below
+    # which two rows are level, and which count put the first row first (null
+    # when nothing separated them). Sent so the screen can say why.
+    ranking: dict[str, Any] = Field(default_factory=dict)
     # Tables of what actually happened, when asked for. Produced from the same
     # run that produced `rows`, never a second one: a download that re-ran the
     # simulation could disagree with the summary it sits beneath.
@@ -516,6 +526,9 @@ def compare_route(req: CompareRequest) -> CompareResponse:
     # and it is returned in the response so nobody has to read this file to
     # find out what it was.
     weights = {"excess_deaths": 1.0, "response_cost": 0.000002}
+    # Ranked on counts in order, not on that weighted score. Deaths first;
+    # where responses are level on deaths, the care each left undelivered;
+    # then what each cost. The score is still returned beside them.
     rows = compare(
         state,
         event,
@@ -523,6 +536,7 @@ def compare_route(req: CompareRequest) -> CompareResponse:
         Objective(weights=weights),
         replicates=max(1, req.replicates),
         base_seed=req.seed or 0,
+        rank_by=RANK_BY,
     )
 
     datasets: list[Dataset] = []
@@ -555,5 +569,6 @@ def compare_route(req: CompareRequest) -> CompareResponse:
         horizon=event.horizon,
         activities=activities,
         weights=weights,
+        ranking={"by": RANK_BY, "tie_below": TIE, "decided_by": decided_by(rows, RANK_BY)},
         datasets=datasets,
     )

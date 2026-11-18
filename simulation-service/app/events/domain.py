@@ -59,6 +59,12 @@ class Resource(BaseModel):
     # they are not admitted by the run, so they are not discharged by it — and
     # apart from the objects because no instance says which bed it is.
     held: NonNegativeFloat = 0.0
+    # Units in use beyond the capacity: what a cut leaves behind when it takes
+    # more than was free. The people in those beds are still in them — a cut
+    # does not discharge anyone — so nothing is free until enough of them have
+    # left to cover it. Without this figure a ward of 100 with 80 in use, cut
+    # to 70, kept its 20 free beds and went on admitting.
+    over: NonNegativeFloat = 0.0
     # Which care activities this resource makes possible. Demand is matched
     # against activities, never against resource ids, so two facilities can name
     # the same capability differently and still be comparable.
@@ -277,9 +283,12 @@ class SystemState(BaseModel):
         for r in sorted(self.facility(fid).enabling(activity), key=lambda x: x.id):
             if remaining <= 0:
                 break
-            room = r.capacity - r.quantity
-            give = min(room, remaining, r.reserved)
-            r.quantity += give
+            give = min(remaining, r.reserved)
+            # A unit freed while the resource is over its capacity closes
+            # the gap first; it becomes available only once nothing is owed.
+            owed = min(r.over, give)
+            r.over -= owed
+            r.quantity = min(r.capacity, r.quantity + give - owed)
             r.reserved -= give
             remaining -= give
 

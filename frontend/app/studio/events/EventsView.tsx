@@ -43,6 +43,7 @@ import PolicyComposer, { type PolicyDraft } from "./PolicyComposer";
 import ReplayPlayer from "./ReplayPlayer";
 import { downloadText, slug, toCsv } from "./download";
 import { runBlockedBecause, unsizedPopulations } from "./run-gate";
+import { COUNT_LABEL, changeAgainst, comparedOn, hasWinner, rankingSentence } from "./ranking";
 import { useStudio } from "../StudioShell";
 import EventBuilder from "./builder/EventBuilder";
 import EventPreview from "./builder/EventPreview";
@@ -802,6 +803,10 @@ function Results({ result }: { result: SimComparison }) {
     response_cost: "Cost",
   };
   const baseline = result.rows.find((r) => r.policy === "null");
+  // Deaths when doing nothing costs any, otherwise the care it leaves
+  // undelivered: a column of dashes says nothing about whether acting helped.
+  const against = comparedOn(baseline, result.ranking);
+  const winner = hasWinner(result.ranking, result.rows);
 
   // Every column the engine scored on, not the three drawn above: the table on
   // screen is an argument and the file is the evidence, and the evidence should
@@ -844,19 +849,19 @@ function Results({ result }: { result: SimComparison }) {
                   {label[c]}
                 </th>
               ))}
-              <th className="py-1.5 text-right font-medium">vs doing nothing</th>
+              <th className="py-1.5 text-right font-medium">
+                vs doing nothing{against ? `, on ${COUNT_LABEL[against] ?? against}` : ""}
+              </th>
             </tr>
           </thead>
           <tbody>
             {result.rows.map((row, i) => {
-              const deaths = Number(row.excess_deaths ?? 0);
-              const base = Number(baseline?.excess_deaths ?? 0);
-              const delta = base > 0 ? (deaths - base) / base : null;
+              const delta = changeAgainst(row, baseline, against);
               return (
                 <tr key={String(row.policy)} className="border-b border-line/60">
                   <td className="py-1.5 pr-3 text-ink">
                     {String(row.name || row.policy)}
-                    {i === 0 && result.rows.length > 1 ? (
+                    {i === 0 && winner ? (
                       <span className="ml-2 rounded bg-ok/10 px-1.5 py-0.5 text-[10px] text-ok">
                         best
                       </span>
@@ -868,7 +873,7 @@ function Results({ result }: { result: SimComparison }) {
                     </td>
                   ))}
                   <td className="py-1.5 text-right tabular-nums">
-                    {delta === null || row.policy === "null" ? (
+                    {delta === null ? (
                       <span className="text-ink-ghost">—</span>
                     ) : (
                       <span className={delta < 0 ? "text-ok" : "text-danger"}>
@@ -884,10 +889,7 @@ function Results({ result }: { result: SimComparison }) {
         </table>
       </div>
       <p className="mt-3 text-[11px] leading-relaxed text-ink-faint">
-        Ranked by a score that weighs one death against{" "}
-        {Math.round(1 / (result.weights.response_cost || 1)).toLocaleString("en-CA")}{" "}
-        dollars of spending. That is a judgement, not a fact — change it and the
-        ranking can change with it.
+        {rankingSentence(result.ranking, result.weights)}
       </p>
     </Card>
   );

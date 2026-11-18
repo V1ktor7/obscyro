@@ -161,6 +161,14 @@ def _transfer(state: SystemState, a: Action, engine: "Engine") -> float:
     return movable
 
 
+def _make_available(r, amount: float) -> None:
+    """Units a resource gains. They cover what it is over its capacity by first;
+    only what is left of them is free."""
+    owed = min(r.over, amount)
+    r.over -= owed
+    r.quantity += amount - owed
+
+
 @register_action("surge_resource")
 def _surge(state: SystemState, a: Action, engine: "Engine") -> float:
     """Raise a resource's capacity — agency staff, a field hospital.
@@ -175,7 +183,7 @@ def _surge(state: SystemState, a: Action, engine: "Engine") -> float:
         return 0.0
     gain = a.amount * a.friction.effectiveness
     r.capacity += gain
-    r.quantity += gain
+    _make_available(r, gain)
     engine.baseline_capacity[(a.target or "", a.resource or "")] += gain
     return gain
 
@@ -196,7 +204,7 @@ def _reallocate(state: SystemState, a: Action, engine: "Engine") -> float:
         return 0.0
     src.quantity -= moved
     dst.capacity += moved
-    dst.quantity += moved
+    _make_available(dst, moved)
     engine.baseline_capacity[(a.source or "", a.resource or "")] -= moved
     engine.baseline_capacity[(a.target or "", a.resource or "")] += moved
     return moved
@@ -232,6 +240,11 @@ class Engine:
             for fid, f in state.facilities.items()
             for rid, r in f.resources.items()
         }
+        # How far each resource's capacity currently sits from its baseline.
+        # A change is applied as the difference from this, once: what an
+        # event takes away on one step comes back on the step it ends, and
+        # is not taken again on every step in between.
+        self.applied_shift: dict[tuple[str, str], float] = {}
         self.baseline_weight: dict[tuple[str, str, str], float] = {
             (e.source, e.target, e.kind): e.weight for e in state.network.all_edges()
         }
@@ -365,7 +378,7 @@ class Engine:
                 out = apply_op(out, "add", e.value_for(tick, here))
         return clamp(spec, out)
 
-    def _apply_objects(self, tick: int) -> None:
+    def _apply_objects(self, tick: int) -> set[str]:
         """Write property effects onto the instances, then re-count the totals.
 
         This runs before capacity, because capacity is *derived* from what this
@@ -374,7 +387,7 @@ class Engine:
         """
         rules = self.state.object_rules
         if not isinstance(rules, ObjectRules):
-            return
+            return set()
 
         schema = self.state.property_schema
         if not isinstance(schema, PropertySchema):
@@ -412,9 +425,14 @@ class Engine:
         # reached *this* tick. Rebuilding only the latter left a closed window
         # applied for ever: the properties reverted, nothing recomputed the
         # totals from them, and the ward stayed shut after the flood receded.
+        rebuilt: set[str] = set()
         for fid in self.object_scope:
             if fid in self.state.facilities:
                 rebuild(self.state.facility(fid), objects, rules)
+                rebuilt.add(fid)
+        # Returned so the capacity pass knows whose free count was just
+        # re-read from the objects rather than carried from the last step.
+        return rebuilt
 
     def _rederive_care(self) -> None:
         """Rebuild the care model from the protocol instances, after effects.
@@ -448,7 +466,7 @@ class Engine:
                 self.state.care_model[acuity] = copy.deepcopy(base)
 
     def _apply_perturbations(self, tick: int) -> None:
-        self._apply_objects(tick)
+        rebuilt = self._apply_objects(tick)
         self._rederive_care()
         for (fid, rid), base in self.baseline_capacity.items():
             r = self.state.facility(fid).resources[rid]
@@ -462,21 +480,33 @@ class Engine:
                 )
                 if cap != base:
                     break
-            # Capacity opened above what the facility normally holds arrives
-            # empty. Without this an event that added fifty beds raised the
-            # ceiling and left the free count where it was: the fifty read as
-            # occupied from the moment they opened, nobody was ever admitted to
-            # them, and "add capacity" changed the occupancy figure and nothing
-            # else. Only the part above the baseline, and only when it grows —
-            # a wing coming back after damage is a different question, about
-            # who was in it, and is left as it was.
-            gain = cap - max(r.capacity, base)
+            # A change of capacity is a change in what is free, by the same
+            # amount, and nothing else: nobody is admitted or discharged by
+            # it. Fifty beds opened are fifty free beds. Thirty beds closed
+            # come out of what is free first; if fewer than thirty were
+            # free, the rest is beds people are still lying in, carried as
+            # `over` until enough of them leave. When the cut ends, the
+            # thirty come back the same way.
+            #
+            # Two rules stood here before and both were wrong in a way that
+            # completed without complaint. Clamping the free count to the
+            # new capacity only bit when more was free than was left, so a
+            # ward of 100 with 80 in use, cut to 70, kept 20 free beds and
+            # reported 71 % occupied. And a capacity returning to its
+            # baseline returned nothing, so a three-day closure shut the
+            # beds for the rest of the run.
+            key = (fid, rid)
+            shift = cap - base
+            if fid in rebuilt:
+                # The free count was just re-read from the objects, as if
+                # capacity had never moved: the whole shift applies to it.
+                signed = r.quantity + shift
+            else:
+                signed = (r.quantity - r.over) + (shift - self.applied_shift.get(key, 0.0))
+            self.applied_shift[key] = shift
             r.capacity = cap
-            if gain > 0:
-                r.quantity += gain
-            # Damage takes what is free first and the rest from what is in use —
-            # a flooded wing does not politely wait for its beds to empty.
-            r.quantity = min(r.quantity, cap)
+            r.quantity = min(cap, max(0.0, signed))
+            r.over = max(0.0, -signed)
 
         for key, base in self.baseline_weight.items():
             e = self.state.network.edge(key[0], key[1], key[2])  # type: ignore[arg-type]
@@ -844,7 +874,9 @@ class Engine:
                 rep = r.replenishment
                 if rep.per_tick <= 0 or tick < rep.lead_time:
                     continue
-                r.quantity = min(r.capacity, r.quantity + rep.per_tick)
+                owed = min(r.over, rep.per_tick)
+                r.over -= owed
+                r.quantity = min(r.capacity, r.quantity + rep.per_tick - owed)
 
     # -- the loop -------------------------------------------------------------
 

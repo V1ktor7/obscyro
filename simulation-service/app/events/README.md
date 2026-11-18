@@ -270,6 +270,45 @@ d'infirmières qui devenait à court de lits continuait d'embaucher : 1,2 M
 dépensé, aucun patient de plus, cinquante-cinq déclenchements dans une trace
 d'apparence saine. Chaque ressource surveille maintenant sa propre rareté.
 
+**Une baisse de capacité ne mordait presque jamais, et ne se terminait pas.**
+Elle plafonnait les unités libres à la nouvelle capacité : un service de 100
+lits dont 80 occupés, ramené à 70, gardait ses 20 lits libres et affichait
+71 % d'occupation. Et une capacité qui revenait à sa ligne de base ne rendait
+rien : une fermeture de trois jours durait tout le run. Les deux se
+terminaient sans une plainte. Un changement de capacité est maintenant un
+changement de ce qui est libre, du même montant, et rien d'autre : ce qui est
+fermé part d'abord du libre ; le reste, ce sont des lits où quelqu'un est
+encore couché, portés dans `over` jusqu'à ce qu'assez de patients soient
+sortis. Personne n'est admis ni renvoyé par une fermeture. À la fin, les lits
+reviennent de la même façon. Un run sans baisse de capacité donne exactement
+la même trajectoire qu'avant.
+
+**Ne rien faire gagnait à tous les coups, sur le prix.** Le classement était
+une somme pondérée : un mort, et un dollar à deux millionièmes de mort. Sur un
+jumeau dont le modèle de soins ne déclare aucun décès, toutes les réponses
+étaient à égalité sur le premier terme, donc l'ordre était celui de leur coût
+— et ne rien faire, qui ne coûte rien, sortait premier, quoi qu'il laisse
+sans soins. Voir la section suivante.
+
+## Comment les réponses sont classées
+
+Sur des comptes, dans l'ordre : les **morts**, puis les **soins non rendus**,
+puis le **coût** (`RANK_BY` dans `api.py`, `rank` dans `harness.py`). Un compte
+ne départage que les réponses à égalité sur ceux qui le précèdent, et un écart
+de moins d'une demi-personne (`TIE`) est une égalité. Des réponses à égalité
+partout gardent l'ordre dans lequel elles ont été données, ce qui laisse la
+référence en tête quand rien ne l'a battue.
+
+C'est un ordre de priorités, pas un prix : une somme pondérée demande un taux
+de change entre ses termes, et il n'y en a pas d'honnête entre une vie, un
+soin non rendu et un dollar. L'ordre lui-même reste un jugement, et l'écran
+le dit.
+
+La réponse de `/events/compare` porte `ranking` : les comptes, le seuil
+d'égalité, et le compte qui a mis la première réponse en tête (`decided_by`,
+nul quand rien ne sépare les deux premières). Le score pondéré est toujours
+renvoyé à côté, pour mémoire ; il ne classe plus rien.
+
 ## Ce qui n'est pas fait
 
 - **Aucun optimiseur.** `evaluate(system, scenario, policy, objective, seed)` est
