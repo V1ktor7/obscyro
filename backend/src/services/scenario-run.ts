@@ -329,33 +329,64 @@ function breakOf(b: SiteBreak): RunDigest["sites"][number]["events"] {
   };
 }
 
-export function runDigest(
-  run: RunOutput,
-  ctx: Pick<TwinContext, "facilities" | "populations" | "care">,
-  stale: boolean,
-): RunDigest {
-  const acuity = ctx.care.find((c) => c.activity === run.activity)?.acuity ?? null;
+type DigestContext = Pick<TwinContext, "facilities" | "populations" | "care">;
+
+/**
+ * One pass, summarised. The one place a pass becomes figures: the two-pass
+ * digest and the single pass an option is read from both go through here, so
+ * a column of the options table cannot differ from what Run shows.
+ */
+function passFigures(v: VariantResult, breaks: SiteBreak[], ctx: DigestContext, activity: string): RunDigest["events"] {
+  const acuity = ctx.care.find((c) => c.activity === activity)?.acuity ?? null;
+  const stranded = strandedCatchments(ctx.populations, ctx.facilities, activity);
+  const s = summarise(breaks, v);
+  const elsewhere = stranded ? waitingElsewhere(v, breaks, acuity) : null;
+  return {
+    island: v.island.map((x) => finite(x)),
+    sitesWithQueue: s.sites,
+    sitesWithActivity: s.of,
+    firstQueueDay: s.firstDay,
+    waitingDays: num(s.waitingDays, 2),
+    peakWaiting: num(s.peakWaiting, 2),
+    peakWaitingDay: s.peakDay,
+    strandedWaitingDays: elsewhere === null ? null : num(elsewhere, 2),
+    arrivals: Object.fromEntries(Object.entries(v.arrivals).map(([k, xs]) => [k, xs.map((x) => num(x, 2))])),
+    notes: v.notes,
+  };
+}
+
+/**
+ * The pass "with every choice", alone: what one column of the options table is
+ * read from.
+ *
+ * A tested option is compared with the scenario as it stands, choices
+ * included. Neither column needs the events-only pass, which exists to show a
+ * person what their choices changed — and that is not what an option is set
+ * beside.
+ */
+export interface PassDigest {
+  ranAt: string;
+  /** Exactly what `runDigest` gives as `full` for the same stamps. */
+  figures: RunDigest["full"];
+  /** Every site that provides the activity, with its own queue in this pass. */
+  sites: { id: string; name: string; capacity: number; break: RunDigest["sites"][number]["full"] }[];
+}
+
+export function passDigest(v: VariantResult, ctx: DigestContext, activity: string, ranAt: string): PassDigest {
+  const breaks = siteBreaks(v, ctx.facilities, activity);
+  return {
+    ranAt,
+    figures: passFigures(v, breaks, ctx, activity),
+    sites: breaks.map((b) => ({ id: b.id, name: b.name, capacity: b.capacity, break: breakOf(b) })),
+  };
+}
+
+export function runDigest(run: RunOutput, ctx: DigestContext, stale: boolean): RunDigest {
   const stranded = strandedCatchments(ctx.populations, ctx.facilities, run.activity);
   const breaksEvents = siteBreaks(run.events, ctx.facilities, run.activity);
   const breaksFull = siteBreaks(run.full, ctx.facilities, run.activity);
   const fullByIndex = new Map(breaksFull.map((b) => [b.index, b]));
-
-  const variant = (v: VariantResult, breaks: SiteBreak[]): RunDigest["events"] => {
-    const s = summarise(breaks, v);
-    const elsewhere = stranded ? waitingElsewhere(v, breaks, acuity) : null;
-    return {
-      island: v.island.map((x) => finite(x)),
-      sitesWithQueue: s.sites,
-      sitesWithActivity: s.of,
-      firstQueueDay: s.firstDay,
-      waitingDays: num(s.waitingDays, 2),
-      peakWaiting: num(s.peakWaiting, 2),
-      peakWaitingDay: s.peakDay,
-      strandedWaitingDays: elsewhere === null ? null : num(elsewhere, 2),
-      arrivals: Object.fromEntries(Object.entries(v.arrivals).map(([k, xs]) => [k, xs.map((x) => num(x, 2))])),
-      notes: v.notes,
-    };
-  };
+  const variant = (v: VariantResult, breaks: SiteBreak[]) => passFigures(v, breaks, ctx, run.activity);
 
   return {
     ranAt: run.ranAt,
@@ -399,6 +430,12 @@ const EVENT_NAME: Record<Variant, string> = {
 /** What the page sends for a route whose flow the twin does not hold. */
 const ROUTE_CAPACITY = 20;
 
+/** One call to the engine and how long it took: a propagation, or a pass of the network. */
+export interface EngineTiming {
+  call: "spread" | "pass";
+  ms: number;
+}
+
 export interface ScenarioWorld {
   /** The twin as it stands: what the page builds its map and its context from. */
   reality: SimExport;
@@ -412,11 +449,12 @@ export interface ScenarioWorld {
 /**
  * Runs for one scenario, with the parts that cannot change kept between them.
  *
- * Testing three options against a scenario is one events-only run, one run of
- * the scenario as it stands, and one run per option: the events-only run never
- * sees a choice, so it is the same for all of them. A spread is kept by what
- * was asked of it, so an option that only adds beds does not integrate the
- * epidemic a second time.
+ * Testing three options against a scenario is one pass of the scenario as it
+ * stands and one pass per option (`full`): four passes, where the page's own
+ * Run of each would be eight. The events-only pass is only made by `run`, for
+ * whoever needs both halves; it never sees a choice, so it is made once and
+ * kept. A spread is kept by what was asked of it, so an option that only adds
+ * beds does not integrate the epidemic a second time.
  */
 export class ScenarioRunner {
   readonly ctx: TwinContext;
@@ -424,6 +462,8 @@ export class ScenarioRunner {
   private eventsRun: Promise<VariantResult> | null = null;
   /** Engine calls made so far: what a tested option costs. */
   calls = 0;
+  /** How long each engine call took, in the order they came back: what a test's time is made of. */
+  readonly timings: EngineTiming[] = [];
 
   constructor(
     private readonly engine: ScenarioEngine,
@@ -439,9 +479,11 @@ export class ScenarioRunner {
     let p = this.spreads.get(key);
     if (!p) {
       this.calls += 1;
-      p = this.engine
-        .spread(spreadPayload(this.world.system, body))
-        .then((out) => shiftEffects(out.event.effects, input.offset));
+      const started = Date.now();
+      p = this.engine.spread(spreadPayload(this.world.system, body)).then((out) => {
+        this.timings.push({ call: "spread", ms: Date.now() - started });
+        return shiftEffects(out.event.effects, input.offset);
+      });
       this.spreads.set(key, p);
     }
     return p;
@@ -460,6 +502,7 @@ export class ScenarioRunner {
     const censusAcuity = ctx.acuities.find((a) => /urg|emerg/i.test(a)) ?? ctx.acuities[0] ?? null;
 
     this.calls += 1;
+    const started = Date.now();
     const run = await this.engine.compare({
       system: world.system,
       template: null,
@@ -479,6 +522,7 @@ export class ScenarioRunner {
       baseline_occupancy: input.occupancy,
       collect: ["facilities", "steps"],
     });
+    this.timings.push({ call: "pass", ms: Date.now() - started });
     const facilityIds = ctx.facilities.map((f) => f.id);
     const table = run.datasets?.find((d) => d.name === "facilities");
     const steps = run.datasets?.find((d) => d.name === "steps");
@@ -520,6 +564,14 @@ export class ScenarioRunner {
   /** The run, as the summary the analyst and the page both read. */
   async digest(stamps: Stamp[]): Promise<RunDigest> {
     return runDigest(await this.run(stamps), this.ctx, false);
+  }
+
+  /**
+   * The stamps with every choice, in one pass: the figures `digest` would give
+   * as `full`, without the events-only pass beside them.
+   */
+  async full(stamps: Stamp[]): Promise<PassDigest> {
+    return passDigest(await this.variant(stamps, "full"), this.ctx, this.world.activity, this.now().toISOString());
   }
 
   /**

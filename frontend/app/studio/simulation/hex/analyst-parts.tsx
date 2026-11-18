@@ -7,12 +7,44 @@
  */
 
 import { Check, ChevronRight, ExternalLink } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/cn";
 
 import { hostOf, isWebLink, stepLabel, type AnalystStep, type Evidence } from "../../analyst-api";
 
 export const LABEL = "text-[10px] font-semibold uppercase tracking-wide text-ink-faint";
+
+/** A duration as a person says it: "42 s", then "2 min 05 s". */
+export function elapsedText(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")} s`;
+}
+
+/**
+ * How long the thing on this line has been going on.
+ *
+ * A test in the engine can take a minute on a large twin, and a spinner alone
+ * does not say whether that minute is the first or the fifth. It stays silent
+ * for the first seconds, so a step that lands at once does not flicker, and it
+ * is kept out of the live region around it: a counter read aloud every second
+ * helps nobody.
+ */
+export function Elapsed({ since }: { since: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [since]);
+  const seconds = Math.floor((now - since) / 1000);
+  if (seconds < 3) return null;
+  return (
+    <span aria-hidden="true" className="tabular-nums text-ink-faint">
+      · {elapsedText(seconds)}
+    </span>
+  );
+}
 
 /** What replaces a figure the server could not trace. Must match the server's. */
 export const STRUCK = "[unverified]";

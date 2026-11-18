@@ -90,6 +90,30 @@ test("an option tested on the server gives the figures Run gives once its stamps
   assert.equal(runner.calls, 5);
 });
 
+test("the pass with every choice, alone, gives the figures the two-pass run gives for it", async () => {
+  // What a column of the options table is read from. The page's Run makes two
+  // passes; the table only ever shows the second, so only the second is made.
+  for (const recorded of [fixture.asItIs, fixture.withOption]) {
+    const engine = replayEngine(recorded.calls);
+    const pass = await new ScenarioRunner(engine, world, now).full(stampsOf(recorded.overrides));
+
+    assert.deepEqual(pass.figures, recorded.digest.full);
+    assert.deepEqual(
+      pass.sites,
+      recorded.digest.sites.map((s) => ({ id: s.id, name: s.name, capacity: s.capacity, break: s.full })),
+    );
+    assert.equal(pass.ranAt, fixture.ranAt);
+    // One pass of the network (after its spread, when the scenario has one): the events-only pass is not asked for.
+    assert.deepEqual(
+      engine.asked.filter((c) => c.call !== "spread").map((c) => c.request),
+      requests(recorded.calls)
+        .filter((c) => c.call !== "spread")
+        .slice(-1)
+        .map((c) => c.request),
+    );
+  }
+});
+
 test("a run on a fresh server gives the page's four calls for the scenario with the option", async () => {
   const engine = replayEngine(fixture.withOption.calls);
   const digest = await new ScenarioRunner(engine, world, now).digest(stampsOf(fixture.withOption.overrides));

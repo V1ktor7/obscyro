@@ -120,7 +120,7 @@ Ce qui vient du modèle et ce qui n'en vient pas :
 
 Ce que l'onglet ne fait pas, par construction : classer les options (elles restent dans l'ordre des tests), en lister une qui n'a pas été testée, en cacher une qui l'a été, écrire dans le scénario. Les arbitrages de valeur sont présentés à part, sous « Yours to weigh ».
 
-Coût et durée sont bornés : trois tests au plus par objectif, et le scénario tel quel n'est lancé qu'une fois pour les trois.
+Coût et durée sont bornés : trois tests au plus par objectif, et le scénario tel quel n'est lancé qu'une fois pour les trois, en une seule passe du moteur. Trois options font quatre passes. Pendant un test, l'onglet dit depuis combien de temps il tourne.
 
 ## Les événements
 
@@ -196,7 +196,7 @@ Les décisions sont dans `app.decision` (migration 061). Les événements accept
 
 **Context** (`ContextLane.tsx`) n'est pas dans le panneau mais dans la frise : le couloir des événements validés, au-dessus des couloirs de tampons. Un clic sur un événement l'ouvre : source, citation, qui l'a accepté, et de quoi le retirer.
 
-**Options** (`OptionsTab.tsx`), de haut en bas : sur quoi les options sont testées ; l'objectif, et des objectifs suggérés d'après le run à l'écran ; les tests, qui s'affichent pendant qu'ils tournent ; le tableau ; une carte par option (mécanisme, sur quoi elle repose avec les niveaux de preuve, ce que le test ne dit pas, « Add to scenario », « Record decision ») ; la lecture ; les arbitrages laissés à la personne ; les limites ; ce sur quoi toutes les colonnes reposent ; les étapes. Un bandeau dit quand le scénario n'est plus celui qui a été testé, et pourquoi : une option ajoutée depuis l'onglet, plusieurs ajoutées ensemble, ou une modification faite ailleurs.
+**Options** (`OptionsTab.tsx`), de haut en bas : sur quoi les options sont testées ; l'objectif, et des objectifs suggérés d'après le run à l'écran ; les tests, qui s'affichent pendant qu'ils tournent, avec la durée de ce qui est en cours ; le tableau ; une carte par option (mécanisme, sur quoi elle repose avec les niveaux de preuve, ce que le test ne dit pas, « Add to scenario », « Record decision ») ; la lecture ; les arbitrages laissés à la personne ; les limites ; ce sur quoi toutes les colonnes reposent ; les étapes. Un bandeau dit quand le scénario n'est plus celui qui a été testé, et pourquoi : une option ajoutée depuis l'onglet, plusieurs ajoutées ensemble, ou une modification faite ailleurs.
 
 **Decisions** (`DecisionsTab.tsx`) : les décisions du scénario ouvert d'abord, puis celles des autres scénarios du projet. Chacune montre qui l'a prise, quand, l'objectif, l'attendu sans et avec l'option, sur quoi elle reposait, et le suivi à la demande. L'onglet se lit même quand l'analyste est éteint : une décision est un enregistrement, pas une réponse.
 
@@ -284,7 +284,7 @@ Quatre réponses ont été relues par une personne et comparées au panneau Resu
 - Une option est faite de capacité et de mesures. Un transfert de patients, du personnel, un stock, un lien nouveau entre un site et un territoire ne se testent pas : le moteur ou le jumeau ne les portent pas. L'analyste les range dans les limites.
 - Une option est testée sur le scénario tel qu'il est au moment du test. Ajouter une option puis une autre donne un scénario qu'aucun test n'a couvert : l'écran prévient, et il faut redire l'objectif.
 - Une option ajoute des tampons ; elle n'en retire ni n'en remplace aucun. « 40 lits au lieu des 60 du scénario » se teste donc comme un tampon de −20 par-dessus les +60. Le résultat est le bon, mais l'ajouter au scénario laisse les deux tampons dans la recette au lieu d'un seul à +40.
-- Un objectif prend plusieurs minutes sur le jumeau de Montréal : chaque passe du moteur dure quelques dizaines de secondes, et le premier test en lance trois (les événements seuls, le scénario tel quel, l'option). Le tableau n'a besoin que des deux dernières : la première est à retirer.
+- Un objectif prend plusieurs minutes sur le jumeau de Montréal. Le premier test lance deux passes du moteur (le scénario tel quel, puis l'option) après avoir lu le jumeau et calculé la propagation ; les suivants, une seule. Avant le 2026-11-18 le premier test en lançait trois : sur le scénario de démonstration il durait 161 secondes, et les deux suivants 30 et 31 secondes.
 - Le suivi d'une décision ne compare que des arrivées (voir « Les décisions »).
 
 État au 2026-11-17 : vérifié en production avec le vrai modèle et le vrai moteur, sur le scénario « Omicron · Montréal — calibrated on INSPQ ».

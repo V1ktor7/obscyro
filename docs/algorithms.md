@@ -220,7 +220,9 @@ flowchart LR
 
 L'enregistrement contient deux runs : le scénario tel quel, et le scénario avec les tampons de l'option. Le second est ce qui garantit qu'ajouter une option testée au scénario puis lancer Run redonne les chiffres du test. Il se régénère à la main quand le moteur ou la traduction change (`cd backend && npx tsx scripts/make-scenario-run-fixture.ts`, avec Python et les dépendances du service de simulation), puis on relance les deux suites.
 
-Sur le serveur, tester plusieurs options ne refait pas tout : la passe « événements seuls » ne voit jamais un choix, elle est donc lancée une fois ; une propagation est gardée d'après ce qu'on lui a demandé, donc une option qui n'ajoute que des lits ne réintègre pas l'épidémie.
+Sur le serveur, le run existe en deux formes. `ScenarioRunner.digest` fait les deux passes, comme la page : c'est lui que le test de parité rejoue. `ScenarioRunner.full` ne fait que la passe « avec les choix » : c'est ce que lit une option testée (A8), parce que le tableau des options compare le scénario avec ses choix au scénario avec l'option en plus, et que la passe « événements seuls » n'y montre rien. Les deux formes passent par le même résumé d'une passe (`passFigures`), donc une colonne du tableau ne peut pas différer de ce que Run affiche pour la même passe ; un test le vérifie sur l'enregistrement.
+
+Tester plusieurs options ne refait pas tout : une propagation est gardée d'après ce qu'on lui a demandé, donc une option qui n'ajoute que des lits ne réintègre pas l'épidémie. Chaque appel au moteur est chronométré (`timings`), pour que la durée d'un test soit une mesure et pas une impression.
 
 **Code.** Page : `frontend/app/studio/simulation/hex/engine.ts` (`runScenario`), `stamps.ts` (`engineInput`), `run-digest.ts`. Serveur : `backend/src/services/scenario-run.ts` (`ScenarioRunner`), `scenario-stamps.ts` (`engineInput`, `twinContext`), `scenario-run-recording.ts`. Enregistrement : `backend/scripts/make-scenario-run-fixture.ts`, `simulation-service/scripts/engine_once.py`.
 **Tests.** `hex.test.ts`, `HexTwinView.test.tsx`, `run-parity.test.ts` (page) ; `scenario-run.unit.test.ts` (serveur).
@@ -300,8 +302,8 @@ flowchart TD
     D -->|"non"| E["Refus motivé, lu par le modèle.<br/>Ne compte pas comme un test"]
     E --> B
     D -->|"oui"| F["Changements écrits comme les tampons de la page"]
-    F --> G["Run du scénario tel quel :<br/>lancé une fois, gardé pour toutes les options"]
-    F --> H["Run du scénario avec les tampons de l'option (A4)"]
+    F --> G["Une passe du scénario tel quel, avec ses choix :<br/>lancée une fois, gardée pour toutes les options"]
+    F --> H["Une passe du scénario avec les tampons de l'option (A4)"]
     G --> I["Résultat pour le modèle : les deux runs en résumé,<br/>les sites où l'on attend, sur quoi l'option repose"]
     H --> I
     H --> J["Relevé pour l'écran : chiffres entiers, tampons,<br/>arrivées par jour, niveaux de preuve"]
@@ -319,7 +321,9 @@ flowchart TD
 ```
 
 **Règles.**
-- Trois options au plus par objectif, quatre changements au plus par option. Chaque test coûte au moteur une passe du réseau, plus une propagation si l'option change un contact ; le scénario tel quel coûte deux passes, une seule fois.
+- Trois options au plus par objectif, quatre changements au plus par option. Chaque test coûte au moteur une passe du réseau, plus une propagation si l'option change un contact ; le scénario tel quel coûte une passe, une seule fois. Trois options font donc quatre passes. La passe « événements seuls » que fait Run sur la page n'est pas lancée : rien dans le tableau ne la lit.
+- Les passes se suivent, elles ne tournent pas en même temps. Le service de simulation est un seul processus : mesuré en local, lancer deux passes ensemble ne gagne que 18 % sur les lancer l'une après l'autre, pour deux fois la mémoire.
+- Chaque test garde dans son relevé de quoi sa durée était faite : la lecture du jumeau (au premier test seulement), puis chaque appel au moteur. Ce relevé va au journal, pas au modèle.
 - Une capacité se teste à un site qui offre déjà l'activité ; négative, elle ferme des unités, jamais plus que le site n'en a. Une mesure se teste sur une couche de contact que le jumeau déclare.
 - Un refus du moteur (un scénario sans événement, par exemple) est lu par le modèle. Un moteur injoignable est une panne : l'échange s'arrête et le dit, sans option inventée.
 - Le niveau de preuve de chaque élément est attribué par le programme, d'après d'où il vient : **mesuré** pour ce que le jumeau contient (unités d'un site, résidents d'un territoire), **publié** pour le taux d'une canicule, **hypothèse** pour les conditions du scénario, les choix, l'option elle-même et la règle de routage du moteur. Le modèle n'en choisit aucun.

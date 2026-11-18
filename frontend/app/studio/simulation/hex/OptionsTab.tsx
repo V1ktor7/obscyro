@@ -37,7 +37,7 @@ import {
   type ProposedOption,
   type RunDigest,
 } from "../../analyst-api";
-import { EvidenceBadge, LABEL, Text, Trace } from "./analyst-parts";
+import { Elapsed, EvidenceBadge, LABEL, Text, Trace } from "./analyst-parts";
 import { people } from "./results";
 
 const LETTERS = ["A", "B", "C"];
@@ -110,6 +110,9 @@ export default function OptionsTab({
   const [draft, setDraft] = useState("");
   const [asked, setAsked] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  // When the line that says what is being done last changed: a test in the
+  // engine is the long wait, and the person is told how long it has been.
+  const [statusAt, setStatusAt] = useState(0);
   const [steps, setSteps] = useState<AnalystStep[]>([]);
   const [result, setResult] = useState<OptionsResult | null>(null);
   const [exchangeId, setExchangeId] = useState<string | null>(null);
@@ -179,8 +182,12 @@ export default function OptionsTab({
     setActionError(null);
     setTestedKey(scenarioKey);
     setStatus("Sending the objective");
+    setStatusAt(Date.now());
     const onEvent = (e: OptionsEvent) => {
-      if (e.type === "status") setStatus(e.message);
+      if (e.type === "status") {
+        setStatus(e.message);
+        setStatusAt(Date.now());
+      }
       else if (e.type === "step") setSteps((s) => [...s, e.step]);
       else if (e.type === "failed") setError(e.message);
       else if (e.type === "done") {
@@ -341,7 +348,7 @@ export default function OptionsTab({
           {asking ? (
             <div role="status" className="flex flex-col gap-1 text-[12px] text-ink-muted">
               <span className="flex items-center gap-2">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> {status}…
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> {status}… <Elapsed since={statusAt} />
               </span>
               {steps.filter((s) => s.tool === "test_option").map((s) => (
                 <span key={s.id} className="pl-5 text-[11.5px]">

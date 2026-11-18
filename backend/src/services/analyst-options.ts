@@ -19,7 +19,7 @@ import {
 } from "./analyst-tools.js";
 import { Ledger, strike, unsourced } from "./analyst-verify.js";
 import type { ScenarioOverride } from "./scenario-overrides.js";
-import { ScenarioRunner, type ScenarioEngine } from "./scenario-run.js";
+import { ScenarioRunner, type EngineTiming, type PassDigest, type ScenarioEngine } from "./scenario-run.js";
 import { basisOfStamp, stampsOf, type Basis, type Stamp, type StampBody, type TwinContext } from "./scenario-stamps.js";
 import type { SimExport } from "./twin-export.js";
 
@@ -58,8 +58,8 @@ export interface OpenBench {
   stamps: Stamp[];
   /** What every run of this scenario rests on, each with its level of evidence. */
   basis: Basis[];
-  /** The scenario as it stands, run once and kept for every option. */
-  asItIs(): Promise<RunDigest>;
+  /** The scenario as it stands, choices included: one pass, run once and kept for every option. */
+  asItIs(): Promise<PassDigest>;
 }
 
 export function benchFor(args: {
@@ -94,14 +94,17 @@ export function benchFor(args: {
           );
         }
         const stamps = stampsOf(args.scenario.overrides);
-        let asItIs: Promise<RunDigest> | null = null;
+        let asItIs: Promise<PassDigest> | null = null;
         const open: OpenBench = {
           runner,
           stamps,
           basis: scenarioBasis(stamps, runner.ctx, args.activity),
           asItIs: () => {
             if (!asItIs) {
-              const attempt = runner.digest(stamps);
+              // One pass, not the page's two: the column an option is set
+              // beside is the scenario with its choices, and the events-only
+              // pass shows nothing this comparison reads.
+              const attempt = runner.full(stamps);
               asItIs = attempt;
               // A run that failed is asked again by the next option, not remembered.
               attempt.catch(() => {
@@ -180,6 +183,12 @@ export interface TestedOption {
   /** Arrivals a day by severity with the option: what a follow-up sets beside what was observed. */
   arrivals: Record<string, number[]>;
   notes: string[];
+  /**
+   * What the test's time was made of: reading the twin (the first test only),
+   * then each call to the engine. Kept in the journal so that how long a test
+   * takes is something measured; it is not a result and no sentence rests on it.
+   */
+  timing: { twinMs: number; engine: EngineTiming[]; totalMs: number };
 }
 
 function figuresOf(v: RunDigest["events"]): OptionFigures {
@@ -415,20 +424,30 @@ export const testOption: AnalystTool = {
         `${MAX_OPTIONS} options have already been tested for this objective, which is the limit. Compare those; the person can state the objective again to test others.`,
       );
     }
+    const startedAt = Date.now();
     const open = await bench.open();
+    const twinMs = Date.now() - startedAt;
     const { runner } = open;
+    const callsBefore = runner.timings.length;
     const option = input.changes.map((c, i) => stampOf(c, runner.ctx, bench, `option-${bench.tested.length + 1}-${i + 1}`));
     const key = JSON.stringify(option.map(bodyOf));
     if (bench.tested.includes(key)) throw new ToolError("This option was already tested for this objective: its result is in an earlier step. Test something different, or deliver.");
 
     const asItIs = await engineRun(() => open.asItIs());
-    const tested = await engineRun(() => runner.digest(ScenarioRunner.withOption(open.stamps, option)));
+    const tested = await engineRun(() => runner.full(ScenarioRunner.withOption(open.stamps, option)));
     bench.tested.push(key);
 
-    const waits = tested.sites.filter((s) => s.full.firstDay !== null || asItIs.sites.find((b) => b.id === s.id)?.full.firstDay != null);
-    const before = new Map(asItIs.sites.map((s) => [s.id, s]));
+    const before = new Map(asItIs.sites.map((s) => [s.id, s.break]));
+    // Both passes list the sites the twin gives the activity to, so a site
+    // missing from one is a fault of ours, not something to paper over.
+    const was = (id: string) => {
+      const b = before.get(id);
+      if (!b) throw new Error(`test_option: site ${id} is in the tested run and not in the scenario's own.`);
+      return b;
+    };
+    const waits = tested.sites.filter((s) => s.break.firstDay !== null || was(s.id).firstDay !== null);
     const basis = [...option.flatMap((s) => basisOfStamp(s, runner.ctx, "option")), ...measuredFor(option, runner.ctx)];
-    const notes = [...new Set(tested.full.notes)];
+    const notes = [...new Set(tested.figures.notes)];
 
     const record: TestedOption = {
       label: input.label,
@@ -436,26 +455,27 @@ export const testOption: AnalystTool = {
       horizon: bench.horizon,
       activity: bench.activity,
       ranAt: tested.ranAt,
-      asItIs: figuresOf(asItIs.full),
-      withOption: figuresOf(tested.full),
-      sites: waits.map((s) => ({ id: s.id, name: s.name, capacity: s.capacity, asItIs: before.get(s.id)?.full ?? s.events, withOption: s.full })),
+      asItIs: figuresOf(asItIs.figures),
+      withOption: figuresOf(tested.figures),
+      sites: waits.map((s) => ({ id: s.id, name: s.name, capacity: s.capacity, asItIs: was(s.id), withOption: s.break })),
       basis,
-      arrivals: tested.full.arrivals,
+      arrivals: tested.figures.arrivals,
       notes,
+      timing: { twinMs, engine: runner.timings.slice(callsBefore), totalMs: Date.now() - startedAt },
     };
     return new Recorded(
       {
         option: input.label,
         changes: option.map((s) => describeChange(s, runner.ctx)),
         tested_over: { days: bench.horizon, activity: bench.activity },
-        scenario_as_it_is: summariseVariant(asItIs.full),
-        with_this_option: summariseVariant(tested.full),
+        scenario_as_it_is: summariseVariant(asItIs.figures),
+        with_this_option: summariseVariant(tested.figures),
         sites_where_somebody_waits_in_either: waits.map((s) => ({
           id: s.id,
           name: s.name,
           usual_units: s.capacity,
-          as_it_is: summariseBreak(before.get(s.id)?.full ?? s.events),
-          with_this_option: summariseBreak(s.full),
+          as_it_is: summariseBreak(was(s.id)),
+          with_this_option: summariseBreak(s.break),
         })),
         rests_on: basis.map((b) => ({ element: b.element, evidence: b.evidence })),
         how_to_read:

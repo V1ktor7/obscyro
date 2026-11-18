@@ -120,8 +120,45 @@ test("a tested option comes back beside the scenario as it is, with the engine's
   );
   assert.match(result.how_to_read, /not forecasts/);
 
-  // Three passes of the network: the events alone, the scenario as it is, the option.
-  assert.equal(engine.compares, 3);
+  // Two passes of the network: the scenario as it is, and the option. The
+  // events-only pass a person's Run also makes shows nothing this table reads.
+  assert.equal(engine.compares, 2);
+});
+
+test("three options cost four passes: the scenario as it is once, then one each", async () => {
+  let compares = 0;
+  const counting: ScenarioEngine = {
+    ...blank,
+    compare: async () => {
+      compares += 1;
+      return { datasets: [] };
+    },
+  };
+  const ctx = context(counting);
+  await run(ctx, BEDS);
+  assert.equal(compares, 2);
+  await run(ctx, { label: "Open 3 beds at Lakeshore from day 5", changes: [{ kind: "capacity", site: "Lakeshore", units: 3, from_day: 5 }] });
+  assert.equal(compares, 3);
+  await run(ctx, { label: "Open 3 beds at Lakeshore from day 9", changes: [{ kind: "capacity", site: "Lakeshore", units: 3, from_day: 9 }] });
+  assert.equal(compares, 4);
+});
+
+test("an engine that fails on the scenario as it is is asked again by the next test, not remembered", async () => {
+  let compares = 0;
+  const flaky: ScenarioEngine = {
+    ...blank,
+    compare: async () => {
+      compares += 1;
+      if (compares === 1) throw new Error("unreachable");
+      return { datasets: [] };
+    },
+  };
+  const ctx = context(flaky);
+  await assert.rejects(run(ctx, BEDS), /unreachable/);
+  // Nothing was tested, so the option does not count against the limit and can be asked again.
+  assert.deepEqual(ctx.bench!.tested, []);
+  await run(ctx, BEDS);
+  assert.equal(compares, 3);
 });
 
 test("what the tool keeps for the screen is the run whole, and the stamps a person would add", async () => {
@@ -138,6 +175,13 @@ test("what the tool keeps for the screen is the run whole, and the stamps a pers
   assert.equal(record.withOption.peakOccupancy, Math.max(...fixture.withOption.digest.full.island.map((x) => x ?? 0)));
   assert.deepEqual(record.arrivals, fixture.withOption.digest.full.arrivals);
   assert.equal(record.arrivals.hospitalisation!.length, 30);
+
+  // What the test's time was made of, for the journal: one propagation, the
+  // scenario as it is, the option. The option adds beds and no contact, so it
+  // does not integrate the epidemic a second time.
+  assert.deepEqual(record.timing.engine.map((c) => c.call), ["spread", "pass", "pass"]);
+  assert.ok(record.timing.totalMs >= 0 && record.timing.twinMs >= 0);
+  assert.equal(JSON.stringify(out.result).includes("timing"), false);
 
   // The model is handed totals, never the day-by-day series it could quote from.
   assert.equal(JSON.stringify(out.result).includes(JSON.stringify(record.arrivals.hospitalisation)), false);
