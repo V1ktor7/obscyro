@@ -7,7 +7,7 @@ import { ApiError } from "@/lib/auth";
 
 import type { AnalystEvent, AnalystResult, AnalystStep } from "../../analyst-api";
 
-const api = vi.hoisted(() => ({ fetchAnalyst: vi.fn(), askAnalyst: vi.fn(), listDecisions: vi.fn() }));
+const api = vi.hoisted(() => ({ fetchAnalyst: vi.fn(), askAnalyst: vi.fn(), listDecisions: vi.fn(), fetchWebSources: vi.fn() }));
 vi.mock("../../analyst-api", async (orig) => ({ ...(await orig<typeof import("../../analyst-api")>()), ...api }));
 
 import AnalystPanel from "./AnalystPanel";
@@ -70,6 +70,7 @@ function panel(props: Partial<Parameters<typeof AnalystPanel>[0]> = {}) {
 
 beforeEach(() => {
   api.fetchAnalyst.mockResolvedValue({ configured: true, model: "claude-opus-5-5" });
+  api.fetchWebSources.mockResolvedValue({ domains: ["quebec.ca"], isDefault: true, defaults: ["quebec.ca"], max: 20 });
 });
 
 describe("the analyst panel", () => {
@@ -177,23 +178,86 @@ describe("the analyst panel", () => {
   });
 });
 
-describe("the analyst's three tabs", () => {
+describe("an answer that rests on published events", () => {
+  const CURFEW = {
+    id: "e1",
+    title: "Curfew across Québec",
+    startsOn: "2021-12-31",
+    endsOn: "2022-01-17",
+    place: "Québec",
+    door: "access",
+    url: "https://www.quebec.ca/nouvelles/couvre-feu",
+    sourceTitle: "Nouvelles mesures",
+    passage: "Un couvre-feu sera en vigueur à compter du 31 décembre 2021",
+  };
+  const EVENTS: AnalystStep = {
+    id: "s3",
+    tool: "list_events",
+    input: { from_day: 34, to_day: 34 },
+    ok: true,
+    output: { day_0_is: "2021-12-13", events: [{ title: "Curfew across Québec", from_day: 18, to_day: 35 }] },
+    // The links are kept beside the result, for the screen.
+    record: { events: [CURFEW, { ...CURFEW, id: "e2", title: "Not a web page", url: "javascript:alert(1)" }] },
+    ms: 3,
+  };
+  const answered = (paragraphs: { text: string; sources: string[] }[]) =>
+    answering([
+      { type: "done", result: result({ steps: [S1, S2, EVENTS], answer: { paragraphs, assumptions: [], limits: [], followUps: [], focusSites: [] } }) },
+    ]);
+
+  it("carries a WEB chip with the link and the Published level, never passed off as the twin's", async () => {
+    answered([
+      { text: "According to quebec.ca, a curfew was in force from day 18 to day 35.", sources: ["s3"] },
+      { text: "West has 1.04 beds per 1,000 residents.", sources: ["s1"] },
+    ]);
+    panel();
+    fireEvent.click(await screen.findByRole("button", { name: "What does this scenario assume?" }));
+    await screen.findByText(/According to quebec\.ca, a curfew was in force/);
+
+    const web = screen.getByLabelText("Published sources this paragraph rests on");
+    expect(within(web).getByText("Published")).toBeTruthy();
+    expect(within(web).getByText(/Not measured by the twin/)).toBeTruthy();
+    const link = within(web).getByRole("link");
+    expect(link.getAttribute("href")).toBe("https://www.quebec.ca/nouvelles/couvre-feu");
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(link.textContent).toMatch(/WEB\s*quebec\.ca/);
+    expect(link.getAttribute("title")).toMatch(/Curfew across Québec — “Un couvre-feu/);
+    // An address that is not a web page is shown, and is not a link.
+    expect(within(web).getAllByText("WEB").length).toBe(2);
+    expect(within(web).getAllByRole("link").length).toBe(1);
+    // The paragraph read from the twin has no such row.
+    expect(screen.getAllByLabelText("Published sources this paragraph rests on").length).toBe(1);
+    // The step itself reads in a planner's words.
+    fireEvent.click(screen.getByRole("button", { name: /What it read · 3 steps/ }));
+    expect(screen.getByText("Validated events from official sources, days 34 to 34 of the run: 1")).toBeTruthy();
+  });
+});
+
+describe("the analyst's tabs", () => {
   const tabs = () => screen.getAllByRole("tab").map((t) => [t.textContent, t.getAttribute("aria-selected")]);
 
   it("opens on Ask, and keeps what was asked when another tab is visited", async () => {
     answering([{ type: "done", result: result() }]);
     panel();
-    expect(tabs()).toEqual([["Ask", "true"], ["Options", "false"], ["Decisions", "false"]]);
+    expect(tabs()).toEqual([["Ask", "true"], ["Event finder", "false"], ["Options", "false"], ["Decisions", "false"]]);
     fireEvent.click(await screen.findByRole("button", { name: "What does this scenario assume?" }));
     await screen.findByText(/West has 1.04 beds/);
 
     fireEvent.click(screen.getByRole("tab", { name: "Options" }));
-    expect(tabs()).toEqual([["Ask", "false"], ["Options", "true"], ["Decisions", "false"]]);
+    expect(tabs()).toEqual([["Ask", "false"], ["Event finder", "false"], ["Options", "true"], ["Decisions", "false"]]);
     expect(screen.getByLabelText("Objective for the options")).toBeTruthy();
     expect(screen.getByText(/Tested on “Omicron” over 60 days/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("tab", { name: "Ask" }));
     expect(screen.getByText(/West has 1.04 beds/)).toBeTruthy();
+  });
+
+  it("offers a search of official sources over the scenario's own dates", async () => {
+    panel({ period: { origin: "2021-12-13", horizon: 60 } });
+    fireEvent.click(screen.getByRole("tab", { name: "Event finder" }));
+    expect(screen.getByLabelText("What to look for in official sources")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^What public health measures were in force in \[place\] between 2021-12-13 and 2022-02-10\?$/ })).toBeTruthy();
+    expect(await screen.findByText(/Sources searched \(starting list\):/)).toBeTruthy();
   });
 
   it("offers nothing to test when the server has no key, but still lists decisions", async () => {
@@ -203,6 +267,8 @@ describe("the analyst's three tabs", () => {
     await screen.findByText("The analyst is not switched on for this server.");
     fireEvent.click(screen.getByRole("tab", { name: "Options" }));
     expect(screen.queryByLabelText("Objective for the options")).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Event finder" }));
+    expect(screen.queryByLabelText("What to look for in official sources")).toBeNull();
     // A decision is a record, not an answer: it reads without the model.
     fireEvent.click(screen.getByRole("tab", { name: "Decisions" }));
     expect(await screen.findByText("No decision recorded in this project yet.")).toBeTruthy();

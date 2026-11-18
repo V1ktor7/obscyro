@@ -18,7 +18,7 @@
 | `SIM_SERVICE_URL` | `https://your-sim.up.railway.app` (optional; falls back to in-process mechanistic SEIR when unset) |
 | `PUBLIC_API_URL` | `https://your-api.up.railway.app` (used in webhook URLs) |
 | `CORS_ORIGINS` | `https://obscyro.vercel.app,https://obscyro.com` |
-| `ANTHROPIC_API_KEY` | Claude API key (optional). The analyst on the Scenarios page reads the twin through it. Unset: the analyst is off and says so; nothing else depends on it. See `docs/analyst.md` |
+| `ANTHROPIC_API_KEY` | Claude API key (optional). The analyst on the Scenarios page reads the twin through it. Unset: the analyst is off and says so; nothing else depends on it. The Event finder tab searches the web through the same key: it needs no variable of its own, but web search must be allowed for the organisation in the Claude Console (it is by default), and it is billed per search on top of tokens. See `docs/analyst.md` |
 
 ### Optional feature tunables (safe defaults; override only to tune)
 

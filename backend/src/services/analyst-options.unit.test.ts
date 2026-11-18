@@ -90,6 +90,7 @@ function context(engine: ScenarioEngine | null = recorded(), overrides = fixture
     world: async () => fixture.twin,
     datasets: async () => [],
     rows: async () => [],
+    events: async () => [],
   };
   ctx.bench = engine ? benchFor({ engine, scenario, horizon: fixture.horizon, activity: fixture.activity, world: ctx.world }) : null;
   return ctx;

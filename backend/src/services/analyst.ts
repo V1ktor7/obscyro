@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { READ_TOOLS, Recorded, ToolError, type AnalystContext, type AnalystTool } from "./analyst-tools.js";
 import { Ledger, checkAnswer, type AnswerDraft, type Finding } from "./analyst-verify.js";
+import { WEB_PASSAGE, WebReader, passageLedger, passageOf, webSearchTool, type WebSearch } from "./analyst-web.js";
 
 /**
  * The analyst: a language model that reads the twin through tools and explains
@@ -27,6 +28,11 @@ import { Ledger, checkAnswer, type AnswerDraft, type Finding } from "./analyst-v
  * checked — is a `Closing`. A question ends with `give_answer` (below); an
  * objective ends with tested options (`analyst-options.ts`). Both are read,
  * recorded and checked by the same code.
+ *
+ * One exchange may also search the web (`analyst-events.ts`). That search is
+ * run by the API inside a request, not by us, so it does not come back as a
+ * call to execute: its queries, its results and the passages it was cited to
+ * are read off each response and recorded as steps like any other reading.
  */
 
 export const ANALYST_MODEL = "claude-opus-5-5";
@@ -65,6 +71,8 @@ export interface AnalystUsage {
   requests: number;
   inputTokens: number;
   outputTokens: number;
+  /** Web searches the API ran and billed; present only when the exchange could search. */
+  webSearches?: number;
 }
 
 /** What an exchange comes to: `A` is what was delivered, `F` a figure that had to be taken out of it. */
@@ -118,8 +126,17 @@ export interface Closing<D, A, F> {
   opening: string;
   /** What the person typed, word for word. */
   asked: string;
-  /** Sent once when the model answers in prose instead of through `tool`. */
-  nudge: string;
+  /**
+   * Sent when the model answers in prose instead of through `tool`. Given what
+   * was read so far, because for an exchange that searches the web prose is a
+   * stage, not a mistake: it is what the passages are cited from, and the reply
+   * is where the model learns their step ids.
+   */
+  nudge: string | ((read: Reading) => string);
+  /** How many times prose is answered with `nudge` before giving up. One when absent. */
+  proseTurns?: number;
+  /** Said on screen while the first request runs. */
+  firstStatus?: string;
   /** Why there is no answer, for each way the loop can end without one. */
   words: { declined: string; tooMuch: string; noForm: string; tooLong: string };
   /** Is this a delivery at all? `invalid` goes back to the model and costs no draft. */
@@ -183,6 +200,10 @@ This is the rule the whole product rests on, so it is enforced by a program, not
 - It keeps three things apart: what the twin records (a fact about the network), what a run produced (the result of a model under stated conditions, not a forecast), and what is an assumption of the scenario.
 - It is short: two to five paragraphs, a few sentences each. One idea per paragraph, each citing the steps it rests on.
 - It states the mechanism, not only the number: why a site queues while its neighbour has room, what the added beds changed and where.
+
+# Published events
+
+list_events returns the events a person validated from official web sources, each with the source that published it and a short quoted passage. They are their own kind of thing, and you keep it apart from the others: not a fact the twin records, not a result of a run, not an assumption of the scenario, but what a source published. Introduce one as what its source states ("according to quebec.ca, …"), cite the step, and never write it as something the twin measured. When day 0 has a calendar date the tool places each event on the run's days: use those days as given, and do not convert a date into a day yourself. You cannot search the web here. If nothing validated covers the moment asked about, say so, and say that events are found and validated in the Event finder tab.
 
 # What you do not do
 
@@ -398,6 +419,8 @@ export async function converse<D, A, F>(
   tools: AnalystTool[] = READ_TOOLS,
   /** Aborts when nobody is waiting for the answer any more. */
   gone?: AbortSignal,
+  /** Lets the model search the web, within these sources and this many searches. */
+  web?: WebSearch,
 ): Promise<LoopResult<A, F>> {
   const byName = new Map(tools.map((t) => [t.name, t]));
   const steps: Step[] = [];
@@ -407,10 +430,21 @@ export async function converse<D, A, F>(
   ctx.known.absorb(question);
   const read: Reading = { steps, ledgers, question };
 
-  const usage: AnalystUsage = { requests: 0, inputTokens: 0, outputTokens: 0 };
+  const usage: AnalystUsage = { requests: 0, inputTokens: 0, outputTokens: 0, ...(web ? { webSearches: 0 } : {}) };
   let servedBy = ANALYST_MODEL;
   let rejected = 0;
-  let nudged = false;
+  let nudges = 0;
+  const reader = new WebReader();
+
+  /** A step, numbered, with what a sentence may take from it. */
+  const keep = (s: Omit<Step, "id">, ledger: Ledger): Step => {
+    const step: Step = { id: `s${steps.length + 1}`, ...s };
+    steps.push(step);
+    ledgers.set(step.id, ledger);
+    ctx.known.absorb(ledger);
+    onEvent({ type: "step", step });
+    return step;
+  };
 
   const finish = (r: Pick<LoopResult<A, F>, "status" | "answer" | "verified" | "struck" | "message">): LoopResult<A, F> => {
     const result: LoopResult<A, F> = { ...r, steps, model: servedBy, usage };
@@ -424,7 +458,7 @@ export async function converse<D, A, F>(
     if (gone?.aborted) {
       return finish({ status: "incomplete", answer: null, verified: false, struck: [], message: "Stopped before an answer was reached." });
     }
-    onEvent({ type: "status", message: steps.length === 0 ? "Reading the question" : "Deciding what to read next" });
+    onEvent({ type: "status", message: steps.length === 0 ? (closing.firstStatus ?? "Reading the question") : "Deciding what to read next" });
     const res = await model.create({
       model: ANALYST_MODEL,
       max_tokens: 16000,
@@ -442,6 +476,7 @@ export async function converse<D, A, F>(
       system: closing.system,
       tools: [
         ...tools.map((t): Anthropic.Beta.BetaTool => ({ name: t.name, description: t.description, input_schema: t.input_schema })),
+        ...(web ? [webSearchTool(web)] : []),
         closing.tool,
       ],
       messages,
@@ -450,6 +485,7 @@ export async function converse<D, A, F>(
     usage.inputTokens +=
       res.usage.input_tokens + (res.usage.cache_read_input_tokens ?? 0) + (res.usage.cache_creation_input_tokens ?? 0);
     usage.outputTokens += res.usage.output_tokens;
+    if (web) usage.webSearches = (usage.webSearches ?? 0) + (res.usage.server_tool_use?.web_search_requests ?? 0);
     servedBy = res.model;
 
     if (res.stop_reason === "refusal") {
@@ -459,15 +495,30 @@ export async function converse<D, A, F>(
       return finish({ status: "incomplete", answer: null, verified: false, struck: [], message: closing.words.tooMuch });
     }
 
+    // What the API searched and cited inside this request. A search result
+    // carries no fact a sentence may lean on — only a passage does.
+    for (const s of reader.read(res.content)) {
+      const passage = s.tool === WEB_PASSAGE ? passageOf(s.output) : null;
+      keep({ ...s, ms: 0 }, passage ? passageLedger(passage) : new Ledger());
+    }
+
     messages.push({ role: "assistant", content: echo(res.content) });
+
+    // The API paused a long search turn: the same turn goes back as it is, and
+    // the API carries on. A user message here would end the turn instead.
+    if (res.stop_reason === "pause_turn") {
+      onEvent({ type: "status", message: "Still searching" });
+      continue;
+    }
+
     const uses = res.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use");
 
     if (uses.length === 0) {
       // It answered in prose. Prose has no sources, so it cannot be checked
-      // paragraph by paragraph: ask once for the answer in its proper form.
-      if (!nudged) {
-        nudged = true;
-        messages.push({ role: "user", content: closing.nudge });
+      // paragraph by paragraph: ask for the answer in its proper form.
+      if (nudges < (closing.proseTurns ?? 1)) {
+        nudges += 1;
+        messages.push({ role: "user", content: typeof closing.nudge === "string" ? closing.nudge : closing.nudge(read) });
         continue;
       }
       return finish({ status: "incomplete", answer: null, verified: false, struck: [], message: closing.words.noForm });
@@ -476,7 +527,9 @@ export async function converse<D, A, F>(
     const results: Anthropic.Beta.BetaToolResultBlockParam[] = [];
     for (const use of uses) {
       if (use.name === closing.tool.name) {
-        if (uses.length > 1) {
+        // A search asked for in the same breath has not run yet: the API runs
+        // it on the next request, once this call is answered.
+        if (uses.length > 1 || reader.waiting > 0) {
           results.push({
             type: "tool_result",
             tool_use_id: use.id,
@@ -501,7 +554,6 @@ export async function converse<D, A, F>(
       }
 
       const tool = byName.get(use.name);
-      const id = `s${steps.length + 1}`;
       const started = Date.now();
       let ok = true;
       let output: unknown;
@@ -532,19 +584,15 @@ export async function converse<D, A, F>(
           }
         }
       }
-      const step: Step = { id, tool: use.name, input: use.input, ok, output, ms: Date.now() - started, ...(record !== undefined ? { record } : {}) };
-      steps.push(step);
       // A refusal carries no facts: only what a tool returned can be cited.
       const ledger = new Ledger();
       if (ok) ledger.addJson(output);
-      ledgers.set(id, ledger);
-      ctx.known.absorb(ledger);
-      onEvent({ type: "step", step });
+      const step = keep({ tool: use.name, input: use.input, ok, output, ms: Date.now() - started, ...(record !== undefined ? { record } : {}) }, ledger);
       results.push({
         type: "tool_result",
         tool_use_id: use.id,
         ...(ok ? {} : { is_error: true }),
-        content: JSON.stringify({ step: id, result: output }),
+        content: JSON.stringify({ step: step.id, result: output }),
       });
     }
     messages.push({ role: "user", content: results });

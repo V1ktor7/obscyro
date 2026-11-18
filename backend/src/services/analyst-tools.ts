@@ -3,6 +3,7 @@ import { z } from "zod";
 import { CalcError, UNIT_CONSTANTS, evaluate } from "./analyst-calc.js";
 import { Ledger, numbersIn } from "./analyst-verify.js";
 import type { DatasetRow } from "./datasets.js";
+import type { HealthEvent } from "./health-events.js";
 import type { ScenarioOverride } from "./scenario-overrides.js";
 import type { SimExport } from "./twin-export.js";
 
@@ -120,6 +121,8 @@ export interface AnalystContext {
   run: RunDigest | null;
   datasets(): Promise<DatasetRow[]>;
   rows(datasetId: string): Promise<Record<string, unknown>[]>;
+  /** The project's calendar: events a person accepted from official web sources, earliest first. */
+  events(): Promise<HealthEvent[]>;
   /** The question and everything read so far: what `calculate` may build on. */
   known: Ledger;
   /**
@@ -1021,6 +1024,103 @@ const readSeries: AnalystTool = {
   },
 };
 
+// ---------------------------------------------------------------------------
+// Reading the calendar of validated events.
+// ---------------------------------------------------------------------------
+
+/** The calendar date of the scenario's day 0, when its reality check sets one. */
+function dayZeroOf(scenario: AnalystScenario | null): string | null {
+  if (!scenario) return null;
+  // The last one written wins: a check is replaced, never stacked.
+  for (let i = scenario.overrides.length - 1; i >= 0; i--) {
+    const o = scenario.overrides[i]!;
+    if (o.targetType !== "param" || o.op !== "set_param" || o.payload.key !== REALITY_KEY) continue;
+    const origin = (o.payload.value as { origin?: unknown } | undefined)?.origin;
+    if (typeof origin === "string" && /^\d{4}-\d{2}-\d{2}$/.test(origin)) return origin;
+  }
+  return null;
+}
+
+const DAY_MS = 86_400_000;
+const daysBetween = (from: string, to: string): number => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS);
+const dateAt = (origin: string, offset: number): string => new Date(Date.parse(`${origin}T00:00:00Z`) + offset * DAY_MS).toISOString().slice(0, 10);
+const hostOf = (url: string): string => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+};
+
+const calendarDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "write the date as YYYY-MM-DD");
+
+const listEvents: AnalystTool = {
+  name: "list_events",
+  description:
+    "The calendar of events around the network that a person validated from official web sources: public health measures, closures, weather, outbreaks. Each has its dates, its place, how it reaches the network (demand, capacity, access, care), the source it was published by and a short quoted passage. These are published statements, not facts the twin recorded and not results of a run. Narrow to a period with from_date and to_date, or — when the scenario gives day 0 a calendar date — with from_day and to_day on the run's own axis, which also places every event on the run's days. Use it to say what was happening at a given moment of a run. You cannot search the web yourself: if nothing validated covers the period, say so.",
+  input_schema: obj(
+    {
+      from_date: { type: "string", description: "YYYY-MM-DD. Keep only events still going on or after this date." },
+      to_date: { type: "string", description: "YYYY-MM-DD. Keep only events that started on or before this date." },
+      from_day: { type: "integer", description: "A day of the run (0 is the first). Needs a calendar date for day 0. Not together with the dates." },
+      to_day: { type: "integer", description: "A day of the run. Needs a calendar date for day 0. Not together with the dates." },
+    },
+    [],
+  ),
+  parse: z.object({
+    from_date: calendarDay.optional(),
+    to_date: calendarDay.optional(),
+    from_day: z.number().int().min(0).max(4000).optional(),
+    to_day: z.number().int().min(0).max(4000).optional(),
+  }),
+  async run(ctx, input: { from_date?: string; to_date?: string; from_day?: number; to_day?: number }) {
+    const origin = dayZeroOf(ctx.scenario);
+    const byDay = input.from_day !== undefined || input.to_day !== undefined;
+    if (byDay && (input.from_date !== undefined || input.to_date !== undefined)) {
+      throw new ToolError("Give a period as dates or as days of the run, not both.");
+    }
+    if (byDay && !origin) {
+      throw new ToolError(
+        "Day 0 of this scenario has no calendar date (it is set under Result, Reality check), so a day of the run cannot be turned into a date. Ask by from_date and to_date instead, or say that the run's days cannot be placed on the calendar.",
+      );
+    }
+    const from = byDay ? (input.from_day !== undefined ? dateAt(origin!, input.from_day) : null) : (input.from_date ?? null);
+    const to = byDay ? (input.to_day !== undefined ? dateAt(origin!, input.to_day) : null) : (input.to_date ?? null);
+    if (from && to && to < from) throw new ToolError("The period ends before it starts.");
+
+    const all = await ctx.events();
+    const kept = all.filter((e) => (!from || (e.endsOn ?? e.startsOn) >= from) && (!to || e.startsOn <= to));
+    const result = {
+      what_these_are:
+        "Events a person validated from official web sources. Published statements about what was happening around the network: not facts the twin recorded, not results of a run.",
+      day_0_is: origin,
+      ...(origin ? {} : { days_of_the_run: "Day 0 of this scenario has no calendar date, so these events cannot be placed on the run's days." }),
+      period: { from_date: from, to_date: to },
+      events: kept.map((e) => ({
+        title: e.title,
+        from_date: e.startsOn,
+        to_date: e.endsOn,
+        // Computed here so that nobody counts days in their head.
+        ...(origin ? { from_day: daysBetween(origin, e.startsOn), to_day: daysBetween(origin, e.endsOn ?? e.startsOn) } : {}),
+        place: e.place,
+        reaches_the_network_by: e.door,
+        published_by: hostOf(e.sourceUrl),
+        source_title: e.sourceTitle,
+        quoted_passage: e.passage,
+        validated_on: e.validatedAt.slice(0, 10),
+      })),
+      events_in_the_calendar: all.length,
+      ...(all.length === 0
+        ? { note: "No event has been validated in this project yet. A person can search official sources and validate events in the Event finder tab." }
+        : {}),
+    };
+    // The links are for the screen: each event shown under a paragraph carries its own.
+    return new Recorded(result, {
+      events: kept.map((e) => ({ id: e.id, title: e.title, startsOn: e.startsOn, endsOn: e.endsOn, place: e.place, door: e.door, url: e.sourceUrl, sourceTitle: e.sourceTitle, passage: e.passage })),
+    });
+  },
+};
+
 const calculate: AnalystTool = {
   name: "calculate",
   description:
@@ -1067,5 +1167,6 @@ export const READ_TOOLS: AnalystTool[] = [
   listDatasets,
   previewDataset,
   readSeries,
+  listEvents,
   calculate,
 ];

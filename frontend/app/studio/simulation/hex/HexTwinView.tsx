@@ -9,6 +9,7 @@ import { fetchSimExport, fetchTwinTree, listGeoShapes, listTwinMetrics } from "@
 import type { ProposedOption } from "../../analyst-api";
 import { OVERLAY_BAR, OverlayPanel } from "../../map-overlay";
 import { useStudio } from "../../StudioShell";
+import { listHealthEvents, removeHealthEvent, type HealthEvent } from "../../analyst-api";
 import {
   addScenarioOverride,
   createOverlayScenario,
@@ -21,6 +22,7 @@ import {
 import AddDataPanel from "./AddDataPanel";
 import AnalystPanel from "./AnalystPanel";
 import BreakList from "./BreakList";
+import ContextLane from "./ContextLane";
 import { guideMeta, guideSteps } from "./guide";
 import ScenarioGuide from "./ScenarioGuide";
 import { engineMessage, runScenario, type RunOutput } from "./engine";
@@ -239,6 +241,9 @@ export default function HexTwinView() {
   const [recipeOpen, setRecipeOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(false);
+  // The project's calendar: events a person validated from official sources.
+  // Context for the timeline; the engine never receives them.
+  const [calendar, setCalendar] = useState<HealthEvent[]>([]);
   const globeRef = useRef<GlobeHandle>(null);
 
   // --- loading ------------------------------------------------------------
@@ -304,6 +309,14 @@ export default function HexTwinView() {
     setScenarioId((cur) => (cur && list.some((s) => s.id === cur) ? cur : list[0]?.id ?? null));
   }, [env]);
 
+  const loadCalendar = useCallback(async () => {
+    if (!env) return;
+    // The lane is context: failing to read it must not stop the page.
+    await listHealthEvents(env)
+      .then(({ events }) => setCalendar(events))
+      .catch(() => setCalendar([]));
+  }, [env]);
+
   const loadStamps = useCallback(async (id: string | null) => {
     if (!id) {
       setStamps([]);
@@ -328,7 +341,8 @@ export default function HexTwinView() {
     void loadLayers();
     void loadReadings();
     void loadScenarios().catch((err) => setMessage(engineMessage(err)));
-  }, [loadTwin, loadLayers, loadReadings, loadScenarios]);
+    void loadCalendar();
+  }, [loadTwin, loadLayers, loadReadings, loadScenarios, loadCalendar]);
 
   useEffect(() => {
     setRun(null);
@@ -1282,6 +1296,12 @@ export default function HexTwinView() {
                 activity={activity}
                 scenarioKey={stampKey}
                 onAddOption={addOption}
+                period={reality ? { origin: reality.config.origin, horizon } : null}
+                onEventAccepted={() => {
+                  // Show it where it now lives: on the timeline's Context lane.
+                  void loadCalendar();
+                  setTimelineOpen(true);
+                }}
               />
             </OverlayPanel>
             {inspected ? (
@@ -1490,6 +1510,17 @@ export default function HexTwinView() {
         </div>
         {timelineOpen ? (
         <div className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5">
+          <ContextLane
+            events={calendar}
+            origin={reality?.config.origin ?? null}
+            horizon={horizon}
+            day={d}
+            onRemove={async (id) => {
+              if (!env) return;
+              await removeHealthEvent(env, id);
+              await loadCalendar();
+            }}
+          />
           {(["Events", "Measures", "Resources"] as Lane[]).map((ln) => (
             <div key={ln} className="contents">
               <span className={cn("text-[10.5px] font-bold uppercase tracking-wide", LANE_INK[ln])}>{ln}</span>

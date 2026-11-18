@@ -39,7 +39,7 @@ Le modèle orchestre et explique. Les faits viennent des outils ; les calculs, d
 |---|---|---|
 | 1. Signal | Les alertes du jumeau et les signaux existent, mais ne lancent pas encore la boucle | [algorithms.md](algorithms.md), D5 |
 | 2. Situation | **Livré et vérifié en production** avec le vrai modèle : l'analyste, onglet Ask. Treize questions de référence passent deux fois de suite | [analyst.md](analyst.md) |
-| 3. Précédents | À faire | [issue 7](https://github.com/V1ktor7/obscyro/issues/7) |
+| 3. Précédents | **Livré**, couvert par les tests ; pas encore vérifié en production : onglet Event finder. Recherche en ligne dans les sources que le projet autorise, candidats avec lien et passage cité, acceptés ou refusés par une personne, calendrier sur la frise et lu par l'analyste (`list_events`). Un événement est un repère daté : il n'est relié à aucun territoire et n'entre pas dans le moteur | [analyst.md](analyst.md), [algorithms.md](algorithms.md), A10 |
 | 4. Effets mesurés | À faire. Les briques de mesure existent (décalages, réplication par épisodes) sans être reliées | [algorithms.md](algorithms.md), C3 |
 | 5. Options testées | **Livré et vérifié en production** avec le vrai modèle : onglet Options. Jusqu'à trois options par objectif, chacune passée dans le moteur sur le serveur, avec les mêmes chiffres que la page (tenu par un test). Options faites de capacité et de mesures seulement | [analyst.md](analyst.md), [algorithms.md](algorithms.md), A4 et A8 |
 | 6. Recommandation | **Livré et vérifié en production** : le scénario tel quel à côté de chaque option, niveaux de preuve attribués par le programme, mécanisme en une phrase, arbitrages laissés à la personne, aucun classement. L'option entre dans le scénario sur un clic | [analyst.md](analyst.md), [algorithms.md](algorithms.md), A8 |
@@ -53,7 +53,7 @@ La mise en service de l'analyste ([issue 5](https://github.com/V1ktor7/obscyro/i
 
 1. Mettre l'analyste en service et le fiabiliser : [issue 5](https://github.com/V1ktor7/obscyro/issues/5). **Fait.**
 2. Options testées par le moteur, recommandation, décision enregistrée : [issue 6](https://github.com/V1ktor7/obscyro/issues/6). **Fait.** Suites : raccourcir le test d'une option ([issue 8](https://github.com/V1ktor7/obscyro/issues/8)), laisser une option remplacer un choix du scénario ([issue 9](https://github.com/V1ktor7/obscyro/issues/9)).
-3. Recherche en ligne validée et calendrier d'événements : [issue 7](https://github.com/V1ktor7/obscyro/issues/7).
+3. Recherche en ligne validée et calendrier d'événements : [issue 7](https://github.com/V1ktor7/obscyro/issues/7). Livré, à vérifier en production.
 4. Ensuite, sans issue encore : historique du jumeau (lire le réseau à une date passée), moteur de facteurs, stocks et répartition des ressources rares, personnel dans le jumeau.
 
 ## Ce qui rend la boucle générale

@@ -6,11 +6,11 @@
  * of steps, and the three levels of evidence.
  */
 
-import { Check, ChevronRight } from "lucide-react";
+import { Check, ChevronRight, ExternalLink } from "lucide-react";
 
 import { cn } from "@/lib/cn";
 
-import { stepLabel, type AnalystStep, type Evidence } from "../../analyst-api";
+import { hostOf, isWebLink, stepLabel, type AnalystStep, type Evidence } from "../../analyst-api";
 
 export const LABEL = "text-[10px] font-semibold uppercase tracking-wide text-ink-faint";
 
@@ -124,5 +124,35 @@ export function EvidenceBadge({ evidence }: { evidence: Evidence }) {
     <span title={e.title} className={cn("shrink-0 rounded px-1 py-px text-[9.5px] font-bold uppercase tracking-wide", e.className)}>
       {e.label}
     </span>
+  );
+}
+
+/**
+ * Something taken from the web: the site it was published by, as a link to the
+ * page. Always beside a "Published" badge, never beside "Measured": what a
+ * source states is not what the twin recorded.
+ */
+export function WebChip({ url, title }: { url: string; title?: string }) {
+  const className = "flex max-w-full items-center gap-1 rounded border border-brand-soft bg-brand-soft px-1.5 py-0.5 text-[10.5px] text-brand-deep";
+  const label = (
+    <>
+      <span className="font-mono font-bold">WEB</span>
+      <span className="truncate">{hostOf(url)}</span>
+    </>
+  );
+  // Only a web address becomes a link: nothing else is ever given an href.
+  if (!isWebLink(url)) {
+    return (
+      <span title={title} className={className}>
+        {label}
+      </span>
+    );
+  }
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" title={title} className={cn(className, "hover:border-brand")}>
+      {label}
+      <ExternalLink className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+      <span className="sr-only">(opens the source in a new tab)</span>
+    </a>
   );
 }

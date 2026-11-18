@@ -49,7 +49,15 @@ export interface AnalystResult {
   steps: AnalystStep[];
   message: string | null;
   model: string;
-  usage: { requests: number; inputTokens: number; outputTokens: number };
+  usage: Usage;
+}
+
+/** What an exchange cost. `webSearches` is there only when the exchange could search the web. */
+export interface Usage {
+  requests: number;
+  inputTokens: number;
+  outputTokens: number;
+  webSearches?: number;
 }
 
 /** What a stream sends, whatever the exchange ends with. `exchangeId` names it in the journal. */
@@ -354,6 +362,191 @@ export async function fetchFollowUp(env: string, decisionId: string): Promise<Fo
   return apiFetch(`/v1/ontology/${enc(env)}/decisions/${enc(decisionId)}/follow-up`);
 }
 
+// ---------------------------------------------------------------------------
+// Event finder: official web sources searched for what was happening around
+// the network, and the calendar of the events a person accepted.
+// ---------------------------------------------------------------------------
+
+/** How an event reaches a health network. */
+export type Door = "demand" | "capacity" | "access" | "care";
+
+export const DOOR_LABEL: Record<Door, { label: string; title: string }> = {
+  demand: { label: "Demand", title: "More people need care." },
+  capacity: { label: "Capacity", title: "Less to care with." },
+  access: { label: "Access", title: "People cannot reach care, or are kept from moving." },
+  care: { label: "Care", title: "Each patient needs more, or for longer." },
+};
+
+/** A passage of a page, as the search returned it under a cited sentence. */
+export interface CandidatePassage {
+  step: string;
+  url: string;
+  title: string;
+  text: string;
+}
+
+export interface EventCandidate {
+  /** "c1", "c2", …: what an acceptance names. */
+  id: string;
+  title: string;
+  /** Null when no passage states the day: the person enters it from the source. */
+  startDate: string | null;
+  endDate: string | null;
+  /** Dates the model gave that no passage states, taken out by the server. */
+  datesRemoved: ("start" | "end")[];
+  place: string;
+  door: Door;
+  url: string;
+  sourceTitle: string;
+  /** Fewer than fifteen words, found word for word in a passage. */
+  quote: string;
+  /** True when the model's quotation was in no passage and the passage's opening words stand in for it. */
+  quoteReplaced: boolean;
+  passages: CandidatePassage[];
+  evidence: Evidence;
+}
+
+export interface EventsProposal {
+  request: string;
+  /** The domains the search was restricted to. */
+  sources: string[];
+  searches: number;
+  candidates: EventCandidate[];
+  notFound: string[];
+  limits: string[];
+}
+
+export interface EventsFinding {
+  where: "title" | "place" | "quote" | "start_date" | "end_date" | "dates" | "source" | "not_found" | "limit";
+  candidate: number | null;
+  index: number;
+  figures: string[];
+}
+
+export interface EventsResult {
+  status: "answered" | "declined" | "incomplete";
+  answer: EventsProposal | null;
+  verified: boolean;
+  struck: EventsFinding[];
+  steps: AnalystStep[];
+  message: string | null;
+  model: string;
+  usage: Usage;
+}
+
+export type EventsEvent = StreamEvent<EventsResult>;
+
+/**
+ * Search the allowed sources for events, and hear each search as it lands.
+ *
+ * Only the request is sent: the search is never handed the twin, the scenario
+ * or a run. `scenarioId` is kept in the journal to say where it was asked from.
+ */
+export async function findEvents(
+  env: string,
+  body: { request: string; scenarioId: string | null },
+  onEvent: (e: EventsEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  return streamExchange<EventsResult>(`/v1/ontology/${enc(env)}/analyst/events`, body, onEvent, signal);
+}
+
+/** An event of the calendar: a candidate a person accepted. */
+export interface HealthEvent {
+  id: string;
+  title: string;
+  place: string;
+  door: Door;
+  /** The dates the person validated, YYYY-MM-DD. */
+  startsOn: string;
+  endsOn: string | null;
+  /** What the analyst had proposed. */
+  proposedStartsOn: string | null;
+  proposedEndsOn: string | null;
+  sourceUrl: string;
+  sourceTitle: string | null;
+  passage: string;
+  sources: CandidatePassage[];
+  proposedByAnalyst: boolean;
+  exchangeId: string | null;
+  candidate: string | null;
+  validatedBy: string | null;
+  validatedAt: string;
+}
+
+/**
+ * Accept a candidate into the calendar.
+ *
+ * Only the search, the candidate and the validated dates are sent: the server
+ * copies the title, the link and the passage from its own journal. There is no
+ * call to reject a candidate — rejecting records nothing.
+ */
+export async function acceptEvent(env: string, body: { exchangeId: string; candidate: string; startsOn: string; endsOn: string | null }): Promise<HealthEvent> {
+  return apiFetch(`/v1/ontology/${enc(env)}/health-events`, { method: "POST", body });
+}
+
+export async function listHealthEvents(env: string): Promise<{ events: HealthEvent[] }> {
+  return apiFetch(`/v1/ontology/${enc(env)}/health-events`);
+}
+
+export async function removeHealthEvent(env: string, id: string): Promise<void> {
+  await apiFetch(`/v1/ontology/${enc(env)}/health-events/${enc(id)}`, { method: "DELETE" });
+}
+
+export interface WebSources {
+  domains: string[];
+  /** True when the project never set a list and the starting one applies. */
+  isDefault: boolean;
+  defaults: string[];
+  max: number;
+}
+
+export async function fetchWebSources(env: string): Promise<WebSources> {
+  return apiFetch(`/v1/ontology/${enc(env)}/web-sources`);
+}
+
+export async function saveWebSources(env: string, domains: string[]): Promise<WebSources> {
+  return apiFetch(`/v1/ontology/${enc(env)}/web-sources`, { method: "PUT", body: { domains } });
+}
+
+/** The site a link points to, without its "www.". */
+export function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+/** An address is shown as a link only when it is a web page: nothing else is ever given an href. */
+export function isWebLink(url: string): boolean {
+  try {
+    const p = new URL(url).protocol;
+    return p === "https:" || p === "http:";
+  } catch {
+    return false;
+  }
+}
+
+/** The validated events a `list_events` step returned, with their links: what a WEB chip is made from. */
+export interface ListedEvent {
+  id: string;
+  title: string;
+  startsOn: string;
+  endsOn: string | null;
+  place: string;
+  door: Door;
+  url: string;
+  sourceTitle: string | null;
+  passage: string;
+}
+
+export function listedEvents(step: Pick<AnalystStep, "tool" | "ok" | "record"> | undefined): ListedEvent[] {
+  if (!step || step.tool !== "list_events" || !step.ok) return [];
+  const events = (step.record as { events?: unknown } | undefined)?.events;
+  return Array.isArray(events) ? (events as ListedEvent[]).filter((e) => typeof e?.url === "string" && typeof e?.title === "string") : [];
+}
+
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
 /** A step, in the words a planner would use for it. */
@@ -391,6 +584,22 @@ export function stepLabel(step: Pick<AnalystStep, "tool" | "input" | "output" | 
       return `Series ${str(i.value_column)} of ${str(i.dataset)}`;
     case "test_option":
       return `Option tested in the engine: ${str(i.label)}`;
+    case "list_events": {
+      const n = step.ok ? ((step.output as { events?: unknown[] } | null)?.events?.length ?? 0) : 0;
+      const period =
+        i.from_day !== undefined || i.to_day !== undefined
+          ? `, days ${i.from_day ?? "…"} to ${i.to_day ?? "…"} of the run`
+          : str(i.from_date) || str(i.to_date)
+            ? `, ${str(i.from_date) || "…"} to ${str(i.to_date) || "…"}`
+            : "";
+      return `Validated events from official sources${period}${step.ok ? `: ${n}` : ""}`;
+    }
+    case "web_search": {
+      const n = step.ok ? ((step.output as { results?: unknown[] } | null)?.results?.length ?? 0) : 0;
+      return `Web search: “${str(i.query)}”${step.ok ? ` · ${n} page${n === 1 ? "" : "s"}` : ""}`;
+    }
+    case "web_passage":
+      return `Passage cited from ${hostOf(str(i.url))}`;
     case "calculate": {
       const result = step.ok ? (step.output as { result?: number } | null)?.result : undefined;
       return `${str(i.label) || "Calculation"}: ${str(i.expression)}${result !== undefined ? ` = ${result}` : ""}`;

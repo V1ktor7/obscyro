@@ -34,7 +34,13 @@ const scenarios = vi.hoisted(() => ({
   createOverlayScenario: vi.fn(),
   updateOverlayScenario: vi.fn(),
 }));
-const analyst = vi.hoisted(() => ({ fetchAnalyst: vi.fn(), askAnalyst: vi.fn(), proposeOptions: vi.fn() }));
+const analyst = vi.hoisted(() => ({
+  fetchAnalyst: vi.fn(),
+  askAnalyst: vi.fn(),
+  proposeOptions: vi.fn(),
+  listHealthEvents: vi.fn(),
+  removeHealthEvent: vi.fn(),
+}));
 
 vi.mock("@/lib/platform-api", async (orig) => ({ ...(await orig<typeof import("@/lib/platform-api")>()), ...api }));
 vi.mock("../../scenarios-api", () => scenarios);
@@ -146,6 +152,7 @@ beforeEach(() => {
   scenarios.addScenarioOverride.mockResolvedValue({ id: "new" });
   scenarios.deleteScenarioOverride.mockResolvedValue({ deleted: true });
   analyst.fetchAnalyst.mockResolvedValue({ configured: true, model: "claude-opus-5-5" });
+  analyst.listHealthEvents.mockResolvedValue({ events: [] });
 });
 
 async function opened() {
@@ -278,6 +285,35 @@ describe("a scenario with starting conditions", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Hôpital Beta" }));
     expect(await screen.findByRole("img", { name: /Occupancy of lit at Hôpital Beta/ })).toBeTruthy();
+  });
+});
+
+describe("the calendar of validated events", () => {
+  const CURFEW = {
+    id: "e1", title: "Curfew across Québec", place: "Québec", door: "access", startsOn: "2021-12-31", endsOn: "2022-01-17",
+    proposedStartsOn: "2021-12-31", proposedEndsOn: null, sourceUrl: "https://www.quebec.ca/nouvelles/couvre-feu", sourceTitle: "Nouvelles mesures",
+    passage: "Un couvre-feu sera en vigueur à compter du 31 décembre 2021", sources: [], proposedByAnalyst: true, exchangeId: "ex-1", candidate: "c1",
+    validatedBy: "Dominique Roy", validatedAt: "2026-11-17T15:00:00.000Z",
+  };
+
+  it("sits on the timeline's Context lane, placed from the date the scenario gives day 0", async () => {
+    analyst.listHealthEvents.mockResolvedValue({ events: [CURFEW] });
+    await opened();
+    expect(analyst.listHealthEvents).toHaveBeenCalledWith("mtl");
+    fireEvent.click(screen.getByRole("button", { name: "Show lanes and curve" }));
+    // Day 0 is 2021-12-13: the curfew runs from day 18 to day 35 of sixty.
+    const bar = await screen.findByRole("button", { name: "Curfew across Québec" });
+    expect(bar.style.left).toBe("30%");
+    expect(bar.style.width).toBe("30%");
+
+    // Taking it out is a person's click, and the lane is read again after it.
+    analyst.removeHealthEvent.mockResolvedValue(undefined);
+    analyst.listHealthEvents.mockResolvedValue({ events: [] });
+    fireEvent.click(bar);
+    fireEvent.click(screen.getByRole("button", { name: "Remove from the calendar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Yes, remove" }));
+    await waitFor(() => expect(analyst.removeHealthEvent).toHaveBeenCalledWith("mtl", "e1"));
+    expect(await screen.findByText("No validated event yet. Find some under Analyst, Event finder.")).toBeTruthy();
   });
 });
 

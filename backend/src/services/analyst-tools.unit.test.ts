@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { READ_TOOLS, ToolError, type AnalystContext, type AnalystScenario, type RunDigest } from "./analyst-tools.js";
 import { Ledger } from "./analyst-verify.js";
 import type { DatasetRow } from "./datasets.js";
+import type { HealthEvent } from "./health-events.js";
 import type { ScenarioOverride } from "./scenario-overrides.js";
 import type { SimExport } from "./twin-export.js";
 
@@ -181,6 +182,7 @@ function ctxOf(over: Partial<AnalystContext> = {}): AnalystContext {
     },
     datasets: async () => [DATASET],
     rows: async () => ROWS,
+    events: async () => [],
     ...over,
   };
 }
@@ -380,4 +382,88 @@ test("arithmetic is done only on figures that were read, or that the person gave
   const out = await call("calculate", { label: "share", expression: "round((7316 - 267) / 7316 * 100, 1)" }, ctx);
   assert.equal(out.result, 96.4);
   await assert.rejects(call("calculate", { label: "x", expression: "7316 +" }, ctx), ToolError);
+});
+
+// --- the calendar of validated events ---------------------------------------
+
+const event = (over: Partial<HealthEvent> = {}): HealthEvent => ({
+  id: "e1",
+  title: "Curfew across Québec",
+  place: "Québec",
+  door: "access",
+  startsOn: "2021-12-31",
+  endsOn: "2022-01-17",
+  proposedStartsOn: "2021-12-31",
+  proposedEndsOn: null,
+  sourceUrl: "https://www.quebec.ca/nouvelles/couvre-feu",
+  sourceTitle: "Nouvelles mesures pour freiner la transmission",
+  passage: "Un couvre-feu sera en vigueur à compter du 31 décembre 2021",
+  sources: [],
+  proposedByAnalyst: true,
+  exchangeId: "ex-1",
+  candidate: "c1",
+  validatedBy: "Dominique Roy",
+  validatedAt: "2026-11-17T15:00:00.000Z",
+  ...over,
+});
+const SCHOOLS = event({ id: "e2", title: "Schools closed", startsOn: "2021-12-21", endsOn: null, sourceUrl: "https://www.quebec.ca/education", passage: "les écoles demeureront fermées" });
+const CALENDAR = [SCHOOLS, event()];
+
+test("validated events are read as published statements, placed on the run's days when day 0 has a date", async () => {
+  const out = await call("list_events", {}, ctxOf({ scenario: SCENARIO, events: async () => CALENDAR }));
+  assert.match(out.result.what_these_are, /Published statements[\s\S]*not facts the twin recorded, not results of a run/);
+  assert.equal(out.result.day_0_is, "2021-12-13");
+  assert.deepEqual(out.result.events[1], {
+    title: "Curfew across Québec",
+    from_date: "2021-12-31",
+    to_date: "2022-01-17",
+    // Counted here, from day 0 = 2021-12-13: the model does not count days.
+    from_day: 18,
+    to_day: 35,
+    place: "Québec",
+    reaches_the_network_by: "access",
+    published_by: "quebec.ca",
+    source_title: "Nouvelles mesures pour freiner la transmission",
+    quoted_passage: "Un couvre-feu sera en vigueur à compter du 31 décembre 2021",
+    validated_on: "2026-11-17",
+  });
+  // An event with no stated end sits on one day.
+  assert.deepEqual([out.result.events[0].from_day, out.result.events[0].to_day], [8, 8]);
+  // The links are kept for the screen, which shows each one under the paragraph that cites the step.
+  assert.deepEqual(out.record.events.map((e: { id: string; url: string }) => [e.id, e.url]), [
+    ["e2", "https://www.quebec.ca/education"],
+    ["e1", "https://www.quebec.ca/nouvelles/couvre-feu"],
+  ]);
+});
+
+test("events are narrowed to a period given as dates or as days of the run", async () => {
+  const ctx = () => ctxOf({ scenario: SCENARIO, events: async () => CALENDAR });
+  const titles = (out: { result: { events: { title: string }[] } }) => out.result.events.map((e) => e.title);
+
+  assert.deepEqual(titles(await call("list_events", { from_date: "2021-12-25" }, ctx())), ["Curfew across Québec"]);
+  assert.deepEqual(titles(await call("list_events", { to_date: "2021-12-30" }, ctx())), ["Schools closed"]);
+  // Day 34 of the run is 2022-01-16: the curfew is still on, the one-day closure is long past.
+  const atPeak = await call("list_events", { from_day: 34, to_day: 34 }, ctx());
+  assert.deepEqual(titles(atPeak), ["Curfew across Québec"]);
+  assert.deepEqual(atPeak.result.period, { from_date: "2022-01-16", to_date: "2022-01-16" });
+  assert.equal(atPeak.result.events_in_the_calendar, 2);
+
+  await assert.rejects(call("list_events", { from_day: 3, from_date: "2021-12-25" }, ctx()), /as dates or as days of the run, not both/);
+  await assert.rejects(call("list_events", { from_date: "2022-01-10", to_date: "2022-01-01" }, ctx()), /ends before it starts/);
+});
+
+test("without a calendar date for day 0, events have dates and no day of the run", async () => {
+  const noReality = { ...SCENARIO, overrides: SCENARIO.overrides.filter((o) => o.payload.key !== "reality") };
+  const out = await call("list_events", {}, ctxOf({ scenario: noReality, events: async () => CALENDAR }));
+  assert.equal(out.result.day_0_is, null);
+  assert.match(out.result.days_of_the_run, /cannot be placed on the run's days/);
+  assert.equal("from_day" in out.result.events[0], false);
+  await assert.rejects(call("list_events", { from_day: 34 }, ctxOf({ scenario: noReality, events: async () => CALENDAR })), /Day 0 of this scenario has no calendar date/);
+});
+
+test("an empty calendar is a fact, and says where events are validated", async () => {
+  const out = await call("list_events", {}, ctxOf());
+  assert.deepEqual(out.result.events, []);
+  assert.equal(out.result.events_in_the_calendar, 0);
+  assert.match(out.result.note, /Event finder tab/);
 });

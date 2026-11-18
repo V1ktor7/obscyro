@@ -67,3 +67,16 @@ test("an objective needs a scenario, a horizon and an activity before anything i
   assert.equal((await post(whole)).statusCode, 401);
   await app.close();
 });
+
+test("a search for events needs a request, and never takes the twin's data from the caller", async () => {
+  const app = await server();
+  assert.ok(app.hasRoute({ method: "POST", url: "/v1/ontology/:env/analyst/events" }));
+  const post = (payload: object) => app.inject({ method: "POST", url: "/v1/ontology/mtl/analyst/events", payload });
+
+  assert.equal((await post({ request: "?" })).statusCode, 400);
+  assert.equal((await post({ request: "What measures were in force in Montréal?", scenarioId: "not-an-id" })).statusCode, 400);
+  // Well formed: it stops at the door, for want of a key. A run sent along is not part of a search and is dropped.
+  assert.equal((await post({ request: "What measures were in force in Montréal?" })).statusCode, 401);
+  assert.equal((await post({ request: "What measures were in force in Montréal?", scenarioId: null, run: { horizon: 60 } })).statusCode, 401);
+  await app.close();
+});

@@ -18,6 +18,7 @@ Chaque algorithme du produit a ici sa section : à quoi il sert, son schéma, se
 | [A7](#a7-grille-dhexagones-et-couches) | Grille d'hexagones et couches | `frontend/app/studio/simulation/hex/hex-grid.ts` |
 | [A8](#a8-options-testées-par-le-moteur) | Options testées par le moteur | `backend/src/services/analyst-options.ts` |
 | [A9](#a9-décision-enregistrée-et-suivi) | Décision enregistrée et suivi | `backend/src/services/decisions.ts` |
+| [A10](#a10-recherche-en-ligne-et-calendrier-dévénements) | Recherche en ligne validée et calendrier d'événements | `backend/src/services/analyst-events.ts` |
 | **B** | **Jumeau et moteur de simulation** | |
 | [B1](#b1-export-du-jumeau) | Export du jumeau vers le moteur | `backend/src/services/twin-export.ts` |
 | [B2](#b2-un-pas-du-moteur-dévénements) | Un pas du moteur d'événements | `simulation-service/app/events/dynamics.py` |
@@ -49,7 +50,7 @@ Chaque algorithme du produit a ici sa section : à quoi il sert, son schéma, se
 
 **But.** Répondre à une question sur le jumeau, le scénario ouvert ou le run à l'écran, en ne s'appuyant que sur ce que des outils ont renvoyé. Le modèle de langage choisit quoi lire et rédige ; il ne détient aucun fait, ne calcule pas et ne décide pas. Détail : [analyst.md](analyst.md).
 
-La même boucle sert deux sortes d'échanges. Ce qui les distingue est leur **clôture** : les consignes données au modèle, l'outil par lequel il livre, et la façon dont cette livraison est contrôlée. Une question se clôt par `give_answer` ; un objectif se clôt par `give_options`, après des tests (A8).
+La même boucle sert trois sortes d'échanges. Ce qui les distingue est leur **clôture** : les consignes données au modèle, l'outil par lequel il livre, et la façon dont cette livraison est contrôlée. Une question se clôt par `give_answer` ; un objectif se clôt par `give_options`, après des tests (A8) ; une recherche d'événements se clôt par `give_events`, après des recherches en ligne (A10).
 
 ```mermaid
 sequenceDiagram
@@ -58,17 +59,25 @@ sequenceDiagram
     participant M as Modèle Claude
     participant O as Outils
     participant C as Clôture
-    P->>B: question ou objectif, scénario ouvert, run à l'écran
+    P->>B: question, objectif ou demande, scénario ouvert, run à l'écran
     loop au plus 16 requêtes au modèle
         B->>M: consignes de la clôture, outils, échange jusqu'ici
-        alt le modèle appelle un outil
+        opt l'échange a la recherche en ligne (A10)
+            M-->>B: recherches faites par l'API dans la requête, pages rendues, passages cités
+            B-->>P: une étape par recherche et par passage cité
+        end
+        alt l'API a mis un long tour de recherche en pause
+            B->>M: le même tour, renvoyé tel quel
+        else le modèle répond en prose
+            B->>M: relance de la clôture, avec les passages relevés s'il y en a
+        else le modèle appelle un outil
             M-->>B: appel d'outil
             B->>O: exécute, entrée validée
             O-->>B: résultat ou refus motivé, plus un relevé complet pour l'écran
             B-->>P: étape s1, s2, ... affichée au fil de l'eau
             B->>M: résultat seul, avec son numéro d'étape
         else le modèle livre par l'outil de la clôture
-            M-->>B: give_answer ou give_options
+            M-->>B: give_answer, give_options ou give_events
             B->>C: la livraison a-t-elle la bonne forme
             alt forme refusée
                 C-->>B: raison, renvoyée au modèle sans compter de brouillon
@@ -90,15 +99,17 @@ sequenceDiagram
 **Règles.**
 - Modèle `claude-opus-5-5`, effort `medium`, choix d'outil libre. Une demande refusée par un garde-fou est rejouée sur le modèle de repli prévu par l'API (`fallbacks: "default"`).
 - Au plus 16 requêtes au modèle par échange, et 2 brouillons renvoyés pour chiffres introuvables.
-- La livraison passe par l'outil de la clôture, seul dans son tour. Une réponse en prose est redemandée une fois, puis abandonnée.
+- La livraison passe par l'outil de la clôture, seul dans son tour. Une réponse en prose est redemandée une fois, puis abandonnée. Deux fois quand l'échange cherche en ligne : la prose y est une étape, c'est d'elle que viennent les passages cités (A10).
+- La recherche en ligne n'est pas exécutée par la boucle mais par l'API, à l'intérieur d'une requête. La boucle lit dans chaque réponse ce que l'API a cherché, les pages rendues et les passages cités, et en fait des étapes numérotées comme les autres. Une page rendue ne porte aucun chiffre citable ; seul un passage en porte.
+- Un tour que l'API met en pause (`pause_turn`) lui est renvoyé tel quel, sans un mot de notre part : un message ajouté fermerait le tour. Une livraison demandée en même temps qu'une recherche est refusée une fois, le temps que la recherche tourne.
 - Un refus d'outil (nom inconnu, pas de run à l'écran) est une étape que le modèle lit ; il ne porte aucun chiffre citable. Une panne de notre côté n'est jamais déguisée en refus.
 - Un outil peut garder, à côté de son résultat, un relevé complet (`Recorded`) : il est affiché et journalisé, jamais envoyé au modèle. Aucune phrase ne peut donc s'appuyer dessus.
 - Un refus du modèle ne produit aucune réponse inventée.
 - Si la personne part, plus rien n'est demandé au modèle.
 - L'identifiant de l'échange est choisi avant de commencer et part avec la dernière ligne du flux : c'est lui qu'une décision nommera (A9).
 
-**Code.** `backend/src/services/analyst.ts` (`converse`, `Closing`, `askClosing`), `backend/src/routes/analyst.ts`, `backend/src/lib/ndjson.ts`, `frontend/app/studio/simulation/hex/AnalystPanel.tsx`.
-**Tests.** `analyst.unit.test.ts`, `analyst-options.unit.test.ts`, `routes/analyst.unit.test.ts`, `lib/ndjson.unit.test.ts`, `AnalystPanel.test.tsx`.
+**Code.** `backend/src/services/analyst.ts` (`converse`, `Closing`, `askClosing`), `analyst-web.ts` (`WebReader`), `backend/src/routes/analyst.ts`, `backend/src/lib/ndjson.ts`, `frontend/app/studio/simulation/hex/AnalystPanel.tsx`.
+**Tests.** `analyst.unit.test.ts`, `analyst-options.unit.test.ts`, `analyst-events.unit.test.ts`, `analyst-web.unit.test.ts`, `routes/analyst.unit.test.ts`, `lib/ndjson.unit.test.ts`, `AnalystPanel.test.tsx`.
 
 ## A2. Vérificateur de chiffres
 
@@ -129,6 +140,7 @@ flowchart TD
 - Un nom se reconnaît à ses mots distinctifs (« lakeshore », « santa cabrini »), sans casse ni accents. Un nom fait seulement de mots communs à tous (« Hôpital général de Montréal ») n'attribue rien.
 - **Ce que le contrôle prouve :** le chiffre existe dans un résultat d'outil cité, et pas dans la ligne d'un autre nom que celui à côté duquel il est écrit. **Ce qu'il ne prouve pas :** que la phrase autour est juste. C'est pourquoi chaque étape reste consultable sous la réponse.
 - Origine de la règle d'attribution : la première réponse donnée en production, tous chiffres « trouvés », donnait à Lachine le jour de LaSalle.
+- **Ce qui vient du web.** Le registre d'un passage cité contient les chiffres du passage et du titre de sa page, et les dates qu'ils écrivent en toutes lettres (« 31 décembre 2021 » vaut 2021-12-31) ; jamais les chiffres de l'adresse de la page. Un chiffre venu du web doit donc se trouver dans le passage cité. Les règles propres aux candidats (citation mot pour mot, date énoncée) sont en A10.
 
 **Code.** `backend/src/services/analyst-verify.ts`. **Tests.** `analyst-verify.unit.test.ts`.
 
@@ -351,6 +363,55 @@ flowchart TD
 
 **Code.** `backend/src/services/decisions.ts` (`decisionFromExchange`, `followUp`, `realityOf`), `backend/src/routes/decisions.ts`, migrations `060_analyst_exchange_kind.sql` et `061_decision.sql` ; `frontend/app/studio/simulation/hex/DecisionsTab.tsx`.
 **Tests.** `decisions.unit.test.ts`, `analyst-options.unit.test.ts` (d'une option testée à une décision), `routes/decisions.unit.test.ts`, `DecisionsTab.test.tsx`.
+
+## A10. Recherche en ligne et calendrier d'événements
+
+**But.** Dire ce qui se passait autour du réseau à une date donnée : un couvre-feu, une fermeture d'écoles, une canicule. L'analyste ne connaît que le jumeau ; ici il peut chercher en ligne, dans les seules sources que le projet autorise. Chaque trouvaille est un **candidat**, et un candidat n'est rien tant qu'une personne ne l'a pas accepté. C'est l'étape « Précédents » de la [boucle](decision-loop.md).
+
+```mermaid
+flowchart TD
+    A["Demande de la personne :<br/>un lieu, une période, un sujet"] --> B["Échange à part : aucun outil qui lit le jumeau,<br/>un scénario ou un jeu de données"]
+    B --> C["Recherche web de l'API Claude, appelée directement :<br/>domaines du projet seulement, 8 recherches au plus"]
+    C --> D["Étape web_search : la requête et les pages rendues<br/>adresse et titre ; le contenu reste chiffré"]
+    D --> E["Le modèle écrit ce que les pages disent,<br/>une phrase par événement : l'API y attache ses citations"]
+    E --> F["Étape web_passage par citation :<br/>adresse, titre, passage de 150 caractères au plus"]
+    F --> G["Le modèle reçoit les passages relevés<br/>avec leur numéro d'étape"]
+    G --> H["give_events : pour chaque candidat un titre, des dates,<br/>un lieu, une porte, ses passages, une citation"]
+    H --> I{"Chaque passage cité est-il<br/>une étape web_passage ?"}
+    I -->|"non"| G
+    I -->|"oui"| J{"Citation mot pour mot dans un passage, moins de 15 mots ?<br/>Dates énoncées par un passage ?<br/>Chiffres du titre dans les passages ?<br/>Page dans les sources autorisées ?"}
+    J -->|"non, et moins de deux brouillons renvoyés"| K["Brouillon renvoyé au modèle,<br/>avec ce qui manque et les passages"]
+    K --> H
+    J -->|"non, au dernier brouillon"| L["Ce qui manque est retiré : date laissée vide,<br/>citation remplacée par le début du passage,<br/>chiffre du titre retiré, candidat hors sources écarté"]
+    J -->|"oui"| M["Candidats à l'écran : niveau Published,<br/>puce WEB avec le lien, citation entre guillemets"]
+    L --> M
+    M --> N{"La personne"}
+    N -->|"Reject"| O["Rien n'est envoyé au serveur :<br/>le candidat n'entre dans aucune table"]
+    N -->|"Accept, dates corrigées au besoin"| P["Le navigateur envoie l'échange, le candidat et les dates"]
+    P --> Q["Le serveur recopie de son journal le titre, le lieu,<br/>la porte, le lien, la citation et les passages"]
+    Q --> R["Ligne de app.health_event :<br/>dates validées, dates proposées, qui, quand"]
+    R --> S["Couloir Context de la frise :<br/>placé d'après la date du jour 0 du scénario"]
+    R --> T["Outil list_events de l'analyste :<br/>événements, jours du run, source, citation"]
+    T --> U["Réponse de l'onglet Ask : puce WEB avec le lien,<br/>niveau Published, jamais « mesuré »"]
+```
+
+**Règles.**
+- **Rien du jumeau ne part dans une recherche.** L'échange n'a aucun outil de lecture et son contexte ne nomme ni le projet ni le scénario : le modèle n'a sous la main que la demande de la personne, la liste des sources et la date du jour. Une requête ne peut donc contenir qu'un lieu, une période et un sujet. Chaque requête est une étape, affichée et journalisée.
+- **Sources.** La liste de domaines est réglable par projet (`app.project_web_source`). Sans réglage, la liste de départ s'applique : inspq.qc.ca, quebec.ca, msss.gouv.qc.ca, donneesquebec.ca, canada.ca, who.int. Un domaine couvre ses sous-domaines ; ASCII seulement, vingt entrées au plus. L'API restreint la recherche à cette liste (`allowed_domains`), et le serveur vérifie à son tour que la page d'un candidat y est.
+- **Plafond.** Huit recherches par demande (`max_uses`). Elles sont appelées directement (`allowed_callers: ["direct"]`) et non depuis le bac à code de l'API : ainsi chaque recherche est une étape visible, et le plafond vaut pour tout l'échange, ce qu'il ne fait pas pour une recherche lancée depuis le bac à code.
+- **Le passage est l'unité de preuve.** L'API ne rend en clair que l'adresse et le titre des pages, et, sous chaque phrase que le modèle écrit d'après une page, le passage qui l'appuie (150 caractères au plus). C'est le seul texte d'une page web que le serveur détient. Une page seulement rendue par une recherche n'appuie rien.
+- **Citation.** Moins de quinze mots, recopiés mot pour mot d'un passage que le candidat cite (aux espaces et aux guillemets typographiques près). Une citation introuvable est remplacée, au dernier brouillon, par les premiers mots du passage, et l'écran le dit.
+- **Dates.** Une date tient quand un passage (ou le titre de sa page) énonce le jour et le mois, en français ou en anglais ; l'année doit y être écrite, ou être une année que les passages ou la demande nomment. « En janvier 2022 » n'énonce aucun jour. Une date introuvable est retirée et laissée vide : la personne lit la source et la saisit.
+- **Portes.** Chaque candidat dit par quelle porte il touche un réseau de santé : demande, capacité, accès, soins. C'est le modèle qui la choisit ; la personne la voit avant d'accepter.
+- **Niveau de preuve.** « Published », attribué par le programme. Un événement validé n'est jamais présenté comme mesuré par le jumeau ni comme le résultat d'un run.
+- **Validation.** Accepter envoie l'identifiant de l'échange, celui du candidat et les dates validées, rien d'autre : le serveur recopie le reste de l'échange journalisé (`app.analyst_exchange`, sorte `events`), comme pour une décision (A9). Un candidat que la recherche n'a pas livré ne s'accepte pas ; le même candidat ne s'accepte pas deux fois. Les dates proposées par l'analyste sont gardées à côté des dates validées.
+- **Refus.** Il n'existe aucune route pour refuser : un candidat refusé n'entre dans aucune table d'événements, et ni `list_events` ni la frise ne le voient. Il reste, comme tout ce que l'analyste a écrit, dans le journal de l'échange où il a été proposé, qu'aucun outil ne relit.
+- **Retrait.** Un événement accepté se retire du calendrier sur un clic confirmé, gardé au journal d'audit.
+- **Sur la frise.** Le couloir « Context » place chaque événement d'après la date que le scénario donne à son jour 0 (réglage « reality »). Sans cette date, rien n'est dessiné et le couloir dit pourquoi. Les événements y sont en contour, pas en aplat : ce ne sont pas des tampons, le moteur ne les reçoit jamais.
+- **Pour l'analyste.** `list_events` rend les événements validés, avec leurs jours sur l'axe du run quand le jour 0 a une date : c'est le programme qui compte les jours, pas le modèle. Le lien de chaque événement reste dans le relevé de l'étape, pour l'écran.
+
+**Code.** `backend/src/services/analyst-events.ts` (`eventsClosing`, `EVENTS_PROMPT`), `analyst-web.ts` (`webSearchTool`, `WebReader`, `statedDates`, `dateStated`, `quotedFrom`), `web-sources.ts`, `health-events.ts` (`eventFromExchange`), outil `listEvents` dans `analyst-tools.ts`, route `POST /v1/ontology/:env/analyst/events` dans `backend/src/routes/analyst.ts`, `backend/src/routes/health-events.ts`, migration `062_health_event.sql` ; `frontend/app/studio/simulation/hex/EventFinderTab.tsx`, `ContextLane.tsx`, `context-lane.ts`, `WebChip` dans `analyst-parts.tsx`.
+**Tests.** `analyst-events.unit.test.ts`, `analyst-web.unit.test.ts`, `web-sources.unit.test.ts`, `health-events.unit.test.ts`, `analyst-tools.unit.test.ts` (`list_events`), `routes/health-events.unit.test.ts`, `routes/analyst.unit.test.ts` ; `EventFinderTab.test.tsx`, `ContextLane.test.tsx`, `context-lane.test.ts`, `AnalystPanel.test.tsx`, `HexTwinView.test.tsx`.
 
 ---
 

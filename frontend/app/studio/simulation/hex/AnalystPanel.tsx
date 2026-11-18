@@ -12,12 +12,14 @@
  *
  * The analyst only reads. Nothing here changes the twin or the scenario.
  *
- * Three tabs, one panel. "Ask" answers a question. "Options" takes an
- * objective and has the engine test up to three ways of meeting it
- * (`OptionsTab.tsx`). "Decisions" lists what was retained, with what was
- * expected of it (`DecisionsTab.tsx`). In all three the analyst writes
- * nothing: an option enters a scenario, and a decision exists, on a person's
- * click.
+ * Four tabs, one panel. "Ask" answers a question. "Event finder" searches
+ * official web sources for what was happening around the network and proposes
+ * candidate events (`EventFinderTab.tsx`). "Options" takes an objective and
+ * has the engine test up to three ways of meeting it (`OptionsTab.tsx`).
+ * "Decisions" lists what was retained, with what was expected of it
+ * (`DecisionsTab.tsx`). In all four the analyst writes nothing: an event
+ * enters the calendar, an option enters a scenario, and a decision exists, on
+ * a person's click.
  */
 
 import { AlertTriangle, Loader2, MapPin, Send, ShieldCheck } from "lucide-react";
@@ -29,15 +31,18 @@ import { cn } from "@/lib/cn";
 import {
   askAnalyst,
   fetchAnalyst,
+  listedEvents,
   stepLabel,
   type AnalystEvent,
   type AnalystResult,
   type AnalystStep,
+  type HealthEvent,
   type ProposedOption,
   type RunDigest,
 } from "../../analyst-api";
-import { LABEL, Text, Trace } from "./analyst-parts";
+import { EvidenceBadge, LABEL, Text, Trace, WebChip } from "./analyst-parts";
 import DecisionsTab from "./DecisionsTab";
+import EventFinderTab from "./EventFinderTab";
 import OptionsTab from "./OptionsTab";
 
 type Looking = "reality" | "scenario";
@@ -52,12 +57,18 @@ function suggestions(hasScenario: boolean, hasRun: boolean, looking: Looking): s
   return ["Which catchment is least provided for?", "Which sites hold the most capacity?", "What is the twin missing for a run?"];
 }
 
-type Tab = "ask" | "options" | "decisions";
+type Tab = "ask" | "events" | "options" | "decisions";
+// In the order of the decision loop: the situation, what was happening around
+// it, the options, what was retained.
 const TABS: { key: Tab; label: string }[] = [
   { key: "ask", label: "Ask" },
+  { key: "events", label: "Event finder" },
   { key: "options", label: "Options" },
   { key: "decisions", label: "Decisions" },
 ];
+
+/** How many published events a paragraph shows a link for before it says how many more its steps hold. */
+const WEB_CHIPS = 6;
 
 export default function AnalystPanel({
   env,
@@ -69,6 +80,8 @@ export default function AnalystPanel({
   activity = "",
   scenarioKey = "",
   onAddOption,
+  period = null,
+  onEventAccepted,
 }: {
   env: string;
   scenario: { id: string; name: string } | null;
@@ -84,6 +97,10 @@ export default function AnalystPanel({
   scenarioKey?: string;
   /** Writes a tested option's stamps into the scenario, on a person's click. */
   onAddOption?: (option: ProposedOption) => Promise<void>;
+  /** The calendar dates the scenario runs over, when its day 0 has one. */
+  period?: { origin: string; horizon: number } | null;
+  /** A person accepted an event into the calendar. */
+  onEventAccepted?: (event: HealthEvent) => void;
 }) {
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [tab, setTab] = useState<Tab>("ask");
@@ -149,6 +166,15 @@ export default function AnalystPanel({
           <AskTab env={env} scenario={scenario} run={run} siteName={siteName} onFocusSite={onFocusSite} onOff={() => setConfigured(false)} />
         )}
       </div>
+      {opened.includes("events") ? (
+        <div role="tabpanel" id="analyst-panel-events" aria-labelledby="analyst-tab-events" hidden={tab !== "events"}>
+          {configured === false ? (
+            off
+          ) : (
+            <EventFinderTab env={env} scenario={scenario} period={period} onAccepted={(e) => onEventAccepted?.(e)} onOff={() => setConfigured(false)} />
+          )}
+        </div>
+      ) : null}
       {opened.includes("options") ? (
         <div role="tabpanel" id="analyst-panel-options" aria-labelledby="analyst-tab-options" hidden={tab !== "options"}>
           {configured === false ? (
@@ -393,7 +419,12 @@ function AskTab({
                 </p>
               )}
 
-              {answer.paragraphs.map((p, i) => (
+              {answer.paragraphs.map((p, i) => {
+                // What the paragraph took from the web: the validated events of the steps it cites.
+                const published = p.sources
+                  .flatMap((id) => listedEvents(stepById.get(id)))
+                  .filter((e, at, all) => all.findIndex((x) => x.id === e.id) === at);
+                return (
                 <div key={i} className="flex flex-col gap-1">
                   <p className="text-[12.5px] leading-relaxed text-ink">
                     <Text text={p.text} />
@@ -419,8 +450,21 @@ function AskTab({
                   ) : (
                     <span className="text-[10.5px] text-ink-faint">Cites no step: nothing in it was read from the twin.</span>
                   )}
+                  {published.length ? (
+                    <div className="flex flex-wrap items-center gap-1" aria-label="Published sources this paragraph rests on">
+                      <EvidenceBadge evidence="published" />
+                      {published.slice(0, WEB_CHIPS).map((e) => (
+                        <WebChip key={e.id} url={e.url} title={`${e.title} — “${e.passage}”`} />
+                      ))}
+                      {published.length > WEB_CHIPS ? (
+                        <span className="text-[10.5px] text-ink-faint">and {published.length - WEB_CHIPS} more in the steps cited</span>
+                      ) : null}
+                      <span className="text-[10.5px] text-ink-faint">From official sources, validated by a person. Not measured by the twin.</span>
+                    </div>
+                  ) : null}
                 </div>
-              ))}
+                );
+              })}
 
               {answer.assumptions.length ? (
                 <div className="flex flex-col gap-1">

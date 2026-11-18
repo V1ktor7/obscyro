@@ -10,15 +10,18 @@ import type { DbClient } from "../lib/db.js";
 import { AppError, BadRequest, NotFound } from "../lib/errors.js";
 import { streamLines } from "../lib/ndjson.js";
 import { ANALYST_MODEL, anthropicModel, ask, converse, type LoopEvent, type LoopResult } from "../services/analyst.js";
+import { eventSearch, eventsClosing } from "../services/analyst-events.js";
 import { OPTION_TOOLS, benchFor, optionsClosing } from "../services/analyst-options.js";
 import { ToolError, runDigestSchema, type AnalystContext, type WorldName } from "../services/analyst-tools.js";
 import { simServiceEngine } from "../services/scenario-run.js";
 import { Ledger } from "../services/analyst-verify.js";
 import { listDatasets, previewRows, type DatasetRow } from "../services/datasets.js";
+import { listHealthEvents, type HealthEvent } from "../services/health-events.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
 import { resolveEnvironment, type EnvironmentRow } from "../services/ontology.js";
 import { getOverlayScenario, listOverrides } from "../services/scenario-overrides.js";
 import { buildTwinExport, type SimExport } from "../services/twin-export.js";
+import { getWebSources } from "../services/web-sources.js";
 
 // ---------------------------------------------------------------------------
 // The analyst: a question about the twin, answered from what tools read, with
@@ -52,6 +55,7 @@ function contextFor(
 ): AnalystContext {
   const worlds = new Map<WorldName, Promise<SimExport>>();
   let datasets: Promise<DatasetRow[]> | null = null;
+  let events: Promise<HealthEvent[]> | null = null;
   const rows = new Map<string, Promise<Record<string, unknown>[]>>();
   return {
     environment: env.slug,
@@ -81,10 +85,14 @@ function contextFor(
       }
       return p;
     },
+    events() {
+      events ??= listHealthEvents(db, env.id);
+      return events;
+    },
   };
 }
 
-/** An exchange of either kind, as the journal keeps it. */
+/** An exchange of any kind, as the journal keeps it. */
 type Exchange = LoopResult<unknown, unknown>;
 
 /**
@@ -96,7 +104,7 @@ async function record(
   db: DbClient,
   row: {
     id: string;
-    kind: "ask" | "options";
+    kind: "ask" | "options" | "events";
     projectId: string;
     scenarioId: string | null;
     userId: string;
@@ -327,6 +335,85 @@ const analystRoutes: FastifyPluginAsync = async (fastify) => {
           userId,
           question: req.body.objective,
           looking: "scenario",
+          result,
+          failure,
+        }).catch((err) => req.log.error({ err }, "analyst exchange not recorded"));
+      });
+    },
+  );
+
+  app.post(
+    "/ontology/:env/analyst/events",
+    {
+      schema: {
+        summary: "Search official web sources for events around the network; get candidates to accept or reject",
+        description:
+          "The person names a place, a period and a kind of event (\"What measures were in force in Montréal between " +
+          "2021-12-01 and 2022-02-28?\"). The analyst searches the web through the Claude API's web search tool, " +
+          "restricted to the project's allowed sources (`/web-sources`) and to a fixed number of searches, and " +
+          "proposes candidate events. Streams like `/analyst/ask`: a `step` line for each search (its query and the " +
+          "pages returned) and for each passage a page was cited to, then `done` with the candidates — title, dates, " +
+          "place, the door by which the event reaches a health network (demand, capacity, access, care), the link, " +
+          "and a quotation of fewer than fifteen words — and `exchangeId`, which names this search when a candidate " +
+          "is accepted. The link and the passage come from the API's citations; the quotation is checked to be in a " +
+          "passage word for word; a date is kept only when a passage states it, and is left blank otherwise for the " +
+          "person to enter. In this exchange the model has no tool that reads the twin, a scenario or a dataset: " +
+          "nothing of the organisation's can go into a search. Nothing is written to the calendar: a candidate " +
+          "becomes an event only through `POST /health-events`.",
+        tags: ["analyst"],
+        params: z.object({ env: z.string().min(1) }),
+        body: z.object({
+          request: z.string().trim().min(3).max(2000),
+          /** The scenario open when the search was made, kept in the journal; the search itself never reads it. */
+          scenarioId: z.string().uuid().nullable().default(null),
+        }),
+        // No response schema: the 200 is a stream of lines, not one document.
+      },
+    },
+    async (req, reply) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      if (!client) {
+        throw new AppError(
+          "ANALYST_NOT_CONFIGURED",
+          "The analyst is not switched on for this server: it needs a Claude API key (ANTHROPIC_API_KEY).",
+          503,
+        );
+      }
+      const { domains } = await getWebSources(req.db, env.id);
+      if (domains.length === 0) {
+        throw BadRequest("NO_WEB_SOURCES", "This project allows no web source, so there is nowhere to search. Add at least one under Sources.");
+      }
+      let scenarioId: string | null = null;
+      if (req.body.scenarioId) {
+        const s = await getOverlayScenario(req.db, req.body.scenarioId);
+        if (s.projectId !== env.id) throw NotFound("SCENARIO_NOT_FOUND", "That scenario is not in this environment.");
+        scenarioId = s.id;
+      }
+      // A context with nothing open and no tool to read it with: the search
+      // cannot be handed the twin, the scenario or a dataset.
+      const ctx = contextFor(req.db, env, null, null);
+      const exchangeId = randomUUID();
+      const closing = eventsClosing({ request: req.body.request, domains, today: new Date().toISOString().slice(0, 10) });
+
+      return streamLines<Line<LoopEvent<unknown, unknown>>>(reply, async (write, gone) => {
+        let result: Exchange | null = null;
+        let failure: string | null = null;
+        try {
+          result = await converse(anthropicModel(client), ctx, closing, withExchange(write, exchangeId), [], gone, eventSearch(domains));
+        } catch (err) {
+          req.log.error({ err }, "analyst events failed");
+          failure = failureMessage(err);
+          write({ type: "failed", message: failure });
+        }
+        await record(req.db, {
+          id: exchangeId,
+          kind: "events",
+          projectId: env.id,
+          scenarioId,
+          userId,
+          question: req.body.request,
+          looking: "web",
           result,
           failure,
         }).catch((err) => req.log.error({ err }, "analyst exchange not recorded"));
