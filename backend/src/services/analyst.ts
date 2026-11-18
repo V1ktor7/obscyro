@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 
-import { READ_TOOLS, ToolError, type AnalystContext, type AnalystTool } from "./analyst-tools.js";
+import { READ_TOOLS, Recorded, ToolError, type AnalystContext, type AnalystTool } from "./analyst-tools.js";
 import { Ledger, checkAnswer, type AnswerDraft, type Finding } from "./analyst-verify.js";
 
 /**
@@ -21,6 +21,12 @@ import { Ledger, checkAnswer, type AnswerDraft, type Finding } from "./analyst-v
  * draft back when a figure cannot be traced, and the rule that an answer is
  * delivered through one call (`give_answer`) so it arrives as paragraphs with
  * their sources rather than as prose to be parsed.
+ *
+ * The loop does not know what is being asked for. How an exchange ends — what
+ * the model is told, the call it delivers through, how that delivery is
+ * checked — is a `Closing`. A question ends with `give_answer` (below); an
+ * objective ends with tested options (`analyst-options.ts`). Both are read,
+ * recorded and checked by the same code.
  */
 
 export const ANALYST_MODEL = "claude-opus-5-5";
@@ -39,6 +45,11 @@ export interface Step {
   /** The tool's result, or `{ error }` when it refused. */
   output: unknown;
   ms: number;
+  /**
+   * What the tool kept beside its result (`Recorded`): the same reading, whole.
+   * Shown and journalled, never sent to the model and never cited.
+   */
+  record?: unknown;
 }
 
 export interface AnalystAnswer {
@@ -56,17 +67,18 @@ export interface AnalystUsage {
   outputTokens: number;
 }
 
-export interface AnalystResult {
+/** What an exchange comes to: `A` is what was delivered, `F` a figure that had to be taken out of it. */
+export interface LoopResult<A, F> {
   /**
    * `answered`: an answer, checked. `declined`: the model or its safeguards
    * would not answer. `incomplete`: the loop ended without an answer.
    */
   status: "answered" | "declined" | "incomplete";
-  answer: AnalystAnswer | null;
+  answer: A | null;
   /** True when no figure had to be struck from the answer. */
   verified: boolean;
   /** Figures taken out because no step held them. */
-  struck: Finding[];
+  struck: F[];
   steps: Step[];
   /** Why there is no answer, when there is none. */
   message: string | null;
@@ -75,10 +87,50 @@ export interface AnalystResult {
   usage: AnalystUsage;
 }
 
-export type AnalystEvent =
+export type LoopEvent<A, F> =
   | { type: "status"; message: string }
   | { type: "step"; step: Step }
-  | { type: "done"; result: AnalystResult };
+  | { type: "done"; result: LoopResult<A, F> };
+
+export type AnalystResult = LoopResult<AnalystAnswer, Finding>;
+export type AnalystEvent = LoopEvent<AnalystAnswer, Finding>;
+
+/** What a delivery is checked against: every step so far, and what the person typed. */
+export interface Reading {
+  steps: Step[];
+  /** One ledger per step id: the figures its result holds. Empty for a refusal. */
+  ledgers: ReadonlyMap<string, Ledger>;
+  /** The figures the person wrote themselves, theirs to use. */
+  question: Ledger;
+}
+
+/**
+ * How an exchange ends.
+ *
+ * `D` is the delivery once its shape is accepted, `A` what reaches the person,
+ * `F` a figure that could not be traced.
+ */
+export interface Closing<D, A, F> {
+  system: string;
+  /** The one call the model delivers through. */
+  tool: Anthropic.Beta.BetaTool;
+  /** The first message: what the person is looking at, and what they asked. */
+  opening: string;
+  /** What the person typed, word for word. */
+  asked: string;
+  /** Sent once when the model answers in prose instead of through `tool`. */
+  nudge: string;
+  /** Why there is no answer, for each way the loop can end without one. */
+  words: { declined: string; tooMuch: string; noForm: string; tooLong: string };
+  /** Is this a delivery at all? `invalid` goes back to the model and costs no draft. */
+  parse(input: unknown, read: Reading): { data: D } | { invalid: string };
+  /**
+   * Check every figure. While drafts may still be sent back (`final` false), a
+   * figure that cannot be traced returns the draft; once they may not, it is
+   * struck and listed.
+   */
+  check(data: D, read: Reading, final: boolean): { sendBack: string } | { answer: A; struck: F[] };
+}
 
 type Message = Anthropic.Beta.BetaMessage;
 type MessageParam = Anthropic.Beta.BetaMessageParam;
@@ -262,7 +314,57 @@ function describeFindings(findings: Finding[], draft: AnswerDraft): string {
   );
 }
 
-export async function ask(
+type AnswerInput = z.infer<typeof answerInput>;
+
+/** How a question ends: `give_answer`, each paragraph checked against the steps it cites. */
+export function askClosing(ctx: AnalystContext, input: AskInput): Closing<AnswerInput, AnalystAnswer, Finding> {
+  const draftOf = (data: AnswerInput, read: Reading): AnswerDraft => {
+    const known = new Set(read.steps.map((s) => s.id));
+    return {
+      // A source that names no step is dropped rather than trusted.
+      paragraphs: data.paragraphs.map((p) => ({ text: p.text, sources: [...new Set(p.sources)].filter((s) => known.has(s)) })),
+      assumptions: data.assumptions,
+      limits: data.limits,
+    };
+  };
+  return {
+    system: SYSTEM_PROMPT,
+    tool: GIVE_ANSWER,
+    opening: `<context>\n${contextBlock(ctx, input)}\n</context>\n\n<question>\n${input.question}\n</question>`,
+    asked: input.question,
+    nudge: "Deliver the answer by calling give_answer, with each paragraph citing the steps it rests on. Do not answer in plain text.",
+    words: {
+      declined: "The model declined to answer this question. Nothing was made up in its place. Try asking about what the twin or the run shows.",
+      tooMuch: "The question needed more reading than one answer allows. Ask about one site, one catchment or one part of the run at a time.",
+      noForm: "The analyst did not deliver an answer in a form that could be checked, so none is shown.",
+      tooLong: "The analyst read for too long without reaching an answer. Ask a narrower question.",
+    },
+    parse(raw) {
+      const parsed = answerInput.safeParse(raw);
+      return parsed.success
+        ? { data: parsed.data }
+        : { invalid: `The answer was not delivered: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}.` };
+    },
+    check(data, read, final) {
+      const draft = draftOf(data, read);
+      const checked = checkAnswer(draft, read.ledgers, read.question);
+      if (checked.findings.length > 0 && !final) return { sendBack: describeFindings(checked.findings, draft) };
+      return {
+        answer: {
+          paragraphs: checked.struck.paragraphs,
+          assumptions: checked.struck.assumptions,
+          limits: checked.struck.limits,
+          followUps: data.follow_ups.slice(0, 3),
+          focusSites: data.focus_sites.slice(0, 5),
+        },
+        struck: checked.findings,
+      };
+    },
+  };
+}
+
+/** A question about the twin, a scenario or the run on screen, answered from what the tools read. */
+export function ask(
   model: AnalystModel,
   ctx: AnalystContext,
   input: AskInput,
@@ -271,30 +373,42 @@ export async function ask(
   /** Aborts when nobody is waiting for the answer any more. */
   gone?: AbortSignal,
 ): Promise<AnalystResult> {
+  return converse(model, ctx, askClosing(ctx, input), onEvent, tools, gone);
+}
+
+/**
+ * The exchange itself: the model reads through tools until it delivers through
+ * the closing's call, and what it delivers is checked before anyone sees it.
+ */
+export async function converse<D, A, F>(
+  model: AnalystModel,
+  ctx: AnalystContext,
+  closing: Closing<D, A, F>,
+  onEvent: (e: LoopEvent<A, F>) => void = () => {},
+  tools: AnalystTool[] = READ_TOOLS,
+  /** Aborts when nobody is waiting for the answer any more. */
+  gone?: AbortSignal,
+): Promise<LoopResult<A, F>> {
   const byName = new Map(tools.map((t) => [t.name, t]));
   const steps: Step[] = [];
   const ledgers = new Map<string, Ledger>();
   const question = new Ledger();
-  question.addText(input.question);
+  question.addText(closing.asked);
   ctx.known.absorb(question);
+  const read: Reading = { steps, ledgers, question };
 
   const usage: AnalystUsage = { requests: 0, inputTokens: 0, outputTokens: 0 };
   let servedBy = ANALYST_MODEL;
   let rejected = 0;
   let nudged = false;
 
-  const finish = (r: Pick<AnalystResult, "status" | "answer" | "verified" | "struck" | "message">): AnalystResult => {
-    const result: AnalystResult = { ...r, steps, model: servedBy, usage };
+  const finish = (r: Pick<LoopResult<A, F>, "status" | "answer" | "verified" | "struck" | "message">): LoopResult<A, F> => {
+    const result: LoopResult<A, F> = { ...r, steps, model: servedBy, usage };
     onEvent({ type: "done", result });
     return result;
   };
 
-  const messages: MessageParam[] = [
-    {
-      role: "user",
-      content: `<context>\n${contextBlock(ctx, input)}\n</context>\n\n<question>\n${input.question}\n</question>`,
-    },
-  ];
+  const messages: MessageParam[] = [{ role: "user", content: closing.opening }];
 
   for (let turn = 0; turn < MAX_REQUESTS; turn++) {
     if (gone?.aborted) {
@@ -315,10 +429,10 @@ export async function ask(
       // The system prompt and the tools never change, and each request repeats
       // everything before it: cached, a long exchange costs a fraction.
       cache_control: { type: "ephemeral" },
-      system: SYSTEM_PROMPT,
+      system: closing.system,
       tools: [
         ...tools.map((t): Anthropic.Beta.BetaTool => ({ name: t.name, description: t.description, input_schema: t.input_schema })),
-        GIVE_ANSWER,
+        closing.tool,
       ],
       messages,
     });
@@ -329,23 +443,10 @@ export async function ask(
     servedBy = res.model;
 
     if (res.stop_reason === "refusal") {
-      return finish({
-        status: "declined",
-        answer: null,
-        verified: false,
-        struck: [],
-        message:
-          "The model declined to answer this question. Nothing was made up in its place. Try asking about what the twin or the run shows.",
-      });
+      return finish({ status: "declined", answer: null, verified: false, struck: [], message: closing.words.declined });
     }
     if (res.stop_reason === "max_tokens" || res.stop_reason === "model_context_window_exceeded") {
-      return finish({
-        status: "incomplete",
-        answer: null,
-        verified: false,
-        struck: [],
-        message: "The question needed more reading than one answer allows. Ask about one site, one catchment or one part of the run at a time.",
-      });
+      return finish({ status: "incomplete", answer: null, verified: false, struck: [], message: closing.words.tooMuch });
     }
 
     messages.push({ role: "assistant", content: echo(res.content) });
@@ -356,70 +457,37 @@ export async function ask(
       // paragraph by paragraph: ask once for the answer in its proper form.
       if (!nudged) {
         nudged = true;
-        messages.push({
-          role: "user",
-          content: "Deliver the answer by calling give_answer, with each paragraph citing the steps it rests on. Do not answer in plain text.",
-        });
+        messages.push({ role: "user", content: closing.nudge });
         continue;
       }
-      return finish({
-        status: "incomplete",
-        answer: null,
-        verified: false,
-        struck: [],
-        message: "The analyst did not deliver an answer in a form that could be checked, so none is shown.",
-      });
+      return finish({ status: "incomplete", answer: null, verified: false, struck: [], message: closing.words.noForm });
     }
 
     const results: Anthropic.Beta.BetaToolResultBlockParam[] = [];
     for (const use of uses) {
-      if (use.name === GIVE_ANSWER.name) {
+      if (use.name === closing.tool.name) {
         if (uses.length > 1) {
           results.push({
             type: "tool_result",
             tool_use_id: use.id,
             is_error: true,
-            content: "give_answer must be called on its own, after you have read the results of your other calls. Read them, then call it again.",
+            content: `${closing.tool.name} must be called on its own, after you have read the results of your other calls. Read them, then call it again.`,
           });
           continue;
         }
-        const parsed = answerInput.safeParse(use.input);
-        if (!parsed.success) {
-          results.push({
-            type: "tool_result",
-            tool_use_id: use.id,
-            is_error: true,
-            content: `The answer was not delivered: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}.`,
-          });
+        const parsed = closing.parse(use.input, read);
+        if ("invalid" in parsed) {
+          results.push({ type: "tool_result", tool_use_id: use.id, is_error: true, content: parsed.invalid });
           continue;
         }
-        const known = new Set(steps.map((s) => s.id));
-        const draft: AnswerDraft = {
-          // A source that names no step is dropped rather than trusted.
-          paragraphs: parsed.data.paragraphs.map((p) => ({ text: p.text, sources: [...new Set(p.sources)].filter((s) => known.has(s)) })),
-          assumptions: parsed.data.assumptions,
-          limits: parsed.data.limits,
-        };
         onEvent({ type: "status", message: "Checking every figure against what was read" });
-        const checked = checkAnswer(draft, ledgers, question);
-        if (checked.findings.length > 0 && rejected < MAX_REJECTED_DRAFTS) {
+        const checked = closing.check(parsed.data, read, rejected >= MAX_REJECTED_DRAFTS);
+        if ("sendBack" in checked) {
           rejected += 1;
-          results.push({ type: "tool_result", tool_use_id: use.id, is_error: true, content: describeFindings(checked.findings, draft) });
+          results.push({ type: "tool_result", tool_use_id: use.id, is_error: true, content: checked.sendBack });
           continue;
         }
-        return finish({
-          status: "answered",
-          answer: {
-            paragraphs: checked.struck.paragraphs,
-            assumptions: checked.struck.assumptions,
-            limits: checked.struck.limits,
-            followUps: parsed.data.follow_ups.slice(0, 3),
-            focusSites: parsed.data.focus_sites.slice(0, 5),
-          },
-          verified: checked.findings.length === 0,
-          struck: checked.findings,
-          message: null,
-        });
+        return finish({ status: "answered", answer: checked.answer, verified: checked.struck.length === 0, struck: checked.struck, message: null });
       }
 
       const tool = byName.get(use.name);
@@ -427,6 +495,7 @@ export async function ask(
       const started = Date.now();
       let ok = true;
       let output: unknown;
+      let record: unknown;
       if (!tool) {
         ok = false;
         output = { error: `There is no tool called "${use.name}".` };
@@ -437,7 +506,13 @@ export async function ask(
           output = { error: `Invalid input: ${parsed.error.issues.map((i) => `${i.path.join(".") || "input"}: ${i.message}`).join("; ")}.` };
         } else {
           try {
+            if (tool.busy) onEvent({ type: "status", message: tool.busy });
             output = await tool.run(ctx, parsed.data);
+            // What the tool kept for the screen stays out of what the model reads.
+            if (output instanceof Recorded) {
+              record = output.record;
+              output = output.result;
+            }
           } catch (err) {
             // A tool's refusal is information for the model. Anything else is
             // a fault of ours and must not be dressed up as one.
@@ -447,7 +522,7 @@ export async function ask(
           }
         }
       }
-      const step: Step = { id, tool: use.name, input: use.input, ok, output, ms: Date.now() - started };
+      const step: Step = { id, tool: use.name, input: use.input, ok, output, ms: Date.now() - started, ...(record !== undefined ? { record } : {}) };
       steps.push(step);
       // A refusal carries no facts: only what a tool returned can be cited.
       const ledger = new Ledger();
@@ -465,11 +540,5 @@ export async function ask(
     messages.push({ role: "user", content: results });
   }
 
-  return finish({
-    status: "incomplete",
-    answer: null,
-    verified: false,
-    struck: [],
-    message: "The analyst read for too long without reaching an answer. Ask a narrower question.",
-  });
+  return finish({ status: "incomplete", answer: null, verified: false, struck: [], message: closing.words.tooLong });
 }

@@ -20,6 +20,8 @@ export interface AnalystStep {
   /** What the tool returned, or `{ error }` when it refused. */
   output: unknown;
   ms: number;
+  /** What the tool kept beside its result, whole: read by the screen, never by the model. */
+  record?: unknown;
 }
 
 export interface AnalystAnswer {
@@ -48,12 +50,15 @@ export interface AnalystResult {
   usage: { requests: number; inputTokens: number; outputTokens: number };
 }
 
-export type AnalystEvent =
+/** What a stream sends, whatever the exchange ends with. `exchangeId` names it in the journal. */
+export type StreamEvent<R> =
   | { type: "status"; message: string }
   | { type: "step"; step: AnalystStep }
-  | { type: "done"; result: AnalystResult }
+  | { type: "done"; result: R; exchangeId?: string }
   | { type: "failed"; message: string }
   | { type: "ping" };
+
+export type AnalystEvent = StreamEvent<AnalystResult>;
 
 /** The run on screen, summarised for the analyst. Mirrors the server's schema. */
 export interface RunDigestSiteBreak {
@@ -106,14 +111,14 @@ export async function fetchAnalyst(env: string): Promise<{ configured: boolean; 
 }
 
 /** Whole lines out of what has arrived so far; the rest waits for more. */
-export function parseLines(buffer: string): { events: AnalystEvent[]; remainder: string } {
+export function parseLines<E = AnalystEvent>(buffer: string): { events: E[]; remainder: string } {
   const lines = buffer.split("\n");
   const remainder = lines.pop() ?? "";
-  const events: AnalystEvent[] = [];
+  const events: E[] = [];
   for (const line of lines) {
     if (!line.trim()) continue;
     try {
-      events.push(JSON.parse(line) as AnalystEvent);
+      events.push(JSON.parse(line) as E);
     } catch {
       // A line that is not JSON is not ours; the answer does not depend on it.
     }
@@ -134,8 +139,13 @@ export async function askAnalyst(
   onEvent: (e: AnalystEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
+  return streamExchange<AnalystResult>(`/v1/ontology/${enc(env)}/analyst/ask`, body, onEvent, signal);
+}
+
+/** One exchange with the analyst, heard line by line. */
+async function streamExchange<R>(path: string, body: unknown, onEvent: (e: StreamEvent<R>) => void, signal?: AbortSignal): Promise<void> {
   const token = getStoredKey();
-  const res = await fetch(`${API_BASE}/v1/ontology/${enc(env)}/analyst/ask`, {
+  const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: {
       Accept: "application/x-ndjson",
@@ -157,12 +167,187 @@ export async function askAnalyst(
     const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
-    const { events, remainder } = parseLines(buffer);
+    const { events, remainder } = parseLines<StreamEvent<R>>(buffer);
     buffer = remainder;
     for (const e of events) if (e.type !== "ping") onEvent(e);
   }
   // A last line without its newline is still a line.
-  for (const e of parseLines(`${buffer}\n`).events) if (e.type !== "ping") onEvent(e);
+  for (const e of parseLines<StreamEvent<R>>(`${buffer}\n`).events) if (e.type !== "ping") onEvent(e);
+}
+
+// ---------------------------------------------------------------------------
+// Options: an objective, up to three options, each tested by the engine.
+// ---------------------------------------------------------------------------
+
+/** How sure anyone can be of something a run rests on. Assigned by the server, never by the model. */
+export type Evidence = "measured" | "published" | "assumption";
+
+export interface Basis {
+  element: string;
+  evidence: Evidence;
+  /** Where it comes from: the twin, the scenario, the option, or a rule of the engine. */
+  from: "twin" | "scenario" | "option" | "engine";
+}
+
+/** One column of the comparison: a run's figures, as the engine counted them. */
+export interface OptionFigures {
+  /** Highest occupancy across every site, as a share; null when the run reports none. */
+  peakOccupancy: number | null;
+  peakDay: number | null;
+  sitesWithQueue: number;
+  sitesWithActivity: number;
+  firstQueueDay: number | null;
+  waitingDays: number;
+  peakWaiting: number;
+  peakWaitingDay: number;
+  strandedWaitingDays: number | null;
+}
+
+/** A stamp as this page writes it: what "Add to scenario" creates. */
+export interface OptionStamp {
+  body: Record<string, unknown> & { kind: string };
+  start: number;
+  days: number;
+}
+
+export interface ProposedOption {
+  /** The step that tested it: what a decision is recorded against. */
+  step: string;
+  label: string;
+  stamps: OptionStamp[];
+  figures: OptionFigures;
+  sites: { id: string; name: string; capacity: number; asItIs: RunDigestSiteBreak; withOption: RunDigestSiteBreak }[];
+  basis: Basis[];
+  arrivals: Record<string, number[]>;
+  notes: string[];
+  mechanism: string;
+  notTested: string[];
+}
+
+export interface OptionsProposal {
+  objective: string;
+  horizon: number;
+  activity: string;
+  /** The scenario as it stands; null when nothing could be tested. */
+  asItIs: OptionFigures | null;
+  options: ProposedOption[];
+  /** What every column shares. */
+  basis: Basis[];
+  reading: { text: string; sources: string[] }[];
+  humanChoices: string[];
+  limits: string[];
+  focusSites: string[];
+}
+
+export interface OptionsFinding {
+  where: "reading" | "mechanism" | "not_tested" | "human_choice" | "limit";
+  option: string | null;
+  index: number;
+  figures: string[];
+}
+
+export interface OptionsResult {
+  status: "answered" | "declined" | "incomplete";
+  answer: OptionsProposal | null;
+  verified: boolean;
+  struck: OptionsFinding[];
+  steps: AnalystStep[];
+  message: string | null;
+  model: string;
+  usage: { requests: number; inputTokens: number; outputTokens: number };
+}
+
+export type OptionsEvent = StreamEvent<OptionsResult>;
+
+/**
+ * State an objective, and hear the options being tested.
+ *
+ * `horizon` and `activity` are the page's own: a test has to answer what Run
+ * would show with the option in the scenario.
+ */
+export async function proposeOptions(
+  env: string,
+  body: { objective: string; scenarioId: string; horizon: number; activity: string; run: RunDigest | null },
+  onEvent: (e: OptionsEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  return streamExchange<OptionsResult>(`/v1/ontology/${enc(env)}/analyst/options`, body, onEvent, signal);
+}
+
+// ---------------------------------------------------------------------------
+// Decisions: a tested option a person retained, and what they expected of it.
+// ---------------------------------------------------------------------------
+
+export interface DecisionExpected {
+  horizon: number;
+  activity: string;
+  asItIs: OptionFigures;
+  withOption: OptionFigures;
+  sites: ProposedOption["sites"];
+  arrivals: Record<string, number[]>;
+  basis: Basis[];
+  mechanism: string;
+  notTested: string[];
+  notes: string[];
+}
+
+export interface Decision {
+  id: string;
+  scenarioId: string | null;
+  scenarioName: string;
+  exchangeId: string | null;
+  optionStep: string;
+  objective: string;
+  optionLabel: string;
+  optionStamps: OptionStamp[];
+  expected: DecisionExpected;
+  sourceSteps: Pick<AnalystStep, "id" | "tool" | "input" | "output">[];
+  note: string | null;
+  decidedBy: string | null;
+  decidedAt: string;
+}
+
+/**
+ * Record that a tested option was retained.
+ *
+ * Only the exchange and the step are sent: the server copies the figures from
+ * its own journal of the test.
+ */
+export async function recordDecision(env: string, body: { exchangeId: string; step: string; note?: string | null }): Promise<Decision> {
+  return apiFetch(`/v1/ontology/${enc(env)}/decisions`, { method: "POST", body });
+}
+
+export async function listDecisions(env: string): Promise<{ decisions: Decision[] }> {
+  return apiFetch(`/v1/ontology/${enc(env)}/decisions`);
+}
+
+export interface FollowUpFit {
+  n: number;
+  meanAbsoluteError: number | null;
+  peakSimulated: { step: number; value: number } | null;
+  peakObserved: { step: number; value: number } | null;
+  peakOffset: number | null;
+  correlation: number | null;
+}
+
+export type FollowUp =
+  | { linked: false; reason: string }
+  | {
+      linked: true;
+      dataset: { id: string; name: string };
+      acuity: string;
+      origin: string;
+      horizon: number;
+      reported: number;
+      expected: number[] | null;
+      observed: (number | null)[];
+      fit: FollowUpFit | null;
+      totals: { days: number; expected: number; observed: number; gap: number } | null;
+    };
+
+/** A decision's expected arrivals beside the series its scenario is compared with. */
+export async function fetchFollowUp(env: string, decisionId: string): Promise<FollowUp> {
+  return apiFetch(`/v1/ontology/${enc(env)}/decisions/${enc(decisionId)}/follow-up`);
 }
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
@@ -200,6 +385,8 @@ export function stepLabel(step: Pick<AnalystStep, "tool" | "input" | "output" | 
       return `First rows of ${str(i.dataset)}`;
     case "read_series":
       return `Series ${str(i.value_column)} of ${str(i.dataset)}`;
+    case "test_option":
+      return `Option tested in the engine: ${str(i.label)}`;
     case "calculate": {
       const result = step.ok ? (step.output as { result?: number } | null)?.result : undefined;
       return `${str(i.label) || "Calculation"}: ${str(i.expression)}${result !== undefined ? ` = ${result}` : ""}`;

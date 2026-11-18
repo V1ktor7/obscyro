@@ -7,7 +7,7 @@ import { ApiError } from "@/lib/auth";
 
 import type { AnalystEvent, AnalystResult, AnalystStep } from "../../analyst-api";
 
-const api = vi.hoisted(() => ({ fetchAnalyst: vi.fn(), askAnalyst: vi.fn() }));
+const api = vi.hoisted(() => ({ fetchAnalyst: vi.fn(), askAnalyst: vi.fn(), listDecisions: vi.fn() }));
 vi.mock("../../analyst-api", async (orig) => ({ ...(await orig<typeof import("../../analyst-api")>()), ...api }));
 
 import AnalystPanel from "./AnalystPanel";
@@ -174,5 +174,37 @@ describe("the analyst panel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Which catchment is least provided for?" }));
     await waitFor(() => expect(api.askAnalyst).toHaveBeenCalled());
     expect(api.askAnalyst.mock.calls[0]![1]).toMatchObject({ scenarioId: null, looking: "reality" });
+  });
+});
+
+describe("the analyst's three tabs", () => {
+  const tabs = () => screen.getAllByRole("tab").map((t) => [t.textContent, t.getAttribute("aria-selected")]);
+
+  it("opens on Ask, and keeps what was asked when another tab is visited", async () => {
+    answering([{ type: "done", result: result() }]);
+    panel();
+    expect(tabs()).toEqual([["Ask", "true"], ["Options", "false"], ["Decisions", "false"]]);
+    fireEvent.click(await screen.findByRole("button", { name: "What does this scenario assume?" }));
+    await screen.findByText(/West has 1.04 beds/);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Options" }));
+    expect(tabs()).toEqual([["Ask", "false"], ["Options", "true"], ["Decisions", "false"]]);
+    expect(screen.getByLabelText("Objective for the options")).toBeTruthy();
+    expect(screen.getByText(/Tested on “Omicron” over 60 days/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Ask" }));
+    expect(screen.getByText(/West has 1.04 beds/)).toBeTruthy();
+  });
+
+  it("offers nothing to test when the server has no key, but still lists decisions", async () => {
+    api.fetchAnalyst.mockResolvedValue({ configured: false, model: "claude-opus-5-5" });
+    api.listDecisions.mockResolvedValue({ decisions: [] });
+    panel();
+    await screen.findByText("The analyst is not switched on for this server.");
+    fireEvent.click(screen.getByRole("tab", { name: "Options" }));
+    expect(screen.queryByLabelText("Objective for the options")).toBeNull();
+    // A decision is a record, not an answer: it reads without the model.
+    fireEvent.click(screen.getByRole("tab", { name: "Decisions" }));
+    expect(await screen.findByText("No decision recorded in this project yet.")).toBeTruthy();
   });
 });

@@ -34,7 +34,7 @@ const scenarios = vi.hoisted(() => ({
   createOverlayScenario: vi.fn(),
   updateOverlayScenario: vi.fn(),
 }));
-const analyst = vi.hoisted(() => ({ fetchAnalyst: vi.fn(), askAnalyst: vi.fn() }));
+const analyst = vi.hoisted(() => ({ fetchAnalyst: vi.fn(), askAnalyst: vi.fn(), proposeOptions: vi.fn() }));
 
 vi.mock("@/lib/platform-api", async (orig) => ({ ...(await orig<typeof import("@/lib/platform-api")>()), ...api }));
 vi.mock("../../scenarios-api", () => scenarios);
@@ -310,5 +310,67 @@ describe("the guide on a first visit", () => {
     fireEvent.click(fold());
     expect(await screen.findByRole("button", { name: "Run the scenario" })).toBeTruthy();
     window.localStorage.clear();
+  });
+});
+
+describe("an option the analyst had tested", () => {
+  const OPTION = {
+    step: "s1",
+    label: "Open 30 beds at Hôpital Beta from day 3",
+    stamps: [{ body: { kind: "capacity", facility: "f:b", activity: "lit", amount: 30 }, start: 3, days: 57 }],
+    figures: { peakOccupancy: 0.9, peakDay: 4, sitesWithQueue: 0, sitesWithActivity: 2, firstQueueDay: null, waitingDays: 0, peakWaiting: 0, peakWaitingDay: 0, strandedWaitingDays: null },
+    sites: [],
+    basis: [],
+    arrivals: {},
+    notes: [],
+    mechanism: "Beds where the east's patients go.",
+    notTested: [],
+  };
+
+  it("is tested over the page's own days and activity, and enters the scenario only on a click", async () => {
+    analyst.proposeOptions.mockImplementation(async (_env: string, _body: unknown, onEvent: (e: unknown) => void) => {
+      onEvent({
+        type: "done",
+        exchangeId: "ex-1",
+        result: {
+          status: "answered", verified: true, struck: [], steps: [], message: null, model: "claude-opus-5-5",
+          usage: { requests: 3, inputTokens: 900, outputTokens: 100 },
+          answer: {
+            objective: "Nobody should wait at Hôpital Beta.", horizon: 60, activity: "lit",
+            asItIs: { ...OPTION.figures, sitesWithQueue: 1, firstQueueDay: 5, waitingDays: 60 },
+            options: [OPTION], basis: [], reading: [{ text: "With the beds nobody waits.", sources: [] }], humanChoices: [], limits: [], focusSites: [],
+          },
+        },
+      });
+    });
+    await opened();
+    fireEvent.click(screen.getByRole("button", { name: /^Analyst/ }));
+    fireEvent.click(await screen.findByRole("tab", { name: "Options" }));
+    fireEvent.change(screen.getByLabelText("Objective for the options"), { target: { value: "Nobody should wait at Hôpital Beta." } });
+    fireEvent.click(screen.getByRole("button", { name: "Test options" }));
+
+    const card = await screen.findByRole("region", { name: /^Option A: Open 30 beds/ });
+    // The test answers what Run would show: the same scenario, days and activity.
+    expect(analyst.proposeOptions.mock.calls[0]![1]).toMatchObject({ scenarioId: "sc1", horizon: 60, activity: "lit", run: null });
+    // Testing wrote nothing.
+    expect(scenarios.addScenarioOverride).not.toHaveBeenCalled();
+
+    fireEvent.click(within(card).getByRole("button", { name: "Add to scenario" }));
+    await within(card).findByRole("button", { name: "Added to the scenario" });
+    // Written as a tap on the map would write it: a stamp, on its day, to the end of the run.
+    expect(scenarios.addScenarioOverride).toHaveBeenCalledTimes(1);
+    const [scenarioId, body] = scenarios.addScenarioOverride.mock.calls[0]!;
+    expect(scenarioId).toBe("sc1");
+    expect(body).toMatchObject({
+      targetType: "param",
+      op: "set_param",
+      effectiveOffsetHours: 72,
+      durationHours: 57 * 24,
+      payload: { value: { kind: "capacity", facility: "f:b", activity: "lit", amount: 30 } },
+    });
+    expect(body.payload.key).toMatch(/^stamp:/);
+    expect(body.note).toBe("+30 lit at Hôpital Beta · from the tested option “Open 30 beds at Hôpital Beta from day 3”");
+    // The recipe is read again, so the stamp is there to see and to run.
+    expect(scenarios.listScenarioOverrides.mock.calls.length).toBeGreaterThan(1);
   });
 });

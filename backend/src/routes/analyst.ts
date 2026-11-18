@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import Anthropic from "@anthropic-ai/sdk";
 import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -5,10 +7,12 @@ import { z } from "zod";
 
 import { config } from "../lib/config.js";
 import type { DbClient } from "../lib/db.js";
-import { AppError, NotFound } from "../lib/errors.js";
+import { AppError, BadRequest, NotFound } from "../lib/errors.js";
 import { streamLines } from "../lib/ndjson.js";
-import { ANALYST_MODEL, anthropicModel, ask, type AnalystEvent, type AnalystResult } from "../services/analyst.js";
+import { ANALYST_MODEL, anthropicModel, ask, converse, type LoopEvent, type LoopResult } from "../services/analyst.js";
+import { OPTION_TOOLS, benchFor, optionsClosing } from "../services/analyst-options.js";
 import { ToolError, runDigestSchema, type AnalystContext, type WorldName } from "../services/analyst-tools.js";
+import { simServiceEngine } from "../services/scenario-run.js";
 import { Ledger } from "../services/analyst-verify.js";
 import { listDatasets, previewRows, type DatasetRow } from "../services/datasets.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
@@ -80,16 +84,36 @@ function contextFor(
   };
 }
 
+/** An exchange of either kind, as the journal keeps it. */
+type Exchange = LoopResult<unknown, unknown>;
+
+/**
+ * One line of the journal. The id is chosen before the exchange starts, so the
+ * person's screen can name the exchange (to record a decision from it) without
+ * waiting for the insert.
+ */
 async function record(
   db: DbClient,
-  row: { projectId: string; scenarioId: string | null; userId: string; question: string; looking: string; result: AnalystResult | null; failure: string | null },
+  row: {
+    id: string;
+    kind: "ask" | "options";
+    projectId: string;
+    scenarioId: string | null;
+    userId: string;
+    question: string;
+    looking: string;
+    result: Exchange | null;
+    failure: string | null;
+  },
 ): Promise<void> {
   const r = row.result;
   await db.query(
     `INSERT INTO app.analyst_exchange
-            (project_id, scenario_id, asked_by, question, looking, status, answer, steps, struck, verified, message, model, usage)
-     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb, $10, $11, $12, $13::jsonb)`,
+            (id, kind, project_id, scenario_id, asked_by, question, looking, status, answer, steps, struck, verified, message, model, usage)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11::jsonb, $12, $13, $14, $15::jsonb)`,
     [
+      row.id,
+      row.kind,
       row.projectId,
       row.scenarioId,
       row.userId,
@@ -115,8 +139,22 @@ function failureMessage(err: unknown): string {
   if (err instanceof Anthropic.RateLimitError) return "The analyst is being asked too much at once. Try again in a minute.";
   if (err instanceof Anthropic.APIConnectionError) return "The analyst's model could not be reached. Try again.";
   if (err instanceof Anthropic.APIError) return `The analyst's model returned an error (${err.status ?? "no status"}). Try again.`;
+  // An option is only an option once the engine ran it: without the engine there is nothing to show.
+  if (err instanceof AppError && err.code === "SIM_UNAVAILABLE") {
+    return "The simulation service could not be reached, so no option could be tested. Nothing was made up in its place. Try again in a moment.";
+  }
+  if (err instanceof AppError && err.code === "SIM_TIMEOUT") {
+    return "The engine took too long to run an option and was cut off, so the test is not shown. Try a shorter run.";
+  }
   return "The analyst stopped on an error of ours before answering. Nothing was made up in its place.";
 }
+
+/** The journal's id travels with the last line, so a decision can name the exchange it rests on. */
+type Line<E> = E | { type: "failed"; message: string };
+const withExchange =
+  <E extends { type: string }>(write: (line: Line<E>) => void, exchangeId: string) =>
+  (e: E) =>
+    write(e.type === "done" ? { ...e, exchangeId } : e);
 
 const analystRoutes: FastifyPluginAsync = async (fastify) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
@@ -182,12 +220,13 @@ const analystRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const looking = scenario ? req.body.looking : "reality";
       const ctx = contextFor(req.db, env, scenario, req.body.run);
+      const exchangeId = randomUUID();
 
-      return streamLines<AnalystEvent | { type: "failed"; message: string }>(reply, async (write, gone) => {
-        let result: AnalystResult | null = null;
+      return streamLines<Line<LoopEvent<unknown, unknown>>>(reply, async (write, gone) => {
+        let result: Exchange | null = null;
         let failure: string | null = null;
         try {
-          result = await ask(anthropicModel(client), ctx, { question: req.body.question, looking }, write, undefined, gone);
+          result = await ask(anthropicModel(client), ctx, { question: req.body.question, looking }, withExchange(write, exchangeId), undefined, gone);
         } catch (err) {
           req.log.error({ err }, "analyst failed");
           failure = failureMessage(err);
@@ -197,11 +236,97 @@ const analystRoutes: FastifyPluginAsync = async (fastify) => {
         // the record must not slow the person down, and failing to write it
         // must not look like no answer.
         await record(req.db, {
+          id: exchangeId,
+          kind: "ask",
           projectId: env.id,
           scenarioId: scenario?.id ?? null,
           userId,
           question: req.body.question,
           looking,
+          result,
+          failure,
+        }).catch((err) => req.log.error({ err }, "analyst exchange not recorded"));
+      });
+    },
+  );
+
+  app.post(
+    "/ontology/:env/analyst/options",
+    {
+      schema: {
+        summary: "State an objective; get up to three options, each tested by the engine",
+        description:
+          "The person states what should change on the open scenario (\"nobody waits at this site\", \"the fewest " +
+          "patient-days waiting with at most 100 beds added\"). The analyst reads the twin and the scenario, proposes " +
+          "up to three options and runs each one through the simulation engine on the server, the way the Scenarios " +
+          "page runs a scenario (`test_option`). Streams like `/analyst/ask`: `status` and `step` lines as the work " +
+          "happens, then `done` with the proposal — the scenario as it is beside each tested option (peak occupancy, " +
+          "sites with a queue, patient-days waiting, first day of queue), what each rests on with its level of " +
+          "evidence (measured, published, assumption), a one-sentence mechanism, what the test does not say, and the " +
+          "trade-offs left to the person — and `exchangeId`, which names this exchange when a decision is recorded " +
+          "from it. The figures of the comparison come from the runs, never from the model's text, and the model's " +
+          "text is checked against the steps like any answer. Nothing is written: the scenario is unchanged until " +
+          "the person adds an option themselves. A run is the result of a model under stated conditions, not a forecast.",
+        tags: ["analyst"],
+        params: z.object({ env: z.string().min(1) }),
+        body: z.object({
+          objective: z.string().trim().min(3).max(2000),
+          /** Options are tested on a scenario: there is nothing to add them to otherwise. */
+          scenarioId: z.string().uuid(),
+          /** The days the page runs over, and the activity it reads: a test must answer what Run would show. */
+          horizon: z.number().int().min(1).max(365),
+          activity: z.string().trim().min(1).max(120),
+          /** The run on screen, as the page summarised it. */
+          run: runDigestSchema.nullable().default(null),
+        }),
+        // No response schema: the 200 is a stream of lines, not one document.
+      },
+    },
+    async (req, reply) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      if (!client) {
+        throw new AppError(
+          "ANALYST_NOT_CONFIGURED",
+          "The analyst is not switched on for this server: it needs a Claude API key (ANTHROPIC_API_KEY).",
+          503,
+        );
+      }
+      if (!config.simServiceUrl) {
+        throw BadRequest("SIM_UNAVAILABLE", "Options are tested by the simulation service, and this server is not connected to one (SIM_SERVICE_URL).");
+      }
+      const s = await getOverlayScenario(req.db, req.body.scenarioId);
+      if (s.projectId !== env.id) throw NotFound("SCENARIO_NOT_FOUND", "That scenario is not in this environment.");
+      const scenario = { id: s.id, name: s.name, description: s.description, overrides: await listOverrides(req.db, s.id) };
+      const ctx = contextFor(req.db, env, scenario, req.body.run);
+      ctx.bench = benchFor({
+        engine: simServiceEngine,
+        scenario,
+        horizon: req.body.horizon,
+        activity: req.body.activity,
+        world: (name) => ctx.world(name),
+      });
+      const exchangeId = randomUUID();
+      const input = { objective: req.body.objective };
+
+      return streamLines<Line<LoopEvent<unknown, unknown>>>(reply, async (write, gone) => {
+        let result: Exchange | null = null;
+        let failure: string | null = null;
+        try {
+          result = await converse(anthropicModel(client), ctx, optionsClosing(ctx, input), withExchange(write, exchangeId), OPTION_TOOLS, gone);
+        } catch (err) {
+          req.log.error({ err }, "analyst options failed");
+          failure = failureMessage(err);
+          write({ type: "failed", message: failure });
+        }
+        await record(req.db, {
+          id: exchangeId,
+          kind: "options",
+          projectId: env.id,
+          scenarioId: scenario.id,
+          userId,
+          question: req.body.objective,
+          looking: "scenario",
           result,
           failure,
         }).catch((err) => req.log.error({ err }, "analyst exchange not recorded"));

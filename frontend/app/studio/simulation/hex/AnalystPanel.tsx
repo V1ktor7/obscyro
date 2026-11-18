@@ -11,9 +11,16 @@
  * is, so nobody reads a sentence that quietly lost its number.
  *
  * The analyst only reads. Nothing here changes the twin or the scenario.
+ *
+ * Three tabs, one panel. "Ask" answers a question. "Options" takes an
+ * objective and has the engine test up to three ways of meeting it
+ * (`OptionsTab.tsx`). "Decisions" lists what was retained, with what was
+ * expected of it (`DecisionsTab.tsx`). In all three the analyst writes
+ * nothing: an option enters a scenario, and a decision exists, on a person's
+ * click.
  */
 
-import { AlertTriangle, Check, ChevronRight, Loader2, MapPin, Send, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Loader2, MapPin, Send, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { ApiError } from "@/lib/auth";
@@ -26,13 +33,12 @@ import {
   type AnalystEvent,
   type AnalystResult,
   type AnalystStep,
+  type ProposedOption,
   type RunDigest,
 } from "../../analyst-api";
-
-const LABEL = "text-[10px] font-semibold uppercase tracking-wide text-ink-faint";
-
-/** What replaces a figure the server could not trace. Must match the server's. */
-const STRUCK = "[unverified]";
+import { LABEL, Text, Trace } from "./analyst-parts";
+import DecisionsTab from "./DecisionsTab";
+import OptionsTab from "./OptionsTab";
 
 type Looking = "reality" | "scenario";
 
@@ -46,61 +52,12 @@ function suggestions(hasScenario: boolean, hasRun: boolean, looking: Looking): s
   return ["Which catchment is least provided for?", "Which sites hold the most capacity?", "What is the twin missing for a run?"];
 }
 
-/** A paragraph, with the places a figure was taken out made visible. */
-function Text({ text }: { text: string }) {
-  const parts = text.split(STRUCK);
-  return (
-    <>
-      {parts.map((p, i) => (
-        <span key={i}>
-          {p}
-          {i < parts.length - 1 ? (
-            <span
-              title="A figure stood here that was not in any step this paragraph cites. It was removed."
-              className="mx-0.5 rounded bg-warn-soft px-1 text-[11px] font-semibold text-warn-ink"
-            >
-              figure removed
-            </span>
-          ) : null}
-        </span>
-      ))}
-    </>
-  );
-}
-
-function StepRow({ step, open, onToggle }: { step: AnalystStep; open: boolean; onToggle: () => void }) {
-  return (
-    <li className={cn("rounded-md border", open ? "border-brand bg-white" : "border-line-soft bg-canvas-raised")}>
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={onToggle}
-        className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2 px-2 py-1.5 text-left"
-      >
-        <span className={cn("mt-px rounded px-1 font-mono text-[10.5px] font-bold", step.ok ? "bg-brand-soft text-brand-deep" : "bg-warn-soft text-warn-ink")}>
-          {step.id}
-        </span>
-        <span className="min-w-0 break-words text-[11.5px] text-ink-body">
-          {stepLabel(step)}
-          {step.ok ? null : <span className="text-warn-ink"> · refused</span>}
-        </span>
-        <ChevronRight className={cn("mt-0.5 h-3 w-3 shrink-0 text-ink-muted transition-transform", open && "rotate-90")} aria-hidden="true" />
-      </button>
-      {open ? (
-        <div className="flex flex-col gap-1.5 border-t border-line-soft px-2 py-2">
-          <span className={LABEL}>Asked · {step.tool}</span>
-          <pre className="max-h-28 overflow-auto whitespace-pre-wrap break-all rounded bg-canvas p-1.5 font-mono text-[10.5px] text-ink">
-            {JSON.stringify(step.input, null, 2)}
-          </pre>
-          <span className={LABEL}>{step.ok ? "Returned" : "Refused, because"}</span>
-          <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded bg-canvas p-1.5 font-mono text-[10.5px] text-ink">
-            {JSON.stringify(step.output, null, 2)}
-          </pre>
-        </div>
-      ) : null}
-    </li>
-  );
-}
+type Tab = "ask" | "options" | "decisions";
+const TABS: { key: Tab; label: string }[] = [
+  { key: "ask", label: "Ask" },
+  { key: "options", label: "Options" },
+  { key: "decisions", label: "Decisions" },
+];
 
 export default function AnalystPanel({
   env,
@@ -108,6 +65,10 @@ export default function AnalystPanel({
   run,
   siteName,
   onFocusSite,
+  horizon = 60,
+  activity = "",
+  scenarioKey = "",
+  onAddOption,
 }: {
   env: string;
   scenario: { id: string; name: string } | null;
@@ -116,18 +77,20 @@ export default function AnalystPanel({
   /** A site's name by id, or null when the map does not show it. */
   siteName: (id: string) => string | null;
   onFocusSite: (id: string) => void;
+  /** The days the page runs over and the activity it reads: what an option is tested on. */
+  horizon?: number;
+  activity?: string;
+  /** Changes whenever the scenario's stamps do. */
+  scenarioKey?: string;
+  /** Writes a tested option's stamps into the scenario, on a person's click. */
+  onAddOption?: (option: ProposedOption) => Promise<void>;
 }) {
   const [configured, setConfigured] = useState<boolean | null>(null);
-  const [looking, setLooking] = useState<Looking>(scenario ? "scenario" : "reality");
-  const [draft, setDraft] = useState("");
-  const [asked, setAsked] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
-  const [steps, setSteps] = useState<AnalystStep[]>([]);
-  const [result, setResult] = useState<AnalystResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [openStep, setOpenStep] = useState<string | null>(null);
-  const [traceOpen, setTraceOpen] = useState(false);
-  const abort = useRef<AbortController | null>(null);
+  const [tab, setTab] = useState<Tab>("ask");
+  // A tab is built the first time it is opened and kept after, so what was
+  // asked or tested in it is still there on the way back.
+  const [opened, setOpened] = useState<Tab[]>(["ask"]);
+  const [decisionsVersion, setDecisionsVersion] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -140,6 +103,109 @@ export default function AnalystPanel({
       live = false;
     };
   }, [env]);
+
+  function show(next: Tab) {
+    setTab(next);
+    setOpened((o) => (o.includes(next) ? o : [...o, next]));
+  }
+
+  const off = (
+    <div className="flex flex-col gap-2 p-3">
+      <p className="text-[12.5px] font-semibold text-ink">The analyst is not switched on for this server.</p>
+      <p className="text-[12px] text-ink-body">
+        It answers questions about the twin by reading it through the Claude API, and the API service has no key for
+        it yet. An administrator has to set <code className="rounded bg-canvas px-1 font-mono text-[11px]">ANTHROPIC_API_KEY</code>{" "}
+        on the API service, then reload this page.
+      </p>
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col">
+      <div role="tablist" aria-label="Analyst" className="flex border-b border-line-soft px-2 pt-1.5">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            id={`analyst-tab-${t.key}`}
+            aria-selected={tab === t.key}
+            aria-controls={`analyst-panel-${t.key}`}
+            onClick={() => show(t.key)}
+            className={cn(
+              "-mb-px border-b-2 px-2.5 py-1 text-[12px]",
+              tab === t.key ? "border-brand font-semibold text-brand-deep" : "border-transparent text-ink-muted hover:text-ink-body",
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div role="tabpanel" id="analyst-panel-ask" aria-labelledby="analyst-tab-ask" hidden={tab !== "ask"}>
+        {configured === false ? (
+          off
+        ) : (
+          <AskTab env={env} scenario={scenario} run={run} siteName={siteName} onFocusSite={onFocusSite} onOff={() => setConfigured(false)} />
+        )}
+      </div>
+      {opened.includes("options") ? (
+        <div role="tabpanel" id="analyst-panel-options" aria-labelledby="analyst-tab-options" hidden={tab !== "options"}>
+          {configured === false ? (
+            off
+          ) : (
+            <OptionsTab
+              env={env}
+              scenario={scenario}
+              run={run}
+              horizon={horizon}
+              activity={activity}
+              scenarioKey={scenarioKey}
+              siteName={siteName}
+              onFocusSite={onFocusSite}
+              onAdd={onAddOption ?? (() => Promise.reject(new Error("This page cannot add an option to a scenario.")))}
+              onRecorded={() => setDecisionsVersion((v) => v + 1)}
+              onOff={() => setConfigured(false)}
+            />
+          )}
+        </div>
+      ) : null}
+      {opened.includes("decisions") ? (
+        // Readable without the model: a decision is a record, not an answer.
+        <div role="tabpanel" id="analyst-panel-decisions" aria-labelledby="analyst-tab-decisions" hidden={tab !== "decisions"}>
+          <DecisionsTab env={env} scenario={scenario} refresh={decisionsVersion} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AskTab({
+  env,
+  scenario,
+  run,
+  siteName,
+  onFocusSite,
+  onOff,
+}: {
+  env: string;
+  scenario: { id: string; name: string } | null;
+  run: RunDigest | null;
+  siteName: (id: string) => string | null;
+  onFocusSite: (id: string) => void;
+  /** The server said the analyst is switched off. */
+  onOff: () => void;
+}) {
+  const [looking, setLooking] = useState<Looking>(scenario ? "scenario" : "reality");
+  const [draft, setDraft] = useState("");
+  const [asked, setAsked] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+  const [steps, setSteps] = useState<AnalystStep[]>([]);
+  const [result, setResult] = useState<AnalystResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [openStep, setOpenStep] = useState<string | null>(null);
+  const [traceOpen, setTraceOpen] = useState(false);
+  const abort = useRef<AbortController | null>(null);
 
   // Without a scenario there is one world; with one, start on what is open.
   useEffect(() => {
@@ -178,7 +244,7 @@ export default function AnalystPanel({
       await askAnalyst(env, { question: q, scenarioId: scenario?.id ?? null, looking: scenario ? looking : "reality", run }, onEvent, controller.signal);
     } catch (err) {
       if ((err as Error).name === "AbortError") return;
-      if (err instanceof ApiError && err.code === "ANALYST_NOT_CONFIGURED") setConfigured(false);
+      if (err instanceof ApiError && err.code === "ANALYST_NOT_CONFIGURED") onOff();
       setError(err instanceof ApiError ? err.message : "The analyst could not be reached. Check the connection and ask again.");
     } finally {
       if (abort.current === controller) {
@@ -204,19 +270,6 @@ export default function AnalystPanel({
   const removed = result ? result.struck.reduce((n, f) => n + f.figures.length, 0) : 0;
   const stepById = new Map(steps.map((s) => [s.id, s]));
   const focus = (answer?.focusSites ?? []).map((id) => ({ id, name: siteName(id) })).filter((s): s is { id: string; name: string } => s.name !== null);
-
-  if (configured === false) {
-    return (
-      <div className="flex flex-col gap-2 p-3">
-        <p className="text-[12.5px] font-semibold text-ink">The analyst is not switched on for this server.</p>
-        <p className="text-[12px] text-ink-body">
-          It answers questions about the twin by reading it through the Claude API, and the API service has no key for
-          it yet. An administrator has to set <code className="rounded bg-canvas px-1 font-mono text-[11px]">ANTHROPIC_API_KEY</code>{" "}
-          on the API service, then reload this page.
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col">
@@ -431,28 +484,8 @@ export default function AnalystPanel({
         </div>
       ) : null}
 
-      {asked && steps.length ? (
-        <div className="flex flex-col gap-1.5 border-t border-line-soft p-3">
-          <button
-            type="button"
-            aria-expanded={traceOpen}
-            onClick={() => setTraceOpen((o) => !o)}
-            className="flex items-center gap-1.5 text-left"
-          >
-            <ChevronRight className={cn("h-3 w-3 text-ink-muted transition-transform", traceOpen && "rotate-90")} aria-hidden="true" />
-            <span className={LABEL}>
-              What it read · {steps.length} step{steps.length === 1 ? "" : "s"}
-            </span>
-            {!asking && result ? <Check className="h-3 w-3 text-ok-ink" aria-hidden="true" /> : null}
-          </button>
-          {traceOpen ? (
-            <ul className="flex flex-col gap-1">
-              {steps.map((s) => (
-                <StepRow key={s.id} step={s} open={openStep === s.id} onToggle={() => setOpenStep(openStep === s.id ? null : s.id)} />
-              ))}
-            </ul>
-          ) : null}
-        </div>
+      {asked ? (
+        <Trace steps={steps} open={traceOpen} onToggle={() => setTraceOpen((o) => !o)} openStep={openStep} onOpenStep={setOpenStep} done={!asking && result !== null} />
       ) : null}
 
       <p className="border-t border-line-soft px-3 py-2 text-[10.5px] text-ink-faint">

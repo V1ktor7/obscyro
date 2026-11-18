@@ -34,7 +34,7 @@ flowchart TD
 | Outils | En haut, au centre | Inspecter, conditions de départ, éclosion, canicule, mesure, capacité |
 | Start here | À gauche | Le guide en trois étapes |
 | Layers | À gauche | Ce que la carte colore : occupation, malades, résidents, couches ajoutées |
-| Analyst | À gauche | Les questions et les réponses de l'analyste : [analyst.md](analyst.md) |
+| Analyst | À gauche | Trois onglets : les questions et leurs réponses (Ask), les options testées par le moteur (Options), les décisions enregistrées et leur suivi (Decisions) : [analyst.md](analyst.md) |
 | Result | À droite | Le pic dans les deux passes, où ça casse, la comparaison à la réalité |
 | Recipe | À droite | Les tampons du scénario, et ce que le moteur reçoit pour chacun |
 | Frise | En bas | Le jour affiché, les couloirs de tampons, la courbe d'occupation |

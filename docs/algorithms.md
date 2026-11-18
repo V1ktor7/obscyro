@@ -12,10 +12,12 @@ Chaque algorithme du produit a ici sa section : à quoi il sert, son schéma, se
 | [A1](#a1-boucle-de-lanalyste) | Boucle de l'analyste | `backend/src/services/analyst.ts` |
 | [A2](#a2-vérificateur-de-chiffres) | Vérificateur de chiffres | `backend/src/services/analyst-verify.ts` |
 | [A3](#a3-calculatrice) | Calculatrice | `backend/src/services/analyst-calc.ts` |
-| [A4](#a4-run-dun-scénario) | Run d'un scénario, en deux passes | `frontend/app/studio/simulation/hex/engine.ts` |
+| [A4](#a4-run-dun-scénario) | Run d'un scénario, en deux passes, sur la page et sur le serveur | `frontend/app/studio/simulation/hex/engine.ts`, `backend/src/services/scenario-run.ts` |
 | [A5](#a5-où-ça-casse) | Où ça casse : lecture des files | `frontend/app/studio/simulation/hex/results.ts` |
 | [A6](#a6-comparaison-à-la-réalité) | Comparaison à la réalité | `backend/src/services/observed-series.ts` |
 | [A7](#a7-grille-dhexagones-et-couches) | Grille d'hexagones et couches | `frontend/app/studio/simulation/hex/hex-grid.ts` |
+| [A8](#a8-options-testées-par-le-moteur) | Options testées par le moteur | `backend/src/services/analyst-options.ts` |
+| [A9](#a9-décision-enregistrée-et-suivi) | Décision enregistrée et suivi | `backend/src/services/decisions.ts` |
 | **B** | **Jumeau et moteur de simulation** | |
 | [B1](#b1-export-du-jumeau) | Export du jumeau vers le moteur | `backend/src/services/twin-export.ts` |
 | [B2](#b2-un-pas-du-moteur-dévénements) | Un pas du moteur d'événements | `simulation-service/app/events/dynamics.py` |
@@ -45,49 +47,58 @@ Chaque algorithme du produit a ici sa section : à quoi il sert, son schéma, se
 
 ## A1. Boucle de l'analyste
 
-**But.** Répondre à une question sur le jumeau, le scénario ouvert ou le run à l'écran, en ne s'appuyant que sur ce que des outils de lecture ont renvoyé. Le modèle de langage choisit quoi lire et rédige ; il ne détient aucun fait, ne calcule pas et ne décide pas. Détail : [analyst.md](analyst.md).
+**But.** Répondre à une question sur le jumeau, le scénario ouvert ou le run à l'écran, en ne s'appuyant que sur ce que des outils ont renvoyé. Le modèle de langage choisit quoi lire et rédige ; il ne détient aucun fait, ne calcule pas et ne décide pas. Détail : [analyst.md](analyst.md).
+
+La même boucle sert deux sortes d'échanges. Ce qui les distingue est leur **clôture** : les consignes données au modèle, l'outil par lequel il livre, et la façon dont cette livraison est contrôlée. Une question se clôt par `give_answer` ; un objectif se clôt par `give_options`, après des tests (A8).
 
 ```mermaid
 sequenceDiagram
     participant P as Personne
     participant B as Boucle analyst.ts
     participant M as Modèle Claude
-    participant O as Outils de lecture
-    participant V as Vérificateur
-    P->>B: question, scénario ouvert, run à l'écran
+    participant O as Outils
+    participant C as Clôture
+    P->>B: question ou objectif, scénario ouvert, run à l'écran
     loop au plus 16 requêtes au modèle
-        B->>M: consignes, outils, échange jusqu'ici
-        alt le modèle demande une lecture
+        B->>M: consignes de la clôture, outils, échange jusqu'ici
+        alt le modèle appelle un outil
             M-->>B: appel d'outil
             B->>O: exécute, entrée validée
-            O-->>B: résultat ou refus motivé
+            O-->>B: résultat ou refus motivé, plus un relevé complet pour l'écran
             B-->>P: étape s1, s2, ... affichée au fil de l'eau
-            B->>M: résultat, avec son numéro d'étape
-        else le modèle livre sa réponse
-            M-->>B: give_answer, paragraphes et étapes citées
-            B->>V: chaque chiffre est-il dans les étapes citées
-            alt tout est tracé, ou deux brouillons déjà renvoyés
-                V-->>B: réponse acceptée, chiffres introuvables retirés
-            else un chiffre est introuvable
-                V-->>B: chiffres nommés
-                B->>M: brouillon refusé, à corriger
+            B->>M: résultat seul, avec son numéro d'étape
+        else le modèle livre par l'outil de la clôture
+            M-->>B: give_answer ou give_options
+            B->>C: la livraison a-t-elle la bonne forme
+            alt forme refusée
+                C-->>B: raison, renvoyée au modèle sans compter de brouillon
+            else forme acceptée
+                B->>C: chaque chiffre est-il dans les étapes citées
+                alt tout est tracé, ou deux brouillons déjà renvoyés
+                    C-->>B: livraison acceptée, chiffres introuvables retirés
+                else un chiffre est introuvable
+                    C-->>B: chiffres nommés
+                    B->>M: brouillon refusé, à corriger
+                end
             end
         end
     end
-    B-->>P: réponse, étapes, chiffres retirés, modèle, jetons
-    B->>B: échange journalisé dans app.analyst_exchange
+    B-->>P: livraison, étapes, chiffres retirés, modèle, jetons, identifiant de l'échange
+    B->>B: échange journalisé dans app.analyst_exchange, avec sa sorte
 ```
 
 **Règles.**
 - Modèle `claude-opus-5-5`, effort `medium`, choix d'outil libre. Une demande refusée par un garde-fou est rejouée sur le modèle de repli prévu par l'API (`fallbacks: "default"`).
-- Au plus 16 requêtes au modèle par question, et 2 brouillons renvoyés pour chiffres introuvables.
-- La réponse passe par l'outil `give_answer`, seul dans son tour. Une réponse en prose est redemandée une fois, puis abandonnée.
+- Au plus 16 requêtes au modèle par échange, et 2 brouillons renvoyés pour chiffres introuvables.
+- La livraison passe par l'outil de la clôture, seul dans son tour. Une réponse en prose est redemandée une fois, puis abandonnée.
 - Un refus d'outil (nom inconnu, pas de run à l'écran) est une étape que le modèle lit ; il ne porte aucun chiffre citable. Une panne de notre côté n'est jamais déguisée en refus.
+- Un outil peut garder, à côté de son résultat, un relevé complet (`Recorded`) : il est affiché et journalisé, jamais envoyé au modèle. Aucune phrase ne peut donc s'appuyer dessus.
 - Un refus du modèle ne produit aucune réponse inventée.
 - Si la personne part, plus rien n'est demandé au modèle.
+- L'identifiant de l'échange est choisi avant de commencer et part avec la dernière ligne du flux : c'est lui qu'une décision nommera (A9).
 
-**Code.** `backend/src/services/analyst.ts`, `backend/src/routes/analyst.ts`, `backend/src/lib/ndjson.ts`, `frontend/app/studio/simulation/hex/AnalystPanel.tsx`.
-**Tests.** `analyst.unit.test.ts`, `routes/analyst.unit.test.ts`, `lib/ndjson.unit.test.ts`, `AnalystPanel.test.tsx`.
+**Code.** `backend/src/services/analyst.ts` (`converse`, `Closing`, `askClosing`), `backend/src/routes/analyst.ts`, `backend/src/lib/ndjson.ts`, `frontend/app/studio/simulation/hex/AnalystPanel.tsx`.
+**Tests.** `analyst.unit.test.ts`, `analyst-options.unit.test.ts`, `routes/analyst.unit.test.ts`, `lib/ndjson.unit.test.ts`, `AnalystPanel.test.tsx`.
 
 ## A2. Vérificateur de chiffres
 
@@ -154,21 +165,46 @@ flowchart TD
     V2 --> T
     T --> P{"Une éclosion,<br/>et le jumeau déclare une propagation ?"}
     P -->|"oui"| SP["Propagation : états par territoire,<br/>demande produite"]
-    P -->|"non"| EV["Événement stocké sous un nom fixe"]
+    P -->|"non"| EV["Événement : les effets de la passe"]
     SP --> EV
-    EV --> RUN["Simulation du réseau, sans réponse,<br/>à travers le scénario"]
+    EV --> W{"Qui lance le run ?"}
+    W -->|"la page, bouton Run"| EP["Événement stocké sous un nom fixe,<br/>par trois routes de l'API"]
+    W -->|"le serveur, pour l'analyste"| ES["Événement envoyé au moteur, rien n'est stocké"]
+    EP --> RUN["Simulation du réseau, sans réponse,<br/>à travers le scénario"]
+    ES --> RUN
     RUN --> G["Par jour et par site : occupation, file,<br/>capacité. Par jour : arrivées, non servis"]
-    G --> R["Panneau Result, liste Where it breaks,<br/>comparaison à la réalité, résumé pour l'analyste"]
+    G --> D["Résumé du run : les deux passes, les sites où l'on attend"]
+    D --> R["Page : panneau Result, liste Where it breaks,<br/>comparaison à la réalité, résumé pour l'analyste"]
+    D --> O["Serveur : résultat d'une option testée (A8)"]
 ```
 
 **Règles.**
 - Les conditions sont dans les deux passes : elles disent d'où l'on part, pas ce qu'on choisit.
 - Le moteur n'ensemence qu'une fois : toutes les éclosions partent du jour de la première, et l'écran le dit.
 - Deux conditions du même genre : la plus haute l'emporte, et l'écran le dit.
-- Les deux événements stockés sont réécrits à chaque run sous un nom fixe.
+- Sur la page, les deux événements stockés sont réécrits à chaque run sous un nom fixe. Sur le serveur, rien n'est stocké : une option testée n'est pas un événement de la bibliothèque, et l'analyste n'écrit rien.
 - L'occupation de l'île est pondérée par la capacité de chaque site, capacité ajoutée comprise à partir du jour où elle ouvre.
+- Les deux côtés lisent le jumeau de la même façon : le contexte (sites, territoires, modèle déclaré) vient du jumeau tel qu'il est, et le moteur reçoit le jumeau lu à travers le scénario.
 
-**Code.** `frontend/app/studio/simulation/hex/engine.ts` (`runScenario`), `stamps.ts` (`engineInput`), `run-digest.ts`. **Tests.** `hex.test.ts`, `HexTwinView.test.tsx`.
+**Le même scénario donne les mêmes chiffres sur la page et sur le serveur.** La traduction des tampons et la lecture des tables existent en deux exemplaires, un par côté. Ce qui les tient ensemble est un enregistrement du vrai moteur, `backend/src/services/scenario-run-parity.fixture.json` : un petit jumeau, un scénario, une option, ce que chaque run demande au moteur, ce que le moteur répond, et le résumé qui en sort. Le test du serveur et celui de la page le rejouent tous les deux, chacun avec son propre code. Chacun doit envoyer au moteur les demandes enregistrées et retrouver les chiffres enregistrés : changer un côté seul fait échouer l'autre.
+
+```mermaid
+flowchart LR
+    M["Vrai moteur, lancé à la main<br/>make-scenario-run-fixture.ts"] --> F["Enregistrement :<br/>demandes, réponses, résumés"]
+    F --> TS["Test du serveur :<br/>scenario-run.ts rejoue"]
+    F --> TP["Test de la page :<br/>runScenario et runDigest rejouent"]
+    TS --> Q{"Mêmes demandes au moteur,<br/>mêmes chiffres ?"}
+    TP --> Q
+    Q -->|"oui des deux côtés"| OK["La page et le serveur s'accordent"]
+    Q -->|"non d'un côté"| KO["Ce côté a changé seul : son test échoue"]
+```
+
+L'enregistrement contient deux runs : le scénario tel quel, et le scénario avec les tampons de l'option. Le second est ce qui garantit qu'ajouter une option testée au scénario puis lancer Run redonne les chiffres du test. Il se régénère à la main quand le moteur ou la traduction change (`cd backend && npx tsx scripts/make-scenario-run-fixture.ts`, avec Python et les dépendances du service de simulation), puis on relance les deux suites.
+
+Sur le serveur, tester plusieurs options ne refait pas tout : la passe « événements seuls » ne voit jamais un choix, elle est donc lancée une fois ; une propagation est gardée d'après ce qu'on lui a demandé, donc une option qui n'ajoute que des lits ne réintègre pas l'épidémie.
+
+**Code.** Page : `frontend/app/studio/simulation/hex/engine.ts` (`runScenario`), `stamps.ts` (`engineInput`), `run-digest.ts`. Serveur : `backend/src/services/scenario-run.ts` (`ScenarioRunner`), `scenario-stamps.ts` (`engineInput`, `twinContext`), `scenario-run-recording.ts`. Enregistrement : `backend/scripts/make-scenario-run-fixture.ts`, `simulation-service/scripts/engine_once.py`.
+**Tests.** `hex.test.ts`, `HexTwinView.test.tsx`, `run-parity.test.ts` (page) ; `scenario-run.unit.test.ts` (serveur).
 
 ## A5. Où ça casse
 
@@ -232,6 +268,81 @@ flowchart TD
 **Règles.** La grille est construite depuis le jumeau, jamais livrée avec le client. La façon de combiner est déclarée par la couche : des lits s'additionnent, une température non.
 
 **Code.** `frontend/app/studio/simulation/hex/hex-grid.ts`, `layers.ts`, `backend/src/services/twin-layers.ts`. **Tests.** `hex.test.ts`, `twin-layers.unit.test.ts`.
+
+## A8. Options testées par le moteur
+
+**But.** Une recommandation qui ne repose sur aucun run est une opinion. La personne dit son objectif ; l'analyste propose jusqu'à trois options, et chacune passe dans le moteur avant d'être montrée, à côté du scénario tel quel. Le modèle écrit des phrases ; les chiffres du tableau, les tampons et les niveaux de preuve viennent du programme.
+
+```mermaid
+flowchart TD
+    A["Objectif de la personne,<br/>scénario ouvert, horizon et activité de la page"] --> B["L'analyste lit : run à l'écran, site, territoires, recette"]
+    B --> C["test_option : une étiquette et 1 à 4 changements<br/>capacité à un site, ou mesure sur une couche de contact"]
+    C --> D{"Testable ?<br/>site connu qui offre l'activité, couche déclarée,<br/>jour dans le run, pas déjà testée, moins de 3 tests"}
+    D -->|"non"| E["Refus motivé, lu par le modèle.<br/>Ne compte pas comme un test"]
+    E --> B
+    D -->|"oui"| F["Changements écrits comme les tampons de la page"]
+    F --> G["Run du scénario tel quel :<br/>lancé une fois, gardé pour toutes les options"]
+    F --> H["Run du scénario avec les tampons de l'option (A4)"]
+    G --> I["Résultat pour le modèle : les deux runs en résumé,<br/>les sites où l'on attend, sur quoi l'option repose"]
+    H --> I
+    H --> J["Relevé pour l'écran : chiffres entiers, tampons,<br/>arrivées par jour, niveaux de preuve"]
+    I --> K{"Autre option à tester ?"}
+    K -->|"oui"| C
+    K -->|"non"| L["give_options : un mécanisme par option,<br/>ce que le test ne dit pas, lecture, arbitrages, limites"]
+    L --> M{"Chaque option testée est-elle listée,<br/>et rien d'autre ?"}
+    M -->|"non"| N["Renvoyé au modèle : une option non testée ne se liste pas,<br/>une option testée ne se cache pas"]
+    N --> L
+    M -->|"oui"| O["Vérificateur de chiffres sur chaque phrase (A2)"]
+    O --> P["Proposition : tableau tiré des relevés,<br/>dans l'ordre des tests, sans classement"]
+    J --> P
+    P --> Q["Add to scenario : clic humain, écrit les tampons"]
+    P --> R["Record decision : clic humain (A9)"]
+```
+
+**Règles.**
+- Trois options au plus par objectif, quatre changements au plus par option. Chaque test coûte au moteur une passe du réseau, plus une propagation si l'option change un contact ; le scénario tel quel coûte deux passes, une seule fois.
+- Une capacité se teste à un site qui offre déjà l'activité ; négative, elle ferme des unités, jamais plus que le site n'en a. Une mesure se teste sur une couche de contact que le jumeau déclare.
+- Un refus du moteur (un scénario sans événement, par exemple) est lu par le modèle. Un moteur injoignable est une panne : l'échange s'arrête et le dit, sans option inventée.
+- Le niveau de preuve de chaque élément est attribué par le programme, d'après d'où il vient : **mesuré** pour ce que le jumeau contient (unités d'un site, résidents d'un territoire), **publié** pour le taux d'une canicule, **hypothèse** pour les conditions du scénario, les choix, l'option elle-même et la règle de routage du moteur. Le modèle n'en choisit aucun.
+- Le mécanisme d'une option est contrôlé contre le résultat de son propre test ; la lecture, contre les étapes qu'elle cite ; le reste, contre tout ce qui a été lu. Un chiffre de l'objectif appartient à la personne et peut être repris.
+- Le tableau suit l'ordre des tests. Rien ne classe les options : dire lesquelles atteignent l'objectif d'après les runs est une lecture, choisir entre elles revient à la personne. Les arbitrages de valeur sont présentés à part, comme tels.
+- L'analyste n'écrit rien. Une option entre dans le scénario au clic « Add to scenario », écrite comme un tampon posé sur la carte ; Run redonne alors les chiffres du test (A4). Si le scénario change après les tests, l'écran le dit.
+- Un run n'est pas une prévision : le tableau le porte dans son titre.
+
+**Code.** `backend/src/services/analyst-options.ts` (`testOption`, `benchFor`, `optionsClosing`), `scenario-stamps.ts` (`basisOfStamp`), route `POST /v1/ontology/:env/analyst/options` dans `backend/src/routes/analyst.ts` ; `frontend/app/studio/simulation/hex/OptionsTab.tsx`, `analyst-parts.tsx`, `addOption` dans `HexTwinView.tsx`.
+**Tests.** `analyst-options.unit.test.ts`, `routes/analyst.unit.test.ts`, `OptionsTab.test.tsx`, `HexTwinView.test.tsx`.
+
+## A9. Décision enregistrée et suivi
+
+**But.** Garder ce qu'une personne a retenu avec le résultat qu'elle en attendait, pour pouvoir le confronter plus tard à ce qui est arrivé. Sans cela on ne compare qu'un souvenir à un résultat.
+
+```mermaid
+flowchart TD
+    A["Clic Record decision sur une option testée"] --> B["Le navigateur envoie deux choses :<br/>l'identifiant de l'échange et l'étape du test"]
+    B --> C["Le serveur relit l'échange dans son journal"]
+    C --> D{"Échange d'options, livré,<br/>et l'étape est un test réussi ?"}
+    D -->|"non"| E["Refus : seule une option testée s'enregistre"]
+    D -->|"oui"| F["Recopie depuis le journal : objectif, option, tampons,<br/>chiffres avec et sans l'option, arrivées par jour,<br/>niveaux de preuve, étapes sources"]
+    F --> G["Ligne de app.decision : qui, quand, quel scénario.<br/>Jamais modifiée ensuite"]
+    G --> H["Onglet Decisions : attendu sans l'option, attendu avec"]
+    H --> I{"Une série observée est-elle liée au scénario ?<br/>réglage reality"}
+    I -->|"non"| J["Dit pourquoi il n'y a rien à comparer"]
+    I -->|"oui"| K["Série observée posée sur les jours du run (A6)"]
+    K --> L["Arrivées attendues par le run testé,<br/>pour la gravité que la série compte"]
+    L --> M["Écart : totaux sur les jours communs,<br/>écart moyen par jour, décalage des pics"]
+    M --> N["L'écart est donné tel quel.<br/>La personne juge"]
+```
+
+**Règles.**
+- Aucun chiffre d'une décision ne vient du navigateur. Le serveur les recopie de l'échange journalisé (`app.analyst_exchange`, sorte `options`) : un chiffre envoyé avec la demande est ignoré, et une étape qui n'est pas un test réussi est refusée.
+- Une décision se suffit à elle-même : elle garde le nom du scénario et une copie des étapes sources, pour rester lisible si le scénario ou l'échange disparaît.
+- Une décision ne se modifie pas. La revoir, c'est en enregistrer une autre.
+- Le suivi compare des arrivées, rien d'autre : c'est la seule chose que le run testé attendait et que le réseau compte aussi jour par jour. Le jumeau ne garde aucun historique des files ni de l'occupation, donc la file attendue n'a rien d'observé à côté d'elle, et l'écran le dit.
+- Un jour que la série ne rapporte pas n'est pas comparé. Une série qui ne rapporte rien ne donne pas un écart nul, elle ne donne pas d'écart.
+- Le suivi ne conclut pas. Il donne l'écart ; dire si la décision a tenu revient à la personne.
+
+**Code.** `backend/src/services/decisions.ts` (`decisionFromExchange`, `followUp`, `realityOf`), `backend/src/routes/decisions.ts`, migrations `060_analyst_exchange_kind.sql` et `061_decision.sql` ; `frontend/app/studio/simulation/hex/DecisionsTab.tsx`.
+**Tests.** `decisions.unit.test.ts`, `analyst-options.unit.test.ts` (d'une option testée à une décision), `routes/decisions.unit.test.ts`, `DecisionsTab.test.tsx`.
 
 ---
 

@@ -122,6 +122,39 @@ export interface AnalystContext {
   rows(datasetId: string): Promise<Record<string, unknown>[]>;
   /** The question and everything read so far: what `calculate` may build on. */
   known: Ledger;
+  /**
+   * Where an option can be run through the engine. Absent or null when the
+   * question was asked somewhere that tests nothing (the Ask tab): the analyst
+   * then reads, and says what would have to be run.
+   */
+  bench?: OptionBench | null;
+}
+
+/** What `test_option` runs on. Built by the route; see `analyst-options.ts`. */
+export interface OptionBench {
+  horizon: number;
+  activity: string;
+  /** Options tested so far for this objective, by what they change. */
+  tested: string[];
+  /** The scenario's twin, its stamps and the engine, read once and kept. */
+  open(): Promise<import("./analyst-options.js").OpenBench>;
+  /** What `open` read, once it has; null before the first test. */
+  opened: import("./analyst-options.js").OpenBench | null;
+}
+
+/**
+ * A result that holds more than the model needs.
+ *
+ * `result` is what the model reads and cites, and what the checker looks
+ * figures up in. `record` is the same reading kept whole — day by day, with
+ * what a person would need to act on it — for the screen and the journal. It
+ * is never sent to the model, so it adds nothing a sentence could lean on.
+ */
+export class Recorded {
+  constructor(
+    readonly result: unknown,
+    readonly record: unknown,
+  ) {}
 }
 
 export interface AnalystTool {
@@ -129,6 +162,8 @@ export interface AnalystTool {
   description: string;
   input_schema: { type: "object"; properties: Record<string, unknown>; required: string[]; additionalProperties: false };
   parse: z.ZodTypeAny;
+  /** Said on screen while the tool runs, for one that takes more than a moment. */
+  busy?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   run(ctx: AnalystContext, input: any): Promise<unknown>;
 }
@@ -137,12 +172,12 @@ export interface AnalystTool {
 // Reading the export.
 // ---------------------------------------------------------------------------
 
-const round = (n: number, d = 1): number => {
+export const round = (n: number, d = 1): number => {
   const k = 10 ** d;
   return Math.round(n * k) / k;
 };
 
-const fold = (s: string): string =>
+export const fold = (s: string): string =>
   s
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
@@ -213,7 +248,7 @@ function requireActivity(sites: SiteView[], activity: string): string {
  * An exact name wins; otherwise every word asked for has to be in the name.
  * Two hits is a question to ask, not a coin to toss.
  */
-function pick<T extends { id: string; name: string }>(items: T[], query: string, what: string): T {
+export function pick<T extends { id: string; name: string }>(items: T[], query: string, what: string): T {
   const q = fold(query);
   const byId = items.find((i) => i.id === query || i.id === `pop:${query}`);
   if (byId) return byId;
@@ -446,7 +481,7 @@ const WORLD_PROP = {
     "Which twin to read: 'reality' is the network as it stands today; 'scenario' is the same network with the open scenario's edits applied. Use the one the person is looking at unless the question compares the two.",
 };
 
-const obj = (properties: Record<string, unknown>, required: string[]): AnalystTool["input_schema"] => ({
+export const obj = (properties: Record<string, unknown>, required: string[]): AnalystTool["input_schema"] => ({
   type: "object",
   properties,
   required,
@@ -670,6 +705,53 @@ const scenarioRecipe: AnalystTool = {
 const pctSeries = (xs: (number | null)[], from: number, to: number) =>
   xs.slice(from, to + 1).map((v) => (v === null ? null : round(v * 100)));
 
+/** The highest value of a daily share, as a percentage and its day. */
+export function peakOf(xs: (number | null)[]): { occupancy_pct: number; on_day: number } | null {
+  let best = { v: -1, t: 0 };
+  xs.forEach((v, t) => {
+    if (v !== null && v > best.v) best = { v, t };
+  });
+  return best.v < 0 ? null : { occupancy_pct: round(best.v * 100), on_day: best.t };
+}
+
+/**
+ * One pass of a run, as a tool hands it to the model.
+ *
+ * Shared by `read_run` and `test_option`, so the run on screen and a tested
+ * option are described in the same words and rounded the same way.
+ */
+export function summariseVariant(v: RunDigest["events"]) {
+  const total = (xs: number[]) => round(xs.reduce((a, b) => a + b, 0));
+  return {
+    peak_occupancy_across_all_sites: peakOf(v.island),
+    sites_where_somebody_waits: v.sitesWithQueue,
+    sites_providing_the_activity: v.sitesWithActivity,
+    first_day_somebody_waits: v.firstQueueDay,
+    patient_days_waiting: round(v.waitingDays),
+    most_people_waiting_at_once: { people: round(v.peakWaiting), on_day: v.peakWaitingDay },
+    ...(v.strandedWaitingDays !== null
+      ? { patient_days_waiting_in_catchments_no_site_serves: round(v.strandedWaitingDays) }
+      : {}),
+    arrivals_over_the_run: Object.fromEntries(Object.entries(v.arrivals).map(([k, xs]) => [k, total(xs)])),
+    engine_notes: v.notes,
+  };
+}
+
+/** One site's queue in one pass, as a tool hands it to the model. */
+export function summariseBreak(b: RunDigest["sites"][number]["events"]) {
+  return b.firstDay === null
+    ? { somebody_waits: false, peak_occupancy_pct: round(b.peakOccupancy * 100) }
+    : {
+        somebody_waits: true,
+        from_day: b.firstDay,
+        days_with_a_queue: b.days,
+        most_waiting_at_once: round(b.peakWaiting),
+        on_day: b.peakDay,
+        patient_days_waiting: round(b.waitingDays),
+        peak_occupancy_pct: round(b.peakOccupancy * 100),
+      };
+}
+
 const readRun: AnalystTool = {
   name: "read_run",
   description:
@@ -706,54 +788,26 @@ const readRun: AnalystTool = {
     const to = Math.min(input.to_day ?? run.horizon - 1, run.horizon - 1);
     if (to < from) throw new ToolError("to_day is before from_day.");
 
-    const peak = (xs: (number | null)[]) => {
-      let best = { v: -1, t: 0 };
-      xs.forEach((v, t) => {
-        if (v !== null && v > best.v) best = { v, t };
-      });
-      return best.v < 0 ? null : { occupancy_pct: round(best.v * 100), on_day: best.t };
-    };
-    const total = (xs: number[]) => round(xs.reduce((a, b) => a + b, 0));
-    const variant = (v: RunDigest["events"]) => ({
-      peak_occupancy_across_all_sites: peak(v.island),
-      sites_where_somebody_waits: v.sitesWithQueue,
-      sites_providing_the_activity: v.sitesWithActivity,
-      first_day_somebody_waits: v.firstQueueDay,
-      patient_days_waiting: round(v.waitingDays),
-      most_people_waiting_at_once: { people: round(v.peakWaiting), on_day: v.peakWaitingDay },
-      ...(v.strandedWaitingDays !== null
-        ? { patient_days_waiting_in_catchments_no_site_serves: round(v.strandedWaitingDays) }
-        : {}),
-      arrivals_over_the_run: Object.fromEntries(Object.entries(v.arrivals).map(([k, xs]) => [k, total(xs)])),
-      engine_notes: v.notes,
-    });
-
     if (input.part === "summary") {
       return {
         ...head,
-        events_only: variant(run.events),
-        with_choices: variant(run.full),
+        events_only: summariseVariant(run.events),
+        with_choices: summariseVariant(run.full),
         catchments_no_site_serves: run.stranded,
         how_to_read:
           "Occupancy stops at 100 % and says nothing about who was turned away; the queue does. 'Patient-days waiting' adds up the people still waiting at the end of each day, so one person waiting three days counts three. The difference between the two runs is what the planner's choices did.",
       };
     }
     if (input.part === "sites") {
-      const brk = (b: RunDigest["sites"][number]["events"]) =>
-        b.firstDay === null
-          ? { somebody_waits: false, peak_occupancy_pct: round(b.peakOccupancy * 100) }
-          : {
-              somebody_waits: true,
-              from_day: b.firstDay,
-              days_with_a_queue: b.days,
-              most_waiting_at_once: round(b.peakWaiting),
-              on_day: b.peakDay,
-              patient_days_waiting: round(b.waitingDays),
-              peak_occupancy_pct: round(b.peakOccupancy * 100),
-            };
       const rows = run.sites
         .filter((s) => s.events.firstDay !== null || s.full.firstDay !== null)
-        .map((s) => ({ id: s.id, name: s.name, usual_units: s.capacity, events_only: brk(s.events), with_choices: brk(s.full) }));
+        .map((s) => ({
+          id: s.id,
+          name: s.name,
+          usual_units: s.capacity,
+          events_only: summariseBreak(s.events),
+          with_choices: summariseBreak(s.full),
+        }));
       return {
         ...head,
         sites_where_somebody_waits_in_either_run: rows,

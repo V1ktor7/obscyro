@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { fetchSimExport, fetchTwinTree, listGeoShapes, listTwinMetrics } from "@/lib/platform-api";
 
+import type { ProposedOption } from "../../analyst-api";
 import { OVERLAY_BAR, OverlayPanel } from "../../map-overlay";
 import { useStudio } from "../../StudioShell";
 import {
@@ -614,6 +615,30 @@ export default function HexTwinView() {
     } catch (err) {
       setMessage(engineMessage(err));
     } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * A tested option becomes part of the scenario here, and only here: on a
+   * person's click. Its stamps are written the way a tap on the map writes
+   * them, so Run then sends the engine what the analyst's test sent it.
+   * Rejects when it cannot, for the panel that asked to say so.
+   */
+  async function addOption(option: ProposedOption) {
+    if (!scenarioId || !ctx) throw new Error("No scenario is open to add it to.");
+    setBusy(true);
+    setMessage(null);
+    try {
+      for (const s of option.stamps) {
+        const draft = { ...s.body, id: "draft", start: s.start, days: s.days } as unknown as Stamp;
+        const note = `${describeStamp(draft, ctx).title} · from the tested option “${option.label}”`.slice(0, 500);
+        await addScenarioOverride(scenarioId, stampToOverride(draft, note, nonce()));
+      }
+      setRecipeOpen(true);
+    } finally {
+      // Whatever was written is in the scenario: show it, even after a failure half-way.
+      await loadStamps(scenarioId).catch(() => undefined);
       setBusy(false);
     }
   }
@@ -1253,6 +1278,10 @@ export default function HexTwinView() {
                 run={digest}
                 siteName={(id) => ctx.facilities.find((f) => f.id === id)?.name ?? null}
                 onFocusSite={focusSite}
+                horizon={horizon}
+                activity={activity}
+                scenarioKey={stampKey}
+                onAddOption={addOption}
               />
             </OverlayPanel>
             {inspected ? (
