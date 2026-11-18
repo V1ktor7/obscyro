@@ -102,6 +102,35 @@ La maquette d'origine est `design/scenario-analyst.html`. Elle montre aussi deux
 6. Le tester dans `analyst-tools.unit.test.ts`.
 7. Mettre à jour la table des outils ci-dessus, et le schéma A1 si la boucle change.
 
+## Les questions de référence
+
+L'analyste est un modèle de langage : « ça a marché quand j'ai essayé » n'est pas un test. La même question peut être bien répondue un jour et mal le lendemain, après un changement de ses consignes ou de la description d'un outil. Douze questions de référence, sur le jumeau de Montréal et le scénario Omicron calé sur l'INSPQ, disent ce qu'une bonne réponse doit contenir.
+
+```bash
+# backend/ — à la main, jamais dans la suite de tests : appelle la vraie API
+OBSCYRO_API_KEY=... npm run eval:analyst
+OBSCYRO_API_KEY=... npm run eval:analyst -- --run run.json --times 2 --show
+```
+
+| Ce qui est jugé | Comment |
+|---|---|
+| Une réponse a été donnée | L'échange se termine comme attendu |
+| Aucun chiffre retiré | `verified` vrai, liste des chiffres retirés vide |
+| Les bons outils ont lu | Chaque outil attendu a été appelé et a renvoyé quelque chose (`a\|b` : l'un ou l'autre) |
+| Les faits connus y sont | Chaque chiffre attendu est dans la réponse, exact ou arrondi comme le vérificateur l'admet |
+| Les mots attendus y sont | Sans tenir compte de la casse ni des accents |
+
+Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une personne, qui lit les réponses avec `--show`.
+
+- Chaque question est rejouée deux fois par défaut : un jeu qui passe une fois n'a pas montré qu'il passe.
+- Les questions sur un run demandent le résumé du run dans un fichier (`--run`), tel que la page l'envoie à l'analyste. Sans lui, elles sont sautées et le rapport le dit.
+- Le script sort en erreur dès qu'une question échoue : il peut servir de garde avant de changer les consignes ou un outil.
+- Les faits attendus sont dans le code (`QUESTIONS`). Quand le jumeau ou le scénario change, c'est la question qu'on corrige.
+
+État au 2026-11-17 : écrit et testé avec des réponses simulées, **jamais exécuté contre le vrai modèle**, faute de clé.
+
+**Code.** `backend/src/services/analyst-eval.ts` (les questions et le jugement), `backend/scripts/analyst-eval.ts` (le rejeu). **Tests.** `analyst-eval.unit.test.ts`.
+
 ## Limites connues
 
 - Chaque question est indépendante : l'analyste ne se souvient pas de la précédente.

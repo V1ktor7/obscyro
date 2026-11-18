@@ -20,7 +20,8 @@
     "test:unit": "tsx --test src/**/*.unit.test.ts",
     "test:integration": "tsx --test src/services/persist-extract.integration.test.ts",
     "enable-spatial": "tsx scripts/enable-spatial.ts",
-    "preflight": "tsx scripts/preflight-migration.ts"
+    "preflight": "tsx scripts/preflight-migration.ts",
+    "eval:analyst": "tsx scripts/analyst-eval.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.10.0",
