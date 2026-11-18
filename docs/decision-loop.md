@@ -53,7 +53,7 @@ La mise en service de l'analyste ([issue 5](https://github.com/V1ktor7/obscyro/i
 
 1. Mettre l'analyste en service et le fiabiliser : [issue 5](https://github.com/V1ktor7/obscyro/issues/5). **Fait.**
 2. Options testées par le moteur, recommandation, décision enregistrée : [issue 6](https://github.com/V1ktor7/obscyro/issues/6). **Fait.** Suites : raccourcir le test d'une option ([issue 8](https://github.com/V1ktor7/obscyro/issues/8)), laisser une option remplacer un choix du scénario ([issue 9](https://github.com/V1ktor7/obscyro/issues/9)).
-3. Recherche en ligne validée et calendrier d'événements : [issue 7](https://github.com/V1ktor7/obscyro/issues/7). Livré ; la recherche est vérifiée en production, l'acceptation d'un événement reste à exercer en production.
+3. Recherche en ligne validée et calendrier d'événements : [issue 7](https://github.com/V1ktor7/obscyro/issues/7). Livré ; la recherche est vérifiée en production, l'acceptation d'un événement reste à exercer en production. Suite : réduire le coût en jetons d'une recherche ([issue 11](https://github.com/V1ktor7/obscyro/issues/11)).
 4. Ensuite, sans issue encore : historique du jumeau (lire le réseau à une date passée), moteur de facteurs, stocks et répartition des ressources rares, personnel dans le jumeau.
 
 ## Ce qui rend la boucle générale

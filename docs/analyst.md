@@ -278,7 +278,7 @@ Quatre réponses ont été relues par une personne et comparées au panneau Resu
 - Le titre, le lieu et la porte d'un candidat ne se corrigent pas à l'écran : seules les dates le peuvent. Un candidat mal titré se refuse.
 - Un événement n'a qu'un lieu écrit en mots. Il n'est relié à aucun territoire du jumeau, et le moteur ne le reçoit pas : c'est un repère pour lire un run, pas une entrée du run.
 - Les événements validés sont ceux du projet, pas d'un scénario : tous les scénarios du projet voient le même calendrier.
-- Une recherche coûte cher en jetons : chaque recherche renvoie jusqu'à dix pages au modèle, et elles sont relues à la requête suivante. Environ 300 000 jetons pour cinq recherches, en plus du prix des recherches.
+- Une recherche coûte cher en jetons : chaque recherche renvoie jusqu'à dix pages au modèle, et elles sont relues à la requête suivante. Environ 300 000 jetons pour cinq recherches, en plus du prix des recherches : [issue 11](https://github.com/V1ktor7/obscyro/issues/11).
 - Le jumeau ne contient ni personnel, ni stocks, ni historique : l'analyste le dit, il ne le comble pas.
 - Le run à l'écran n'est pas gardé au rechargement de la page ; il faut relancer Run. Les options testées non plus : ce qui reste, ce sont les décisions enregistrées et le journal.
 - Une option est faite de capacité et de mesures. Un transfert de patients, du personnel, un stock, un lien nouveau entre un site et un territoire ne se testent pas : le moteur ou le jumeau ne les portent pas. L'analyste les range dans les limites.
