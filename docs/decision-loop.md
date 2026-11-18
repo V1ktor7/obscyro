@@ -52,7 +52,7 @@ La mise en service de l'analyste ([issue 5](https://github.com/V1ktor7/obscyro/i
 ## Ordre de construction
 
 1. Mettre l'analyste en service et le fiabiliser : [issue 5](https://github.com/V1ktor7/obscyro/issues/5). **Fait.**
-2. Options testées par le moteur, recommandation, décision enregistrée : [issue 6](https://github.com/V1ktor7/obscyro/issues/6). **Fait.** Suites : raccourcir le test d'une option ([issue 8](https://github.com/V1ktor7/obscyro/issues/8)), laisser une option remplacer un choix du scénario ([issue 9](https://github.com/V1ktor7/obscyro/issues/9)).
+2. Options testées par le moteur, recommandation, décision enregistrée : [issue 6](https://github.com/V1ktor7/obscyro/issues/6). **Fait.** Suites : le test d'une option raccourci d'une passe, et sa durée mesurée ([issue 8](https://github.com/V1ktor7/obscyro/issues/8), **fait**), laisser une option remplacer un choix du scénario ([issue 9](https://github.com/V1ktor7/obscyro/issues/9)).
 3. Recherche en ligne validée et calendrier d'événements : [issue 7](https://github.com/V1ktor7/obscyro/issues/7). Livré ; la recherche est vérifiée en production, l'acceptation d'un événement reste à exercer en production. Suite : réduire le coût en jetons d'une recherche ([issue 11](https://github.com/V1ktor7/obscyro/issues/11)).
 4. Le direct : de l'alerte à la décision en un clic. Six issues, dans cet ordre.
    1. L'alerte arrive sur toutes les pages, avec un lien vers son unité : [issue 12](https://github.com/V1ktor7/obscyro/issues/12).

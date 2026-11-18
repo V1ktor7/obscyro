@@ -284,7 +284,16 @@ Quatre réponses ont été relues par une personne et comparées au panneau Resu
 - Une option est faite de capacité et de mesures. Un transfert de patients, du personnel, un stock, un lien nouveau entre un site et un territoire ne se testent pas : le moteur ou le jumeau ne les portent pas. L'analyste les range dans les limites.
 - Une option est testée sur le scénario tel qu'il est au moment du test. Ajouter une option puis une autre donne un scénario qu'aucun test n'a couvert : l'écran prévient, et il faut redire l'objectif.
 - Une option ajoute des tampons ; elle n'en retire ni n'en remplace aucun. « 40 lits au lieu des 60 du scénario » se teste donc comme un tampon de −20 par-dessus les +60. Le résultat est le bon, mais l'ajouter au scénario laisse les deux tampons dans la recette au lieu d'un seul à +40.
-- Un objectif prend plusieurs minutes sur le jumeau de Montréal. Le premier test lance deux passes du moteur (le scénario tel quel, puis l'option) après avoir lu le jumeau et calculé la propagation ; les suivants, une seule. Avant le 2026-11-18 le premier test en lançait trois : sur le scénario de démonstration il durait 161 secondes, et les deux suivants 30 et 31 secondes.
+- Un objectif prend plusieurs minutes sur le jumeau de Montréal. Le premier test lance deux passes du moteur (le scénario tel quel, puis l'option) après avoir lu le jumeau et calculé la propagation ; les suivants, une seule. Mesuré en production le 2026-11-18, sur le scénario de démonstration et le même objectif (« How do we stop the queue at Lakeshore? »), trois options testées :
+
+  | | Avant (trois passes au premier test) | Après (deux passes) |
+  |---|---|---|
+  | Premier test | 161 s | 64 s : une passe de 31 s, une de 32 s |
+  | Deuxième et troisième tests | 30 s et 31 s | 33 s et 33 s |
+  | Les trois tests | 222 s | 130 s |
+  | L'objectif entier | cinq à six minutes | un peu moins de trois minutes |
+
+  La passe retirée fait gagner une passe, une trentaine de secondes. Le reste de l'écart sur le premier test vient de la lecture du jumeau, qu'une étape précédente avait déjà faite dans le second relevé et pas dans le premier. La colonne « As it is » est restée la même : 93 %, 3 sites sur 34, 267 jours-patients, première file au jour 20. Une passe du moteur prend donc une trentaine de secondes sur ce jumeau, et c'est elle qui fixe la durée : pour aller plus vite il faut accélérer le moteur, pas l'analyste.
 - Le suivi d'une décision ne compare que des arrivées (voir « Les décisions »).
 
 État au 2026-11-17 : vérifié en production avec le vrai modèle et le vrai moteur, sur le scénario « Omicron · Montréal — calibrated on INSPQ ».
