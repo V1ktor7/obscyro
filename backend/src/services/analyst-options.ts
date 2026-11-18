@@ -620,6 +620,11 @@ export interface OptionsFinding {
   /** Position in its list, from zero. */
   index: number;
   figures: string[];
+  /**
+   * Set when the figures exist but were written beside the wrong name: what
+   * each was said of, and whose row holds it.
+   */
+  misattributed?: { figure: string; saidOf: string; belongsTo: string[] }[];
 }
 
 export interface OptionsAsk {
@@ -646,6 +651,15 @@ function describeFindings(findings: OptionsFinding[]): string {
   const say = (f: OptionsFinding) => {
     const figures = f.figures.map((x) => `"${x}"`).join(", ");
     const verb = f.figures.length === 1 ? "is" : "are";
+    if (f.misattributed) {
+      const place = f.where === "mechanism" ? `Option ${f.option}, mechanism` : `Reading, paragraph ${f.index + 1}`;
+      return f.misattributed
+        .map(
+          (m) =>
+            `- ${place}: "${m.figure}" is written about ${m.saidOf}, but in the steps cited that figure is in the row of ${m.belongsTo.join(" or ")}, not in ${m.saidOf}'s. Re-read the rows and correct the sentence.`,
+        )
+        .join("\n");
+    }
     switch (f.where) {
       case "reading":
         return `- Reading, paragraph ${f.index + 1}: ${figures} ${verb} not in the results of the steps it cites nor in the objective.`;
@@ -660,9 +674,10 @@ function describeFindings(findings: OptionsFinding[]): string {
     }
   };
   return (
-    "The options were not delivered. These figures could not be traced:\n" +
+    "The options were not delivered. These figures could not be traced, or are written beside the wrong name:\n" +
     findings.map(say).join("\n") +
-    "\nFor each one: cite the step that holds it, or compute it with calculate and cite that step, or rewrite the sentence without the figure. Then call give_options again with everything."
+    "\nFor a figure that could not be traced: cite the step that holds it, or compute it with calculate and cite that step, or rewrite the sentence without the figure. " +
+    "For a figure beside the wrong name: go back to the row of that name in the step and copy its own figure. Then call give_options again with everything."
   );
 }
 
@@ -715,10 +730,22 @@ export function optionsClosing(ctx: AnalystContext, input: OptionsAsk): Closing<
       for (const l of read.ledgers.values()) everything.absorb(l);
       const known = new Set(read.steps.map((s) => s.id));
       const findings: OptionsFinding[] = [];
-      const checked = (text: string, ledger: Ledger, at: Omit<OptionsFinding, "figures">): string => {
+      // The same two controls as an answer's paragraphs: a figure nobody
+      // returned, and (where a text rests on named rows) a figure that exists
+      // but is written beside the wrong site or catchment.
+      const checked = (text: string, ledger: Ledger, at: Omit<OptionsFinding, "figures" | "misattributed">, rows = false): string => {
         const bad = unsourced(text, ledger);
         if (bad.length) findings.push({ ...at, figures: bad.map((t) => t.raw) });
-        return strike(text, bad);
+        const taken = new Set(bad.map((t) => t.start));
+        const swapped = rows ? ledger.misattributed(text).filter((m) => !taken.has(m.token.start)) : [];
+        if (swapped.length) {
+          findings.push({
+            ...at,
+            figures: swapped.map((m) => m.token.raw),
+            misattributed: swapped.map((m) => ({ figure: m.token.raw, saidOf: m.saidOf, belongsTo: m.belongsTo })),
+          });
+        }
+        return strike(text, [...bad, ...swapped.map((m) => m.token)]);
       };
 
       const reading = data.reading.map((p, index) => {
@@ -727,7 +754,7 @@ export function optionsClosing(ctx: AnalystContext, input: OptionsAsk): Closing<
         const own = new Ledger();
         own.absorb(read.question);
         for (const id of sources) own.absorb(read.ledgers.get(id)!);
-        return { text: checked(p.text, own, { where: "reading", option: null, index }), sources };
+        return { text: checked(p.text, own, { where: "reading", option: null, index }, true), sources };
       });
       const options = data.options.map((o) => {
         const own = new Ledger();
@@ -735,7 +762,7 @@ export function optionsClosing(ctx: AnalystContext, input: OptionsAsk): Closing<
         own.absorb(read.ledgers.get(o.step)!);
         return {
           step: o.step,
-          mechanism: checked(o.mechanism, own, { where: "mechanism", option: o.step, index: 0 }),
+          mechanism: checked(o.mechanism, own, { where: "mechanism", option: o.step, index: 0 }, true),
           notTested: o.not_tested.map((t, index) => checked(t, everything, { where: "not_tested", option: o.step, index })),
         };
       });

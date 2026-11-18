@@ -119,6 +119,10 @@ export default function OptionsTab({
   const [basisOpen, setBasisOpen] = useState(false);
   // The scenario as it was when the options were tested.
   const [testedKey, setTestedKey] = useState<string | null>(null);
+  // The scenario as this tab left it after adding an option: the one change
+  // since the tests that is not somebody editing the recipe elsewhere.
+  const [ownKey, setOwnKey] = useState<string | null>(null);
+  const adding = useRef(false);
   const [added, setAdded] = useState<string[]>([]);
   const [recorded, setRecorded] = useState<string[]>([]);
   const [acting, setActing] = useState<string | null>(null);
@@ -126,6 +130,16 @@ export default function OptionsTab({
   const abort = useRef<AbortController | null>(null);
 
   useEffect(() => () => abort.current?.abort(), []);
+
+  useEffect(() => {
+    // The recipe changed while this tab was writing an option into it.
+    if (adding.current) setOwnKey(scenarioKey);
+    // Back to the scenario that was tested: what was added has been taken out again.
+    if (testedKey !== null && scenarioKey === testedKey) {
+      setAdded([]);
+      setOwnKey(null);
+    }
+  }, [scenarioKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Another scenario is another question: what was tested belongs to the one before.
   useEffect(() => {
@@ -138,6 +152,7 @@ export default function OptionsTab({
     setExchangeId(null);
     setError(null);
     setAdded([]);
+    setOwnKey(null);
     setRecorded([]);
     setActionError(null);
   }, [scenario?.id]);
@@ -159,6 +174,7 @@ export default function OptionsTab({
     setOpenStep(null);
     setTraceOpen(true);
     setAdded([]);
+    setOwnKey(null);
     setRecorded([]);
     setActionError(null);
     setTestedKey(scenarioKey);
@@ -198,12 +214,16 @@ export default function OptionsTab({
   async function add(o: ProposedOption) {
     setActing(`add:${o.step}`);
     setActionError(null);
+    adding.current = true;
     try {
       await onAdd(o);
       setAdded((a) => [...a, o.step]);
     } catch (err) {
+      // Part of it may have been written: the scenario is then one no test covered.
+      setOwnKey(null);
       setActionError(`“${o.label}” was not added: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
+      adding.current = false;
       setActing(null);
     }
   }
@@ -238,7 +258,14 @@ export default function OptionsTab({
   const proposal = result?.answer ?? null;
   const removed = result ? result.struck.reduce((n, f) => n + f.figures.length, 0) : 0;
   const stepById = new Map(steps.map((s) => [s.id, s]));
-  const changed = proposal !== null && testedKey !== null && testedKey !== scenarioKey;
+  const moved = proposal !== null && testedKey !== null && testedKey !== scenarioKey;
+  // Three ways the scenario can differ from the one tested, and they do not
+  // mean the same thing: one option added from here (Run should give its
+  // column), several added together (a scenario no test covered), or an edit
+  // made elsewhere (every column is out of date).
+  const ownOnly = moved && ownKey === scenarioKey && added.length > 0;
+  const addedOne = ownOnly && added.length === 1 ? (proposal?.options.find((o) => o.step === added[0]) ?? null) : null;
+  const changed = moved && !addedOne;
   const focus = (proposal?.focusSites ?? []).map((id) => ({ id, name: siteName(id) })).filter((s): s is { id: string; name: string } => s.name !== null);
   const showStranded = proposal?.asItIs?.strandedWaitingDays != null;
 
@@ -332,11 +359,18 @@ export default function OptionsTab({
 
           {proposal ? (
             <>
-              {changed ? (
+              {addedOne ? (
+                <p role="status" className="flex items-start gap-1.5 rounded bg-brand-soft px-2 py-1.5 text-[11.5px] text-brand-deep">
+                  <Check className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  “{addedOne.label}” is now in the scenario: Run should give the figures of its column. The other options
+                  were tested without it, so their columns no longer describe this scenario.
+                </p>
+              ) : changed ? (
                 <p role="alert" className="flex items-start gap-1.5 rounded bg-warn-soft px-2 py-1.5 text-[11.5px] text-warn-ink">
                   <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  The scenario was edited since these options were tested. The figures below describe it as it was; state
-                  the objective again before relying on them.
+                  {ownOnly
+                    ? `${added.length} options are now in the scenario together. No test covered them together: state the objective again, or run the scenario, before relying on a column.`
+                    : "The scenario was edited since these options were tested. The figures below describe it as it was; state the objective again before relying on them."}
                 </p>
               ) : null}
 
@@ -348,8 +382,9 @@ export default function OptionsTab({
               ) : (
                 <p role="alert" className="flex items-start gap-1.5 rounded bg-warn-soft px-2 py-1.5 text-[11.5px] text-warn-ink">
                   <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  {removed} figure{removed === 1 ? " was" : "s were"} removed from the text: no step it cites held{" "}
-                  {removed === 1 ? "it" : "them"}. The table is the engine’s own counts and is not affected.
+                  {removed} figure{removed === 1 ? " was" : "s were"} removed from the text: the steps it cites did not hold{" "}
+                  {removed === 1 ? "it" : "them"}, or held {removed === 1 ? "it" : "them"} for another site. The table is the
+                  engine’s own counts and is not affected.
                 </p>
               )}
 

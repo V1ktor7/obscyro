@@ -246,6 +246,8 @@ export interface OptionsFinding {
   option: string | null;
   index: number;
   figures: string[];
+  /** Set when the figures exist but were written beside the wrong name. */
+  misattributed?: { figure: string; saidOf: string; belongsTo: string[] }[];
 }
 
 export interface OptionsResult {

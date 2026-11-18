@@ -425,3 +425,25 @@ test("a decision is copied from the journalled test: the caller names a step and
   assert.throws(() => decisionFromExchange({ ...journalled, status: "incomplete", answer: null }, "s2"), /where options were tested/);
   assert.throws(() => decisionFromExchange({ ...journalled, answer: { options: "tampered" } }, "s2"), /cannot be read as tested options/);
 });
+
+test("a figure written beside the wrong site is sent back, in a reading as in an answer", async () => {
+  const tested = [{ step: "s2", mechanism: "Beds where the west's patients go.", not_tested: [] }];
+  // Twenty beds are Lakeshore's. The clinic at Pointe holds stretchers only.
+  const swapped = give({ options: tested, reading: [{ text: "Clinique Pointe holds 20 beds.", sources: ["s1"] }] });
+  const right = give({ options: tested, reading: [{ text: "Lakeshore holds 20 beds.", sources: ["s1"] }] });
+
+  const { model, out } = await propose([reply([use("find_sites", { world: "scenario" })]), reply([use("test_option", BEDS)]), reply([swapped]), reply([right])]);
+  const back = sentBack(model, 3)[0]!;
+  assert.equal(back.error, true);
+  assert.match(back.text, /Reading, paragraph 1: "20" is written about Clinique Pointe, but in the steps cited that figure is in the row of Lakeshore/);
+  assert.equal(out.verified, true);
+  assert.equal(out.answer!.reading[0]!.text, "Lakeshore holds 20 beds.");
+
+  // Left uncorrected, the figure is taken out and the fault is named.
+  const stubborn = await propose([reply([use("find_sites", { world: "scenario" })]), reply([use("test_option", BEDS)]), reply([swapped]), reply([swapped]), reply([swapped])]);
+  assert.equal(stubborn.out.verified, false);
+  assert.equal(stubborn.out.answer!.reading[0]!.text, `Clinique Pointe holds ${STRUCK} beds.`);
+  assert.deepEqual(stubborn.out.struck, [
+    { where: "reading", option: null, index: 0, figures: ["20"], misattributed: [{ figure: "20", saidOf: "Clinique Pointe", belongsTo: ["Lakeshore"] }] },
+  ]);
+});

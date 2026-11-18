@@ -137,7 +137,7 @@ Les décisions sont dans `app.decision` (migration 061).
 
 `AnalystPanel.tsx`, dans un `OverlayPanel` sous « Layers », replié à l'arrivée. Trois onglets ; chacun n'est construit qu'à sa première ouverture, puis garde ce qu'on y a fait.
 
-**Options** (`OptionsTab.tsx`), de haut en bas : sur quoi les options sont testées ; l'objectif, et des objectifs suggérés d'après le run à l'écran ; les tests, qui s'affichent pendant qu'ils tournent ; le tableau ; une carte par option (mécanisme, sur quoi elle repose avec les niveaux de preuve, ce que le test ne dit pas, « Add to scenario », « Record decision ») ; la lecture ; les arbitrages laissés à la personne ; les limites ; ce sur quoi toutes les colonnes reposent ; les étapes. Un bandeau prévient si le scénario a changé depuis les tests.
+**Options** (`OptionsTab.tsx`), de haut en bas : sur quoi les options sont testées ; l'objectif, et des objectifs suggérés d'après le run à l'écran ; les tests, qui s'affichent pendant qu'ils tournent ; le tableau ; une carte par option (mécanisme, sur quoi elle repose avec les niveaux de preuve, ce que le test ne dit pas, « Add to scenario », « Record decision ») ; la lecture ; les arbitrages laissés à la personne ; les limites ; ce sur quoi toutes les colonnes reposent ; les étapes. Un bandeau dit quand le scénario n'est plus celui qui a été testé, et pourquoi : une option ajoutée depuis l'onglet, plusieurs ajoutées ensemble, ou une modification faite ailleurs.
 
 **Decisions** (`DecisionsTab.tsx`) : les décisions du scénario ouvert d'abord, puis celles des autres scénarios du projet. Chacune montre qui l'a prise, quand, l'objectif, l'attendu sans et avec l'option, sur quoi elle reposait, et le suivi à la demande. L'onglet se lit même quand l'analyste est éteint : une décision est un enregistrement, pas une réponse.
 
@@ -221,7 +221,13 @@ Quatre réponses ont été relues par une personne et comparées au panneau Resu
 - Un objectif prend plusieurs minutes sur le jumeau de Montréal : chaque passe du moteur dure quelques dizaines de secondes, et le premier test en lance trois (les événements seuls, le scénario tel quel, l'option). Le tableau n'a besoin que des deux dernières : la première est à retirer.
 - Le suivi d'une décision ne compare que des arrivées (voir « Les décisions »).
 
-État au 2026-11-17 : l'onglet Options est vérifié en production avec le vrai modèle et le vrai moteur, sur le scénario « Omicron · Montréal — calibrated on INSPQ » : trois options testées pour un objectif, aucun chiffre retiré, et la colonne « As it is » redonne les chiffres du panneau Result. « Add to scenario », « Record decision » et le suivi sont couverts par les tests, **pas encore exercés en production** : ils écrivent dans le scénario de démonstration et dans la liste des décisions.
+État au 2026-11-17 : vérifié en production avec le vrai modèle et le vrai moteur, sur le scénario « Omicron · Montréal — calibrated on INSPQ ».
+
+- Un objectif (« How do we stop the queue at Lakeshore? ») a rendu trois options testées, sans aucun chiffre retiré, et la colonne « As it is » redonne les chiffres du panneau Result.
+- Une option ajoutée au scénario, puis Run : le panneau Result redonne les chiffres de sa colonne (pic 92 %, 3 sites sur 34, 267 jours-patients d'attente, première file au jour 20). Ses tampons retirés, le scénario est revenu à ses 20 tampons et à ses chiffres d'origine.
+- Une décision enregistrée se relit dans l'onglet Decisions, et son suivi donne 2 954 arrivées attendues contre 2 944 observées sur 60 jours.
+
+Cette décision de test (« 40 beds at Lakeshore from day 10 instead of 60 ») reste dans la liste du projet de démonstration : rien à l'écran ne permet de la supprimer.
 
 ## Fichiers
 

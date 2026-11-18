@@ -215,14 +215,47 @@ describe("the options tab", () => {
     expect((within(a).getByRole("button", { name: "Added to the scenario" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("says so when the scenario changed after the tests", async () => {
+  it("says so when the scenario was edited elsewhere after the tests", async () => {
     const view = await tested();
     await screen.findByRole("table");
     expect(screen.queryByText(/The scenario was edited since these options were tested/)).toBeNull();
     view.rerender(
       <OptionsTab env="mtl" scenario={{ id: "sc1", name: "Omicron" }} run={null} horizon={60} activity="lit" scenarioKey="k2" siteName={() => null} onFocusSite={focus} onAdd={add} onRecorded={recorded} onOff={off} />,
     );
-    expect(screen.getByText(/The scenario was edited since these options were tested/)).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toMatch(/The scenario was edited since these options were tested/);
+  });
+
+  it("tells an option it added itself from an edit made elsewhere, and from two options added together", async () => {
+    // The page writes the stamps, and the recipe it reads back has a new key.
+    const view = await tested();
+    const writes = (key: string) =>
+      add.mockImplementationOnce(async () => {
+        view.rerender(
+          <OptionsTab env="mtl" scenario={{ id: "sc1", name: "Omicron" }} run={null} horizon={60} activity="lit" scenarioKey={key} siteName={() => null} onFocusSite={focus} onAdd={add} onRecorded={recorded} onOff={off} />,
+        );
+      });
+    const a = await screen.findByRole("region", { name: /^Option A/ });
+    const b = screen.getByRole("region", { name: /^Option B/ });
+
+    writes("k1+a");
+    fireEvent.click(within(a).getByRole("button", { name: "Add to scenario" }));
+    await within(a).findByRole("button", { name: "Added to the scenario" });
+    // Not a warning: this is what the test was for.
+    expect(screen.getByText(/“Open 40 beds at Lakeshore from day 10” is now in the scenario: Run should give the figures of its column/)).toBeTruthy();
+    expect(screen.queryByText(/The scenario was edited since/)).toBeNull();
+
+    writes("k1+a+b");
+    fireEvent.click(within(b).getByRole("button", { name: "Add to scenario" }));
+    await within(b).findByRole("button", { name: "Added to the scenario" });
+    expect(screen.getByRole("alert").textContent).toMatch(/2 options are now in the scenario together. No test covered them together/);
+
+    // Taken out of the recipe again: the scenario is the one that was tested, and both can be added afresh.
+    view.rerender(
+      <OptionsTab env="mtl" scenario={{ id: "sc1", name: "Omicron" }} run={null} horizon={60} activity="lit" scenarioKey="k1" siteName={() => null} onFocusSite={focus} onAdd={add} onRecorded={recorded} onOff={off} />,
+    );
+    await waitFor(() => expect(within(a).getByRole("button", { name: "Add to scenario" })).toBeTruthy());
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByText(/is now in the scenario/)).toBeNull();
   });
 
   it("records a decision by naming the exchange and the step, and sends no figure", async () => {
