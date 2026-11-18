@@ -28,7 +28,7 @@ Il lit le jumeau à travers l'API Claude. Il lui faut la variable `ANTHROPIC_API
 
 Ce que les outils lisent du jumeau (des comptes et des capacités, jamais une personne) est envoyé à l'API Claude pour rédiger la réponse. Le panneau le dit en pied.
 
-État au 2026-11-17 : livré, testé avec un modèle simulé, **pas encore vérifié avec le vrai modèle**. C'est l'objet de la première issue de la suite.
+État au 2026-11-17 : en service en production, vérifié avec le vrai modèle. Le premier test a trouvé deux défauts, corrigés le jour même (une interversion de deux sites et un chiffre arrondi deux fois, voir « La règle des chiffres »), puis les questions de référence ont toutes passé deux fois de suite (voir plus bas).
 
 ## Les routes
 
@@ -188,7 +188,24 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 - Le script sort en erreur dès qu'une question échoue : il peut servir de garde avant de changer les consignes ou un outil.
 - Les faits attendus sont dans le code (`QUESTIONS`). Quand le jumeau ou le scénario change, c'est la question qu'on corrige.
 
-État au 2026-11-17 : écrit et testé avec des réponses simulées, **jamais exécuté contre le vrai modèle**, faute de clé.
+### Dernier rejeu
+
+2026-11-17, en production, modèle `claude-opus-5-5`, effort `medium`, scénario « Omicron · Montréal — calibrated on INSPQ » avec son run à l'écran :
+
+| | |
+|---|---|
+| Questions | 13, rejouées 2 fois chacune : 26 réponses |
+| Réussies | 26 sur 26 |
+| Chiffres retirés | aucun |
+| Durée médiane d'une réponse | 15,1 s |
+| Réponse la plus lente | 38,8 s (une question sur le run, 7 étapes) |
+| Jetons par réponse | de 11 500 à 61 800 |
+
+L'effort reste à `medium` : à cette durée il n'y a rien à gagner à le baisser, et le rejeu passe sans rien retirer.
+
+Ce rejeu a été lancé depuis la page, dans le navigateur, avec le même code de jugement (`judge`, `QUESTIONS`) que le script, parce que le script demande une clé d'API Obscyro dans son environnement. Le résumé du run venait de la page elle-même. Le script `npm run eval:analyst` n'a donc pas encore tourné tel quel contre la production.
+
+Quatre réponses ont été relues par une personne et comparées au panneau Result : l'ordre des files, le résumé des choix, le cas sans run, et la question à laquelle l'outil ne peut pas répondre.
 
 **Code.** `backend/src/services/analyst-eval.ts` (les questions et le jugement), `backend/scripts/analyst-eval.ts` (le rejeu). **Tests.** `analyst-eval.unit.test.ts`.
 

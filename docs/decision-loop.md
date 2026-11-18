@@ -38,20 +38,20 @@ Le modèle orchestre et explique. Les faits viennent des outils ; les calculs, d
 | Étape | État | Où |
 |---|---|---|
 | 1. Signal | Les alertes du jumeau et les signaux existent, mais ne lancent pas encore la boucle | [algorithms.md](algorithms.md), D5 |
-| 2. Situation | **Livré** : l'analyste, onglet Ask. Pas encore vérifié avec le vrai modèle | [analyst.md](analyst.md) |
+| 2. Situation | **Livré et vérifié en production** avec le vrai modèle : l'analyste, onglet Ask. Treize questions de référence passent deux fois de suite | [analyst.md](analyst.md) |
 | 3. Précédents | À faire | [issue 7](https://github.com/V1ktor7/obscyro/issues/7) |
 | 4. Effets mesurés | À faire. Les briques de mesure existent (décalages, réplication par épisodes) sans être reliées | [algorithms.md](algorithms.md), C3 |
 | 5. Options testées | **Livré** : onglet Options. Jusqu'à trois options par objectif, chacune passée dans le moteur sur le serveur, avec les mêmes chiffres que la page (tenu par un test). Options faites de capacité et de mesures seulement. Vérifié en production avec le vrai modèle le 2026-11-17 | [analyst.md](analyst.md), [algorithms.md](algorithms.md), A4 et A8 |
 | 6. Recommandation | **Livré** : le scénario tel quel à côté de chaque option, niveaux de preuve attribués par le programme, mécanisme en une phrase, arbitrages laissés à la personne, aucun classement. L'option entre dans le scénario sur un clic | [analyst.md](analyst.md), [algorithms.md](algorithms.md), A8 |
 | 7. Suivi | **Livré, en partie** : la décision est enregistrée avec les chiffres du run testé, et ses arrivées attendues se comparent à la série observée liée au scénario. Seules les arrivées se comparent : le jumeau n'a pas d'historique des files ni de l'occupation. Couvert par les tests, pas encore exercé en production | [analyst.md](analyst.md), [algorithms.md](algorithms.md), A6 et A9 |
 
-Avant tout le reste : mettre l'analyste en service et le fiabiliser, [issue 5](https://github.com/V1ktor7/obscyro/issues/5).
+La mise en service de l'analyste ([issue 5](https://github.com/V1ktor7/obscyro/issues/5)) est faite : clé posée, test de bout en bout, questions de référence, guide de la page, deux défauts du moteur corrigés.
 
 **Cette table se met à jour à la fin de chaque issue.**
 
 ## Ordre de construction
 
-1. Mettre l'analyste en service et le fiabiliser : [issue 5](https://github.com/V1ktor7/obscyro/issues/5).
+1. Mettre l'analyste en service et le fiabiliser : [issue 5](https://github.com/V1ktor7/obscyro/issues/5). **Fait.**
 2. Options testées par le moteur, recommandation, décision enregistrée : [issue 6](https://github.com/V1ktor7/obscyro/issues/6), livré. Les options sont vérifiées en production avec le vrai modèle ; l'ajout au scénario et l'enregistrement d'une décision restent à exercer en production.
 3. Recherche en ligne validée et calendrier d'événements : [issue 7](https://github.com/V1ktor7/obscyro/issues/7).
 4. Ensuite, sans issue encore : historique du jumeau (lire le réseau à une date passée), moteur de facteurs, stocks et répartition des ressources rares, personnel dans le jumeau.
