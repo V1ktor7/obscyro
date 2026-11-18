@@ -1,0 +1,652 @@
+# Les algorithmes d'Obscyro
+
+Chaque algorithme du produit a ici sa section : à quoi il sert, son schéma, ses règles, où il vit dans le code et quels tests le tiennent.
+
+**Ce fichier se met à jour avec le code.** Ajouter, modifier ou supprimer un algorithme, c'est aussi ajouter, modifier ou supprimer sa section et son schéma, dans le même commit (voir [CLAUDE.md](../CLAUDE.md)). Un schéma se dessine d'après le code qu'on vient de lire.
+
+## Table
+
+| Réf. | Algorithme | Fichier principal |
+|---|---|---|
+| **A** | **Aide à la décision, page Scenarios** | |
+| [A1](#a1-boucle-de-lanalyste) | Boucle de l'analyste | `backend/src/services/analyst.ts` |
+| [A2](#a2-vérificateur-de-chiffres) | Vérificateur de chiffres | `backend/src/services/analyst-verify.ts` |
+| [A3](#a3-calculatrice) | Calculatrice | `backend/src/services/analyst-calc.ts` |
+| [A4](#a4-run-dun-scénario) | Run d'un scénario, en deux passes | `frontend/app/studio/simulation/hex/engine.ts` |
+| [A5](#a5-où-ça-casse) | Où ça casse : lecture des files | `frontend/app/studio/simulation/hex/results.ts` |
+| [A6](#a6-comparaison-à-la-réalité) | Comparaison à la réalité | `backend/src/services/observed-series.ts` |
+| [A7](#a7-grille-dhexagones-et-couches) | Grille d'hexagones et couches | `frontend/app/studio/simulation/hex/hex-grid.ts` |
+| **B** | **Jumeau et moteur de simulation** | |
+| [B1](#b1-export-du-jumeau) | Export du jumeau vers le moteur | `backend/src/services/twin-export.ts` |
+| [B2](#b2-un-pas-du-moteur-dévénements) | Un pas du moteur d'événements | `simulation-service/app/events/dynamics.py` |
+| [B3](#b3-propagation) | Propagation entre états déclarés | `simulation-service/app/events/spread.py` |
+| [B4](#b4-politiques-score-et-comparaison) | Politiques, score et comparaison | `simulation-service/app/events/policy.py` |
+| [B5](#b5-scénario-en-surcouche) | Scénario en surcouche du jumeau | `backend/src/services/scenario-overrides.ts` |
+| [B6](#b6-événement-tiré-dune-série-observée) | Événement tiré d'une série observée | `backend/src/services/sim-event-from-rows.ts` |
+| **C** | **Prévision et laboratoire** | |
+| [C1](#c1-boucle-de-prévision-quotidienne) | Boucle de prévision quotidienne | `backend/src/services/forecast-loops.ts` |
+| [C2](#c2-prévision-dune-série-et-apprentissage-sur-table) | Prévision d'une série, apprentissage sur table | `simulation-service/app/lab/timeseries.py` |
+| [C3](#c3-signaux-précurseurs) | Signaux précurseurs : décalage et réplication | `backend/src/services/lag-scan.ts` |
+| [C4](#c4-laboratoire-causal) | Laboratoire causal | `backend/src/services/causal-lab.ts` |
+| [C5](#c5-simulation-hybride) | Simulation hybride, graphe de modèles | `simulation-service/app/runner.py` |
+| **D** | **Données** | |
+| [D1](#d1-extraction-clinique) | Extraction clinique d'un texte | `nlp-service/app/main.py` |
+| [D2](#d2-pipelines-de-données) | Pipelines de données | `backend/src/services/pipeline.ts` |
+| [D3](#d3-identité-des-objets) | Identité des objets | `backend/src/services/identity.ts` |
+| [D4](#d4-qualité-des-données) | Qualité des données, six couches | `backend/src/services/data-quality.ts` |
+| [D5](#d5-alertes-du-jumeau-et-signaux) | Alertes du jumeau et signaux | `backend/src/services/twin-alert-scheduler.ts` |
+| [D6](#d6-métriques-du-jumeau) | Métriques du jumeau | `backend/src/services/twin-metrics.ts` |
+| [D7](#d7-fraîcheur-dune-valeur) | Fraîcheur d'une valeur | `backend/src/services/observed-at.ts` |
+| [D8](#d8-correspondance-de-zones) | Correspondance de zones | `backend/src/services/zone-correspondence.ts` |
+
+---
+
+# A. Aide à la décision, page Scenarios
+
+## A1. Boucle de l'analyste
+
+**But.** Répondre à une question sur le jumeau, le scénario ouvert ou le run à l'écran, en ne s'appuyant que sur ce que des outils de lecture ont renvoyé. Le modèle de langage choisit quoi lire et rédige ; il ne détient aucun fait, ne calcule pas et ne décide pas. Détail : [analyst.md](analyst.md).
+
+```mermaid
+sequenceDiagram
+    participant P as Personne
+    participant B as Boucle analyst.ts
+    participant M as Modèle Claude
+    participant O as Outils de lecture
+    participant V as Vérificateur
+    P->>B: question, scénario ouvert, run à l'écran
+    loop au plus 16 requêtes au modèle
+        B->>M: consignes, outils, échange jusqu'ici
+        alt le modèle demande une lecture
+            M-->>B: appel d'outil
+            B->>O: exécute, entrée validée
+            O-->>B: résultat ou refus motivé
+            B-->>P: étape s1, s2, ... affichée au fil de l'eau
+            B->>M: résultat, avec son numéro d'étape
+        else le modèle livre sa réponse
+            M-->>B: give_answer, paragraphes et étapes citées
+            B->>V: chaque chiffre est-il dans les étapes citées
+            alt tout est tracé, ou deux brouillons déjà renvoyés
+                V-->>B: réponse acceptée, chiffres introuvables retirés
+            else un chiffre est introuvable
+                V-->>B: chiffres nommés
+                B->>M: brouillon refusé, à corriger
+            end
+        end
+    end
+    B-->>P: réponse, étapes, chiffres retirés, modèle, jetons
+    B->>B: échange journalisé dans app.analyst_exchange
+```
+
+**Règles.**
+- Modèle `claude-opus-5-5`, effort `medium`, choix d'outil libre. Une demande refusée par un garde-fou est rejouée sur le modèle de repli prévu par l'API (`fallbacks: "default"`).
+- Au plus 16 requêtes au modèle par question, et 2 brouillons renvoyés pour chiffres introuvables.
+- La réponse passe par l'outil `give_answer`, seul dans son tour. Une réponse en prose est redemandée une fois, puis abandonnée.
+- Un refus d'outil (nom inconnu, pas de run à l'écran) est une étape que le modèle lit ; il ne porte aucun chiffre citable. Une panne de notre côté n'est jamais déguisée en refus.
+- Un refus du modèle ne produit aucune réponse inventée.
+- Si la personne part, plus rien n'est demandé au modèle.
+
+**Code.** `backend/src/services/analyst.ts`, `backend/src/routes/analyst.ts`, `backend/src/lib/ndjson.ts`, `frontend/app/studio/simulation/hex/AnalystPanel.tsx`.
+**Tests.** `analyst.unit.test.ts`, `routes/analyst.unit.test.ts`, `lib/ndjson.unit.test.ts`, `AnalystPanel.test.tsx`.
+
+## A2. Vérificateur de chiffres
+
+**But.** Empêcher qu'un chiffre arrive à l'écran sans qu'un outil l'ait renvoyé. Chaque paragraphe est contrôlé contre les étapes qu'il cite lui-même, pas contre tout ce qui a été lu : c'est ce qui donne un sens à une puce de source.
+
+```mermaid
+flowchart TD
+    A["Un paragraphe et les étapes qu'il cite"] --> B["Relever chaque chiffre du texte :<br/>dates, milliers, décimales, pourcentages, k et M"]
+    B --> C{"Chiffre collé à un mot ?<br/>COVID-19, H1N1, s3"}
+    C -->|"oui"| D["Ignoré : il fait partie d'un nom"]
+    C -->|"non"| E["Registre du paragraphe :<br/>nombres des étapes citées, plus ceux de la question"]
+    E --> F{"Le chiffre est-il dans le registre ?"}
+    F -->|"exact, arrondi, part écrite en pour cent,<br/>ou chiffre rond à 5 pour cent près"| G["Tracé"]
+    F -->|"non"| H{"Moins de deux brouillons<br/>déjà renvoyés ?"}
+    H -->|"oui"| I["Brouillon renvoyé au modèle,<br/>chiffres nommés"]
+    H -->|"non"| J["Chiffre retiré du texte<br/>et listé à l'écran"]
+```
+
+**Règles.**
+- Le registre d'une étape contient : chaque nombre du résultat, chaque nombre écrit dans une chaîne, chaque date et ses parties (année, mois, jour), et la longueur de chaque liste.
+- Arrondi admis : « 94 » pour 93,6 ; « 94 % » pour une part de 0,941 ; « 6 000 » pour 5 999. Un chiffre rond ne peut pas s'écarter de plus de 5 % : « 100 » ne vaut pas pour 60.
+- Les hypothèses et les limites ne citent pas d'étape : elles sont contrôlées contre tout ce qui a été lu.
+- **Ce que le contrôle prouve :** le chiffre existe dans un résultat d'outil cité. **Ce qu'il ne prouve pas :** que la phrase autour est juste. C'est pourquoi chaque étape reste consultable sous la réponse.
+
+**Code.** `backend/src/services/analyst-verify.ts`. **Tests.** `analyst-verify.unit.test.ts`.
+
+## A3. Calculatrice
+
+**But.** Faire les calculs à la place du modèle, et refuser de calculer sur un nombre qui ne vient de nulle part.
+
+```mermaid
+flowchart TD
+    A["Expression écrite par le modèle<br/>round((7316 - 267) / 7316 * 100, 1)"] --> B["Découpage : nombres, opérateurs, fonctions"]
+    B --> C{"Autre chose que de l'arithmétique ?"}
+    C -->|"oui"| X["Refus motivé"]
+    C -->|"non"| D["Relever les opérandes<br/>sauf le nombre de décimales de round"]
+    D --> E{"Chaque opérande est-il déjà lu,<br/>dans la question, ou une unité ?"}
+    E -->|"non"| Y["Refus : lire le chiffre d'abord"]
+    E -->|"oui"| F["Évaluation selon les priorités usuelles"]
+    F --> G{"Résultat fini ?"}
+    G -->|"non"| X
+    G -->|"oui"| H["Résultat rendu comme une étape, citable"]
+```
+
+**Règles.** Opérateurs `+ - * / ^` et parenthèses. Fonctions `round, abs, sqrt, floor, ceil, min, max, sum, mean`. Aucune variable, aucun accès à quoi que ce soit, rien n'est exécuté comme du code. Unités admises sans source : 0, 1, 2, 7, 10, 24, 100, 1000.
+
+**Code.** `backend/src/services/analyst-calc.ts`, outil `calculate` dans `analyst-tools.ts`. **Tests.** `analyst-calc.unit.test.ts`, `analyst-tools.unit.test.ts`.
+
+## A4. Run d'un scénario
+
+**But.** Dire ce que les choix du planificateur changent. Le scénario passe deux fois dans le moteur : une fois avec ce qui arrive à la ville, une fois avec les choix en plus. La différence entre les deux est l'effet des choix, construit plutôt que déduit.
+
+```mermaid
+flowchart TD
+    S["Tampons du scénario"] --> C["Conditions de départ : occupation habituelle,<br/>immunité préalable, transmissibilité"]
+    S --> E["Événements : éclosions, canicule"]
+    S --> K["Choix : mesures, capacité ajoutée"]
+    C --> V1["Passe 1 : événements seuls"]
+    E --> V1
+    C --> V2["Passe 2 : avec les choix"]
+    E --> V2
+    K --> V2
+    V1 --> T["Traduction en entrée du moteur"]
+    V2 --> T
+    T --> P{"Une éclosion,<br/>et le jumeau déclare une propagation ?"}
+    P -->|"oui"| SP["Propagation : états par territoire,<br/>demande produite"]
+    P -->|"non"| EV["Événement stocké sous un nom fixe"]
+    SP --> EV
+    EV --> RUN["Simulation du réseau, sans réponse,<br/>à travers le scénario"]
+    RUN --> G["Par jour et par site : occupation, file,<br/>capacité. Par jour : arrivées, non servis"]
+    G --> R["Panneau Result, liste Where it breaks,<br/>comparaison à la réalité, résumé pour l'analyste"]
+```
+
+**Règles.**
+- Les conditions sont dans les deux passes : elles disent d'où l'on part, pas ce qu'on choisit.
+- Le moteur n'ensemence qu'une fois : toutes les éclosions partent du jour de la première, et l'écran le dit.
+- Deux conditions du même genre : la plus haute l'emporte, et l'écran le dit.
+- Les deux événements stockés sont réécrits à chaque run sous un nom fixe.
+- L'occupation de l'île est pondérée par la capacité de chaque site, capacité ajoutée comprise à partir du jour où elle ouvre.
+
+**Code.** `frontend/app/studio/simulation/hex/engine.ts` (`runScenario`), `stamps.ts` (`engineInput`), `run-digest.ts`. **Tests.** `hex.test.ts`, `HexTwinView.test.tsx`.
+
+## A5. Où ça casse
+
+**But.** Un pic à 96 % sur l'ensemble des sites dit que le réseau a tenu. Il ne dit pas que quatre hôpitaux ont été pleins trois semaines. L'occupation plafonne à 100 % et se tait sur ceux qu'on a refusés : c'est la file, site par site, qui le dit.
+
+```mermaid
+flowchart TD
+    A["Grille jour par site : occupation et file"] --> B["Pour chaque site qui offre l'activité"]
+    B --> C{"File d'au moins 0,5 personne<br/>en fin de journée ?"}
+    C -->|"non"| D["Jour sans file"]
+    C -->|"oui"| E["Premier jour, nombre de jours,<br/>plus grande file et son jour,<br/>jours-patients d'attente"]
+    E --> F["Résumé par passe : sites avec une file,<br/>premier jour, jours-patients, pic"]
+    F --> G["Les deux passes côte à côte,<br/>le pire en premier"]
+    A --> H["Territoires qu'aucun site ne sert :<br/>non servis moins les files visibles"]
+    H --> G
+```
+
+**Règles.** Une file sous 0,5 est de l'arithmétique, pas une personne. Un jour-patient d'attente compte une personne qui attend un jour : une personne trois jours compte trois. Un territoire sans site pour l'activité n'apparaît dans aucune ligne du moteur : il est nommé à part, pour qu'un dixième de l'île n'attende pas sous un panneau qui dit que personne n'attend.
+
+**Code.** `frontend/app/studio/simulation/hex/results.ts`, `BreakList.tsx`. **Tests.** `results.test.ts`.
+
+## A6. Comparaison à la réalité
+
+**But.** Poser une série observée sur l'axe du run et dire à quel point les deux s'écartent, en commençant par ce qui trompe le moins.
+
+```mermaid
+flowchart TD
+    A["Lignes d'un jeu de données"] --> B["Placer chaque date sur un jour du run.<br/>Jour non rapporté : vide, pas zéro"]
+    B --> C{"Colonne cumulée ?"}
+    C -->|"oui"| D["Différences d'un jour au suivant"]
+    C -->|"non"| E["Série observée"]
+    D --> E
+    E --> F["Garder les jours où les deux séries ont une valeur"]
+    S["Arrivées simulées par jour"] --> F
+    F --> G["1. Écart entre les deux pics, en jours"]
+    G --> H["2. Erreur absolue moyenne par jour"]
+    H --> I["3. Corrélation, donnée en dernier et jamais seule"]
+```
+
+**Règles.** Une date répétée : la dernière ligne l'emporte, on ne somme pas. Deux courbes qui montent puis descendent se corrèlent fortement que le modèle soit juste ou non : la corrélation ne vient qu'en dernier. Un calage après coup n'est pas une prévision, et l'écran le dit.
+
+**Code.** `backend/src/services/observed-series.ts`, route `POST /v1/ontology/:env/observed-series`, `frontend/app/studio/simulation/hex/RealityCheck.tsx`. **Tests.** `observed-series.unit.test.ts`.
+
+## A7. Grille d'hexagones et couches
+
+**But.** Une seule grille pour tout ce qui se montre sur la carte : une lecture de civières, la population d'un territoire et une mesure dessinée tombent sur les mêmes cellules, donc se superposent sans jointure.
+
+```mermaid
+flowchart TD
+    A["Sites localisés du jumeau"] --> G["Cellules H3, dont la taille suit l'étendue du réseau"]
+    B["Contours des territoires, s'il y en a"] --> G
+    G --> C{"Contours disponibles ?"}
+    C -->|"oui"| D["Chaque cellule prend le territoire<br/>dont le contour la contient"]
+    C -->|"non"| E["Chaque cellule prend le territoire<br/>du site le plus proche"]
+    D --> F["Résidents répartis sur les cellules du territoire"]
+    E --> F
+    F --> H["Une couche : un site sur sa cellule,<br/>un territoire sur toutes ses cellules"]
+    H --> I["Plusieurs valeurs sur une cellule :<br/>somme, moyenne ou maximum, comme la couche le déclare"]
+```
+
+**Règles.** La grille est construite depuis le jumeau, jamais livrée avec le client. La façon de combiner est déclarée par la couche : des lits s'additionnent, une température non.
+
+**Code.** `frontend/app/studio/simulation/hex/hex-grid.ts`, `layers.ts`, `backend/src/services/twin-layers.ts`. **Tests.** `hex.test.ts`, `twin-layers.unit.test.ts`.
+
+---
+
+# B. Jumeau et moteur de simulation
+
+## B1. Export du jumeau
+
+**But.** Mettre le jumeau dans la forme que lit le moteur. Le moteur est en Python et l'ontologie en Postgres : ce qui traverse est une charge utile, pas une connexion. Rien ici ne reconnaît un nom de type ou de lien : tout est déclaré (rôle du type, comportement du lien, mécanique de la propriété).
+
+```mermaid
+flowchart TD
+    A["Arbre des unités, instances, liens, types"] --> B{"Plafond de lecture atteint ?"}
+    B -->|"oui"| B1["Manque signalé : jumeau tronqué"]
+    B --> C["Objets rattachés à une unité<br/>dont le type déclare un rôle"]
+    C --> D["Par unité et par type : capacité totale,<br/>libre = totale moins en usage"]
+    D --> E{"Rôle du type"}
+    E -->|"demande"| F["Patients déjà présents"]
+    E -->|"espace, personnel, matériel, systèmes"| G["Ressource qui permet une activité"]
+    A --> H["Liens ni hiérarchiques ni de placement : routes"]
+    A --> I{"Un type déclare une taille de population ?"}
+    I -->|"oui"| J["Territoires déclarés,<br/>servis par les unités qui leur sont liées"]
+    I -->|"non"| K["Un territoire par lieu, de taille zéro"]
+    A --> L["Instances dont le type lie une mécanique :<br/>modèle de soins, transitions"]
+    F --> M["Export : sites, objets, types, territoires, routes"]
+    G --> M
+    H --> M
+    J --> M
+    K --> M
+    L --> M
+    M --> N["Liste de ce qui manque, nommé"]
+```
+
+**Règles.** Un lit déjà occupé n'est pas de la capacité libre. Un territoire sans chiffre de population apparaît quand même, à zéro, dans la liste des manques. Une route n'a pas de débit dans l'ontologie : elle sort à zéro, et c'est signalé. Le plafond de lecture est `ROLLUP_INSTANCE_CAP` ; l'atteindre se dit, parce que tout le reste serait une sous-estimation silencieuse.
+
+**Code.** `backend/src/services/twin-export.ts`, `property-schema.ts`. **Tests.** `twin-export.unit.test.ts`, `scenario-lens-links.unit.test.ts`.
+
+## B2. Un pas du moteur d'événements
+
+**But.** Faire avancer le réseau d'un pas : appliquer l'événement, décider la réponse, soigner ou non, propager les pannes, tout écrire. L'ordre dans un pas est une décision de modélisation, écrite une seule fois.
+
+```mermaid
+flowchart TD
+    A["Le temps avance d'un pas"] --> B["L'événement s'applique,<br/>à partir de la ligne de base"]
+    B --> C["La réponse est décidée :<br/>règles évaluées sur l'état du moment"]
+    C --> D["Les actions s'appliquent, avec leur coût"]
+    D --> E["Arrivées par territoire et par gravité"]
+    E --> F{"Un site du territoire offre<br/>tout ce que la gravité consomme ?"}
+    F -->|"oui"| G["Répartition entre ces sites, au prorata<br/>de leur capacité habituelle"]
+    F -->|"non"| H["File dans le territoire :<br/>non servis, et visibles"]
+    G --> I{"Assez de ressources libres ?"}
+    I -->|"oui"| J["Soigné : ressources tenues<br/>pour la durée du séjour"]
+    I -->|"non"| K["En attente : la file s'accumule"]
+    J --> L["Pannes en cascade, jusqu'à stabilité"]
+    K --> L
+    H --> L
+    L --> R["Réapprovisionnement des stocks qui en déclarent un"]
+    R --> M["Tout est écrit : arrivées, servis,<br/>non servis, règles déclenchées et pourquoi"]
+    M --> A
+```
+
+**Règles.**
+- La réponse est décidée avant les soins : une politique réagit dans le pas où l'événement arrive.
+- Une capacité se reconstruit depuis une ligne de base à chaque pas ; une file s'accumule. La façon de composer appartient à la quantité, pas à l'auteur de l'événement (voir `simulation-service/app/events/README.md`).
+- Un site plein reste le bon endroit où attendre ; un site qui n'offre pas l'activité ne le devient jamais.
+- Le poids d'un site est sa capacité habituelle pour la ressource la plus rare que la gravité consomme, pas ce qu'il lui reste de libre ce jour-là. Pondérer par le libre donnerait au réseau un équilibrage parfait et gratuit, c'est-à-dire exactement ce qu'une politique de transfert est censée acheter.
+- L'occupation habituelle d'un scénario est tenue à chaque site pour tout le run. La capacité ouverte au-dessus de la ligne de base arrive vide.
+- Même système, même événement, même politique, même graine : même trajectoire.
+- **Défaut connu :** une baisse de capacité ne mord que sous le nombre d'unités libres et ne se rétablit pas (issue 5).
+
+**Code.** `simulation-service/app/events/dynamics.py` (`Engine.run`, `_deliver_care`), `domain.py`, `objects.py`, `ontology.py`, `mechanics.py`. **Tests.** `simulation-service/tests/`.
+
+## B3. Propagation
+
+**But.** Faire circuler une condition dans la population sans que le moteur connaisse le mot « infectieux ». Le jumeau déclare des états et des transitions ; le moteur ne connaît que trois formes de transition.
+
+```mermaid
+flowchart TD
+    A["Par territoire : combien de personnes dans chaque état"] --> B["Pour chaque transition déclarée"]
+    B --> C{"Forme"}
+    C -->|"spontanée"| D["Un taux de sortie de l'état, sans autre cause"]
+    C -->|"couplée"| E["Un taux proportionnel à la part d'un autre état,<br/>le long d'une couche de contact"]
+    C -->|"forcée"| F["Un taux qu'un événement modifie dans le temps"]
+    E --> G["Mélange entre territoires, par couche,<br/>si le jumeau en déclare"]
+    D --> H["Personnes déplacées d'un état à l'autre"]
+    G --> H
+    F --> H
+    H --> I{"La transition produit une demande ?"}
+    I -->|"oui"| J["Arrivées d'une gravité,<br/>remises au moteur d'événements"]
+    I -->|"non"| K["États du pas suivant"]
+    J --> K
+    K --> A
+```
+
+**Règles.** Une mesure ou un variant multiplie une couche de contact, entre deux pas, pour certains territoires ou pour tous. Deux transitions qui décrivent le même passage avec deux taux sont refusées, pas arbitrées. Sans mélange déclaré, une éclosion ne sort pas de son territoire. Approximation assumée : un visiteur rencontre les résidents du lieu visité, à leur prévalence.
+
+**Code.** `simulation-service/app/events/spread.py`, `backend/src/services/spread-payload.ts`. **Tests.** `simulation-service/tests/`, `spread-payload.unit.test.ts`.
+
+## B4. Politiques, score et comparaison
+
+**But.** Comparer des réponses sur un même événement, avec un score qu'on peut discuter.
+
+```mermaid
+flowchart TD
+    A["Politique : règles ordonnées par priorité"] --> B["À chaque pas : condition évaluée<br/>sur l'état du moment"]
+    B --> C{"Condition vraie ?"}
+    C -->|"oui"| D["Action : transfert, renfort, réaffectation<br/>ou demande modifiée, avec délai, coût et efficacité"]
+    C -->|"non"| E["Rien"]
+    D --> F["Règle notée avec sa raison :<br/>occupation de tel site à 0,94, au-dessus de 0,90"]
+    F --> G["Trajectoire"]
+    E --> G
+    G --> H["Score : chaque objectif garde sa série par pas<br/>et son total"]
+    H --> I["Les poids sont des données, pas du code"]
+    I --> J["Plusieurs graines par politique,<br/>puis comparaison"]
+```
+
+**Règles.** Une condition est un arbre typé, pas une chaîne évaluée : on peut la montrer et la faire varier par programme. Ce que vaut une mort face à un coût n'est pas une question de modélisation : le fichier ne répond pas à la place de celui qui décide. Comparer sur une seule graine reviendrait à optimiser la graine.
+- **Défaut connu :** dans « Compare responses », « No response » se classe toujours premier, parce qu'un patient non servi ne coûte rien (issue 5).
+
+**Code.** `simulation-service/app/events/policy.py`, `scoring.py`, `harness.py`, `backend/src/services/sim-policies.ts`. **Tests.** `simulation-service/tests/`.
+
+## B5. Scénario en surcouche
+
+**But.** Un scénario n'est pas une copie du jumeau : c'est une liste ordonnée de modifications lues par-dessus. Lire le jumeau « à travers » un scénario donne le monde tel qu'il serait.
+
+```mermaid
+flowchart TD
+    A["Scénario demandé"] --> B["Chaîne des scénarios parents, les ancêtres d'abord"]
+    B --> C["Modifications de chaque scénario,<br/>dans l'ordre de leur jour d'effet puis de saisie"]
+    C --> D["Ne garder que celles en vigueur<br/>au moment lu dans le scénario"]
+    D --> E{"Cible"}
+    E -->|"instance ou lien"| F["Appliquée à la lecture du jumeau :<br/>créer, modifier, supprimer, lier, délier"]
+    E -->|"paramètre"| G["Ignorée par les lectures du jumeau :<br/>ce sont les tampons et réglages de la page"]
+    F --> H["Jumeau vu à travers le scénario"]
+```
+
+**Règles.** Une lecture qui reçoit une lentille qu'elle ne sait pas honorer échoue bruyamment : comparer la réalité à elle-même en silence serait le pire résultat. Ce qu'un scénario invente reçoit un identifiant stable, dérivé, pour ne pas apparaître et disparaître d'une lecture à l'autre. La lecture « à une date passée » est déclarée mais pas faite : les propriétés sont écrasées en place.
+
+**Code.** `backend/src/services/scenario-overrides.ts`, `scenario-apply.ts`, `ontology-lens.ts`. **Tests.** `scenario-overrides.unit.test.ts`, `scenario-apply.unit.test.ts`, `ontology-lens.unit.test.ts`.
+
+## B6. Événement tiré d'une série observée
+
+**But.** Le chemin le plus court entre un fichier publié et un run : ce qui a été admis chaque jour devient les arrivées de l'événement, sans script à la main.
+
+```mermaid
+flowchart LR
+    A["Lignes datées d'un jeu de données"] --> B["Un compte par jour, depuis le jour zéro"]
+    B --> C["Un effet par jour sur le volume de demande"]
+    C --> D["Événement que le moteur sait déjà faire tourner"]
+```
+
+**Règles.** La cible est un volume, pas une incidence : une incidence est par mille personnes et demanderait une taille de population que le fichier ne porte pas.
+
+**Code.** `backend/src/services/sim-event-from-rows.ts`. **Tests.** `sim-event-from-rows.unit.test.ts`.
+
+---
+
+# C. Prévision et laboratoire
+
+## C1. Boucle de prévision quotidienne
+
+**But.** Savoir ce que vaut une prévision faite chaque matin avec ce qu'on savait ce matin-là. Chaque prévision est figée le jour où elle est faite ; personne ne peut la retoucher après coup.
+
+```mermaid
+flowchart TD
+    A["Chaque matin"] --> B["Pour chaque horizon : 1, 3, 7, 14 et 21 jours,<br/>et pour chaque modèle, A et B"]
+    B --> C["Prévoir avec ce qui était connu ce matin-là :<br/>la cible jusqu'à la veille, le moteur un jour plus tôt"]
+    C --> D["Figer : insérée une fois, jamais modifiée"]
+    A --> E{"Lundi, ou premier matin ?"}
+    E -->|"oui"| F["Réentraîner sur tout ce qui est connu"]
+    F --> G["Erreur à attendre : mesurée sur les 56 derniers jours,<br/>sans les avoir vus"]
+    D --> H["Quand le jour visé arrive : écart entre prévu et observé"]
+    G --> I{"Erreur des 28 derniers jours<br/>au moins 1,5 fois l'erreur attendue ?"}
+    H --> I
+    I -->|"oui"| J["Alerte de dérive, levée sous 1,25 fois"]
+    H --> K{"Le lundi : sur 56 jours, l'autre modèle fait-il<br/>au moins 10 pour cent mieux à 7, 14 et 21 jours ?"}
+    K -->|"oui"| L["Il prend la place du modèle en vigueur"]
+```
+
+**Règles.**
+- Modèle A : régression ridge sur 14 jours de la cible et le calendrier. Modèle B : gradient boosting, avec le moteur s'il y en a un.
+- Il faut au moins 90 jours d'historique avant le premier matin, et 60 lignes pour un réentraînement.
+- La dérive demande au moins 14 prévisions notées dans la fenêtre ; le remplacement, au moins 28 par horizon.
+- Le modèle en vigueur, les alertes et les remplacements ne sont pas stockés : ce sont des règles fixées d'avance, appliquées à des prévisions figées. Elles donnent la même réponse à chaque lecture.
+- Le rejeu se fait par blocs de 28 matins, dans n'importe quel ordre.
+
+**Code.** `backend/src/services/forecast-loops.ts`, `simulation-service/app/lab/loop.py`, `frontend/app/studio/lab/loop-rules.ts`, migration `058_forecast_loops.sql`. **Tests.** `forecast-loops.unit.test.ts`, `tests/test_lab_loop.py`, `loop-rules.test.ts`.
+
+## C2. Prévision d'une série et apprentissage sur table
+
+**But.** Une prévision est une régression dont les variables sont le passé. Ce qui change n'est pas le modèle, c'est la façon de le noter.
+
+```mermaid
+flowchart TD
+    A["Série datée"] --> B["Variables : retards de la cible, calendrier,<br/>retards d'une autre série au besoin"]
+    B --> C["Un modèle par horizon, entraîné pour cet horizon"]
+    C --> D["Évaluation en marche avant :<br/>plusieurs origines successives"]
+    D --> E["Référence : pareil que la dernière fois"]
+    E --> F["Score : erreur divisée par celle de la référence.<br/>1,0 vaut ne rien faire"]
+    T["Table quelconque"] --> U["Cible, variables, estimateur"]
+    U --> V{"Colonne de temps ?"}
+    V -->|"oui"| W["Découpage chronologique possible, et noté"]
+    V -->|"non"| X["Découpage aléatoire"]
+    W --> Y["Score comparé à une référence qui prédit la moyenne"]
+    X --> Y
+    Y --> Z["Lignes écartées : comptées et rapportées"]
+```
+
+**Règles.** Un modèle qui ne bat pas la référence ne se déploie pas. Un découpage aléatoire sur une table ordonnée dans le temps s'entraîne sur la semaine prochaine : quand une colonne de temps existe, le découpage honnête est offert. Le contexte d'entraînement est gardé avec le score.
+
+**Code.** `simulation-service/app/lab/timeseries.py`, `tabular.py`, `sandbox.py` (code de l'utilisateur, isolé), `backend/src/services/lab-models.ts`. **Tests.** `simulation-service/tests/`.
+
+## C3. Signaux précurseurs
+
+**But.** Dire quel signal en précède un autre et de combien, avec les raisons d'en douter calculées dans la même passe.
+
+```mermaid
+flowchart TD
+    A["Un signal et une cible"] --> B["Taille effective : une courbe lisse de 90 jours<br/>peut ne porter que 10 points indépendants"]
+    B --> C["Corrélation à chaque décalage"]
+    C --> D["Seuil relevé : beaucoup de tests ont été faits"]
+    D --> E["Décalage retenu, vérifié sur une période<br/>tenue hors de la recherche"]
+    E --> F["Série longue découpée en épisodes,<br/>une vague chacun"]
+    F --> G["Même question posée à chaque épisode"]
+    G --> H["Ce qui est rapporté : l'accord entre épisodes,<br/>pas la force d'un seul"]
+```
+
+**Règles.** Choisir le décalage qui maximise la corrélation puis rapporter cette corrélation est circulaire : d'où la période tenue à part. Une série longue n'est pas beaucoup d'observations : c'est la réplication d'une vague à l'autre qui tranche.
+
+**Code.** `backend/src/services/lag-scan.ts` (`effectiveSize`, `crossCorrelate`, `findLead`), `episodes.ts` (`findEpisodes`, `replicationAcross`). **Tests.** `lag-scan.unit.test.ts`, `episodes.unit.test.ts`.
+
+## C4. Laboratoire causal
+
+**But.** Explorer, sur les données vivantes d'un environnement, quels signaux en précèdent d'autres, et ce que deviendrait une série si l'on en perturbait une autre.
+
+```mermaid
+flowchart TD
+    A["Signaux horaires : créations par type,<br/>moyenne d'une propriété, activité d'un canal"] --> B["Pour chaque paire : corrélation au meilleur décalage"]
+    B --> C["Arêtes : qui précède qui"]
+    A --> D["Modèle à un pas, régression ridge sur le passé"]
+    D --> E["Prévision : le modèle itéré vers l'avant"]
+    E --> F["Événement injecté : une variable future est perturbée"]
+    F --> G["Trajectoire simulée"]
+```
+
+**Règles.** Le décalage va de 1 au maximum demandé, pour que la direction suive le temps. Une arête est une précédence, pas une cause prouvée : voir C3 pour les raisons d'en douter.
+
+**Code.** `backend/src/services/causal-lab.ts`. **Tests.** aucun test unitaire dédié à ce jour.
+
+## C5. Simulation hybride
+
+**But.** Faire tourner un graphe de modèles sur une branche de scénario : un modèle mécaniste comme base, des modèles appris par-dessus quand ils existent.
+
+```mermaid
+flowchart TD
+    A["Charge utile : branche du jumeau, paramètres"] --> B["Graphe de contacts :<br/>appartenance par les liens de lieu, voisinage par les liens de contact"]
+    B --> C["Graphe de modèles, exécuté dans l'ordre de ses dépendances"]
+    C --> D["Nœud mécaniste : SEIR à graine fixe"]
+    D --> E["Nœuds appris : résidu, réseau sur graphe,<br/>substitut, prévision"]
+    E --> F["Bandes de quantiles, écart à la base,<br/>importance des variables"]
+    C --> G{"Service de simulation absent,<br/>ou modèle lourd non installé ?"}
+    G -->|"oui"| H["Retour au SEIR mécaniste, dans l'API"]
+```
+
+**Règles.** Le SEIR Python reproduit celui de l'API à graine égale. Le service est sans état : il ne touche jamais la base. Sans le service, la route de simulation retombe sur le SEIR de l'API.
+
+**Code.** `simulation-service/app/runner.py`, `graph.py`, `contacts.py`, `mechanistic.py`, `uncertainty.py`, `training.py`, `models/` ; `backend/src/services/simulation.ts`, `ml-simulation.ts`. **Tests.** `simulation-service/tests/`, `simulation.unit.test.ts`, `ml-simulation.unit.test.ts`.
+
+---
+
+# D. Données
+
+## D1. Extraction clinique
+
+**But.** Tirer d'un texte clinique des concepts codés et leur contexte, sans modèle génératif.
+
+```mermaid
+flowchart TD
+    A["Texte clinique"] --> B["Repérage des mentions"]
+    B --> C["Plongement de chaque mention"]
+    C --> D["Recherche des descriptions SNOMED les plus proches,<br/>dans Postgres"]
+    D --> E{"Proximité et marge sur le suivant"}
+    E -->|"nettes"| F["Résolu"]
+    E -->|"douteuses"| G["Signalé"]
+    E -->|"insuffisantes"| H["Non résolu"]
+    A --> I["Contexte par règles, en français et en anglais :<br/>affirmé ou nié, sujet, temporalité"]
+    F --> J["Décision : accepter, signaler, faire remonter"]
+    G --> J
+    I --> J
+    J --> K{"Persistance demandée ?"}
+    K -->|"oui"| L["Constat clinique écrit dans l'ontologie,<br/>avec sa provenance"]
+```
+
+**Règles.** La correspondance SNOMED n'utilise que la base Postgres d'Obscyro. Un patient n'est rattaché que par un identifiant explicite, jamais deviné depuis un nom ou le texte.
+
+**Code.** `nlp-service/app/main.py`, `ner.py`, `context.py`, `embeddings.py`, `pg_index.py` ; `backend/src/services/persist-extract.ts`. **Tests.** `nlp-service/tests/`, `persist-extract.integration.test.ts`.
+
+## D2. Pipelines de données
+
+**But.** Transformer des jeux de données en objets de l'ontologie ou en d'autres jeux, par un graphe de nœuds.
+
+```mermaid
+flowchart LR
+    A["Entrée : dataset_input"] --> B["Table : filter, select, derive, cast,<br/>expand, join, latest"]
+    B --> C["Texte clinique : text_field,<br/>extract_snomed, validate_confidence"]
+    B --> D["Sorties : object_output, dataset_output"]
+    C --> D
+```
+
+**Règles.** La liste des sortes de nœuds existe en un seul endroit (`NODE_KINDS`) : le schéma de la route est construit à partir d'elle, pour qu'un nœud accepté soit toujours un nœud exécutable. Les objets écrits passent par l'identité (D3). Les canaux d'ingestion (`channel-runner.ts`) font le même travail pour une charge utile reçue par webhook ou par appel REST.
+
+**Code.** `backend/src/services/pipeline.ts`, `channel-runner.ts`, `rest-connector.ts`, `connectivity.ts`. **Tests.** `pipeline*.unit.test.ts`, `channel-*.unit.test.ts`, `rest-connector*.unit.test.ts`.
+
+## D3. Identité des objets
+
+**But.** Dire quelles propriétés font qu'un objet est « la même chose réelle », pour que deux pipelines ne créent pas deux fois le même lit.
+
+```mermaid
+flowchart TD
+    A["Objet à écrire"] --> B["Clés d'identité déclarées sur son type"]
+    B --> C{"Un objet porte déjà ces valeurs ?"}
+    C -->|"oui"| D["Mise à jour de cet objet"]
+    C -->|"non"| E["Création"]
+    D --> F["Contrainte tenue par la base elle-même"]
+    E --> F
+```
+
+**Règles.** L'identité est déclarée sur le type, pas fournie par le pipeline qui passe. La contrainte vit dans la base (migration 043).
+
+**Code.** `backend/src/services/identity.ts`, `ontology.ts` (`upsertInstanceByIdentity`). **Tests.** `identity.unit.test.ts`.
+
+## D4. Qualité des données
+
+**But.** Contrôler chaque objet de l'ontologie par couches, de la plus simple à la plus statistique.
+
+```mermaid
+flowchart TD
+    A["Un objet"] --> L1["L1 Forme : type de chaque propriété,<br/>code SNOMED existant"]
+    L1 --> L2["L2 Valeur : bornes déclarées,<br/>pas de négatif, date valide"]
+    L2 --> L3["L3 Cohérence : ordre des dates,<br/>objet sans aucun lien"]
+    L3 --> L4["L4 Population : valeur aberrante<br/>parmi les objets du même type"]
+    L4 --> L5["L5 Source : source muette depuis 7 jours,<br/>valeurs identiques répétées"]
+    L5 --> L6["L6 Anomalie : écart interquartile<br/>ou écart robuste à la médiane"]
+    L6 --> F["Constats, chacun avec sa couche et son code"]
+```
+
+**Règles.** En L6, l'un ou l'autre des deux tests suffit à signaler. Il faut au moins 12 valeurs du même type ; les seuils sont réglables (`DQ_IQR_K`, `DQ_ZSCORE_THRESHOLD`, `DQ_ANOMALY_MIN_SAMPLE`). Les couches L4 à L6 lisent toute la population, pour rester stables.
+
+**Code.** `backend/src/services/data-quality.ts`. **Tests.** `data-quality.unit.test.ts`, `data-quality.integration.test.ts`.
+
+## D5. Alertes du jumeau et signaux
+
+**But.** Qu'une règle se déclenche à l'heure où le seuil est franchi, pas à l'heure où quelqu'un ouvre la page.
+
+```mermaid
+flowchart TD
+    A["Toutes les 30 secondes"] --> B["Projets qui ont au moins une règle"]
+    B --> C["Métriques de chaque unité, sans lentille"]
+    C --> D["Chaque règle évaluée"]
+    D --> E{"La condition"}
+    E -->|"tient maintenant, pas avant"| F["Alerte ouverte"]
+    E -->|"tenait, et ne tient plus de façon démontrée"| G["Alerte résolue"]
+    F --> H["Signal créé, titré une fois"]
+    H --> I["Workflow : étapes, approbation au besoin"]
+```
+
+**Règles.** La résolution ne se fait jamais dans une lecture : sous une lentille qui cache des unités, leur absence ressemblerait à un service vidé. L'échec d'un projet ne coûte pas leur évaluation aux autres.
+
+**Code.** `backend/src/services/twin-alert-scheduler.ts`, `alert-bridge.ts`, `signals.ts`, `twin.ts`. **Tests.** `twin-alert-scheduler.unit.test.ts`, `alert-bridge.unit.test.ts`, `signals.unit.test.ts`.
+
+## D6. Métriques du jumeau
+
+**But.** Laisser chaque établissement définir ses mesures, sans que le moteur sache ce qu'est un lit.
+
+```mermaid
+flowchart LR
+    A["Définition : un agrégat,<br/>divisé au besoin par un second"] --> B["Objets du sous-arbre d'une unité"]
+    B --> C["Compte, somme, moyenne, minimum ou maximum,<br/>sur les objets retenus"]
+    C --> D["Valeur de la métrique pour l'unité"]
+```
+
+**Règles.** Rien ne repose sur un nom de type ou une valeur de statut écrits en dur : « lits occupés sur lits » est une définition, pas un cas particulier.
+
+**Code.** `backend/src/services/twin-metrics.ts`, `twin.ts`. **Tests.** `twin-metrics.unit.test.ts`, `twin-self-rollup.unit.test.ts`.
+
+## D7. Fraîcheur d'une valeur
+
+**But.** Mesurer l'âge d'une valeur depuis le moment où elle était vraie, pas depuis notre dernier téléchargement.
+
+```mermaid
+flowchart TD
+    A["Une lecture"] --> B{"Le type déclare une propriété<br/>qui porte le moment de la mesure ?"}
+    B -->|"oui"| C["Âge compté depuis ce moment,<br/>dans le fuseau déclaré"]
+    B -->|"non"| D["Âge inconnu, et dit comme tel"]
+```
+
+**Règles.** Le moment est déclaré, jamais deviné : une colonne qui ressemble à une date n'est pas forcément l'heure de la mesure. Un horodatage sans fuseau et sans fuseau déclaré est rapporté illisible plutôt qu'interprété.
+
+**Code.** `backend/src/services/observed-at.ts`. **Tests.** `observed-at.unit.test.ts`.
+
+## D8. Correspondance de zones
+
+**But.** Lire un signal mesuré sur une géographie (un bassin d'égout, une station) sur les territoires du réseau.
+
+```mermaid
+flowchart TD
+    A["Signal par zone source"] --> B["Recouvrements : part de chaque zone<br/>qui revient à chaque territoire"]
+    B --> C{"Base du poids"}
+    C -->|"population"| D["Préférée dès qu'elle existe"]
+    C -->|"surface ou déclarée"| E["Admise, et étiquetée comme telle"]
+    D --> F{"Nature de la quantité"}
+    E --> F
+    F -->|"un compte"| G["Les parts s'additionnent"]
+    F -->|"une concentration, un taux"| H["Moyenne pondérée"]
+```
+
+**Règles.** Pondérer par la surface trompe : un bassin qui couvre 30 % des hectares peut porter 70 % des gens. Deux usines à 500 copies par litre ne font pas 1 000.
+
+**Code.** `backend/src/services/zone-correspondence.ts`. **Tests.** `zone-correspondence.unit.test.ts`.

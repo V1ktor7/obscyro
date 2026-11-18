@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Obscyro — Analyst on the Scenarios map (mockup)</title>
+<!--
+  An AI analyst on the Scenarios map, as a collapsible overlay like Layers,
+  Result and Recipe: the map stays the page. A mockup: it talks to nothing.
+
+  WHAT IS REAL IN IT
+    The map       34 sites with physical-health beds and their coordinates, from
+                  demo/msss-installations-montreal.csv and msss-capacites; the
+                  island outline is drawn by hand. Cell colours on day 17 are
+                  illustrative, chosen to agree with the run below.
+    The answer    Every figure the analyst quotes comes from the run of
+                  "Omicron · Montréal — calibrated on INSPQ" made on 13 Nov 2026:
+                  Lakeshore 234 beds, the only acute site of RLS Pierrefonds –
+                  Lac-Saint-Louis (225,710 residents); a queue from day 17 up to
+                  103 waiting under events only; relieved by +60 beds from day 10.
+    Event finder  Illustrative cards. The real feature would quote each source
+                  verbatim and keep the announcement and the effective date apart.
+
+  WHAT EACH PART MAPS TO
+    Tool calls    Read tools over endpoints that already exist: the twin export
+                  (/twin/sim-export, with a scenario lens), /objects, the scenario
+                  overrides, the run's datasets, /observed-series. Web search and
+                  fetch are the Claude API's server tools, limited to listed domains.
+    Writes        Only propose_event, into a review queue. The analyst never edits
+                  the live twin and never computes a statistic itself: numbers come
+                  from tools, and the factor engine is tested code.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --ink:#1c2127;--ink-body:#404854;--ink-muted:#5f6b7c;--ink-faint:#8f99a8;--ink-ghost:#c5cbd3;
+    --line:#d3d8de;--line-soft:#e5e8eb;--line-faint:#eef1f4;
+    --canvas:#f6f7f9;--canvas-raised:#f8f9fa;
+    --brand:#2d72d2;--brand-deep:#215db0;--brand-soft:#e7f2fd;
+    --ok:#1d9e75;--ok-soft:#e8f6f0;--ok-ink:#1c6e42;
+    --warn:#d9822b;--warn-soft:#fdf6ec;--warn-line:#f0d9b5;--warn-ink:#935610;
+    --danger:#c23030;--danger-soft:#fdf1f1;--danger-ink:#a82255;
+    --scenario:#5b4a86;--scenario-soft:#f0edf7;
+    --water:#dfe8f1;--land:#eef0ec;
+    --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--canvas);color:var(--ink);font:12.5px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased;overflow:hidden}
+  button,input,select{font:inherit;color:inherit}
+  button{cursor:pointer}
+  .lucide{width:14px;height:14px;flex:none}
+  .mono{font-family:var(--mono);font-size:.92em}
+  .lbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint)}
+  .muted{color:var(--ink-muted)} .faint{color:var(--ink-faint)} .tnum{font-variant-numeric:tabular-nums}
+  :focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+
+  /* ---------- the Studio shell ---------- */
+  .app{display:flex;flex-direction:column;height:100vh}
+  .hdr{height:44px;flex:none;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line);background:var(--canvas);padding:0 12px}
+  .wordmark{font-size:14px;font-weight:500;letter-spacing:-.01em}
+  .org{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;border-radius:4px;padding:3px 8px;font-size:11.5px}
+  .org .lucide{color:var(--brand-deep)}
+  .search{margin:0 auto;width:280px;display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:#fff;border-radius:4px;padding:4px 10px;font-size:11.5px;color:var(--ink-faint)}
+  .search kbd{margin-left:auto;border:1px solid var(--line);border-radius:3px;padding:0 4px;font:10px Inter,sans-serif}
+  .hr{display:flex;align-items:center;gap:10px;font-size:11.5px}
+  .envb{border:1px solid var(--warn-line);background:var(--warn-soft);color:var(--warn-ink);border-radius:3px;padding:1px 6px;font-size:9.5px;font-weight:600;letter-spacing:.04em}
+  .health{display:inline-flex;align-items:center;gap:6px;color:var(--ink-muted)}
+  .health b{width:7px;height:7px;border-radius:50%;background:#10b981}
+  .body{flex:1;min-height:0;display:flex}
+  .rail{width:56px;flex:none;border-right:1px solid var(--line);background:var(--canvas);padding:6px 0;display:flex;flex-direction:column}
+  .rail span{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 0;color:var(--ink-muted);font-size:8.5px;line-height:1}
+  .rail span .lucide{width:17px;height:17px}
+  .rail span.on{background:var(--brand-soft);color:var(--brand-deep);box-shadow:inset 2px 0 0 var(--brand)}
+  .sub{width:150px;flex:none;border-right:1px solid var(--line);background:#fff;padding:8px 0}
+  .sub span{display:block;padding:6px 12px;font-size:12px}
+  .sub span.on{background:var(--brand-soft);color:var(--brand-deep);font-weight:500}
+
+  /* ---------- the map page ---------- */
+  /* The map is the page. Everything else floats on it and folds, as Layers, Result and Recipe do in the Studio. */
+  .page{flex:1;min-width:0;position:relative}
+  .mapcol{position:absolute;inset:0;overflow:hidden;background:var(--water)}
+  .mapcol svg.map{position:absolute;left:0;top:58px;width:100%;height:calc(100% - 114px)}
+  .float{position:absolute;left:12px;right:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    border:1px solid var(--line);background:rgba(255,255,255,.96);border-radius:8px;box-shadow:0 1px 2px rgba(16,24,40,.06);padding:7px 10px}
+  .float.top{top:12px;flex-wrap:nowrap;overflow:hidden}
+  .float.top > *{flex:none;white-space:nowrap}
+  .float.top > .field:first-of-type{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+  .chev2{margin-left:auto;transition:transform .15s}
+  .an:not(.folded) .an-h .chev2,.legend:not(.folded) .lg-h .chev2{transform:rotate(180deg)}
+  .float.bottom{bottom:12px}
+  .field{height:26px;border:1px solid var(--line);border-radius:5px;background:#fff;padding:0 8px;font-size:12px;display:inline-flex;align-items:center;gap:6px}
+  .scen{display:inline-flex;align-items:center;border-radius:4px;background:var(--scenario-soft);color:var(--scenario);padding:2px 7px;font-size:11px;font-weight:600}
+  .btn{height:28px;display:inline-flex;align-items:center;gap:6px;padding:0 11px;border-radius:6px;border:1px solid var(--line);background:#fff;color:var(--ink-body);font-size:12px;white-space:nowrap}
+  .btn:hover{border-color:var(--brand);color:var(--brand-deep)}
+  .btn.p{background:var(--brand);border-color:var(--brand-deep);color:#fff}
+  .btn.p:hover{background:var(--brand-deep);color:#fff}
+  .btn.sm{height:24px;padding:0 8px;font-size:11.5px;border-radius:5px}
+  .legend{position:absolute;left:12px;top:64px;max-width:300px;border:1px solid var(--line);background:rgba(255,255,255,.96);border-radius:8px;box-shadow:0 1px 2px rgba(16,24,40,.06);overflow:hidden}
+  .lg-h{display:flex;align-items:center;gap:8px;width:100%;border:0;background:none;padding:7px 10px;font-size:11.5px;text-align:left}
+  .lg-h:hover,.an-h:hover{background:var(--canvas-raised)}
+  .lg-h b{font-weight:600;color:var(--ink)}
+  .lg-b{display:flex;flex-direction:column;gap:3px;padding:6px 10px 8px;font-size:11px;border-top:1px solid var(--line-soft)}
+  .legend.folded .lg-b{display:none}
+  .lg-b i{display:inline-block;width:12px;height:12px;border-radius:2px;border:1px solid var(--line);vertical-align:-2px;margin-right:6px}
+  .scrub{flex:1;min-width:200px;height:4px;border-radius:2px;background:var(--line);position:relative}
+  .scrub b{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:var(--brand)}
+  .scrub i{position:absolute;top:-5px;width:14px;height:14px;border-radius:50%;background:var(--brand);border:2px solid #fff;box-shadow:0 0 0 1px var(--brand)}
+  .site-label{font:600 10px Inter,sans-serif;fill:var(--ink);paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round}
+  .site-sub{font:500 9.5px Inter,sans-serif;fill:var(--danger-ink);paint-order:stroke;stroke:#fff;stroke-width:3px}
+  @keyframes ring{from{r:9;opacity:.8}to{r:22;opacity:0}}
+  .ring{fill:none;stroke:var(--brand);stroke-width:2;animation:ring 1.6s ease-out infinite}
+  @media (prefers-reduced-motion:reduce){.ring{animation:none;opacity:.6}}
+
+  /* ---------- the analyst ---------- */
+  .an{position:absolute;top:64px;right:12px;width:430px;max-width:calc(100% - 24px);max-height:calc(100% - 64px - 62px);display:flex;flex-direction:column;
+    border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.97);box-shadow:0 1px 2px rgba(16,24,40,.06);overflow:hidden}
+  .an.folded{width:auto}
+  .an.folded .tabs,.an.folded .pane,.an.folded .ask{display:none}
+  .an-h{flex:none;display:flex;align-items:center;gap:8px;width:100%;border:0;background:none;padding:8px 10px;text-align:left;border-bottom:1px solid var(--line)}
+  .an.folded .an-h{border-bottom:0}
+  .an-h .an-title{font-size:12px;font-weight:600;color:var(--ink)}
+  .an-h .model{font-size:11px;color:var(--ink-muted);white-space:nowrap}
+  .tabs{flex:none;display:flex;gap:2px;padding:6px 10px 0;border-bottom:1px solid var(--line)}
+  .tabs button{border:0;background:none;padding:6px 10px 7px;font-size:12px;color:var(--ink-muted);border-bottom:2px solid transparent;margin-bottom:-1px;display:inline-flex;align-items:center;gap:6px}
+  .tabs button[aria-selected="true"]{color:var(--brand-deep);border-bottom-color:var(--brand);font-weight:500}
+  .count{min-width:16px;height:16px;border-radius:8px;background:var(--warn-soft);color:var(--warn-ink);border:1px solid var(--warn-line);font-size:10px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;padding:0 4px}
+  .pane{flex:1;min-height:0;overflow-y:auto;padding:12px}
+  .pane[hidden]{display:none}
+
+  .ctx{border:1px solid var(--line);border-radius:8px;background:var(--canvas-raised);padding:9px 10px;display:flex;flex-direction:column;gap:6px}
+  .ctx-top{display:flex;align-items:center;gap:8px}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:5px;overflow:hidden;margin-left:auto}
+  .seg button{border:0;background:#fff;padding:2px 8px;font-size:11px;color:var(--ink-muted)}
+  .seg button[aria-pressed="true"]{background:var(--scenario);color:#fff}
+  .seg button[aria-pressed="true"].real{background:var(--ink)}
+  .ctx ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:2px;font-size:11.5px;color:var(--ink-body)}
+  .ctx li{display:flex;gap:6px}
+  .ctx li .lucide{width:13px;height:13px;margin-top:2px;color:var(--ink-faint)}
+  .ctx li.added .lucide{color:var(--scenario)}
+  .ctx li.added{color:var(--scenario)}
+
+  .msg{margin-top:12px}
+  .q{margin-left:36px;border-radius:10px 10px 2px 10px;background:var(--brand-soft);color:var(--ink);padding:8px 10px;font-size:12.5px}
+  .who{display:flex;align-items:center;gap:6px;margin:12px 0 6px;font-size:11px;color:var(--ink-muted)}
+  .who b{width:20px;height:20px;border-radius:5px;background:var(--ink);color:#fff;display:inline-flex;align-items:center;justify-content:center}
+  .who b .lucide{width:12px;height:12px}
+
+  .steps{border:1px solid var(--line-soft);border-radius:8px;overflow:hidden}
+  .steps-h{width:100%;display:flex;align-items:center;gap:6px;border:0;background:var(--canvas-raised);padding:6px 9px;font-size:11.5px;color:var(--ink-muted);text-align:left}
+  .steps-h .chev{margin-left:auto;transition:transform .15s}
+  .steps.open .chev{transform:rotate(180deg)}
+  .steps ol{margin:0;padding:0;list-style:none;display:none}
+  .steps.open ol{display:block}
+  .steps li{display:grid;grid-template-columns:16px minmax(0,1fr);gap:7px;padding:6px 9px;border-top:1px solid var(--line-faint);font-size:11.5px}
+  .steps li .lucide{width:13px;height:13px;margin-top:2px;color:var(--ok)}
+  .steps li.web .lucide{color:var(--brand)}
+  .call{font-family:var(--mono);font-size:11px;color:var(--ink)}
+  .call em{font-style:normal;color:var(--ink-faint)}
+  .res{color:var(--ink-muted);margin-top:1px}
+
+  .ans{margin-top:8px;font-size:12.5px;line-height:1.55;color:var(--ink-body)}
+  .ans p{margin:0 0 8px}
+  .ans b{color:var(--ink);font-weight:600}
+  .chip{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);background:#fff;border-radius:4px;padding:0 6px;font-size:11.5px;line-height:19px;color:var(--ink);vertical-align:1px}
+  .chip:hover,.chip[aria-pressed="true"]{border-color:var(--brand);background:var(--brand-soft);color:var(--brand-deep)}
+  .chip .lucide{width:12px;height:12px}
+  .chip.sc{color:var(--scenario);border-color:#d6cfe8}
+  .chip.sc:hover,.chip.sc[aria-pressed="true"]{background:var(--scenario-soft);border-color:var(--scenario)}
+  .src{display:inline-flex;align-items:center;border-radius:3px;padding:0 4px;font-size:9px;font-weight:600;letter-spacing:.04em;line-height:15px;vertical-align:1px;margin-left:3px}
+  .src.twin{background:var(--brand-soft);color:var(--brand-deep)}
+  .src.run{background:#eceef1;color:var(--ink-body)}
+  .src.sc{background:var(--scenario-soft);color:var(--scenario)}
+  .src.as{background:var(--warn-soft);color:var(--warn-ink)}
+  .src.web{background:#e6f4f4;color:#0f6b6b}
+  .care{border-left:3px solid var(--warn);background:var(--warn-soft);border-radius:0 6px 6px 0;padding:7px 9px;font-size:11.5px;color:var(--warn-ink);margin:4px 0 8px}
+  .follow{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+  .follow button{border:1px solid var(--line);background:#fff;border-radius:14px;padding:3px 10px;font-size:11.5px;color:var(--ink-body)}
+  .follow button:hover{border-color:var(--brand);color:var(--brand-deep)}
+
+  .ask{flex:none;border-top:1px solid var(--line);padding:9px 12px;display:flex;flex-direction:column;gap:6px}
+  .askbox{display:flex;align-items:flex-end;gap:6px;border:1px solid var(--line);border-radius:8px;padding:6px 6px 6px 10px}
+  .askbox:focus-within{border-color:var(--brand)}
+  .askbox textarea{flex:1;border:0;resize:none;outline:none;font:12.5px/1.4 Inter,sans-serif;height:36px;color:var(--ink)}
+  .send{width:28px;height:28px;border-radius:6px;border:0;background:var(--brand);color:#fff;display:inline-flex;align-items:center;justify-content:center}
+  .ask .meta{display:flex;gap:8px;font-size:10.5px;color:var(--ink-faint)}
+
+  .banner{border:1px dashed var(--line);border-radius:6px;padding:6px 9px;font-size:11px;color:var(--ink-muted);margin-bottom:10px}
+  .card{border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin-bottom:10px;background:#fff}
+  .card h3{margin:0;font-size:12.5px;font-weight:600}
+  .card .row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:5px;font-size:11.5px;color:var(--ink-body)}
+  .kv{display:grid;grid-template-columns:96px minmax(0,1fr);gap:2px 8px;margin-top:7px;font-size:11.5px}
+  .kv dt{color:var(--ink-faint)} .kv dd{margin:0;color:var(--ink-body)}
+  .quote{margin-top:7px;border-left:2px solid var(--line);padding-left:8px;font-size:11.5px;color:var(--ink-muted);font-style:italic}
+  .status{margin-left:auto;font-size:10.5px;font-weight:600;border-radius:3px;padding:1px 6px}
+  .status.pending{background:var(--warn-soft);color:var(--warn-ink)}
+  .status.ok{background:var(--ok-soft);color:var(--ok-ink)}
+  .status.no{background:#eceef1;color:var(--ink-muted)}
+  .card .acts{display:flex;gap:6px;margin-top:8px}
+  .flag{display:flex;gap:6px;align-items:flex-start;margin-top:7px;border-radius:6px;background:var(--danger-soft);color:var(--danger-ink);padding:6px 8px;font-size:11.5px}
+  .flag .lucide{margin-top:1px}
+
+  .tool{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:8px;align-items:start;padding:8px 0;border-top:1px solid var(--line-faint)}
+  .tool:first-of-type{border-top:0}
+  .tool .lucide{margin-top:2px;color:var(--ink-muted)}
+  .tool .name{font-family:var(--mono);font-size:11.5px;color:var(--ink)}
+  .tool .what{font-size:11.5px;color:var(--ink-muted)}
+  .perm{font-size:10px;font-weight:600;border-radius:3px;padding:1px 6px;white-space:nowrap}
+  .perm.r{background:var(--brand-soft);color:var(--brand-deep)}
+  .perm.w{background:var(--warn-soft);color:var(--warn-ink)}
+  .perm.x{background:#eceef1;color:var(--ink-body)}
+  .never{margin-top:10px;border-radius:8px;background:var(--canvas-raised);border:1px solid var(--line-soft);padding:8px 10px;font-size:11.5px;color:var(--ink-body)}
+  .never li{margin:2px 0}
+  h4{margin:14px 0 4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint)}
+  .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:6px;padding:6px 12px;font-size:12px;opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.on{opacity:1}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="hdr">
+    <span class="wordmark">obscyro</span>
+    <span class="org"><i data-lucide="building-2"></i>obscyro</span>
+    <span class="search"><i data-lucide="search"></i>Search or run a command<kbd>⌘K</kbd></span>
+    <span class="hr">
+      <span class="envb">PRODUCTION</span>
+      <span class="muted">Home <span class="faint">/</span> <b style="font-weight:500;color:var(--ink)">Montreal COVID-19 · operations</b></span>
+      <span class="health"><b></b>Live — connected to API</span>
+      <span class="muted">Sign out</span>
+    </span>
+  </header>
+
+  <div class="body">
+    <nav class="rail" aria-label="Sections">
+      <span><i data-lucide="house"></i>Home</span>
+      <span><i data-lucide="database"></i>Data</span>
+      <span><i data-lucide="layout-grid"></i>Dashboard</span>
+      <span><i data-lucide="workflow"></i>Lineage</span>
+      <span><i data-lucide="box"></i>Ontology</span>
+      <span><i data-lucide="chart-line"></i>Models</span>
+      <span class="on"><i data-lucide="map"></i>Twin</span>
+      <span><i data-lucide="activity"></i>Health</span>
+      <span><i data-lucide="shield-check"></i>Govern</span>
+    </nav>
+    <aside class="sub" aria-label="Twin navigation">
+      <span>Response</span><span>Units</span><span>Network</span><span class="on">Scenarios</span><span>Events</span><span>Profiles</span>
+    </aside>
+
+    <div class="page">
+      <!-- ================= the map ================= -->
+      <section class="mapcol" aria-label="Scenario map">
+        <svg class="map" id="map" viewBox="0 0 640 560" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Montréal island, physical-health bed occupancy on day 17"></svg>
+
+        <div class="float top">
+          <span class="lbl">Scenario</span>
+          <span class="field">Omicron · Montréal — calibrated on INSPQ <i data-lucide="chevron-down"></i></span>
+          <span class="scen">Scenario · not reality</span>
+          <span style="flex:1"></span>
+          <span class="lbl">Days</span><span class="field">60</span>
+          <span class="lbl">Capacity read</span><span class="field">litsantephysique</span>
+          <button class="btn p" type="button">Run</button>
+        </div>
+
+        <div class="legend" id="layers">
+          <button class="lg-h" type="button" aria-expanded="true"><b>Layers</b><span class="muted">beds in use, queue included</span><i data-lucide="chevron-down" class="chev2"></i></button>
+          <div class="lg-b">
+            <span><i style="background:#dcefe5"></i>under 90 %</span>
+            <span><i style="background:#f6e4b8"></i>90–109 %</span>
+            <span><i style="background:#f2b867"></i>110–149 %</span>
+            <span><i style="background:#e07a3f"></i>150–199 %</span>
+          </div>
+        </div>
+
+        <div class="float bottom">
+          <span class="tnum" style="font-weight:600">Day 17 of 59</span>
+          <span class="muted tnum">30 Dec 2021</span>
+          <span class="scrub" aria-hidden="true"><b style="width:28.8%"></b><i style="left:calc(28.8% - 7px)"></i></span>
+          <span class="muted" style="font-size:11.5px">Lakeshore starts to queue today</span>
+        </div>
+      </section>
+
+      <!-- ================= the analyst: a collapsible overlay on the map ================= -->
+      <aside class="an" id="analyst" aria-label="Analyst">
+        <button class="an-h" type="button" aria-expanded="true">
+          <i data-lucide="radar" style="color:var(--brand-deep)"></i>
+          <span class="an-title">Analyst</span>
+          <span class="model">1 answer · 3 events to review</span>
+          <i data-lucide="chevron-down" class="chev2"></i>
+        </button>
+        <div class="tabs" role="tablist">
+          <button role="tab" aria-selected="true" data-tab="ask"><i data-lucide="message-square-text"></i>Ask</button>
+          <button role="tab" aria-selected="false" data-tab="finder"><i data-lucide="calendar-search"></i>Event finder <span class="count">3</span></button>
+          <button role="tab" aria-selected="false" data-tab="tools"><i data-lucide="wrench"></i>What it can use</button>
+        </div>
+
+        <!-- ---------- Ask ---------- -->
+        <div class="pane" id="pane-ask" role="tabpanel">
+          <div class="ctx">
+            <div class="ctx-top">
+              <span class="lbl">The world it reads</span>
+              <span class="seg" role="group" aria-label="World">
+                <button type="button" class="real" data-world="real" aria-pressed="false">Reality</button>
+                <button type="button" data-world="sc" aria-pressed="true">This scenario</button>
+              </span>
+            </div>
+            <ul id="world">
+              <li><i data-lucide="building-2"></i><span><b>241 sites</b>, 34 with physical-health beds (6,527)</span></li>
+              <li><i data-lucide="users"></i><span><b>12 territories</b>, 2.16 M residents</span></li>
+              <li class="added"><i data-lucide="plus-square"></i><span>Added by your team: <b>+185 beds</b> at 5 hospitals from day 10</span></li>
+              <li class="added"><i data-lucide="link"></i><span>Added by your team: RLS Rivière-des-Prairies served by HMR and Santa Cabrini</span></li>
+              <li class="added"><i data-lucide="sliders-horizontal"></i><span>Starting conditions: 85 % usual occupancy, 83 % immune, variant ×3.6</span></li>
+            </ul>
+          </div>
+
+          <div class="msg">
+            <div class="q">Why does Lakeshore overflow on day 17, and what would fix it?</div>
+
+            <div class="who"><b><i data-lucide="radar"></i></b>Analyst · 6 tool calls · 4 s</div>
+            <div class="steps" id="steps">
+              <button class="steps-h" type="button" aria-expanded="false"><i data-lucide="list-checks"></i>What it looked at<i data-lucide="chevron-down" class="chev"></i></button>
+              <ol>
+                <li><i data-lucide="check"></i><div><div class="call">describe_twin<em>(world: scenario)</em></div><div class="res">241 sites, 12 territories; the scenario adds +185 beds, 2 links, 3 conditions.</div></div></li>
+                <li><i data-lucide="check"></i><div><div class="call">get_object<em>("Hôpital général du Lakeshore")</em></div><div class="res">234 physical-health beds · serves RLS Pierrefonds – Lac-Saint-Louis · no route with a capacity.</div></div></li>
+                <li><i data-lucide="check"></i><div><div class="call">find_objects<em>(provides: litsantephysique, serves: "Pierrefonds – Lac-Saint-Louis")</em></div><div class="res">1 site: Lakeshore.</div></div></li>
+                <li><i data-lucide="check"></i><div><div class="call">compare_territories<em>(measure: beds per 1,000)</em></div><div class="res">Pierrefonds – Lac-Saint-Louis 1.0 · island 3.0 · lowest of 12 with Dorval – Lachine – LaSalle (1.1).</div></div></li>
+                <li><i data-lucide="check"></i><div><div class="call">read_run<em>(last run, site: Lakeshore)</em></div><div class="res">Events only: queue from day 17, up to 103 waiting on day 50. With your choices: no queue.</div></div></li>
+                <li><i data-lucide="check"></i><div><div class="call">scenario_changes<em>(site: Lakeshore)</em></div><div class="res">+60 litsantephysique from day 10 · Decision · added 13 Nov.</div></div></li>
+              </ol>
+            </div>
+
+            <div class="ans">
+              <p><button class="chip" data-focus="lakeshore" aria-pressed="false"><i data-lucide="hospital"></i>Lakeshore</button> is the only site with physical-health beds serving <button class="chip" data-focus="pierrefonds" aria-pressed="false"><i data-lucide="map-pin"></i>RLS Pierrefonds – Lac-Saint-Louis</button>: <b>225,710 residents for 234 beds</b>, 1.0 per 1,000, against 3.0 for the island.<span class="src twin">TWIN</span></p>
+              <p>At the usual occupancy set in this scenario, it starts with about <b>35 free beds</b>.<span class="src sc">SCENARIO</span> The wave fills them by <b>day 17 (30 Dec 2021)</b>, and with no transfer the queue grows to <b>103 people by day 50</b>.<span class="src run">RUN</span></p>
+              <p>Your <button class="chip sc" data-focus="beds" aria-pressed="false"><i data-lucide="plus-square"></i>+60 beds from day 10</button> remove that queue entirely in this run.<span class="src run">RUN</span></p>
+              <div class="care"><b>Two assumptions decide this answer.</b> The 85 % usual occupancy is a figure your team set, not a measure, and patients stay in their own territory because the run used no transfer. Lakeshore's real occupancy in December 2021 is not in the twin.</div>
+              <div class="follow">
+                <button type="button" data-toast>Test “Transfer when full” on this event</button>
+                <button type="button" data-toast>Which territories have under 1.5 beds per 1,000?</button>
+                <button type="button" data-toast>Would +30 beds be enough?</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ---------- Event finder ---------- -->
+        <div class="pane" id="pane-finder" role="tabpanel" hidden>
+          <div class="banner"><b>Illustrative cards.</b> The real feature quotes each source verbatim, keeps the announcement and the effective date apart, and adds nothing to the calendar until someone approves it.</div>
+          <div class="lbl" style="margin-bottom:6px">Found on the web · waiting for review</div>
+
+          <article class="card" data-card>
+            <div class="row" style="margin-top:0"><h3>Curfew 8 p.m.–5 a.m.</h3><span class="status pending">Needs review</span></div>
+            <dl class="kv">
+              <dt>Where</dt><dd>Every region</dd>
+              <dt>Announced</dt><dd class="tnum">6 Jan 2021</dd>
+              <dt>In force</dt><dd class="tnum">9 Jan 2021 → 8 Feb 2021, then by region</dd>
+              <dt>Acts on</dt><dd>Contact layers <span class="mono">visiteurs</span>, <span class="mono">autre</span></dd>
+              <dt>Source</dt><dd>Québec government press release · <span class="src web">WEB</span></dd>
+            </dl>
+            <div class="quote">“Quoted sentence from the source would appear here.”</div>
+            <div class="acts"><button class="btn sm p" data-approve>Approve</button><button class="btn sm" data-toast>Edit</button><button class="btn sm" data-reject>Reject</button></div>
+          </article>
+
+          <article class="card" data-card>
+            <div class="row" style="margin-top:0"><h3>Schools closed before the holidays</h3><span class="status pending">Needs review</span></div>
+            <dl class="kv">
+              <dt>Where</dt><dd>Every region</dd>
+              <dt>Announced</dt><dd class="tnum">16 Dec 2021</dd>
+              <dt>In force</dt><dd class="tnum">17 Dec 2021 → 16 Jan 2022</dd>
+              <dt>Acts on</dt><dd>Contact layer <span class="mono">ecole</span></dd>
+              <dt>Source</dt><dd>Ministère de l'Éducation · <span class="src web">WEB</span></dd>
+            </dl>
+            <div class="flag"><i data-lucide="split"></i><span><b>Inseparable from the holidays</b>: same dates in every region. Its effect can only be told apart by age group (0–19 years first), if at all.</span></div>
+            <div class="acts"><button class="btn sm p" data-approve>Approve</button><button class="btn sm" data-toast>Edit</button><button class="btn sm" data-reject>Reject</button></div>
+          </article>
+
+          <article class="card" data-card>
+            <div class="row" style="margin-top:0"><h3>Lead from an anomaly</h3><span class="status pending">Needs review</span></div>
+            <div class="row"><i data-lucide="scan-search" style="color:var(--brand)"></i><span>The factor engine flagged growth that no recorded event explains, in one region, over one week. The analyst searched the allowed sources for that place and those dates.</span></div>
+            <dl class="kv">
+              <dt>Searched</dt><dd><span class="mono">region + dates + “éclosion” / “mesure”</span> · 4 sources read</dd>
+              <dt>Found</dt><dd>2 candidate events, each with its source</dd>
+              <dt>Next</dt><dd>Approve one, and the engine re-runs with it</dd>
+            </dl>
+            <div class="acts"><button class="btn sm" data-toast>Open the two candidates</button></div>
+          </article>
+        </div>
+
+        <!-- ---------- Tools ---------- -->
+        <div class="pane" id="pane-tools" role="tabpanel" hidden>
+          <h4 style="margin-top:0">Read the twin</h4>
+          <div class="tool"><i data-lucide="layout-dashboard"></i><div><div class="name">describe_twin</div><div class="what">The summary at the top of every conversation: sites, capacity, territories, and what a scenario adds.</div></div><span class="perm r">Read</span></div>
+          <div class="tool"><i data-lucide="search"></i><div><div class="name">find_objects</div><div class="what">“Schools within 2 km of this hospital”, “sites serving this territory”. Types are understood from what they declare, not their name.</div></div><span class="perm r">Read</span></div>
+          <div class="tool"><i data-lucide="file-search"></i><div><div class="name">get_object</div><div class="what">Every property and link of one object, and where it came from: entered by hand or loaded from a file.</div></div><span class="perm r">Read</span></div>
+          <div class="tool"><i data-lucide="git-compare"></i><div><div class="name">scenario_changes</div><div class="what">What your team added or changed in a scenario, and when.</div></div><span class="perm r">Read</span></div>
+          <h4>Read results and data</h4>
+          <div class="tool"><i data-lucide="play-circle"></i><div><div class="name">read_run</div><div class="what">Occupancy, queues and arrivals from a run, by site and by day.</div></div><span class="perm r">Read</span></div>
+          <div class="tool"><i data-lucide="line-chart"></i><div><div class="name">read_series</div><div class="what">Any dated dataset in the project: INSPQ admissions, positivity, wastewater.</div></div><span class="perm r">Read</span></div>
+          <div class="tool"><i data-lucide="sigma"></i><div><div class="name">run_factor_engine</div><div class="what">Runs the tested engine that measures effects. The analyst reads its answer; it never computes a statistic itself.</div></div><span class="perm x">Runs</span></div>
+          <h4>The web</h4>
+          <div class="tool"><i data-lucide="globe"></i><div><div class="name">web_search · web_fetch</div><div class="what">Only: inspq.qc.ca · quebec.ca · msss.gouv.qc.ca · santemontreal.qc.ca · publicationsduquebec.gouv.qc.ca</div></div><span class="perm r">Read</span></div>
+          <h4>Write</h4>
+          <div class="tool"><i data-lucide="inbox"></i><div><div class="name">propose_event</div><div class="what">Adds a card to the Event finder. Nothing reaches the calendar until a person approves it.</div></div><span class="perm w">Proposes</span></div>
+          <div class="never"><b>Never</b><ul style="margin:4px 0 0;padding-left:18px"><li>edits the live twin</li><li>computes a statistic itself</li><li>reads or stores anything about a person</li></ul></div>
+        </div>
+
+        <div class="ask">
+          <div class="askbox">
+            <textarea aria-label="Ask the analyst" placeholder="Ask about the twin, a run, or an event…"></textarea>
+            <button class="send" type="button" aria-label="Send" data-toast><i data-lucide="arrow-up"></i></button>
+          </div>
+          <div class="meta"><span>Reading: <b id="meta-world" style="color:var(--scenario)">this scenario</b></span><span>·</span><span>Answers cite the twin, the run and their sources</span></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast">Mockup: not connected</div>
+
+<script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script>
+// ---------------------------------------------------------------------------
+// The island, the sites and the cells.
+// ---------------------------------------------------------------------------
+const X = (lon) => (lon + 74.0) * 1150 + 10;
+const Y = (lat) => (45.74 - lat) * 1150 * 1.427 + 10;
+
+// Montréal island, drawn by hand from the shoreline: west tip, north shore eastward, back along the St. Lawrence.
+const ISLAND = [
+  [-73.955,45.405],[-73.965,45.432],[-73.93,45.468],[-73.87,45.497],[-73.80,45.508],[-73.72,45.532],[-73.68,45.553],
+  [-73.64,45.573],[-73.61,45.598],[-73.57,45.636],[-73.53,45.668],[-73.49,45.695],[-73.472,45.70],[-73.478,45.672],
+  [-73.495,45.632],[-73.507,45.600],[-73.522,45.565],[-73.535,45.535],[-73.548,45.502],[-73.556,45.468],[-73.583,45.432],
+  [-73.612,45.413],[-73.65,45.422],[-73.68,45.428],[-73.74,45.433],[-73.80,45.428],[-73.86,45.419],[-73.91,45.410],
+];
+
+// Sites with physical-health beds (MSSS permits, demo/*.csv). p = beds in use on day 17, queue included (illustrative).
+const SITES = [
+  {id:"lakeshore", n:"Lakeshore", beds:234, lat:45.4486, lon:-73.8337, p:1.13},
+  {n:"CHUM", beds:732, lat:45.5118, lon:-73.5563, p:0.91},
+  {n:"Jewish General", beds:516, lat:45.4978, lon:-73.6288, p:0.92},
+  {n:"Maisonneuve-Rosemont", beds:507, lat:45.5742, lon:-73.5585, p:0.95},
+  {n:"Glen", beds:480, lat:45.4734, lon:-73.6009, p:0.9},
+  {n:"Sacré-Cœur", beds:420, lat:45.5326, lon:-73.714, p:0.93},
+  {n:"Sainte-Justine", beds:333, lat:45.5032, lon:-73.6249, p:0.88},
+  {n:"Santa Cabrini", beds:305, lat:45.5801, lon:-73.5717, p:0.97},
+  {n:"Verdun", beds:244, lat:45.4641, lon:-73.564, p:0.98},
+  {n:"Montreal General", beds:236, lat:45.497, lon:-73.589, p:0.9},
+  {n:"Marie-Clarac", beds:228, lat:45.5908, lon:-73.6497, p:0.89},
+  {n:"St. Mary's", beds:224, lat:45.4949, lon:-73.6241, p:0.91},
+  {n:"Notre-Dame", beds:224, lat:45.5254, lon:-73.5636, p:0.9},
+  {n:"Villa Medica", beds:207, lat:45.515, lon:-73.5687, p:0.87},
+  {n:"Cardiologie", beds:153, lat:45.5738, lon:-73.5778, p:0.92},
+  {n:"Hôtel-Dieu", beds:150, lat:45.5139, lon:-73.5781, p:0.89},
+  {n:"Jean-Talon", beds:131, lat:45.5459, lon:-73.6095, p:0.92},
+  {n:"Fleury", beds:115, lat:45.5718, lon:-73.6504, p:0.9},
+  {n:"LaSalle", beds:110, lat:45.4208, lon:-73.6234, p:1.0},
+  {n:"Lachine", beds:56, lat:45.4408, lon:-73.677, p:1.0},
+];
+
+function inside(x, y, poly) {
+  let hit = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hit = !hit;
+  }
+  return hit;
+}
+const ramp = (v) => (v < 0.9 ? "#dcefe5" : v < 1.1 ? "#f6e4b8" : v < 1.5 ? "#f2b867" : "#e07a3f");
+
+const svg = document.getElementById("map");
+const NS = "http://www.w3.org/2000/svg";
+const el = (tag, attrs, parent = svg) => {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  parent.appendChild(e);
+  return e;
+};
+const island = ISLAND.map(([lon, lat]) => [X(lon), Y(lat)]);
+el("polygon", { points: island.map((p) => p.join(",")).join(" "), fill: "var(--land)", stroke: "#c7cfd8", "stroke-width": 1.2 });
+
+// Pointy-top hexes, coloured by the nearest site's pressure.
+const R = 10.5, W = Math.sqrt(3) * R, H = 1.5 * R;
+const cells = el("g", {});
+const pierrefonds = el("g", {});
+for (let row = 0, y = 0; y < 580; row++, y += H) {
+  for (let x = (row % 2) * (W / 2); x < 660; x += W) {
+    if (!inside(x, y, island)) continue;
+    let best = null, bd = Infinity;
+    for (const s of SITES) {
+      const d = (X(s.lon) - x) ** 2 + (Y(s.lat) - y) ** 2;
+      if (d < bd) { bd = d; best = s; }
+    }
+    const pts = [0, 1, 2, 3, 4, 5].map((k) => {
+      const a = (Math.PI / 180) * (60 * k - 30);
+      return `${(x + (R - 0.6) * Math.cos(a)).toFixed(1)},${(y + (R - 0.6) * Math.sin(a)).toFixed(1)}`;
+    }).join(" ");
+    el("polygon", { points: pts, fill: ramp(best.p), stroke: "rgba(255,255,255,.7)", "stroke-width": 0.8 }, cells);
+    // RLS Pierrefonds – Lac-Saint-Louis: the west island, beyond Dorval.
+    if (x < X(-73.765)) el("polygon", { points: pts, fill: "none", stroke: "var(--brand)", "stroke-width": 1.4, class: "rls", opacity: 0 }, pierrefonds);
+  }
+}
+
+// Sites, sized by beds.
+const dots = el("g", {});
+let lakeshoreRing = null;
+for (const s of SITES) {
+  const cx = X(s.lon), cy = Y(s.lat), r = 3 + Math.sqrt(s.beds) / 6;
+  if (s.id === "lakeshore") lakeshoreRing = el("circle", { cx, cy, r: 9, class: "ring", opacity: 0 }, dots);
+  el("circle", { cx, cy, r, fill: s.p >= 1.1 ? "var(--danger-ink)" : "#1c2127", stroke: "#fff", "stroke-width": 1.5 }, dots);
+}
+const lk = SITES[0];
+const lab = el("text", { x: X(lk.lon) - 6, y: Y(lk.lat) + 24, class: "site-label", "text-anchor": "middle" });
+lab.textContent = "Lakeshore · 234 beds";
+const sub = el("text", { x: X(lk.lon) - 6, y: Y(lk.lat) + 36, class: "site-sub", "text-anchor": "middle" });
+sub.textContent = "full · queue starts";
+const plus = el("text", { x: X(lk.lon) + 12, y: Y(lk.lat) - 9, class: "site-label", fill: "var(--scenario)", opacity: 0 });
+plus.textContent = "+60 from day 10";
+plus.style.fill = "var(--scenario)";
+
+// ---------------------------------------------------------------------------
+// Interactions.
+// ---------------------------------------------------------------------------
+const toast = (t = "Mockup: not connected") => {
+  const n = document.getElementById("toast");
+  n.textContent = t; n.classList.add("on");
+  clearTimeout(toast.t); toast.t = setTimeout(() => n.classList.remove("on"), 1400);
+};
+document.querySelectorAll("[data-toast]").forEach((b) => b.addEventListener("click", () => toast()));
+
+document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll(".tabs button").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+  for (const p of ["ask", "finder", "tools"]) document.getElementById(`pane-${p}`).hidden = p !== b.dataset.tab;
+}));
+
+// Overlays fold: the map is the page, and a panel is a title bar that opens downwards.
+for (const [id, head] of [["analyst", ".an-h"], ["layers", ".lg-h"]]) {
+  const panel = document.getElementById(id);
+  panel.querySelector(head).addEventListener("click", (e) => {
+    panel.classList.toggle("folded");
+    e.currentTarget.setAttribute("aria-expanded", String(!panel.classList.contains("folded")));
+  });
+}
+
+const steps = document.getElementById("steps");
+steps.querySelector(".steps-h").addEventListener("click", (e) => {
+  steps.classList.toggle("open");
+  e.currentTarget.setAttribute("aria-expanded", String(steps.classList.contains("open")));
+});
+
+document.querySelectorAll("[data-focus]").forEach((chip) => chip.addEventListener("click", () => {
+  const on = chip.getAttribute("aria-pressed") !== "true";
+  document.querySelectorAll("[data-focus]").forEach((c) => c.setAttribute("aria-pressed", "false"));
+  chip.setAttribute("aria-pressed", String(on));
+  const f = on ? chip.dataset.focus : null;
+  lakeshoreRing.setAttribute("opacity", f === "lakeshore" || f === "beds" ? 1 : 0);
+  pierrefonds.querySelectorAll(".rls").forEach((p) => p.setAttribute("opacity", f === "pierrefonds" ? 1 : 0));
+  plus.setAttribute("opacity", f === "beds" ? 1 : 0);
+}));
+
+const WORLD = {
+  sc: [
+    ["building-2", "<b>241 sites</b>, 34 with physical-health beds (6,527)", ""],
+    ["users", "<b>12 territories</b>, 2.16 M residents", ""],
+    ["plus-square", "Added by your team: <b>+185 beds</b> at 5 hospitals from day 10", "added"],
+    ["link", "Added by your team: RLS Rivière-des-Prairies served by HMR and Santa Cabrini", "added"],
+    ["sliders-horizontal", "Starting conditions: 85 % usual occupancy, 83 % immune, variant ×3.6", "added"],
+  ],
+  real: [
+    ["building-2", "<b>241 sites</b>, 34 with physical-health beds (6,527)", ""],
+    ["users", "<b>12 territories</b>, 2.16 M residents", ""],
+    ["triangle-alert", "RLS Rivière-des-Prairies has no site with physical-health beds", ""],
+    ["clock", "As of today. Reading a past date needs the history the twin does not keep yet", ""],
+  ],
+};
+document.querySelectorAll("[data-world]").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll("[data-world]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  const w = b.dataset.world;
+  document.getElementById("world").innerHTML = WORLD[w]
+    .map(([icon, text, cls]) => `<li class="${cls}"><i data-lucide="${icon}"></i><span>${text}</span></li>`).join("");
+  const meta = document.getElementById("meta-world");
+  meta.textContent = w === "sc" ? "this scenario" : "reality";
+  meta.style.color = w === "sc" ? "var(--scenario)" : "var(--ink)";
+  lucide.createIcons();
+}));
+
+document.querySelectorAll("[data-card]").forEach((card) => {
+  const status = card.querySelector(".status");
+  card.querySelector("[data-approve]")?.addEventListener("click", () => { status.className = "status ok"; status.textContent = "Approved · in the calendar"; });
+  card.querySelector("[data-reject]")?.addEventListener("click", () => { status.className = "status no"; status.textContent = "Rejected"; });
+});
+
+lucide.createIcons();
+</script>
+</body>
+</html>

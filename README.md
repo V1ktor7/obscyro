@@ -2,6 +2,13 @@
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
+# Obscyro
+
+Outil d'aide à la décision pour un réseau de santé : un jumeau numérique du réseau, un moteur de simulation, et un analyste qui explique ce qui en sort sans jamais avancer un chiffre qu'un outil n'a pas renvoyé.
+
+- **Documentation** : [docs/](docs/README.md) — la boucle d'aide à la décision, l'analyste, et tous les algorithmes avec leur schéma.
+- **Consignes de travail** : [CLAUDE.md](CLAUDE.md) — conventions, règles du produit, règle de documentation.
+
 # Run and deploy your AI Studio app
 
 This contains everything you need to run your app locally.

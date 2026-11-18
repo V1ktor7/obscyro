@@ -18,6 +18,7 @@
 | `SIM_SERVICE_URL` | `https://your-sim.up.railway.app` (optional; falls back to in-process mechanistic SEIR when unset) |
 | `PUBLIC_API_URL` | `https://your-api.up.railway.app` (used in webhook URLs) |
 | `CORS_ORIGINS` | `https://obscyro.vercel.app,https://obscyro.com` |
+| `ANTHROPIC_API_KEY` | Claude API key (optional). The analyst on the Scenarios page reads the twin through it. Unset: the analyst is off and says so; nothing else depends on it. See `docs/analyst.md` |
 
 ### Optional feature tunables (safe defaults; override only to tune)
 
@@ -32,7 +33,7 @@
 | `ROLLUP_INSTANCE_CAP` | `50000` | Max rows loaded for rollups/clones/scans |
 | `SIM_MAX_RUNS` | `200` | Monte-Carlo simulation run ceiling |
 | `SIM_SERVICE_URL` | _(unset)_ | Hybrid ML simulation-service base URL; falls back to mechanistic SEIR when unset |
-| `SIM_SERVICE_TIMEOUT_MS` | `60000` | Upstream timeout for simulation-service calls |
+| `SIM_SERVICE_TIMEOUT_MS` | `300000` | Upstream timeout for simulation-service calls |
 | `SIM_DEFAULT_GRAPH` | _(unset)_ | Optional default model-DAG JSON for ML `/simulate` |
 | `DQ_ANOMALY_ENABLED` | `true` | Enable L6 statistical anomaly layer |
 | `DQ_IQR_K` | `3.0` | Tukey IQR fence multiplier (L6) |
