@@ -125,6 +125,14 @@ describe("the event finder", () => {
     expect(screen.getByText("Passage cited from quebec.ca")).toBeTruthy();
   });
 
+  it("opens the passage a candidate rests on, as the search returned it", async () => {
+    await searched();
+    const card = screen.getByRole("listitem", { name: "Curfew across Québec" });
+    fireEvent.click(within(card).getByRole("button", { name: /s2\s*passage · quebec\.ca/ }));
+    // The whole passage, not only the words quoted from it.
+    expect(screen.getByText(/"cited_text": "Un couvre-feu sera en vigueur à compter du 31 décembre 2021, de 22 h à 5 h, partout au Québec\."/)).toBeTruthy();
+  });
+
   it("accepts a candidate by naming it, with the dates the person validated", async () => {
     const event = { id: "e1", startsOn: "2021-12-31", endsOn: "2022-01-17" } as HealthEvent;
     api.acceptEvent.mockResolvedValue(event);

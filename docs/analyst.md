@@ -150,6 +150,15 @@ Les sources se règlent dans l'onglet (« Sources searched », Change) : une lis
 
 Rien du jumeau ne part dans une recherche. Dans cet échange le modèle n'a aucun outil de lecture, et son contexte ne nomme ni le projet ni le scénario : il n'a que la demande, la liste des sources et la date du jour.
 
+État au 2026-11-17, en production, avec le vrai modèle et la vraie recherche, sur le scénario « Omicron · Montréal — calibrated on INSPQ ».
+
+- La demande « What public health measures were in force in Montréal between 2021-12-13 and 2022-02-10? Include the curfew and the dates schools closed and reopened in Québec. » a rendu douze candidats en cinq recherches, sans rien de retiré. Parmi eux le couvre-feu, du 31 décembre 2021 au 17 janvier 2022 (quebec.ca), et les écoles, fermées à compter du 21 décembre avec un retour en classe le 17 janvier (inspq.qc.ca et quebec.ca). Les passages de ces deux candidats ont été relus un à un : ils disent ce que les candidats en retiennent.
+- Deux candidats sont arrivés sans date de début, parce que leur passage ne la donnait pas : l'écran demande de la lire dans la source.
+- Reject n'a déclenché aucun appel au serveur.
+- Dans l'onglet Ask, `list_events` a répondu que le calendrier est vide et a renvoyé vers Event finder ; une question de référence sur le jumeau a redonné ses chiffres connus.
+- **Pas encore exercé en production : Accept, le couloir Context, et une réponse qui cite un événement.** Ils sont couverts par les tests. Accepter écrit dans le calendrier du projet de démonstration : ce clic revient à une personne.
+- Coût observé de cette demande : 32 étapes, 5 recherches, environ 319 000 jetons lus et écrits, la plupart étant le contenu des pages que la recherche renvoie au modèle.
+
 ## Les décisions
 
 « Record decision » garde l'option retenue avec ce qu'on en attend. Le navigateur n'envoie que l'identifiant de l'échange et l'étape du test ; le serveur recopie tout le reste depuis son journal : l'objectif, les tampons, les chiffres du run testé avec et sans l'option, les arrivées jour par jour, les niveaux de preuve, les étapes sources. On ne peut donc enregistrer qu'une option que le moteur a testée.
@@ -183,7 +192,7 @@ Les décisions sont dans `app.decision` (migration 061). Les événements accept
 
 `AnalystPanel.tsx`, dans un `OverlayPanel` sous « Layers », replié à l'arrivée. Quatre onglets, dans l'ordre de la boucle ; chacun n'est construit qu'à sa première ouverture, puis garde ce qu'on y a fait.
 
-**Event finder** (`EventFinderTab.tsx`), de haut en bas : la demande, et des demandes suggérées sur les dates du scénario, où il reste à écrire le lieu ; les sources cherchées et de quoi les changer ; les recherches, qui s'affichent pendant qu'elles tournent ; un bandeau qui dit si tout a été trouvé dans les passages ; une carte par candidat (porte, niveau « Published », puce WEB, titre, lieu, citation et lien, dates à corriger, Accept, Reject) ; ce qui n'a pas été trouvé ; les limites ; les étapes. Un candidat refusé se replie en une ligne, avec de quoi revenir dessus : le refus n'a rien écrit nulle part.
+**Event finder** (`EventFinderTab.tsx`), de haut en bas : la demande, et des demandes suggérées sur les dates du scénario, où il reste à écrire le lieu ; les sources cherchées et de quoi les changer ; les recherches, qui s'affichent pendant qu'elles tournent ; un bandeau qui dit si tout a été trouvé dans les passages ; une carte par candidat (porte, niveau « Published », puce WEB, titre, lieu, citation et lien, les passages sur lesquels il repose, qui ouvrent l'étape où le passage se lit en entier, dates à corriger, Accept, Reject) ; ce qui n'a pas été trouvé ; les limites ; les étapes. Un candidat refusé se replie en une ligne, avec de quoi revenir dessus : le refus n'a rien écrit nulle part.
 
 **Context** (`ContextLane.tsx`) n'est pas dans le panneau mais dans la frise : le couloir des événements validés, au-dessus des couloirs de tampons. Un clic sur un événement l'ouvre : source, citation, qui l'a accepté, et de quoi le retirer.
 
@@ -269,6 +278,7 @@ Quatre réponses ont été relues par une personne et comparées au panneau Resu
 - Le titre, le lieu et la porte d'un candidat ne se corrigent pas à l'écran : seules les dates le peuvent. Un candidat mal titré se refuse.
 - Un événement n'a qu'un lieu écrit en mots. Il n'est relié à aucun territoire du jumeau, et le moteur ne le reçoit pas : c'est un repère pour lire un run, pas une entrée du run.
 - Les événements validés sont ceux du projet, pas d'un scénario : tous les scénarios du projet voient le même calendrier.
+- Une recherche coûte cher en jetons : chaque recherche renvoie jusqu'à dix pages au modèle, et elles sont relues à la requête suivante. Environ 300 000 jetons pour cinq recherches, en plus du prix des recherches.
 - Le jumeau ne contient ni personnel, ni stocks, ni historique : l'analyste le dit, il ne le comble pas.
 - Le run à l'écran n'est pas gardé au rechargement de la page ; il faut relancer Run. Les options testées non plus : ce qui reste, ce sont les décisions enregistrées et le journal.
 - Une option est faite de capacité et de mesures. Un transfert de patients, du personnel, un stock, un lien nouveau entre un site et un territoire ne se testent pas : le moteur ou le jumeau ne les portent pas. L'analyste les range dans les limites.

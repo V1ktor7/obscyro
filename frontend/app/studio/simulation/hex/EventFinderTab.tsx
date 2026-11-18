@@ -31,6 +31,7 @@ import {
   acceptEvent,
   fetchWebSources,
   findEvents,
+  hostOf,
   isWebLink,
   saveWebSources,
   type AnalystStep,
@@ -186,6 +187,12 @@ export default function EventFinderTab({
     }
   }
 
+  /** Opens the step a candidate rests on: the passage, as the search returned it. */
+  function cite(id: string) {
+    setTraceOpen(true);
+    setOpenStep(id);
+  }
+
   const proposal = result?.answer ?? null;
   const candidates = proposal?.candidates ?? [];
   const removed = result ? result.struck.length : 0;
@@ -336,6 +343,21 @@ export default function EventFinderTab({
                       {c.quoteReplaced ? (
                         <p className="text-[11px] text-warn-ink">The analyst’s quotation was not in the passage. These are the passage’s own opening words.</p>
                       ) : null}
+                      <div className="flex flex-wrap items-center gap-1">
+                        <span className="text-[10.5px] text-ink-faint">Rests on</span>
+                        {c.passages.map((p) => (
+                          <button
+                            key={p.step}
+                            type="button"
+                            onClick={() => cite(p.step)}
+                            title={p.text}
+                            className="flex max-w-full items-center gap-1 rounded border border-line-soft bg-canvas-raised px-1.5 py-0.5 text-[10.5px] text-ink-body hover:border-brand"
+                          >
+                            <span className="font-mono font-bold text-brand-deep">{p.step}</span>
+                            <span className="truncate">passage · {hostOf(p.url)}</span>
+                          </button>
+                        ))}
+                      </div>
 
                       {done ? (
                         <p className="flex items-center gap-1 text-[11.5px] font-semibold text-ok-ink">
