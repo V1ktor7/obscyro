@@ -20,6 +20,8 @@ import {
 import AddDataPanel from "./AddDataPanel";
 import AnalystPanel from "./AnalystPanel";
 import BreakList from "./BreakList";
+import { guideMeta, guideSteps } from "./guide";
+import ScenarioGuide from "./ScenarioGuide";
 import { engineMessage, runScenario, type RunOutput } from "./engine";
 import HexGlobe, { GlobeControls, type GlobeArea, type GlobeHandle, type GlobeSeed, type GlobeSite } from "./HexGlobe";
 import {
@@ -137,6 +139,9 @@ function ramp(v: number, steps: [number, string, string][]): string {
 const pct = (r: number) => (Number.isFinite(r) ? `${Math.round(r * 100)} %` : "—");
 const fmt = (n: number) => Math.round(n).toLocaleString("en-CA");
 
+/** Set once the guide has been folded: it then starts folded. */
+const GUIDE_KEY = "obs_scenarios_guide_seen";
+
 const FIELD =
   "rounded border border-line bg-white px-2 py-1 text-[12px] text-ink focus:border-brand focus:outline-none";
 const LABEL = "text-[10px] font-semibold uppercase tracking-wide text-ink-faint";
@@ -226,6 +231,10 @@ export default function HexTwinView() {
   // Folded on arrival: the first thing seen is the map.
   const [layersOpen, setLayersOpen] = useState(false);
   const [analystOpen, setAnalystOpen] = useState(false);
+  // The guide: open on a first visit, folded for good once its three steps
+  // are done or it is folded by hand.
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [analystSeen, setAnalystSeen] = useState(false);
   const [recipeOpen, setRecipeOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(false);
@@ -356,6 +365,42 @@ export default function HexTwinView() {
   const stampKey = JSON.stringify([stamps.map((s) => [s.id, s.start, s.days]), horizon, activity]);
   const stale = run !== null && runKey !== stampKey;
   const d = Math.min(day, horizon - 1);
+
+  // Where the person is in the page's three steps, read off the page itself.
+  const guide = useMemo(
+    () => ({
+      conditions: stamps.filter(isCondition).length,
+      events: stamps.filter((s) => s.kind === "seed" || s.kind === "heat").length,
+      choices: stamps.filter(isChoice).length,
+      hasRun: run !== null,
+      stale,
+      running: running !== null,
+      analystSeen,
+    }),
+    [stamps, run, stale, running, analystSeen],
+  );
+  const guideDone = guideSteps(guide).every((s) => s.state === "done");
+  const foldGuide = useCallback(() => {
+    setGuideOpen(false);
+    try {
+      window.localStorage.setItem(GUIDE_KEY, "1");
+    } catch {
+      // Private window, storage blocked: the guide simply opens again next time.
+    }
+  }, []);
+  useEffect(() => {
+    try {
+      if (!window.localStorage.getItem(GUIDE_KEY)) setGuideOpen(true);
+    } catch {
+      setGuideOpen(true);
+    }
+  }, []);
+  useEffect(() => {
+    if (analystOpen) setAnalystSeen(true);
+  }, [analystOpen]);
+  useEffect(() => {
+    if (guideDone) foldGuide();
+  }, [guideDone, foldGuide]);
 
   // The run as the analyst is given it: the same figures the Result panel
   // reads, reduced to what a question can be about.
@@ -1062,6 +1107,21 @@ export default function HexTwinView() {
 
         <div className="flex min-h-0 flex-1 items-start justify-between gap-2">
           <div className="flex max-h-full min-h-0 flex-col gap-2">
+            <OverlayPanel
+              title="Start here"
+              meta={guideMeta(guideSteps(guide))}
+              open={guideOpen}
+              onToggle={() => (guideOpen ? foldGuide() : setGuideOpen(true))}
+              className={guideOpen ? "w-[280px]" : "max-w-[280px]"}
+            >
+              <ScenarioGuide
+                state={guide}
+                onConditions={() => setTool("conditions")}
+                onSeed={() => setTool("seed")}
+                onRun={() => void doRun()}
+                onAsk={() => setAnalystOpen(true)}
+              />
+            </OverlayPanel>
             <OverlayPanel
               title="Layers"
               meta={lensName}

@@ -66,6 +66,7 @@ Elles ne se négocient pas, et elles s'appliquent à tout ce qui touche à la bo
 |---|---|
 | Un algorithme (ajouté, modifié, supprimé) | Sa section **et son schéma** dans [docs/algorithms.md](docs/algorithms.md), et la table en tête du fichier |
 | L'analyste (outil, prompt, vérificateur, écran) | [docs/analyst.md](docs/analyst.md), et les schémas A1 à A3 |
+| La page Scenarios (un panneau, le guide) | [docs/scenarios-page.md](docs/scenarios-page.md) |
 | Une étape de la boucle de décision | La table d'état de [docs/decision-loop.md](docs/decision-loop.md) |
 | Le moteur d'événements | `simulation-service/app/events/README.md`, et les schémas de la partie B |
 | Une route de l'API | Son `summary` et sa `description` dans le schéma de la route, et le document qui en parle |

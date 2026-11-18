@@ -4,6 +4,7 @@
 |---|---|
 | [decision-loop.md](decision-loop.md) | La boucle d'aide à la décision : ses sept étapes, ses règles, où elle en est, ce qui vient ensuite |
 | [analyst.md](analyst.md) | L'analyste de la page Scenarios : ses outils, la règle des chiffres, ses routes, comment lui ajouter un outil |
+| [scenarios-page.md](scenarios-page.md) | La page Scenarios : ses panneaux et le guide en trois étapes |
 | [algorithms.md](algorithms.md) | Tous les algorithmes du produit, chacun avec son schéma, ses règles, ses fichiers et ses tests |
 
 Ailleurs dans le dépôt :

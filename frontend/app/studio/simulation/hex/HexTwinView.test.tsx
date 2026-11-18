@@ -280,3 +280,35 @@ describe("a scenario with starting conditions", () => {
     expect(await screen.findByRole("img", { name: /Occupancy of lit at Hôpital Beta/ })).toBeTruthy();
   });
 });
+
+describe("the guide on a first visit", () => {
+  const fold = () => screen.getByRole("button", { name: /^Start here/ });
+
+  it("walks from Run to the analyst, then folds for good", async () => {
+    window.localStorage.clear();
+    await opened();
+    // The scenario already says what happens, so the step to do is Run.
+    expect(fold().getAttribute("aria-expanded")).toBe("true");
+    await waitFor(() => expect(fold().textContent).toContain("step 2 of 3"));
+    fireEvent.click(screen.getByRole("button", { name: "Run the scenario" }));
+    await screen.findByText(/Where it breaks/);
+    await waitFor(() => expect(fold().textContent).toContain("step 3 of 3"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Open the analyst" }));
+    // All three done: it folds, and will start folded from now on.
+    await waitFor(() => expect(fold().getAttribute("aria-expanded")).toBe("false"));
+    expect(fold().textContent).toContain("all three steps done");
+    expect(window.localStorage.getItem("obs_scenarios_guide_seen")).toBe("1");
+    expect(screen.getByRole("button", { name: /^Analyst/ }).getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("starts folded once it has been seen, and can be opened again", async () => {
+    window.localStorage.setItem("obs_scenarios_guide_seen", "1");
+    await opened();
+    expect(fold().getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("button", { name: "Run the scenario" })).toBeNull();
+    fireEvent.click(fold());
+    expect(await screen.findByRole("button", { name: "Run the scenario" })).toBeTruthy();
+    window.localStorage.clear();
+  });
+});
