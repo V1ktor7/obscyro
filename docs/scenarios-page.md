@@ -21,6 +21,7 @@ flowchart TD
 - Un scénario modifié après un run renvoie à l'étape 2 : le résultat à l'écran ne décrit plus le scénario.
 - Ouvrir l'analyste par curiosité avant d'avoir lancé un run ne saute pas l'étape 2.
 - Le guide s'ouvre à la première visite. Une fois replié, à la main ou parce que les trois étapes sont faites, il démarre replié (clé `obs_scenarios_guide_seen` dans le navigateur). Il reste disponible, sur une ligne, pour qui veut le rouvrir.
+- Une étape à venir ne montre que son titre. Écrites en entier, les trois étapes dépassaient la place qu'un portable de 1366 × 768 laisse sous la barre d'outils, et le guide s'ouvrait sur une barre de défilement.
 - Ses boutons portent leur propre nom (« Run the scenario », « Set starting conditions ») : la barre d'outils a déjà un « Run » et un « Starting conditions », et deux commandes du même nom en font une de trop pour qui navigue au clavier ou au lecteur d'écran.
 
 **Code.** `frontend/app/studio/simulation/hex/guide.ts` (les étapes, sans carte), `ScenarioGuide.tsx` (l'affichage), intégration dans `HexTwinView.tsx`. **Tests.** `guide.test.ts`, `HexTwinView.test.tsx`.

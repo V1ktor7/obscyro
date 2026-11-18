@@ -71,7 +71,10 @@ export default function ScenarioGuide({
               {s.title}
               <span className="sr-only">{s.state === "done" ? " (done)" : s.state === "now" ? " (next)" : " (later)"}</span>
             </span>
-            <span className="text-[11.5px] text-ink-muted">{s.detail}</span>
+            {/* A step still to come shows its title only. Spelled out, the three
+                steps ran taller than the room a laptop leaves under the toolbar,
+                and the first thing a newcomer saw was a scrollbar. */}
+            {s.state === "later" ? null : <span className="text-[11.5px] text-ink-muted">{s.detail}</span>}
             {s.state === "now" ? (
               <div className="flex flex-wrap gap-1.5">
                 {actions[s.key].map((a) => (
