@@ -197,8 +197,11 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 - Le run à l'écran n'est pas gardé au rechargement de la page ; il faut relancer Run. Les options testées non plus : ce qui reste, ce sont les décisions enregistrées et le journal.
 - Une option est faite de capacité et de mesures. Un transfert de patients, du personnel, un stock, un lien nouveau entre un site et un territoire ne se testent pas : le moteur ou le jumeau ne les portent pas. L'analyste les range dans les limites.
 - Une option est testée sur le scénario tel qu'il est au moment du test. Ajouter une option puis une autre donne un scénario qu'aucun test n'a couvert : l'écran prévient, et il faut redire l'objectif.
+- Une option ajoute des tampons ; elle n'en retire ni n'en remplace aucun. « 40 lits au lieu des 60 du scénario » se teste donc comme un tampon de −20 par-dessus les +60. Le résultat est le bon, mais l'ajouter au scénario laisse les deux tampons dans la recette au lieu d'un seul à +40.
+- Un objectif prend plusieurs minutes sur le jumeau de Montréal : chaque passe du moteur dure quelques dizaines de secondes, et le premier test en lance trois (les événements seuls, le scénario tel quel, l'option). Le tableau n'a besoin que des deux dernières : la première est à retirer.
 - Le suivi d'une décision ne compare que des arrivées (voir « Les décisions »).
-- Les options n'ont été testées qu'avec un modèle simulé. Elles demandent la clé `ANTHROPIC_API_KEY` et le service de simulation ; la vérification avec le vrai modèle reste à faire.
+
+État au 2026-11-17 : l'onglet Options est vérifié en production avec le vrai modèle et le vrai moteur, sur le scénario « Omicron · Montréal — calibrated on INSPQ » : trois options testées pour un objectif, aucun chiffre retiré, et la colonne « As it is » redonne les chiffres du panneau Result. « Add to scenario », « Record decision » et le suivi sont couverts par les tests, **pas encore exercés en production** : ils écrivent dans le scénario de démonstration et dans la liste des décisions.
 
 ## Fichiers
 
