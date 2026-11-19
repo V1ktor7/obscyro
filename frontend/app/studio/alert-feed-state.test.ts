@@ -15,6 +15,7 @@ import {
   freshAlerts,
   signalHref,
   unitHref,
+  valueAge,
 } from "./alert-feed-state";
 
 const alert = (over: Partial<FeedAlert> = {}): FeedAlert => ({
@@ -127,6 +128,41 @@ describe("how an age is said", () => {
   it("says nothing rather than something false when the time is unknown", () => {
     expect(ago(null, "2026-11-19T15:00:10.000Z")).toBeNull();
     expect(ago("not a date", "2026-11-19T15:00:10.000Z")).toBeNull();
+  });
+});
+
+describe("how old an alert's value is, and what that age rests on", () => {
+  const NOW = "2026-11-19T15:00:10.000Z";
+
+  it("is the age itself when the source published the time", () => {
+    expect(valueAge({ observedAt: "2026-11-19T14:23:10.000Z", observedBasis: "observed" }, NOW)).toEqual({
+      text: "value read 37 min ago",
+      why: null,
+    });
+  });
+
+  it("is said as a floor when one of the unit's sources published no time", () => {
+    // Acting on "2 h" when it may be six is the mistake this wording prevents.
+    const age = valueAge({ observedAt: "2026-11-19T13:00:10.000Z", observedBasis: "partial" }, NOW);
+    expect(age.text).toBe("value read at least 2 h ago");
+    expect(age.why).toMatch(/^At least this old/);
+  });
+
+  it("stays unknown, with the reason, when there is no age", () => {
+    const age = valueAge({ observedAt: null, observedBasis: "undeclared" }, NOW);
+    expect(age.text).toBe("age of the value unknown");
+    expect(age.why).toMatch(/no property on this type is declared/);
+    expect(valueAge({ observedAt: null, observedBasis: "zone-unknown" }, NOW).why).toMatch(/no zone is declared/);
+  });
+
+  it("claims nothing about the basis of an alert that carries none", () => {
+    // Alerts last evaluated before the basis was kept, or an older API.
+    expect(valueAge({ observedAt: "2026-11-19T14:23:10.000Z" }, NOW)).toEqual({ text: "value read 37 min ago", why: null });
+    expect(valueAge({ observedAt: null, observedBasis: null }, NOW)).toEqual({ text: "age of the value unknown", why: null });
+  });
+
+  it("does not print an age from a time it cannot read", () => {
+    expect(valueAge({ observedAt: "not a date", observedBasis: "observed" }, NOW).text).toBe("age of the value unknown");
   });
 });
 

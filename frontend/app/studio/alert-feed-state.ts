@@ -9,6 +9,8 @@
 
 import type { AlertFeed, FeedAlert, TwinAlert } from "@/lib/platform-api";
 
+import { explainFreshness } from "./twin-ui";
+
 /** How often the feed is read. With the server evaluating every five seconds, an alert is on screen within eight. */
 export const POLL_MS = 3_000;
 
@@ -105,6 +107,28 @@ export function ago(iso: string | null, serverNowIso: string): string | null {
   const ms = Date.parse(serverNowIso) - Date.parse(iso);
   if (!Number.isFinite(ms)) return null;
   return ms < 5_000 ? "just now" : `${duration(ms)} ago`;
+}
+
+/**
+ * How old an alert's value is, said with what the age rests on.
+ *
+ * Acting fast on an old value is the real danger, so the age never claims more
+ * than the twin knows. A floor is said as a floor ("at least 2 h ago"): one of
+ * the unit's sources published no time, and the others may be hiding an older
+ * reading. An unknown age stays unknown, and `why` carries the reason in the
+ * twin's own words, the same sentence the unit's card shows.
+ */
+export function valueAge(
+  a: Pick<FeedAlert, "observedAt" | "observedBasis">,
+  serverNowIso: string,
+): { text: string; why: string | null } {
+  const basis = a.observedBasis ?? null;
+  const why = basis && basis !== "observed" ? explainFreshness(basis) : null;
+  if (!a.observedAt) return { text: "age of the value unknown", why };
+  const ms = Date.parse(serverNowIso) - Date.parse(a.observedAt);
+  if (!Number.isFinite(ms)) return { text: "age of the value unknown", why };
+  if (basis === "partial") return { text: `value read at least ${duration(ms)} ago`, why };
+  return { text: `value read ${ago(a.observedAt, serverNowIso)}`, why };
 }
 
 /** The newest alerts that opened while this screen was watching, worst first. */

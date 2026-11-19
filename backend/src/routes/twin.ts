@@ -808,7 +808,9 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
         description:
           "The one reading every page makes of the open alerts, in place of a clock per page. Each alert carries " +
           "its unit and the unit's name, its severity, metric, value and message, when it opened (`openedAt`), when " +
-          "its value was true according to the source (`observedAt`, null when the source does not say), when the " +
+          "its value was true according to the source (`observedAt`, null when the source does not say), what " +
+          "that age rests on (`observedBasis`: `observed`, `partial` when it is only a floor, or the reason it is " +
+          "unknown), when the " +
           "data that opened it was written here (`writtenAt`), and the signal it raised (`signalId`). Worst first, " +
           "then newest. `counts` holds every open alert by severity and `omitted` how many are beyond the list. " +
           "`signals` says how many signals are open and when one last changed, which is enough for the response " +
@@ -832,6 +834,9 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
                 message: z.string(),
                 openedAt: z.string(),
                 observedAt: z.string().nullable(),
+                observedBasis: z
+                  .enum(["observed", "undeclared", "unreadable", "zone-unknown", "partial", "empty"])
+                  .nullable(),
                 writtenAt: z.string().nullable(),
                 signalId: z.string().nullable(),
               }),

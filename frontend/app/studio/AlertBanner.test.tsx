@@ -90,6 +90,25 @@ describe("the standing summary of open alerts", () => {
     expect(within(rows[1]!).queryByRole("link", { name: "Signal" })).toBeNull();
   });
 
+  it("says a floor as a floor, and gives the reason an age is unknown", () => {
+    shell(
+      value({
+        feed: feed([
+          alert({ observedAt: "2026-11-19T13:00:10.000Z", observedBasis: "partial" }),
+          alert({ id: "a2", message: "Urgence — Hôpital C — 111 %", unitId: "u3", observedAt: null, observedBasis: "undeclared" }),
+        ]),
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open alerts: 2 critical" }));
+    const rows = within(screen.getByRole("dialog", { name: "Open alerts" })).getAllByRole("listitem");
+
+    // The qualifier is in the text, where it is read; the reason is one hover away.
+    const floor = within(rows[0]!).getByText("opened 4 min ago · value read at least 2 h ago");
+    expect(floor.getAttribute("title")).toMatch(/^At least this old/);
+    const unknown = within(rows[1]!).getByText("opened 4 min ago · age of the value unknown");
+    expect(unknown.getAttribute("title")).toMatch(/no property on this type is declared/);
+  });
+
   it("is not shown at all for a calm project whose feed works", () => {
     shell(value({ feed: feed([]) }));
     expect(screen.queryByRole("button")).toBeNull();

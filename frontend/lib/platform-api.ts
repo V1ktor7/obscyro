@@ -1274,6 +1274,11 @@ export interface FeedAlert {
   openedAt: string;
   /** When the value was true, from the timestamp the source published; null when it does not say. */
   observedAt: string | null;
+  /**
+   * What that age rests on. `partial` means it is a floor: one of the unit's
+   * sources published no time. The others say why there is no age.
+   */
+  observedBasis?: FreshnessBasis | null;
   /** When the data that opened the alert was written here; null when that was not kept. */
   writtenAt: string | null;
   /** The signal this alert raised, when a signal type claims its metric. */

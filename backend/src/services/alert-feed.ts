@@ -1,4 +1,5 @@
 import type { DbClient } from "../lib/db.js";
+import type { FreshnessBasis } from "./observed-at.js";
 import { evaluationPulse, type EvaluationPulse } from "./twin-alert-scheduler.js";
 
 /**
@@ -37,6 +38,12 @@ export interface FeedAlert {
   openedAt: string;
   /** When the value was true, from the timestamp the source published; null when it does not say. */
   observedAt: string | null;
+  /**
+   * What that age rests on: the source's own timestamp, a floor because one of
+   * the unit's sources published no time, or the reason there is no age at
+   * all. Null for an alert last evaluated before this was kept.
+   */
+  observedBasis: FreshnessBasis | null;
   /** When the data that opened the alert was written here; null for alerts opened before this was kept. */
   writtenAt: string | null;
   /** The signal this alert raised, when a signal type claims its metric. */
@@ -67,6 +74,7 @@ export interface FeedAlertRow {
   message: string;
   created_at: Date;
   observed_at: Date | null;
+  observed_basis: FreshnessBasis | null;
   written_at: Date | null;
   signal_id: string | null;
 }
@@ -96,6 +104,7 @@ export function feedFrom(
       message: r.message,
       openedAt: r.created_at.toISOString(),
       observedAt: iso(r.observed_at),
+      observedBasis: r.observed_basis,
       writtenAt: iso(r.written_at),
       signalId: r.signal_id,
     })),
@@ -112,7 +121,7 @@ export async function readAlertFeed(db: DbClient, projectId: string, limit = FEE
       // The unit is named the way the twin's tree names it (`getUnitTree`), so
       // the banner and the map cannot call one ward two things.
       `SELECT a.id, a.unit_instance_id, a.severity, a.metric, a.value::text AS value, a.message,
-              a.created_at, a.observed_at, a.written_at,
+              a.created_at, a.observed_at, a.observed_basis, a.written_at,
               COALESCE(NULLIF(oi.properties ->> 'name', ''), NULLIF(oi.properties ->> 'code', ''),
                        left(a.unit_instance_id::text, 8)) AS unit_name,
               (SELECT s.id FROM app.signal s

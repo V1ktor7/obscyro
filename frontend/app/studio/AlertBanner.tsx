@@ -28,7 +28,7 @@ import { cn } from "@/lib/cn";
 import type { FeedAlert, TwinAlertSeverity } from "@/lib/platform-api";
 
 import { useAlertFeed } from "./AlertFeed";
-import { ago, duration, freshAlerts, signalHref, unitHref, type FirstSight } from "./alert-feed-state";
+import { ago, duration, freshAlerts, signalHref, unitHref, valueAge, type FirstSight } from "./alert-feed-state";
 
 const TONE: Record<TwinAlertSeverity, { dot: string; chip: string; label: string }> = {
   critical: { dot: "bg-danger", chip: "bg-danger-soft text-danger-ink", label: "Critical" },
@@ -41,11 +41,15 @@ const LISTED = 60;
 /** New alerts shown in the strip at once. */
 const ANNOUNCED = 2;
 
-/** "opened 4 min ago · value read 37 min ago", with the unknown said as unknown. */
-function ages(a: FeedAlert, serverNow: string): string {
+/**
+ * "opened 4 min ago · value read 37 min ago", with a floor said as a floor and
+ * the unknown said as unknown. `why` is the reason, in the words the unit's own
+ * card uses: it goes in the hover, the qualifier itself stays in the text.
+ */
+function ages(a: FeedAlert, serverNow: string): { text: string; why: string | undefined } {
   const opened = ago(a.openedAt, serverNow);
-  const read = ago(a.observedAt, serverNow);
-  return `opened ${opened ?? "at an unknown time"} · ${read ? `value read ${read}` : "age of the value unknown"}`;
+  const age = valueAge(a, serverNow);
+  return { text: `opened ${opened ?? "at an unknown time"} · ${age.text}`, why: age.why ?? undefined };
 }
 
 function AlertLinks({ a, env, onGo }: { a: FeedAlert; env: string | null; onGo?: () => void }) {
@@ -176,8 +180,8 @@ function AlertRow({ a, env, serverNow, first, onGo }: { a: FeedAlert; env: strin
         {first ? <span className="shrink-0 rounded bg-danger px-1 text-[10px] font-bold text-white">new</span> : null}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 pl-4">
-        <span className="text-[11px] text-ink-muted">
-          {ages(a, serverNow)}
+        <span className="text-[11px] text-ink-muted" title={ages(a, serverNow).why}>
+          {ages(a, serverNow).text}
           {first ? ` · on this screen ${duration(first.lagMs)} after it opened` : ""}
         </span>
         <AlertLinks a={a} env={env} onGo={onGo} />
@@ -205,7 +209,9 @@ export function AlertStrip({ env }: { env: string | null }) {
         <div key={a.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-0.5">
           <span className={cn("rounded px-1 py-px text-[9.5px] font-bold uppercase tracking-wide", TONE[a.severity].chip)}>New · {TONE[a.severity].label}</span>
           <span className="min-w-0 flex-1 break-words text-[12px] font-semibold text-ink">{a.message}</span>
-          <span className="text-[11px] text-ink-muted">{ages(a, feed.at)}</span>
+          <span className="text-[11px] text-ink-muted" title={ages(a, feed.at).why}>
+            {ages(a, feed.at).text}
+          </span>
           <AlertLinks a={a} env={env} />
           <button
             type="button"

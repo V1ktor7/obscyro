@@ -939,6 +939,9 @@ export async function evaluateAlerts(
       // so the UI can toast only those.
       //
       // `observed_at` follows the value: it is the age of what is shown.
+      // `observed_basis` follows it too: it says what that age rests on, so an
+      // age that is only a floor is never shown as an answer, and an unknown
+      // age comes with its reason.
       // `written_at` does not: it is the write the opening followed, and an
       // alert that stays open through ten more syncs was still opened by one.
       const { rows } = await db.query<{
@@ -949,15 +952,16 @@ export async function evaluateAlerts(
       }>(
         `INSERT INTO app.twin_alert
            (project_id, unit_instance_id, rule_id, severity, metric, value, message, recommendation, status,
-            observed_at, written_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'open', $9, $10)
+            observed_at, written_at, observed_basis)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'open', $9, $10, $11)
          ON CONFLICT (project_id, unit_instance_id, rule_id) WHERE status = 'open'
          DO UPDATE SET severity = EXCLUDED.severity,
                        metric = EXCLUDED.metric,
                        value = EXCLUDED.value,
                        message = EXCLUDED.message,
                        recommendation = EXCLUDED.recommendation,
-                       observed_at = EXCLUDED.observed_at
+                       observed_at = EXCLUDED.observed_at,
+                       observed_basis = EXCLUDED.observed_basis
          RETURNING id, created_at, written_at, (xmax = 0) AS inserted`,
         [
           environmentId,
@@ -970,6 +974,7 @@ export async function evaluateAlerts(
           recommendation,
           observedAt,
           writtenAt,
+          metrics.freshnessBasis,
         ],
       );
       created.push({

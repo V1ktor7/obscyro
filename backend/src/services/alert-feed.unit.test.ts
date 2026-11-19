@@ -34,6 +34,7 @@ const row = (over: Partial<FeedAlertRow> = {}): FeedAlertRow => ({
   message: "Urgence — Hôpital A — 132.5 %",
   created_at: new Date("2026-11-19T15:00:04.000Z"),
   observed_at: new Date("2026-11-19T14:00:00.000Z"),
+  observed_basis: "observed",
   written_at: new Date("2026-11-19T15:00:01.000Z"),
   signal_id: "s1",
   ...over,
@@ -58,6 +59,8 @@ test("an alert in the feed carries what a person needs to act: where, how bad, s
         openedAt: "2026-11-19T15:00:04.000Z",
         // The value is an hour old; we noticed it three seconds after it was written. Two different facts.
         observedAt: "2026-11-19T14:00:00.000Z",
+        // And that hour is the source's own timestamp, not a floor.
+        observedBasis: "observed",
         writtenAt: "2026-11-19T15:00:01.000Z",
         signalId: "s1",
       },
@@ -70,8 +73,10 @@ test("an alert in the feed carries what a person needs to act: where, how bad, s
 });
 
 test("an age the source does not publish stays unknown, and an alert without a signal says so", () => {
-  const feed = feedFrom([row({ observed_at: null, written_at: null, signal_id: null })], [], { open: 0, changed_at: null }, PULSE, NOW);
+  const feed = feedFrom([row({ observed_at: null, observed_basis: "undeclared", written_at: null, signal_id: null })], [], { open: 0, changed_at: null }, PULSE, NOW);
   assert.equal(feed.alerts[0]!.observedAt, null);
+  // Unknown, with the reason: nothing on this type is declared as carrying the time of the reading.
+  assert.equal(feed.alerts[0]!.observedBasis, "undeclared");
   assert.equal(feed.alerts[0]!.writtenAt, null);
   assert.equal(feed.alerts[0]!.signalId, null);
   assert.equal(feed.signals.changedAt, null);
@@ -145,8 +150,9 @@ async function evaluate(m: UnitMetrics, returned: Record<string, unknown> = {}) 
 
 test("an alert is opened with the time its value was true and the time its data was written here", async () => {
   const { sql, params, out, before, after } = await evaluate(metrics());
-  assert.match(sql[0]!, /observed_at, written_at\)/);
+  assert.match(sql[0]!, /observed_at, written_at, observed_basis\)/);
   const [observedAt, writtenAt] = [params[0]![8] as Date, params[0]![9] as Date];
+  assert.equal(params[0]![10], "observed");
   // The reading is fifty minutes old; the row was written four seconds ago.
   assert.ok(observedAt.getTime() >= before - 3_000_000 && observedAt.getTime() <= after - 3_000_000);
   assert.ok(writtenAt.getTime() >= before - 4_000 && writtenAt.getTime() <= after - 4_000);
@@ -158,6 +164,8 @@ test("an alert that stays open follows its value's age, and keeps the write that
   const { sql, out } = await evaluate(metrics(), { inserted: false, written_at: firstWrite });
   const update = sql[0]!.slice(sql[0]!.indexOf("DO UPDATE"), sql[0]!.indexOf("RETURNING"));
   assert.match(update, /observed_at = EXCLUDED\.observed_at/);
+  // What the age rests on follows the age: a source that goes quiet turns an answer into a floor.
+  assert.match(update, /observed_basis = EXCLUDED\.observed_basis/);
   // Ten syncs later the alert was still opened by one write: that time is not overwritten.
   assert.doesNotMatch(update, /written_at/);
   assert.equal(out[0]!.writtenAt, firstWrite);
@@ -176,4 +184,18 @@ test("only a read of reality raises alerts: a scenario or another instant never 
   // A ward that overflows in a what-if must not reach every screen as if it were happening.
   assert.equal(readsReality({ scenarioId: "sc1", atOffsetHours: 0 }), false);
   assert.equal(readsReality({ asOf: "2026-01-01T00:00:00Z" }), false);
+});
+
+test("an age that is only a floor is kept as a floor", async () => {
+  // Two sources feed the unit and one published no time: the age is the oldest of
+  // the ones that did, which a screen must not print as the answer.
+  const { params } = await evaluate(metrics({ freshnessSeconds: 7200, freshnessBasis: "partial" }));
+  assert.equal(params[0]![10], "partial");
+  const feed = feedFrom([row({ observed_basis: "partial" })], [], { open: 0, changed_at: null }, PULSE, NOW);
+  assert.equal(feed.alerts[0]!.observedBasis, "partial");
+});
+
+test("an alert last evaluated before the basis was kept has none, rather than a guessed one", () => {
+  const feed = feedFrom([row({ observed_basis: null })], [], { open: 0, changed_at: null }, PULSE, NOW);
+  assert.equal(feed.alerts[0]!.observedBasis, null);
 });
