@@ -79,6 +79,40 @@ describe("what counts as a new alert", () => {
     expect(absorb(first, feed([alert(), old]), T0 + 3000).fresh).toEqual({});
   });
 
+  it("announces on waking what opened while this screen was not reading", () => {
+    // 14:41, the last reading before the computer went to sleep. 14:46, an
+    // emergency room goes over its threshold. 15:12, the screen wakes.
+    const before = absorb(EMPTY_FEED, feed([alert()], "2026-11-19T14:41:26.000Z"), T0);
+    const during = alert({ id: "a2", openedAt: "2026-11-19T14:46:08.000Z" });
+    const awake = absorb(before, feed([during, alert()], "2026-11-19T15:12:13.000Z"), T0 + 31 * 60_000);
+    // It is news here, and the screen says how late it is: 26 minutes.
+    expect(awake.fresh.a2).toEqual({ atMs: T0 + 31 * 60_000, lagMs: 26 * 60_000 + 5000 });
+    expect(freshAlerts(awake).map((a) => a.id)).toEqual(["a2"]);
+    // Announced for two minutes from the moment it was seen, like any other.
+    expect(expire(awake, T0 + 31 * 60_000 + NEW_FOR_MS - 1).fresh.a2).toBeDefined();
+    expect(expire(awake, T0 + 31 * 60_000 + NEW_FOR_MS).fresh).toEqual({});
+  });
+
+  it("still does not announce, on waking, an alert that was open before the screen slept", () => {
+    const before = absorb(EMPTY_FEED, feed([alert()], "2026-11-19T14:41:26.000Z"), T0);
+    // Open since noon, absent from the reading before only because the list was cut.
+    const old = alert({ id: "a9", openedAt: "2026-11-19T12:00:00.000Z" });
+    expect(absorb(before, feed([alert(), old], "2026-11-19T15:12:13.000Z"), T0 + 31 * 60_000).fresh).toEqual({});
+  });
+
+  it("announces an alert written while the reading before was being made", () => {
+    // Opened a moment before the previous reading's clock, and not in it.
+    const first = absorb(EMPTY_FEED, feed([alert()], "2026-11-19T15:00:10.000Z"), T0);
+    const racing = alert({ id: "a2", openedAt: "2026-11-19T15:00:09.900Z" });
+    const second = absorb(first, feed([racing, alert()], "2026-11-19T15:00:13.000Z"), T0 + 3000);
+    expect(second.fresh.a2).toEqual({ atMs: T0 + 3000, lagMs: 3100 });
+  });
+
+  it("announces nothing for an alert whose opening time cannot be read", () => {
+    const first = absorb(EMPTY_FEED, feed([alert()]), T0);
+    expect(absorb(first, feed([alert(), alert({ id: "a3", openedAt: "not a date" })]), T0 + 3000).fresh).toEqual({});
+  });
+
   it("puts the worst new alert first, then the newest", () => {
     const first = absorb(EMPTY_FEED, feed([]), T0);
     const second = absorb(

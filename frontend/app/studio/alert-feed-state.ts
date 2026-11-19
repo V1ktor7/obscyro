@@ -44,10 +44,16 @@ export const EMPTY_FEED: FeedState = { feed: null, lastOkAtMs: null, fresh: {} }
 /**
  * A new reading, taken in.
  *
- * An alert is new when it is in this reading and was not in the one before.
- * The first reading announces nothing: those alerts were open before anybody
- * looked, and a screen that shouts forty old alerts on arrival teaches people
- * to ignore it.
+ * An alert is new when it is in this reading, was not in the one before, and
+ * opened since that one. The first reading announces nothing: those alerts
+ * were open before anybody looked, and a screen that shouts forty old alerts
+ * on arrival teaches people to ignore it.
+ *
+ * "Since the reading before", not "in the last two minutes": a screen that
+ * stopped reading for a quarter of an hour (a computer asleep, a tab the
+ * browser froze, a network that dropped) announces on its first reading back
+ * what opened while it was not looking. The count in the pill moving from 44
+ * to 45 with no word about which one is the silence this banner exists to end.
  */
 export function absorb(prev: FeedState, feed: AlertFeed, nowMs: number): FeedState {
   const fresh: Record<string, FirstSight> = {};
@@ -59,12 +65,17 @@ export function absorb(prev: FeedState, feed: AlertFeed, nowMs: number): FeedSta
   if (prev.feed) {
     const known = new Set(prev.feed.alerts.map((a) => a.id));
     const serverNow = Date.parse(feed.at);
+    // The server's clock at the reading before, with room for an alert whose
+    // row was being written while that reading was made.
+    const openedSince = Date.parse(prev.feed.at) - NEW_FOR_MS;
     for (const a of feed.alerts) {
       if (known.has(a.id) || fresh[a.id]) continue;
-      // An alert that opened long ago and only now enters the list (the list
-      // was full, a filter moved) is not news.
-      const lagMs = Math.max(0, serverNow - Date.parse(a.openedAt));
-      if (lagMs < NEW_FOR_MS) fresh[a.id] = { atMs: nowMs, lagMs };
+      const openedMs = Date.parse(a.openedAt);
+      // An alert that was already open at the reading before and only now
+      // enters the list (the list was full, a filter moved) is not news. A
+      // time that cannot be read announces nothing rather than everything.
+      if (!(openedMs > openedSince)) continue;
+      fresh[a.id] = { atMs: nowMs, lagMs: Math.max(0, serverNow - openedMs) };
     }
   }
   return { feed, lastOkAtMs: nowMs, fresh };

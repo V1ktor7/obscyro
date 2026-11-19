@@ -37,7 +37,7 @@ Le modèle orchestre et explique. Les faits viennent des outils ; les calculs, d
 
 | Étape | État | Où |
 |---|---|---|
-| 1. Signal | **Livré** : une alerte arrive sur toutes les pages du studio. Les seuils sont évalués toutes les cinq secondes, le cadre lit un seul fil d'alertes toutes les trois secondes, un bandeau annonce ce qui vient de s'ouvrir, et un clic mène à l'unité ou au signal. Le tableau Response se relit seul. Chaque alerte dit de quand date sa valeur. Couvert par les tests ; mesures en production à venir. L'alerte ne propose pas encore de réponse : [issue 13](https://github.com/V1ktor7/obscyro/issues/13) et suivantes | [algorithms.md](algorithms.md), D5 |
+| 1. Signal | **Livré** : une alerte arrive sur toutes les pages du studio. Les seuils sont évalués toutes les cinq secondes, le cadre lit un seul fil d'alertes toutes les trois secondes, un bandeau annonce ce qui vient de s'ouvrir, et un clic mène à l'unité ou au signal. Le tableau Response se relit seul. Chaque alerte dit de quand date sa valeur, et ce que cet âge vaut. **Vérifié en production** le 2026-11-19 ; le délai mesuré est sous la table. L'alerte ne propose pas encore de réponse : [issue 13](https://github.com/V1ktor7/obscyro/issues/13) et suivantes. Restes : le tableau Response est noyé sous les signaux d'alertes retombées ([issue 18](https://github.com/V1ktor7/obscyro/issues/18)), et l'âge d'une valeur n'est encore qu'un plancher ou un inconnu ([issue 19](https://github.com/V1ktor7/obscyro/issues/19)) | [algorithms.md](algorithms.md), D5 |
 | 2. Situation | **Livré et vérifié en production** avec le vrai modèle : l'analyste, onglet Ask. Treize questions de référence passent deux fois de suite | [analyst.md](analyst.md) |
 | 3. Précédents | **Livré** : onglet Event finder. Recherche en ligne dans les sources que le projet autorise, candidats avec lien et passage cité, acceptés ou refusés par une personne, calendrier sur la frise et lu par l'analyste (`list_events`). La recherche est vérifiée en production avec le vrai modèle le 2026-11-17 ; l'acceptation d'un événement, le couloir de la frise et la citation par l'analyste sont couverts par les tests, pas encore exercés en production. Un événement est un repère daté : il n'est relié à aucun territoire et n'entre pas dans le moteur | [analyst.md](analyst.md), [algorithms.md](algorithms.md), A10 |
 | 4. Effets mesurés | À faire. Les briques de mesure existent (décalages, réplication par épisodes) sans être reliées | [algorithms.md](algorithms.md), C3 |
@@ -49,13 +49,31 @@ La mise en service de l'analyste ([issue 5](https://github.com/V1ktor7/obscyro/i
 
 **Cette table se met à jour à la fin de chaque issue.**
 
+### Le délai d'une alerte, mesuré
+
+Mesuré en production le 2026-11-19 sur le projet de démonstration, dont les données arrivent une fois par heure. Onze alertes se sont ouvertes sur trois arrivées (14 h 46, 15 h 46 et 16 h 47 UTC).
+
+| Du moment où… | au moment où… | Mesuré | Borne par construction |
+|---|---|---|---|
+| la donnée est écrite ici | l'alerte est ouverte | 0,1 à 3,1 s, médiane 2,1 s (11 alertes, `created_at - written_at`, à la seconde près) | 5 s d'attente, plus une évaluation (0,4 à 0,7 s mesurés) |
+| l'alerte est ouverte | son signal est levé | 0,02 à 0,14 s, médiane 0,11 s (11 alertes). Avant : médiane 2,3 s, 14,3 s au 95e centile (436 alertes sur sept jours) | une passe du pont |
+| l'alerte est ouverte | elle est à l'écran | lecture du fil toutes les 3,0 s (dix intervalles entre 2,99 et 3,01 s), chaque lecture en 0,11 à 0,41 s (12 lectures) : 3,4 s au plus | 3 s, plus une lecture |
+| la donnée est écrite ici | l'alerte est à l'écran | 6,5 s au plus, en additionnant les deux pires cas mesurés | un peu plus de 9 s |
+
+Ce que ces chiffres ne disent pas, et qu'il faut lire avec eux :
+
+- **Le total est une somme de deux mesures, pas un chronomètre.** La part du serveur est mesurée sur chaque alerte. La part de l'écran est sa cadence de lecture. L'apparition du bandeau sur une vraie alerte n'a pas été observée en direct : le poste d'observation était en veille aux trois arrivées. À son réveil, la pastille et le tableau Response se sont mis à jour seuls (2 752, puis 2 754, puis 2 755 signaux, sans clic sur « Refresh »).
+- **Cette veille a montré un défaut, corrigé depuis.** Un écran qui se réveillait n'annonçait pas ce qui s'était ouvert pendant son absence : le compteur changeait, sans dire quelle alerte. Il l'annonce maintenant, avec son retard.
+- **Voir vite n'est pas voir une valeur fraîche.** Ce délai est celui que nous mettons à voir un dépassement une fois la donnée arrivée. La source, elle, publie une fois par heure. Et sur les 44 alertes ouvertes ce jour-là, aucune n'a un âge qui soit une réponse : 19 ont un plancher (« au moins 2 h »), 25 un âge inconnu parce que l'horodatage de la source est illisible. L'écran le dit ; le corriger est l'[issue 19](https://github.com/V1ktor7/obscyro/issues/19).
+- **Onze alertes, un seul jour, un seul projet.** L'évaluation prend 0,4 à 0,7 s sur ce jumeau. Sur un jumeau où elle prendrait plus de 2,5 s, l'évaluateur espace ses passes de lui-même (deux fois la durée de la dernière, 30 s au plus) et l'écrit au journal du service : le délai s'allonge alors, et il se relit sur chaque alerte.
+
 ## Ordre de construction
 
 1. Mettre l'analyste en service et le fiabiliser : [issue 5](https://github.com/V1ktor7/obscyro/issues/5). **Fait.**
 2. Options testées par le moteur, recommandation, décision enregistrée : [issue 6](https://github.com/V1ktor7/obscyro/issues/6). **Fait.** Suites : le test d'une option raccourci d'une passe, et sa durée mesurée ([issue 8](https://github.com/V1ktor7/obscyro/issues/8), **fait**), laisser une option remplacer un choix du scénario ([issue 9](https://github.com/V1ktor7/obscyro/issues/9)).
 3. Recherche en ligne validée et calendrier d'événements : [issue 7](https://github.com/V1ktor7/obscyro/issues/7). Livré ; la recherche est vérifiée en production, l'acceptation d'un événement reste à exercer en production. Suite : réduire le coût en jetons d'une recherche ([issue 11](https://github.com/V1ktor7/obscyro/issues/11)).
 4. Le direct : de l'alerte à la décision en un clic. Six issues, dans cet ordre.
-   1. L'alerte arrive sur toutes les pages, avec un lien vers son unité : [issue 12](https://github.com/V1ktor7/obscyro/issues/12). **Fait.**
+   1. L'alerte arrive sur toutes les pages, avec un lien vers son unité : [issue 12](https://github.com/V1ktor7/obscyro/issues/12). **Fait.** Suites : garder le tableau Response lisible quand les alertes se referment seules ([issue 18](https://github.com/V1ktor7/obscyro/issues/18)), donner à chaque alerte l'âge de sa propre valeur ([issue 19](https://github.com/V1ktor7/obscyro/issues/19)).
    2. Une fiche de situation s'ouvre depuis une alerte, avec l'analyste dedans : [issue 13](https://github.com/V1ktor7/obscyro/issues/13).
    3. Des réponses préparées par type de signal, engagées d'un clic : [issue 14](https://github.com/V1ktor7/obscyro/issues/14).
    4. Les réponses préparées retestées sur l'état du moment, dès qu'une alerte s'ouvre : [issue 15](https://github.com/V1ktor7/obscyro/issues/15).
