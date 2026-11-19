@@ -44,6 +44,8 @@ import {
   type HealthStatus,
 } from "@/lib/platform-api";
 
+import { AlertPill, AlertStrip } from "./AlertBanner";
+import { AlertFeedProvider } from "./AlertFeed";
 import CommandPalette from "./CommandPalette";
 import PlatformRail from "./PlatformRail";
 
@@ -308,6 +310,11 @@ export default function StudioShell({ children }: { children: ReactNode }) {
 
   return (
     <StudioContext.Provider value={value}>
+     {/*
+       The open alerts are read here, once, for every page under the shell: an
+       alert must reach whoever is in the studio, whatever page they are on.
+     */}
+     <AlertFeedProvider env={selectedEnv} enabled={hasKey}>
       {/*
         `--accent` is #111111 globally — the marketing site's black, and what
         `Button variant="primary"` paints with. Inside the Studio the primary
@@ -348,6 +355,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
           </button>
 
           <div className="ml-auto flex items-center gap-2.5">
+            <AlertPill env={selectedEnv} />
             <EnvBadge env={currentEnv} />
             {currentEnv ? (
               <span className="hidden items-center gap-1.5 text-[11.5px] sm:flex">
@@ -377,6 +385,8 @@ export default function StudioShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
+        <AlertStrip env={selectedEnv} />
+
         <div className="flex min-h-0 flex-1">
           <Suspense fallback={<div className="w-14 shrink-0 border-r border-[#d3d8de] bg-[#f6f7f9]" />}>
             <PlatformRail capabilities={identity?.capabilities?.length ? identity.capabilities : null} />
@@ -399,6 +409,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
         onSelectEnv={(slug) => setSelectedEnv(slug)}
         capabilities={identity?.capabilities?.length ? identity.capabilities : null}
       />
+     </AlertFeedProvider>
     </StudioContext.Provider>
   );
 }

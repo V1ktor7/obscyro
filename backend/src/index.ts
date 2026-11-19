@@ -22,7 +22,7 @@ import { pool } from "./db/pool.js";
 import { startChannelJobWorker } from "./services/channel-jobs.js";
 import { startFeedScheduler } from "./services/feed-sim.js";
 import { startSyncScheduler } from "./services/connectivity.js";
-import { startAlertBridge } from "./services/alert-bridge.js";
+import { runAlertBridge, startAlertBridge } from "./services/alert-bridge.js";
 import { startPipelineScheduler } from "./services/pipeline.js";
 import { startForecastLoopScheduler } from "./services/forecast-loops.js";
 import { startTwinAlertScheduler } from "./services/twin-alert-scheduler.js";
@@ -211,7 +211,9 @@ try {
 startSyncScheduler(pool, app.log);
 startPipelineScheduler(pool, app.log);
 startForecastLoopScheduler(pool, app.log);
-startTwinAlertScheduler(pool, app.log);
+// An evaluation that opens or closes an alert runs the bridge at once, so the
+// signal does not wait for the bridge's own clock; that clock stays as the net.
+startTwinAlertScheduler(pool, app.log, () => runAlertBridge(pool as unknown as Parameters<typeof runAlertBridge>[0]));
 startAlertBridge(pool, app.log);
   startChannelJobWorker(pool, app.log);
 } catch (err) {

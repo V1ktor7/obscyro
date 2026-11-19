@@ -35,7 +35,48 @@ import {
 // "no longer firing" can be asserted.
 // ---------------------------------------------------------------------------
 
-const TICK_MS = 30_000;
+/**
+ * How long to wait between two evaluations when one is quick.
+ *
+ * This is what bounds the time between a reading that crosses a threshold and
+ * the alert it opens: nobody acts on a ward that overflowed half a minute ago
+ * and has not been noticed yet. It was thirty seconds, which was fine for a
+ * map somebody glances at and is not for a banner somebody acts on.
+ */
+export const TARGET_GAP_MS = 5_000;
+
+/** However slow an evaluation gets, the next one is not put off longer than this. */
+export const MAX_GAP_MS = 30_000;
+
+/**
+ * The wait before the next evaluation, given how long the last one took.
+ *
+ * The loop paces itself instead of ticking on a clock: an evaluation never
+ * starts before the last one has finished, and the wait is at least twice the
+ * time the last one took, so the evaluator cannot spend more than a third of
+ * the database's attention however large the twin grows. A quick evaluation
+ * keeps the five-second cadence; a slow one slows itself down and says so.
+ */
+export function nextEvaluationDelay(lastMs: number): number {
+  const twice = Number.isFinite(lastMs) && lastMs > 0 ? Math.round(lastMs * 2) : 0;
+  return Math.min(MAX_GAP_MS, Math.max(TARGET_GAP_MS, twice));
+}
+
+/** When alerts were last evaluated here, and how often they are: what "live" means on a screen. */
+export interface EvaluationPulse {
+  /** The end of the last evaluation; null before the first one, or where no scheduler runs. */
+  lastAt: string | null;
+  /** How long it took. */
+  lastMs: number | null;
+  /** The time from one evaluation's start to the next one's: the cadence, measured. */
+  everyMs: number | null;
+}
+
+let pulse: EvaluationPulse = { lastAt: null, lastMs: null, everyMs: null };
+
+export function evaluationPulse(): EvaluationPulse {
+  return pulse;
+}
 
 /**
  * Past this many projects a tick costs more than it is worth, and the cure is
@@ -201,34 +242,51 @@ export async function runTwinAlertEvaluation(db: DbClient): Promise<EvalResult[]
   return out;
 }
 
+/** An evaluation slower than this is worth a line in the log: it is what stretches the cadence. */
+const SLOW_EVALUATION_MS = 2_500;
+
 export function startTwinAlertScheduler(
   pool: { query: DbClient["query"] },
   log: { info: (o: unknown, m?: string) => void; warn: (o: unknown, m?: string) => void },
+  /**
+   * Called when an evaluation opened or closed an alert, before the next one
+   * is scheduled. The bridge to signals hangs here, so a new alert becomes a
+   * signal in the same breath instead of waiting for the bridge's own clock.
+   */
+  afterChange?: () => Promise<unknown>,
 ): void {
   if (started || process.env.TWIN_ALERT_SCHEDULER_DISABLED === "1") return;
   started = true;
-  log.info({ tickMs: TICK_MS }, "twin alert scheduler started");
+  log.info({ targetGapMs: TARGET_GAP_MS, maxGapMs: MAX_GAP_MS }, "twin alert scheduler started");
 
-  setInterval(() => {
-    void (async () => {
-      const db = pool as DbClient;
-      try {
-        const results = await runTwinAlertEvaluation(db);
-        if (results.length > BUSY_PROJECTS) {
-          log.warn(
-            { projects: results.length, limit: BUSY_PROJECTS },
-            "twin alert evaluation is walking more projects than a tick was sized for",
-          );
-        }
-        const opened = results.reduce((n, r) => n + r.opened, 0);
-        const resolved = results.reduce((n, r) => n + r.resolved, 0);
-        const unreadable = results.reduce((n, r) => n + r.unreadable, 0);
-        if (opened > 0 || resolved > 0) {
-          log.info({ opened, resolved, unreadable }, "twin alerts evaluated");
-        }
-      } catch (err) {
-        log.warn({ err }, "twin alert scheduler tick failed");
+  const evaluate = async (): Promise<void> => {
+    const startedAt = Date.now();
+    const db = pool as DbClient;
+    try {
+      const results = await runTwinAlertEvaluation(db);
+      if (results.length > BUSY_PROJECTS) {
+        log.warn(
+          { projects: results.length, limit: BUSY_PROJECTS },
+          "twin alert evaluation is walking more projects than a tick was sized for",
+        );
       }
-    })();
-  }, TICK_MS).unref?.();
+      const opened = results.reduce((n, r) => n + r.opened, 0);
+      const resolved = results.reduce((n, r) => n + r.resolved, 0);
+      const unreadable = results.reduce((n, r) => n + r.unreadable, 0);
+      if (opened > 0 || resolved > 0) {
+        log.info({ opened, resolved, unreadable }, "twin alerts evaluated");
+        if (afterChange) await afterChange().catch((err) => log.warn({ err }, "after-evaluation hook failed"));
+      }
+    } catch (err) {
+      log.warn({ err }, "twin alert scheduler tick failed");
+    }
+    const ms = Date.now() - startedAt;
+    const wait = nextEvaluationDelay(ms);
+    if (ms > SLOW_EVALUATION_MS) log.warn({ ms, nextInMs: wait }, "twin alert evaluation is slow: alerts open later");
+    pulse = { lastAt: new Date().toISOString(), lastMs: ms, everyMs: ms + wait };
+    // Scheduled once the evaluation is over, never on a clock: two evaluations
+    // cannot overlap, however long one takes.
+    setTimeout(() => void evaluate(), wait).unref?.();
+  };
+  setTimeout(() => void evaluate(), TARGET_GAP_MS).unref?.();
 }

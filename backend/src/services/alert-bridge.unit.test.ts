@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { DbClient } from "../lib/db.js";
-import { noteClearedAlerts, raiseSignalsForOpenAlerts, signalTitle } from "./alert-bridge.js";
+import { noteClearedAlerts, raiseSignalsForOpenAlerts, runAlertBridge, signalTitle } from "./alert-bridge.js";
 
 /** Records every statement and returns queued results in order. */
 function scriptDb(results: unknown[][] = []): {
@@ -193,4 +193,39 @@ test("only open signals are considered for the cleared note", async () => {
   await noteClearedAlerts(db);
   assert.match(sql[0]!, /s\.closed_at IS NULL/);
   assert.match(sql[0]!, /a\.status <> 'open'/);
+});
+
+// --- one pass at a time --------------------------------------------------------
+
+test("two passes of the bridge never run side by side", async () => {
+  // The bridge's own clock and the alert evaluator both call it. "One signal
+  // per alert" is a NOT EXISTS, which two passes at once would both get through.
+  const order: string[] = [];
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const db = (name: string, wait?: Promise<void>) =>
+    ({
+      query: async () => {
+        order.push(`${name}:start`);
+        if (wait) await wait;
+        order.push(`${name}:end`);
+        return { rows: [], rowCount: 0 };
+      },
+    }) as unknown as DbClient;
+
+  const first = runAlertBridge(db("first", held));
+  const second = runAlertBridge(db("second"));
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  // The second pass has not touched the database while the first is still reading.
+  assert.deepEqual(order, ["first:start"]);
+  release();
+  await Promise.all([first, second]);
+  assert.deepEqual(order.slice(0, 5), ["first:start", "first:end", "first:start", "first:end", "second:start"]);
+});
+
+test("a pass that failed does not stop the one queued behind it", async () => {
+  const broken = { query: async () => Promise.reject(new Error("connection lost")) } as unknown as DbClient;
+  const { db } = scriptDb();
+  await assert.rejects(runAlertBridge(broken), /connection lost/);
+  assert.deepEqual(await runAlertBridge(db), { raised: 0, cleared: 0 });
 });

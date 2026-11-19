@@ -775,23 +775,49 @@ flowchart TD
 
 ## D5. Alertes du jumeau et signaux
 
-**But.** Qu'une règle se déclenche à l'heure où le seuil est franchi, pas à l'heure où quelqu'un ouvre la page.
+**But.** Qu'un seuil franchi atteigne une personne en quelques secondes, où qu'elle soit dans le studio, avec de quoi juger : quelle unité, depuis quand, de quand date la valeur, et un clic vers l'unité et vers le signal. Une règle se déclenche à l'heure où le seuil est franchi, pas à l'heure où quelqu'un ouvre la page.
 
 ```mermaid
 flowchart TD
-    A["Toutes les 30 secondes"] --> B["Projets qui ont au moins une règle"]
-    B --> C["Métriques de chaque unité, sans lentille"]
+    A["Évaluateur : une évaluation finie,<br/>attendre 5 s, ou deux fois sa durée si elle a été lente"] --> B["Projets qui ont au moins une règle"]
+    B --> C["Métriques de chaque unité, sans lentille :<br/>la réalité, jamais un scénario"]
     C --> D["Chaque règle évaluée"]
     D --> E{"La condition"}
-    E -->|"tient maintenant, pas avant"| F["Alerte ouverte"]
+    E -->|"tient maintenant, pas avant"| F["Alerte ouverte, avec deux heures :<br/>de quand date la valeur, quand la donnée a été écrite ici"]
+    E -->|"tient encore"| F2["Valeur et âge de la valeur rafraîchis ;<br/>l'heure d'écriture qui a ouvert l'alerte ne bouge pas"]
     E -->|"tenait, et ne tient plus de façon démontrée"| G["Alerte résolue"]
-    F --> H["Signal créé, titré une fois"]
-    H --> I["Workflow : étapes, approbation au besoin"]
+    F --> H["Pont lancé tout de suite, une passe à la fois"]
+    G --> H
+    H --> I["Signal créé, titré une fois"]
+    I --> J["Workflow : étapes, approbation au besoin"]
+    F --> K["Fil d'alertes : GET /alerts/feed<br/>alertes ouvertes, unité nommée, âges, signal, dernière évaluation"]
+    I --> K
+    K --> L["Cadre du studio : lu toutes les 3 s,<br/>une seule lecture pour toutes les pages"]
+    L --> M["Pastille : combien sont ouvertes, et si la liste est à jour"]
+    L --> N{"Alerte absente de la lecture précédente ?"}
+    N -->|"oui"| O["Bandeau sur toutes les pages, deux minutes :<br/>Open unit, Signal"]
+    N -->|"non, ou première lecture"| M
+    L --> P["Pages du jumeau : mêmes alertes sur la carte, l'arbre, la fiche d'unité"]
+    L --> Q["Response : le tableau se relit quand les signaux changent"]
 ```
 
-**Règles.** La résolution ne se fait jamais dans une lecture : sous une lentille qui cache des unités, leur absence ressemblerait à un service vidé. L'échec d'un projet ne coûte pas leur évaluation aux autres.
+**Règles.**
+- **Cadence.** L'évaluateur se règle seul : une évaluation ne commence jamais avant la fin de la précédente, et l'attente vaut cinq secondes, ou deux fois la durée de la dernière évaluation si elle a été lente, sans dépasser trente secondes. Il ne peut donc pas prendre plus d'un tiers de l'attention de la base, quelle que soit la taille du jumeau. Une évaluation lente est écrite au journal du service.
+- **Seule la réalité lève des alertes.** Une lecture faite à travers un scénario, ou à une autre date, n'évalue rien : une urgence qui déborde dans un « et si » ne doit pas arriver sur tous les écrans comme si elle arrivait.
+- **La résolution ne se fait jamais dans une lecture** : sous une lentille qui cache des unités, leur absence ressemblerait à un service vidé. L'échec d'un projet ne coûte pas leur évaluation aux autres.
+- **Deux heures de plus que l'ouverture.** `observed_at` : quand la valeur était vraie, d'après l'horodatage que la source publie (D7) ; vide quand la source ne le dit pas. `written_at` : quand la donnée qui a fait franchir le seuil a été écrite ici ; fixée à l'ouverture. `created_at - written_at` est le temps que nous avons mis à voir le dépassement, mesuré sur chaque alerte. Une alerte ouverte trois secondes après son écriture peut porter sur une valeur vieille de cinquante minutes : l'écran dit les deux.
+- **Le pont suit l'évaluateur.** Une évaluation qui ouvre ou ferme une alerte lance le pont aussitôt ; l'horloge propre du pont (quinze secondes) reste comme filet. Les passes du pont se suivent, jamais deux à la fois : « un signal par alerte » repose sur un `NOT EXISTS` que deux passes simultanées franchiraient toutes les deux.
+- **Une seule lecture pour tout le studio.** Le cadre lit le fil d'alertes toutes les trois secondes et le donne à toutes les pages. Avant, chaque page avait son horloge : dix secondes sur la fiche d'unité, trente sur le globe, une requête par unité sur l'arbre, un bouton sur Response.
+- **Ce qui est une nouvelle.** Une alerte est annoncée quand elle est dans une lecture et n'était pas dans la précédente. La première lecture n'annonce rien : ces alertes étaient ouvertes avant qu'on regarde, et un écran qui crie quarante vieilles alertes à l'arrivée apprend à ne plus le lire. L'annonce dure deux minutes, ou jusqu'à ce qu'on la ferme ; la fermer ne touche pas à l'alerte.
+- **Le silence n'est pas le calme.** Sans lecture réussie depuis quinze secondes, la pastille dit que la liste n'est plus à jour et depuis combien de temps ; la dernière liste lue reste affichée, marquée comme ancienne. La liste dit aussi quand les seuils ont été vérifiés pour la dernière fois.
+- **Les âges se comptent sur l'horloge du serveur**, pas sur celle du poste : un ordinateur réglé cinq minutes de travers ne vieillit pas une alerte de cinq minutes.
+- **Un clic.** Depuis une alerte : son unité (`/studio/live?unit=…`, la fiche s'ouvre seule) et son signal (`/studio/response?signal=…`). Depuis un signal : son unité. Le lien porte le projet.
+- Une alerte est une unité et une valeur agrégée, jamais une personne.
 
-**Code.** `backend/src/services/twin-alert-scheduler.ts`, `alert-bridge.ts`, `signals.ts`, `twin.ts`. **Tests.** `twin-alert-scheduler.unit.test.ts`, `alert-bridge.unit.test.ts`, `signals.unit.test.ts`.
+**Délai.** Du moment où une donnée est écrite ici au moment où l'alerte est à l'écran : au plus cinq secondes d'attente de l'évaluateur, la durée d'une évaluation, puis au plus trois secondes de lecture. Les mesures faites en production sont dans [decision-loop.md](decision-loop.md), ligne « Signal ».
+
+**Code.** `backend/src/services/twin-alert-scheduler.ts` (`nextEvaluationDelay`, `evaluationPulse`), `alert-bridge.ts`, `alert-feed.ts`, `signals.ts`, `twin.ts` (`evaluateAlerts`, `readsReality`), route `GET /v1/ontology/:env/alerts/feed` dans `backend/src/routes/twin.ts`, migration `063_twin_alert_times.sql` ; `frontend/app/studio/AlertFeed.tsx`, `alert-feed-state.ts`, `AlertBanner.tsx`, `StudioShell.tsx`, `response/ResponseView.tsx`, `live/LiveTwinView.tsx`.
+**Tests.** `twin-alert-scheduler.unit.test.ts`, `alert-bridge.unit.test.ts`, `alert-feed.unit.test.ts`, `signals.unit.test.ts` ; `alert-feed-state.test.ts`, `AlertBanner.test.tsx`, `response/ResponseView.test.tsx`, `platform-nav.test.ts`.
 
 ## D6. Métriques du jumeau
 

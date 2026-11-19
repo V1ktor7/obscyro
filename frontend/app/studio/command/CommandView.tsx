@@ -29,7 +29,6 @@ import {
   ackTwinAlert,
   fetchTwinTree,
   fetchTwinUnit,
-  listTwinAlerts,
   seedTwinDemo,
   subscribeTwinStream,
   type TwinAlert,
@@ -54,6 +53,8 @@ import {
   timeAgo,
   useElementWidth,
 } from "../command-ui";
+import { useAlertFeed } from "../AlertFeed";
+import { asTwinAlerts } from "../alert-feed-state";
 import { useStudio } from "../StudioShell";
 import {
   loadTwinPreferences,
@@ -103,7 +104,14 @@ export default function CommandView() {
   const [streamMode, setStreamMode] = useState<"stream" | "poll" | "idle">(
     "idle",
   );
-  const [alerts, setAlerts] = useState<TwinAlert[]>([]);
+  // The open alerts are the ones the shell reads for every page. This canvas
+  // used to keep a list of its own, refreshed every ten seconds.
+  const alertFeed = useAlertFeed();
+  const alerts: TwinAlert[] = useMemo(
+    () => (isOperations ? asTwinAlerts(alertFeed.feed) : []),
+    [alertFeed.feed, isOperations],
+  );
+  const refreshAlerts = alertFeed.refresh;
   const [scenarios, setScenarios] = useState<OverlayScenario[]>([]);
   const [scenarioId, setScenarioId] = useState<string>("");
   const [showEdits, setShowEdits] = useState(false);
@@ -154,22 +162,11 @@ export default function CommandView() {
     [env],
   );
 
-  const refreshAlerts = useCallback(async () => {
-    if (!env) return;
-    try {
-      const { alerts: list } = await listTwinAlerts(env, { limit: 100 });
-      setAlerts(list);
-    } catch {
-      /* keep last */
-    }
-  }, [env]);
-
   // Twin stream with poll fallback.
   useEffect(() => {
     if (!env || !hasKey || !isOperations) {
       setSnapshot(null);
       setStreamMode("idle");
-      setAlerts([]);
       return;
     }
     let pollId: ReturnType<typeof setInterval> | undefined;
@@ -222,14 +219,6 @@ export default function CommandView() {
       .then((r) => setScenarios(r.scenarios))
       .catch(() => setScenarios([]));
   }, [env, hasKey]);
-
-  // Alerts poll (10s).
-  useEffect(() => {
-    if (!env || !hasKey || !isOperations) return;
-    void refreshAlerts();
-    const id = setInterval(() => void refreshAlerts(), 10000);
-    return () => clearInterval(id);
-  }, [env, hasKey, isOperations, refreshAlerts]);
 
   // Unit detail on selection / snapshot change.
   useEffect(() => {

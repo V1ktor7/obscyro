@@ -37,7 +37,7 @@ Le modèle orchestre et explique. Les faits viennent des outils ; les calculs, d
 
 | Étape | État | Où |
 |---|---|---|
-| 1. Signal | Les alertes du jumeau et les signaux existent, mais ne lancent pas encore la boucle : une alerte ne se voit que sur certaines pages et ne mène ni à son unité, ni à l'analyste, ni à une réponse. À faire : [issue 12](https://github.com/V1ktor7/obscyro/issues/12) | [algorithms.md](algorithms.md), D5 |
+| 1. Signal | **Livré** : une alerte arrive sur toutes les pages du studio. Les seuils sont évalués toutes les cinq secondes, le cadre lit un seul fil d'alertes toutes les trois secondes, un bandeau annonce ce qui vient de s'ouvrir, et un clic mène à l'unité ou au signal. Le tableau Response se relit seul. Chaque alerte dit de quand date sa valeur. Couvert par les tests ; mesures en production à venir. L'alerte ne propose pas encore de réponse : [issue 13](https://github.com/V1ktor7/obscyro/issues/13) et suivantes | [algorithms.md](algorithms.md), D5 |
 | 2. Situation | **Livré et vérifié en production** avec le vrai modèle : l'analyste, onglet Ask. Treize questions de référence passent deux fois de suite | [analyst.md](analyst.md) |
 | 3. Précédents | **Livré** : onglet Event finder. Recherche en ligne dans les sources que le projet autorise, candidats avec lien et passage cité, acceptés ou refusés par une personne, calendrier sur la frise et lu par l'analyste (`list_events`). La recherche est vérifiée en production avec le vrai modèle le 2026-11-17 ; l'acceptation d'un événement, le couloir de la frise et la citation par l'analyste sont couverts par les tests, pas encore exercés en production. Un événement est un repère daté : il n'est relié à aucun territoire et n'entre pas dans le moteur | [analyst.md](analyst.md), [algorithms.md](algorithms.md), A10 |
 | 4. Effets mesurés | À faire. Les briques de mesure existent (décalages, réplication par épisodes) sans être reliées | [algorithms.md](algorithms.md), C3 |
@@ -55,7 +55,7 @@ La mise en service de l'analyste ([issue 5](https://github.com/V1ktor7/obscyro/i
 2. Options testées par le moteur, recommandation, décision enregistrée : [issue 6](https://github.com/V1ktor7/obscyro/issues/6). **Fait.** Suites : le test d'une option raccourci d'une passe, et sa durée mesurée ([issue 8](https://github.com/V1ktor7/obscyro/issues/8), **fait**), laisser une option remplacer un choix du scénario ([issue 9](https://github.com/V1ktor7/obscyro/issues/9)).
 3. Recherche en ligne validée et calendrier d'événements : [issue 7](https://github.com/V1ktor7/obscyro/issues/7). Livré ; la recherche est vérifiée en production, l'acceptation d'un événement reste à exercer en production. Suite : réduire le coût en jetons d'une recherche ([issue 11](https://github.com/V1ktor7/obscyro/issues/11)).
 4. Le direct : de l'alerte à la décision en un clic. Six issues, dans cet ordre.
-   1. L'alerte arrive sur toutes les pages, avec un lien vers son unité : [issue 12](https://github.com/V1ktor7/obscyro/issues/12).
+   1. L'alerte arrive sur toutes les pages, avec un lien vers son unité : [issue 12](https://github.com/V1ktor7/obscyro/issues/12). **Fait.**
    2. Une fiche de situation s'ouvre depuis une alerte, avec l'analyste dedans : [issue 13](https://github.com/V1ktor7/obscyro/issues/13).
    3. Des réponses préparées par type de signal, engagées d'un clic : [issue 14](https://github.com/V1ktor7/obscyro/issues/14).
    4. Les réponses préparées retestées sur l'état du moment, dès qu'une alerte s'ouvre : [issue 15](https://github.com/V1ktor7/obscyro/issues/15).

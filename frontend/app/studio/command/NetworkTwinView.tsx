@@ -57,7 +57,6 @@ import {
   listEnvObjects,
   listGeoShapes,
   listIngestEvents,
-  listTwinAlerts,
   listTwinAlertRules,
   listTwinMetrics,
   type TwinAlertRule,
@@ -76,6 +75,8 @@ import {
 import { explainFreshness, formatFreshness, formatReadingAge } from "../twin-ui";
 import { OVERLAY_BAR } from "../map-overlay";
 import { GLOBE_ZOOM, MAPBOX_TOKEN, STYLE_SATELLITE, STYLE_STANDARD } from "../map-style";
+import { useAlertFeed } from "../AlertFeed";
+import { asTwinAlerts } from "../alert-feed-state";
 import { useStudio } from "../StudioShell";
 import TreeExplorer, { type TreeItem } from "../TreeExplorer";
 import { BAND_COLOUR, bandOf, type Frame } from "../events/replay-frames";
@@ -304,7 +305,10 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   const env = selectedEnv;
 
   const [network, setNetwork] = useState<TwinNetworkSnapshot | null>(null);
-  const [alerts, setAlerts] = useState<TwinAlert[]>([]);
+  // The open alerts the shell reads for every page, in place of a list this
+  // globe refreshed on its own every thirty seconds.
+  const alertFeed = useAlertFeed();
+  const alerts: TwinAlert[] = useMemo(() => asTwinAlerts(alertFeed.feed), [alertFeed.feed]);
   const [feedEvents, setFeedEvents] = useState<{ id: string; receivedAt: string }[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // The map is why this screen exists; on a laptop the panel costs it a fifth
@@ -604,15 +608,13 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   const load = useCallback(async () => {
     if (!env) {
       setNetwork(null);
-      setAlerts([]);
       setFeedEvents([]);
       return;
     }
     setLoading(true);
     try {
-      const [net, al, ev, schema, mets, rules] = await Promise.all([
+      const [net, ev, schema, mets, rules] = await Promise.all([
         fetchTwinNetwork(env),
-        listTwinAlerts(env, { limit: 100 }).catch(() => ({ alerts: [] as TwinAlert[] })),
         listIngestEvents().catch(() => ({ events: [] })),
         listEnvTypes(env).catch(() => ({ linkTypes: [] as EnvLinkType[] })),
         // The badge is banded on the rule's own threshold, so the map needs the
@@ -630,7 +632,6 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         .then((t) => setTreeSnap(t))
         .catch(() => setTreeSnap(null));
       setLinkTypes(schema.linkTypes);
-      setAlerts(al.alerts);
       setFeedEvents(ev.events.map((e) => ({ id: e.id, receivedAt: e.receivedAt })));
       setError(null);
     } catch (err) {

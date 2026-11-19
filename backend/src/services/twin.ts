@@ -169,6 +169,17 @@ export interface TwinAlertRow {
   status: TwinAlertStatus;
   createdAt: Date;
   ackedAt: Date | null;
+  /**
+   * When the value was true, from the timestamp the source published. Refreshed
+   * with the value at every evaluation; null when the source does not say.
+   */
+  observedAt: Date | null;
+  /**
+   * When the data that crossed the threshold was written here. Set when the
+   * alert opens and never touched again, so `createdAt - writtenAt` is how
+   * long it took us to notice.
+   */
+  writtenAt: Date | null;
   /** True only when this evaluation newly opened the alert (vs. refreshed it). */
   isNew?: boolean;
 }
@@ -900,9 +911,14 @@ export async function evaluateAlerts(
 ): Promise<TwinAlertRow[]> {
   const activeRules = rules ?? (await listAlertRules(db, environmentId));
   const created: TwinAlertRow[] = [];
+  const now = Date.now();
 
   for (const [unitId, metrics] of metricsByUnit) {
     const kind = unitKinds.get(unitId) ?? null;
+    // The two ages the rollup already measured, turned into instants so they
+    // stay true while the alert stays open.
+    const observedAt = metrics.freshnessSeconds == null ? null : new Date(now - metrics.freshnessSeconds * 1000);
+    const writtenAt = metrics.fetchedAgeSeconds == null ? null : new Date(now - metrics.fetchedAgeSeconds * 1000);
     for (const rule of activeRules) {
       if (rule.unitKind && rule.unitKind !== kind) continue;
       const val = metricValue(metrics, rule.metric);
@@ -921,21 +937,28 @@ export async function evaluateAlerts(
       // loop refreshes the existing row instead of inserting a duplicate every
       // tick. `inserted` (xmax = 0) tells callers which alerts are genuinely new
       // so the UI can toast only those.
+      //
+      // `observed_at` follows the value: it is the age of what is shown.
+      // `written_at` does not: it is the write the opening followed, and an
+      // alert that stays open through ten more syncs was still opened by one.
       const { rows } = await db.query<{
         id: string;
         created_at: Date;
+        written_at: Date | null;
         inserted: boolean;
       }>(
         `INSERT INTO app.twin_alert
-           (project_id, unit_instance_id, rule_id, severity, metric, value, message, recommendation, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'open')
+           (project_id, unit_instance_id, rule_id, severity, metric, value, message, recommendation, status,
+            observed_at, written_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'open', $9, $10)
          ON CONFLICT (project_id, unit_instance_id, rule_id) WHERE status = 'open'
          DO UPDATE SET severity = EXCLUDED.severity,
                        metric = EXCLUDED.metric,
                        value = EXCLUDED.value,
                        message = EXCLUDED.message,
-                       recommendation = EXCLUDED.recommendation
-         RETURNING id, created_at, (xmax = 0) AS inserted`,
+                       recommendation = EXCLUDED.recommendation,
+                       observed_at = EXCLUDED.observed_at
+         RETURNING id, created_at, written_at, (xmax = 0) AS inserted`,
         [
           environmentId,
           unitId,
@@ -945,6 +968,8 @@ export async function evaluateAlerts(
           val,
           message,
           recommendation,
+          observedAt,
+          writtenAt,
         ],
       );
       created.push({
@@ -960,6 +985,8 @@ export async function evaluateAlerts(
         status: "open",
         createdAt: rows[0]!.created_at,
         ackedAt: null,
+        observedAt,
+        writtenAt: rows[0]!.written_at,
         isNew: rows[0]!.inserted,
       });
     }
@@ -975,7 +1002,8 @@ export async function listOpenAlerts(
 ): Promise<TwinAlertRow[]> {
   const params: unknown[] = [environmentId];
   let sql = `SELECT id, project_id, unit_instance_id, rule_id, severity, metric,
-                    value::text, message, recommendation, status, created_at, acked_at
+                    value::text, message, recommendation, status, created_at, acked_at,
+                    observed_at, written_at
                FROM app.twin_alert
               WHERE project_id = $1 AND status = 'open'`;
   if (unitId) {
@@ -1002,6 +1030,8 @@ export async function listOpenAlerts(
     status: TwinAlertStatus;
     created_at: Date;
     acked_at: Date | null;
+    observed_at: Date | null;
+    written_at: Date | null;
   }>(sql, params);
 
   return rows.map((r) => ({
@@ -1017,6 +1047,8 @@ export async function listOpenAlerts(
     status: r.status,
     createdAt: r.created_at,
     ackedAt: r.acked_at,
+    observedAt: r.observed_at,
+    writtenAt: r.written_at,
   }));
 }
 
@@ -1171,12 +1203,21 @@ export async function deleteAlertRule(
   if (!rowCount) throw NotFound("RULE_NOT_FOUND", "Alert rule not found.");
 }
 
+/** Is this read the twin as it stands now: no scenario laid over it, no other instant? */
+export function readsReality(lens?: ReadLens): boolean {
+  return !lens || (lens.scenarioId === undefined && lens.asOf === undefined);
+}
+
 export async function getTwinTreeSnapshot(db: DbClient, environmentId: string, lens?: ReadLens) {
   const tree = await getUnitTree(db, environmentId, lens);
   const metricsByUnit = await rollupAllUnits(db, environmentId, lens);
   const unitKinds = new Map(tree.nodes.map((n) => [n.id, n.kind]));
   const unitNames = new Map(tree.nodes.map((n) => [n.id, n.name]));
-  await evaluateAlerts(db, environmentId, metricsByUnit, unitKinds, unitNames);
+  // Reality only. Under a lens the metrics are those of a scenario or of
+  // another instant, and a ward that overflows in a what-if must not raise an
+  // alert that reaches every screen as if it were happening. The scheduler
+  // evaluates reality on its own, every few seconds, whoever is watching.
+  if (readsReality(lens)) await evaluateAlerts(db, environmentId, metricsByUnit, unitKinds, unitNames);
   const openAlerts = await listOpenAlerts(db, environmentId, undefined, {
     limit: config.listMaxLimit,
   });

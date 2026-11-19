@@ -152,11 +152,24 @@ export async function noteClearedAlerts(db: DbClient, limit = BATCH): Promise<nu
   return rows.length;
 }
 
-export async function runAlertBridge(db: DbClient): Promise<BridgeResult> {
-  return {
+let lastRun: Promise<unknown> = Promise.resolve();
+
+/**
+ * One pass of the bridge, and only one at a time.
+ *
+ * Two things call this now: the bridge's own clock, and the alert evaluator
+ * the moment it opens or closes something. "One signal per alert" rests on a
+ * NOT EXISTS, which two passes running side by side would both get through.
+ * So passes queue: each starts when the one before it is done.
+ */
+export function runAlertBridge(db: DbClient): Promise<BridgeResult> {
+  const run = lastRun.then(async () => ({
     raised: await raiseSignalsForOpenAlerts(db),
     cleared: await noteClearedAlerts(db),
-  };
+  }));
+  // A pass that failed must not stop the ones queued behind it.
+  lastRun = run.catch(() => undefined);
+  return run;
 }
 
 export function startAlertBridge(

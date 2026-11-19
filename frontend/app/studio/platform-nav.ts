@@ -212,8 +212,11 @@ export const NAV_SECTIONS: NavSection[] = [
         items: [
           // Three of these were reachable only by typing the URL.
           { label: "Response", href: "/studio/response" },
-          { label: "Units", href: "/studio/command" },
-          { label: "Network", href: "/studio/live" },
+          // Named for what each page shows. They were the other way round:
+          // "Units" opened the globe of the network's sites, and "Network" the
+          // tree of its units.
+          { label: "Units", href: "/studio/live" },
+          { label: "Network", href: "/studio/command" },
           { label: "Scenarios", href: "/studio/simulation" },
           { label: "Events", href: "/studio/events" },
           { label: "Profiles", href: "/studio/profiles" },

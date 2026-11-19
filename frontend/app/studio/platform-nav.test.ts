@@ -90,3 +90,23 @@ describe("the Models section lists what the lab has", () => {
     expect(new Set(hrefs).size).toBe(hrefs.length);
   });
 });
+
+describe("a page is named for what it shows", () => {
+  const twin = NAV_SECTIONS.find((s) => s.capability === "twin")!.groups.flatMap((g) => g.items);
+  const hrefOf = (label: string) => twin.find((i) => i.label === label)?.href;
+
+  it("opens the tree of units under Units, and the globe of sites under Network", () => {
+    // They were the other way round: "Units" opened the network globe.
+    expect(hrefOf("Units")).toBe("/studio/live");
+    expect(hrefOf("Network")).toBe("/studio/command");
+  });
+
+  it("keeps the six pages of the twin, in the order people work through them", () => {
+    expect(twin.map((i) => i.label)).toEqual(["Response", "Units", "Network", "Scenarios", "Events", "Profiles"]);
+  });
+
+  it("still lights Units when an alert's link carries a unit in the address", () => {
+    const on = twin.filter((i) => navItemActive(i, "/studio/live", q("env=mtl&unit=u1"), twin));
+    expect(on.map((i) => i.label)).toEqual(["Units"]);
+  });
+});

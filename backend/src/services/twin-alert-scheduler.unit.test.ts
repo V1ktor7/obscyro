@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { alertsToResolve, type OpenAlertRef } from "./twin-alert-scheduler.js";
+import { MAX_GAP_MS, TARGET_GAP_MS, alertsToResolve, nextEvaluationDelay, type OpenAlertRef } from "./twin-alert-scheduler.js";
 import type { TwinAlertRuleRow, UnitMetrics } from "./twin.js";
 
 /**
@@ -175,5 +175,28 @@ describe("several units at once", () => {
     );
     assert.equal(resolve.length + unreadable.length + kept.length, open.length);
     assert.deepEqual(kept.map((a) => a.id), ["a3"], "the one still over capacity");
+  });
+});
+
+describe("how often alerts are evaluated", () => {
+  it("is every five seconds while an evaluation is quick", () => {
+    // What bounds the time between a reading that crosses a threshold and its alert.
+    assert.equal(TARGET_GAP_MS, 5_000);
+    assert.equal(nextEvaluationDelay(0), 5_000);
+    assert.equal(nextEvaluationDelay(180), 5_000);
+    assert.equal(nextEvaluationDelay(2_500), 5_000);
+  });
+
+  it("slows itself down when an evaluation is slow, and never waits more than thirty seconds", () => {
+    // Twice the time the last one took: the evaluator cannot take more than a third of the database.
+    assert.equal(nextEvaluationDelay(4_000), 8_000);
+    assert.equal(nextEvaluationDelay(12_000), 24_000);
+    assert.equal(nextEvaluationDelay(20_000), MAX_GAP_MS);
+    assert.equal(nextEvaluationDelay(600_000), 30_000);
+  });
+
+  it("falls back to the quick cadence on a duration that makes no sense", () => {
+    assert.equal(nextEvaluationDelay(Number.NaN), 5_000);
+    assert.equal(nextEvaluationDelay(-40), 5_000);
   });
 });

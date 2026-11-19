@@ -6,6 +6,7 @@ import { config } from "../lib/config.js";
 import type { DbClient } from "../lib/db.js";
 import { AppError, BadRequest, NotFound } from "../lib/errors.js";
 import { startSseStream } from "../lib/sse.js";
+import { readAlertFeed } from "../services/alert-feed.js";
 import { recordAudit } from "../services/audit.js";
 import {
   assertEventMatchesWorld,
@@ -796,6 +797,58 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
           ackedAt: a.ackedAt?.toISOString() ?? null,
         })),
       };
+    },
+  );
+
+  app.get(
+    "/ontology/:env/alerts/feed",
+    {
+      schema: {
+        summary: "The project's open alerts, for every screen at once",
+        description:
+          "The one reading every page makes of the open alerts, in place of a clock per page. Each alert carries " +
+          "its unit and the unit's name, its severity, metric, value and message, when it opened (`openedAt`), when " +
+          "its value was true according to the source (`observedAt`, null when the source does not say), when the " +
+          "data that opened it was written here (`writtenAt`), and the signal it raised (`signalId`). Worst first, " +
+          "then newest. `counts` holds every open alert by severity and `omitted` how many are beyond the list. " +
+          "`signals` says how many signals are open and when one last changed, which is enough for the response " +
+          "board to know it must reload. `evaluation` says when alerts were last evaluated and how often they are, " +
+          "so a screen can tell \"nothing is wrong\" from \"nobody has checked\". `at` is the server's clock: ages " +
+          "are counted from it. Reads only; alerts are opened and closed by the evaluator. Aggregate values about " +
+          "units, never about a person.",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1) }),
+        response: {
+          200: z.object({
+            at: z.string(),
+            alerts: z.array(
+              z.object({
+                id: z.string(),
+                unitId: z.string(),
+                unitName: z.string(),
+                severity: z.enum(["info", "warn", "critical"]),
+                metric: z.string(),
+                value: z.number(),
+                message: z.string(),
+                openedAt: z.string(),
+                observedAt: z.string().nullable(),
+                writtenAt: z.string().nullable(),
+                signalId: z.string().nullable(),
+              }),
+            ),
+            counts: z.object({ critical: z.number(), warn: z.number(), info: z.number() }),
+            omitted: z.number(),
+            signals: z.object({ open: z.number(), changedAt: z.string().nullable() }),
+            evaluation: z.object({ lastAt: z.string().nullable(), lastMs: z.number().nullable(), everyMs: z.number().nullable() }),
+          }),
+          404: errorEnvelope,
+        },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      return readAlertFeed(req.db, env.id);
     },
   );
 

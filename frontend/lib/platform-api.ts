@@ -1035,6 +1035,10 @@ export interface TwinAlert {
    * arrive here — it is named so the two ends agree on what the states are.
    */
   status: "open" | "ack" | "resolved";
+  /** When the value was true, from the timestamp the source published; null when it does not say. */
+  observedAt?: string | null;
+  /** When the data that opened the alert was written here. */
+  writtenAt?: string | null;
   createdAt?: string;
   ackedAt?: string | null;
 }
@@ -1254,6 +1258,46 @@ export async function listTwinAlerts(
   if (opts?.offset != null) qs.set("offset", String(opts.offset));
   const q = qs.toString();
   return apiFetch(`/v1/ontology/${encEnv(env)}/twin/alerts${q ? `?${q}` : ""}`);
+}
+
+/** One open alert, as the feed every page reads gives it. */
+export interface FeedAlert {
+  id: string;
+  unitId: string;
+  /** The unit's name as the twin gives it. */
+  unitName: string;
+  severity: TwinAlertSeverity;
+  metric: string;
+  value: number;
+  message: string;
+  /** When an evaluation first saw the threshold crossed. */
+  openedAt: string;
+  /** When the value was true, from the timestamp the source published; null when it does not say. */
+  observedAt: string | null;
+  /** When the data that opened the alert was written here; null when that was not kept. */
+  writtenAt: string | null;
+  /** The signal this alert raised, when a signal type claims its metric. */
+  signalId: string | null;
+}
+
+export interface AlertFeed {
+  /** The server's clock when this was read: ages are counted from it, not from this computer's. */
+  at: string;
+  /** Worst first, then newest. */
+  alerts: FeedAlert[];
+  /** Every open alert by severity; the list may be shorter. */
+  counts: Record<TwinAlertSeverity, number>;
+  /** Open alerts beyond the list's limit. */
+  omitted: number;
+  /** Enough to know the response board changed. */
+  signals: { open: number; changedAt: string | null };
+  /** When alerts were last evaluated on the server, and how often they are. */
+  evaluation: { lastAt: string | null; lastMs: number | null; everyMs: number | null };
+}
+
+/** The project's open alerts: the one reading every page makes of them. */
+export async function fetchAlertFeed(env: string, signal?: AbortSignal): Promise<AlertFeed> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/alerts/feed`, { signal });
 }
 
 export async function ackTwinAlert(

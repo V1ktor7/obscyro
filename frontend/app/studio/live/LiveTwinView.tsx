@@ -1,7 +1,8 @@
 "use client";
 
 import { Activity, BellRing, SlidersHorizontal } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -17,6 +18,8 @@ import {
   type TwinUnitDetail,
 } from "@/lib/platform-api";
 
+import { useAlertFeed } from "../AlertFeed";
+import { UNIT_PARAM } from "../alert-feed-state";
 import { StatusChip } from "../StatusChip";
 import { useStudio } from "../StudioShell";
 import {
@@ -28,7 +31,6 @@ import { DISPLAY_METRIC_OPTIONS } from "../twin-ui";
 import LiveMetricsDialog from "./LiveMetricsDialog";
 import AlertRuleEditor from "./AlertRuleEditor";
 import MetricEditor from "./MetricEditor";
-import TwinAlertToasts from "./TwinAlertToasts";
 import TwinCanvas from "./TwinCanvas";
 import UnitDetailDialog from "./UnitDetailDialog";
 
@@ -64,10 +66,18 @@ export default function LiveTwinView() {
   const [metricsVersion, setMetricsVersion] = useState(0);
   const [kindFilter, setKindFilter] = useState<string | null>(null);
 
-  const [toastAlerts, setToastAlerts] = useState<
-    Array<{ id: string; severity: "info" | "warn" | "critical"; message: string; unitInstanceId: string }>
-  >([]);
-  const seenAlertIds = useRef(new Set<string>());
+  // New alerts are announced by the shell, on every page: this page used to
+  // raise its own toasts, by fetching every alerting unit at each snapshot.
+  const { refresh: refreshAlerts } = useAlertFeed();
+
+  // An alert, or a signal, links here with its unit in the address: open that
+  // unit's detail without a click.
+  const linkedUnit = useSearchParams().get(UNIT_PARAM);
+  useEffect(() => {
+    if (!linkedUnit) return;
+    setSelectedUnitId(linkedUnit);
+    setShowDetail(true);
+  }, [linkedUnit]);
 
   useEffect(() => {
     if (!env) return;
@@ -107,39 +117,7 @@ export default function LiveTwinView() {
     setSnapshot(snap);
   }, []);
 
-  const collectNewAlerts = useCallback(async (snap: TwinTreeSnapshot) => {
-    if (!env) return;
-    const newToasts: typeof toastAlerts = [];
-    for (const node of snap.nodes) {
-      if (node.openAlertCount === 0) continue;
-      try {
-        const detail = await fetchTwinUnit(env, node.id);
-        for (const a of detail.alerts) {
-          if (seenAlertIds.current.has(a.id)) continue;
-          seenAlertIds.current.add(a.id);
-          newToasts.push({
-            id: a.id,
-            severity: a.severity,
-            message: a.message,
-            unitInstanceId: a.unitInstanceId,
-          });
-        }
-      } catch {
-        /* skip unit on error */
-      }
-    }
-    if (newToasts.length) {
-      setToastAlerts((cur) => [...cur, ...newToasts].slice(-5));
-    }
-  }, [env]);
-
-  const onSnapshot = useCallback(
-    (snap: TwinTreeSnapshot) => {
-      applySnapshot(snap);
-      void collectNewAlerts(snap);
-    },
-    [applySnapshot, collectNewAlerts],
-  );
+  const onSnapshot = applySnapshot;
 
   useEffect(() => {
     if (!env || !hasKey || !isOperations) {
@@ -227,6 +205,8 @@ export default function LiveTwinView() {
       }
       const snap = await fetchTwinTree(env);
       onSnapshot(snap);
+      // The banner must not go on showing an alert somebody just acknowledged.
+      await refreshAlerts();
     } catch (err) {
       setError((err as Error).message);
     }
@@ -408,11 +388,6 @@ export default function LiveTwinView() {
         </div>
       </div>
 
-      <TwinAlertToasts
-        alerts={toastAlerts}
-        onDismiss={(id) => setToastAlerts((cur) => cur.filter((a) => a.id !== id))}
-      />
-
       {showDetail && selectedUnitId ? (
         <UnitDetailDialog
           unitId={selectedUnitId}
@@ -446,4 +421,4 @@ export default function LiveTwinView() {
     </div>
   );
 }
-
+

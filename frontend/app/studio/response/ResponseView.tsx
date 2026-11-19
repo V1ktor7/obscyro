@@ -1,7 +1,9 @@
 "use client";
 
 import { Loader2, Pencil, Plus, RefreshCw, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@/lib/cn";
 
@@ -20,6 +22,8 @@ import {
   type Workflow,
   type WorkflowStage,
 } from "../signals-api";
+import { useAlertFeed } from "../AlertFeed";
+import { SIGNAL_PARAM, unitHref } from "../alert-feed-state";
 import { useStudio } from "../StudioShell";
 
 // ---------------------------------------------------------------------------
@@ -92,6 +96,38 @@ export default function ResponseView() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // The board follows the signals on its own. The shell's alert feed says how
+  // many signals are open and when one last changed; when either moves, the
+  // board is read again. It used to change only when somebody pressed Refresh,
+  // so a signal raised at 03:00 waited for a click.
+  const { feed } = useAlertFeed();
+  const signalsVersion = feed ? `${feed.signals.open}|${feed.signals.changedAt ?? ""}` : null;
+  const seenVersion = useRef<string | null>(null);
+  useEffect(() => {
+    if (signalsVersion === null) return;
+    const first = seenVersion.current === null;
+    const changed = seenVersion.current !== signalsVersion;
+    seenVersion.current = signalsVersion;
+    // The first value is the state the board was just loaded in.
+    if (!first && changed) void load();
+  }, [signalsVersion, load]);
+
+  // An alert links here with its signal in the address: show that signal,
+  // whatever domain and workflow it sits in.
+  const linkedSignal = useSearchParams().get(SIGNAL_PARAM);
+  const openedLink = useRef<string | null>(null);
+  useEffect(() => {
+    if (!linkedSignal || !board || openedLink.current === linkedSignal) return;
+    const s = board.signals.find((x) => x.id === linkedSignal);
+    if (!s) return;
+    openedLink.current = linkedSignal;
+    setDomain(s.domain);
+    setWorkflowId(s.workflowId);
+    void openDetail(s.id);
+    // `openDetail` is stable; it is declared below this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedSignal, board]);
 
   // A domain usually maps to one workflow. When it maps to several, the board
   // cannot invent a column set — so it asks rather than picking arbitrarily.
@@ -359,6 +395,7 @@ export default function ResponseView() {
           <aside className="w-[310px] shrink-0 overflow-y-auto border-l border-line bg-white">
             <Detail
               signal={selected}
+              env={selectedEnv}
               detail={detail}
               busy={busy}
               onClose={() => setSel(null)}
@@ -557,6 +594,7 @@ function Card({
 
 function Detail({
   signal,
+  env,
   detail,
   busy,
   onClose,
@@ -564,6 +602,7 @@ function Detail({
   onDismiss,
 }: {
   signal: BoardSignal;
+  env: string | null;
   detail: { stages: WorkflowStage[]; events: SignalEvent[] } | null;
   busy: string | null;
   onClose: () => void;
@@ -607,6 +646,15 @@ function Detail({
         </p>
         {signal.detail ? (
           <p className="mt-2 text-[11.5px] leading-relaxed text-ink-body">{signal.detail}</p>
+        ) : null}
+        {/* A signal about a unit leads to that unit: its live figures, its open alerts. */}
+        {signal.subjectKind === "object_instance" && signal.subjectId ? (
+          <Link
+            href={unitHref(signal.subjectId, env)}
+            className="mt-2 inline-flex rounded border border-line bg-white px-2 py-1 text-[11px] font-semibold text-ink hover:border-brand hover:bg-brand-soft"
+          >
+            Open unit
+          </Link>
         ) : null}
       </div>
 
