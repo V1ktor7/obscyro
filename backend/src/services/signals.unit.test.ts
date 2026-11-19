@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { DbClient } from "../lib/db.js";
-import { createWorkflow, dismissSignal, moveSignal } from "./signals.js";
+import { countSignals, createWorkflow, dismissSignal, listSignals, moveSignal, SIGNAL_LIST_LIMIT } from "./signals.js";
 
 // ---------------------------------------------------------------------------
 // The engine's guarantees, pinned without a database.
@@ -174,4 +174,73 @@ test("a dismissal is recorded as a false positive, not as a resolution", async (
   assert.ok(update, "the signal is closed");
   const insert = db.calls.find((c) => c.startsWith("INSERT INTO app.signal_event"));
   assert.ok(insert, "and the dismissal is on the trail");
+});
+
+// --- the board's list ----------------------------------------------------------
+
+/** A db that keeps every query whole, with its parameters. */
+function recordingDb(results: unknown[][]): DbClient & { sent: { sql: string; params: unknown[] }[] } {
+  const sent: { sql: string; params: unknown[] }[] = [];
+  let i = 0;
+  const db = {
+    query: async (sql: string, params: unknown[] = []) => {
+      sent.push({ sql: sql.replace(/\s+/g, " ").trim(), params });
+      const rows = results[i++] ?? [];
+      return { rows, rowCount: rows.length };
+    },
+  } as unknown as DbClient;
+  return Object.assign(db, { sent }) as DbClient & { sent: { sql: string; params: unknown[] }[] };
+}
+
+const OLD_SIGNAL = { ...OPEN_SIGNAL[0]!, id: "sig-old", title: "Urgence au-dessus du seuil depuis des semaines" };
+
+test("the list stops at the most recent signals, open ones only", async () => {
+  const db = recordingDb([OPEN_SIGNAL]);
+  const listed = await listSignals(db, "p1", { scenarioId: null });
+  assert.deepEqual(listed.map((s) => s.id), ["sig-1"]);
+  assert.equal(db.sent.length, 1, "nothing else is read when no link names a signal");
+  assert.match(db.sent[0]!.sql, /WHERE project_id = \$1 AND scenario_id IS NULL AND closed_at IS NULL ORDER BY detected_at DESC LIMIT 500$/);
+  assert.equal(SIGNAL_LIST_LIMIT, 500);
+});
+
+test("a signal a link names is listed even when it is older than the list goes", async () => {
+  // An emergency room over its threshold for weeks: the alert is still open and
+  // links to a signal thousands of signals old.
+  const db = recordingDb([OPEN_SIGNAL, [OLD_SIGNAL]]);
+  const listed = await listSignals(db, "p1", { scenarioId: null, also: "sig-old" });
+  assert.deepEqual(listed.map((s) => s.id), ["sig-old", "sig-1"], "it comes first: it is what the person came for");
+  const second = db.sent[1]!;
+  assert.match(second.sql, /WHERE project_id = \$1 AND scenario_id IS NULL AND id = \$2$/);
+  assert.deepEqual(second.params, ["p1", "sig-old"], "looked up in this project, never across projects");
+  assert.doesNotMatch(second.sql, /closed_at IS NULL/, "a closed signal is still shown to whoever follows its link");
+});
+
+test("a signal the list already holds is not read twice", async () => {
+  const db = recordingDb([OPEN_SIGNAL]);
+  const listed = await listSignals(db, "p1", { scenarioId: null, also: "sig-1" });
+  assert.equal(listed.length, 1);
+  assert.equal(db.sent.length, 1);
+});
+
+test("a link to a signal of another project adds nothing", async () => {
+  const db = recordingDb([OPEN_SIGNAL, []]);
+  const listed = await listSignals(db, "p1", { scenarioId: null, also: "sig-elsewhere" });
+  assert.deepEqual(listed.map((s) => s.id), ["sig-1"]);
+});
+
+test("a linked signal stays inside the scenario the list is about", async () => {
+  const db = recordingDb([[], []]);
+  await listSignals(db, "p1", { scenarioId: "sc-1", also: "sig-old" });
+  assert.match(db.sent[1]!.sql, /WHERE project_id = \$1 AND scenario_id = \$2 AND id = \$3$/);
+  assert.deepEqual(db.sent[1]!.params, ["p1", "sc-1", "sig-old"]);
+});
+
+test("the count is what the list chooses from, before its limit", async () => {
+  const db = recordingDb([[{ n: 2752 }]]);
+  assert.equal(await countSignals(db, "p1", { scenarioId: null }), 2752);
+  assert.match(db.sent[0]!.sql, /^SELECT count\(\*\)::int AS n FROM app\.signal WHERE project_id = \$1 AND scenario_id IS NULL AND closed_at IS NULL$/);
+  // With closed signals asked for, they are counted too: the count and the list agree.
+  const all = recordingDb([[{ n: 3000 }]]);
+  assert.equal(await countSignals(all, "p1", { scenarioId: null, includeClosed: true }), 3000);
+  assert.doesNotMatch(all.sent[0]!.sql, /closed_at/);
 });

@@ -55,6 +55,19 @@ const SEV: Record<Severity, { dot: string; border: string; chip: string; label: 
   },
 };
 
+/** The API takes a signal id as a UUID and refuses anything else. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * What the board holds, against what there is. The list stops at the most
+ * recent signals, and a board that says "500 open signals" when there are
+ * 2,752 states a limit as if it were the whole.
+ */
+export function shownOfTotal(shown: number, total: number | undefined): string {
+  if (typeof total !== "number" || total <= shown) return `${shown} open signals`;
+  return `Showing ${shown.toLocaleString("en-US")} of ${total.toLocaleString("en-US")} open signals, most recent first`;
+}
+
 function ago(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
   if (!Number.isFinite(ms) || ms < 0) return "just now";
@@ -81,17 +94,23 @@ export default function ResponseView() {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [creatingDomain, setCreatingDomain] = useState(false);
 
+  // An alert links here with its signal in the address. The board is asked
+  // for that signal by name: the list stops at the most recent ones, and an
+  // alert open for weeks links to a signal far older than that.
+  const linkedSignal = useSearchParams().get(SIGNAL_PARAM);
+  const linkedId = linkedSignal && UUID.test(linkedSignal) ? linkedSignal : null;
+
   const load = useCallback(async () => {
     if (!selectedEnv) return;
     try {
-      const b = await getCommandBoard(selectedEnv);
+      const b = await getCommandBoard(selectedEnv, linkedId ? { signal: linkedId } : undefined);
       setBoard(b);
       setError(null);
       setDomain((cur) => (cur && b.domains.some((d) => d.domain === cur) ? cur : b.domains[0]?.domain ?? ""));
     } catch (e) {
       setError((e as Error).message);
     }
-  }, [selectedEnv]);
+  }, [selectedEnv, linkedId]);
 
   useEffect(() => {
     void load();
@@ -113,9 +132,7 @@ export default function ResponseView() {
     if (!first && changed) void load();
   }, [signalsVersion, load]);
 
-  // An alert links here with its signal in the address: show that signal,
-  // whatever domain and workflow it sits in.
-  const linkedSignal = useSearchParams().get(SIGNAL_PARAM);
+  // Show the linked signal, whatever domain and workflow it sits in.
   const openedLink = useRef<string | null>(null);
   useEffect(() => {
     if (!linkedSignal || !board || openedLink.current === linkedSignal) return;
@@ -158,6 +175,12 @@ export default function ResponseView() {
   const selected = useMemo(
     () => (board?.signals ?? []).find((s) => s.id === sel) ?? null,
     [board, sel],
+  );
+
+  // A link that leads nowhere says so, rather than showing a board with
+  // nothing opened.
+  const linkLost = Boolean(
+    linkedSignal && board && !board.signals.some((s) => s.id === linkedSignal),
   );
 
   const openDetail = useCallback(async (id: string) => {
@@ -229,8 +252,15 @@ export default function ResponseView() {
           Response
         </span>
         <span className="text-[11px] text-ink-muted">
-          {board ? `${board.signals.filter((s) => !s.closedAt).length} open signals` : "…"}
+          {board
+            ? shownOfTotal(board.signals.filter((s) => !s.closedAt).length, board.total)
+            : "…"}
         </span>
+        {linkLost ? (
+          <span role="status" className="text-[11px] text-warn-ink">
+            The signal this link names is not in this project.
+          </span>
+        ) : null}
         {error ? (
           <span className="max-w-[46ch] truncate text-[11px] text-danger-ink" title={error}>
             {error}

@@ -390,22 +390,70 @@ function outSignal(r: SignalDbRow): Signal {
   };
 }
 
+/** A board lists the most recent signals only. What it leaves out is counted, never hidden. */
+export const SIGNAL_LIST_LIMIT = 500;
+
+export interface SignalListOptions {
+  includeClosed?: boolean;
+  scenarioId?: string | null;
+  /**
+   * One signal to list whatever its age, and whether or not it is closed: the
+   * one a link names. A unit over its threshold for weeks has a signal older
+   * than the most recent {@link SIGNAL_LIST_LIMIT}, and the alert that links to
+   * it is still open.
+   */
+  also?: string;
+}
+
+/** Which signals a list is about: one project, reality or one scenario. */
+function signalScope(projectId: string, opts?: SignalListOptions): { where: string; params: unknown[] } {
+  const params: unknown[] = [projectId];
+  let where = `project_id = $1`;
+  if (opts?.scenarioId === null) where += ` AND scenario_id IS NULL`;
+  else if (opts?.scenarioId) {
+    params.push(opts.scenarioId);
+    where += ` AND scenario_id = $${params.length}`;
+  }
+  return { where, params };
+}
+
 export async function listSignals(
   db: DbClient,
   projectId: string,
-  opts?: { includeClosed?: boolean; scenarioId?: string | null },
+  opts?: SignalListOptions,
 ): Promise<Signal[]> {
-  const params: unknown[] = [projectId];
-  let sql = `${S_SELECT} WHERE project_id = $1`;
-  if (!opts?.includeClosed) sql += ` AND closed_at IS NULL`;
-  if (opts?.scenarioId === null) sql += ` AND scenario_id IS NULL`;
-  else if (opts?.scenarioId) {
-    params.push(opts.scenarioId);
-    sql += ` AND scenario_id = $${params.length}`;
+  const { where, params } = signalScope(projectId, opts);
+  const open = opts?.includeClosed ? "" : ` AND closed_at IS NULL`;
+  const { rows } = await db.query<SignalDbRow>(
+    `${S_SELECT} WHERE ${where}${open} ORDER BY detected_at DESC LIMIT ${SIGNAL_LIST_LIMIT}`,
+    params,
+  );
+  const listed = rows.map(outSignal);
+  if (opts?.also && !listed.some((s) => s.id === opts.also)) {
+    // Same project, same scenario scope: a link cannot pull in a signal the
+    // list itself would never have held.
+    const { rows: one } = await db.query<SignalDbRow>(
+      `${S_SELECT} WHERE ${where} AND id = $${params.length + 1}`,
+      [...params, opts.also],
+    );
+    if (one[0]) listed.unshift(outSignal(one[0]));
   }
-  sql += ` ORDER BY detected_at DESC LIMIT 500`;
-  const { rows } = await db.query<SignalDbRow>(sql, params);
-  return rows.map(outSignal);
+  return listed;
+}
+
+/** How many signals {@link listSignals} is choosing from, before its limit. */
+export async function countSignals(
+  db: DbClient,
+  projectId: string,
+  opts?: Omit<SignalListOptions, "also">,
+): Promise<number> {
+  const { where, params } = signalScope(projectId, opts);
+  const open = opts?.includeClosed ? "" : ` AND closed_at IS NULL`;
+  const { rows } = await db.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM app.signal WHERE ${where}${open}`,
+    params,
+  );
+  return rows[0]?.n ?? 0;
 }
 
 export async function getSignal(db: DbClient, id: string): Promise<Signal> {

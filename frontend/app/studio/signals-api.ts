@@ -85,6 +85,11 @@ export interface CommandBoard {
   domains: { domain: string; open: number; critical: number }[];
   workflows: Workflow[];
   signalTypes: SignalType[];
+  /**
+   * How many signals the list was chosen from. The list holds the most recent
+   * ones only, so a board says "showing 500 of 2,752" rather than "500".
+   */
+  total: number;
   signals: BoardSignal[];
 }
 
@@ -118,11 +123,17 @@ function enc(s: string): string {
 
 export async function getCommandBoard(
   env: string,
-  opts?: { includeClosed?: boolean; scenarioId?: string },
+  opts?: {
+    includeClosed?: boolean;
+    scenarioId?: string;
+    /** A signal to list whatever its age: the one a link names. */
+    signal?: string;
+  },
 ): Promise<CommandBoard> {
   const qs = new URLSearchParams();
   if (opts?.includeClosed) qs.set("includeClosed", "true");
   if (opts?.scenarioId) qs.set("scenarioId", opts.scenarioId);
+  if (opts?.signal) qs.set("signal", opts.signal);
   const q = qs.toString();
   return apiFetch(`/v1/ontology/${enc(env)}/command-board${q ? `?${q}` : ""}`);
 }

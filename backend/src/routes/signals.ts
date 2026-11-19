@@ -8,6 +8,7 @@ import { recordAudit } from "../services/audit.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
 import { resolveEnvironment } from "../services/ontology.js";
 import {
+  countSignals,
   createSignalType,
   createWorkflow,
   dismissSignal,
@@ -486,17 +487,25 @@ const signalRoutes: FastifyPluginAsync = async (fastify) => {
     {
       schema: {
         summary: "Everything the command post needs: config plus open signals",
+        description:
+          "The workflows, the signal types and the open signals of a project, in one call. " +
+          "The list holds the 500 most recent signals; `total` says how many there are, so the " +
+          "board can say what it leaves out. `signal` names one signal to list whatever its age " +
+          "and whether or not it is closed: the one an alert links to. It is looked up in this " +
+          "project only, and is simply absent when it is not there.",
         tags: ["signals"],
         params: z.object({ env: z.string().min(1) }),
         querystring: z.object({
           includeClosed: z.coerce.boolean().default(false),
           scenarioId: z.string().uuid().optional(),
+          signal: z.string().uuid().optional(),
         }),
         response: {
           200: z.object({
             domains: z.array(z.object({ domain: z.string(), open: z.number(), critical: z.number() })),
             workflows: z.array(workflowOut),
             signalTypes: z.array(signalTypeOut),
+            total: z.number(),
             signals: z.array(
               signalOut.extend({
                 domain: z.string(),
@@ -514,13 +523,15 @@ const signalRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
 
-      const [workflows, signalTypes, raw] = await Promise.all([
+      const scope = {
+        includeClosed: req.query.includeClosed,
+        scenarioId: req.query.scenarioId ?? null,
+      };
+      const [workflows, signalTypes, raw, total] = await Promise.all([
         listWorkflows(req.db, env.organizationId),
         listSignalTypes(req.db, env.organizationId),
-        listSignals(req.db, env.id, {
-          includeClosed: req.query.includeClosed,
-          scenarioId: req.query.scenarioId ?? null,
-        }),
+        listSignals(req.db, env.id, { ...scope, also: req.query.signal }),
+        countSignals(req.db, env.id, scope),
       ]);
 
       const typeById = new Map(signalTypes.map((t) => [t.id, t]));
@@ -559,6 +570,7 @@ const signalRoutes: FastifyPluginAsync = async (fastify) => {
         ),
         workflows,
         signalTypes,
+        total,
         signals,
       };
     },

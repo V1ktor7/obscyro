@@ -799,6 +799,10 @@ flowchart TD
     N -->|"non, ou première lecture"| M
     L --> P["Pages du jumeau : mêmes alertes sur la carte, l'arbre, la fiche d'unité"]
     L --> Q["Response : le tableau se relit quand les signaux changent"]
+    O -->|"clic sur Signal"| R["Response demande ce signal par son nom :<br/>il est listé même plus vieux que les 500 du tableau"]
+    R --> S{"Dans ce projet ?"}
+    S -->|"oui"| T["Sa fiche s'ouvre, dans son domaine"]
+    S -->|"non"| U["L'écran dit que le lien ne mène à rien"]
 ```
 
 **Règles.**
@@ -812,11 +816,13 @@ flowchart TD
 - **Le silence n'est pas le calme.** Sans lecture réussie depuis quinze secondes, la pastille dit que la liste n'est plus à jour et depuis combien de temps ; la dernière liste lue reste affichée, marquée comme ancienne. La liste dit aussi quand les seuils ont été vérifiés pour la dernière fois.
 - **Les âges se comptent sur l'horloge du serveur**, pas sur celle du poste : un ordinateur réglé cinq minutes de travers ne vieillit pas une alerte de cinq minutes.
 - **Un clic.** Depuis une alerte : son unité (`/studio/live?unit=…`, la fiche s'ouvre seule) et son signal (`/studio/response?signal=…`). Depuis un signal : son unité. Le lien porte le projet.
+- **Un lien trouve son signal, quel que soit son âge.** Le tableau Response ne liste que les 500 signaux les plus récents. Une urgence au-dessus de son seuil depuis des semaines a une alerte encore ouverte, et un signal bien plus vieux que cela. Le tableau demande donc à l'API le signal que le lien nomme (`?signal=` sur `GET /command-board`) : il est ajouté à la liste, en tête, fermé ou non, cherché dans ce projet et ce périmètre seulement. S'il n'y est pas, l'écran le dit au lieu de montrer un tableau où rien ne s'ouvre.
+- **Le tableau dit ce qu'il laisse de côté.** L'API rend le nombre de signaux parmi lesquels la liste est choisie (`total`) ; l'en-tête écrit « Showing 500 of 2,752 open signals » plutôt que « 500 open signals ».
 - Une alerte est une unité et une valeur agrégée, jamais une personne.
 
 **Délai.** Du moment où une donnée est écrite ici au moment où l'alerte est à l'écran : au plus cinq secondes d'attente de l'évaluateur, la durée d'une évaluation, puis au plus trois secondes de lecture. Les mesures faites en production sont dans [decision-loop.md](decision-loop.md), ligne « Signal ».
 
-**Code.** `backend/src/services/twin-alert-scheduler.ts` (`nextEvaluationDelay`, `evaluationPulse`), `alert-bridge.ts`, `alert-feed.ts`, `signals.ts`, `twin.ts` (`evaluateAlerts`, `readsReality`), route `GET /v1/ontology/:env/alerts/feed` dans `backend/src/routes/twin.ts`, migration `063_twin_alert_times.sql` ; `frontend/app/studio/AlertFeed.tsx`, `alert-feed-state.ts`, `AlertBanner.tsx`, `StudioShell.tsx`, `response/ResponseView.tsx`, `live/LiveTwinView.tsx`.
+**Code.** `backend/src/services/twin-alert-scheduler.ts` (`nextEvaluationDelay`, `evaluationPulse`), `alert-bridge.ts`, `alert-feed.ts`, `signals.ts` (`listSignals`, `countSignals`), `twin.ts` (`evaluateAlerts`, `readsReality`), routes `GET /v1/ontology/:env/alerts/feed` dans `backend/src/routes/twin.ts` et `GET /v1/ontology/:env/command-board` dans `backend/src/routes/signals.ts`, migration `063_twin_alert_times.sql` ; `frontend/app/studio/AlertFeed.tsx`, `alert-feed-state.ts`, `AlertBanner.tsx`, `StudioShell.tsx`, `response/ResponseView.tsx`, `live/LiveTwinView.tsx`.
 **Tests.** `twin-alert-scheduler.unit.test.ts`, `alert-bridge.unit.test.ts`, `alert-feed.unit.test.ts`, `signals.unit.test.ts` ; `alert-feed-state.test.ts`, `AlertBanner.test.tsx`, `response/ResponseView.test.tsx`, `platform-nav.test.ts`.
 
 ## D6. Métriques du jumeau
