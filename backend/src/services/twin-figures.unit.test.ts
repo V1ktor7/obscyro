@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import type { EnvInstanceRow, EnvLinkRow } from "./ontology.js";
 import type { SimRole } from "./property-schema.js";
-import { facilitiesFrom } from "./twin-export.js";
+import { capacityFindings, facilitiesFrom, unitsWithoutOwnCapacity } from "./twin-export.js";
 import type { MetricDef } from "./twin-metrics.js";
 import { rollupFrom, type TwinTreeEdge } from "./twin.js";
 
@@ -24,6 +24,11 @@ import { rollupFrom, type TwinTreeEdge } from "./twin.js";
 //
 // The second is why the analyst reads a unit's live figures from the roll-up
 // (`unit_now`), not from the export: it has to give the number the screen gives.
+//
+// It is also why a unit can be empty in the export for two unrelated reasons,
+// which the export tells apart (the last tests of this file): its capacity
+// stands in its sub-units, and the page shows it; or nothing under it holds
+// any, and the page shows none.
 // ---------------------------------------------------------------------------
 
 const AT = new Date("2026-11-20T12:00:00Z");
@@ -197,4 +202,77 @@ test("a unit with nothing standing in it is empty on both, not zero on one", () 
   // No beds is no occupancy, not 0 %.
   assert.equal(onPage.values.occupancy, null);
   assert.deepEqual(inExport.resources, {});
+});
+
+// --- a unit that holds nothing of its own ------------------------------------
+
+// A network over an establishment whose beds are all in its one installation;
+// and an annex with nothing in it, over a room with nothing either.
+const BARE_UNITS = [
+  { id: "R", name: "Réseau" },
+  { id: "E", name: "Établissement" },
+  { id: "I", name: "Installation" },
+  { id: "X", name: "Annexe" },
+  { id: "X1", name: "Salle" },
+];
+const AT_I = [inst("b6", "Lit", "space"), inst("b7", "Lit", "space", { status: "occupied" })];
+const ALL_UNITS = [...UNITS, ...BARE_UNITS];
+const ALL_EDGES: TwinTreeEdge[] = [...EDGES, { fromId: "R", toId: "E" }, { fromId: "E", toId: "I" }, { fromId: "X", toId: "X1" }];
+const ALL_INSTANCES: EnvInstanceRow[] = [...INSTANCES, ...BARE_UNITS.map((u) => inst(u.id, "OrgUnit", null, { name: u.name })), ...AT_I];
+const ALL_LINKS: EnvLinkRow[] = [...LINKS, contains("R", "E"), contains("E", "I"), contains("X", "X1"), ...AT_I.map((i) => placed(i, "I"))];
+
+const widePage = rollupFrom(ALL_UNITS, ALL_EDGES, ALL_INSTANCES, ALL_LINKS, [OCCUPANCY], AT.getTime());
+const wide = facilitiesFrom(ALL_UNITS, ALL_INSTANCES, ALL_LINKS, ROLES).facilities;
+/** Units of capacity the unit page shows for a unit: everything under it. */
+const onThePage = (id: string) => {
+  const counted = widePage.get(id)!.instanceCountByType;
+  return (counted.Lit ?? 0) + (counted.Civière ?? 0);
+};
+
+test("an establishment whose beds are all in its installation is empty in the export and full on its page", () => {
+  const inExport = wide.find((f) => f.id === "E")!;
+  assert.deepEqual(inExport.resources, {});
+  // The page adds the installation's two beds, one of them in use.
+  assert.equal(onThePage("E"), 2);
+  assert.equal(widePage.get("E")!.values.occupancy, 50);
+  // And so does the network above it, two levels up.
+  assert.deepEqual(wide.find((f) => f.id === "R")!.resources, {});
+  assert.equal(onThePage("R"), 2);
+});
+
+test("the export tells capacity held by sub-units from capacity held nowhere", () => {
+  const { inSubUnits, nowhere } = unitsWithoutOwnCapacity(wide, ALL_EDGES);
+  // Under them, at any depth, something holds capacity: the shape of the tree.
+  assert.deepEqual(inSubUnits.map((f) => f.name), ["Réseau", "Établissement"]);
+  // Nothing under them does: a hole in the twin. A room under an empty annex is one too.
+  assert.deepEqual(nowhere.map((f) => f.name), ["Annexe", "Salle"]);
+  // The hospital holds stretchers of its own, the wards and the installation their beds: neither list.
+  for (const id of ["H", "W1", "W2", "I"]) {
+    assert.equal([...inSubUnits, ...nowhere].some((f) => f.id === id), false, id);
+  }
+});
+
+test("the split is the unit page's: a hole shows no capacity there, the tree's shape shows some", () => {
+  const { inSubUnits, nowhere } = unitsWithoutOwnCapacity(wide, ALL_EDGES);
+  for (const f of wide) {
+    const own = Object.keys(f.resources).length > 0;
+    assert.equal(nowhere.includes(f), onThePage(f.id) === 0, `${f.name}: a hole is a unit the page shows empty`);
+    assert.equal(inSubUnits.includes(f), !own && onThePage(f.id) > 0, `${f.name}: held by sub-units is empty here and not on the page`);
+  }
+});
+
+test("the hole is a gap and the shape of the tree is not", () => {
+  const { gaps, structure } = capacityFindings(wide, ALL_EDGES);
+  assert.deepEqual(gaps.map((g) => [g.code, g.subjects]), [["FACILITY_WITHOUT_RESOURCES", ["Annexe", "Salle"]]]);
+  assert.match(gaps[0]!.message, /^2 unit\(s\) carry no capacity of any kind, and nothing under them does either/);
+  assert.deepEqual(structure.map((n) => [n.code, n.subjects]), [["CAPACITY_IN_SUBUNITS", ["Réseau", "Établissement"]]]);
+  assert.match(structure[0]!.message, /^2 unit\(s\) hold no capacity of their own: it stands in their sub-units/);
+  assert.match(structure[0]!.message, /not something the twin is missing/);
+  // The message a reader used to get for both — "can never serve anyone" — is said of the hole only.
+  assert.match(gaps[0]!.message, /can never serve anyone/);
+  assert.doesNotMatch(structure[0]!.message, /never serve/);
+});
+
+test("a twin where every unit holds something of its own says neither", () => {
+  assert.deepEqual(capacityFindings(facilities, EDGES), { gaps: [], structure: [] });
 });

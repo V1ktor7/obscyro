@@ -1752,6 +1752,17 @@ export interface SimGap {
   subjects: string[];
 }
 
+/**
+ * Something about how the twin is built that changes how a figure of the
+ * export reads, without anything being missing: a unit that holds no capacity
+ * of its own because it stands in its sub-units. Never listed among the gaps.
+ */
+export interface SimStructureNote {
+  code: "CAPACITY_IN_SUBUNITS";
+  message: string;
+  subjects: string[];
+}
+
 export interface SimExportResource {
   id: string;
   category: SimRole;
@@ -1797,6 +1808,8 @@ export interface SimExport {
   populations: { id: string; name: string; size: number; served_by: string[] }[];
   edges: { source: string; target: string; kind: string; capacity: number; via: string }[];
   gaps: SimGap[];
+  /** What the shape of the tree makes of the figures above. Nothing here is missing. */
+  structure: SimStructureNote[];
 }
 
 /** One table of what actually happened during a run. */

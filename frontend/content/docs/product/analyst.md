@@ -3,7 +3,7 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "65f3696e441871d3"
+translatedFrom: "44286b2beac897fd"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
@@ -97,7 +97,7 @@ The Event finder tab is apart: it has none of these tools. It has only the API's
 
 | Tool | What it reads |
 |---|---|
-| `describe_twin` | Overview: sites, activities and units, territories, the declared care and spread model, what the twin lacks |
+| `describe_twin` | Overview: sites, activities and units, territories, the declared care and spread model, what the twin lacks. Apart from what it lacks, the units that have no capacity of their own because it is in their sub-units |
 | `find_sites` | The sites, filtered by name, activity or territory, largest first |
 | `get_site` | One site: place, units per activity, patients present, territories served, what the scenario changes there |
 | `compare_catchments` | For an activity: each territory, its residents, its sites, its units per 1,000 residents |
@@ -114,7 +114,7 @@ The Event finder tab is apart: it has none of these tools. It has only the API's
 
 A tool that cannot answer (unknown name, two sites for one name, no run on screen, a table that holds several series, an option that cannot be tested) says so with a reasoned refusal that the model reads. It never guesses.
 
-**Live.** `list_alerts` and `unit_now` do not read the twin's export as the others do: they read what the screens read, the alert feed of the banner and the computation of the unit page ([Algorithms](/docs/product/algorithms), D9). That is deliberate. A unit's page adds up everything under it, its sub-units included; the export counts only what is attached to the unit itself, because that is what a run uses. For a ward with no sub-unit the two give the same figure; for a hospital that has wards, they do not. A person looking at a unit's page and asking the analyst has to be given that page's figure: `unit_now` gives it, rounded the way the page writes it, and `get_site` remains the engine's reading. Three rules go with live reading: a value is never given without its age (exact, “at least”, or unknown with its reason); no open alert is not good news in itself (the tool says when the thresholds were checked, and whether no rule exists at all); and there is no history.
+**Live.** `list_alerts` and `unit_now` do not read the twin's export as the others do: they read what the screens read, the alert feed of the banner and the computation of the unit page ([Algorithms](/docs/product/algorithms), D9). That is deliberate. A unit's page adds up everything under it, its sub-units included; the export counts only what is attached to the unit itself, because that is what a run uses. For a ward with no sub-unit the two give the same figure; for a hospital that has wards, they do not. A person looking at a unit's page and asking the analyst has to be given that page's figure: `unit_now` gives it, rounded the way the page writes it, and `get_site` remains the engine's reading. The overview (`describe_twin`) keeps the same separation. An institution whose whole capacity is in its facilities has none of its own in a run: the tool puts it under “how_the_tree_is_built”, says that nothing is missing, and points to `unit_now` for the figure on its page. Only a unit under which nothing holds capacity is listed among the gaps. The three counts of sites (capacity of their own, capacity in their sub-units, no capacity under them) add up to the total. Three rules go with live reading: a value is never given without its age (exact, “at least”, or unknown with its reason); no open alert is not good news in itself (the tool says when the thresholds were checked, and whether no rule exists at all); and there is no history.
 
 The digest of the run on screen is built by the page (`run-digest.ts`) with the functions the Result panel already reads: the analyst and the panel cannot diverge on a figure. The digest of a tested option is built by the server (`scenario-run.ts`), and a test holds the two together: [Algorithms](/docs/product/algorithms), section A4.
 

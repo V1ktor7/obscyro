@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "4e7b4cbaadba8280"
+translatedFrom: "9448072bdfa21e65"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -15,6 +15,7 @@ An entry is written the day the change ships, in the same commit as the code. Si
 
 ## 20 November 2026
 
+- **Change · Analyst.** In its overview of the twin, the analyst no longer says of an institution that it “carries no capacity” when that capacity is in its facilities. It tells two cases apart: a unit whose capacity is in its sub-units, which is the shape of the tree and not a gap, and a unit under which nothing holds any, which is one. For the first, it points to the figure the unit's page shows.
 - **New feature · Studio.** Prepared responses. An option tested in Scenarios can be kept for a kind of signal (“Keep as a prepared response for…”). The situation card of a signal of that kind shows it with the figures of its test, its date, and a warning if the scenario has changed since. One click on “Engage” records the decision on the signal and moves it one stage forward. Nothing is triggered in any other system.
 - **New feature · Studio.** A situation card opens in one click from an alert, a signal or a unit: the unit's live figures with their age, the alert, the stage of the signal, and a question already written for the analyst. It reads in full even when the analyst is switched off.
 - **New feature · Analyst.** The analyst can be reached from every page of the Studio, through the “Analyst” button at the bottom right. The question goes with what you are looking at: the page, and the unit or the signal selected.

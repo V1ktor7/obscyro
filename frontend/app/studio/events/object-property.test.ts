@@ -40,6 +40,7 @@ function snapshot(types: SimObjectType[], instanceTypes = types.map((t) => t.nam
     populations: [],
     edges: [],
     gaps: [],
+    structure: [],
   };
 }
 

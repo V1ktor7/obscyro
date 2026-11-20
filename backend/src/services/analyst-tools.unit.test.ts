@@ -6,7 +6,7 @@ import { Ledger } from "./analyst-verify.js";
 import type { DatasetRow } from "./datasets.js";
 import type { HealthEvent } from "./health-events.js";
 import type { ScenarioOverride } from "./scenario-overrides.js";
-import type { SimExport } from "./twin-export.js";
+import { capacityFindings, type SimExport } from "./twin-export.js";
 
 // A small island: three hospitals, one clinic with nothing, three catchments,
 // one of which no hospital serves.
@@ -59,6 +59,7 @@ const TWIN: SimExport = {
   ],
   edges: [],
   gaps: [{ code: "ROUTE_WITHOUT_CAPACITY", message: "No relationship carries a throughput.", subjects: ["transfere_vers"] }],
+  structure: [],
 } as unknown as SimExport;
 
 const override = (o: Partial<ScenarioOverride>): ScenarioOverride => ({
@@ -197,7 +198,14 @@ async function call(name: string, input: unknown, ctx = ctxOf()): Promise<any> {
 
 test("the overview counts what the twin holds and repeats what it is missing", async () => {
   const out = await call("describe_twin", { world: "reality" });
-  assert.deepEqual(out.sites, { total: 4, with_a_location: 3, with_some_capacity: 3 });
+  assert.deepEqual(out.sites, {
+    total: 4,
+    with_a_location: 3,
+    with_capacity_of_their_own: 3,
+    with_capacity_only_in_their_sub_units: 0,
+    with_no_capacity_under_them_at_all: 0,
+  });
+  assert.deepEqual(out.how_the_tree_is_built, []);
   assert.deepEqual(
     out.activities.find((a: { activity: string }) => a.activity === "litsantephysique"),
     { activity: "litsantephysique", kind: "space", sites: 3, units: 598, marked_in_use: 44 },
@@ -208,6 +216,42 @@ test("the overview counts what the twin holds and repeats what it is missing", a
     { type: "Protocole", name: "Hospitalisation", serves_severity: "hospitalisation", consumes_activity: "litsantephysique", occupies_for: "7 days" },
   ]);
   assert.equal(out.missing[0].code, "ROUTE_WITHOUT_CAPACITY");
+});
+
+test("the overview tells a unit whose capacity is in its sub-units from one with nothing under it", async () => {
+  // The same island under an establishment that holds nothing of its own: the
+  // Lakeshore's beds are its capacity. The clinic has nothing, and nothing under it.
+  const facilities = [{ id: "u0", name: "CIUSSS de l'Ouest-de-l'Île", location: null, resources: {}, census: {} }, ...TWIN.facilities];
+  const found = capacityFindings(facilities, [
+    { fromId: "u0", toId: "u1" },
+    { fromId: "u0", toId: "u3" },
+  ]);
+  const twin = { ...TWIN, facilities, gaps: [...TWIN.gaps, ...found.gaps], structure: found.structure } as SimExport;
+  const out = await call("describe_twin", { world: "reality" }, ctxOf({ world: async () => twin }));
+
+  // Three counts that add up to the total, so none of them reads as a remainder.
+  assert.deepEqual(out.sites, {
+    total: 5,
+    with_a_location: 3,
+    with_capacity_of_their_own: 3,
+    with_capacity_only_in_their_sub_units: 1,
+    with_no_capacity_under_them_at_all: 1,
+  });
+
+  // What is missing: the clinic, and only the clinic.
+  const hole = out.missing.find((g: { code: string }) => g.code === "FACILITY_WITHOUT_RESOURCES");
+  assert.deepEqual(hole.subjects, ["CLSC de Pierrefonds"]);
+  assert.match(hole.message, /^1 unit\(s\) carry no capacity of any kind, and nothing under them does either/);
+
+  // What is not missing: the establishment, said apart, with where its figure is read.
+  assert.equal(out.how_the_tree_is_built.length, 1);
+  const tree = out.how_the_tree_is_built[0];
+  assert.equal(tree.code, "CAPACITY_IN_SUBUNITS");
+  assert.deepEqual(tree.units, ["CIUSSS de l'Ouest-de-l'Île"]);
+  assert.equal(tree.units_total, 1);
+  assert.match(tree.message, /it stands in their sub-units[\s\S]*not something the twin is missing/);
+  assert.match(tree.for_the_figure_on_the_unit_page, /unit_now[\s\S]*everything under the unit/);
+  assert.equal(JSON.stringify(out.missing).includes("CIUSSS"), false);
 });
 
 test("sites are found by activity, by words of their name and by catchment, largest first", async () => {

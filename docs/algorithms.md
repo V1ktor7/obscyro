@@ -501,11 +501,14 @@ flowchart TD
     K --> M
     L --> M
     M --> N["Liste de ce qui manque, nommé"]
+    M --> O{"Une unité sans capacité<br/>rattachée directement ?"}
+    O -->|"et rien sous elle n'en porte"| N
+    O -->|"mais une de ses sous-unités en porte,<br/>à n'importe quelle profondeur"| P["Note sur la forme de l'arbre,<br/>à part de la liste des manques"]
 ```
 
-**Règles.** Seul ce qui est rattaché à une unité elle-même compte pour elle (`facilitiesFrom`) : les services d'un hôpital sont des sites à part entière, et leurs lits sont les leurs. C'est la différence avec la page des unités, qui additionne tout ce qui est sous une unité (D6, D9). Un lit déjà occupé n'est pas de la capacité libre. Un territoire sans chiffre de population apparaît quand même, à zéro, dans la liste des manques. Une route n'a pas de débit dans l'ontologie : elle sort à zéro, et c'est signalé. Le plafond de lecture est `ROLLUP_INSTANCE_CAP` ; l'atteindre se dit, parce que tout le reste serait une sous-estimation silencieuse.
+**Règles.** Seul ce qui est rattaché à une unité elle-même compte pour elle (`facilitiesFrom`) : les services d'un hôpital sont des sites à part entière, et leurs lits sont les leurs. C'est la différence avec la page des unités, qui additionne tout ce qui est sous une unité (D6, D9). Une unité peut donc sortir sans capacité pour deux raisons qui n'ont rien à voir, et l'export les sépare (`capacityFindings`). Si une de ses sous-unités porte de la capacité, c'est la forme de l'arbre : un établissement dont tous les lits sont dans ses installations. L'export le note à part (`structure`, code `CAPACITY_IN_SUBUNITS`), jamais parmi les manques, et la page de l'unité montre cette capacité. Si rien sous elle n'en porte, c'est un manque (`FACILITY_WITHOUT_RESOURCES`), et la page n'en montre aucune. « Sous » a ici le sens de la page des unités : les deux lectures parcourent l'arbre avec la même fonction (`buildDescendantMap`). Un lit déjà occupé n'est pas de la capacité libre. Un territoire sans chiffre de population apparaît quand même, à zéro, dans la liste des manques. Une route n'a pas de débit dans l'ontologie : elle sort à zéro, et c'est signalé. Le plafond de lecture est `ROLLUP_INSTANCE_CAP` ; l'atteindre se dit, parce que tout le reste serait une sous-estimation silencieuse.
 
-**Code.** `backend/src/services/twin-export.ts` (`buildTwinExport`, `facilitiesFrom`), `property-schema.ts`. **Tests.** `twin-export.unit.test.ts`, `twin-figures.unit.test.ts`, `scenario-lens-links.unit.test.ts`.
+**Code.** `backend/src/services/twin-export.ts` (`buildTwinExport`, `facilitiesFrom`, `capacityFindings`), `twin.ts` (`buildDescendantMap`), `property-schema.ts`. **Tests.** `twin-export.unit.test.ts`, `twin-figures.unit.test.ts`, `scenario-lens-links.unit.test.ts`.
 
 ## B2. Un pas du moteur d'événements
 

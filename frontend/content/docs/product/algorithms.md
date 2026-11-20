@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "c89cb0c059db7da9"
+translatedFrom: "316e3a48e3b3256c"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -507,11 +507,14 @@ flowchart TD
     K --> M
     L --> M
     M --> N["List of what is missing, named"]
+    M --> O{"A unit with no capacity<br/>attached to it directly?"}
+    O -->|"and nothing under it holds any"| N
+    O -->|"but one of its sub-units does,<br/>at any depth"| P["Note on the shape of the tree,<br/>apart from the list of gaps"]
 ```
 
-**Rules.** Only what is attached to a unit itself counts for it (`facilitiesFrom`): a hospital's wards are sites in their own right, and their beds are theirs. That is the difference with the unit page, which adds up everything under a unit (D6, D9). A bed already occupied is not free capacity. A territory with no population figure still appears, at zero, in the list of gaps. A route has no throughput in the ontology: it comes out at zero, and that is reported. The read cap is `ROLLUP_INSTANCE_CAP`; reaching it is said, because everything else would be a silent underestimate.
+**Rules.** Only what is attached to a unit itself counts for it (`facilitiesFrom`): a hospital's wards are sites in their own right, and their beds are theirs. That is the difference with the unit page, which adds up everything under a unit (D6, D9). So a unit can come out with no capacity for two reasons that have nothing in common, and the export tells them apart (`capacityFindings`). If one of its sub-units holds capacity, that is the shape of the tree: an institution whose beds are all in its facilities. The export notes it apart (`structure`, code `CAPACITY_IN_SUBUNITS`), never among the gaps, and the unit's page shows that capacity. If nothing under it holds any, that is a gap (`FACILITY_WITHOUT_RESOURCES`), and the page shows none. “Under” means here what it means on the unit page: both readings walk the tree with the same function (`buildDescendantMap`). A bed already occupied is not free capacity. A territory with no population figure still appears, at zero, in the list of gaps. A route has no throughput in the ontology: it comes out at zero, and that is reported. The read cap is `ROLLUP_INSTANCE_CAP`; reaching it is said, because everything else would be a silent underestimate.
 
-**Code.** `backend/src/services/twin-export.ts` (`buildTwinExport`, `facilitiesFrom`), `property-schema.ts`. **Tests.** `twin-export.unit.test.ts`, `twin-figures.unit.test.ts`, `scenario-lens-links.unit.test.ts`.
+**Code.** `backend/src/services/twin-export.ts` (`buildTwinExport`, `facilitiesFrom`, `capacityFindings`), `twin.ts` (`buildDescendantMap`), `property-schema.ts`. **Tests.** `twin-export.unit.test.ts`, `twin-figures.unit.test.ts`, `scenario-lens-links.unit.test.ts`.
 
 ## B2. One step of the event engine
 

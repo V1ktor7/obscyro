@@ -514,7 +514,7 @@ export const obj = (properties: Record<string, unknown>, required: string[]): An
 const describeTwin: AnalystTool = {
   name: "describe_twin",
   description:
-    "An overview of the digital twin: how many sites, which activities (kinds of capacity) exist and how many units of each, the catchments and their residents, the care and transmission model the twin declares, and what the twin is missing. Call this first when you do not yet know the names used in this twin.",
+    "An overview of the digital twin: how many sites, which activities (kinds of capacity) exist and how many units of each, the catchments and their residents, the care and transmission model the twin declares, and what the twin is missing. It keeps two things apart: what is missing ('missing'), and units that hold no capacity of their own because it stands in their sub-units ('how_the_tree_is_built'), which is not a gap. Call this first when you do not yet know the names used in this twin.",
   input_schema: obj({ world: WORLD_PROP }, ["world"]),
   parse: z.object({ world }),
   async run(ctx, input: { world: WorldName }) {
@@ -529,6 +529,10 @@ const describeTwin: AnalystTool = {
     const perType = new Map<string, number>();
     for (const o of ex.objects) perType.set(o.type, (perType.get(o.type) ?? 0) + 1);
     const model = declaredModel(ex);
+    // A site with nothing of its own is one of two things, and the export says
+    // which: its sub-units hold the capacity, or nothing under it does.
+    const inSubUnits = ex.structure.find((s) => s.code === "CAPACITY_IN_SUBUNITS")?.subjects.length ?? 0;
+    const nowhere = ex.gaps.find((g) => g.code === "FACILITY_WITHOUT_RESOURCES")?.subjects.length ?? 0;
     return {
       world: input.world,
       environment: ex.environment,
@@ -536,7 +540,9 @@ const describeTwin: AnalystTool = {
       sites: {
         total: sites.length,
         with_a_location: sites.filter((s) => s.location).length,
-        with_some_capacity: sites.filter((s) => Object.keys(s.activities).length > 0).length,
+        with_capacity_of_their_own: sites.filter((s) => Object.keys(s.activities).length > 0).length,
+        with_capacity_only_in_their_sub_units: inSubUnits,
+        with_no_capacity_under_them_at_all: nowhere,
       },
       activities,
       catchments: {
@@ -555,8 +561,19 @@ const describeTwin: AnalystTool = {
         subjects: g.subjects.slice(0, 8),
         subjects_total: g.subjects.length,
       })),
+      // Not under `missing`: nothing here is. Said because a unit read this
+      // way looks empty in a run and full on its page, and both are right.
+      how_the_tree_is_built: ex.structure.map((s) => ({
+        code: s.code,
+        message: s.message,
+        units: s.subjects.slice(0, 8),
+        units_total: s.subjects.length,
+        for_the_figure_on_the_unit_page:
+          "Call unit_now on one of these units: it adds up everything under the unit, as its page does. get_site gives what a run counts at the unit itself, which is nothing.",
+      })),
       note:
-        "'marked_in_use' counts units whose own status says occupied. Zero can mean empty or that the twin does not record status; the scenario's starting conditions say what a run assumes instead.",
+        "'marked_in_use' counts units whose own status says occupied. Zero can mean empty or that the twin does not record status; the scenario's starting conditions say what a run assumes instead. " +
+        "The three counts of sites by capacity add up to the total: a site in 'with_capacity_only_in_their_sub_units' is not missing anything.",
     };
   },
 };

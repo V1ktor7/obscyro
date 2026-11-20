@@ -303,9 +303,16 @@ export async function getUnitTree(
   return { nodes, edges, roots };
 }
 
-function buildDescendantMap(
+/**
+ * Every unit with what stands under it, itself included.
+ *
+ * Shared with the simulation export, which has to say of a unit holding
+ * nothing of its own whether its sub-units hold something: "under" must mean
+ * there what it means on the unit page.
+ */
+export function buildDescendantMap(
   unitIds: Set<string>,
-  edges: TwinTreeEdge[],
+  edges: readonly TwinTreeEdge[],
 ): Map<string, Set<string>> {
   const children = new Map<string, string[]>();
   for (const id of unitIds) children.set(id, []);

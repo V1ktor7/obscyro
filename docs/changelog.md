@@ -9,6 +9,7 @@ Une entrée est écrite le jour où le changement est livré, dans le même comm
 
 ## 20 novembre 2026
 
+- **Modification · Analyste.** Dans sa vue d'ensemble du jumeau, l'analyste ne dit plus d'un établissement qu'il « ne porte aucune capacité » quand cette capacité est dans ses installations. Il sépare deux cas : une unité dont la capacité est dans ses sous-unités, ce qui est la forme de l'arbre et pas un manque, et une unité sous laquelle rien n'en porte, ce qui en est un. Pour la première, il renvoie au chiffre que montre la page de l'unité.
 - **Nouvelle fonction · Studio.** Des réponses préparées. Une option testée dans Scenarios se garde pour un type de signal (« Keep as a prepared response for… »). La fiche de situation d'un signal de ce type la montre avec les chiffres de son test, sa date, et un avertissement si le scénario a changé depuis. Un clic sur « Engage » enregistre la décision sur le signal et le fait avancer d'une étape. Rien n'est déclenché dans un autre système.
 - **Nouvelle fonction · Studio.** Une fiche de situation s'ouvre d'un clic depuis une alerte, un signal ou une unité : les chiffres en direct de l'unité avec leur âge, l'alerte, l'étape du signal, et une question déjà écrite pour l'analyste. Elle se lit en entier même quand l'analyste est éteint.
 - **Nouvelle fonction · Analyste.** L'analyste est accessible depuis toutes les pages du Studio, par le bouton « Analyst » en bas à droite. La question part avec ce qu'on regarde : la page, et l'unité ou le signal sélectionné.

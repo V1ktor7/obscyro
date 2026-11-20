@@ -11,7 +11,7 @@ import {
   type PropertyDef,
   type SimRole,
 } from "./property-schema.js";
-import { aggregationEnds, attaches, buildsHierarchy, getUnitTree } from "./twin.js";
+import { aggregationEnds, attaches, buildDescendantMap, buildsHierarchy, getUnitTree, type TwinTreeEdge } from "./twin.js";
 
 /**
  * The twin, in the shape the simulation engine reads.
@@ -91,6 +91,22 @@ export interface SimGap {
     | "FACILITY_WITHOUT_RESOURCES"
     | "PROPERTY_WITHOUT_BEHAVIOUR"
     | "TWIN_TRUNCATED";
+  message: string;
+  subjects: string[];
+}
+
+/**
+ * Something about how the twin is built that changes how a figure of the
+ * export reads, without anything being missing.
+ *
+ * Kept apart from `gaps` on purpose. A hospital whose beds all stand in its
+ * wards holds no capacity of its own here, and listed among the gaps it read
+ * as "this hospital can never serve anyone" beside a unit page showing its
+ * hundreds of beds. Both were right, about two different things: a gap of the
+ * twin is not a property of its tree, so the two do not share a list.
+ */
+export interface SimStructureNote {
+  code: "CAPACITY_IN_SUBUNITS";
   message: string;
   subjects: string[];
 }
@@ -260,6 +276,8 @@ export interface SimExport {
   edges: SimEdge[];
   /** What is missing, named. The engine refuses to run on a blocking gap. */
   gaps: SimGap[];
+  /** What the shape of the tree makes of the figures above. Nothing here is missing. */
+  structure: SimStructureNote[];
 }
 
 function coordOf(properties: Record<string, unknown>): [number, number] | null {
@@ -404,6 +422,73 @@ export function facilitiesFrom(
 }
 
 /**
+ * The units that hold no capacity of their own, told apart by what is under
+ * them.
+ *
+ * The export counts at a unit only what is attached to the unit itself, so a
+ * unit can come out empty for two reasons that have nothing in common:
+ *
+ * - `inSubUnits`: its capacity stands in its sub-units, which are sites of
+ *   their own. That is the shape of the tree. The unit page, which adds a
+ *   unit's whole subtree, shows capacity for it;
+ * - `nowhere`: nothing under it holds any either. That is a hole in the twin,
+ *   and the unit page shows none for it.
+ *
+ * "Under" is the unit page's own notion (`buildDescendantMap`), so the two
+ * readings cannot part on which units a unit contains.
+ */
+export function unitsWithoutOwnCapacity(
+  facilities: readonly SimFacility[],
+  edges: readonly TwinTreeEdge[],
+): { inSubUnits: SimFacility[]; nowhere: SimFacility[] } {
+  const holds = new Set(facilities.filter((f) => Object.keys(f.resources).length > 0).map((f) => f.id));
+  const under = buildDescendantMap(new Set(facilities.map((f) => f.id)), edges);
+  const inSubUnits: SimFacility[] = [];
+  const nowhere: SimFacility[] = [];
+  for (const f of facilities) {
+    if (holds.has(f.id)) continue;
+    const below = [...(under.get(f.id) ?? [])].some((id) => id !== f.id && holds.has(id));
+    (below ? inSubUnits : nowhere).push(f);
+  }
+  return { inSubUnits, nowhere };
+}
+
+/**
+ * What the export says about the units that hold no capacity of their own:
+ * a gap for the ones with nothing under them, a note on the tree for the rest.
+ */
+export function capacityFindings(
+  facilities: readonly SimFacility[],
+  edges: readonly TwinTreeEdge[],
+): { gaps: SimGap[]; structure: SimStructureNote[] } {
+  const { inSubUnits, nowhere } = unitsWithoutOwnCapacity(facilities, edges);
+  const gaps: SimGap[] = [];
+  const structure: SimStructureNote[] = [];
+  if (nowhere.length > 0) {
+    gaps.push({
+      code: "FACILITY_WITHOUT_RESOURCES",
+      message:
+        `${nowhere.length} unit(s) carry no capacity of any kind, and nothing under them does either. ` +
+        `They can be reached by a transfer but can never serve anyone, so a policy routing to them ` +
+        `will look like it failed for the wrong reason.`,
+      subjects: nowhere.map((f) => f.name),
+    });
+  }
+  if (inSubUnits.length > 0) {
+    structure.push({
+      code: "CAPACITY_IN_SUBUNITS",
+      message:
+        `${inSubUnits.length} unit(s) hold no capacity of their own: it stands in their sub-units, ` +
+        `which are sites of their own here. That is how the tree is built, not something the twin ` +
+        `is missing. A run counts each sub-unit where it is and nothing at these units themselves; ` +
+        `the unit page adds up everything under a unit, so it shows capacity for them.`,
+      subjects: inSubUnits.map((f) => f.name),
+    });
+  }
+  return { gaps, structure };
+}
+
+/**
  * `lens` decides *which* world is exported.
  *
  * Without it the engine can only ever stress the network as it stands today,
@@ -419,7 +504,7 @@ export async function buildTwinExport(
   environmentSlug: string,
   lens?: ReadLens,
 ): Promise<SimExport> {
-  const [{ nodes }, instances, links, roleRows] = await Promise.all([
+  const [{ nodes, edges: tree }, instances, links, roleRows] = await Promise.all([
     getUnitTree(db, environmentId, lens),
     // The configured ceiling, not a literal. This read used to cap at 20 000
     // while `rollupInstanceCap` said 50 000, and the query orders by age — so a
@@ -484,17 +569,12 @@ export async function buildTwinExport(
 
   const { facilities, objects, typesWithoutRole, placeOfUnit } = facilitiesFrom(nodes, instances, links, roleByType);
 
-  const empty = facilities.filter((f) => Object.keys(f.resources).length === 0);
-  if (empty.length > 0) {
-    gaps.push({
-      code: "FACILITY_WITHOUT_RESOURCES",
-      message:
-        `${empty.length} unit(s) carry no capacity of any kind. They can be reached ` +
-        `by a transfer but can never serve anyone, so a policy routing to them ` +
-        `will look like it failed for the wrong reason.`,
-      subjects: empty.map((f) => f.name),
-    });
-  }
+  // A unit that holds nothing of its own is a hole only when nothing under it
+  // holds anything either. Otherwise it is the tree: a hospital whose beds are
+  // all in its wards.
+  const capacity = capacityFindings(facilities, tree);
+  gaps.push(...capacity.gaps);
+  const structure: SimStructureNote[] = [...capacity.structure];
 
   // Routes between units: any relationship the ontology does not treat as
   // structural. `contains` builds the hierarchy and is not a road; a placement
@@ -708,5 +788,6 @@ export async function buildTwinExport(
     populations,
     edges,
     gaps,
+    structure,
   };
 }

@@ -44,6 +44,7 @@ function snapshot(
     populations: [],
     edges: [],
     gaps: [],
+    structure: [],
   };
 }
 
