@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "docs:sync": "node scripts/sync-docs.mjs",
+    "prebuild": "node scripts/sync-docs.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -17,6 +19,7 @@
     "h3-js": "^4.1.0",
     "lucide-react": "^0.469.0",
     "mapbox-gl": "^3.26.0",
+    "mermaid": "^11.17.2",
     "next": "14.2.35",
     "next-mdx-remote": "^6.0.0",
     "react": "^18",

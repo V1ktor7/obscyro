@@ -11,6 +11,19 @@ export interface DocSection {
 
 export const DOC_NAV: DocSection[] = [
   {
+    // The repository's own documentation, copied from `docs/` by
+    // scripts/sync-docs.mjs: one page per part of the product, and the dated
+    // journal of what changed. In French, as it is written.
+    title: "Produit",
+    items: [
+      { title: "La boucle de décision", slug: ["product", "decision-loop"] },
+      { title: "La page Scenarios", slug: ["product", "scenarios-page"] },
+      { title: "L'analyste", slug: ["product", "analyst"] },
+      { title: "Les algorithmes", slug: ["product", "algorithms"] },
+      { title: "Journal des changements", slug: ["product", "changelog"] },
+    ],
+  },
+  {
     title: "Getting Started",
     items: [
       { title: "Introduction", slug: ["getting-started", "introduction"] },
@@ -45,10 +58,7 @@ export const DOC_NAV: DocSection[] = [
   },
   {
     title: "Resources",
-    items: [
-      { title: "Changelog", slug: ["resources", "changelog"] },
-      { title: "Status", slug: ["resources", "status"] },
-    ],
+    items: [{ title: "Status", slug: ["resources", "status"] }],
   },
 ];
 
@@ -78,4 +88,5 @@ export function getAdjacent(slug: string[]): { prev?: DocLink; next?: DocLink } 
   };
 }
 
-export const DOCS_DEFAULT_SLUG = ["getting-started", "introduction"];
+/** /docs opens on the product: what it does comes before how to call its API. */
+export const DOCS_DEFAULT_SLUG = ["product", "decision-loop"];

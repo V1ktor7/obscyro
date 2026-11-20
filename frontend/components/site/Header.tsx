@@ -23,6 +23,7 @@ export default function Header() {
   const navItems = [
     { label: t("nav.features"), href: "/#features" },
     { label: t("nav.pricing"), href: "/#offer" },
+    { label: t("nav.docs"), href: "/docs" },
   ];
 
   return (
@@ -66,7 +67,7 @@ export default function Header() {
         <div className="flex items-center gap-2">
           <Link
             href="/sign-in"
-            className="hidden h-7 items-center rounded-full bg-accent px-3.5 text-[0.75rem] font-medium text-accent-fg transition-colors hover:bg-[#1f5fbd] md:inline-flex"
+            className="hidden h-7 items-center rounded-full bg-accent px-3.5 text-[0.75rem] font-medium text-accent-fg transition-colors hover:bg-brand-deep md:inline-flex"
           >
             {t("nav.signin")}
           </Link>

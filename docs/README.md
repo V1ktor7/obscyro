@@ -6,6 +6,9 @@
 | [analyst.md](analyst.md) | L'analyste de la page Scenarios : ses quatre onglets (questions, recherche d'événements en ligne, options testées, décisions), ses outils, la règle des chiffres, ses routes, comment lui ajouter un outil |
 | [scenarios-page.md](scenarios-page.md) | La page Scenarios : ses panneaux et le guide en trois étapes |
 | [algorithms.md](algorithms.md) | Tous les algorithmes du produit, chacun avec son schéma, ses règles, ses fichiers et ses tests |
+| [changelog.md](changelog.md) | Le journal des changements : chaque nouvelle fonction et chaque modification, datée |
+
+Ces cinq pages sont aussi publiées sur le site, sous `/docs/product`. Le site n'en a pas sa propre version : `npm run docs:sync`, dans `frontend/`, recopie les pages d'ici vers `frontend/content/docs/product` (`frontend/scripts/sync-docs.mjs`). On modifie donc toujours la page d'ici, jamais la copie.
 
 Ailleurs dans le dépôt :
 

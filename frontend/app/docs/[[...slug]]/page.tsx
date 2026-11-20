@@ -15,7 +15,10 @@ import {
   findNavItem,
   getAdjacent,
 } from "@/lib/docs/nav";
+import { remarkMermaid } from "@/lib/docs/remark-mermaid";
 import { PRETTY_CODE_OPTIONS } from "@/lib/shiki";
+
+const REPOSITORY = "https://github.com/V1ktor7/obscyro/blob/main";
 
 interface PageProps {
   params: { slug?: string[] };
@@ -51,10 +54,12 @@ export default async function DocPage({ params }: PageProps) {
   const title =
     (doc.frontmatter.title as string | undefined) ?? navItem?.title ?? "Documentation";
   const description = doc.frontmatter.description as string | undefined;
+  // A page copied from the repository says where its source is.
+  const source = doc.frontmatter.source as string | undefined;
 
   return (
     <div className="grid grid-cols-1 gap-8 px-4 py-8 sm:px-6 sm:py-12 xl:grid-cols-[minmax(0,1fr)_220px] xl:gap-12 xl:px-12">
-      <article className="prose prose-neutral mx-auto w-full max-w-3xl">
+      <article className="prose mx-auto w-full max-w-3xl">
         <header className="not-prose mb-6 sm:mb-8">
           <p className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-fg-secondary sm:text-[0.65rem] sm:tracking-[0.2em]">
             {breadcrumb(slug)}
@@ -62,9 +67,18 @@ export default async function DocPage({ params }: PageProps) {
           <h1 className="mt-3 text-balance text-2xl font-semibold tracking-tighter sm:text-3xl lg:text-4xl">
             {title}
           </h1>
-          {description ? (
+          {description && !source ? (
             <p className="mt-3 text-pretty text-base text-fg-secondary sm:text-lg">
               {description}
+            </p>
+          ) : null}
+          {source ? (
+            <p className="mt-3 text-[0.8125rem] text-fg-secondary">
+              Kept with the code, in{" "}
+              <a href={`${REPOSITORY}/${source}`} target="_blank" rel="noreferrer" className="text-brand hover:underline">
+                {source}
+              </a>
+              : it changes in the same commit as what it describes.
             </p>
           ) : null}
         </header>
@@ -74,7 +88,8 @@ export default async function DocPage({ params }: PageProps) {
           components={mdxComponents}
           options={{
             mdxOptions: {
-              remarkPlugins: [remarkGfm],
+              format: doc.format,
+              remarkPlugins: [remarkGfm, remarkMermaid],
               rehypePlugins: [[rehypePrettyCode, PRETTY_CODE_OPTIONS]],
             },
           }}

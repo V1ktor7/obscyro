@@ -43,7 +43,7 @@ Le `--typeRoots` du frontend n'est pas décoratif : sans lui, un paquet de types
 - **Langue.** Réponses à la personne en français, en langage simple. Interface du produit en anglais. Messages de commit et documentation en français. Commentaires de code en anglais.
 - **Git.** On pousse directement sur `main` une fois testé. Un commit par changement cohérent, avec sa documentation.
 - **Cartes.** Sur une page qui montre une carte, tout panneau est un overlay repliable posé sur la carte (`OverlayPanel` dans `frontend/app/studio/map-overlay.tsx`). Jamais de panneau latéral.
-- **Thème.** Le Studio est en thème sombre (`.theme-g100` dans `frontend/app/globals.css`). Un écran nomme un rôle (`bg-surface`, `text-ink-muted`, `border-line`), jamais une couleur : ni `bg-white`, ni `text-gray-500`, ni hex dans une classe. Les rôles, et ce qui reste en valeurs littérales (cartes, graphiques) : [design/PALETTE.md](design/PALETTE.md).
+- **Thème.** Le Studio et le site public partagent un seul thème sombre (`:root` dans `frontend/app/globals.css`). Un écran nomme un rôle (`bg-surface`, `text-ink-muted`, `border-line`), jamais une couleur : ni `bg-white`, ni `text-gray-500`, ni hex dans une classe. Les rôles, et ce qui reste en valeurs littérales (cartes, graphiques) : [design/PALETTE.md](design/PALETTE.md).
 - **Secrets.** Ne jamais saisir, créer ni écrire une clé d'API ou un mot de passe. Une variable manquante se signale ; c'est un administrateur qui la pose.
 - **Tests.** Un changement de comportement arrive avec son test. Les appels à un modèle de langage sont simulés dans les tests ; la vraie API n'est appelée que par un script lancé à la main.
 - **Migrations.** Ne jamais modifier une migration déjà appliquée : ajouter le numéro suivant. L'en-tête du fichier explique, en français, pourquoi la table existe.
@@ -74,6 +74,8 @@ Elles ne se négocient pas, et elles s'appliquent à tout ce qui touche à la bo
 | Une variable d'environnement | `backend/.env.example` et `backend/DEPLOY.md` |
 | Le thème du Studio (un rôle de couleur, une rampe de carte, la navigation) | [design/PALETTE.md](design/PALETTE.md) |
 | Une migration | L'en-tête du fichier SQL |
+| Une fonction ajoutée ou modifiée, que quelqu'un qui utilise le produit peut voir | Une entrée datée en tête de [docs/changelog.md](docs/changelog.md), marquée **Nouvelle fonction** ou **Modification** |
+| N'importe quelle page de `docs/` | `npm run docs:sync` dans `frontend/` : le site publie ces pages sous `/docs/product` (copies dans `frontend/content/docs/product`), et un test du frontend échoue quand une copie est en retard sur sa source |
 | Une suppression | On retire la section et le schéma. Pas de documentation orpheline |
 
 Les schémas sont en Mermaid, pour qu'ils s'affichent sur GitHub et se relisent dans un diff. Un schéma se dessine d'après le code qu'on vient de lire, jamais de mémoire : un schéma faux est pire qu'un schéma absent. Chaque section d'algorithme nomme ses fichiers et ses tests, pour qu'on puisse vérifier.

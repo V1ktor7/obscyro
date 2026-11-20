@@ -3,9 +3,9 @@ import { type ReactNode } from "react";
 import MobileNav from "@/components/docs/MobileNav";
 import Sidebar from "@/components/docs/Sidebar";
 
-// The documentation is no longer linked from the site, and is kept out of
-// search results too: it is still reachable by its address for whoever already
-// has it, but it is not what the site offers to someone arriving.
+// The documentation is linked from the header: it opens on the product's own
+// pages, then the API reference. It is still kept out of search results, which
+// is a separate decision from showing it to someone who is already on the site.
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };

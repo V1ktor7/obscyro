@@ -5,8 +5,22 @@ import { extractHeadings, type DocHeading } from "./headings";
 
 const DOCS_ROOT = path.join(process.cwd(), "content", "docs");
 
+/**
+ * How a page is written.
+ *
+ * `mdx` is a page written for the site: it may use the site's components.
+ * `md` is plain Markdown, which is what the repository's own documentation is
+ * (`content/docs/product`, copied from `docs/` by scripts/sync-docs.mjs). It is
+ * compiled as Markdown, so a brace or an angle bracket in a sentence is a
+ * character and not the start of an expression.
+ */
+export type DocFormat = "mdx" | "md";
+
+const FORMATS: DocFormat[] = ["mdx", "md"];
+
 export interface LoadedDoc {
   slug: string[];
+  format: DocFormat;
   content: string;
   frontmatter: {
     title?: string;
@@ -17,21 +31,23 @@ export interface LoadedDoc {
 }
 
 export async function loadDoc(slug: string[]): Promise<LoadedDoc | null> {
-  const relativePath = `${slug.join("/")}.mdx`;
-  const filePath = path.join(DOCS_ROOT, relativePath);
-  try {
-    const raw = await fs.readFile(filePath, "utf8");
-    const { data, content } = matter(raw);
-    return {
-      slug,
-      content,
-      frontmatter: data as LoadedDoc["frontmatter"],
-      headings: extractHeadings(content),
-    };
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
-    throw err;
+  for (const format of FORMATS) {
+    const filePath = path.join(DOCS_ROOT, `${slug.join("/")}.${format}`);
+    try {
+      const raw = await fs.readFile(filePath, "utf8");
+      const { data, content } = matter(raw);
+      return {
+        slug,
+        format,
+        content,
+        frontmatter: data as LoadedDoc["frontmatter"],
+        headings: extractHeadings(content),
+      };
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    }
   }
+  return null;
 }
 
 export async function listDocFiles(): Promise<{ slug: string[] }[]> {
@@ -55,8 +71,8 @@ async function walk(
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       await walk(full, [...prefix, entry.name], out);
-    } else if (entry.isFile() && entry.name.endsWith(".mdx")) {
-      const stem = entry.name.replace(/\.mdx$/, "");
+    } else if (entry.isFile() && /\.mdx?$/.test(entry.name)) {
+      const stem = entry.name.replace(/\.mdx?$/, "");
       out.push({ slug: [...prefix, stem] });
     }
   }
