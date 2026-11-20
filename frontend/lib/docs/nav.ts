@@ -34,20 +34,6 @@ export const DOC_NAV: DocSection[] = [
     ],
   },
   {
-    title: "Core API",
-    items: [
-      { title: "/v1/concepts/{code}", slug: ["api", "concepts"] },
-      { title: "/v1/normalize", slug: ["api", "normalize"] },
-      { title: "/v1/concepts/{code}/descendants", slug: ["api", "descendants"] },
-      { title: "/v1/translate", slug: ["api", "translate"] },
-      { title: "/v1/concepts/{code}/synonyms", slug: ["api", "synonyms"] },
-      { title: "/v1/normalize-batch", slug: ["api", "normalize-batch"] },
-      { title: "/v1/disambiguate", slug: ["api", "disambiguate"] },
-      { title: "/v1/extract/concepts", slug: ["api", "extract-concepts"], badge: "new" },
-      { title: "/v1/extract/contexts", slug: ["api", "extract-contexts"], badge: "new" },
-    ],
-  },
-  {
     title: "Standards",
     items: [
       { title: "SNOMED CT", slug: ["standards", "snomed"] },

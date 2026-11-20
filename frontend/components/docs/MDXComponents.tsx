@@ -4,8 +4,6 @@ import type { MDXRemoteProps } from "next-mdx-remote/rsc";
 
 import { slugify } from "@/lib/docs/headings";
 import EndpointHeader from "./EndpointHeader";
-import { Param, Parameters } from "./Parameters";
-import ResponseExample from "./ResponseExample";
 import ErrorTable, { ErrorRow } from "./ErrorTable";
 import CodeTabs, { CodeTab } from "@/components/ui/CodeTabs";
 import CodeBlock from "@/components/ui/CodeBlock";
@@ -73,9 +71,6 @@ export const mdxComponents: MDXRemoteProps["components"] = {
   table: MdxTable,
   div: MdxDiv,
   EndpointHeader,
-  Parameters,
-  Param,
-  ResponseExample,
   ErrorTable,
   ErrorRow,
   CodeTabs,

@@ -9,6 +9,7 @@ Une entrée est écrite le jour où le changement est livré, dans le même comm
 
 ## 20 novembre 2026
 
+- **Modification · Site.** La section « Core API » est retirée de la documentation du site : neuf pages, une par point d'accès de l'API de terminologie. Les points d'accès existent toujours ; leur référence est celle que l'API sert elle-même, à l'adresse `/documentation`.
 - **Nouvelle fonction · Studio.** Une page « API keys » dans la section Admin. La clé que le navigateur utilise s'y affiche en entier, masquée tant qu'on ne demande pas à la voir, avec un bouton pour la copier. Les autres clés montrent leur début. On y crée une clé, qui s'affiche une fois pour être copiée, et on en révoque une.
 - **Nouvelle fonction · Site.** La documentation du produit est sur le site, sous Docs : la boucle de décision, la page Scenarios, l'analyste, les algorithmes avec leurs schémas, et ce journal. Ce sont les pages du dépôt, en anglais comme le reste du site. La page française du dépôt reste l'originale : quand elle change, un test signale la page anglaise qui est en retard.
 - **Modification · Site.** Le site public passe au thème sombre du Studio : accueil, pages de fonctions, documentation, connexion et compte. Le contenu ne change pas.

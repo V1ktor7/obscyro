@@ -32,6 +32,6 @@ When the rate-limit plugin returns a 429, the response carries the standard head
 
 Healthcare workloads tend to be bursty (a nightly ETL processes a million records, then nothing for hours). If your steady state is below your budget but you spike above it, the cleanest pattern is:
 
-1. Use [`/v1/normalize-batch`](/docs/api/normalize-batch) — one request, up to 1,000 strings, counts as a single rate-limit hit.
+1. Use `/v1/normalize-batch` — one request, up to 1,000 strings, counts as a single rate-limit hit.
 2. Wrap individual calls in retry-with-jitter on `429`.
 3. Ask us to raise the budget on your key if you need sustained throughput.

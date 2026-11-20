@@ -52,8 +52,8 @@ layer of it rather than the product:
 - Context-aware disambiguation when an abbreviation maps to several concepts.
 
 Inside the platform, coding runs as a node in a pipeline rather than as a
-separate migration. Over HTTP it stays exactly as documented in the Core API
-section.
+separate migration. It can also be called over HTTP: the API describes each of
+its endpoints itself, in the interactive reference it serves at `/documentation`.
 
 ## How it fits
 
@@ -66,7 +66,8 @@ matters at two points:
 
 ## Reading this documentation
 
-- The **Core API** section is your reference manual — one page per endpoint, with request/response schemas and copy-paste examples in cURL, Node.js, and Python.
+- **Product** describes what the software does: the decision loop, the Scenarios page, the analyst, the algorithms, and what changed and when.
+- **Getting Started** covers authentication, a first call, errors and rate limits. The endpoint-by-endpoint reference is the one the API serves at `/documentation`.
 - **Standards** explains how Obscyro models each terminology so you know what to expect in responses.
 - **Resources** gives the `/v1/health` readiness probe. What changed, and when, is in the [journal](/docs/product/changelog).
 
