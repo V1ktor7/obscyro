@@ -1,19 +1,24 @@
 "use client";
 
 /**
- * Administration — organization members with their roles, and the environment
- * inventory. Role changes are audited server-side and surface separation-of-
- * duties conflicts rather than silently allowing them (spec Part 2.2).
+ * Administration — organization members with their roles, the environment
+ * inventory, and the account's API keys. Role changes are audited server-side
+ * and surface separation-of-duties conflicts rather than silently allowing
+ * them (spec Part 2.2). The keys have their own file: `ApiKeysPanel.tsx`.
  */
 
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-import { AlertTriangle, Loader2, Settings, Users } from "lucide-react";
+import { AlertTriangle, KeyRound, Loader2, Settings, Users } from "lucide-react";
 
 import { apiFetch } from "@/lib/auth";
 
 import { useStudio } from "../StudioShell";
+import ApiKeysPanel from "./ApiKeysPanel";
+
+type View = "members" | "environments" | "keys";
+const TITLE: Record<View, string> = { members: "Users & roles", environments: "Environments", keys: "API keys" };
 
 interface Member {
   userId: string;
@@ -46,7 +51,8 @@ const ROLES = [
 export default function AdminView() {
   const { hasKey, environments } = useStudio();
   const searchParams = useSearchParams();
-  const view = searchParams?.get("view") === "environments" ? "environments" : "members";
+  const asked = searchParams?.get("view");
+  const view: View = asked === "environments" || asked === "keys" ? asked : "members";
 
   const [members, setMembers] = useState<Member[]>([]);
   const [orgName, setOrgName] = useState<string | null>(null);
@@ -97,11 +103,9 @@ export default function AdminView() {
       <header className="border-b border-line bg-surface px-5 py-3">
         <div className="flex items-center gap-2.5">
           <span className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-soft text-brand-deep">
-            {view === "members" ? <Users className="h-4 w-4" /> : <Settings className="h-4 w-4" />}
+            {view === "members" ? <Users className="h-4 w-4" /> : view === "keys" ? <KeyRound className="h-4 w-4" /> : <Settings className="h-4 w-4" />}
           </span>
-          <h1 className="text-[15px] font-medium">
-            {view === "members" ? "Users & roles" : "Environments"}
-          </h1>
+          <h1 className="text-[15px] font-medium">{TITLE[view]}</h1>
           {orgName && view === "members" ? (
             <span className="rounded border border-line px-2 py-0.5 text-[10.5px] text-ink-muted">
               {orgName}
@@ -173,6 +177,8 @@ export default function AdminView() {
               </tbody>
             </table>
           </div>
+        ) : view === "keys" ? (
+          <ApiKeysPanel />
         ) : (
           <div className="space-y-1.5">
             {environments.map((e) => (

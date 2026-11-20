@@ -49,6 +49,12 @@ Hitting any other endpoint without a valid key returns:
 
 with HTTP status `401`. See [Errors](/docs/getting-started/errors) for the full envelope contract and [Rate limits](/docs/getting-started/rate-limits) for `429` responses.
 
+## Where your keys are
+
+In the Studio, **Admin → API keys** lists the keys of your account by name and by their first characters, which is all the server keeps of them. From there you create a key (it is shown once, to be copied) and revoke one.
+
+The key your browser is signed in with is shown on the same page: masked until you ask to see it, with a button that copies it. That is the one to paste into a script. It can be read there because the browser has to hold it to sign its requests; the server cannot show it.
+
 ## Key rotation
 
-To revoke a key, contact us at [obscyro-team@obscyro.com](mailto:obscyro-team@obscyro.com). Active sessions tolerate a soft 60-second TTL while the in-memory cache expires; after that, requests return `401 INVALID_API_KEY`.
+To revoke a key, use **Admin → API keys** in the Studio, or contact us at [obscyro-team@obscyro.com](mailto:obscyro-team@obscyro.com). Active sessions tolerate a soft 60-second TTL while the in-memory cache expires; after that, requests return `401 INVALID_API_KEY`.

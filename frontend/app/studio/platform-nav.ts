@@ -259,6 +259,7 @@ export const NAV_SECTIONS: NavSection[] = [
         items: [
           { label: "Users & roles", href: "/studio/admin?view=members", view: "members" },
           { label: "Environments", href: "/studio/admin?view=environments", view: "environments" },
+          { label: "API keys", href: "/studio/admin?view=keys", view: "keys" },
         ],
       },
     ],
