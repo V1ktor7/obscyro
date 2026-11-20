@@ -197,6 +197,33 @@ export function stampFromOverride(o: ScenarioOverride): Stamp | null {
   return { ...body, id: o.id, start, days } as Stamp;
 }
 
+/** a, b, … z, aa, ab, … */
+function letters(i: number): string {
+  let s = "";
+  for (let n = i; n >= 0; n = Math.floor(n / 26) - 1) s = String.fromCharCode(97 + (n % 26)) + s;
+  return s;
+}
+
+export type ChoiceStamp = Stamp & { kind: "measure" | "capacity" };
+
+/**
+ * What each choice of a scenario is called while one exchange lasts: the
+ * stamp's id, to the name a tool reads and writes (`choice-a`, `choice-b`, …).
+ *
+ * A stamp's own id is a UUID. Handed to a language model it is thirty-six
+ * characters to copy without a slip, and it is full of digits that the checker
+ * of figures would then find "in a step". A name made of letters is neither.
+ * It is not kept anywhere: what an option records is the stamp's id.
+ */
+export function choiceRefs(overrides: ScenarioOverride[]): Map<string, string> {
+  const refs = new Map<string, string>();
+  for (const o of overrides) {
+    const s = stampFromOverride(o);
+    if (s && isChoice(s)) refs.set(s.id, `choice-${letters(refs.size)}`);
+  }
+  return refs;
+}
+
 /** A scenario's stamps, in the order the page holds them: by the day they start. */
 export function stampsOf(overrides: ScenarioOverride[]): Stamp[] {
   return overrides
@@ -395,6 +422,24 @@ export interface Basis {
 const share = (x: number) => `${Math.round(x * 1000) / 10} %`;
 
 /**
+ * A choice, as a line: what is opened or closed where and from when, or which
+ * contact is scaled, where and for how long. Written by the program from the
+ * stamp, so the screen can say what an option adds, replaces or removes
+ * without a sentence of the model's.
+ */
+export function choiceLine(s: ChoiceStamp, ctx: Pick<TwinContext, "populations" | "facilities">): string {
+  if (s.kind === "capacity") {
+    const f = ctx.facilities.find((x) => x.id === s.facility)?.name ?? s.facility;
+    return `${s.amount > 0 ? "+" : ""}${s.amount} ${s.activity} at ${f} from day ${s.start}`;
+  }
+  const popName = (id: string) => ctx.populations.find((p) => p.id === id)?.name ?? id;
+  const where =
+    s.populations === null ? "every catchment" : s.populations.length === 1 ? popName(s.populations[0]!) : `${s.populations.length} catchments`;
+  const layers = s.layers.map((l) => `${l.layer} ×${l.factor}`).join(", ");
+  return `${s.label} in ${where}, days ${s.start} to ${s.start + s.days - 1}: contact scaled (${layers})`;
+}
+
+/**
  * What a stamp asks anyone to believe, and on what grounds.
  *
  * Assigned from what the stamp is, never written by the model: a level of
@@ -421,24 +466,12 @@ export function basisOfStamp(
         },
         { element: "Half of the extra heat arrivals need a stretcher", evidence: "assumption", from },
       ];
-    case "measure": {
-      const where =
-        s.populations === null ? "every catchment" : s.populations.length === 1 ? popName(s.populations[0]!) : `${s.populations.length} catchments`;
-      const layers = s.layers.map((l) => `${l.layer} ×${l.factor}`).join(", ");
-      return [{ element: `${s.label} in ${where}, days ${s.start} to ${last}: contact scaled (${layers})`, evidence: "assumption", from }];
-    }
-    case "capacity": {
-      const f = ctx.facilities.find((x) => x.id === s.facility)?.name ?? s.facility;
+    case "measure":
+      return [{ element: choiceLine(s, ctx), evidence: "assumption", from }];
+    case "capacity":
       // That a bed can be opened is one thing; that somebody can staff it is
       // another, and the twin holds no staff to say so.
-      return [
-        {
-          element: `${s.amount > 0 ? "+" : ""}${s.amount} ${s.activity} at ${f} from day ${s.start}, ${s.amount > 0 ? "open and staffed" : "closed"}`,
-          evidence: "assumption",
-          from,
-        },
-      ];
-    }
+      return [{ element: `${choiceLine(s, ctx)}, ${s.amount > 0 ? "open and staffed" : "closed"}`, evidence: "assumption", from }];
     case "occupancy":
       return [{ element: `Usual occupancy: ${share(s.share)} of ${s.activity} already in use at every site`, evidence: "assumption", from }];
     case "immunity":

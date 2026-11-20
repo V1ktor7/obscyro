@@ -20,6 +20,7 @@ import {
   type OverlayScenario,
 } from "../../scenarios-api";
 import AddDataPanel from "./AddDataPanel";
+import { writeOption } from "./option-write";
 import AnalystPanel from "./AnalystPanel";
 import BreakList from "./BreakList";
 import ContextLane from "./ContextLane";
@@ -636,19 +637,28 @@ export default function HexTwinView() {
   /**
    * A tested option becomes part of the scenario here, and only here: on a
    * person's click. Its stamps are written the way a tap on the map writes
-   * them, so Run then sends the engine what the analyst's test sent it.
-   * Rejects when it cannot, for the panel that asked to say so.
+   * them, and the choices it replaces or removes are taken out the way the
+   * recipe's own edit does, so Run then sends the engine what the analyst's
+   * test sent it. Rejects when it cannot, for the panel that asked to say so;
+   * when a stamp the option takes out is no longer there, nothing is written
+   * (`option-write.ts`).
    */
   async function addOption(option: ProposedOption) {
     if (!scenarioId || !ctx) throw new Error("No scenario is open to add it to.");
+    const twin = ctx;
     setBusy(true);
     setMessage(null);
     try {
-      for (const s of option.stamps) {
-        const draft = { ...s.body, id: "draft", start: s.start, days: s.days } as unknown as Stamp;
-        const note = `${describeStamp(draft, ctx).title} · from the tested option “${option.label}”`.slice(0, 500);
-        await addScenarioOverride(scenarioId, stampToOverride(draft, note, nonce()));
-      }
+      await writeOption(option, {
+        held: async () => (await listScenarioOverrides(scenarioId)).overrides.map((o) => o.id),
+        add: async (stamp, note) => {
+          await addScenarioOverride(scenarioId, stampToOverride(stamp, note, nonce()));
+        },
+        remove: async (id) => {
+          await deleteScenarioOverride(scenarioId, id);
+        },
+        title: (stamp) => describeStamp(stamp, twin).title,
+      });
       setRecipeOpen(true);
     } finally {
       // Whatever was written is in the scenario: show it, even after a failure half-way.

@@ -297,16 +297,22 @@ flowchart TD
 ```mermaid
 flowchart TD
     A["Objectif de la personne,<br/>scénario ouvert, horizon et activité de la page"] --> B["L'analyste lit : run à l'écran, site, territoires, recette"]
-    B --> C["test_option : une étiquette et 1 à 4 changements<br/>capacité à un site, ou mesure sur une couche de contact"]
+    B --> B2["scenario_recipe : chaque choix du scénario<br/>porte un nom (choice-a, choice-b…)"]
+    B2 --> C["test_option : une étiquette et 1 à 4 changements.<br/>Ajouter une capacité ou une mesure,<br/>remplacer un choix nommé, ou le retirer"]
     C --> D{"Testable ?<br/>site connu qui offre l'activité, couche déclarée,<br/>jour dans le run, pas déjà testée, moins de 3 tests"}
     D -->|"non"| E["Refus motivé, lu par le modèle.<br/>Ne compte pas comme un test"]
     E --> B
-    D -->|"oui"| F["Changements écrits comme les tampons de la page"]
+    D -->|"oui"| D2{"Le changement nomme-t-il<br/>un choix du scénario ?"}
+    D2 -->|"non : il ajoute"| F["Changements écrits comme les tampons de la page"]
+    D2 -->|"oui"| D3{"Est-ce bien un choix (mesure, capacité),<br/>du même genre, nommé une seule fois,<br/>et remplacé par autre chose que lui-même ?"}
+    D3 -->|"non"| E
+    D3 -->|"oui"| D4["L'ancien tampon sort de la liste.<br/>Remplacement : ce que le changement ne dit pas<br/>est gardé de l'ancien"]
+    D4 --> F
     F --> G["Une passe du scénario tel quel, avec ses choix :<br/>lancée une fois, gardée pour toutes les options"]
-    F --> H["Une passe du scénario avec les tampons de l'option (A4)"]
+    F --> H["Une passe du scénario, les tampons retirés en moins,<br/>ceux de l'option en plus (A4)"]
     G --> I["Résultat pour le modèle : les deux runs en résumé,<br/>les sites où l'on attend, sur quoi l'option repose"]
     H --> I
-    H --> J["Relevé pour l'écran : chiffres entiers, tampons,<br/>arrivées par jour, niveaux de preuve"]
+    H --> J["Relevé pour l'écran : chiffres entiers, tampons écrits,<br/>choix retirés, ce qui est ajouté, remplacé, retiré,<br/>arrivées par jour, niveaux de preuve"]
     I --> K{"Autre option à tester ?"}
     K -->|"oui"| C
     K -->|"non"| L["give_options : un mécanisme par option,<br/>ce que le test ne dit pas, lecture, arbitrages, limites"]
@@ -316,7 +322,12 @@ flowchart TD
     M -->|"oui"| O["Vérificateur de chiffres sur chaque phrase (A2)"]
     O --> P["Proposition : tableau tiré des relevés,<br/>dans l'ordre des tests, sans classement"]
     J --> P
-    P --> Q["Add to scenario : clic humain, écrit les tampons"]
+    P --> Q{"Add to scenario / Apply to scenario :<br/>clic humain. L'option retire-t-elle un choix ?"}
+    Q -->|"non"| Q1["Les tampons sont écrits"]
+    Q -->|"oui"| Q2["La recette est relue"]
+    Q2 --> Q3{"Chaque tampon à retirer<br/>y est-il encore ?"}
+    Q3 -->|"non"| Q4["Rien n'est écrit, et l'écran dit lequel manque"]
+    Q3 -->|"oui"| Q5["Pour chaque tampon : le nouveau écrit, puis l'ancien retiré.<br/>Enfin les choix retirés sans remplaçant"]
     P --> R["Record decision : clic humain (A9)"]
 ```
 
@@ -325,16 +336,20 @@ flowchart TD
 - Les passes se suivent, elles ne tournent pas en même temps. Le service de simulation est un seul processus : mesuré en local, lancer deux passes ensemble ne gagne que 18 % sur les lancer l'une après l'autre, pour deux fois la mémoire.
 - Chaque test garde dans son relevé de quoi sa durée était faite : la lecture du jumeau (au premier test seulement), puis chaque appel au moteur. Ce relevé va au journal, pas au modèle.
 - Une capacité se teste à un site qui offre déjà l'activité ; négative, elle ferme des unités, jamais plus que le site n'en a. Une mesure se teste sur une couche de contact que le jumeau déclare.
+- **Remplacer ou retirer un choix.** Un changement peut prendre la place d'un choix que le scénario contient déjà (`replaces`), ou le retirer (`remove`). « 40 lits au lieu de 60 » est alors un seul tampon à +40, et non un −20 empilé sur un +60 : le test tourne sur le scénario sans l'ancien tampon et avec le nouveau, et c'est ce que la recette contiendra. Un remplacement ne dit que ce qui diffère (les unités, le jour, la durée) ; le reste est gardé du choix remplacé.
+- **Un choix se désigne par un nom, pas par son identifiant.** `scenario_recipe` donne à chaque choix un nom fait de lettres (`choice-a`, `choice-b`…), valable le temps de l'échange. L'identifiant d'un tampon est un UUID : trente-six caractères à recopier sans faute, et pleins de chiffres que le vérificateur trouverait ensuite « dans une étape ». Le relevé du test, lui, garde l'identifiant du tampon : c'est ce que la page retire.
+- **Seul un choix se remplace.** Une condition de départ dit où le run commence, un événement dit ce qui arrive : une option qui en retirerait un testerait un autre scénario en l'appelant une réponse. Ni l'un ni l'autre n'a de nom, et les désigner est refusé, avec la liste de ce qui peut l'être. Sont refusés aussi : remplacer une capacité par une mesure (on retire l'une et on ajoute l'autre, dans la même option), nommer deux fois le même choix, remplacer un choix par lui-même.
+- **Ce qui est retiré se dit.** Le relevé liste ce que l'option ajoute, remplace et retire, en phrases écrites par le programme à partir des tampons ; la carte de l'option les montre telles quelles, et « Takes out of the scenario : … » figure parmi ce sur quoi l'option repose, au niveau **hypothèse**. Une décision enregistrée les garde.
 - Un refus du moteur (un scénario sans événement, par exemple) est lu par le modèle. Un moteur injoignable est une panne : l'échange s'arrête et le dit, sans option inventée.
 - Le niveau de preuve de chaque élément est attribué par le programme, d'après d'où il vient : **mesuré** pour ce que le jumeau contient (unités d'un site, résidents d'un territoire), **publié** pour le taux d'une canicule, **hypothèse** pour les conditions du scénario, les choix, l'option elle-même et la règle de routage du moteur. Le modèle n'en choisit aucun.
 - Le mécanisme d'une option est contrôlé contre le résultat de son propre test ; la lecture, contre les étapes qu'elle cite ; le reste, contre tout ce qui a été lu. Un chiffre de l'objectif appartient à la personne et peut être repris.
 - Le mécanisme et la lecture reçoivent les deux contrôles du vérificateur (A2), comme les paragraphes d'une réponse : un chiffre que personne n'a renvoyé, et un chiffre qui existe mais qui est écrit à côté du mauvais site ou du mauvais territoire.
 - Le tableau suit l'ordre des tests. Rien ne classe les options : dire lesquelles atteignent l'objectif d'après les runs est une lecture, choisir entre elles revient à la personne. Les arbitrages de valeur sont présentés à part, comme tels.
-- L'analyste n'écrit rien. Une option entre dans le scénario au clic « Add to scenario », écrite comme un tampon posé sur la carte ; Run redonne alors les chiffres du test (A4). Si le scénario n'est plus celui qui a été testé, l'écran dit lequel des trois cas c'est : une option ajoutée depuis l'onglet (Run doit redonner sa colonne, les autres colonnes ne décrivent plus ce scénario), plusieurs options ajoutées ensemble (aucun test ne les a couvertes ensemble), ou une modification faite ailleurs (toutes les colonnes sont dépassées).
+- L'analyste n'écrit rien. Une option entre dans le scénario au clic « Add to scenario », écrite comme un tampon posé sur la carte ; Run redonne alors les chiffres du test (A4). Quand l'option retire un choix, le bouton dit « Apply to scenario » : la recette est relue, et si un tampon à retirer n'y est plus (quelqu'un l'a modifié depuis le test), rien n'est écrit et l'écran le dit. Sinon le nouveau tampon est écrit puis l'ancien retiré, comme le fait la recette quand on modifie un tampon à la main : un arrêt à mi-chemin laisse un tampon de trop, qui se voit, plutôt qu'un de moins. Le jeu d'essai de parité couvre un remplacement : les chiffres du test et ceux de Run après le clic sont les mêmes. Si le scénario n'est plus celui qui a été testé, l'écran dit lequel des trois cas c'est : une option ajoutée depuis l'onglet (Run doit redonner sa colonne, les autres colonnes ne décrivent plus ce scénario), plusieurs options ajoutées ensemble (aucun test ne les a couvertes ensemble), ou une modification faite ailleurs (toutes les colonnes sont dépassées).
 - Un run n'est pas une prévision : le tableau le porte dans son titre.
 
-**Code.** `backend/src/services/analyst-options.ts` (`testOption`, `benchFor`, `optionsClosing`), `scenario-stamps.ts` (`basisOfStamp`), route `POST /v1/ontology/:env/analyst/options` dans `backend/src/routes/analyst.ts` ; `frontend/app/studio/simulation/hex/OptionsTab.tsx`, `analyst-parts.tsx`, `addOption` dans `HexTwinView.tsx`.
-**Tests.** `analyst-options.unit.test.ts`, `routes/analyst.unit.test.ts`, `OptionsTab.test.tsx`, `HexTwinView.test.tsx`.
+**Code.** `backend/src/services/analyst-options.ts` (`testOption`, `choiceNamed`, `stampOf`, `benchFor`, `optionsClosing`), `scenario-stamps.ts` (`basisOfStamp`, `choiceRefs`, `choiceLine`), `scenario-run.ts` (`ScenarioRunner.withOption`), `analyst-tools.ts` (`scenario_recipe`), route `POST /v1/ontology/:env/analyst/options` dans `backend/src/routes/analyst.ts` ; `frontend/app/studio/simulation/hex/OptionsTab.tsx`, `analyst-parts.tsx` (`OptionChanges`), `option-write.ts` (`writeOption`), `addOption` dans `HexTwinView.tsx`.
+**Tests.** `analyst-options.unit.test.ts`, `scenario-run.unit.test.ts` (parité, dont le remplacement), `analyst-tools.unit.test.ts`, `routes/analyst.unit.test.ts`, `OptionsTab.test.tsx`, `option-write.test.ts`, `run-parity.test.ts`, `DecisionsTab.test.tsx`, `HexTwinView.test.tsx`. Le jeu d'essai `scenario-run-parity.fixture.json` est écrit par `backend/scripts/make-scenario-run-fixture.ts`.
 
 ## A9. Décision enregistrée et suivi
 

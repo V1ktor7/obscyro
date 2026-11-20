@@ -11,9 +11,44 @@ import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/cn";
 
-import { hostOf, isWebLink, stepLabel, type AnalystStep, type Evidence } from "../../analyst-api";
+import { hostOf, isWebLink, stepLabel, type AnalystStep, type Evidence, type OptionChange } from "../../analyst-api";
 
 export const LABEL = "text-[10px] font-semibold uppercase tracking-wide text-ink-faint";
+
+const VERB: Record<OptionChange["does"], string> = { adds: "Adds", replaces: "Replaces", removes: "Removes" };
+
+/**
+ * What an option does to the scenario, when it does more than add: the choice
+ * it replaces and with what, the choice it removes. The lines are the
+ * server's, written from the stamps; none is a sentence of the model's.
+ *
+ * Nothing is shown for an option that only adds: what it adds is already the
+ * first thing its card says it rests on.
+ */
+export function OptionChanges({ changes, heading }: { changes: OptionChange[] | undefined; heading: string }) {
+  if (!changes || changes.every((c) => c.does === "adds")) return null;
+  return (
+    <>
+      <span className={LABEL}>{heading}</span>
+      <ul className="flex flex-col gap-0.5 text-[11.5px] text-ink-body">
+        {changes.map((c, i) => (
+          <li key={i}>
+            <span className="font-semibold text-ink">{VERB[c.does]}</span>{" "}
+            {c.does === "replaces" ? (
+              <>
+                {c.was} <span className="text-ink-muted">with</span> {c.now}
+              </>
+            ) : c.does === "adds" ? (
+              c.now
+            ) : (
+              c.was
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
 
 /** A duration as a person says it: "42 s", then "2 min 05 s". */
 export function elapsedText(seconds: number): string {

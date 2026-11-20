@@ -12,7 +12,9 @@
  * - the level of evidence beside each thing a run rests on — measured,
  *   published or assumption — which the server assigns from where that thing
  *   comes from;
- * - the two buttons. "Add to scenario" writes the option's stamps, and "Record
+ * - the two buttons. "Add to scenario" writes the option's stamps (and, for
+ *   an option that replaces or removes a choice the scenario holds, takes that
+ *   choice out: the button then reads "Apply to scenario"), and "Record
  *   decision" keeps the choice with the figures expected of it. Nothing happens
  *   to the scenario until one of them is pressed.
  *
@@ -37,7 +39,8 @@ import {
   type ProposedOption,
   type RunDigest,
 } from "../../analyst-api";
-import { Elapsed, EvidenceBadge, LABEL, Text, Trace } from "./analyst-parts";
+import { Elapsed, EvidenceBadge, LABEL, OptionChanges, Text, Trace } from "./analyst-parts";
+import { takesOut } from "./option-write";
 import { people } from "./results";
 
 const LETTERS = ["A", "B", "C"];
@@ -100,7 +103,7 @@ export default function OptionsTab({
   scenarioKey: string;
   siteName: (id: string) => string | null;
   onFocusSite: (id: string) => void;
-  /** Writes an option's stamps into the scenario. Rejects when it cannot. */
+  /** Applies an option to the scenario: its stamps written, the choices it takes out deleted. Rejects when it cannot. */
   onAdd: (option: ProposedOption) => Promise<void>;
   /** A decision was recorded. */
   onRecorded: () => void;
@@ -228,7 +231,7 @@ export default function OptionsTab({
     } catch (err) {
       // Part of it may have been written: the scenario is then one no test covered.
       setOwnKey(null);
-      setActionError(`“${o.label}” was not added: ${err instanceof Error ? err.message : String(err)}`);
+      setActionError(`“${o.label}” was not ${takesOut(o) ? "applied" : "added"}: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       adding.current = false;
       setActing(null);
@@ -441,7 +444,8 @@ export default function OptionsTab({
                   </div>
                   <p className="text-[10.5px] text-ink-faint">
                     “As it is” is this scenario with the choices it already holds. Each option is the same run with its
-                    changes added. In the order tested; nothing here ranks them.
+                    changes applied: stamps added and, where its card says so, a choice of the scenario replaced or removed.
+                    In the order tested; nothing here ranks them.
                   </p>
                 </div>
               ) : null}
@@ -449,6 +453,8 @@ export default function OptionsTab({
               {proposal.options.map((o, i) => {
                 const isAdded = added.includes(o.step);
                 const isRecorded = recorded.includes(o.step);
+                // "Add" would be the wrong word for an option that takes a choice out.
+                const edits = takesOut(o);
                 return (
                   <section key={o.step} aria-label={`Option ${LETTERS[i]}: ${o.label}`} className="flex flex-col gap-1.5 rounded-md border border-line-soft bg-canvas-raised p-2">
                     <div className="flex items-start gap-1.5">
@@ -466,6 +472,7 @@ export default function OptionsTab({
                     <p className="text-[12px] leading-relaxed text-ink-body">
                       <Text text={o.mechanism} />
                     </p>
+                    <OptionChanges changes={o.changes} heading="What it does to the scenario" />
                     <span className={LABEL}>What it rests on</span>
                     <BasisList items={o.basis} />
                     {o.notTested.length || o.notes.length ? (
@@ -486,10 +493,11 @@ export default function OptionsTab({
                         type="button"
                         disabled={acting !== null || isAdded}
                         onClick={() => void add(o)}
+                        title={edits ? "Writes its stamps into the recipe and takes out the choices it replaces or removes." : undefined}
                         className="flex items-center gap-1 rounded border border-line bg-white px-2 py-1 text-[11.5px] font-semibold text-ink hover:bg-canvas disabled:opacity-60"
                       >
                         {acting === `add:${o.step}` ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : isAdded ? <Check className="h-3 w-3 text-ok-ink" aria-hidden="true" /> : <Plus className="h-3 w-3" aria-hidden="true" />}
-                        {isAdded ? "Added to the scenario" : "Add to scenario"}
+                        {edits ? (isAdded ? "Applied to the scenario" : "Apply to scenario") : isAdded ? "Added to the scenario" : "Add to scenario"}
                       </button>
                       <button
                         type="button"
@@ -503,7 +511,11 @@ export default function OptionsTab({
                       </button>
                     </div>
                     {isAdded ? (
-                      <p className="text-[11px] text-ink-muted">Its stamps are in the recipe. Press Run: the result should show the figures of this column.</p>
+                      <p className="text-[11px] text-ink-muted">
+                        {edits
+                          ? "The recipe now holds its stamps, in place of the choices it replaced or removed. Press Run: the result should show the figures of this column."
+                          : "Its stamps are in the recipe. Press Run: the result should show the figures of this column."}
+                      </p>
                     ) : null}
                     {isRecorded ? <p className="text-[11px] text-ink-muted">Kept under Decisions, with these figures as what is expected.</p> : null}
                   </section>
@@ -569,6 +581,11 @@ export default function OptionsTab({
                     What every column rests on · {proposal.basis.length} {basisOpen ? "▾" : "▸"}
                   </button>
                   {basisOpen ? <BasisList items={proposal.basis} /> : null}
+                  {basisOpen && proposal.options.some(takesOut) ? (
+                    <p className="text-[10.5px] text-ink-faint">
+                      A choice an option replaces or removes is in “As it is” and not in that option’s column.
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
 

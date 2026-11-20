@@ -1,3 +1,4 @@
+import { choiceRefs } from "./scenario-stamps.js";
 import { z } from "zod";
 
 import { CalcError, UNIT_CONSTANTS, evaluate } from "./analyst-calc.js";
@@ -334,6 +335,8 @@ function recipe(scenario: AnalystScenario, ex: SimExport): Record<string, unknow
   const network: Record<string, unknown>[] = [];
   let compared: Record<string, unknown> | null = null;
   let other = 0;
+  // What test_option calls each choice, to replace it or to remove it.
+  const refs = choiceRefs(scenario.overrides);
 
   for (const o of scenario.overrides) {
     const from_day = Math.max(0, Math.round(o.effectiveOffsetHours / 24));
@@ -375,6 +378,7 @@ function recipe(scenario: AnalystScenario, ex: SimExport): Record<string, unknow
         case "measure": {
           const pops = Array.isArray(v.populations) ? (v.populations as string[]).map(popName) : null;
           choices.push({
+            ref: refs.get(o.id) ?? null,
             what: "measure",
             label: v.label,
             contact_layers: v.layers,
@@ -386,7 +390,15 @@ function recipe(scenario: AnalystScenario, ex: SimExport): Record<string, unknow
           break;
         }
         case "capacity":
-          choices.push({ what: "capacity", site: siteName(String(v.facility)), site_id: v.facility, activity: v.activity, units_added: v.amount, from_day });
+          choices.push({
+            ref: refs.get(o.id) ?? null,
+            what: "capacity",
+            site: siteName(String(v.facility)),
+            site_id: v.facility,
+            activity: v.activity,
+            units_added: v.amount,
+            from_day,
+          });
           break;
         default:
           other += 1;
@@ -417,7 +429,8 @@ function recipe(scenario: AnalystScenario, ex: SimExport): Record<string, unknow
     other_edits: other,
     how_to_read:
       "Conditions and events are in both runs. Choices (measures, capacity) are only in the run called 'with your choices'. " +
-      "Network edits change which sites a catchment's patients can go to, in both runs.",
+      "Network edits change which sites a catchment's patients can go to, in both runs. " +
+      "A choice's ref is how test_option names it, to replace it or to remove it; conditions and events have none, because an option does not undo what happens.",
   };
 }
 

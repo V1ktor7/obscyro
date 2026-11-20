@@ -159,3 +159,31 @@ describe("the decisions tab", () => {
     await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/could not be read: offline/));
   });
 });
+
+describe("a decision that replaced or removed a choice of the scenario", () => {
+  it("says what the option took out, so “40 beds” is not read as forty more", async () => {
+    api.listDecisions.mockResolvedValue({
+      decisions: [
+        decision({
+          optionLabel: "40 beds at Lakeshore instead of 60",
+          expected: {
+            ...decision().expected,
+            changes: [{ does: "replaces", now: "+40 lit at Lakeshore from day 10", was: "+60 lit at Lakeshore from day 10" }],
+            retires: [{ id: "st-60", stamp: { body: { kind: "capacity" }, start: 10, days: 50 }, text: "+60 lit at Lakeshore from day 10", replacedBy: 0 }],
+          },
+        }),
+      ],
+    });
+    tab();
+    expect(await screen.findByText("What it did to the scenario")).toBeTruthy();
+    expect(screen.getByText("Replaces").parentElement!.textContent).toBe("Replaces +60 lit at Lakeshore from day 10 with +40 lit at Lakeshore from day 10");
+  });
+
+  it("says nothing more for a decision that only added, as every older decision did", async () => {
+    api.listDecisions.mockResolvedValue({ decisions: [decision()] });
+    tab();
+    await screen.findByText("Open 80 beds at Lakeshore from day 5");
+    expect(screen.queryByText("What it did to the scenario")).toBeNull();
+  });
+});
+

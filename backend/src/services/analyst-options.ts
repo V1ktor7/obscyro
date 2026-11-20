@@ -20,7 +20,18 @@ import {
 import { Ledger, strike, unsourced } from "./analyst-verify.js";
 import type { ScenarioOverride } from "./scenario-overrides.js";
 import { ScenarioRunner, type EngineTiming, type PassDigest, type ScenarioEngine } from "./scenario-run.js";
-import { basisOfStamp, stampsOf, type Basis, type Stamp, type StampBody, type TwinContext } from "./scenario-stamps.js";
+import {
+  basisOfStamp,
+  choiceLine,
+  choiceRefs,
+  isChoice,
+  stampsOf,
+  type Basis,
+  type ChoiceStamp,
+  type Stamp,
+  type StampBody,
+  type TwinContext,
+} from "./scenario-stamps.js";
 import type { SimExport } from "./twin-export.js";
 
 /**
@@ -29,9 +40,10 @@ import type { SimExport } from "./twin-export.js";
  * A recommendation that rests on no run of the engine is an opinion. Here the
  * analyst may propose something to try — beds at a site from a given day, a
  * measure on a contact layer — and the only way it can say what that would
- * change is to run it: `test_option` adds the option's stamps to the open
- * scenario, runs the scenario on the server the way the page runs it, and
- * returns the figures beside those of the scenario as it stands.
+ * change is to run it: `test_option` applies the option to the open scenario
+ * (stamps added, and a choice the scenario already holds replaced or removed),
+ * runs the scenario on the server the way the page runs it, and returns the
+ * figures beside those of the scenario as it stands.
  *
  * Three things are kept out of the model's hands on purpose:
  *
@@ -56,6 +68,8 @@ export interface OpenBench {
   runner: ScenarioRunner;
   /** The scenario's own stamps, in the page's order. */
   stamps: Stamp[];
+  /** The scenario's choices, by the name `scenario_recipe` gave each: what an option may replace or remove. */
+  choices: Map<string, ChoiceStamp>;
   /** What every run of this scenario rests on, each with its level of evidence. */
   basis: Basis[];
   /** The scenario as it stands, choices included: one pass, run once and kept for every option. */
@@ -94,10 +108,17 @@ export function benchFor(args: {
           );
         }
         const stamps = stampsOf(args.scenario.overrides);
+        const refs = choiceRefs(args.scenario.overrides);
+        const choices = new Map<string, ChoiceStamp>();
+        for (const s of stamps) {
+          const ref = refs.get(s.id);
+          if (ref && isChoice(s)) choices.set(ref, s as ChoiceStamp);
+        }
         let asItIs: Promise<PassDigest> | null = null;
         const open: OpenBench = {
           runner,
           stamps,
+          choices,
           basis: scenarioBasis(stamps, runner.ctx, args.activity),
           asItIs: () => {
             if (!asItIs) {
@@ -168,9 +189,35 @@ export interface OptionStamp {
   days: number;
 }
 
+/** A choice of the scenario an option takes out: replaced by one of its stamps, or removed. */
+export interface RetiredChoice {
+  /** The stamp's id in the scenario when the option was tested: what "Add to scenario" takes out. */
+  id: string;
+  /** The choice as it stood, as the page wrote it. */
+  stamp: OptionStamp;
+  /** The same, as a line. */
+  text: string;
+  /** Position, in the option's stamps, of what takes its place; null when it is removed. */
+  replacedBy: number | null;
+}
+
+/** One thing an option does to the scenario, as the screen says it. Written by the program. */
+export interface OptionChange {
+  does: "adds" | "replaces" | "removes";
+  /** What is in the scenario once it is applied; null for a removal. */
+  now: string | null;
+  /** The scenario's choice it takes out; null for an addition. */
+  was: string | null;
+}
+
 export interface TestedOption {
   label: string;
+  /** The stamps the option writes: what it adds, and what it puts in place of a choice. */
   stamps: OptionStamp[];
+  /** The scenario's choices it takes out. Empty for an option that only adds. */
+  retires: RetiredChoice[];
+  /** What it adds, replaces and removes, in the order asked. */
+  changes: OptionChange[];
   horizon: number;
   activity: string;
   ranAt: string;
@@ -268,24 +315,71 @@ export function scenarioBasis(stamps: Stamp[], ctx: TwinContext, activity: strin
 // The tool.
 // ---------------------------------------------------------------------------
 
+const choiceRef = z.string().trim().min(1).max(60);
+// With `replaces`, a change says only what differs from the choice it takes
+// the place of, so every field of the stamp is optional here and required,
+// for a plain addition, where the stamp is written.
 const change = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("capacity"),
-    site: z.string().min(1).max(300),
+    replaces: choiceRef.optional(),
+    site: z.string().min(1).max(300).optional(),
     activity: z.string().min(1).max(120).optional(),
-    units: z.number().int(),
-    from_day: z.number().int().min(0),
+    units: z.number().int().optional(),
+    from_day: z.number().int().min(0).optional(),
   }),
   z.object({
     kind: z.literal("measure"),
-    name: z.string().trim().min(1).max(120),
-    layers: z.array(z.object({ layer: z.string().min(1).max(120), factor: z.number().min(0).max(5) })).min(1).max(8),
-    catchments: z.array(z.string().min(1).max(300)).max(60).default([]),
-    from_day: z.number().int().min(0),
-    days: z.number().int().min(1),
+    replaces: choiceRef.optional(),
+    name: z.string().trim().min(1).max(120).optional(),
+    layers: z.array(z.object({ layer: z.string().min(1).max(120), factor: z.number().min(0).max(5) })).min(1).max(8).optional(),
+    catchments: z.array(z.string().min(1).max(300)).max(60).optional(),
+    from_day: z.number().int().min(0).optional(),
+    days: z.number().int().min(1).optional(),
   }),
+  z.object({ kind: z.literal("remove"), ref: choiceRef }),
 ]);
 type Change = z.infer<typeof change>;
+type Placed = Exclude<Change, { kind: "remove" }>;
+
+/** A field a plain addition must give, and a replacement may leave to the choice it replaces. */
+function missing(field: string, kind: string): never {
+  throw new ToolError(
+    `A ${kind} change needs "${field}". Only a change that replaces a choice of the scenario (replaces: its ref) may leave a field out, to keep the choice's own.`,
+  );
+}
+
+/**
+ * The choice of the scenario a change names, or a refusal that says what can
+ * be named.
+ *
+ * Only a choice can be: a measure or capacity the planner placed. A starting
+ * condition is where the run starts and an event is what happens to the city;
+ * an option that took one out would be testing another scenario and calling
+ * it a response.
+ */
+function choiceNamed(open: OpenBench, named: string, kind: Change["kind"]): ChoiceStamp {
+  const ctx = open.runner.ctx;
+  const hit = open.choices.get(named.toLowerCase());
+  if (!hit) {
+    const stamp = open.stamps.find((s) => s.id === named);
+    if (stamp && isChoice(stamp)) return stamp as ChoiceStamp;
+    const listed = [...open.choices].map(([ref, s]) => `${ref}: ${choiceLine(s, ctx)}`);
+    const what = stamp
+      ? `"${named}" is ${["seed", "heat"].includes(stamp.kind) ? "an event" : "a starting condition"} of the scenario, not a choice`
+      : `The scenario holds no choice called "${named}"`;
+    throw new ToolError(
+      `${what}. An option replaces or removes only what the planner chose (a measure, capacity): starting conditions and events are what happens, and an option does not undo them. ` +
+        (listed.length ? `The scenario's choices are: ${listed.join("; ")}.` : "This scenario contains no choice, so there is nothing to replace or remove: add capacity or a measure instead."),
+    );
+  }
+  if (kind !== "remove" && hit.kind !== kind) {
+    throw new ToolError(
+      `${named} is ${hit.kind === "capacity" ? "capacity" : "a measure"} (${choiceLine(hit, ctx)}): it is replaced by a change of the same kind. To put ${kind === "capacity" ? "capacity" : "a measure"} in its place, remove it and add the new change, in the same option.`,
+    );
+  }
+  return hit;
+}
 
 function requireActivityOf(ctx: TwinContext, asked: string): string {
   const hit = ctx.activities.find((a) => a === asked) ?? ctx.activities.find((a) => fold(a) === fold(asked));
@@ -293,15 +387,26 @@ function requireActivityOf(ctx: TwinContext, asked: string): string {
   return hit;
 }
 
-/** One change, checked against the twin and written as the stamp the page would write. */
-function stampOf(c: Change, ctx: TwinContext, bench: OptionBench, id: string): Stamp {
+/**
+ * One change, checked against the twin and written as the stamp the page would
+ * write. `old` is the choice it replaces, when it replaces one: what the change
+ * does not say is kept from it.
+ */
+function stampOf(c: Placed, ctx: TwinContext, bench: OptionBench, id: string, old: ChoiceStamp | null): ChoiceStamp {
   const { horizon } = bench;
-  if (c.from_day >= horizon) {
-    throw new ToolError(`from_day ${c.from_day} is after the last day of the run: options are tested over ${horizon} days, numbered 0 to ${horizon - 1}.`);
+  const from = c.from_day ?? old?.start ?? missing("from_day", c.kind);
+  if (from >= horizon) {
+    throw new ToolError(`from_day ${from} is after the last day of the run: options are tested over ${horizon} days, numbered 0 to ${horizon - 1}.`);
   }
   if (c.kind === "capacity") {
-    const activity = requireActivityOf(ctx, c.activity ?? bench.activity);
-    const site = pick(ctx.facilities, c.site, "site");
+    const was = old?.kind === "capacity" ? old : null;
+    const activity = requireActivityOf(ctx, c.activity ?? was?.activity ?? bench.activity);
+    const site = c.site !== undefined ? pick(ctx.facilities, c.site, "site") : was ? ctx.facilities.find((f) => f.id === was.facility) : undefined;
+    if (!site) {
+      if (was) throw new ToolError(`The choice being replaced is at a site the twin no longer places on the map (${was.facility}). Name the site the units go to.`);
+      missing("site", c.kind);
+    }
+    const units = c.units ?? was?.amount ?? missing("units", c.kind);
     const held = site.capacity[activity] ?? 0;
     if (held <= 0) {
       const able = ctx.facilities.filter((f) => (f.capacity[activity] ?? 0) > 0);
@@ -313,11 +418,19 @@ function stampOf(c: Change, ctx: TwinContext, bench: OptionBench, id: string): S
             .join("; ")}${able.length > 12 ? "; …" : ""}.`,
       );
     }
-    if (c.units === 0) throw new ToolError("An option that changes no unit changes nothing. Give the number of units to add (or, negative, to close).");
-    if (-c.units > held) throw new ToolError(`${site.name} holds ${held} ${activity}: ${-c.units} cannot be closed there.`);
-    return { id, kind: "capacity", facility: site.id, activity, amount: c.units, start: c.from_day, days: Math.max(1, horizon - c.from_day) };
+    if (units === 0) {
+      throw new ToolError(
+        was
+          ? "A choice replaced by no unit is a choice removed: use a change of kind \"remove\" with its ref."
+          : "An option that changes no unit changes nothing. Give the number of units to add (or, negative, to close).",
+      );
+    }
+    if (-units > held) throw new ToolError(`${site.name} holds ${held} ${activity}: ${-units} cannot be closed there.`);
+    return { id, kind: "capacity", facility: site.id, activity, amount: units, start: from, days: Math.max(1, horizon - from) };
   }
-  const unknown = c.layers.filter((l) => !ctx.couplings.includes(l.layer));
+  const was = old?.kind === "measure" ? old : null;
+  const layers = c.layers ?? was?.layers ?? missing("layers", c.kind);
+  const unknown = layers.filter((l) => !ctx.couplings.includes(l.layer));
   if (unknown.length) {
     throw new ToolError(
       ctx.couplings.length
@@ -325,19 +438,27 @@ function stampOf(c: Change, ctx: TwinContext, bench: OptionBench, id: string): S
         : "The twin declares no contact layer, so no measure can be tested on it. Capacity can.",
     );
   }
-  const populations = c.catchments.length ? [...new Set(c.catchments.map((q) => pick(ctx.populations, q, "catchment").id))] : null;
+  // Catchments left unsaid: a replacement covers what the choice covered, an
+  // addition covers every catchment.
+  const moved = c.catchments !== undefined || !was;
+  const asked = c.catchments ?? [];
+  const populations = moved ? (asked.length ? [...new Set(asked.map((q) => pick(ctx.populations, q, "catchment").id))] : null) : was!.populations;
   return {
     id,
     kind: "measure",
-    label: c.name,
-    layers: c.layers,
-    at: null,
-    radiusKm: null,
+    label: c.name ?? was?.label ?? missing("name", c.kind),
+    layers,
+    // Where the planner dropped it on the map: kept while it covers the same catchments.
+    at: moved ? null : was!.at,
+    radiusKm: moved ? null : was!.radiusKm,
     populations,
-    start: c.from_day,
-    days: Math.max(1, Math.min(c.days, horizon - c.from_day)),
+    start: from,
+    days: Math.max(1, Math.min(c.days ?? was?.days ?? missing("days", c.kind), horizon - from)),
   };
 }
+
+/** The same stamp in other words: a replacement that changes nothing. */
+const sameChoice = (a: Stamp, b: Stamp) => JSON.stringify(bodyOf(a)) === JSON.stringify(bodyOf(b));
 
 /** A stamp, as a line the model and a person can both read. */
 function describeChange(s: Stamp, ctx: TwinContext): Record<string, unknown> {
@@ -372,7 +493,8 @@ const bodyOf = (s: Stamp): OptionStamp => {
 export const testOption: AnalystTool = {
   name: "test_option",
   description:
-    "Run one option through the simulation engine and read what it changes. An option is a label and one to four changes added on top of the open scenario: capacity (units of an activity added at a site from a day; negative closes units) or a measure (contact layers scaled in some catchments for some days). " +
+    "Run one option through the simulation engine and read what it changes. An option is a label and one to four changes to the open scenario. A change adds something: capacity (units of an activity added at a site from a day; negative closes units) or a measure (contact layers scaled in some catchments for some days). " +
+    "Or it acts on a choice the scenario already contains, named by the ref scenario_recipe gives it: 'replaces' puts this change in its place (say only what differs: other units, another day, another duration), and kind 'remove' takes it out. To test fewer units or another date than a choice of the scenario, replace that choice; do not stack a second change on top of it. " +
     "Returns the scenario as it is and the scenario with this option, side by side: peak occupancy, sites where somebody waits, patient-days waiting, first day somebody waits, and each site with a queue. " +
     `At most ${MAX_OPTIONS} options can be tested for one objective, and each takes the engine some seconds, so read first and test what the reading points to. Nothing is written: the scenario is unchanged until the person adds the option themselves.`,
   busy: "Testing an option in the engine",
@@ -385,7 +507,13 @@ export const testOption: AnalystTool = {
         items: {
           type: "object",
           properties: {
-            kind: { type: "string", enum: ["capacity", "measure"] },
+            kind: { type: "string", enum: ["capacity", "measure", "remove"], description: "capacity or measure: something placed. remove: a choice of the scenario taken out, named by ref." },
+            replaces: {
+              type: "string",
+              description:
+                "capacity or measure: the ref of a choice of the scenario of the same kind (scenario_recipe: choices[].ref) that this change takes the place of. Fields left out keep that choice's own value.",
+            },
+            ref: { type: "string", description: "remove: the ref of the choice of the scenario to take out." },
             site: { type: "string", description: "capacity: the site's id or name. It must already provide the activity." },
             activity: { type: "string", description: "capacity: the activity whose units change. Default: the activity the run reads." },
             units: { type: "integer", description: "capacity: units added from from_day until the end of the run. Negative closes units." },
@@ -404,7 +532,7 @@ export const testOption: AnalystTool = {
             from_day: { type: "integer", description: "First day it applies, counted from day 0 of the run." },
             days: { type: "integer", description: "measure: how many days it lasts." },
           },
-          required: ["kind", "from_day"],
+          required: ["kind"],
           additionalProperties: false,
         },
       },
@@ -429,12 +557,35 @@ export const testOption: AnalystTool = {
     const twinMs = Date.now() - startedAt;
     const { runner } = open;
     const callsBefore = runner.timings.length;
-    const option = input.changes.map((c, i) => stampOf(c, runner.ctx, bench, `option-${bench.tested.length + 1}-${i + 1}`));
-    const key = JSON.stringify(option.map(bodyOf));
+    // What the option writes, and what it takes out of the scenario.
+    const option: ChoiceStamp[] = [];
+    const retired: { old: ChoiceStamp; replacedBy: number | null }[] = [];
+    const moves: { does: OptionChange["does"]; now: ChoiceStamp | null; was: ChoiceStamp | null }[] = [];
+    input.changes.forEach((c, i) => {
+      const named = c.kind === "remove" ? c.ref : c.replaces;
+      const old = named === undefined ? null : choiceNamed(open, named, c.kind);
+      if (old && retired.some((r) => r.old.id === old.id)) {
+        throw new ToolError(`${named} is named twice in this option. A choice is replaced or removed once.`);
+      }
+      if (c.kind === "remove") {
+        retired.push({ old: old!, replacedBy: null });
+        moves.push({ does: "removes", now: null, was: old });
+        return;
+      }
+      const stamp = stampOf(c, runner.ctx, bench, `option-${bench.tested.length + 1}-${i + 1}`, old);
+      if (old && sameChoice(old, stamp)) {
+        throw new ToolError(`This replaces ${named} with itself (${choiceLine(old, runner.ctx)}), which changes nothing. Say what differs: the units, the day, the duration.`);
+      }
+      if (old) retired.push({ old, replacedBy: option.length });
+      moves.push({ does: old ? "replaces" : "adds", now: stamp, was: old });
+      option.push(stamp);
+    });
+    const key = JSON.stringify({ writes: option.map(bodyOf), retires: retired.map((r) => [r.old.id, r.replacedBy]) });
     if (bench.tested.includes(key)) throw new ToolError("This option was already tested for this objective: its result is in an earlier step. Test something different, or deliver.");
 
     const asItIs = await engineRun(() => open.asItIs());
-    const tested = await engineRun(() => runner.full(ScenarioRunner.withOption(open.stamps, option)));
+    const applied = ScenarioRunner.withOption(open.stamps, option, new Set(retired.map((r) => r.old.id)));
+    const tested = await engineRun(() => runner.full(applied));
     bench.tested.push(key);
 
     const before = new Map(asItIs.sites.map((s) => [s.id, s.break]));
@@ -446,12 +597,23 @@ export const testOption: AnalystTool = {
       return b;
     };
     const waits = tested.sites.filter((s) => s.break.firstDay !== null || was(s.id).firstDay !== null);
-    const basis = [...option.flatMap((s) => basisOfStamp(s, runner.ctx, "option")), ...measuredFor(option, runner.ctx)];
+    const basis: Basis[] = [
+      ...option.flatMap((s) => basisOfStamp(s, runner.ctx, "option")),
+      // Taking a choice out is as much a supposition as placing one.
+      ...retired.map((r) => ({ element: `Takes out of the scenario: ${choiceLine(r.old, runner.ctx)}`, evidence: "assumption" as const, from: "option" as const })),
+      ...measuredFor([...option, ...retired.map((r) => r.old)], runner.ctx),
+    ];
     const notes = [...new Set(tested.figures.notes)];
 
     const record: TestedOption = {
       label: input.label,
       stamps: option.map(bodyOf),
+      retires: retired.map((r) => ({ id: r.old.id, stamp: bodyOf(r.old), text: choiceLine(r.old, runner.ctx), replacedBy: r.replacedBy })),
+      changes: moves.map((m) => ({
+        does: m.does,
+        now: m.now ? choiceLine(m.now, runner.ctx) : null,
+        was: m.was ? choiceLine(m.was, runner.ctx) : null,
+      })),
       horizon: bench.horizon,
       activity: bench.activity,
       ranAt: tested.ranAt,
@@ -466,7 +628,13 @@ export const testOption: AnalystTool = {
     return new Recorded(
       {
         option: input.label,
-        changes: option.map((s) => describeChange(s, runner.ctx)),
+        changes: moves.map((m) =>
+          m.does === "adds"
+            ? { does: "adds", ...describeChange(m.now!, runner.ctx) }
+            : m.does === "replaces"
+              ? { does: "replaces", ...describeChange(m.now!, runner.ctx), instead_of: describeChange(m.was!, runner.ctx) }
+              : { does: "removes", ...describeChange(m.was!, runner.ctx) },
+        ),
         tested_over: { days: bench.horizon, activity: bench.activity },
         scenario_as_it_is: summariseVariant(asItIs.figures),
         with_this_option: summariseVariant(tested.figures),
@@ -480,7 +648,8 @@ export const testOption: AnalystTool = {
         rests_on: basis.map((b) => ({ element: b.element, evidence: b.evidence })),
         how_to_read:
           "Both columns are runs of the engine under the scenario's stated conditions, not forecasts. 'scenario_as_it_is' holds the choices the scenario already contains; " +
-          "'with_this_option' adds this option's changes to them. Occupancy stops at 100 %; the queue is what says somebody was turned away. " +
+          "'with_this_option' applies this option's changes to them: what it adds, and what it replaces or removes among those choices. " +
+          "Occupancy stops at 100 %; the queue is what says somebody was turned away. " +
           "The run knows nothing of staff, stocks or transfers between sites.",
       },
       record,
@@ -518,6 +687,7 @@ The comparison table the person sees is built from the test results themselves, 
 
 1. Understand the situation before proposing anything. If a run is on screen, read it (read_run: summary, then sites). Look at where the queue is and why: the site, the catchments whose patients go there, what the scenario already contains (scenario_recipe, get_site, compare_catchments). If you do not know the names this twin uses, call describe_twin first.
 2. Choose options that act on the mechanism you read. Capacity where the queue is, or at another site the same catchment's patients can go to; earlier or later; more or fewer units. A measure on a contact layer only if the scenario contains an outbreak and the twin declares that layer. Make the options genuinely different from each other unless the objective is about size or timing. Respect any limit the person stated (a number of beds, a date).
+   When the option is a choice the scenario already contains, done differently (fewer or more units, another day, another duration), replace that choice: read its ref in scenario_recipe and give it as "replaces", with only what differs. When the option is the scenario without one of its choices, remove it by its ref. Never shrink or move a choice by stacking a second change on top of it: the scenario would hold two stamps where the person means one. Starting conditions and events have no ref and cannot be replaced or removed.
 3. Test each option with test_option. At most three tests. If a test is refused, read why: a refused test does not count and tells you what to change.
 4. An option you did not test is not an option. An idea the engine cannot test (staff, stocks, transferring patients between sites: the twin holds none of them) belongs in limits, not in options.
 5. When the tests are done, call give_options once, on its own, with nothing else in that turn.
@@ -538,7 +708,7 @@ Most objectives take two to five reads and two or three tests. Do not call a too
 
 - You do not recommend, rank by preference, or call an option "the best". You may say which tested options meet the stated objective according to the runs, because that is reading a result. Choosing between them is the person's.
 - You do not present a run as a prediction. It is what the model gives under the scenario's stated conditions.
-- You do not claim anything was changed. test_option writes nothing; the scenario is as the person left it.
+- You do not claim anything was changed. test_option writes nothing, whether it adds, replaces or removes: the scenario is as the person left it.
 - You follow the system, not people. The twin holds counts and capacities, never a person's record.
 
 Write in the language the person wrote in, in plain words. Name sites and catchments as the twin names them.`;
@@ -609,6 +779,10 @@ export interface ProposedOption {
   step: string;
   label: string;
   stamps: OptionStamp[];
+  /** The scenario's choices it takes out: what "Add to scenario" deletes once the stamps are written. */
+  retires: RetiredChoice[];
+  /** What it adds, replaces and removes, as the screen says it. */
+  changes: OptionChange[];
   figures: OptionFigures;
   sites: TestedOption["sites"];
   basis: Basis[];
@@ -806,6 +980,8 @@ export function optionsClosing(ctx: AnalystContext, input: OptionsAsk): Closing<
               step: o.step,
               label: r.label,
               stamps: r.stamps,
+              retires: r.retires,
+              changes: r.changes,
               figures: r.withOption,
               sites: r.sites,
               basis: r.basis,

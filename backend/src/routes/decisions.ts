@@ -55,7 +55,8 @@ const decisionRoutes: FastifyPluginAsync = async (fastify) => {
         description:
           "Records that the person asking chose one of the options the analyst had the engine test. The body names " +
           "the journalled exchange (`exchangeId`, sent with the `done` line of `/analyst/options`) and the step that " +
-          "tested the option. Every figure of the record — the objective, the option's stamps, the run's figures with " +
+          "tested the option. Every figure of the record — the objective, the option's stamps, the choices of the " +
+          "scenario it replaced or removed (`expected.changes`, `expected.retires`), the run's figures with " +
           "and without the option, the arrivals day by day, the steps they come from — is copied by the server from " +
           "that exchange: the caller sends none, and an option that was not tested is refused. A decision is never " +
           "edited; revising one records another.",

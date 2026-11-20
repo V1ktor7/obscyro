@@ -1,8 +1,9 @@
 /**
  * Writes `src/services/scenario-run-parity.fixture.json`.
  *
- * The fixture is a small twin, a scenario, an option, and what the real engine
- * answered when the scenario was run with and without that option. The
+ * The fixture is a small twin, a scenario, two options, and what the real
+ * engine answered when the scenario was run as it is and with each of them:
+ * one that adds a stamp, one that replaces a choice the scenario holds. The
  * server's test and the page's test both replay it: each must send the engine
  * the recorded requests and read the recorded figures out of its answers. That
  * is how "the server and the page give the same figures" is held.
@@ -178,6 +179,17 @@ const OPTION = {
   overrides: [stamp("22222222-0000-4000-8000-000000000001", { kind: "capacity", facility: "site:lake", activity: "lit", amount: 6 }, 5, HORIZON - 5)],
 };
 
+/**
+ * An option that replaces a choice of the scenario: three beds at Nord from
+ * day 6, where the scenario opens five from day 8. Once a person adds it, the
+ * recipe holds the new stamp and no longer the old one.
+ */
+const REPLACEMENT = {
+  label: "Open 3 beds at Nord from day 6 instead of 5 from day 8",
+  retired: ["11111111-0000-4000-8000-000000000009"],
+  overrides: [stamp("33333333-0000-4000-8000-000000000001", { kind: "capacity", facility: "site:north", activity: "lit", amount: 3 }, 6, HORIZON - 6)],
+};
+
 // --- the real engine --------------------------------------------------------
 
 function engineOnce<T>(route: string, body: unknown): T {
@@ -210,6 +222,11 @@ async function main() {
   const both = [...OVERRIDES, ...OPTION.overrides];
   const optionDigest = await new ScenarioRunner(withOption, world, now).digest(stampsOf(both));
 
+  // The recipe as the page leaves it after a replacement: the new stamp in, the old one out.
+  const withReplacement = recordingEngine(engine);
+  const replaced = [...OVERRIDES.filter((o) => !REPLACEMENT.retired.includes(o.id)), ...REPLACEMENT.overrides];
+  const replacementDigest = await new ScenarioRunner(withReplacement, world, now).digest(stampsOf(replaced));
+
   const fixture = {
     about:
       "A recording of the real engine, replayed by backend/src/services/scenario-run.unit.test.ts and by " +
@@ -221,6 +238,14 @@ async function main() {
     ranAt: RAN_AT,
     asItIs: { overrides: OVERRIDES, calls: base.calls, digest: asItIs },
     withOption: { label: OPTION.label, added: OPTION.overrides, overrides: both, calls: withOption.calls, digest: optionDigest },
+    withReplacement: {
+      label: REPLACEMENT.label,
+      retired: REPLACEMENT.retired,
+      added: REPLACEMENT.overrides,
+      overrides: replaced,
+      calls: withReplacement.calls,
+      digest: replacementDigest,
+    },
   };
   writeFileSync(OUT, `${JSON.stringify(fixture)}\n`);
 
@@ -234,7 +259,8 @@ async function main() {
   });
   console.log("as it is   ", line(asItIs));
   console.log("with option", line(optionDigest));
-  console.log(`${base.calls.length} + ${withOption.calls.length} engine calls recorded -> ${path.relative(process.cwd(), OUT)}`);
+  console.log("replacement", line(replacementDigest));
+  console.log(`${base.calls.length} + ${withOption.calls.length} + ${withReplacement.calls.length} engine calls recorded -> ${path.relative(process.cwd(), OUT)}`);
 }
 
 main().catch((err) => {

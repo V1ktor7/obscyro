@@ -17,7 +17,7 @@ import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 
 import { fetchFollowUp, listDecisions, type Decision, type FollowUp, type OptionFigures } from "../../analyst-api";
-import { EvidenceBadge, LABEL } from "./analyst-parts";
+import { EvidenceBadge, LABEL, OptionChanges } from "./analyst-parts";
 import { people } from "./results";
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -168,6 +168,7 @@ function DecisionCard({ env, d, here }: { env: string; d: Decision; here: boolea
       <p className="text-[10.5px] text-ink-faint">
         From the run that tested the option (step {d.optionStep}): the result of a model under the scenario’s conditions, not a forecast.
       </p>
+      <OptionChanges changes={d.expected.changes} heading="What it did to the scenario" />
 
       <button type="button" aria-expanded={basisOpen} onClick={() => setBasisOpen((o) => !o)} className={cn(LABEL, "text-left hover:text-ink-body")}>
         What it rested on · {d.expected.basis.length} {basisOpen ? "▾" : "▸"}

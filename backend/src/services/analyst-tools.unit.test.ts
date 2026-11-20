@@ -250,7 +250,8 @@ test("a site is read by name, and two sites by one name is a question, not a gue
 test("in the scenario world a site says what the scenario adds there", async () => {
   const site = await call("get_site", { world: "scenario", site: "u1" }, ctxOf({ scenario: SCENARIO }));
   assert.deepEqual(site.scenario_changes_here, [
-    { what: "capacity", site: "Hôpital général du Lakeshore", site_id: "u1", activity: "litsantephysique", units_added: 60, from_day: 10 },
+    // With the name test_option uses to replace or remove it.
+    { ref: "choice-a", what: "capacity", site: "Hôpital général du Lakeshore", site_id: "u1", activity: "litsantephysique", units_added: 60, from_day: 10 },
   ]);
 });
 
@@ -277,6 +278,10 @@ test("the recipe sorts conditions, events, choices and network edits, with names
   ]);
   assert.deepEqual(out.events, [{ what: "outbreak", catchment: "RLS de l'Ouest-de-l'Île", people_sick: 500, on_day: 0 }]);
   assert.equal(out.choices[0].units_added, 60);
+  // Each choice has a name test_option can use to replace or remove it: letters, never a figure.
+  assert.deepEqual(out.choices.map((c: { ref: string }) => c.ref), out.choices.map((_: unknown, i: number) => `choice-${String.fromCharCode(97 + i)}`));
+  assert.equal(JSON.stringify([out.starting_conditions, out.events]).includes('"ref"'), false);
+  assert.match(out.how_to_read, /conditions and events have none/);
   assert.deepEqual(out.network_edits[0], {
     what: "site linked to a catchment",
     site: "Hôpital de Verdun",

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import type { DbClient } from "../lib/db.js";
 import { BadRequest, NotFound } from "../lib/errors.js";
-import type { OptionFigures, OptionStamp, ProposedOption } from "./analyst-options.js";
+import type { OptionChange, OptionFigures, OptionStamp, ProposedOption, RetiredChoice } from "./analyst-options.js";
 import { alignSeries, compareSeries, type Fit } from "./observed-series.js";
 import type { ScenarioOverride } from "./scenario-overrides.js";
 import type { Basis } from "./scenario-stamps.js";
@@ -39,6 +39,13 @@ export interface DecisionExpected {
   arrivals: Record<string, number[]>;
   /** What the run rests on: the option's own basis, then the scenario's. */
   basis: Basis[];
+  /**
+   * What the option does to the scenario, as the screen said it, and the
+   * choices it takes out. Absent from decisions recorded before an option
+   * could replace or remove a choice: those only added.
+   */
+  changes?: OptionChange[];
+  retires?: RetiredChoice[];
   mechanism: string;
   notTested: string[];
   notes: string[];
@@ -81,6 +88,7 @@ const figures = z.object({
   strandedWaitingDays: z.number().nullable(),
 });
 const basis = z.object({ element: z.string(), evidence: z.enum(["measured", "published", "assumption"]), from: z.enum(["twin", "scenario", "option", "engine"]) });
+const journalledStamp = z.object({ body: z.record(z.unknown()), start: z.number().int(), days: z.number().int() });
 const journalledProposal = z.object({
   objective: z.string(),
   horizon: z.number().int(),
@@ -92,7 +100,10 @@ const journalledProposal = z.object({
     z.object({
       step: z.string(),
       label: z.string(),
-      stamps: z.array(z.object({ body: z.record(z.unknown()), start: z.number().int(), days: z.number().int() })),
+      stamps: z.array(journalledStamp),
+      // Absent from exchanges journalled before an option could replace or remove a choice.
+      retires: z.array(z.object({ id: z.string(), stamp: journalledStamp, text: z.string(), replacedBy: z.number().int().nullable() })).default([]),
+      changes: z.array(z.object({ does: z.enum(["adds", "replaces", "removes"]), now: z.string().nullable(), was: z.string().nullable() })).default([]),
       figures,
       sites: z.array(z.record(z.unknown())),
       basis: z.array(basis),
@@ -140,6 +151,8 @@ export function decisionFromExchange(exchange: JournalledExchange, step: string)
       sites: option.sites as ProposedOption["sites"],
       arrivals: option.arrivals,
       basis: [...option.basis, ...proposal.data.basis],
+      changes: option.changes,
+      retires: option.retires as RetiredChoice[],
       mechanism: option.mechanism,
       notTested: option.notTested,
       notes: option.notes,

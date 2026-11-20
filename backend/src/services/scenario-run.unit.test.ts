@@ -36,6 +36,7 @@ const fixture = JSON.parse(readFileSync(new URL("./scenario-run-parity.fixture.j
   ranAt: string;
   asItIs: Recorded;
   withOption: Recorded & { label: string; added: ScenarioOverride[] };
+  withReplacement: Recorded & { label: string; retired: string[]; added: ScenarioOverride[] };
 };
 
 const world: ScenarioWorld = {
@@ -88,6 +89,43 @@ test("an option tested on the server gives the figures Run gives once its stamps
   assert.equal(before, 4);
   assert.deepEqual(engine.asked.slice(before), requests(fixture.withOption.calls).slice(-1));
   assert.equal(runner.calls, 5);
+});
+
+test("an option that replaces a choice gives the figures Run gives once the recipe holds the new stamp and not the old", async () => {
+  const added = stampsOf(fixture.withReplacement.added);
+  const scenario = stampsOf(fixture.asItIs.overrides);
+  const retired = new Set(fixture.withReplacement.retired);
+  // What the page holds after "Add to scenario": the new stamp written, the old one deleted.
+  const onThePage = stampsOf(fixture.withReplacement.overrides);
+
+  // The scenario holds five beds at Nord from day 8; the option makes it three from day 6.
+  assert.deepEqual(
+    scenario.filter((s) => retired.has(s.id)).map((s) => [s.kind, s.start, s.kind === "capacity" ? s.amount : null]),
+    [["capacity", 8, 5]],
+  );
+  const applied = ScenarioRunner.withOption(scenario, added, retired);
+  assert.deepEqual(applied, onThePage);
+  // One stamp for that choice, not the old one with a correction stacked on it.
+  assert.deepEqual(
+    applied.filter((s) => s.kind === "capacity").map((s) => [s.start, s.kind === "capacity" ? s.amount : null]),
+    [[6, 3]],
+  );
+
+  const engine = replayEngine([...fixture.asItIs.calls, ...fixture.withReplacement.calls]);
+  const runner = new ScenarioRunner(engine, world, now);
+  await runner.digest(scenario);
+  const before = engine.asked.length;
+  const digest = await runner.digest(applied);
+  assert.deepEqual(digest, fixture.withReplacement.digest);
+  // The run says something the scenario's own does not: other beds, another peak.
+  assert.notDeepEqual(digest.full.island, fixture.asItIs.digest.full.island);
+  // Still one pass: the events-only run holds no choice, replaced or not.
+  assert.deepEqual(engine.asked.slice(before), requests(fixture.withReplacement.calls).slice(-1));
+
+  // A fresh server, as the page after the click: the page's four calls, the same figures.
+  const fresh = replayEngine(fixture.withReplacement.calls);
+  assert.deepEqual(await new ScenarioRunner(fresh, world, now).digest(onThePage), fixture.withReplacement.digest);
+  assert.deepEqual(fresh.asked, requests(fixture.withReplacement.calls));
 });
 
 test("the pass with every choice, alone, gives the figures the two-pass run gives for it", async () => {

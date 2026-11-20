@@ -220,11 +220,36 @@ export interface OptionStamp {
   days: number;
 }
 
+/** A choice of the scenario an option takes out: replaced by one of its stamps, or removed. */
+export interface RetiredChoice {
+  /** The stamp's id in the scenario when the option was tested. */
+  id: string;
+  stamp: OptionStamp;
+  /** The choice as a line, written by the server from the stamp. */
+  text: string;
+  /** Position, in the option's stamps, of what takes its place; null when it is removed. */
+  replacedBy: number | null;
+}
+
+/** One thing an option does to the scenario, in the server's own words. */
+export interface OptionChange {
+  does: "adds" | "replaces" | "removes";
+  /** What is in the scenario once it is applied; null for a removal. */
+  now: string | null;
+  /** The scenario's choice it takes out; null for an addition. */
+  was: string | null;
+}
+
 export interface ProposedOption {
   /** The step that tested it: what a decision is recorded against. */
   step: string;
   label: string;
+  /** The stamps it writes: what it adds, and what it puts in place of a choice. */
   stamps: OptionStamp[];
+  /** The scenario's choices it takes out. Absent from an exchange journalled before an option could. */
+  retires?: RetiredChoice[];
+  /** What it adds, replaces and removes, in the order asked. */
+  changes?: OptionChange[];
   figures: OptionFigures;
   sites: { id: string; name: string; capacity: number; asItIs: RunDigestSiteBreak; withOption: RunDigestSiteBreak }[];
   basis: Basis[];
@@ -298,6 +323,9 @@ export interface DecisionExpected {
   sites: ProposedOption["sites"];
   arrivals: Record<string, number[]>;
   basis: Basis[];
+  /** What the option did to the scenario, and the choices it took out. Absent from older decisions, which only added. */
+  changes?: OptionChange[];
+  retires?: RetiredChoice[];
   mechanism: string;
   notTested: string[];
   notes: string[];

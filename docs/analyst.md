@@ -108,6 +108,10 @@ Une option est une étiquette et un à quatre changements :
 |---|---|
 | Capacité : des unités d'une activité, à un site, à partir d'un jour (négatif : des unités fermées) | Le site offre déjà cette activité ; on ne ferme pas plus qu'il n'a |
 | Mesure : des couches de contact multipliées, dans certains territoires, pendant des jours | Le jumeau déclare ces couches |
+| Remplacer un choix du scénario : la même capacité ou la même mesure, avec d'autres unités, un autre jour, une autre durée | Le choix est désigné par le nom que lui donne `scenario_recipe` ; c'est une capacité remplacée par une capacité, ou une mesure par une mesure |
+| Retirer un choix du scénario | Le choix est désigné par son nom |
+
+« 40 lits au lieu des 60 du scénario » est donc un seul tampon à +40 : le test tourne sans les 60 et avec les 40, et c'est ce que la recette contient une fois l'option appliquée. Seuls les choix (mesures, capacité) se remplacent ou se retirent. Les conditions de départ et les événements sont ce qui arrive : une option ne les défait pas.
 
 Ce qui vient du modèle et ce qui n'en vient pas :
 
@@ -116,6 +120,7 @@ Ce qui vient du modèle et ce qui n'en vient pas :
 | Le tableau : pic, sites avec une file, jours-patients d'attente, premier jour de file, pour le scénario tel quel et chaque option | Les runs du moteur, lus dans le relevé de chaque test. Jamais d'une phrase |
 | Le niveau de preuve de chaque élément : Measured, Published, Assumption | Le programme, d'après d'où vient l'élément (jumeau, scénario, option, règle du moteur) |
 | Les tampons qu'ajoute « Add to scenario » | Le test : ce sont ceux que le moteur a reçus |
+| « What it does to the scenario » : ce que l'option ajoute, remplace et retire, quand elle ne fait pas qu'ajouter | Le programme, à partir des tampons. Le bouton dit alors « Apply to scenario » |
 | Le mécanisme en une phrase, ce que le test ne dit pas, la lecture, les arbitrages, les limites | Le modèle, chaque chiffre contrôlé par le vérificateur |
 
 Ce que l'onglet ne fait pas, par construction : classer les options (elles restent dans l'ordre des tests), en lister une qui n'a pas été testée, en cacher une qui l'a été, écrire dans le scénario. Les arbitrages de valeur sont présentés à part, sous « Yours to weigh ».
@@ -283,7 +288,9 @@ Quatre réponses ont été relues par une personne et comparées au panneau Resu
 - Le run à l'écran n'est pas gardé au rechargement de la page ; il faut relancer Run. Les options testées non plus : ce qui reste, ce sont les décisions enregistrées et le journal.
 - Une option est faite de capacité et de mesures. Un transfert de patients, du personnel, un stock, un lien nouveau entre un site et un territoire ne se testent pas : le moteur ou le jumeau ne les portent pas. L'analyste les range dans les limites.
 - Une option est testée sur le scénario tel qu'il est au moment du test. Ajouter une option puis une autre donne un scénario qu'aucun test n'a couvert : l'écran prévient, et il faut redire l'objectif.
-- Une option ajoute des tampons ; elle n'en retire ni n'en remplace aucun. « 40 lits au lieu des 60 du scénario » se teste donc comme un tampon de −20 par-dessus les +60. Le résultat est le bon, mais l'ajouter au scénario laisse les deux tampons dans la recette au lieu d'un seul à +40.
+- Une option peut remplacer ou retirer un choix du scénario, mais pas une condition de départ ni un événement. Remplacer une capacité par une mesure se fait en deux changements de la même option : retirer l'une, ajouter l'autre.
+- Appliquer une option qui retire un choix se fait en deux écritures, le nouveau tampon puis le retrait de l'ancien, et non en une seule opération. Si la seconde échoue, la recette garde les deux tampons : l'écran le montre, et le retrait se fait à la main. Si le tampon à retirer n'est plus là au moment du clic, rien n'est écrit.
+- Le nom d'un choix (`choice-a`) vaut pour un échange. Une question suivante relit la recette et peut lui donner un autre nom.
 - Un objectif prend plusieurs minutes sur le jumeau de Montréal. Le premier test lance deux passes du moteur (le scénario tel quel, puis l'option) après avoir lu le jumeau et calculé la propagation ; les suivants, une seule. Mesuré en production le 2026-11-18, sur le scénario de démonstration et le même objectif (« How do we stop the queue at Lakeshore? »), trois options testées :
 
   | | Avant (trois passes au premier test) | Après (deux passes) |

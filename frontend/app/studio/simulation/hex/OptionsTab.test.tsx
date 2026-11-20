@@ -215,6 +215,74 @@ describe("the options tab", () => {
     expect((within(a).getByRole("button", { name: "Added to the scenario" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("says what an option replaces or removes, in the server's words, and applies rather than adds", async () => {
+    add.mockResolvedValue(undefined);
+    const fewer = option({
+      label: "40 beds at Lakeshore instead of 60",
+      retires: [{ id: "st-60", stamp: { body: { kind: "capacity", facility: "f:lake", activity: "lit", amount: 60 }, start: 10, days: 50 }, text: "+60 lit at Lakeshore from day 10", replacedBy: 0 }],
+      changes: [{ does: "replaces", now: "+40 lit at Lakeshore from day 10", was: "+60 lit at Lakeshore from day 10" }],
+      basis: [
+        { element: "+40 lit at Lakeshore from day 10, open and staffed", evidence: "assumption", from: "option" },
+        { element: "Takes out of the scenario: +60 lit at Lakeshore from day 10", evidence: "assumption", from: "option" },
+      ],
+    });
+    const without = option({
+      step: "s3",
+      label: "Without the school closure",
+      stamps: [],
+      retires: [{ id: "st-school", stamp: { body: { kind: "measure" }, start: 8, days: 10 }, text: "Schools closed in Centre, days 8 to 17", replacedBy: null }],
+      changes: [{ does: "removes", now: null, was: "Schools closed in Centre, days 8 to 17" }],
+    });
+    await tested([{ type: "done", result: result({ answer: proposal({ options: [fewer, without] }) }), exchangeId: "ex-1" }]);
+
+    const a = await screen.findByRole("region", { name: /^Option A: 40 beds at Lakeshore instead of 60/ });
+    expect(within(a).getByText("What it does to the scenario")).toBeTruthy();
+    expect(within(a).getAllByRole("listitem").map((li) => li.textContent)).toContain("Replaces +60 lit at Lakeshore from day 10 with +40 lit at Lakeshore from day 10");
+    // Taking a choice out is one of the things the option rests on, with its level.
+    expect(within(a).getAllByRole("listitem").map((li) => li.textContent)).toContain("AssumptionTakes out of the scenario: +60 lit at Lakeshore from day 10");
+    const b = screen.getByRole("region", { name: /^Option B: Without the school closure/ });
+    expect(within(b).getAllByRole("listitem").map((li) => li.textContent)).toContain("Removes Schools closed in Centre, days 8 to 17");
+
+    // "Add" would be the wrong word: it takes a choice out.
+    expect(within(a).queryByRole("button", { name: "Add to scenario" })).toBeNull();
+    fireEvent.click(within(a).getByRole("button", { name: "Apply to scenario" }));
+    await within(a).findByRole("button", { name: "Applied to the scenario" });
+    // The page is handed what to take out, by the id the test named.
+    expect(add.mock.calls[0]![0]).toMatchObject({ step: "s2", retires: [{ id: "st-60", replacedBy: 0 }] });
+    expect(within(a).getByText(/in place of the choices it replaced or removed\. Press Run/)).toBeTruthy();
+
+    // And the table says its columns are not all additions.
+    expect(screen.getByText(/a choice of the scenario replaced or removed/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /What every column rests on/ }));
+    expect(screen.getByText(/is in “As it is” and not in that option’s column/)).toBeTruthy();
+  });
+
+  it("writes nothing and says why when a choice the option replaces is gone from the scenario", async () => {
+    add.mockRejectedValue(new Error("the scenario no longer holds “+60 lit at Lakeshore from day 10”, which this option replaces. Nothing was written. State the objective again to test against the scenario as it is now."));
+    const fewer = option({
+      label: "40 beds at Lakeshore instead of 60",
+      retires: [{ id: "st-60", stamp: { body: { kind: "capacity" }, start: 10, days: 50 }, text: "+60 lit at Lakeshore from day 10", replacedBy: 0 }],
+      changes: [{ does: "replaces", now: "+40 lit at Lakeshore from day 10", was: "+60 lit at Lakeshore from day 10" }],
+    });
+    await tested([{ type: "done", result: result({ answer: proposal({ options: [fewer] }) }), exchangeId: "ex-1" }]);
+    const a = await screen.findByRole("region", { name: /^Option A/ });
+    fireEvent.click(within(a).getByRole("button", { name: "Apply to scenario" }));
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "“40 beds at Lakeshore instead of 60” was not applied: the scenario no longer holds “+60 lit at Lakeshore from day 10”, which this option replaces. Nothing was written. State the objective again to test against the scenario as it is now.",
+    );
+    // Still to do: the button did not turn into "Applied".
+    expect(within(a).getByRole("button", { name: "Apply to scenario" })).toBeTruthy();
+  });
+
+  it("shows no list of changes for an option that only adds: its card already says what it adds", async () => {
+    await tested([
+      { type: "done", result: result({ answer: proposal({ options: [option({ changes: [{ does: "adds", now: "+40 lit at Lakeshore from day 10", was: null }], retires: [] })] }) }), exchangeId: "ex-1" },
+    ]);
+    const a = await screen.findByRole("region", { name: /^Option A/ });
+    expect(within(a).queryByText("What it does to the scenario")).toBeNull();
+    expect(within(a).getByRole("button", { name: "Add to scenario" })).toBeTruthy();
+  });
+
   it("says so when the scenario was edited elsewhere after the tests", async () => {
     const view = await tested();
     await screen.findByRole("table");

@@ -272,7 +272,11 @@ const analystRoutes: FastifyPluginAsync = async (fastify) => {
           "sites with a queue, patient-days waiting, first day of queue), what each rests on with its level of " +
           "evidence (measured, published, assumption), a one-sentence mechanism, what the test does not say, and the " +
           "trade-offs left to the person — and `exchangeId`, which names this exchange when a decision is recorded " +
-          "from it. The figures of the comparison come from the runs, never from the model's text, and the model's " +
+          "from it. An option adds stamps, and may replace or remove a choice the scenario already holds (a measure " +
+          "or capacity, never a starting condition or an event): each option carries `changes`, what it adds, " +
+          "replaces and removes in the program's own words, and `retires`, the stamps of the scenario it takes out, " +
+          "by id. That is what the page deletes when the person applies the option; `stamps` is what it writes. " +
+          "The figures of the comparison come from the runs, never from the model's text, and the model's " +
           "text is checked against the steps like any answer. Nothing is written: the scenario is unchanged until " +
           "the person adds an option themselves. A run is the result of a model under stated conditions, not a forecast.",
         tags: ["analyst"],

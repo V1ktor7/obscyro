@@ -575,11 +575,16 @@ export class ScenarioRunner {
   }
 
   /**
-   * A scenario's stamps with an option's added, in the order the page will
+   * A scenario's stamps with an option applied, in the order the page will
    * hold them once a person adds the option: by the day each starts, the
    * scenario's own first among equals.
+   *
+   * `retired` names the scenario's stamps the option takes out, by id: a
+   * choice it replaces, or one it removes. The page does the same thing to the
+   * recipe (the new stamp is written, the old one deleted), so what is run
+   * here is what Run will send.
    */
-  static withOption(scenario: Stamp[], option: Stamp[]): Stamp[] {
-    return [...scenario, ...option].sort((a, b) => a.start - b.start);
+  static withOption(scenario: Stamp[], option: Stamp[], retired: ReadonlySet<string> = new Set()): Stamp[] {
+    return [...scenario.filter((s) => !retired.has(s.id)), ...option].sort((a, b) => a.start - b.start);
   }
 }

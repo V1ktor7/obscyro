@@ -61,6 +61,7 @@ const fixture = JSON.parse(
   ranAt: string;
   asItIs: Recorded;
   withOption: Recorded;
+  withReplacement: Recorded & { retired: string[]; added: ScenarioOverride[] };
 };
 
 const ctx = twinContext(fixture.twin);
@@ -165,5 +166,20 @@ describe("a scenario run on the page and on the server", () => {
     expect(asked).toEqual(requests(fixture.withOption.calls));
     expect(digest).toEqual(fixture.withOption.digest);
     expect(digest.full.sitesWithQueue).toBe(0);
+  });
+
+  it("gives the figures the analyst's test gave for a replacement, once the recipe holds the new stamp and not the old", async () => {
+    // What "Apply to scenario" leaves: the scenario's overrides, the replaced one deleted, the new one written.
+    const { retired, added, overrides } = fixture.withReplacement;
+    expect(overrides).toEqual([...fixture.asItIs.overrides.filter((o) => !retired.includes(o.id)), ...added]);
+    const beds = stampsOf(overrides).filter((s) => s.kind === "capacity");
+    // One stamp for that choice: three beds from day 6, where the scenario had five from day 8.
+    expect(beds.map((s) => [s.start, s.kind === "capacity" ? s.amount : null])).toEqual([[6, 3]]);
+
+    const asked = replay(fixture.withReplacement.calls);
+    const digest = await pageDigest(overrides);
+    expect(asked).toEqual(requests(fixture.withReplacement.calls));
+    expect(digest).toEqual(fixture.withReplacement.digest);
+    expect(digest.full.island).not.toEqual(fixture.asItIs.digest.full.island);
   });
 });
