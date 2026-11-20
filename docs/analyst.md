@@ -230,13 +230,13 @@ La maquette d'origine est `design/scenario-analyst.html`. Elle montre aussi un o
 
 ## Les questions de référence
 
-L'analyste est un modèle de langage : « ça a marché quand j'ai essayé » n'est pas un test. La même question peut être bien répondue un jour et mal le lendemain, après un changement de ses consignes ou de la description d'un outil. Seize questions de référence, sur le jumeau de Montréal et le scénario Omicron calé sur l'INSPQ, disent ce qu'une bonne réponse doit contenir.
+L'analyste est un modèle de langage : « ça a marché quand j'ai essayé » n'est pas un test. La même question peut être bien répondue un jour et mal le lendemain, après un changement de ses consignes ou de la description d'un outil. Dix-sept questions de référence, sur le jumeau de Montréal et le scénario Omicron calé sur l'INSPQ, disent ce qu'une bonne réponse doit contenir.
 
 ```bash
 # backend/ — à la main, jamais dans la suite de tests : appelle la vraie API
 npm run eval:analyst
 npm run eval:analyst -- --times 2 --show
-npm run eval:analyst -- --only three-sites,two-catchments,in-french
+npm run eval:analyst -- --only three-sites,two-catchments,in-french,run-waiting-by-site
 ```
 
 **La clé.** Le script agit comme une personne : il lui faut une clé d'API Obscyro d'un utilisateur qui peut lire l'environnement. Elle se crée sur la page des clés du compte (`/app/keys`) et s'y révoque ensuite. Le script la lit dans `OBSCYRO_API_KEY` si la variable existe ; sinon il la demande au terminal, tapée ou collée sans s'afficher. C'est la façon à préférer : la clé n'est alors écrite nulle part, ni dans un fichier, ni dans l'historique du terminal. Elle n'a sa place ni dans le dépôt, ni dans `backend/.env`, ni dans un journal, et le script ne l'imprime jamais.
@@ -265,7 +265,7 @@ npm run eval:analyst -- --only three-sites,two-catchments,in-french
 Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une personne, qui lit les réponses avec `--show`.
 
 - Chaque question est rejouée deux fois par défaut : un jeu qui passe une fois n'a pas montré qu'il passe.
-- Trois questions ont été ajoutées après le premier rejeu réel, pour ce qu'il avait montré de fragile : trois sites cités avec un chiffre chacun (`three-sites`), deux territoires comparés (`two-catchments`), une question posée en français (`in-french`).
+- Quatre questions ont été ajoutées après le premier rejeu réel, pour ce qu'il avait montré de fragile : trois sites cités avec un chiffre chacun (`three-sites`), les sites d'un run avec leur attente (`run-waiting-by-site`), deux territoires comparés (`two-catchments`), une question posée en français (`in-french`). Leurs faits attendus ont été relevés en production le 2026-11-20.
 - Le script sort en erreur dès qu'une question échoue : il peut servir de garde avant de changer les consignes ou un outil.
 - Les faits attendus sont dans le code (`QUESTIONS`). Quand le jumeau ou le scénario change, c'est la question qu'on corrige.
 
@@ -286,7 +286,7 @@ L'effort reste à `medium` : à cette durée il n'y a rien à gagner à le baiss
 
 Ce rejeu a été lancé depuis la page, dans le navigateur, avec le même code de jugement (`judge`, `QUESTIONS`) que le script, et le résumé du run venait de la page elle-même. Il portait sur les treize questions d'alors.
 
-Depuis le 2026-11-20, le script n'a plus besoin de rien de préparé à la main : le serveur fait le run, et la clé se donne au terminal. **Il reste à le lancer une fois contre la production, deux passes, et à remplacer ce tableau par son résultat** : c'est une personne qui détient la clé, pas un outil.
+Depuis le 2026-11-20, le script n'a plus besoin de rien de préparé à la main : le serveur fait le run, et la clé se donne au terminal. Le run fait par le serveur a été vérifié en production ce jour-là : en 64 secondes, il rend les chiffres du panneau Result (94 % et 93 % au pic, 8 puis 3 sites sur 34 avec une file, 7 316 puis 267 jours-patients d'attente) et l'ordre des files que les questions attendent. **Il reste à le lancer une fois contre la production, deux passes, et à remplacer ce tableau par son résultat** : c'est une personne qui détient la clé, pas un outil.
 
 Quatre réponses ont été relues par une personne et comparées au panneau Result : l'ordre des files, le résumé des choix, le cas sans run, et la question à laquelle l'outil ne peut pas répondre.
 

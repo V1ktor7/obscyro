@@ -130,7 +130,19 @@ test("a question asked in French is answered in French, with figures written the
   assert.deepEqual(judge(q, read("get_site", "Lakeshore has 234 acute beds and serves 225,710 residents.")), ['does not mention "lits"']);
 });
 
+test("the sites of a run each keep their own waiting", () => {
+  const q = question("run-waiting-by-site");
+  assert.equal(q.needsRun, true);
+  const good =
+    "With your choices three sites still have a queue. Centre d'hébergement Camille-Lefebvre has 195 patient-days of waiting. Hôpital Maisonneuve-Rosemont has 43. Hôpital Douglas has 28.";
+  assert.deepEqual(judge(q, read("read_run", good)), []);
+  const swapped =
+    "With your choices three sites still have a queue. Centre d'hébergement Camille-Lefebvre has 43 patient-days of waiting. Hôpital Maisonneuve-Rosemont has 195. Hôpital Douglas has 28.";
+  assert.deepEqual(judge(q, read("read_run", swapped)), ["does not give 195 for Camille-Lefebvre", "does not give 43 for Maisonneuve-Rosemont"]);
+});
+
 test("the set now has the questions the first real replay showed were missing", () => {
+  assert.equal(QUESTIONS.length, 17);
   for (const id of ["three-sites", "two-catchments", "in-french"]) assert.ok(QUESTIONS.some((q) => q.id === id), id);
   // None of them needs a run: they are asked whether or not one was made.
   assert.equal(QUESTIONS.filter((q) => ["three-sites", "two-catchments", "in-french"].includes(q.id)).some((q) => q.needsRun), false);

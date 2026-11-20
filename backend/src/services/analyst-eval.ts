@@ -129,8 +129,9 @@ export function judge(e: Expectation, r: AnswerLike): string[] {
  * The reference set.
  *
  * Facts come from the Montréal twin and the calibrated Omicron scenario as they
- * stood when this was written (2026-11-17): the scenario's own recipe, and the
- * run the Result panel shows for it. A figure here that the twin no longer
+ * stood when this was written (2026-11-17; the questions added on 2026-11-20
+ * were read off production that day): the scenario's own recipe, and the run
+ * the Result panel shows for it, which is also the run the server makes. A figure here that the twin no longer
  * holds is a question to fix, not an answer to blame.
  */
 export const QUESTIONS: Expectation[] = [
@@ -259,6 +260,20 @@ export const QUESTIONS: Expectation[] = [
     needsRun: true,
     tools: ["read_run"],
     figures: ["8", "34", "3"],
+  },
+  {
+    // Three sites of the run, each with its own waiting: the figures of a run
+    // are where a swap between two names was first seen.
+    id: "run-waiting-by-site",
+    question: "With my choices, which sites still have a queue, and how many patient-days of waiting at each?",
+    looking: "scenario",
+    needsRun: true,
+    tools: ["read_run"],
+    pairs: [
+      ["Camille-Lefebvre", "195"],
+      ["Maisonneuve-Rosemont", "43"],
+      ["Douglas", "28"],
+    ],
   },
   {
     id: "run-share",
