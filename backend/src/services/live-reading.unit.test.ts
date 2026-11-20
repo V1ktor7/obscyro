@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import type Anthropic from "@anthropic-ai/sdk";
+
 import { feedFrom, type FeedAlertRow } from "./alert-feed.js";
 import { READ_TOOLS, ToolError, type AnalystContext } from "./analyst-tools.js";
 import { Ledger } from "./analyst-verify.js";
 import { ageOfValue, alertsNow, duration, shown, unitNow, type LiveReading, type LiveSignal } from "./live-reading.js";
 import type { EnvInstanceRow, EnvLinkRow } from "./ontology.js";
-import { askClosing } from "./analyst.js";
+import { ANALYST_MODEL, ask, askClosing, type AnalystModel } from "./analyst.js";
 import { preparedQuestion, situationOf } from "./situation.js";
 import type { SimRole } from "./property-schema.js";
 import type { MetricDef } from "./twin-metrics.js";
@@ -373,4 +375,76 @@ test("the analyst is told what the person has in front of them, in names the ser
   // Asked from the Scenarios map, as before: nothing is added.
   const plain = askClosing(ctxOf(live()), { question: "What is open here?", looking: "reality" }).opening;
   assert.doesNotMatch(plain, /page of the Studio|unit selected|signal open/);
+});
+
+// ---------------------------------------------------------------------------
+// The whole exchange, with a model that says what the test tells it to.
+// ---------------------------------------------------------------------------
+
+type Message = Anthropic.Beta.BetaMessage;
+type Block = Anthropic.Beta.BetaContentBlock;
+
+let calls = 0;
+const use = (name: string, input: unknown): Block => ({ type: "tool_use", id: `tu_${++calls}`, name, input }) as Block;
+const turn = (content: Block[]): Message =>
+  ({
+    id: "msg",
+    type: "message",
+    role: "assistant",
+    model: ANALYST_MODEL,
+    content,
+    stop_reason: "tool_use",
+    stop_sequence: null,
+    usage: { input_tokens: 100, output_tokens: 20, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+  }) as unknown as Message;
+const scripted = (turns: Message[]): AnalystModel => ({
+  async create() {
+    const next = turns.shift();
+    if (!next) throw new Error("The script ran out: the loop asked for a turn the test did not expect.");
+    return next;
+  },
+});
+const give = (paragraphs: { text: string; sources: string[] }[], limits: string[] = []) =>
+  use("give_answer", { paragraphs, assumptions: [], limits, follow_ups: [], focus_sites: [] });
+
+const OPEN_NOW = { question: "What is open right now, and where?", looking: "reality" as const };
+
+test("asked what is open right now, the analyst answers from the alert list, citing its step, every figure traced", async () => {
+  const model = scripted([
+    turn([use("list_alerts", {})]),
+    turn([
+      give(
+        [
+          { text: "Three alerts are open. The worst is at Chirurgie: occupancy is at 100 %, the alert has been open for 3 h, and the value was read 37 min ago. Its signal is at Triage, step 1 of 4.", sources: ["s1"] },
+          { text: "Hôpital du Lac is at 57 %, a value read at least 2 h ago because one of its sources published no time. At Médecine the value is 33 % and its age is unknown.", sources: ["s1"] },
+        ],
+        ["There is no history: this is what is open now, not what was open earlier."],
+      ),
+    ]),
+  ]);
+  const out = await ask(model, ctxOf(live()), OPEN_NOW);
+
+  assert.equal(out.status, "answered");
+  assert.equal(out.verified, true);
+  assert.deepEqual(out.struck, []);
+  assert.deepEqual(
+    out.steps.map((s) => [s.id, s.tool, s.ok]),
+    [["s1", "list_alerts", true]],
+  );
+  assert.deepEqual(
+    out.answer!.paragraphs.map((p) => p.sources),
+    [["s1"], ["s1"]],
+  );
+  assert.match(out.answer!.paragraphs[0]!.text, /100 %.*open for 3 h.*read 37 min ago/);
+});
+
+test("a live figure the alert list does not hold is taken out of the answer", async () => {
+  const wrong = () => turn([give([{ text: "Chirurgie is at 100 % and Médecine is at 41 %.", sources: ["s1"] }])]);
+  // Sent back twice, then delivered with the figure nobody could trace struck from it.
+  const out = await ask(scripted([turn([use("list_alerts", {})]), wrong(), wrong(), wrong()]), ctxOf(live()), OPEN_NOW);
+  assert.equal(out.status, "answered");
+  assert.equal(out.verified, false);
+  assert.deepEqual(out.struck.flatMap((f) => f.figures), ["41 %"]);
+  assert.doesNotMatch(out.answer!.paragraphs[0]!.text, /41/);
+  assert.match(out.answer!.paragraphs[0]!.text, /100 %/);
 });

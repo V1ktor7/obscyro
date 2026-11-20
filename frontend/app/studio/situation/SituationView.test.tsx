@@ -200,6 +200,14 @@ describe("the situation card", () => {
     const line = await screen.findByText(/no alert rule exists in this project, so nothing can open/);
     // Said once, and not beside a count of rules that would contradict it.
     expect(line.textContent).not.toMatch(/alert rules? in this project/);
+    // No open alert, with no rule that could have opened one, is not offered as good news.
+    cleanup();
+    api.getSituation.mockResolvedValue(
+      card({ alert: null, alertRules: 0, unit: unit({ open_alerts: [] }), checked: { at: null, says: "no alert rule exists in this project, so nothing can open" } }),
+    );
+    render(<SituationView />);
+    expect(await screen.findByText(/No alert is open at this unit, and none could be: this project has no alert rule\. That is not a sign that nothing is wrong\./)).toBeTruthy();
+    expect(screen.queryByText(/That is what the rules saw when they were last checked/)).toBeNull();
     expect(screen.queryByRole("region", { name: "The alert" })).toBeNull();
   });
 

@@ -252,7 +252,11 @@ export default function SituationView() {
               </section>
             ) : u && !main ? (
               <section aria-label="Open alerts at this unit" className={cn(CARD, "p-3")}>
-                <p className="text-[12px] text-ink-body">No alert is open at this unit. That is what the rules saw when they were last checked.</p>
+                <p className="text-[12px] text-ink-body">
+                  {card.alertRules === 0
+                    ? "No alert is open at this unit, and none could be: this project has no alert rule. That is not a sign that nothing is wrong."
+                    : "No alert is open at this unit. That is what the rules saw when they were last checked."}
+                </p>
               </section>
             ) : null}
 
