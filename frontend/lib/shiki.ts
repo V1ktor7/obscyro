@@ -10,10 +10,7 @@ const LANGS: BundledLanguage[] = [
   "sql",
 ];
 
-/** MDX / docs and general inline examples on light UI. */
-const THEME_LIGHT: BundledTheme = "github-light";
-
-/** Hero / Features code panels on black background (readable tokens). */
+/** Every code block is on a dark panel (`--code-bg`): one theme, with tokens that read on it. */
 const THEME_DARK_PANEL: BundledTheme = "github-dark-default";
 
 let highlighterPromise: Promise<Highlighter> | null = null;
@@ -22,7 +19,7 @@ async function getHighlighter(): Promise<Highlighter> {
   if (!highlighterPromise) {
     highlighterPromise = import("shiki").then((shiki) =>
       shiki.createHighlighter({
-        themes: [THEME_LIGHT, THEME_DARK_PANEL],
+        themes: [THEME_DARK_PANEL],
         langs: LANGS,
       }),
     );
@@ -37,11 +34,11 @@ export async function highlight(
   const hl = await getHighlighter();
   return hl.codeToHtml(code, {
     lang: LANGS.includes(lang as BundledLanguage) ? (lang as BundledLanguage) : "text",
-    theme: THEME_LIGHT,
+    theme: THEME_DARK_PANEL,
   });
 }
 
-/** Syntax colors tuned for `--code-bg` marketing blocks (Hero, Features). */
+/** The same theme, kept under its older name for the blocks that asked for it. */
 export async function highlightDarkPanel(
   code: string,
   lang: BundledLanguage | "text" = "text",

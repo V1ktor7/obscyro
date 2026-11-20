@@ -317,8 +317,8 @@ export default function StudioShell({ children }: { children: ReactNode }) {
      <AlertFeedProvider env={selectedEnv} enabled={hasKey}>
       {/*
         The colours, the type and the square corners all come from the theme
-        (`.theme-g100` in globals.css, set on the element that wraps the
-        Studio). The shell is the ground: panels sit one step lighter on it.
+        (`:root` in globals.css). The shell is the ground: panels sit one step
+        lighter on it.
       */}
       <div className="flex h-screen flex-col bg-canvas text-ink">
         <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line bg-canvas px-4">

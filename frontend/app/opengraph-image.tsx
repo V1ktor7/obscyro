@@ -16,8 +16,8 @@ export default function Image() {
           flexDirection: "column",
           justifyContent: "space-between",
           padding: "80px",
-          backgroundColor: "#0a0a0a",
-          color: "#ededed",
+          backgroundColor: "#161616",
+          color: "#f4f4f4",
           fontFamily: "system-ui, -apple-system, sans-serif",
           backgroundImage:
             "linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px)",
@@ -26,8 +26,8 @@ export default function Image() {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="9" stroke="#ededed" strokeWidth="1.6" />
-            <circle cx="12" cy="12" r="4.5" stroke="#ededed" strokeOpacity="0.45" strokeWidth="1.6" />
+            <circle cx="12" cy="12" r="9" stroke="#f4f4f4" strokeWidth="1.6" />
+            <circle cx="12" cy="12" r="4.5" stroke="#f4f4f4" strokeOpacity="0.45" strokeWidth="1.6" />
           </svg>
           <span style={{ fontSize: 28, fontWeight: 600, letterSpacing: -0.5 }}>
             obscyro
@@ -48,7 +48,7 @@ export default function Image() {
             <br />
             for Health Networks
           </h1>
-          <p style={{ fontSize: 28, color: "#a1a1aa", margin: 0, maxWidth: 900 }}>
+          <p style={{ fontSize: 28, color: "#c6c6c6", margin: 0, maxWidth: 900 }}>
 One ontology, a digital twin, and responses ranked by dominance.
           </p>
         </div>
@@ -59,7 +59,7 @@ One ontology, a digital twin, and responses ranked by dominance.
             justifyContent: "space-between",
             alignItems: "center",
             fontSize: 18,
-            color: "#a1a1aa",
+            color: "#c6c6c6",
             fontFamily: "ui-monospace, SFMono-Regular, monospace",
             textTransform: "uppercase",
             letterSpacing: 4,

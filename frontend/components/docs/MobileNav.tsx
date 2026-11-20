@@ -55,7 +55,7 @@ export default function MobileNav() {
             type="button"
             aria-label={t("docs.closeMenu")}
             onClick={() => setOpen(false)}
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
           />
           <aside className="absolute left-0 top-0 flex h-full w-72 max-w-[85vw] flex-col border-r border-border-subtle bg-bg-primary shadow-xl">
             <div className="flex h-14 items-center justify-between border-b border-border-subtle px-4">

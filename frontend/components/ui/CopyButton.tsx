@@ -29,7 +29,7 @@ export default function CopyButton({
       onClick={onClick}
       aria-label={copied ? "Copied" : "Copy"}
       className={cn(
-        "inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-black/40 text-white/70 backdrop-blur transition-colors hover:bg-black/60 hover:text-white",
+        "inline-flex h-8 w-8 items-center justify-center rounded-md border border-surface/10 bg-black/60 text-white/70 backdrop-blur transition-colors hover:bg-black/60 hover:text-white",
         className,
       )}
     >

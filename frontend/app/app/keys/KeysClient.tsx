@@ -97,7 +97,7 @@ export default function KeysClient() {
       </header>
 
       {newRawKey ? (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+        <div className="rounded-lg border border-warn/30 bg-warn/10 p-4">
           <p className="mb-2 text-sm font-medium">{t("signin.keyCreatedOnce")}</p>
           <code className="block break-all rounded-md border border-border-subtle bg-bg-primary px-3 py-2 font-mono text-xs">
             {newRawKey}
@@ -142,7 +142,7 @@ export default function KeysClient() {
                 <button
                   type="button"
                   onClick={() => onRevoke(k.id)}
-                  className="shrink-0 rounded-md p-2 text-fg-secondary hover:bg-bg-tertiary hover:text-rose-600"
+                  className="shrink-0 rounded-md p-2 text-fg-secondary hover:bg-bg-tertiary hover:text-danger"
                   aria-label={t("app.keys.revoke")}
                 >
                   <Trash2 className="h-4 w-4" />
@@ -173,7 +173,7 @@ export default function KeysClient() {
             )}
           </Button>
         </form>
-        {error ? <p className="mt-2 text-sm text-rose-700">{error}</p> : null}
+        {error ? <p className="mt-2 text-sm text-danger-ink">{error}</p> : null}
       </section>
 
       <section className="rounded-xl border border-border-subtle bg-bg-secondary p-5 sm:p-6">

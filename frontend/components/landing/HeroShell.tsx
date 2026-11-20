@@ -35,8 +35,8 @@ export default function HeroShell() {
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(ellipse 58% 34% at 50% 46%, rgba(255,255,255,0.94) 0%, rgba(255,255,255,0.72) 46%, rgba(255,255,255,0.18) 78%, rgba(255,255,255,0) 100%)," +
-            "linear-gradient(to bottom, rgba(255,255,255,0) 72%, rgba(255,255,255,1) 100%)",
+            "radial-gradient(ellipse 58% 34% at 50% 46%, rgba(22,22,22,0.94) 0%, rgba(22,22,22,0.72) 46%, rgba(22,22,22,0.18) 78%, rgba(22,22,22,0) 100%)," +
+            "linear-gradient(to bottom, rgba(22,22,22,0) 72%, rgba(22,22,22,1) 100%)",
         }}
         aria-hidden
       />

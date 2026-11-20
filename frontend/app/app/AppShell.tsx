@@ -185,7 +185,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
                   type="button"
                   aria-label={t("app.closeMenu")}
                   onClick={() => setDrawerOpen(false)}
-                  className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                  className="absolute inset-0 bg-black/60 backdrop-blur-sm"
                 />
                 <aside className="absolute right-0 top-0 flex h-full w-72 max-w-[85vw] flex-col border-l border-border-subtle bg-bg-primary shadow-xl">
                   <div className="flex h-14 items-center justify-between border-b border-border-subtle px-4">

@@ -6,8 +6,8 @@ import typography from "@tailwindcss/typography";
  *
  * The variables hold three numbers ("38 38 38"), not a hex value, so that an
  * opacity suffix (`bg-surface/95`, `border-danger/40`) still works. Their
- * values are in `app/globals.css`: the light ones on `:root`, the Studio's on
- * `.theme-g100`.
+ * values are in `app/globals.css`, on `:root`: one theme for the Studio and the
+ * public pages.
  */
 const studio = (name: string) => `rgb(var(--s-${name}) / <alpha-value>)`;
 
@@ -17,7 +17,7 @@ const studio = (name: string) => `rgb(var(--s-${name}) / <alpha-value>)`;
  * A filled button wants the deep one (white text has to stay readable on it), a
  * link wants the pale one (it is text on a dark panel), and a one-pixel outline
  * wants the one in between. The class name stays `brand` everywhere; what it
- * gives depends on what is being painted. On `:root` the three are the same.
+ * gives depends on what is being painted.
  */
 const brandText = { brand: { DEFAULT: studio("brand-text"), deep: studio("brand-text-deep") } };
 const brandEdge = { brand: { DEFAULT: studio("brand-edge"), deep: studio("brand-text") } };
@@ -46,11 +46,10 @@ const config: Config = {
       colors: {
         // --- Studio palette -------------------------------------------------
         //
-        // Every colour the Studio paints with has a name here and a value in
+        // Every colour the product paints with has a name here and a value in
         // `app/globals.css`. A screen never writes a hex value: it names a
-        // role, and the theme says what that role looks like. The Studio runs
-        // on the dark theme (`.theme-g100`, IBM Carbon Gray 100); the light
-        // values on `:root` are what the public site's product tour draws with.
+        // role, and the theme (IBM Carbon Gray 100, dark) says what that role
+        // looks like. The public pages use the same roles.
         ink: {
           DEFAULT: studio("ink"), // headings, primary text
           body: studio("ink-body"),
@@ -139,9 +138,9 @@ const config: Config = {
       stroke: brandEdge,
       // A fill that carries white text: the pale purple of `scenario` cannot.
       backgroundColor: { scenario: { DEFAULT: studio("scenario-fill") } },
-      // The Studio's corners are square. Each radius reads a variable the theme
-      // sets to zero, and falls back to Tailwind's own value everywhere else.
-      // `rounded-full` is untouched: a dot and a pill stay round.
+      // Corners are square. Each radius reads a variable the theme sets to
+      // zero (Tailwind's own value is only the fallback). `rounded-full` is
+      // untouched: a dot and a pill stay round.
       borderRadius: {
         sm: "var(--radius-sm, 0.125rem)",
         DEFAULT: "var(--radius, 0.25rem)",

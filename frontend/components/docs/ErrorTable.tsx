@@ -7,11 +7,11 @@ interface ErrorRowProps {
 }
 
 const STATUS_COLORS: Record<number, string> = {
-  400: "text-rose-500",
-  401: "text-rose-500",
-  404: "text-rose-500",
-  429: "text-rose-500",
-  500: "text-rose-500",
+  400: "text-danger",
+  401: "text-danger",
+  404: "text-danger",
+  429: "text-danger",
+  500: "text-danger",
 };
 
 function Row({ status, code, children }: ErrorRowProps) {

@@ -114,10 +114,10 @@ export default function ProductTour({
 
   return (
     <div ref={hostRef} className={className}>
-      <div className="overflow-hidden border border-line bg-white">
+      <div className="overflow-hidden border border-line bg-surface">
         {/* Chrome, straight from the Studio: a 56px icon rail and a thin
             header. Recognition is the whole point of the frame. */}
-        <div className="flex items-center gap-3 border-b border-line bg-white px-4 py-2.5">
+        <div className="flex items-center gap-3 border-b border-line bg-surface px-4 py-2.5">
           <span className="text-[0.8125rem] font-medium lowercase tracking-tight text-ink">
             obscyro
           </span>
@@ -129,7 +129,7 @@ export default function ProductTour({
         </div>
 
         <div className="flex">
-          <div className="flex w-11 shrink-0 flex-col items-center gap-1 border-r border-line bg-white py-3 sm:w-14">
+          <div className="flex w-11 shrink-0 flex-col items-center gap-1 border-r border-line bg-surface py-3 sm:w-14">
             {RAIL.map((Icon, i) => {
               const cls =
                 "flex h-8 w-8 items-center justify-center transition-colors sm:h-9 sm:w-9 " +
@@ -197,7 +197,7 @@ export default function ProductTour({
         <div className="mt-5 flex justify-center">
           <Link
             href={links[step]}
-            className="group inline-flex items-center gap-1.5 text-[0.875rem] font-medium text-accent transition-colors hover:text-[#1f5fbd]"
+            className="group inline-flex items-center gap-1.5 text-[0.875rem] font-medium text-brand transition-colors hover:text-brand-deep"
           >
             {exploreLabel ? `${exploreLabel} ` : ""}
             {labels[step]}
@@ -225,7 +225,7 @@ function DataScreen({ t }: { t: number }) {
   const rows = 8;
   return (
     <div className="flex h-full gap-3">
-      <ul className="hidden w-48 shrink-0 flex-col border border-line bg-white sm:flex">
+      <ul className="hidden w-48 shrink-0 flex-col border border-line bg-surface sm:flex">
         {sets.map((s, i) => (
           <li
             key={s}
@@ -238,7 +238,7 @@ function DataScreen({ t }: { t: number }) {
           </li>
         ))}
       </ul>
-      <div className="min-w-0 flex-1 border border-line bg-white">
+      <div className="min-w-0 flex-1 border border-line bg-surface">
         <div className="flex gap-3 border-b border-line px-3 py-1.5">
           {["Installation", "Civières", "Occupées", "Mise à jour"].map((h) => (
             <span key={h} className="flex-1 truncate text-[0.625rem] font-medium text-ink-muted">
@@ -304,7 +304,7 @@ function PipelineScreen({ t }: { t: number }) {
   const into = (i: number) => ({ x: nodes[i]!.x, y: nodes[i]!.y + BH / 2 });
 
   return (
-    <div className="relative h-full border border-line bg-white">
+    <div className="relative h-full border border-line bg-surface">
       <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full">
         {edges.map(([a, b], i) => {
           const on = t * edges.length > i;
@@ -316,7 +316,7 @@ function PipelineScreen({ t }: { t: number }) {
               key={i}
               d={`M${p0.x},${p0.y} C${mid},${p0.y} ${mid},${p1.y} ${p1.x},${p1.y}`}
               fill="none"
-              stroke={on ? "#2d72d2" : "#d3d8de"}
+              stroke={on ? "#4589ff" : "#393939"}
               strokeWidth={on ? 1.4 : 1}
             />
           );
@@ -330,8 +330,8 @@ function PipelineScreen({ t }: { t: number }) {
                 y={n.y}
                 width={BW}
                 height={BH}
-                fill="#fff"
-                stroke={on ? "#2d72d2" : "#d3d8de"}
+                fill="#262626"
+                stroke={on ? "#4589ff" : "#393939"}
                 strokeWidth={1.2}
               />
               <text
@@ -339,14 +339,14 @@ function PipelineScreen({ t }: { t: number }) {
                 y={n.y + BH / 2 + 3.2}
                 textAnchor="middle"
                 fontSize="9"
-                fill={on ? "#1c2127" : "#8f99a8"}
+                fill={on ? "#f4f4f4" : "#a8a8a8"}
               >
                 {n.label}
               </text>
             </g>
           );
         })}
-        <text x={10} y={H - 8} fontSize="8" fill="#8f99a8">
+        <text x={10} y={H - 8} fontSize="8" fill="#a8a8a8">
           {t > 0.9 ? "Run complete" : "Running…"}
         </text>
       </svg>
@@ -387,7 +387,7 @@ function OntologyScreen({ t }: { t: number }) {
   const boxH = (i: number) => head + types[i]!.props.length * rowH + 6;
 
   return (
-    <div className="h-full border border-line bg-white">
+    <div className="h-full border border-line bg-surface">
       <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full">
         {links.map((l, i) => {
           const on = t * links.length > i;
@@ -401,7 +401,7 @@ function OntologyScreen({ t }: { t: number }) {
               <path
                 d={`M${p0.x},${p0.y} C${mid},${p0.y} ${mid},${p1.y} ${p1.x},${p1.y}`}
                 fill="none"
-                stroke="#2d72d2"
+                stroke="#4589ff"
                 strokeWidth={1.2}
               />
               <text
@@ -409,7 +409,7 @@ function OntologyScreen({ t }: { t: number }) {
                 y={(p0.y + p1.y) / 2 - 4}
                 textAnchor="middle"
                 fontSize="7.5"
-                fill="#5f6b7c"
+                fill="#c6c6c6"
               >
                 {l.label}
               </text>
@@ -426,8 +426,8 @@ function OntologyScreen({ t }: { t: number }) {
                 y={ty.y}
                 width={BW}
                 height={boxH(i)}
-                fill="#fff"
-                stroke="#d3d8de"
+                fill="#262626"
+                stroke="#393939"
                 strokeWidth={1.1}
               />
               <line
@@ -435,10 +435,10 @@ function OntologyScreen({ t }: { t: number }) {
                 y1={ty.y + head}
                 x2={ty.x + BW}
                 y2={ty.y + head}
-                stroke="#d3d8de"
+                stroke="#393939"
                 strokeWidth={1.1}
               />
-              <text x={ty.x + 7} y={ty.y + 11.5} fontSize="8.5" fill="#1c2127">
+              <text x={ty.x + 7} y={ty.y + 11.5} fontSize="8.5" fill="#f4f4f4">
                 {ty.name}
               </text>
               {ty.props.map((prop, k) => (
@@ -448,13 +448,13 @@ function OntologyScreen({ t }: { t: number }) {
                     y={ty.y + head + 5 + k * rowH}
                     width={3}
                     height={3}
-                    fill="#2d72d2"
+                    fill="#4589ff"
                   />
                   <text
                     x={ty.x + 14}
                     y={ty.y + head + 8 + k * rowH}
                     fontSize="7.5"
-                    fill="#5f6b7c"
+                    fill="#c6c6c6"
                   >
                     {prop}
                   </text>
@@ -481,10 +481,10 @@ function TwinScreen({ t }: { t: number }) {
     <div className="relative h-full overflow-hidden border border-line bg-canvas-raised">
       <svg viewBox="0 0 100 80" className="absolute inset-0 h-full w-full" preserveAspectRatio="none">
         {[20, 40, 60].map((y) => (
-          <line key={y} x1={0} y1={y} x2={100} y2={y} stroke="#eef1f4" strokeWidth={0.4} vectorEffect="non-scaling-stroke" />
+          <line key={y} x1={0} y1={y} x2={100} y2={y} stroke="#2c2c2c" strokeWidth={0.4} vectorEffect="non-scaling-stroke" />
         ))}
         {[25, 50, 75].map((x) => (
-          <line key={x} x1={x} y1={0} x2={x} y2={80} stroke="#eef1f4" strokeWidth={0.4} vectorEffect="non-scaling-stroke" />
+          <line key={x} x1={x} y1={0} x2={x} y2={80} stroke="#2c2c2c" strokeWidth={0.4} vectorEffect="non-scaling-stroke" />
         ))}
       </svg>
       {sites.map((s, i) => {
@@ -499,7 +499,7 @@ function TwinScreen({ t }: { t: number }) {
             <span
               className={
                 "block rounded-full border-2 " +
-                (hot ? "border-danger bg-danger/15" : "border-ink-muted bg-white")
+                (hot ? "border-danger bg-danger/15" : "border-ink-muted bg-surface")
               }
               style={{ width: 10 + s.load * 12, height: 10 + s.load * 12 }}
             />
@@ -523,7 +523,7 @@ function DashboardScreen({ t }: { t: number }) {
   const bars = [0.82, 0.61, 0.94, 0.47, 0.7, 0.55, 0.88];
   return (
     <div className="grid h-full grid-cols-2 gap-3">
-      <div className="flex flex-col border border-line bg-white">
+      <div className="flex flex-col border border-line bg-surface">
         <div className="border-b border-line px-3 py-1.5 text-[0.6875rem] text-ink">
           Civières par établissement
         </div>
@@ -540,7 +540,7 @@ function DashboardScreen({ t }: { t: number }) {
           120 rows read · 12 with no measure
         </div>
       </div>
-      <div className="flex flex-col border border-line bg-white">
+      <div className="flex flex-col border border-line bg-surface">
         <div className="border-b border-line px-3 py-1.5 text-[0.6875rem] text-ink">
           Admissions, 2020–2023
         </div>
@@ -555,7 +555,7 @@ function DashboardScreen({ t }: { t: number }) {
               .filter(Boolean)
               .join(" ")}
             fill="none"
-            stroke="#2d72d2"
+            stroke="#4589ff"
             strokeWidth={1.6}
             vectorEffect="non-scaling-stroke"
           />
@@ -576,7 +576,7 @@ function ResponseScreen({ t }: { t: number }) {
     { name: "Open 10% everywhere", rank: "—", dominated: true },
   ];
   return (
-    <div className="flex h-full flex-col border border-line bg-white">
+    <div className="flex h-full flex-col border border-line bg-surface">
       <div className="border-b border-line px-3 py-1.5 text-[0.6875rem] text-ink">
         Ranked responses
       </div>

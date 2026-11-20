@@ -5,12 +5,12 @@ type Tone = "default" | "method-get" | "method-post" | "method-head" | "success"
 
 const TONE: Record<Tone, string> = {
   default: "bg-bg-tertiary text-fg-secondary border-border-subtle",
-  "method-get": "bg-sky-500/10 text-sky-600 border-sky-500/20",
-  "method-post": "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
-  "method-head": "bg-amber-500/10 text-amber-600 border-amber-500/20",
-  success: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
-  warning: "bg-amber-500/10 text-amber-600 border-amber-500/20",
-  danger: "bg-rose-500/10 text-rose-600 border-rose-500/20",
+  "method-get": "bg-sky-500/10 text-sky-300 border-sky-400/20",
+  "method-post": "bg-ok/10 text-ok-ink border-ok/20",
+  "method-head": "bg-warn/10 text-warn-ink border-warn/20",
+  success: "bg-ok/10 text-ok-ink border-ok/20",
+  warning: "bg-warn/10 text-warn-ink border-warn/20",
+  danger: "bg-danger/10 text-danger border-danger/20",
 };
 
 export function Badge({

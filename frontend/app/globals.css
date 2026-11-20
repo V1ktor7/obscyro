@@ -2,84 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f8f9fa;
-  --bg-tertiary: #f1f3f5;
-  --text-primary: #111111;
-  --text-secondary: #6b7280;
-  --border-subtle: #e5e7eb;
-  --accent: #111111;
-  --accent-fg: #ffffff;
-  --card-bg: #ffffff;
-  --code-bg: #0a0a0a;
-  --code-fg: #ededed;
-
-  /*
-   * The Studio palette, light. Each value is three numbers so that Tailwind can
-   * add an opacity to it (see `studio()` in tailwind.config.ts). The Studio
-   * itself no longer draws with these: it runs under `.theme-g100` below. They
-   * stay for the product tour on the public site, which shows the Studio's
-   * components on a white page.
-   */
-  --s-ink: 28 33 39;
-  --s-ink-body: 64 72 84;
-  --s-ink-muted: 95 107 124;
-  --s-ink-faint: 143 153 168;
-  --s-ink-ghost: 197 203 211;
-  --s-inverse: 255 255 255;
-  --s-line: 211 216 222;
-  --s-line-soft: 229 232 235;
-  --s-line-faint: 238 241 244;
-  --s-line-strong: 156 163 175;
-  --s-canvas: 246 247 249;
-  --s-canvas-raised: 248 249 250;
-  --s-surface: 255 255 255;
-  --s-surface-hover: 246 247 249;
-  --s-brand: 45 114 210;
-  --s-brand-deep: 33 93 176;
-  --s-brand-soft: 231 242 253;
-  --s-brand-line: 181 212 244;
-  --s-brand-text: 45 114 210;
-  --s-brand-text-deep: 33 93 176;
-  --s-brand-edge: 45 114 210;
-  --s-ok: 29 158 117;
-  --s-ok-soft: 232 246 240;
-  --s-ok-line: 159 225 203;
-  --s-ok-ink: 28 110 66;
-  --s-warn: 217 130 43;
-  --s-warn-soft: 253 246 236;
-  --s-warn-line: 240 217 181;
-  --s-warn-ink: 147 86 16;
-  --s-danger: 194 48 48;
-  --s-danger-soft: 253 241 241;
-  --s-danger-line: 244 192 209;
-  --s-danger-ink: 168 34 85;
-  --s-scenario: 91 74 134;
-  --s-scenario-fill: 91 74 134;
-  --s-scenario-soft: 240 237 247;
-  --s-scenario-line: 217 210 230;
-  --s-teal: 15 107 104;
-  --s-teal-soft: 233 245 244;
-}
-
 /*
- * The Studio theme: IBM Carbon Gray 100.
+ * The theme: IBM Carbon Gray 100, for the Studio and for the public site.
  *
  * A dark ground (Gray 100), panels one step lighter (Gray 90), one blue, and
  * square corners. Colour is kept for what it means: red for a queue or a site
  * over capacity, yellow for what needs a look, green for what was checked,
  * purple for what is a model's output and not the network.
  *
- * It is set once, on the element that wraps every Studio page (SiteChrome), so
- * a screen only ever names a role (`bg-surface`, `text-ink-muted`) and this
- * block says what the role looks like. The public site does not carry the
- * class and is not affected.
+ * It is set once, here, on the root. A screen only ever names a role
+ * (`bg-surface`, `text-ink-muted`); this block says what the role looks like.
+ * The names are declared in tailwind.config.ts, and the whole of it is
+ * described in design/PALETTE.md.
+ *
+ * Each `--s-*` value is three numbers so that Tailwind can add an opacity to it
+ * (`bg-surface/95`, `border-danger/40`).
  *
  * Text sizes in the Studio are small, so the greys used for text are the ones
  * that keep a 4.5:1 contrast on a panel: #a8a8a8 is the faintest text there is.
  */
-.theme-g100 {
+:root {
   color-scheme: dark;
 
   --s-ink: 244 244 244; /* Gray 10 */
@@ -122,7 +64,8 @@
   --s-teal: 61 219 217; /* Teal 30 */
   --s-teal-soft: 11 50 51;
 
-  /* The shared components (Button, Card, the prose styles) read these. */
+  /* What the public pages and the shared components (Button, Card, the prose
+     styles) read. The same greys and the same blue, under their older names. */
   --bg-primary: #161616;
   --bg-secondary: #262626;
   --bg-tertiary: #393939;
@@ -132,7 +75,26 @@
   --accent: #0f62fe;
   --accent-fg: #ffffff;
   --card-bg: #262626;
+  --code-bg: #262626;
+  --code-fg: #f4f4f4;
 
+  /* Saturation: a threshold crossed, a bed that is not there. */
+  --pressure: #fa4d56;
+
+  /*
+   * A palette to draw with, not to decorate with. These five are for the
+   * figures on the public pages and nothing else: the type stays white, the
+   * interface stays grey, and colour lives inside the artwork, which is how a
+   * technical illustration earns it.
+   */
+  --art-1: #4589ff;
+  --art-2: #78a9ff;
+  --art-3: #be95ff;
+  --art-4: #08bdba;
+  --art-5: #ffd6a5;
+
+  /* Square corners. Each Tailwind radius reads one of these (see the config);
+     `rounded-full` does not, so a dot and a pill stay round. */
   --radius-sm: 0px;
   --radius: 0px;
   --radius-md: 0px;
@@ -140,96 +102,53 @@
   --radius-xl: 0px;
   --radius-2xl: 0px;
   --radius-3xl: 0px;
+}
 
-  /* IBM Plex, the face the theme was drawn for. */
-  --font-sans: var(--font-display);
-  --font-mono: var(--font-plex-mono);
+* {
+  border-color: var(--border-subtle);
+}
+
+html {
+  scroll-behavior: smooth;
+  /* What shows when a page is pulled past its edge. */
+  background-color: #161616;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  /* IBM Plex, the face the theme was drawn for (set in app/layout.tsx). */
   font-family: var(--font-sans), "Helvetica Neue", Arial, sans-serif;
-
-  background-color: rgb(var(--s-canvas));
-  color: rgb(var(--s-ink));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* What shows behind the Studio when the page is pulled past its edge, and the
-   colour of native scrollbars and form controls. */
-html:has(.theme-g100) {
-  color-scheme: dark;
-  background-color: #161616;
-}
-html:has(.theme-g100) body {
-  background-color: #161616;
-}
-
-.theme-g100 ::selection {
+::selection {
   background-color: #0f62fe;
   color: #ffffff;
 }
 
 /* Carbon's focus ring: white, inside the control. A control that draws its own
    (`focus:outline-none` with a border) keeps its own. */
-.theme-g100 :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
   outline: 2px solid #ffffff;
   outline-offset: -2px;
 }
 
 /*
- * Marketing surface.
+ * The public pages.
  *
- * The previous pass ran this page dark with monospace eyebrows, a particle
- * field and two accent colours. Every one of those is a tell, and together they
- * read as a template rather than as a product — which for software whose whole
- * argument is sobriety was the wrong first impression.
+ * They share the Studio's theme: a visitor who signs in should not land in
+ * what looks like another company's product. What is their own is the scale of
+ * the type and a great deal of space. An institution evaluating a decision
+ * system reads confidence in what a page leaves out, so there is one accent,
+ * and colour appears only inside the figures.
  *
- * So: white and one grey, one accent, black text, and a great deal of space.
- * The restraint is not a style borrowed for its own sake — an institution
- * evaluating a decision system reads confidence in what a page leaves out.
- *
- * The type stack is the platform's own UI face rather than a webfont. On the
- * hardware this look comes from it renders San Francisco; on Windows, Segoe UI.
- * Both are neo-grotesques designed for exactly this, both are already resident,
- * and neither costs a download.
- *
- * Applied to the whole public site, documentation included — a marketing page
- * and its docs set in two different faces look like two different companies.
- * /studio keeps Inter and its own scale: it is an instrument people work in for
- * hours, and it has no business shifting under them because the brochure did.
+ * `.site` is set on the element that wraps every public page (SiteChrome);
+ * /studio does not carry it and keeps its own, denser scale: it is an
+ * instrument people work in for hours.
  */
-.site-light {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f5f5f7;
-  --bg-tertiary: #ececef;
-  --text-primary: #1d1d1f;
-  --text-secondary: #6e6e73;
-  --border-subtle: #d2d2d7;
-  /* Colour is rationed. The mark is black rings on white with one region where
-     they overlap, and that is the rule the page follows: monochrome
-     everywhere, colour only where two things meet or where something is
-     actually running. */
-  --accent: #1d6fd4;
-  --accent-fg: #ffffff;
-  /* Saturation — a threshold crossed, a bed that is not there. Deep rather
-     than neon, because it appears next to numbers people act on. */
-  --pressure: #b3261e;
-  --card-bg: #ffffff;
-
-  /*
-   * A palette to draw with, not to decorate with.
-   *
-   * The page was monochrome plus one blue, and it read as unfinished rather
-   * than as restrained. These five are for the artwork and nothing else: the
-   * type stays black, the interface stays grey, and colour lives inside the
-   * figures — which is how a technical illustration earns it.
-   */
-  --art-1: #0f62fe;
-  --art-2: #4589ff;
-  --art-3: #a56eff;
-  --art-4: #08bdba;
-  --art-5: #ffd6a5;
-
-  font-family: var(--font-display), -apple-system, BlinkMacSystemFont,
-    "Segoe UI", Arial, sans-serif;
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
+.site {
   letter-spacing: -0.01em;
 }
 
@@ -241,81 +160,81 @@ html:has(.theme-g100) body {
  * is the single typographic habit that separates this register from a page that
  * merely uses big text.
  */
-.site-light .display-xl {
+.site .display-xl {
   font-size: clamp(2.5rem, 6.2vw, 5.5rem);
   line-height: 1.05;
   letter-spacing: -0.025em;
   font-weight: 600;
 }
-.site-light .display-lg {
+.site .display-lg {
   font-size: clamp(2rem, 4.4vw, 3.5rem);
   line-height: 1.08;
   letter-spacing: -0.022em;
   font-weight: 600;
 }
-.site-light .display-md {
+.site .display-md {
   font-size: clamp(1.5rem, 2.6vw, 2.25rem);
   line-height: 1.14;
   letter-spacing: -0.018em;
   font-weight: 600;
 }
-.site-light .body-lg {
+.site .body-lg {
   font-size: clamp(1.0625rem, 1.35vw, 1.3125rem);
   line-height: 1.5;
   letter-spacing: -0.005em;
   color: var(--text-secondary);
 }
-.site-light .body-md {
+.site .body-md {
   font-size: 1.0625rem;
   line-height: 1.55;
   letter-spacing: -0.004em;
   color: var(--text-secondary);
 }
-.site-light .caption {
+.site .caption {
   font-size: 0.8125rem;
   line-height: 1.45;
   color: var(--text-secondary);
 }
 
-/* A text link that ends in a chevron, and a filled pill. Two CTA shapes for
-   the whole site — a third would be a decision nobody could explain. */
-.site-light .link-cta {
-  color: var(--accent);
+/* A text link that ends in a chevron, and a filled button. Two CTA shapes for
+   the whole site — a third would be a decision nobody could explain. The link
+   is the pale blue (it is text on a dark ground); the button is the deep one
+   (white text has to stay readable on it). */
+.site .link-cta {
+  color: rgb(var(--s-brand-text));
   font-size: 1.0625rem;
   letter-spacing: -0.004em;
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
 }
-.site-light .link-cta:hover {
+.site .link-cta:hover {
   text-decoration: underline;
 }
+
 /*
  * Shape vocabulary, taken from the mark.
  *
  * The logo is two true circles and straight-cut letterforms. There is no soft
  * rectangle anywhere in it, and a soft rectangle is precisely the shape a page
  * reaches for when nobody decided. So: a thing is either a real circle or a
- * sharp panel, and nothing sits in between. Panels get 2px, which reads as a
- * cut edge rather than as a radius.
+ * sharp panel, and nothing sits in between.
  */
-.site-light .panel {
+.site .panel {
   border-radius: 0;
   background: var(--bg-secondary);
 }
-.site-light .panel-outline {
+.site .panel-outline {
   border-radius: 0;
   border: 1px solid var(--border-subtle);
   background: var(--bg-primary);
 }
 
 /*
- * Square. The reference sets every control at zero radius, and a stadium button
- * beside a sharp panel was the last soft edge on the page — the one thing still
- * reading as a template. The name stays `pill` because a hundred call sites use
- * it; the shape does not.
+ * Square. The name stays `pill` because a hundred call sites use it; the shape
+ * does not.
  */
-.site-light .pill {
+.site .pill {
   background: var(--accent);
   color: var(--accent-fg);
   border-radius: 0;
@@ -327,35 +246,14 @@ html:has(.theme-g100) body {
   gap: 0.4rem;
   transition: background-color 0.2s ease;
 }
-.site-light .pill:hover {
-  background: #175bb0;
-}
-
-* {
-  border-color: var(--border-subtle);
-}
-
-html {
-  scroll-behavior: smooth;
-}
-
-body {
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-::selection {
-  background-color: var(--accent);
-  color: var(--accent-fg);
+.site .pill:hover {
+  background: rgb(var(--s-brand-deep));
 }
 
 code[data-theme*=" "],
 code[data-theme*=" "] span {
-  color: var(--shiki-light);
-  background-color: var(--shiki-light-bg);
+  color: var(--shiki-dark, var(--shiki-light));
+  background-color: transparent;
 }
 
 pre[data-theme*=" "] {
@@ -391,8 +289,8 @@ figure[data-rehype-pretty-code-figure] > pre {
   font-size: 0.825rem;
   line-height: 1.65;
   overflow-x: auto;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 0.75rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0;
   padding: 1rem 0;
 }
 
@@ -428,10 +326,9 @@ figure[data-rehype-pretty-code-figure] [data-rehype-pretty-code-title] {
   letter-spacing: 0.18em;
   color: var(--text-secondary);
   padding: 0.6rem 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background-color: rgba(0, 0, 0, 0.4);
-  border-top-left-radius: 0.75rem;
-  border-top-right-radius: 0.75rem;
+  border: 1px solid var(--border-subtle);
+  border-bottom: 0;
+  background-color: var(--bg-tertiary);
 }
 
 figure[data-rehype-pretty-code-figure]:has([data-rehype-pretty-code-title]) > pre {

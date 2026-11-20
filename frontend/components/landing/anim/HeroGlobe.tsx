@@ -24,11 +24,13 @@ import "mapbox-gl/dist/mapbox-gl.css";
  */
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
-const STYLE = "mapbox://styles/mapbox/light-v11";
+// The same dark basemap as the Studio's maps (app/studio/map-style.ts).
+const STYLE = "mapbox://styles/mapbox/dark-v11";
 
-const INK = "29,29,31";
-const FLOW = "29,111,212";
-const PRESSURE = "179,38,30";
+// Drawn on a dark ground: light ink, the blue that reads as a line, the theme's red.
+const INK = "244,244,244";
+const FLOW = "69,137,255";
+const PRESSURE = "250,77,86";
 
 /** Illustrative sites. `load` is a fixed pattern, not a measurement. */
 const SITES: { lng: number; lat: number; load: number }[] = [
@@ -277,10 +279,10 @@ export default function HeroGlobe({ className }: { className?: string }) {
         host.style.opacity = "0.55";
         try {
           m.setFog({
-            color: "rgb(255,255,255)",
-            "high-color": "rgb(240,242,245)",
+            color: "rgb(22,22,22)",
+            "high-color": "rgb(38,38,38)",
             "horizon-blend": 0.03,
-            "space-color": "rgb(255,255,255)",
+            "space-color": "rgb(22,22,22)",
             "star-intensity": 0,
           });
         } catch {
@@ -435,7 +437,7 @@ function drawBuildings(ctx: CanvasRenderingContext2D, w: number, h: number, time
     const bw = s * 2;
     const bx = x - s;
     const by = y + s + 9;
-    ctx.fillStyle = "rgba(29,29,31,0.14)";
+    ctx.fillStyle = "rgba(244,244,244,0.16)";
     ctx.fillRect(bx, by, bw, 4);
     ctx.fillStyle = load > 0.8 ? `rgba(${PRESSURE},0.95)` : `rgba(${FLOW},0.95)`;
     ctx.fillRect(bx, by, bw * load * Math.min(1, on), 4);

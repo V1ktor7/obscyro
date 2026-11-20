@@ -28,7 +28,7 @@ export default async function CodeBlock({
       )}
     >
       {filename ? (
-        <div className="flex items-center justify-between border-b border-white/[0.06] bg-black/40 px-4 py-2 font-mono text-[0.65rem] uppercase tracking-[0.2em] text-fg-secondary">
+        <div className="flex items-center justify-between border-b border-surface/[0.06] bg-black/60 px-4 py-2 font-mono text-[0.65rem] uppercase tracking-[0.2em] text-fg-secondary">
           <span>{filename}</span>
           <span className="text-[0.6rem] text-fg-secondary/70">{language}</span>
         </div>

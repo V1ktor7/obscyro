@@ -32,7 +32,7 @@ export default function StaticCodeBlock({
       )}
     >
       {filename ? (
-        <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] bg-black/40 px-3 py-2 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-fg-secondary sm:px-4 sm:text-[0.65rem] sm:tracking-[0.2em]">
+        <div className="flex items-center justify-between gap-2 border-b border-surface/[0.06] bg-black/60 px-3 py-2 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-fg-secondary sm:px-4 sm:text-[0.65rem] sm:tracking-[0.2em]">
           <span className="truncate">{filename}</span>
           {language ? (
             <span className="shrink-0 text-[0.55rem] text-fg-secondary/70 sm:text-[0.6rem]">

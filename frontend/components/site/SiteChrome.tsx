@@ -7,22 +7,20 @@ import Header from "@/components/site/Header";
 import Footer from "@/components/site/Footer";
 
 // The /studio editor is a full-screen app surface, so we drop the marketing
-// chrome (header, footer) on those routes and give it its own theme: every
-// Studio page is drawn under `.theme-g100` (globals.css), set here once.
+// chrome (header, footer) on those routes. The colours are the same on both
+// sides: one theme, set on the root (globals.css).
 export default function SiteChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const bare = pathname?.startsWith("/studio") ?? false;
-  // The marketing surface carries its own type and colour system; /studio keeps
-  // the product's. Scoping it here rather than per page means the header
-  // and footer are in the same world as whatever sits between them.
-  const light = !bare;
-
   if (bare) {
-    return <main className="theme-g100 min-h-screen">{children}</main>;
+    return <main className="min-h-screen">{children}</main>;
   }
 
+  // The public pages carry their own scale of type (`.site` in globals.css);
+  // /studio keeps its denser one. Scoping it here rather than per page means
+  // the header and footer are in the same world as whatever sits between them.
   return (
-    <div className={light ? "site-light" : undefined}>
+    <div className="site">
       <Header />
       <main className="min-h-[calc(100vh-4rem)]">{children}</main>
       <Footer />

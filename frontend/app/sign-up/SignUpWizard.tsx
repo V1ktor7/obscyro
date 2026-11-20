@@ -238,7 +238,7 @@ export default function SignUpWizard() {
           {error ? (
             <p
               role="alert"
-              className="mt-5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-700"
+              className="mt-5 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger-ink"
             >
               {error}
             </p>

@@ -37,7 +37,7 @@ export function Param({
         <span
           className={cn(
             "font-mono text-[0.6rem] uppercase tracking-[0.18em]",
-            required ? "text-rose-500" : "text-fg-secondary/70",
+            required ? "text-danger" : "text-fg-secondary/70",
           )}
         >
           {required ? "required" : "optional"}

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Mono, IBM_Plex_Sans, Inter, JetBrains_Mono } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
 
 import SiteChrome from "@/components/site/SiteChrome";
@@ -8,35 +8,23 @@ import { SITE_URL } from "@/lib/site-url";
 
 import "./globals.css";
 
-const inter = Inter({
+// One family for the whole product, public pages and Studio: IBM Plex, the
+// face the theme (Carbon Gray 100) was drawn for. It has details a reader
+// notices without being able to name — the flat-topped a, the straight-legged
+// g — which is exactly what a default grotesque does not.
+const plex = IBM_Plex_Sans({
   subsets: ["latin"],
+  // 300 is for large figures, which are set light.
+  weight: ["300", "400", "500", "600"],
   variable: "--font-sans",
   display: "swap",
 });
 
-// A face with actual character, and the one the reference is built on. It has
-// details a reader notices without being able to name — the flat-topped a, the
-// straight-legged g — which is exactly what a default grotesque does not.
-const plex = IBM_Plex_Sans({
-  subsets: ["latin"],
-  // 300 is the Studio: its large figures are set light.
-  weight: ["300", "400", "500", "600"],
-  variable: "--font-display",
-  display: "swap",
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
-  display: "swap",
-});
-
-// The Studio sets code, step ids and figures in Plex Mono, to go with Plex
-// Sans. The theme points --font-mono at it (.theme-g100 in globals.css).
+// Code, step ids and figures in tables.
 const plexMono = IBM_Plex_Mono({
   subsets: ["latin"],
   weight: ["400", "500"],
-  variable: "--font-plex-mono",
+  variable: "--font-mono",
   display: "swap",
 });
 
@@ -84,8 +72,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ffffff",
-  colorScheme: "light",
+  themeColor: "#161616",
+  colorScheme: "dark",
 };
 
 export default function RootLayout({
@@ -94,9 +82,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="light">
+    <html lang="en">
       <body
-        className={`${inter.variable} ${plex.variable} ${jetbrainsMono.variable} ${plexMono.variable} min-h-screen bg-bg-primary font-sans text-fg-primary antialiased`}
+        className={`${plex.variable} ${plexMono.variable} min-h-screen bg-bg-primary font-sans text-fg-primary antialiased`}
       >
         <LocaleProvider>
           <SiteChrome>{children}</SiteChrome>

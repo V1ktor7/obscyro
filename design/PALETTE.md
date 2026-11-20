@@ -1,23 +1,26 @@
-# Thème du Studio
+# Thème d'Obscyro
 
-Le Studio est dessiné en thème sombre : **IBM Carbon Gray 100**. Un fond presque
-noir, des panneaux un cran plus clairs, un seul bleu, des coins carrés, et la
-police IBM Plex. La couleur est gardée pour ce qu'elle veut dire.
+Le Studio et le site public sont dessinés dans le même thème sombre : **IBM
+Carbon Gray 100**. Un fond presque noir, des panneaux un cran plus clairs, un
+seul bleu, des coins carrés, et la police IBM Plex. La couleur est gardée pour
+ce qu'elle veut dire.
 
-Le site public (accueil, documentation, connexion) n'est pas concerné : il reste
-clair, avec son propre système.
+Quelqu'un qui se connecte depuis le site ne doit pas avoir l'impression
+d'arriver dans le produit d'une autre entreprise. Ce que le site a en propre,
+c'est l'échelle de son texte (`.site` dans `globals.css`) et beaucoup d'espace.
 
 ## Où ça se règle
 
 | Quoi | Où |
 |---|---|
-| Les valeurs des couleurs | `frontend/app/globals.css`, bloc `.theme-g100` |
+| Les valeurs des couleurs | `frontend/app/globals.css`, bloc `:root` |
 | Les noms que les écrans utilisent | `frontend/tailwind.config.ts`, `theme.extend.colors` |
-| L'endroit où le thème est posé | `frontend/components/site/SiteChrome.tsx` : la classe `theme-g100` sur l'élément qui enveloppe toutes les pages `/studio` |
+| La police | `frontend/app/layout.tsx` : IBM Plex Sans et IBM Plex Mono, pour tout |
+| L'échelle de texte du site public | `frontend/app/globals.css`, classes `.site …` ; la classe `site` est posée dans `frontend/components/site/SiteChrome.tsx` |
 | Le fond de carte | `frontend/app/studio/map-style.ts` |
 
-Changer une couleur du Studio, c'est changer une ligne dans `.theme-g100`. Aucun
-écran n'est à toucher.
+Changer une couleur, c'est changer une ligne dans `:root`. Aucun écran n'est à
+toucher.
 
 ## La règle
 
@@ -168,11 +171,23 @@ Le ciel et l'indigo de Tailwind (`sky-*`, `indigo-*`) servent aussi de teintes
 catégorielles dans quelques graphes de nœuds ; ils gardent leur teinte, dans sa
 variante sombre (`text-sky-300`, `bg-sky-400/15`, `border-sky-400`).
 
-## Les valeurs claires
+## Le site public
 
-`:root` garde les mêmes rôles en clair. Le Studio ne les utilise plus ; elles
-servent à la visite du produit sur le site public, qui dessine des composants du
-Studio sur une page blanche.
+Les pages publiques lisent les mêmes gris et le même bleu sous leurs anciens
+noms (`bg-bg-primary`, `text-fg-secondary`, `border-border-subtle`,
+`bg-accent`), définis dans le même bloc `:root`. Trois choses leur sont
+propres :
+
+- **Les figures** (`components/brand/Artwork.tsx`) sont le seul endroit où la
+  couleur est libre : cinq teintes, `--art-1` à `--art-5`.
+- **Le globe de l'accueil** (`components/landing/anim/HeroGlobe.tsx`) et les
+  schémas animés portent leurs valeurs en clair, comme les cartes du Studio :
+  encre claire, un bleu, le rouge du thème.
+- **La visite du produit** (`components/landing/anim/ProductTour.tsx`) dessine
+  le Studio avec les rôles du Studio : elle suit le thème sans qu'on y touche.
+
+Les blocs de code et les schémas de la documentation (`components/docs/Mermaid.tsx`)
+sont dessinés sur un panneau, avec des couleurs prises dans le thème.
 
 ## Historique
 
@@ -180,3 +195,7 @@ Le Studio était clair jusqu'au 2026-11-20, avec des couleurs écrites en hex da
 les classes (`text-[#8f99a8]` 303 fois, `border-[#d3d8de]` 295). La conversion a
 remplacé environ 2 700 emplois par des rôles, dans 90 fichiers. La maquette de
 référence est l'artefact « Obscyro Dark Redesign ».
+
+Le site public a suivi le même jour. Il avait son propre système clair
+(`.site-light`) et deux polices de plus (Inter, JetBrains Mono) ; il n'y a plus
+qu'un thème, posé sur `:root`, et une seule famille de polices.

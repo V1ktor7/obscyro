@@ -34,7 +34,7 @@ function CodeTabs({ children, className }: CodeTabsProps) {
   return (
     <div className={cn("not-prose my-6 overflow-hidden rounded-xl border border-border-subtle bg-code-bg shadow-code", className)}>
       <div
-        className="thin-scrollbar flex items-center gap-0.5 overflow-x-auto border-b border-white/[0.06] bg-black/40 px-2"
+        className="thin-scrollbar flex items-center gap-0.5 overflow-x-auto border-b border-surface/[0.06] bg-black/60 px-2"
         role="tablist"
       >
         {tabs.map((tab, i) => (
@@ -51,7 +51,7 @@ function CodeTabs({ children, className }: CodeTabsProps) {
           >
             {tab.props.label}
             {i === active ? (
-              <span className="absolute inset-x-2 bottom-0 h-px bg-white" aria-hidden />
+              <span className="absolute inset-x-2 bottom-0 h-px bg-surface" aria-hidden />
             ) : null}
           </button>
         ))}

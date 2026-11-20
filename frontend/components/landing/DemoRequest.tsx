@@ -131,21 +131,21 @@ export default function DemoRequest() {
                   <label key={f.id} className="block">
                     <span className="caption">
                       {f.label}
-                      {f.required ? <span className="ml-1 text-accent">*</span> : null}
+                      {f.required ? <span className="ml-1 text-brand">*</span> : null}
                     </span>
                     {f.type === "textarea" ? (
                       <textarea
                         rows={4}
                         value={values[f.id] ?? ""}
                         onChange={(e) => set(f.id, e.target.value)}
-                        className="mt-2 w-full resize-y border-b border-border-subtle bg-transparent pb-2 text-[1.0625rem] text-fg-primary outline-none transition-colors focus:border-accent"
+                        className="mt-2 w-full resize-y border-b border-border-subtle bg-transparent pb-2 text-[1.0625rem] text-fg-primary outline-none transition-colors focus:border-brand"
                       />
                     ) : (
                       <input
                         type={f.type ?? "text"}
                         value={values[f.id] ?? ""}
                         onChange={(e) => set(f.id, e.target.value)}
-                        className="mt-2 w-full border-b border-border-subtle bg-transparent pb-2 text-[1.0625rem] text-fg-primary outline-none transition-colors focus:border-accent"
+                        className="mt-2 w-full border-b border-border-subtle bg-transparent pb-2 text-[1.0625rem] text-fg-primary outline-none transition-colors focus:border-brand"
                       />
                     )}
                   </label>

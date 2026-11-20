@@ -148,7 +148,7 @@ export default function SignInForm() {
             />
 
             {error ? (
-              <p role="alert" className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-700">
+              <p role="alert" className="mt-4 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger-ink">
                 {error}
               </p>
             ) : null}
@@ -197,7 +197,7 @@ export default function SignInForm() {
             ) : null}
 
             {newRawKey ? (
-              <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+              <div className="mb-4 rounded-lg border border-warn/30 bg-warn/10 p-4">
                 <p className="mb-2 text-sm font-medium text-fg-primary">{t("signin.keyCreatedOnce")}</p>
                 <code className="block break-all rounded-md border border-border-subtle bg-bg-primary px-3 py-2 font-mono text-xs">
                   {newRawKey}
@@ -232,7 +232,7 @@ export default function SignInForm() {
                   className="w-full rounded-lg border border-border-subtle bg-bg-primary px-3 py-2.5 text-sm focus:border-fg-primary focus:outline-none focus:ring-2 focus:ring-fg-primary/10"
                 />
                 {error ? (
-                  <p role="alert" className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-700">
+                  <p role="alert" className="mt-4 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger-ink">
                     {error}
                   </p>
                 ) : null}

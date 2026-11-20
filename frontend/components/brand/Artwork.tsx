@@ -7,7 +7,7 @@
  * square panels, the same vocabulary the logo uses, and each says something
  * specific about the panel it sits on.
  *
- * Colour lives here and almost nowhere else. The type stays black and the
+ * Colour lives here and almost nowhere else. The type stays white and the
  * interface stays grey, so a figure is the one place on the page that is
  * allowed to be loud — which is how a technical illustration earns its colour
  * instead of spending the reader's attention on chrome.
@@ -18,7 +18,9 @@ const A2 = "var(--art-2)";
 const A3 = "var(--art-3)";
 const A4 = "var(--art-4)";
 const A5 = "var(--art-5)";
-const INK = "#1d1d1f";
+// The outline of every figure, and the fill of an empty panel: the theme's text and its panel grey.
+const INK = "#f4f4f4";
+const PANEL = "#262626";
 
 export type ArtName = "converge" | "network" | "surge" | "ledger";
 
@@ -76,7 +78,7 @@ function Network() {
           cx={x}
           cy={y}
           r={i === 4 ? 15 : 11}
-          fill={i === 4 ? A4 : i === 1 ? A2 : "#fff"}
+          fill={i === 4 ? A4 : i === 1 ? A2 : PANEL}
           stroke={INK}
           strokeWidth={3}
         />
@@ -111,7 +113,7 @@ function Surge() {
 function Ledger() {
   return (
     <>
-      <rect x={22} y={34} width={54} height={92} fill="#fff" stroke={INK} strokeWidth={3} />
+      <rect x={22} y={34} width={54} height={92} fill={PANEL} stroke={INK} strokeWidth={3} />
       <rect x={92} y={34} width={46} height={92} fill={A2} fillOpacity={0.25} stroke={INK} strokeWidth={3} />
       {[0, 1, 2, 3].map((i) => (
         <line
@@ -120,7 +122,7 @@ function Ledger() {
           y1={50 + i * 20}
           x2={66}
           y2={50 + i * 20}
-          stroke={i < 3 ? A1 : "rgba(29,29,31,0.25)"}
+          stroke={i < 3 ? A1 : "rgba(244,244,244,0.25)"}
           strokeWidth={5}
         />
       ))}

@@ -27,9 +27,9 @@ const PAIRS: [number, number][] = [
   [5, 4],
 ];
 
-const INK = "#1d1d1f";
-const HAIR = "rgba(29,29,31,0.16)";
-const ACCENT = "#1d6fd4";
+const INK = "#f4f4f4";
+const HAIR = "rgba(244,244,244,0.16)";
+const ACCENT = "#4589ff";
 
 const W = 620;
 const H = 300;
