@@ -12,7 +12,7 @@ const FENCE_RE = /```[\s\S]*?```/g;
  *
  * An accented letter is folded to its plain one rather than dropped: half the
  * documentation is in French, and "fraîcheur" has to give "fraicheur", not
- * "frachur". `siteSlug` in scripts/sync-docs.mjs is the same rule, kept in
+ * "frachur". `siteSlug` in scripts/product-docs.mjs is the same rule, kept in
  * step by a test.
  */
 export function slugify(input: string): string {

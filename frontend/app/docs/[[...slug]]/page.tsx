@@ -54,7 +54,7 @@ export default async function DocPage({ params }: PageProps) {
   const title =
     (doc.frontmatter.title as string | undefined) ?? navItem?.title ?? "Documentation";
   const description = doc.frontmatter.description as string | undefined;
-  // A page copied from the repository says where its source is.
+  // A product page is the English of a page of the repository, and says which.
   const source = doc.frontmatter.source as string | undefined;
 
   return (
@@ -67,18 +67,18 @@ export default async function DocPage({ params }: PageProps) {
           <h1 className="mt-3 text-balance text-2xl font-semibold tracking-tighter sm:text-3xl lg:text-4xl">
             {title}
           </h1>
-          {description && !source ? (
+          {description ? (
             <p className="mt-3 text-pretty text-base text-fg-secondary sm:text-lg">
               {description}
             </p>
           ) : null}
           {source ? (
             <p className="mt-3 text-[0.8125rem] text-fg-secondary">
-              Kept with the code, in{" "}
+              The English of{" "}
               <a href={`${REPOSITORY}/${source}`} target="_blank" rel="noreferrer" className="text-brand hover:underline">
                 {source}
               </a>
-              : it changes in the same commit as what it describes.
+              , the page kept with the code. It changes with what it describes.
             </p>
           ) : null}
         </header>

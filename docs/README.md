@@ -8,7 +8,7 @@
 | [algorithms.md](algorithms.md) | Tous les algorithmes du produit, chacun avec son schéma, ses règles, ses fichiers et ses tests |
 | [changelog.md](changelog.md) | Le journal des changements : chaque nouvelle fonction et chaque modification, datée |
 
-Ces cinq pages sont aussi publiées sur le site, sous `/docs/product`. Le site n'en a pas sa propre version : `npm run docs:sync`, dans `frontend/`, recopie les pages d'ici vers `frontend/content/docs/product` (`frontend/scripts/sync-docs.mjs`). On modifie donc toujours la page d'ici, jamais la copie.
+Ces cinq pages sont aussi publiées sur le site, sous `/docs/product`, en anglais. La page d'ici, en français, reste l'originale ; sa traduction est dans `frontend/content/docs/product/`. Quand une page d'ici change, on met sa traduction à jour dans le même commit, puis on lance `npm run docs:stamp` dans `frontend/` : la page anglaise garde l'empreinte de la page française qu'elle traduit, et un test du frontend échoue tant que les deux ne concordent pas (`frontend/scripts/product-docs.mjs`).
 
 Ailleurs dans le dépôt :
 

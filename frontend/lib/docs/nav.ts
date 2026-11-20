@@ -11,16 +11,16 @@ export interface DocSection {
 
 export const DOC_NAV: DocSection[] = [
   {
-    // The repository's own documentation, copied from `docs/` by
-    // scripts/sync-docs.mjs: one page per part of the product, and the dated
-    // journal of what changed. In French, as it is written.
-    title: "Produit",
+    // The repository's own documentation (`docs/`, in French), in English:
+    // one page per part of the product, and the dated record of what
+    // changed. scripts/product-docs.mjs says how the two are kept in step.
+    title: "Product",
     items: [
-      { title: "La boucle de décision", slug: ["product", "decision-loop"] },
-      { title: "La page Scenarios", slug: ["product", "scenarios-page"] },
-      { title: "L'analyste", slug: ["product", "analyst"] },
-      { title: "Les algorithmes", slug: ["product", "algorithms"] },
-      { title: "Journal des changements", slug: ["product", "changelog"] },
+      { title: "The decision loop", slug: ["product", "decision-loop"] },
+      { title: "The Scenarios page", slug: ["product", "scenarios-page"] },
+      { title: "The analyst", slug: ["product", "analyst"] },
+      { title: "Algorithms", slug: ["product", "algorithms"] },
+      { title: "Changelog", slug: ["product", "changelog"] },
     ],
   },
   {

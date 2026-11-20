@@ -1,418 +1,419 @@
 ---
-# Copy of docs/analyst.md, made by scripts/sync-docs.mjs. Edit the source, then run `npm run docs:sync`.
-title: "L'analyste"
-description: "L'analyste est le panneau repliable « Analyst » de la page Scenarios."
+# The English of docs/analyst.md. When that page changes, bring this one up to date, then run `npm run docs:stamp`.
+title: "The analyst"
+description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
+translatedFrom: "8221351065598114"
 ---
 
-L'analyste est le panneau repliable « Analyst » de la page Scenarios. On lui pose une question sur le jumeau, le scénario ouvert ou le run à l'écran ; il répond en ne s'appuyant que sur ce que des outils de lecture lui ont renvoyé, et montre tout ce qu'il a lu.
+The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
 
-Le panneau a quatre onglets, qui couvrent cinq étapes de la [boucle d'aide à la décision](/docs/product/decision-loop) :
+The panel has four tabs, which cover five steps of the [decision loop](/docs/product/decision-loop):
 
-| Onglet | Étape de la boucle | Ce qu'on y fait |
+| Tab | Step of the loop | What you do there |
 |---|---|---|
-| Ask | Situation | Poser une question, lire la réponse et ce qui a été lu pour l'écrire |
-| Event finder | Précédents | Chercher dans des sources officielles ce qui se passait autour du réseau, accepter ou refuser chaque événement trouvé |
-| Options | Options testées, Recommandation | Dire un objectif, voir jusqu'à trois options testées par le moteur à côté du scénario tel quel |
-| Decisions | Suivi | Relire ce qui a été retenu, ce qu'on en attendait, et l'écart avec ce qui a été observé |
+| Ask | Situation | Ask a question, read the answer and what was read to write it |
+| Event finder | Precedents | Search official sources for what was happening around the network, accept or reject each event found |
+| Options | Tested options, Recommendation | State an objective, see up to three options tested by the engine beside the scenario as it is |
+| Decisions | Follow-up | Read back what was retained, what was expected of it, and the gap with what was observed |
 
-Les schémas de la boucle, du vérificateur et de la calculatrice sont dans [algorithms.md](/docs/product/algorithms), sections A1 à A3 ; ceux des options testées et des décisions, sections A8 et A9 ; celui de la recherche en ligne et du calendrier, section A10.
+The diagrams of the loop, the verifier and the calculator are in [Algorithms](/docs/product/algorithms), sections A1 to A3; those of the tested options and the decisions, sections A8 and A9; that of the online search and the calendar, section A10.
 
-## Ce qu'il fait, et ce qu'il ne fait pas
+## What it does, and what it does not
 
-| Il fait | Il ne fait pas |
+| It does | It does not |
 |---|---|
-| Choisir quoi lire, puis rédiger | Détenir un fait sur le réseau |
-| Citer, pour chaque paragraphe, les étapes sur lesquelles il repose | Calculer de tête |
-| Dire ce qui manque quand les outils ne peuvent pas répondre | Combler un manque par une estimation |
-| Lire | Écrire dans le jumeau ou le scénario |
-| Faire tester une option par le moteur, et dire ce que le test montre | Classer des options qu'il n'a pas testées, recommander, décider |
-| Chercher en ligne, dans les sources que le projet autorise, et proposer des événements | Mettre un événement au calendrier, envoyer dans une recherche quoi que ce soit du jumeau, tenir pour mesuré ce qu'une source a publié |
+| Choose what to read, then write | Hold a fact about the network |
+| Cite, for each paragraph, the steps it rests on | Do arithmetic in its head |
+| Say what is missing when the tools cannot answer | Fill a gap with an estimate |
+| Read | Write to the twin or the scenario |
+| Have an option tested by the engine, and say what the test shows | Rank options it has not tested, recommend, decide |
+| Search online, in the sources the project authorises, and propose events | Put an event on the calendar, send anything from the twin into a search, treat what a source published as measured |
 
-## Le mettre en service
+## Putting it into service
 
-Il lit le jumeau à travers l'API Claude. Il lui faut la variable `ANTHROPIC_API_KEY` sur le service de l'API. Sans elle il est éteint, le panneau le dit, et rien d'autre dans le produit n'en dépend.
+It reads the twin through the Claude API. It needs the `ANTHROPIC_API_KEY` variable on the API service. Without it the analyst is off, the panel says so, and nothing else in the product depends on it.
 
-Ce que les outils lisent du jumeau (des comptes et des capacités, jamais une personne) est envoyé à l'API Claude pour rédiger la réponse. Le panneau le dit en pied.
+What the tools read from the twin (counts and capacities, never a person) is sent to the Claude API to write the answer. The panel says so at its foot.
 
-L'onglet Event finder utilise la recherche web de l'API Claude. Elle n'a pas de variable à elle : elle marche avec la même clé, à deux conditions qui se règlent dans la console Claude et non dans le produit. La recherche web doit être permise pour l'organisation (elle l'est par défaut ; coupée, la demande échoue avec une erreur du modèle), et les domaines du projet ne doivent pas sortir d'une liste que l'organisation aurait restreinte. Elle est facturée en plus des jetons : 10 $ US pour 1 000 recherches au tarif lu le 2026-11-17 et relu le 2026-11-20, huit recherches au plus par demande.
+The Event finder tab uses the web search of the Claude API. It has no variable of its own: it works with the same key, on two conditions that are set in the Claude console and not in the product. Web search must be allowed for the organisation (it is by default; switched off, the request fails with an error from the model), and the project's domains must not fall outside a list the organisation may have restricted. It is billed on top of tokens: US$10 per 1,000 searches at the rate read on 2026-11-17 and read again on 2026-11-20, eight searches at most per request.
 
-État au 2026-11-17 : en service en production, vérifié avec le vrai modèle. Le premier test a trouvé deux défauts, corrigés le jour même (une interversion de deux sites et un chiffre arrondi deux fois, voir « La règle des chiffres »), puis les questions de référence ont toutes passé deux fois de suite (voir plus bas).
+State on 2026-11-17: in service in production, verified with the real model. The first test found two defects, fixed the same day (two sites swapped and a figure rounded twice, see “The rule of numbers”), then the reference questions all passed twice in a row (see below).
 
-## Les routes
+## The routes
 
-| Route | Ce qu'elle rend |
+| Route | What it returns |
 |---|---|
-| `GET /v1/ontology/:env/analyst` | `{ configured, model }` : l'analyste peut-il être interrogé |
-| `POST /v1/ontology/:env/analyst/ask` | Un flux, une ligne JSON par événement : une question et sa réponse |
-| `POST /v1/ontology/:env/analyst/options` | Le même flux : un objectif et les options testées |
-| `POST /v1/ontology/:env/analyst/events` | Le même flux : une demande et les événements candidats trouvés en ligne |
-| `POST /v1/ontology/:env/analyst/run` | Un flux plus court : le scénario tourné par le serveur comme le fait Run, et son résumé, dans la forme que `ask` et `options` acceptent comme `run`. N'appelle aucun modèle et n'écrit rien |
-| `POST /v1/ontology/:env/decisions` | Enregistre une décision à partir d'une option testée |
-| `GET /v1/ontology/:env/decisions` | Les décisions du projet, les plus récentes d'abord (`scenarioId` pour un seul scénario) |
-| `GET /v1/ontology/:env/decisions/:id/follow-up` | Les arrivées attendues par une décision à côté de la série observée, avec l'écart |
-| `POST /v1/ontology/:env/health-events` | Accepte un candidat : il entre au calendrier |
-| `GET /v1/ontology/:env/health-events` | Le calendrier du projet, du plus ancien au plus récent (`from`, `to` pour une période) |
-| `DELETE /v1/ontology/:env/health-events/:id` | Retire un événement du calendrier |
-| `GET /v1/ontology/:env/web-sources` | Les domaines où la recherche a le droit de chercher |
-| `PUT /v1/ontology/:env/web-sources` | Remplace cette liste |
+| `GET /v1/ontology/:env/analyst` | `{ configured, model }`: can the analyst be asked |
+| `POST /v1/ontology/:env/analyst/ask` | A stream, one JSON line per event: a question and its answer |
+| `POST /v1/ontology/:env/analyst/options` | The same stream: an objective and the tested options |
+| `POST /v1/ontology/:env/analyst/events` | The same stream: a request and the candidate events found online |
+| `POST /v1/ontology/:env/analyst/run` | A shorter stream: the scenario run by the server the way Run does it, and its digest, in the shape `ask` and `options` accept as `run`. Calls no model and writes nothing |
+| `POST /v1/ontology/:env/decisions` | Records a decision from a tested option |
+| `GET /v1/ontology/:env/decisions` | The project's decisions, most recent first (`scenarioId` for a single scenario) |
+| `GET /v1/ontology/:env/decisions/:id/follow-up` | The arrivals a decision expected beside the observed series, with the gap |
+| `POST /v1/ontology/:env/health-events` | Accepts a candidate: it enters the calendar |
+| `GET /v1/ontology/:env/health-events` | The project's calendar, oldest to most recent (`from`, `to` for a period) |
+| `DELETE /v1/ontology/:env/health-events/:id` | Removes an event from the calendar |
+| `GET /v1/ontology/:env/web-sources` | The domains the search is allowed to look in |
+| `PUT /v1/ontology/:env/web-sources` | Replaces that list |
 
-Corps de la question : `question`, `scenarioId` (ou `null`), `looking` (`reality` ou `scenario`), `run` (le résumé du run à l'écran, ou `null`).
+Body of a question: `question`, `scenarioId` (or `null`), `looking` (`reality` or `scenario`), `run` (the digest of the run on screen, or `null`).
 
-Corps d'un objectif : `objective`, `scenarioId` (obligatoire : une option s'ajoute à un scénario), `horizon` et `activity` (ceux de la page, pour que le test réponde à ce que Run montrerait), `run`.
+Body of an objective: `objective`, `scenarioId` (required: an option is added to a scenario), `horizon` and `activity` (the page's own, so that the test answers what Run would show), `run`.
 
-Corps d'une décision : `exchangeId` et `step`, rien d'autre. Les chiffres sont recopiés par le serveur depuis son journal.
+Body of a decision: `exchangeId` and `step`, nothing else. The figures are copied by the server from its journal.
 
-Corps d'une recherche d'événements : `request`, et `scenarioId` (ou `null`), qui ne sert qu'à dire au journal d'où la demande a été faite. Ni le run ni rien du jumeau n'en fait partie.
+Body of an event search: `request`, and `scenarioId` (or `null`), which only tells the journal where the request was made from. Neither the run nor anything from the twin is part of it.
 
-Corps d'une acceptation : `exchangeId`, `candidate` (`c1`, `c2`…), `startsOn` et `endsOn` (ou `null`). Le titre, le lien et le passage sont recopiés par le serveur depuis son journal.
+Body of an acceptance: `exchangeId`, `candidate` (`c1`, `c2`…), `startsOn` and `endsOn` (or `null`). The title, the link and the passage are copied by the server from its journal.
 
-Lignes du flux :
+Lines of the stream:
 
-| `type` | Contenu |
+| `type` | Content |
 |---|---|
-| `status` | Ce qui est en train d'être fait |
-| `step` | Un appel d'outil : son numéro (`s1`, `s2`…), son entrée, son résultat ou son refus, et le relevé que l'outil a gardé pour l'écran s'il en garde un |
-| `done` | La réponse ou la proposition, les chiffres retirés, les étapes, le modèle, les jetons, et `exchangeId`, l'identifiant de l'échange dans le journal |
-| `failed` | Le modèle ou le moteur n'a pas pu être joint ; remplace `done` |
-| `ping` | Rien : garde la connexion ouverte |
+| `status` | What is being done |
+| `step` | A tool call: its number (`s1`, `s2`…), its input, its result or its refusal, and the record the tool kept for the screen if it keeps one |
+| `done` | The answer or the proposal, the figures removed, the steps, the model, the tokens, and `exchangeId`, the identifier of the exchange in the journal |
+| `failed` | The model or the engine could not be reached; replaces `done` |
+| `ping` | Nothing: keeps the connection open |
 
-Une demande refusée avant de commencer (pas de session, analyste éteint, service de simulation non configuré, corps invalide) est une erreur HTTP ordinaire, pas un flux.
+A request refused before it starts (no session, analyst off, simulation service not configured, invalid body) is an ordinary HTTP error, not a stream.
 
-## Les outils
+## The tools
 
-Aucun n'écrit. Onze lisent ; un douzième, `test_option`, fait tourner le moteur, et n'existe que dans l'onglet Options. Deux mondes : `reality`, le jumeau tel qu'il est ; `scenario`, le même jumeau lu à travers le scénario ouvert.
+None of them writes. Eleven read; a twelfth, `test_option`, runs the engine, and exists only in the Options tab. Two worlds: `reality`, the twin as it is; `scenario`, the same twin read through the open scenario.
 
-L'onglet Event finder est à part : il n'a aucun de ces outils. Il n'a que la recherche web de l'API (`web_search`), qui tourne chez Anthropic et non chez nous, et son outil de livraison. C'est ce qui garantit qu'une recherche ne peut rien emporter du jumeau.
+The Event finder tab is apart: it has none of these tools. It has only the API's web search (`web_search`), which runs at Anthropic and not with us, and its delivery tool. That is what guarantees a search can take nothing from the twin with it.
 
-| Outil | Ce qu'il lit |
+| Tool | What it reads |
 |---|---|
-| `describe_twin` | Vue d'ensemble : sites, activités et unités, territoires, modèle de soins et de propagation déclaré, ce qui manque au jumeau |
-| `find_sites` | Les sites, filtrés par nom, activité ou territoire, les plus grands d'abord |
-| `get_site` | Un site : lieu, unités par activité, patients présents, territoires servis, ce que le scénario y change |
-| `compare_catchments` | Pour une activité : chaque territoire, ses résidents, ses sites, ses unités par 1 000 résidents |
-| `scenario_recipe` | Le scénario : conditions de départ, événements, choix, liens modifiés, série de comparaison |
-| `read_run` | Le run à l'écran : résumé des deux passes, sites où l'on attend, un site jour par jour, le réseau jour par jour |
-| `list_datasets` | Les jeux de données du projet et leurs colonnes |
-| `preview_dataset` | Les premières lignes d'un jeu et les valeurs de ses colonnes de catégorie |
-| `read_series` | Une colonne lue comme série quotidienne : total, moyenne, extrêmes, valeurs |
-| `list_events` | Le calendrier : les événements validés, leurs dates, leur lieu, leur porte, la source qui les a publiés et le passage cité. Quand le jour 0 du scénario a une date, chaque événement est aussi placé sur les jours du run |
-| `calculate` | Un calcul, sur des nombres déjà lus ou donnés dans la question |
-| `test_option` | Onglet Options seulement. Ajoute une option au scénario ouvert, le temps d'un run sur le serveur, et rend le scénario tel quel à côté du scénario avec l'option |
+| `describe_twin` | Overview: sites, activities and units, territories, the declared care and spread model, what the twin lacks |
+| `find_sites` | The sites, filtered by name, activity or territory, largest first |
+| `get_site` | One site: place, units per activity, patients present, territories served, what the scenario changes there |
+| `compare_catchments` | For an activity: each territory, its residents, its sites, its units per 1,000 residents |
+| `scenario_recipe` | The scenario: starting conditions, events, choices, modified links, comparison series |
+| `read_run` | The run on screen: digest of both passes, sites where people wait, one site day by day, the network day by day |
+| `list_datasets` | The project's datasets and their columns |
+| `preview_dataset` | The first rows of a dataset and the values of its category columns |
+| `read_series` | A column read as a daily series: total, mean, extremes, values |
+| `list_events` | The calendar: the validated events, their dates, their place, their gate, the source that published them and the passage quoted. When day 0 of the scenario has a date, each event is also placed on the days of the run |
+| `calculate` | A calculation, on numbers already read or given in the question |
+| `test_option` | Options tab only. Adds an option to the open scenario, for the time of a run on the server, and returns the scenario as it is beside the scenario with the option |
 
-Un outil qui ne peut pas répondre (nom inconnu, deux sites pour un nom, pas de run à l'écran, table qui contient plusieurs séries, option qu'on ne peut pas tester) le dit par un refus motivé que le modèle lit. Il ne devine jamais.
+A tool that cannot answer (unknown name, two sites for one name, no run on screen, a table that holds several series, an option that cannot be tested) says so with a reasoned refusal that the model reads. It never guesses.
 
-Le résumé du run à l'écran est construit par la page (`run-digest.ts`) avec les fonctions que lit déjà le panneau Result : l'analyste et le panneau ne peuvent pas diverger sur un chiffre. Le résumé d'une option testée est construit par le serveur (`scenario-run.ts`), et un test tient les deux ensemble : [algorithms.md](/docs/product/algorithms), section A4.
+The digest of the run on screen is built by the page (`run-digest.ts`) with the functions the Result panel already reads: the analyst and the panel cannot diverge on a figure. The digest of a tested option is built by the server (`scenario-run.ts`), and a test holds the two together: [Algorithms](/docs/product/algorithms), section A4.
 
-## Les options
+## The options
 
-On dit un objectif : « plus personne n'attend à tel site », « le moins de jours-patients d'attente avec au plus 100 lits ajoutés ». L'analyste lit la situation, propose jusqu'à trois options et fait tourner chacune dans le moteur avant de la montrer.
+You state an objective: “nobody waits at this site any more”, “the fewest patient-days of waiting with at most 100 beds added”. The analyst reads the situation, proposes up to three options and runs each one through the engine before showing it.
 
-Une option est une étiquette et un à quatre changements :
+An option is a label and one to four changes:
 
-| Changement | Ce qu'il faut pour le tester |
+| Change | What it takes to test it |
 |---|---|
-| Capacité : des unités d'une activité, à un site, à partir d'un jour (négatif : des unités fermées) | Le site offre déjà cette activité ; on ne ferme pas plus qu'il n'a |
-| Mesure : des couches de contact multipliées, dans certains territoires, pendant des jours | Le jumeau déclare ces couches |
-| Remplacer un choix du scénario : la même capacité ou la même mesure, avec d'autres unités, un autre jour, une autre durée | Le choix est désigné par le nom que lui donne `scenario_recipe` ; c'est une capacité remplacée par une capacité, ou une mesure par une mesure |
-| Retirer un choix du scénario | Le choix est désigné par son nom |
+| Capacity: units of an activity, at a site, from a given day (negative: units closed) | The site already offers that activity; you cannot close more than it has |
+| Measure: contact layers multiplied, in some territories, for a number of days | The twin declares those layers |
+| Replace a choice of the scenario: the same capacity or the same measure, with other units, another day, another duration | The choice is named the way `scenario_recipe` names it; it is a capacity replaced by a capacity, or a measure by a measure |
+| Remove a choice of the scenario | The choice is named |
 
-« 40 lits au lieu des 60 du scénario » est donc un seul tampon à +40 : le test tourne sans les 60 et avec les 40, et c'est ce que la recette contient une fois l'option appliquée. Seuls les choix (mesures, capacité) se remplacent ou se retirent. Les conditions de départ et les événements sont ce qui arrive : une option ne les défait pas.
+“40 beds instead of the scenario's 60” is therefore a single stamp at +40: the test runs without the 60 and with the 40, and that is what the recipe holds once the option is applied. Only choices (measures, capacity) can be replaced or removed. Starting conditions and events are what happens: an option does not undo them.
 
-Ce qui vient du modèle et ce qui n'en vient pas :
+What comes from the model and what does not:
 
-| À l'écran | D'où ça vient |
+| On screen | Where it comes from |
 |---|---|
-| Les chiffres des cartes : pic, sites avec une file, jours-patients d'attente, premier jour de file, pour le scénario tel quel et chaque option. La barre et les cases les dessinent, elles n'ajoutent rien | Les runs du moteur, lus dans le relevé de chaque test. Jamais d'une phrase |
-| L'écart d'une option avec le scénario tel quel (« −7,049 vs as it is ») | Le programme : la soustraction des deux chiffres affichés, arrondis, pour qu'on puisse la refaire de tête |
-| Le décompte « 2 measured · 1 published · 3 assumption » d'une carte | Le programme : il compte les éléments de la liste par niveau. Les trois niveaux ne sont jamais additionnés |
-| Le niveau de preuve de chaque élément : Measured, Published, Assumption | Le programme, d'après d'où vient l'élément (jumeau, scénario, option, règle du moteur) |
-| Les tampons qu'ajoute « Add to scenario » | Le test : ce sont ceux que le moteur a reçus |
-| « What it does to the scenario » : ce que l'option ajoute, remplace et retire, quand elle ne fait pas qu'ajouter | Le programme, à partir des tampons. Le bouton dit alors « Apply to scenario » |
-| Le mécanisme en une phrase, ce que le test ne dit pas, la lecture, les arbitrages, les limites | Le modèle, chaque chiffre contrôlé par le vérificateur |
+| The figures on the cards: peak, sites with a queue, patient-days of waiting, first day of a queue, for the scenario as it is and for each option. The bar and the squares draw them; they add nothing | The engine's runs, read from the record of each test. Never from a sentence |
+| The gap between an option and the scenario as it is (“−7,049 vs as it is”) | The program: the subtraction of the two figures shown, rounded, so it can be redone in your head |
+| The count “2 measured · 1 published · 3 assumption” of a card | The program: it counts the items of the list per level. The three levels are never added together |
+| The level of evidence of each item: Measured, Published, Assumption | The program, from where the item comes from (twin, scenario, option, a rule of the engine) |
+| The stamps that “Add to scenario” adds | The test: they are the ones the engine received |
+| “What it does to the scenario”: what the option adds, replaces and removes, when it does more than add | The program, from the stamps. The button then reads “Apply to scenario” |
+| The mechanism in one sentence, what the test does not say, the reading, the trade-offs, the limits | The model, every figure checked by the verifier |
 
-Ce que l'onglet ne fait pas, par construction : classer les options (elles restent dans l'ordre des tests, et aucune carte n'est marquée comme la meilleure), en lister une qui n'a pas été testée, en cacher une qui l'a été, écrire dans le scénario. Les arbitrages de valeur sont présentés à part, sous « Yours to weigh ».
+What the tab does not do, by construction: rank the options (they stay in the order of the tests, and no card is marked as the best), list one that was not tested, hide one that was, write to the scenario. Trade-offs of values are presented apart, under “Yours to weigh”.
 
-Coût et durée sont bornés : trois tests au plus par objectif, et le scénario tel quel n'est lancé qu'une fois pour les trois, en une seule passe du moteur. Trois options font quatre passes. Pendant un test, l'onglet dit depuis combien de temps il tourne.
+Cost and duration are bounded: three tests at most per objective, and the scenario as it is runs only once for the three, in a single pass of the engine. Three options make four passes. During a test, the tab says how long it has been running.
 
-## Les événements
+## The events
 
-L'analyste ne connaît que le jumeau. Il ne peut pas dire qu'un couvre-feu commençait tel jour. L'onglet Event finder lui donne une recherche en ligne, limitée aux sources officielles que le projet autorise, et un calendrier où n'entre que ce qu'une personne a accepté. Le schéma complet est dans [algorithms.md](/docs/product/algorithms), section A10.
+The analyst knows only the twin. It cannot say that a curfew began on such a day. The Event finder tab gives it an online search, limited to the official sources the project authorises, and a calendar that only what a person accepted can enter. The full diagram is in [Algorithms](/docs/product/algorithms), section A10.
 
-On écrit une demande : « What measures were in force in Montréal between 2021-12-01 and 2022-02-28? ». L'analyste cherche, puis rend des événements **candidats** : un titre, des dates, un lieu, la porte par laquelle l'événement touche un réseau de santé (demande, capacité, accès, soins), le lien vers la source et un court passage cité, entre guillemets.
+You write a request: “What measures were in force in Montréal between 2021-12-01 and 2022-02-28?”. The analyst searches, then returns **candidate** events: a title, dates, a place, the gate through which the event touches a health network (demand, capacity, access, care), the link to the source and a short quoted passage, in quotation marks.
 
-Ce qui vient du modèle et ce qui n'en vient pas :
+What comes from the model and what does not:
 
-| À l'écran | D'où ça vient |
+| On screen | Where it comes from |
 |---|---|
-| Le lien, le titre de la page, le passage | Les citations de la recherche, rendues par l'API. Le serveur vérifie que la page est dans les sources autorisées |
-| La citation entre guillemets, moins de quinze mots | Le modèle la choisit **dans** un passage ; le serveur vérifie qu'elle y est, mot pour mot. Sinon ce sont les premiers mots du passage, et l'écran le dit |
-| Les dates | Le modèle les propose ; le serveur ne garde que celles qu'un passage énonce. Les autres restent vides, et la personne les saisit d'après la source |
-| Le niveau « Published » et la puce WEB | Le programme |
-| Le titre, le lieu, la porte | Le modèle. Un chiffre du titre qui n'est pas dans les passages est retiré |
+| The link, the page's title, the passage | The search's citations, returned by the API. The server checks that the page is among the authorised sources |
+| The quotation in quotation marks, under fifteen words | The model chooses it **within** a passage; the server checks that it is there, word for word. Otherwise it is the first words of the passage, and the screen says so |
+| The dates | The model proposes them; the server keeps only those a passage states. The others stay empty, and the person enters them from the source |
+| The “Published” level and the WEB chip | The program |
+| The title, the place, the gate | The model. A figure in the title that is not in the passages is removed |
 
-**Accept** fait entrer le candidat au calendrier, avec les dates que la personne a validées ; elle peut les corriger d'abord, et les deux versions sont gardées. **Reject** n'envoie rien au serveur : le candidat n'entre dans aucune table d'événements, et ni l'analyste ni la frise ne le voient. Il reste dans le journal de l'échange où il a été proposé, comme tout ce que l'analyste a écrit.
+**Accept** puts the candidate on the calendar, with the dates the person validated; they can correct them first, and both versions are kept. **Reject** sends nothing to the server: the candidate enters no table of events, and neither the analyst nor the timeline sees it. It stays in the journal of the exchange where it was proposed, like everything the analyst wrote.
 
-Une fois accepté, un événement :
+Once accepted, an event:
 
-- apparaît dans le couloir « Context » de la frise, placé d'après la date que le scénario donne à son jour 0 (réglage « Reality check »). Sans cette date, le couloir dit pourquoi il est vide ;
-- est lu par l'analyste avec `list_events`, dans les onglets Ask et Options. Une réponse qui s'en sert porte, sous le paragraphe, une puce WEB avec le lien et le niveau « Published » ;
-- se retire du calendrier depuis la frise, sur un clic confirmé.
+- appears in the “Context” lane of the timeline, placed from the date the scenario gives to its day 0 (the “Reality check” setting). Without that date, the lane says why it is empty;
+- is read by the analyst with `list_events`, in the Ask and Options tabs. An answer that uses it carries, under the paragraph, a WEB chip with the link and the “Published” level;
+- is removed from the calendar from the timeline, on a confirmed click.
 
-Les sources se règlent dans l'onglet (« Sources searched », Change) : une liste de domaines par projet, vingt au plus. Sans réglage, la liste de départ s'applique : inspq.qc.ca, quebec.ca, msss.gouv.qc.ca, donneesquebec.ca, canada.ca, who.int.
+The sources are set in the tab (“Sources searched”, Change): a list of domains per project, twenty at most. With nothing set, the starting list applies: inspq.qc.ca, quebec.ca, msss.gouv.qc.ca, donneesquebec.ca, canada.ca, who.int.
 
-Rien du jumeau ne part dans une recherche. Dans cet échange le modèle n'a aucun outil de lecture, et son contexte ne nomme ni le projet ni le scénario : il n'a que la demande, la liste des sources et la date du jour.
+Nothing from the twin leaves in a search. In that exchange the model has no reading tool, and its context names neither the project nor the scenario: it has only the request, the list of sources and today's date.
 
-État au 2026-11-17, en production, avec le vrai modèle et la vraie recherche, sur le scénario « Omicron · Montréal — calibrated on INSPQ ».
+State on 2026-11-17, in production, with the real model and the real search, on the scenario “Omicron · Montréal — calibrated on INSPQ”.
 
-- La demande « What public health measures were in force in Montréal between 2021-12-13 and 2022-02-10? Include the curfew and the dates schools closed and reopened in Québec. » a rendu douze candidats en cinq recherches, sans rien de retiré. Parmi eux le couvre-feu, du 31 décembre 2021 au 17 janvier 2022 (quebec.ca), et les écoles, fermées à compter du 21 décembre avec un retour en classe le 17 janvier (inspq.qc.ca et quebec.ca). Les passages de ces deux candidats ont été relus un à un : ils disent ce que les candidats en retiennent.
-- Deux candidats sont arrivés sans date de début, parce que leur passage ne la donnait pas : l'écran demande de la lire dans la source.
-- Reject n'a déclenché aucun appel au serveur.
-- Dans l'onglet Ask, `list_events` a répondu que le calendrier est vide et a renvoyé vers Event finder ; une question de référence sur le jumeau a redonné ses chiffres connus.
-- Accept, le couloir Context et une réponse qui cite un événement ont été exercés en production le 2026-11-20 : le couvre-feu et la fermeture des écoles, acceptés d'un clic, apparaissent sur la frise du scénario, et l'analyste les cite avec leur lien quand on lui demande ce qui se passait au pic des admissions.
-- Coût observé de cette demande ce jour-là : 32 étapes, 5 recherches, environ 319 000 jetons lus et écrits. Il a été réduit depuis : voir ci-dessous.
+- The request “What public health measures were in force in Montréal between 2021-12-13 and 2022-02-10? Include the curfew and the dates schools closed and reopened in Québec.” returned twelve candidates in five searches, with nothing removed. Among them the curfew, from 31 December 2021 to 17 January 2022 (quebec.ca), and the schools, closed from 21 December with a return to class on 17 January (inspq.qc.ca and quebec.ca). The passages of those two candidates were read back one by one: they say what the candidates take from them.
+- Two candidates arrived without a start date, because their passage did not give it: the screen asks to read it in the source.
+- Reject triggered no call to the server.
+- In the Ask tab, `list_events` answered that the calendar is empty and pointed to Event finder; a reference question about the twin gave its known figures again.
+- Accept, the Context lane and an answer that cites an event were exercised in production on 2026-11-20: the curfew and the school closure, accepted with one click, appear on the scenario's timeline, and the analyst cites them with their link when asked what was happening at the peak of admissions.
+- Observed cost of that request that day: 32 steps, 5 searches, about 319,000 tokens read and written. It has been reduced since: see below.
 
-### Ce que coûte une recherche
+### What a search costs
 
-Mesuré en production le 2026-11-20, sur la même demande de référence, avec le modèle `claude-opus-5-5`. Le journal garde les jetons de chaque requête par prix (`usage.byRequest`), ce qui a permis de voir où ils allaient. Prix lus le même jour sur la page de tarification de l'API : 4 $ par million de jetons lus, 5 $ écrits au cache, 0,20 $ relus du cache, 20 $ écrits par le modèle, et 10 $ pour 1 000 recherches.
+Measured in production on 2026-11-20, on the same reference request, with the model `claude-opus-5-5`. The journal keeps the tokens of each request per price (`usage.byRequest`), which made it possible to see where they went. Prices read the same day on the API's pricing page: $4 per million tokens read, $5 written to the cache, $0.20 read back from the cache, $20 written by the model, and $10 per 1,000 searches.
 
-| | Avant | Après |
+| | Before | After |
 |---|---|---|
-| Requêtes au modèle | 3 | 2 |
-| Recherches lancées | 5 | 6 |
-| Jetons écrits au cache | 155 661 | 99 413 |
-| Jetons relus du cache | 131 228 | 4 806 |
-| Jetons lus au plein tarif | 14 | 10 |
-| Jetons écrits par le modèle | 9 633 | 7 421 |
-| **Total des jetons** | **296 536** | **111 650** |
-| **Prix de la demande** | **1,05 $** | **0,71 $** |
-| Candidats rendus, rien de retiré | 12 | 12 |
-| Durée | 87 s | 68 s |
+| Requests to the model | 3 | 2 |
+| Searches launched | 5 | 6 |
+| Tokens written to the cache | 155,661 | 99,413 |
+| Tokens read back from the cache | 131,228 | 4,806 |
+| Tokens read at full price | 14 | 10 |
+| Tokens written by the model | 9,633 | 7,421 |
+| **Total tokens** | **296,536** | **111,650** |
+| **Price of the request** | **$1.05** | **$0.71** |
+| Candidates returned, nothing removed | 12 | 12 |
+| Duration | 87 s | 68 s |
 
-Le total a baissé de 62 %, le prix de 33 %. Les deux chiffres ne bougent pas ensemble, et c'est le constat qui compte : **ce qui coûte, c'est d'écrire les pages une fois, pas de les relire.** Une recherche renvoie dix pages, environ 14 800 jetons, soit à peu près 8 cents (7 cents de jetons, 1 cent de recherche). Relire ces pages depuis le cache est vingt-cinq fois moins cher que de les écrire.
+The total fell by 62 %, the price by 33 %. The two figures do not move together, and that is the finding that matters: **what costs is writing the pages once, not reading them again.** A search returns ten pages, about 14,800 tokens, or roughly 8 cents (7 cents of tokens, 1 cent of search). Reading those pages back from the cache is twenty-five times cheaper than writing them.
 
-Où allaient les jetons, et ce qui a été changé :
+Where the tokens went, and what was changed:
 
-| Constat | Changement | Effet mesuré |
+| Finding | Change | Measured effect |
 |---|---|---|
-| La livraison des candidats, puis sa correction quand un brouillon était renvoyé, repartaient avec toutes les pages : 162 706 jetons d'entrée, plus de la moitié de la demande. Et la deuxième requête ne relisait rien du cache de la première : ses 76 421 jetons étaient réécrits, pour 38 cents | La livraison se fait dans une conversation neuve, qui ne contient que la demande, les recherches faites et les passages relevés. Les pages ne repartent plus | La livraison passe de 162 706 jetons d'entrée à 5 967. La demande passe de 1,05 $ à 0,70 $ |
-| Chaque recherche lancée seule fait relire tout ce que les précédentes ont renvoyé : 128 315 jetons relus pour six recherches | Les consignes demandent de prévoir les recherches et de les lancer ensemble, dans la même étape | La relecture passe de 128 315 jetons à 4 806. Le prix ne bouge presque pas (2,5 cents) : ces jetons-là étaient déjà au tarif du cache |
+| Delivering the candidates, then correcting the delivery when a draft was sent back, set off again with all the pages: 162,706 input tokens, more than half the request. And the second request read nothing back from the first one's cache: its 76,421 tokens were written again, for 38 cents | Delivery happens in a fresh conversation, which holds only the request, the searches made and the passages noted. The pages no longer travel | Delivery goes from 162,706 input tokens to 5,967. The request goes from $1.05 to $0.70 |
+| Each search launched on its own makes everything the earlier ones returned be read again: 128,315 tokens read back for six searches | The instructions ask for the searches to be planned and launched together, in the same step | Reading back goes from 128,315 tokens to 4,806. The price hardly moves (2.5 cents): those tokens were already at the cache rate |
 
-Ce qui n'a pas été retenu, et pourquoi :
+What was not adopted, and why:
 
-- **Le filtrage des résultats par l'API** (la recherche lancée depuis son bac à code, qui ne garde que les extraits utiles). La documentation de l'API le dit : les recherches lancées ainsi ne comptent pas dans le plafond d'un échange à plusieurs requêtes, et ce mode n'est pas admissible aux engagements de non-conservation des données. Le plafond de huit recherches doit tenir, donc la recherche reste appelée directement.
-- **Couper le cache pour cet échange.** Les pages ne sont plus relues par une autre requête, et les écrire au cache coûte un quart de plus que de les lire simplement : environ 9 cents par demande. Mais si le modèle lance une recherche après les autres, tout ce qui précède est relu, et sans cache cette relecture coûterait vingt fois plus. Le cache reste, comme une assurance.
-- **Baisser le plafond de huit recherches.** Le modèle en a lancé cinq ou six sur la demande de référence. Le plafond est une limite, pas une cible.
+- **Filtering of results by the API** (the search launched from its code sandbox, which keeps only the useful excerpts). The API's documentation says it: searches launched that way do not count towards the cap of an exchange with several requests, and that mode is not eligible for zero-data-retention commitments. The cap of eight searches has to hold, so the search is still called directly.
+- **Switching the cache off for this exchange.** The pages are no longer read back by another request, and writing them to the cache costs a quarter more than simply reading them: about 9 cents per request. But if the model launches one search after the others, everything before it is read again, and without a cache that reading would cost twenty times more. The cache stays, as an insurance.
+- **Lowering the cap of eight searches.** The model launched five or six on the reference request. The cap is a limit, not a target.
 
-Ce que ces mesures ne disent pas :
+What these measurements do not say:
 
-- **Une demande par état, pas une moyenne.** Le nombre de recherches change d'une fois à l'autre (cinq, puis six), et le prix avec lui.
-- **Lancer les recherches ensemble est une consigne, pas une garantie.** Si le modèle cherche en plusieurs temps, la relecture revient : la mesure intermédiaire, six recherches lancées en plusieurs étapes, a coûté 230 735 jetons pour le même prix, 0,70 $.
-- **Pourquoi la deuxième requête ne relisait pas le cache n'a pas été établi.** L'explication la plus probable est dans la documentation de l'API : un point de cache ne cherche une entrée que sur les vingt blocs qui le précèdent, et la première réponse en contient plusieurs dizaines après la dernière page (une phrase citée par bloc). La question ne se pose plus, puisque les pages ne repartent plus.
-- **Les dates tiennent aux passages, et les passages changent d'une fois à l'autre.** Sur les trois demandes, le couvre-feu est revenu une fois sans sa date de fin, une fois sans sa date de début, une fois avec les deux ; les écoles deux fois avec leurs deux dates. C'était déjà vrai avant ces changements : une date n'est gardée que si un passage l'énonce, et c'est la personne qui la complète sinon.
+- **One request per state, not an average.** The number of searches changes from one time to the next (five, then six), and the price with it.
+- **Launching the searches together is an instruction, not a guarantee.** If the model searches in several stages, the reading back returns: the intermediate measurement, six searches launched over several steps, cost 230,735 tokens for the same price, $0.70.
+- **Why the second request did not read the cache back was not established.** The most likely explanation is in the API's documentation: a cache breakpoint looks for an entry only across the twenty blocks before it, and the first answer holds several dozen after the last page (one quoted sentence per block). The question no longer arises, since the pages no longer travel.
+- **The dates depend on the passages, and the passages change from one time to the next.** Over the three requests, the curfew came back once without its end date, once without its start date, once with both; the schools twice with both their dates. That was already true before these changes: a date is kept only if a passage states it, and the person completes it otherwise.
 
-## Les décisions
+## The decisions
 
-« Record decision » garde l'option retenue avec ce qu'on en attend. Le navigateur n'envoie que l'identifiant de l'échange et l'étape du test ; le serveur recopie tout le reste depuis son journal : l'objectif, les tampons, les chiffres du run testé avec et sans l'option, les arrivées jour par jour, les niveaux de preuve, les étapes sources. On ne peut donc enregistrer qu'une option que le moteur a testée.
+“Record decision” keeps the option retained with what is expected of it. The browser sends only the identifier of the exchange and the step of the test; the server copies everything else from its journal: the objective, the stamps, the figures of the tested run with and without the option, the arrivals day by day, the levels of evidence, the source steps. So only an option the engine tested can be recorded.
 
-Une décision ne se modifie pas : la revoir, c'est en enregistrer une autre.
+A decision cannot be edited: revising it means recording another one.
 
-Le suivi (« Compare with observed ») existe quand une série observée est liée au scénario, par le réglage « Reality check » du panneau Result. Il pose les arrivées que le run testé attendait à côté de celles qui ont été comptées, et donne l'écart : totaux sur les jours que les deux rapportent, écart moyen par jour, décalage des pics. Il ne conclut pas. Et il ne compare que des arrivées : le jumeau ne garde aucun historique des files ni de l'occupation, donc la file attendue n'a rien d'observé en face, ce que l'écran dit.
+The follow-up (“Compare with observed”) exists when an observed series is linked to the scenario, through the “Reality check” setting of the Result panel. It sets the arrivals the tested run expected beside those that were counted, and gives the gap: totals over the days both report, average gap per day, offset of the peaks. It does not conclude. And it compares arrivals only: the twin keeps no history of queues or of occupancy, so the expected queue has nothing observed to face it, which the screen says.
 
-## La règle des chiffres
+## The rule of numbers
 
-1. Chaque paragraphe cite les étapes sur lesquelles il repose.
-2. Chaque chiffre du paragraphe doit se trouver dans les résultats de **ces** étapes, ou dans la question de la personne.
-3. Un chiffre dérivé (différence, part, taux) passe par `calculate`, qui devient une étape citée.
-4. Un chiffre écrit à côté d'un nom de site ou de territoire doit être dans la ligne de ce nom. S'il est dans la ligne d'un autre, c'est une interversion.
-5. Un chiffre introuvable ou interverti renvoie le brouillon au modèle, deux fois au plus. Ensuite il est retiré, et l'écran montre l'endroit où il manquait.
-6. Un chiffre venu du web doit se trouver dans le passage cité, ou dans le titre de sa page. Une date y compte quand le passage l'écrit, même en toutes lettres. Dans une réponse, un événement du calendrier se cite par l'étape `list_events` qui l'a rendu : ses dates sont celles qu'une personne a validées.
+1. Each paragraph cites the steps it rests on.
+2. Each figure in the paragraph must be found in the results of **those** steps, or in the person's question.
+3. A derived figure (difference, share, rate) goes through `calculate`, which becomes a cited step.
+4. A figure written beside the name of a site or a territory must be in that name's line. If it is in another's line, it is a swap.
+5. A figure that cannot be found, or is swapped, sends the draft back to the model, twice at most. After that it is removed, and the screen shows the place where it was.
+6. A figure that came from the web must be found in the quoted passage, or in the title of its page. A date counts there when the passage writes it, even spelled out. In an answer, an event of the calendar is cited by the `list_events` step that returned it: its dates are the ones a person validated.
 
-Les outils rendent les comptes de personnes et les pourcentages arrondis une seule fois, comme l'écran les écrit (103, 93 %). Rendus avec une décimale, le modèle les arrondissait une seconde fois : 103,46 devenait 103,5 puis « environ 104 », à côté d'un panneau qui dit 103. Et la liste des sites où l'on attend arrive dans l'ordre où ils cassent, pour que « lequel d'abord » se lise au lieu de se calculer.
+The tools return counts of people and percentages rounded once, the way the screen writes them (103, 93 %). Returned with one decimal, the model rounded them a second time: 103.46 became 103.5 then “about 104”, beside a panel that says 103. And the list of sites where people wait arrives in the order in which they break, so that “which one first” is read rather than computed.
 
-Ce que la règle garantit : aucun chiffre affiché n'a été inventé, ni pris dans la ligne d'un autre site. Ce qu'elle ne garantit pas : que la phrase autour du chiffre est juste. C'est pourquoi chaque étape s'ouvre sous la réponse, avec ce que l'outil a renvoyé.
+What the rule guarantees: no figure shown was invented, or taken from another site's line. What it does not guarantee: that the sentence around the figure is right. That is why each step opens under the answer, with what the tool returned.
 
-## Le journal
+## The journal
 
-Chaque échange est gardé dans `app.analyst_exchange` (migration 059) : la question ou l'objectif, le monde regardé, chaque étape avec son entrée, son résultat et son relevé, ce qui a été affiché, les chiffres retirés, le modèle et les jetons. La colonne `kind` dit si c'est une question (`ask`), un objectif (`options`, migration 060) ou une recherche d'événements (`events`, migration 062). Pour une recherche, le monde regardé est `web`, et les étapes sont les requêtes, les pages rendues et les passages cités. Rien n'est modifié après l'insertion.
+Each exchange is kept in `app.analyst_exchange` (migration 059): the question or the objective, the world looked at, each step with its input, its result and its record, what was shown, the figures removed, the model and the tokens. The `kind` column says whether it is a question (`ask`), an objective (`options`, migration 060) or an event search (`events`, migration 062). For a search, the world looked at is `web`, and the steps are the queries, the pages returned and the passages quoted. Nothing is modified after insertion.
 
-Les jetons sont gardés requête par requête (`usage.byRequest`) et par prix : ce qui a été lu au plein tarif (`input`), ce qui a été écrit au cache (`cacheWrite`), ce qui a été relu du cache (`cacheRead`), ce qui a été écrit par le modèle (`output`), et les recherches web lancées dans la requête. Un échange coûte peu ou cher selon la part de chaque requête qui est relue du cache : c'est ce que ce détail permet de vérifier après coup, au lieu de le supposer. Le total affiché à l'écran reste la somme de tous les jetons, quel que soit leur prix.
+Tokens are kept request by request (`usage.byRequest`) and per price: what was read at full price (`input`), what was written to the cache (`cacheWrite`), what was read back from the cache (`cacheRead`), what was written by the model (`output`), and the web searches launched in the request. An exchange costs little or a lot depending on the share of each request that is read back from the cache: that is what this detail makes it possible to check afterwards, instead of assuming it. The total shown on screen remains the sum of all tokens, whatever their price.
 
-L'identifiant de la ligne est choisi avant l'échange et part avec la ligne `done` du flux. C'est ce qui permet d'enregistrer une décision à partir d'un test : si l'écriture au journal a échoué, la décision est refusée et il faut tester à nouveau.
+The identifier of the row is chosen before the exchange and leaves with the `done` line of the stream. That is what allows a decision to be recorded from a test: if the write to the journal failed, the decision is refused and the test has to be run again.
 
-Les décisions sont dans `app.decision` (migration 061). Les événements acceptés sont dans `app.health_event`, et les sources autorisées d'un projet dans `app.project_web_source` (migration 062).
+Decisions are in `app.decision` (migration 061). Accepted events are in `app.health_event`, and a project's authorised sources in `app.project_web_source` (migration 062).
 
-## L'écran
+## The screen
 
-`AnalystPanel.tsx`, dans un `OverlayPanel` sous « Layers », replié à l'arrivée. Quatre onglets, dans l'ordre de la boucle ; chacun n'est construit qu'à sa première ouverture, puis garde ce qu'on y a fait.
+`AnalystPanel.tsx`, in an `OverlayPanel` under “Layers”, folded on arrival. Four tabs, in the order of the loop; each is built only when first opened, then keeps what was done in it.
 
-**Event finder** (`EventFinderTab.tsx`), de haut en bas : la demande, et des demandes suggérées sur les dates du scénario, où il reste à écrire le lieu ; les sources cherchées et de quoi les changer ; les recherches, qui s'affichent pendant qu'elles tournent ; un bandeau qui dit si tout a été trouvé dans les passages ; une carte par candidat (porte, niveau « Published », puce WEB, titre, lieu, citation et lien, les passages sur lesquels il repose, qui ouvrent l'étape où le passage se lit en entier, dates à corriger, Accept, Reject) ; ce qui n'a pas été trouvé ; les limites ; les étapes. Un candidat refusé se replie en une ligne, avec de quoi revenir dessus : le refus n'a rien écrit nulle part.
+**Event finder** (`EventFinderTab.tsx`), top to bottom: the request, and suggested requests on the scenario's dates, where the place remains to be written; the sources searched and the means to change them; the searches, shown while they run; a banner that says whether everything was found in the passages; one card per candidate (gate, “Published” level, WEB chip, title, place, quotation and link, the passages it rests on, which open the step where the passage reads in full, dates to correct, Accept, Reject); what was not found; the limits; the steps. A rejected candidate folds into one line, with the means to come back to it: the rejection wrote nothing anywhere.
 
-**Context** (`ContextLane.tsx`) n'est pas dans le panneau mais dans la frise : le couloir des événements validés, au-dessus des couloirs de tampons. Un clic sur un événement l'ouvre : source, citation, qui l'a accepté, et de quoi le retirer.
+**Context** (`ContextLane.tsx`) is not in the panel but in the timeline: the lane of validated events, above the stamp lanes. A click on an event opens it: source, quotation, who accepted it, and the means to remove it.
 
-**Options** (`OptionsTab.tsx`), de haut en bas : sur quoi les options sont testées ; l'objectif, et des objectifs suggérés d'après le run à l'écran ; les tests, qui s'affichent pendant qu'ils tournent, avec la durée de ce qui est en cours ; la carte du scénario tel quel, en pointillé ; une carte par option ; la lecture ; les arbitrages laissés à la personne ; les limites ; ce sur quoi toutes les options reposent ; les étapes. Un bandeau dit quand le scénario n'est plus celui qui a été testé, et pourquoi : une option ajoutée depuis l'onglet, plusieurs ajoutées ensemble, ou une modification faite ailleurs.
+**Options** (`OptionsTab.tsx`), top to bottom: what the options are tested on; the objective, and objectives suggested from the run on screen; the tests, shown while they run, with the duration of what is in progress; the card of the scenario as it is, with a dashed border; one card per option; the reading; the trade-offs left to the person; the limits; what every option rests on; the steps. A banner says when the scenario is no longer the one that was tested, and why: an option added from the tab, several added together, or an edit made elsewhere.
 
-Une carte d'option se lit d'un coup d'œil et s'explique d'un clic (`option-cards.tsx`). En haut : sa lettre, son libellé, et ce à quoi le run aboutit en trois mots (« Nobody waits », ou « 4 sites with a queue »). Puis ses chiffres, dessinés :
+An option's card reads at a glance and explains itself on a click (`option-cards.tsx`). At the top: its letter, its label, and what the run comes to in three words (“Nobody waits”, or “4 sites with a queue”). Then its figures, drawn:
 
-- les jours-patients d'attente, avec l'écart au scénario tel quel, et une barre. Toutes les barres de l'onglet sont à la même échelle, celle de la plus longue attente, et un trait y marque le scénario tel quel : on compare deux options sans lire un chiffre ;
-- les sites avec une file, « 3 of 34 », et une case par site, rouge quand il a une file. Au-delà de 60 sites, les cases deviennent une part de barre ;
-- le pic d'occupation et son jour, le premier jour où quelqu'un attend, et l'attente là où aucun site ne sert quand le scénario en a.
+- the patient-days of waiting, with the gap from the scenario as it is, and a bar. Every bar in the tab is on the same scale, that of the longest wait, and a tick on it marks the scenario as it is: two options are compared without reading a figure;
+- the sites with a queue, “3 of 34”, and a square per site, red when it has a queue. Beyond 60 sites, the squares become a share of a bar;
+- the peak occupancy and its day, the first day somebody waits, and the waiting where no site serves when the scenario has some.
 
-Sous les chiffres, trois lignes repliées, qui s'ouvrent d'un clic : « Why this option » (le mécanisme, ce que l'option remplace ou retire, et l'étape qui l'a testée), « What it rests on » (chaque élément avec son niveau de preuve ; le décompte par niveau se lit sans ouvrir), « What this test does not say ». Une ligne dont le texte a perdu un chiffre s'ouvre toute seule : un retrait ne se cache pas derrière un clic. En bas, « Add to scenario » (ou « Apply to scenario ») et « Record decision ».
+Under the figures, three folded lines, which open on a click: “Why this option” (the mechanism, what the option replaces or removes, and the step that tested it), “What it rests on” (each item with its level of evidence; the count per level reads without opening), “What this test does not say”. A line whose text lost a figure opens by itself: a removal is not hidden behind a click. At the bottom, “Add to scenario” (or “Apply to scenario”) and “Record decision”.
 
-**Decisions** (`DecisionsTab.tsx`) : les décisions du scénario ouvert d'abord, puis celles des autres scénarios du projet. Chacune est une carte du même dessin : qui l'a prise, quand, l'objectif, les chiffres attendus avec l'option (l'écart est donné contre le même run sans elle), puis, repliés, l'attendu sans l'option, le mécanisme, sur quoi elle reposait, ce que le test ne disait pas. Le suivi se demande d'un bouton. L'onglet se lit même quand l'analyste est éteint : une décision est un enregistrement, pas une réponse.
+**Decisions** (`DecisionsTab.tsx`): the decisions of the open scenario first, then those of the project's other scenarios. Each is a card of the same design: who took it, when, the objective, the figures expected with the option (the gap is given against the same run without it), then, folded, what was expected without the option, the mechanism, what it rested on, what the test did not say. The follow-up is asked for with a button. The tab reads even when the analyst is off: a decision is a record, not an answer.
 
-**Ask**, de haut en bas :
+**Ask**, top to bottom:
 
-- ce qu'il va lire (le scénario ou la réalité, et le run s'il y en a un) ;
-- la question, et des questions suggérées selon ce qui est à l'écran ;
-- les étapes, qui arrivent pendant la lecture ;
-- la réponse : un bandeau vert quand tous les chiffres sont tracés, orange avec leur nombre quand certains ont été retirés ; sous chaque paragraphe, les puces des étapes citées, qui ouvrent l'étape, et, quand le paragraphe s'appuie sur des événements du calendrier, une puce WEB par événement avec son lien et le niveau « Published » ;
-- ce qui est supposé, ce que la réponse ne peut pas dire ;
-- les sites dont parle la réponse, qui pointent la carte dessus ;
-- les questions à poser ensuite.
+- what it will read (the scenario or reality, and the run if there is one);
+- the question, and questions suggested from what is on screen;
+- the steps, which arrive while it reads;
+- the answer: a green banner when every figure is traced, an orange one with their number when some were removed; under each paragraph, the chips of the steps cited, which open the step, and, when the paragraph relies on events of the calendar, one WEB chip per event with its link and the “Published” level;
+- what is assumed, what the answer cannot say;
+- the sites the answer talks about, which point the map at them;
+- the questions to ask next.
 
-La maquette d'origine est `design/scenario-analyst.html`. Elle montre aussi un onglet qui n'est pas encore construit : « What it can use ».
+The original mock-up is `design/scenario-analyst.html`. It also shows a tab that is not built yet: “What it can use”.
 
-## Ajouter un outil
+## Adding a tool
 
-1. L'écrire dans `backend/src/services/analyst-tools.ts` : un nom, une description pour le modèle, un schéma d'entrée, une validation, une fonction pure qui lit. L'ajouter à `READ_TOOLS`. Un outil qui ne sert qu'aux options va dans `analyst-options.ts` et dans `OPTION_TOOLS`.
-2. Il lit, il n'écrit pas. S'il doit proposer une écriture, la validation reste un clic humain à l'écran. S'il doit rendre plus que le modèle n'a besoin de lire (des séries jour par jour, de quoi agir), il rend un `Recorded` : le résultat va au modèle, le relevé à l'écran et au journal.
-3. Ses résultats nomment les choses comme le jumeau les nomme, et portent leurs unités dans le nom des champs (`occupancy_pct`, `units_per_1000_residents`).
-4. Un cas qu'il ne sait pas traiter lève une `ToolError` qui dit quoi faire à la place.
-5. Lui donner un libellé lisible dans `stepLabel` (`frontend/app/studio/analyst-api.ts`).
-6. Le tester dans `analyst-tools.unit.test.ts`.
-7. Mettre à jour la table des outils ci-dessus, et le schéma A1 si la boucle change.
+1. Write it in `backend/src/services/analyst-tools.ts`: a name, a description for the model, an input schema, a validation, a pure function that reads. Add it to `READ_TOOLS`. A tool that only serves the options goes in `analyst-options.ts` and in `OPTION_TOOLS`.
+2. It reads, it does not write. If it has to propose a write, validation remains a human click on screen. If it has to return more than the model needs to read (day-by-day series, what is needed to act), it returns a `Recorded`: the result goes to the model, the record to the screen and to the journal.
+3. Its results name things the way the twin names them, and carry their units in the field names (`occupancy_pct`, `units_per_1000_residents`).
+4. A case it cannot handle throws a `ToolError` that says what to do instead.
+5. Give it a readable label in `stepLabel` (`frontend/app/studio/analyst-api.ts`).
+6. Test it in `analyst-tools.unit.test.ts`.
+7. Update the table of tools above, and diagram A1 if the loop changes.
 
-## Les questions de référence
+## The reference questions
 
-L'analyste est un modèle de langage : « ça a marché quand j'ai essayé » n'est pas un test. La même question peut être bien répondue un jour et mal le lendemain, après un changement de ses consignes ou de la description d'un outil. Dix-sept questions de référence, sur le jumeau de Montréal et le scénario Omicron calé sur l'INSPQ, disent ce qu'une bonne réponse doit contenir.
+The analyst is a language model: “it worked when I tried” is not a test. The same question can be answered well one day and badly the next, after a change to its instructions or to the description of a tool. Seventeen reference questions, on the Montréal twin and the Omicron scenario fitted to INSPQ data, say what a good answer must contain.
 
 ```bash
-# backend/ — à la main, jamais dans la suite de tests : appelle la vraie API
+# backend/ — by hand, never in the test suite: it calls the real API
 npm run eval:analyst
 npm run eval:analyst -- --times 2 --show
 npm run eval:analyst -- --only three-sites,two-catchments,in-french,run-waiting-by-site
 ```
 
-**La clé.** Le script agit comme une personne : il lui faut une clé d'API Obscyro d'un utilisateur qui peut lire l'environnement. Elle se crée sur la page des clés du compte (`/app/keys`) et s'y révoque ensuite. Le script la lit dans `OBSCYRO_API_KEY` si la variable existe ; sinon il la demande au terminal, tapée ou collée sans s'afficher. C'est la façon à préférer : la clé n'est alors écrite nulle part, ni dans un fichier, ni dans l'historique du terminal. Elle n'a sa place ni dans le dépôt, ni dans `backend/.env`, ni dans un journal, et le script ne l'imprime jamais.
+**The key.** The script acts as a person: it needs an Obscyro API key of a user who can read the environment. It is created on the account's keys page (`/app/keys`) and revoked there afterwards. The script reads it from `OBSCYRO_API_KEY` if the variable exists; otherwise it asks for it in the terminal, typed or pasted without being displayed. That is the way to prefer: the key is then written nowhere, neither in a file nor in the terminal's history. It has no place in the repository, in `backend/.env`, or in a log, and the script never prints it.
 
-**Le run.** Certaines questions portent sur « le run à l'écran ». Le script n'a pas d'écran : il demande au serveur de faire tourner le scénario de référence (`POST /v1/ontology/:env/analyst/run`), c'est-à-dire les deux passes que fait Run sur la page, résumées comme la page les résume. Ce résumé part avec les questions sur le run. Il faut compter environ une minute avant la première question, et le script écrit en une ligne de quel run il s'agit (pic, sites avec une file, jours-patients d'attente, avec et sans les choix) : c'est ce qui permet de distinguer une réponse fausse d'un scénario modifié depuis.
+**The run.** Some questions are about “the run on screen”. The script has no screen: it asks the server to run the reference scenario (`POST /v1/ontology/:env/analyst/run`), that is, the two passes Run does on the page, summarised the way the page summarises them. That digest goes with the questions about the run. Allow about a minute before the first question, and the script writes in one line which run it is (peak, sites with a queue, patient-days of waiting, with and without the choices): that is what makes it possible to tell a wrong answer from a scenario edited since.
 
-| Option | Ce qu'elle fait |
+| Option | What it does |
 |---|---|
-| `--horizon`, `--activity` | Les jours du run et l'activité qu'il lit. Par défaut 60 jours et `litsantephysique`, comme la page |
-| `--save-run fichier.json` | Garde le run fait par le serveur |
-| `--run fichier.json` | Rejoue un run gardé, sans en refaire un |
-| `--no-run` | Ne fait aucun run : les questions sur le run sont sautées, et le rapport le dit |
-| `--only id,id` | Seulement ces questions |
-| `--times n` | Chaque question n fois. Par défaut 2 |
-| `--show` | Imprime chaque réponse, pour qu'une personne la lise |
+| `--horizon`, `--activity` | The days of the run and the activity it reads. By default 60 days and `litsantephysique`, like the page |
+| `--save-run file.json` | Keeps the run done by the server |
+| `--run file.json` | Replays a kept run, without doing another |
+| `--no-run` | Does no run: the questions about the run are skipped, and the report says so |
+| `--only id,id` | Only these questions |
+| `--times n` | Each question n times. By default 2 |
+| `--show` | Prints each answer, for a person to read |
 
-| Ce qui est jugé | Comment |
+| What is judged | How |
 |---|---|
-| Une réponse a été donnée | L'échange se termine comme attendu |
-| Aucun chiffre retiré | `verified` vrai, liste des chiffres retirés vide |
-| Les bons outils ont lu | Chaque outil attendu a été appelé et a renvoyé quelque chose (`a\|b` : l'un ou l'autre) |
-| Les faits connus y sont | Chaque chiffre attendu est dans la réponse, exact ou arrondi comme le vérificateur l'admet |
-| Les mots attendus y sont | Sans tenir compte de la casse ni des accents |
-| Chaque nom garde son chiffre | Un nom et son chiffre sont dans la même proposition (`pairs`) : c'est ce qui attrape deux chiffres justes écrits chacun à côté du mauvais site |
+| An answer was given | The exchange ends as expected |
+| No figure removed | `verified` true, the list of removed figures empty |
+| The right tools read | Each expected tool was called and returned something (`a\|b`: one or the other) |
+| The known facts are there | Each expected figure is in the answer, exact or rounded the way the verifier allows |
+| The expected words are there | Ignoring case and accents |
+| Each name keeps its figure | A name and its figure are in the same clause (`pairs`): that is what catches two right figures each written beside the wrong site |
 
-Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une personne, qui lit les réponses avec `--show`.
+What is not judged: the quality of the writing. That still takes a person, who reads the answers with `--show`.
 
-- Chaque question est rejouée deux fois par défaut : un jeu qui passe une fois n'a pas montré qu'il passe.
-- Quatre questions ont été ajoutées après le premier rejeu réel, pour ce qu'il avait montré de fragile : trois sites cités avec un chiffre chacun (`three-sites`), les sites d'un run avec leur attente (`run-waiting-by-site`), deux territoires comparés (`two-catchments`), une question posée en français (`in-french`). Leurs faits attendus ont été relevés en production le 2026-11-20.
-- Le script sort en erreur dès qu'une question échoue : il peut servir de garde avant de changer les consignes ou un outil.
-- Les faits attendus sont dans le code (`QUESTIONS`). Quand le jumeau ou le scénario change, c'est la question qu'on corrige.
+- Each question is replayed twice by default: a set that passes once has not shown that it passes.
+- Four questions were added after the first real replay, for what it had shown to be fragile: three sites cited with one figure each (`three-sites`), the sites of a run with their waiting (`run-waiting-by-site`), two territories compared (`two-catchments`), a question asked in French (`in-french`). Their expected facts were recorded in production on 2026-11-20.
+- The script exits with an error as soon as a question fails: it can serve as a guard before changing the instructions or a tool.
+- The expected facts are in the code (`QUESTIONS`). When the twin or the scenario changes, it is the question that gets corrected.
 
-### Dernier rejeu
+### Latest replay
 
-2026-11-17, en production, modèle `claude-opus-5-5`, effort `medium`, scénario « Omicron · Montréal — calibrated on INSPQ » avec son run à l'écran :
+2026-11-17, in production, model `claude-opus-5-5`, effort `medium`, scenario “Omicron · Montréal — calibrated on INSPQ” with its run on screen:
 
 | | |
 |---|---|
-| Questions | 13, rejouées 2 fois chacune : 26 réponses |
-| Réussies | 26 sur 26 |
-| Chiffres retirés | aucun |
-| Durée médiane d'une réponse | 15,1 s |
-| Réponse la plus lente | 38,8 s (une question sur le run, 7 étapes) |
-| Jetons par réponse | de 11 500 à 61 800 |
+| Questions | 13, replayed twice each: 26 answers |
+| Passed | 26 out of 26 |
+| Figures removed | none |
+| Median duration of an answer | 15.1 s |
+| Slowest answer | 38.8 s (a question about the run, 7 steps) |
+| Tokens per answer | from 11,500 to 61,800 |
 
-L'effort reste à `medium` : à cette durée il n'y a rien à gagner à le baisser, et le rejeu passe sans rien retirer.
+The effort stays at `medium`: at that duration there is nothing to gain by lowering it, and the replay passes with nothing removed.
 
-Ce rejeu a été lancé depuis la page, dans le navigateur, avec le même code de jugement (`judge`, `QUESTIONS`) que le script, et le résumé du run venait de la page elle-même. Il portait sur les treize questions d'alors.
+That replay was launched from the page, in the browser, with the same judging code (`judge`, `QUESTIONS`) as the script, and the digest of the run came from the page itself. It covered the thirteen questions of the time.
 
-Depuis le 2026-11-20, le script n'a plus besoin de rien de préparé à la main : le serveur fait le run, et la clé se donne au terminal. Le run fait par le serveur a été vérifié en production ce jour-là : en 64 secondes, il rend les chiffres du panneau Result (94 % et 93 % au pic, 8 puis 3 sites sur 34 avec une file, 7 316 puis 267 jours-patients d'attente) et l'ordre des files que les questions attendent. **Il reste à le lancer une fois contre la production, deux passes, et à remplacer ce tableau par son résultat** : c'est une personne qui détient la clé, pas un outil.
+Since 2026-11-20, the script no longer needs anything prepared by hand: the server does the run, and the key is given in the terminal. The run done by the server was verified in production that day: in 64 seconds, it returns the figures of the Result panel (94 % and 93 % at the peak, 8 then 3 sites out of 34 with a queue, 7,316 then 267 patient-days of waiting) and the order of the queues the questions expect. **What remains is to launch it once against production, two passes, and to replace this table with its result**: a person holds the key, not a tool.
 
-Quatre réponses ont été relues par une personne et comparées au panneau Result : l'ordre des files, le résumé des choix, le cas sans run, et la question à laquelle l'outil ne peut pas répondre.
+Four answers were read back by a person and compared with the Result panel: the order of the queues, the summary of the choices, the case with no run, and the question the tool cannot answer.
 
-**Code.** `backend/src/services/analyst-eval.ts` (les questions, le jugement, la lecture d'un flux), `backend/scripts/analyst-eval.ts` (le rejeu), `serverRun` dans `backend/src/services/scenario-run.ts` et la route `POST /v1/ontology/:env/analyst/run` dans `backend/src/routes/analyst.ts` (le run fait par le serveur). **Tests.** `analyst-eval.unit.test.ts`, `scenario-run.unit.test.ts`, `routes/analyst.unit.test.ts`.
+**Code.** `backend/src/services/analyst-eval.ts` (the questions, the judging, the reading of a stream), `backend/scripts/analyst-eval.ts` (the replay), `serverRun` in `backend/src/services/scenario-run.ts` and the route `POST /v1/ontology/:env/analyst/run` in `backend/src/routes/analyst.ts` (the run done by the server). **Tests.** `analyst-eval.unit.test.ts`, `scenario-run.unit.test.ts`, `routes/analyst.unit.test.ts`.
 
-## Limites connues
+## Known limits
 
-- Chaque question, chaque objectif est indépendant : l'analyste ne se souvient pas du précédent.
-- Il ne cherche en ligne que dans l'onglet Event finder. Dans Ask et Options il lit les événements déjà validés, et dit quand aucun ne couvre le moment demandé.
-- Une recherche ne voit que ce que les sources autorisées publient et que le moteur de recherche de l'API en a retenu. Un événement absent des candidats n'est pas un événement qui n'a pas eu lieu.
-- Le serveur ne détient d'une page web que le passage cité, 150 caractères au plus. Une date que la page donne ailleurs que dans ce passage reste vide : il faut ouvrir la source et la saisir.
-- Ce qui est vérifié d'un candidat : son lien, sa citation, ses dates. Que le passage dise bien ce que le titre en retient, et que la porte soit la bonne, c'est la personne qui le juge en acceptant.
-- Le titre, le lieu et la porte d'un candidat ne se corrigent pas à l'écran : seules les dates le peuvent. Un candidat mal titré se refuse.
-- Un événement n'a qu'un lieu écrit en mots. Il n'est relié à aucun territoire du jumeau, et le moteur ne le reçoit pas : c'est un repère pour lire un run, pas une entrée du run.
-- Les événements validés sont ceux du projet, pas d'un scénario : tous les scénarios du projet voient le même calendrier.
-- Une recherche d'événements coûte environ 70 cents, mesuré le 2026-11-20 : chaque recherche lancée renvoie dix pages, près de 15 000 jetons, et aucun réglage de l'API ne permet d'en demander moins sans renoncer au plafond de recherches. Le détail est dans « Ce que coûte une recherche ».
-- Le jumeau ne contient ni personnel, ni stocks, ni historique : l'analyste le dit, il ne le comble pas.
-- Le run à l'écran n'est pas gardé au rechargement de la page ; il faut relancer Run. Les options testées non plus : ce qui reste, ce sont les décisions enregistrées et le journal.
-- Une option est faite de capacité et de mesures. Un transfert de patients, du personnel, un stock, un lien nouveau entre un site et un territoire ne se testent pas : le moteur ou le jumeau ne les portent pas. L'analyste les range dans les limites.
-- Une option est testée sur le scénario tel qu'il est au moment du test. Ajouter une option puis une autre donne un scénario qu'aucun test n'a couvert : l'écran prévient, et il faut redire l'objectif.
-- Une option peut remplacer ou retirer un choix du scénario, mais pas une condition de départ ni un événement. Remplacer une capacité par une mesure se fait en deux changements de la même option : retirer l'une, ajouter l'autre.
-- Appliquer une option qui retire un choix se fait en deux écritures, le nouveau tampon puis le retrait de l'ancien, et non en une seule opération. Si la seconde échoue, la recette garde les deux tampons : l'écran le montre, et le retrait se fait à la main. Si le tampon à retirer n'est plus là au moment du clic, rien n'est écrit.
-- Le nom d'un choix (`choice-a`) vaut pour un échange. Une question suivante relit la recette et peut lui donner un autre nom.
-- Un objectif prend plusieurs minutes sur le jumeau de Montréal. Le premier test lance deux passes du moteur (le scénario tel quel, puis l'option) après avoir lu le jumeau et calculé la propagation ; les suivants, une seule. Mesuré en production le 2026-11-18, sur le scénario de démonstration et le même objectif (« How do we stop the queue at Lakeshore? »), trois options testées :
+- Each question, each objective is independent: the analyst does not remember the previous one.
+- It searches online only in the Event finder tab. In Ask and Options it reads the events already validated, and says when none covers the moment asked about.
+- A search sees only what the authorised sources publish and what the API's search engine retained of it. An event absent from the candidates is not an event that did not happen.
+- The server holds of a web page only the quoted passage, 150 characters at most. A date the page gives elsewhere than in that passage stays empty: the source has to be opened and the date entered.
+- What is verified about a candidate: its link, its quotation, its dates. Whether the passage really says what the title takes from it, and whether the gate is the right one, is for the person to judge when accepting.
+- The title, the place and the gate of a candidate cannot be corrected on screen: only the dates can. A badly titled candidate is rejected.
+- An event has only a place written in words. It is tied to no territory of the twin, and the engine does not receive it: it is a marker for reading a run, not an input of the run.
+- The validated events are the project's, not a scenario's: every scenario of the project sees the same calendar.
+- An event search costs about 70 cents, measured on 2026-11-20: each search launched returns ten pages, close to 15,000 tokens, and no setting of the API lets you ask for fewer without giving up the cap on searches. The detail is in “What a search costs”.
+- The twin holds no staff, no stocks and no history: the analyst says so, it does not fill the gap.
+- The run on screen is not kept when the page is reloaded; Run has to be launched again. Nor are the tested options: what remains are the recorded decisions and the journal.
+- An option is made of capacity and measures. A transfer of patients, staff, a stock, a new link between a site and a territory cannot be tested: the engine or the twin does not carry them. The analyst files them under the limits.
+- An option is tested on the scenario as it is at the time of the test. Adding one option then another gives a scenario no test covered: the screen warns, and the objective has to be stated again.
+- An option can replace or remove a choice of the scenario, but not a starting condition or an event. Replacing a capacity by a measure is done in two changes of the same option: remove one, add the other.
+- Applying an option that removes a choice is done in two writes, the new stamp then the removal of the old one, and not in a single operation. If the second fails, the recipe keeps both stamps: the screen shows it, and the removal is done by hand. If the stamp to remove is no longer there at the time of the click, nothing is written.
+- The name of a choice (`choice-a`) holds for one exchange. A later question reads the recipe again and may give it another name.
+- An objective takes several minutes on the Montréal twin. The first test launches two passes of the engine (the scenario as it is, then the option) after reading the twin and computing the spread; the following ones, a single pass. Measured in production on 2026-11-18, on the demonstration scenario and the same objective (“How do we stop the queue at Lakeshore?”), three options tested:
 
-  | | Avant (trois passes au premier test) | Après (deux passes) |
+  | | Before (three passes on the first test) | After (two passes) |
   |---|---|---|
-  | Premier test | 161 s | 64 s : une passe de 31 s, une de 32 s |
-  | Deuxième et troisième tests | 30 s et 31 s | 33 s et 33 s |
-  | Les trois tests | 222 s | 130 s |
-  | L'objectif entier | cinq à six minutes | un peu moins de trois minutes |
+  | First test | 161 s | 64 s: one pass of 31 s, one of 32 s |
+  | Second and third tests | 30 s and 31 s | 33 s and 33 s |
+  | The three tests | 222 s | 130 s |
+  | The whole objective | five to six minutes | a little under three minutes |
 
-  La passe retirée fait gagner une passe, une trentaine de secondes. Le reste de l'écart sur le premier test vient de la lecture du jumeau, qu'une étape précédente avait déjà faite dans le second relevé et pas dans le premier. La colonne « As it is » est restée la même : 93 %, 3 sites sur 34, 267 jours-patients, première file au jour 20. Une passe du moteur prend donc une trentaine de secondes sur ce jumeau, et c'est elle qui fixe la durée : pour aller plus vite il faut accélérer le moteur, pas l'analyste.
-- Le suivi d'une décision ne compare que des arrivées (voir « Les décisions »).
+  The pass removed saves one pass, about thirty seconds. The rest of the gap on the first test comes from reading the twin, which an earlier step had already done in the second measurement and not in the first. The “As it is” column stayed the same: 93 %, 3 sites out of 34, 267 patient-days, first queue on day 20. One pass of the engine therefore takes about thirty seconds on this twin, and it is what sets the duration: to go faster the engine has to be sped up, not the analyst.
+- The follow-up of a decision compares arrivals only (see “The decisions”).
 
-État au 2026-11-17 : vérifié en production avec le vrai modèle et le vrai moteur, sur le scénario « Omicron · Montréal — calibrated on INSPQ ».
+State on 2026-11-17: verified in production with the real model and the real engine, on the scenario “Omicron · Montréal — calibrated on INSPQ”.
 
-- Un objectif (« How do we stop the queue at Lakeshore? ») a rendu trois options testées, sans aucun chiffre retiré, et la colonne « As it is » redonne les chiffres du panneau Result.
-- Une option ajoutée au scénario, puis Run : le panneau Result redonne les chiffres de sa colonne (pic 92 %, 3 sites sur 34, 267 jours-patients d'attente, première file au jour 20). Ses tampons retirés, le scénario est revenu à ses 20 tampons et à ses chiffres d'origine.
-- Le 2026-11-20, une option qui remplace un choix a été appliquée d'un clic sur « Apply to scenario » : « 30 beds at Lakeshore from day 10 instead of 60 ». La recette est restée à 20 tampons, avec un seul tampon pour Lakeshore (+30 au jour 10) et plus aucun +60. Run a alors redonné la colonne du test : pic à 93 % au jour 36, 4 sites sur 34 avec une file, 359 jours-patients d'attente, une file à Lakeshore à partir du jour 30, de 8 personnes au plus. Le choix d'origine a ensuite été remis et le +30 retiré : la recette a le même contenu qu'avant (le tampon remis est une nouvelle ligne, rangée en dernier), et Run redonne le panneau Result d'avant au caractère près (3 sites sur 34, 267 jours-patients). Le refus quand le tampon à retirer a disparu n'a pas été provoqué en production : il est tenu par les tests.
-- Une décision enregistrée se relit dans l'onglet Decisions, et son suivi donne 2 954 arrivées attendues contre 2 944 observées sur 60 jours.
-- Le 2026-11-20, après le passage aux cartes : en production, l'onglet Decisions redonne une décision enregistrée dans le nouveau dessin (« 40 beds at Lakeshore from day 10 instead of 60 » : 267 jours-patients, 3 sites sur 34, pic 93 % au jour 36, première file au jour 20), et un Run redonne le panneau Result connu (94 % puis 93 %, 8 puis 3 sites, 7 316 puis 267 jours-patients). Les cartes de l'onglet Options ont été regardées en local sur des réponses simulées, et sont tenues par les tests ; un objectif n'a pas été rejoué en production avec le vrai modèle depuis ce changement.
+- An objective (“How do we stop the queue at Lakeshore?”) returned three tested options, with no figure removed, and the “As it is” column gives the figures of the Result panel again.
+- An option added to the scenario, then Run: the Result panel gives the figures of its column again (peak 92 %, 3 sites out of 34, 267 patient-days of waiting, first queue on day 20). Its stamps removed, the scenario came back to its 20 stamps and its original figures.
+- On 2026-11-20, an option that replaces a choice was applied with a click on “Apply to scenario”: “30 beds at Lakeshore from day 10 instead of 60”. The recipe stayed at 20 stamps, with a single stamp for Lakeshore (+30 on day 10) and no +60 left. Run then gave the column of the test again: peak at 93 % on day 36, 4 sites out of 34 with a queue, 359 patient-days of waiting, a queue at Lakeshore from day 30, of 8 people at most. The original choice was then put back and the +30 removed: the recipe has the same content as before (the stamp put back is a new row, placed last), and Run gives the earlier Result panel again to the character (3 sites out of 34, 267 patient-days). The refusal when the stamp to remove has disappeared was not provoked in production: it is held by the tests.
+- A recorded decision reads back in the Decisions tab, and its follow-up gives 2,954 expected arrivals against 2,944 observed over 60 days.
+- On 2026-11-20, after the move to cards: in production, the Decisions tab shows a recorded decision in the new design (“40 beds at Lakeshore from day 10 instead of 60”: 267 patient-days, 3 sites out of 34, peak 93 % on day 36, first queue on day 20), and a Run gives the known Result panel again (94 % then 93 %, 8 then 3 sites, 7,316 then 267 patient-days). The cards of the Options tab were looked at locally on simulated answers, and are held by the tests; an objective has not been replayed in production with the real model since that change.
 
-Cette décision de test (« 40 beds at Lakeshore from day 10 instead of 60 ») reste dans la liste du projet de démonstration : rien à l'écran ne permet de la supprimer.
+That test decision (“40 beds at Lakeshore from day 10 instead of 60”) stays in the list of the demonstration project: nothing on screen allows it to be deleted.
 
-## Fichiers
+## Files
 
-| Rôle | Fichier |
+| Role | File |
 |---|---|
-| Boucle, clôture d'une question, `give_answer` | `backend/src/services/analyst.ts` |
-| Outils de lecture, résumé du run | `backend/src/services/analyst-tools.ts` |
-| Outil `test_option`, clôture d'un objectif, `give_options` | `backend/src/services/analyst-options.ts` |
-| Clôture d'une recherche d'événements, `give_events` | `backend/src/services/analyst-events.ts` |
-| Lecture de la recherche web : requêtes, pages, passages, dates, citations | `backend/src/services/analyst-web.ts` |
-| Sources autorisées d'un projet | `backend/src/services/web-sources.ts` |
-| Calendrier des événements acceptés | `backend/src/services/health-events.ts` |
-| Run d'un scénario sur le serveur | `backend/src/services/scenario-run.ts`, `scenario-stamps.ts` |
-| Décisions et suivi | `backend/src/services/decisions.ts` |
-| Vérificateur | `backend/src/services/analyst-verify.ts` |
-| Calculatrice | `backend/src/services/analyst-calc.ts` |
-| Routes de l'analyste, contexte, journal | `backend/src/routes/analyst.ts` |
-| Routes des décisions | `backend/src/routes/decisions.ts` |
-| Routes du calendrier et des sources | `backend/src/routes/health-events.ts` |
-| Réponse en flux | `backend/src/lib/ndjson.ts` |
-| Journal, décisions, calendrier | `backend/scripts/migrations/059_analyst_exchange.sql`, `060_analyst_exchange_kind.sql`, `061_decision.sql`, `062_health_event.sql` |
-| Appels et libellés côté écran | `frontend/app/studio/analyst-api.ts` |
-| Panneau et onglet Ask | `frontend/app/studio/simulation/hex/AnalystPanel.tsx` |
-| Onglets Options et Decisions | `frontend/app/studio/simulation/hex/OptionsTab.tsx`, `DecisionsTab.tsx` |
-| Onglet Event finder | `frontend/app/studio/simulation/hex/EventFinderTab.tsx` |
-| Couloir Context de la frise | `frontend/app/studio/simulation/hex/ContextLane.tsx`, `context-lane.ts` |
-| Pièces communes aux onglets | `frontend/app/studio/simulation/hex/analyst-parts.tsx` |
-| Carte d'une option ou d'une décision : chiffres dessinés, écart, niveaux de preuve, lignes repliées | `frontend/app/studio/simulation/hex/option-cards.tsx`, tests `option-cards.test.tsx` |
-| Résumé du run | `frontend/app/studio/simulation/hex/run-digest.ts` |
+| Loop, closing of a question, `give_answer` | `backend/src/services/analyst.ts` |
+| Reading tools, digest of the run | `backend/src/services/analyst-tools.ts` |
+| The `test_option` tool, closing of an objective, `give_options` | `backend/src/services/analyst-options.ts` |
+| Closing of an event search, `give_events` | `backend/src/services/analyst-events.ts` |
+| Reading the web search: queries, pages, passages, dates, quotations | `backend/src/services/analyst-web.ts` |
+| A project's authorised sources | `backend/src/services/web-sources.ts` |
+| Calendar of accepted events | `backend/src/services/health-events.ts` |
+| Run of a scenario on the server | `backend/src/services/scenario-run.ts`, `scenario-stamps.ts` |
+| Decisions and follow-up | `backend/src/services/decisions.ts` |
+| Verifier | `backend/src/services/analyst-verify.ts` |
+| Calculator | `backend/src/services/analyst-calc.ts` |
+| The analyst's routes, context, journal | `backend/src/routes/analyst.ts` |
+| The decisions' routes | `backend/src/routes/decisions.ts` |
+| Routes of the calendar and the sources | `backend/src/routes/health-events.ts` |
+| Streamed response | `backend/src/lib/ndjson.ts` |
+| Journal, decisions, calendar | `backend/scripts/migrations/059_analyst_exchange.sql`, `060_analyst_exchange_kind.sql`, `061_decision.sql`, `062_health_event.sql` |
+| Calls and labels on the screen side | `frontend/app/studio/analyst-api.ts` |
+| Panel and Ask tab | `frontend/app/studio/simulation/hex/AnalystPanel.tsx` |
+| Options and Decisions tabs | `frontend/app/studio/simulation/hex/OptionsTab.tsx`, `DecisionsTab.tsx` |
+| Event finder tab | `frontend/app/studio/simulation/hex/EventFinderTab.tsx` |
+| Context lane of the timeline | `frontend/app/studio/simulation/hex/ContextLane.tsx`, `context-lane.ts` |
+| Parts shared by the tabs | `frontend/app/studio/simulation/hex/analyst-parts.tsx` |
+| Card of an option or a decision: drawn figures, gap, levels of evidence, folded lines | `frontend/app/studio/simulation/hex/option-cards.tsx`, tests `option-cards.test.tsx` |
+| Digest of the run | `frontend/app/studio/simulation/hex/run-digest.ts` |

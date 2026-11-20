@@ -1,95 +1,96 @@
 ---
-# Copy of docs/changelog.md, made by scripts/sync-docs.mjs. Edit the source, then run `npm run docs:sync`.
-title: "Journal des changements"
-description: "Ce qui a changé dans Obscyro, du plus récent au plus ancien. Chaque entrée dit ce qu'elle est :"
+# The English of docs/changelog.md. When that page changes, bring this one up to date, then run `npm run docs:stamp`.
+title: "Changelog"
+description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
+translatedFrom: "5b243d78875a9b99"
 ---
 
-Ce qui a changé dans Obscyro, du plus récent au plus ancien. Chaque entrée dit ce qu'elle est :
+What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
 
-- **Nouvelle fonction** : quelque chose que le produit ne faisait pas.
-- **Modification** : quelque chose qu'il faisait déjà, et qu'il fait autrement, mieux ou plus vite. Une correction en est une.
+- **New feature**: something the product did not do.
+- **Change**: something it already did, and now does differently, better or faster. A fix is one.
 
-Une entrée est écrite le jour où le changement est livré, dans le même commit que le code. Depuis novembre 2026, chaque changement visible a la sienne. Les mois d'avant sont résumés. Le détail complet, commit par commit, est dans [l'historique du dépôt](https://github.com/V1ktor7/obscyro/commits/main).
+An entry is written the day the change ships, in the same commit as the code. Since November 2026, every visible change has its own. The months before are summarised. The full detail, commit by commit, is in [the repository's history](https://github.com/V1ktor7/obscyro/commits/main).
 
-## 20 novembre 2026
+## 20 November 2026
 
-- **Nouvelle fonction · Studio.** Une page « API keys » dans la section Admin. La clé que le navigateur utilise s'y affiche en entier, masquée tant qu'on ne demande pas à la voir, avec un bouton pour la copier. Les autres clés montrent leur début. On y crée une clé, qui s'affiche une fois pour être copiée, et on en révoque une.
-- **Nouvelle fonction · Site.** La documentation du produit est sur le site, sous Docs : la boucle de décision, la page Scenarios, l'analyste, les algorithmes avec leurs schémas, et ce journal. Ce sont les pages du dépôt, publiées telles quelles : elles changent dans le même commit que le code.
-- **Modification · Site.** Le site public passe au thème sombre du Studio : accueil, pages de fonctions, documentation, connexion et compte. Le contenu ne change pas.
-- **Modification · Studio.** Tout le Studio passe à un thème sombre : fond presque noir, panneaux gris foncé, un seul bleu, coins carrés. Les pages d'une section sont des onglets au-dessus de la page, pour que la carte garde toute la largeur. Les cartes ont un fond sombre et des échelles de couleur refaites pour lui.
-- **Modification · Analyste.** Dans l'onglet Options, chaque option testée est une carte qui se lit d'un coup d'œil : le résultat en trois mots, une barre pour l'attente, une case par site. L'explication complète se déplie d'un clic. L'onglet Decisions reprend le même dessin.
-- **Modification · Studio.** La page Models n'affiche plus ses onglets deux fois.
-- **Nouvelle fonction · Analyste.** Une option peut remplacer ou retirer un choix que le scénario contient déjà, et non seulement en ajouter un. Le bouton dit alors « Apply to scenario ».
-- **Nouvelle fonction · Analyste.** Une question de référence sur l'attente par site d'un run. Le rejeu des questions de référence devient une commande, et le journal garde ce que chaque requête a coûté.
-- **Modification · Analyste.** La recherche d'événements en ligne est plus rapide : les recherches d'une demande partent ensemble, et les pages ne sont plus relues pour livrer.
+- **New feature · Studio.** An “API keys” page in the Admin section. The key the browser uses is shown there in full, masked until you ask to see it, with a button to copy it. The other keys show how they start. You create a key there, which is shown once to be copied, and revoke one.
+- **New feature · Site.** The product's documentation is on the site, under Docs: the decision loop, the Scenarios page, the analyst, the algorithms with their diagrams, and this changelog. They are the repository's pages, in English like the rest of the site. The French page in the repository remains the original: when it changes, a test points at the English page that has fallen behind.
+- **Change · Site.** The public site takes the Studio's dark theme: home, feature pages, documentation, sign-in and account. The content does not change.
+- **Change · Studio.** The whole Studio moves to a dark theme: a near-black ground, dark grey panels, a single blue, square corners. The pages of a section are tabs above the page, so the map keeps the full width. Maps have a dark ground and colour scales redrawn for it.
+- **Change · Analyst.** In the Options tab, each tested option is a card that reads at a glance: the result in three words, a bar for the waiting, a square per site. The full explanation unfolds on a click. The Decisions tab takes the same design.
+- **Change · Studio.** The Models page no longer shows its tabs twice.
+- **New feature · Analyst.** An option can replace or remove a choice the scenario already holds, and not only add one. The button then reads “Apply to scenario”.
+- **New feature · Analyst.** A reference question on the waiting per site of a run. Replaying the reference questions becomes a command, and the journal keeps what each request cost.
+- **Change · Analyst.** The online search for events is faster: the searches of one request start together, and pages are no longer read again to deliver.
 
-## 19 novembre 2026
+## 19 November 2026
 
-- **Nouvelle fonction · Alertes.** Une alerte arrive sur toutes les pages du Studio, avec un clic vers son unité et vers son signal.
-- **Modification · Alertes.** Un écran qui se réveille annonce ce qui s'est ouvert pendant son absence. L'âge d'une valeur dit s'il est exact, s'il est un plancher, ou s'il est inconnu. Le lien « Signal » d'une alerte ancienne retrouve son signal.
+- **New feature · Alerts.** An alert reaches every page of the Studio, with one click to its unit and to its signal.
+- **Change · Alerts.** A screen that wakes up announces what opened while it was away. The age of a value says whether it is exact, a floor, or unknown. The “Signal” link of an old alert finds its signal again.
 
-## 18 novembre 2026
+## 18 November 2026
 
-- **Modification · Scenarios.** Le test d'une option ne relance plus la passe « événements seuls » : il est plus court, et sa durée se mesure.
+- **Change · Scenarios.** Testing an option no longer reruns the “events only” pass: it is shorter, and its duration is measured.
 
-## 17 novembre 2026
+## 17 November 2026
 
-- **Nouvelle fonction · Scenarios.** L'analyste : on pose une question sur le réseau ou sur un run, il lit le jumeau avec des outils, et aucun chiffre ne passe sans source.
-- **Nouvelle fonction · Scenarios.** L'analyste propose des options, le moteur teste chacune, et la décision retenue s'enregistre avec ce qu'on en attend.
-- **Nouvelle fonction · Analyste.** La recherche en ligne propose des événements tirés de sources officielles ; une personne les valide. Un candidat montre les passages sur lesquels il repose.
-- **Nouvelle fonction · Analyste.** Douze questions de référence, rejouables contre le vrai modèle.
-- **Nouvelle fonction · Scenarios.** Un guide en trois étapes sur la carte, qui lit où en est la page.
-- **Modification · Moteur.** Une baisse de capacité a un effet et une fin, et ne rien faire ne gagne plus au classement sur le prix.
-- **Modification · Analyste.** Un chiffre écrit à côté du nom d'un site doit venir de la ligne de ce site.
-- **Modification · Scenarios.** Le guide tient sur un portable sans défiler, et seule l'étape en cours est détaillée. L'onglet Options dit pourquoi le scénario n'est plus celui qui a été testé.
+- **New feature · Scenarios.** The analyst: you ask a question about the network or about a run, it reads the twin with tools, and no figure passes without a source.
+- **New feature · Scenarios.** The analyst proposes options, the engine tests each one, and the decision retained is recorded with what is expected of it.
+- **New feature · Analyst.** Online search proposes events drawn from official sources; a person validates them. A candidate shows the passages it rests on.
+- **New feature · Analyst.** Twelve reference questions, replayable against the real model.
+- **New feature · Scenarios.** A three-step guide on the map, which reads where the page stands.
+- **Change · Engine.** A drop in capacity has an effect and an end, and doing nothing no longer wins the ranking on price.
+- **Change · Analyst.** A figure written beside the name of a site has to come from that site's line.
+- **Change · Scenarios.** The guide fits a laptop without scrolling, and only the current step is detailed. The Options tab says why the scenario is no longer the one that was tested.
 
-## 13 novembre 2026
+## 13 November 2026
 
-- **Nouvelle fonction · Scenarios.** Un scénario part d'un réseau déjà occupé, les lits ajoutés servent, et le résultat dit où ça casse.
-- **Modification · Scenarios.** Les résultats ont leur propre panneau, et un panneau long défile. Un territoire sans hôpital pour l'activité lue est nommé, pas caché.
+- **New feature · Scenarios.** A scenario starts from a network that is already occupied, the beds added are used, and the result says where it breaks.
+- **Change · Scenarios.** The results have their own panel, and a long panel scrolls. A territory with no hospital for the activity read is named, not hidden.
 
-## 12 novembre 2026
+## 12 November 2026
 
-- **Nouvelle fonction · Models.** La boucle de prévision quotidienne : une série se prévoit chaque jour, et la prévision est comparée à ce qui arrive.
-- **Nouvelle fonction · Events.** Un événement se compose en phrases, à partir d'un catalogue de profils. Une courbe écrite jour par jour se lit en une ligne.
-- **Modification · Models.** Une table sans dates est refusée, et une boucle de prévision se supprime.
-- **Modification · Scenarios.** Un jumeau lu à travers un scénario garde ses hôpitaux.
+- **New feature · Models.** The daily forecast loop: a series is forecast every day, and the forecast is compared with what happens.
+- **New feature · Events.** An event is composed in sentences, from a catalogue of profiles. A curve written day by day reads in one line.
+- **Change · Models.** A table without dates is refused, and a forecast loop can be deleted.
+- **Change · Scenarios.** A twin read through a scenario keeps its hospitals.
 
-## 11 novembre 2026
+## 11 November 2026
 
-- **Modification · Studio.** Les cartes prennent toute la page, et les panneaux flottent dessus.
+- **Change · Studio.** Maps take the whole page, and the panels float over them.
 
-## 9 novembre 2026
+## 9 November 2026
 
-- **Nouvelle fonction · Scenarios.** La carte hexagonale remplace les écrans Compose et Outbreak : on pose les événements et les mesures sur la carte.
-- **Nouvelle fonction · Propagation.** Le mélange entre territoires se déclare par voie de contact, et une mesure peut viser certains territoires seulement.
+- **New feature · Scenarios.** The hexagon map replaces the Compose and Outbreak screens: events and measures are placed on the map.
+- **New feature · Spread.** Mixing between territories is declared per contact route, and a measure can target some territories only.
 
-## 6 novembre 2026
+## 6 November 2026
 
-- **Nouvelle fonction · Site.** Le globe a son propre écran, et chaque fonction a sa page.
-- **Modification · Site.** Une offre claire, sans mention de phase de test.
+- **New feature · Site.** The globe has its own screen, and each feature has its page.
+- **Change · Site.** A clear offer, with no mention of a test phase.
 
-## Septembre 2026
+## September 2026
 
-- **Nouvelles fonctions.** Le laboratoire entraîne un modèle sur une table, avec sa ligne de base, prévoit une série en disant ce que la prévision vaut, et offre un carnet Python. Les tableaux de bord ont des cartes qui lisent le jumeau, une exécution ou un modèle. Sur la carte du réseau, on choisit la mesure affichée, colorée d'après le seuil de sa règle ; on dessine des bassins ; une frontière se colore d'après un nombre qu'elle porte. Les pipelines gagnent le nœud « dernier par clé », la composition d'une valeur à partir d'un motif, et une sortie qui est l'ensemble complet. Le jumeau évalue ses alertes même quand personne ne regarde.
-- **Modifications.** Le Studio est entièrement en anglais. La fraîcheur d'une valeur mesure l'âge de la donnée, pas celui du téléchargement, et une valeur absente n'est plus un zéro. L'occupation n'est plus tronquée à 100 %. La carte du réseau ne coupe plus à 500 sites sans le dire. Les synchronisations lisent un fichier dans son vrai encodage, ne perdent plus de fichiers à la pagination, et un échec passager n'éteint plus un flux.
+- **New features.** The lab trains a model on a table, with its baseline, forecasts a series while saying what the forecast is worth, and offers a Python notebook. Dashboards have cards that read the twin, an execution or a model. On the network map, you choose the measure shown, coloured from the threshold of its rule; you draw catchments; a boundary is coloured from a number it carries. Pipelines gain the “last per key” node, composing a value from a pattern, and an output that is the complete set. The twin evaluates its alerts even when nobody is watching.
+- **Changes.** The Studio is entirely in English. The freshness of a value measures the age of the data, not that of the download, and a missing value is no longer a zero. Occupancy is no longer cut off at 100 %. The network map no longer stops at 500 sites without saying so. Syncs read a file in its real encoding, no longer lose files at pagination, and a passing failure no longer switches a feed off.
 
-## Août 2026
+## August 2026
 
-- **Nouvelles fonctions.** Le moteur d'événements : on compose un événement, il part d'un endroit, met du temps à arriver et faiblit en route ; une frise place ses fenêtres ; la simulation rend ses données. Le modèle de propagation, branché sur la carte, avec ses leviers ajustés sur une vague observée. Les scénarios en calque : un scénario se modifie à côté du jumeau qu'il change, sans le copier. Les signaux : les alertes du jumeau deviennent des signaux, visibles et déplaçables sur un tableau. Les métriques du jumeau deviennent des définitions qu'on crée et règle depuis le logiciel, avec leurs seuils. Sur la carte : les couches viennent de l'ontologie, on trace un flux entre deux sites, on dessine des aires, et les questions spatiales passent par PostGIS. On rejoue une course pas à pas, sur la vraie carte, et on pose une série observée à côté. L'ontologie déclare l'identité d'un type, ce que fait un lien, et l'unité et les bornes d'une propriété. Les tableaux de bord se composent à partir de ce que les données portent.
-- **Modifications.** La palette du Studio devient des noms de rôles. L'environnement vit dans l'adresse de la page et se choisit dans l'en-tête. La demande suit la population et non le nombre de lits ; les arrivées se répartissent selon la taille des sites ; la capacité se compte par rôle déclaré. L'ordre des effets d'un événement ne décide plus du résultat. Le site public est refait.
+- **New features.** The event engine: you compose an event, it starts from a place, takes time to arrive and weakens on the way; a timeline places its windows; the simulation gives back its data. The spread model, connected to the map, with its levers fitted to an observed wave. Overlay scenarios: a scenario is edited beside the twin it changes, without copying it. Signals: the twin's alerts become signals, visible and movable on a board. The twin's metrics become definitions that you create and tune from the software, with their thresholds. On the map: layers come from the ontology, you draw a flow between two sites, you draw areas, and spatial questions go through PostGIS. You replay a run step by step, on the real map, and set an observed series beside it. The ontology declares the identity of a type, what a link does, and the unit and bounds of a property. Dashboards are composed from what the data carries.
+- **Changes.** The Studio's palette becomes role names. The environment lives in the page's address and is chosen in the header. Demand follows population and not the number of beds; arrivals are shared out by the size of sites; capacity is counted by declared role. The order of an event's effects no longer decides the result. The public site is redone.
 
-## Juillet 2026
+## July 2026
 
-- **Nouvelles fonctions.** Le gestionnaire d'ontologie. Les canaux de données, alimentés par webhook, avec une file durable. Les projets et leurs jeux de données, avec versions. Les sources, les synchronisations et le connecteur REST. Le graphe de lignage et le Pipeline Builder, avec des pipelines qui tournent seuls et des règles de liens. Le globe du réseau : sites, flux, et le détail d'un site. Les unités en arbre et en mosaïque. Le laboratoire causal. Le modèle de rôles et le journal d'audit. La navigation du Studio : rail, sous-navigation, palette de commandes. Les premiers scénarios en calque.
-- **Modifications.** L'« environnement » devient le « projet ». La page d'accueil du Studio remplace le menu déroulant des environnements.
+- **New features.** The ontology manager. Data channels, fed by webhook, with a durable queue. Projects and their datasets, with versions. Sources, syncs and the REST connector. The lineage graph and the Pipeline Builder, with pipelines that run on their own and link rules. The network globe: sites, flows, and the detail of a site. Units as a tree and as a treemap. The causal lab. The role model and the audit log. The Studio's navigation: rail, sub-navigation, command palette. The first overlay scenarios.
+- **Changes.** The “environment” becomes the “project”. The Studio's home page replaces the dropdown of environments.
 
-## Juin 2026
+## June 2026
 
-- **Nouvelles fonctions.** L'extraction clinique : concepts et contextes tirés d'un texte. Le Studio : un éditeur de nœuds, l'accès par compte, les nœuds Source et Webhook, un routeur de formats. L'ontologie par environnement et son API de requête. La qualité des données, avec ses scans. Les alertes et les cumuls du jumeau. Le service de simulation hybride et son mode prévision.
-- **Modifications.** Le déploiement applique les migrations avant de démarrer le serveur.
+- **New features.** Clinical extraction: concepts and contexts drawn from a text. The Studio: a node editor, access by account, the Source and Webhook nodes, a format router. The ontology per environment and its query API. Data quality, with its scans. The twin's alerts and roll-ups. The hybrid simulation service and its forecast mode.
+- **Changes.** Deployment applies migrations before starting the server.
 
-## Mai 2026
+## May 2026
 
-- **Première version.** L'API de terminologie : clés d'API et limites par clé, recherche de concepts, synonymes, hiérarchie, normalisation, traduction et désambiguïsation, sur SNOMED CT (édition internationale de février 2026). Le site de documentation et la console du compte.
+- **First release.** The terminology API: API keys and per-key limits, concept lookup, synonyms, hierarchy, normalisation, translation and disambiguation, on SNOMED CT (International Edition, February 2026). The documentation site and the account console.

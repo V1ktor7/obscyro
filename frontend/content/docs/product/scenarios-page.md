@@ -1,55 +1,56 @@
 ---
-# Copy of docs/scenarios-page.md, made by scripts/sync-docs.mjs. Edit the source, then run `npm run docs:sync`.
-title: "La page Scenarios"
-description: "La carte est la page. Tout le reste flotte dessus dans des panneaux repliables (OverlayPanel, frontend/app/studio/map-overlay.tsx) : jamais de panneau latéral, et à l'arrivée tout est replié sauf l…"
+# The English of docs/scenarios-page.md. When that page changes, bring this one up to date, then run `npm run docs:stamp`.
+title: "The Scenarios page"
+description: "The map is the page. Everything else floats over it in panels that fold away."
 source: "docs/scenarios-page.md"
+translatedFrom: "944d8e4dbc2ed17d"
 ---
 
-La carte est la page. Tout le reste flotte dessus dans des panneaux repliables (`OverlayPanel`, `frontend/app/studio/map-overlay.tsx`) : jamais de panneau latéral, et à l'arrivée tout est replié sauf le guide d'une première visite.
+The map is the page. Everything else floats over it in panels that fold away (`OverlayPanel`, `frontend/app/studio/map-overlay.tsx`): never a side panel, and on arrival everything is folded except the guide on a first visit.
 
-## Ce qu'on y fait, en trois temps
+## What you do there, in three beats
 
-La page est une phrase : dire ce qui arrive, le faire tourner, demander ce que ça montre. Le panneau **Start here** dit où l'on en est dans cette phrase, en lisant l'état de la page elle-même, et propose le bouton qui fait l'étape suivante.
+The page is a sentence: say what happens, run it, ask what it shows. The **Start here** panel says where you are in that sentence, by reading the state of the page itself, and offers the button that does the next step.
 
 ```mermaid
 flowchart TD
-    A{"Le scénario contient un événement ?<br/>éclosion ou canicule"} -->|"non"| S1["Étape 1 : dire ce qui arrive<br/>boutons : conditions de départ, éclosion"]
-    A -->|"oui"| B{"Un run à jour est à l'écran ?"}
-    B -->|"non, ou le scénario a changé depuis"| S2["Étape 2 : lancer le run<br/>bouton : Run the scenario"]
-    B -->|"oui"| C{"Le panneau Analyst a déjà été ouvert ?"}
-    C -->|"non"| S3["Étape 3 : demander ce que ça montre<br/>bouton : Open the analyst"]
-    C -->|"oui"| D["Les trois étapes sont faites :<br/>le guide se replie, et reste replié aux visites suivantes"]
+    A{"Does the scenario hold an event?<br/>outbreak or heat wave"} -->|"no"| S1["Step 1: say what happens<br/>buttons: starting conditions, outbreak"]
+    A -->|"yes"| B{"Is an up-to-date run on screen?"}
+    B -->|"no, or the scenario changed since"| S2["Step 2: launch the run<br/>button: Run the scenario"]
+    B -->|"yes"| C{"Has the Analyst panel been opened before?"}
+    C -->|"no"| S3["Step 3: ask what it shows<br/>button: Open the analyst"]
+    C -->|"yes"| D["All three steps are done:<br/>the guide folds, and stays folded on later visits"]
 ```
 
-**Règles.**
-- Des conditions de départ seules ne suffisent pas pour passer à l'étape 2 : elles décrivent un réseau un jour ordinaire. C'est un événement qui donne quelque chose à faire tourner.
-- Un scénario modifié après un run renvoie à l'étape 2 : le résultat à l'écran ne décrit plus le scénario.
-- Ouvrir l'analyste par curiosité avant d'avoir lancé un run ne saute pas l'étape 2.
-- Le guide s'ouvre à la première visite. Une fois replié, à la main ou parce que les trois étapes sont faites, il démarre replié (clé `obs_scenarios_guide_seen` dans le navigateur). Il reste disponible, sur une ligne, pour qui veut le rouvrir.
-- Seule l'étape en cours est détaillée ; les autres ne montrent que leur titre. Écrites en entier, les trois étapes dépassaient la place qu'un portable de 1366 × 768 laisse sous la barre d'outils, et le guide s'ouvrait sur une barre de défilement.
-- Ses boutons portent leur propre nom (« Run the scenario », « Set starting conditions ») : la barre d'outils a déjà un « Run » et un « Starting conditions », et deux commandes du même nom en font une de trop pour qui navigue au clavier ou au lecteur d'écran.
+**Rules.**
+- Starting conditions alone are not enough to move to step 2: they describe a network on an ordinary day. An event is what gives something to run.
+- A scenario edited after a run goes back to step 2: the result on screen no longer describes the scenario.
+- Opening the analyst out of curiosity before launching a run does not skip step 2.
+- The guide opens on the first visit. Once folded, by hand or because the three steps are done, it starts folded (key `obs_scenarios_guide_seen` in the browser). It stays available, on one line, for whoever wants to reopen it.
+- Only the current step is detailed; the others show their title alone. Written in full, the three steps took more room than a 1366 × 768 laptop leaves under the toolbar, and the guide opened on a scrollbar.
+- Its buttons carry their own names (“Run the scenario”, “Set starting conditions”): the toolbar already has a “Run” and a “Starting conditions”, and two controls with the same name are one too many for someone using a keyboard or a screen reader.
 
-**Code.** `frontend/app/studio/simulation/hex/guide.ts` (les étapes, sans carte), `ScenarioGuide.tsx` (l'affichage), intégration dans `HexTwinView.tsx`. **Tests.** `guide.test.ts`, `HexTwinView.test.tsx`.
+**Code.** `frontend/app/studio/simulation/hex/guide.ts` (the steps, without a map), `ScenarioGuide.tsx` (the display), wired into `HexTwinView.tsx`. **Tests.** `guide.test.ts`, `HexTwinView.test.tsx`.
 
-## Les panneaux
+## The panels
 
-| Panneau | Où | Ce qu'il montre |
+| Panel | Where | What it shows |
 |---|---|---|
-| Barre du scénario | En haut | Le scénario ouvert, l'horizon, l'activité lue, le bouton Run |
-| Outils | En haut, au centre | Inspecter, conditions de départ, éclosion, canicule, mesure, capacité |
-| Start here | À gauche | Le guide en trois étapes |
-| Layers | À gauche | Ce que la carte colore : occupation, malades, résidents, couches ajoutées |
-| Analyst | À gauche | Quatre onglets : les questions et leurs réponses (Ask), la recherche d'événements dans des sources officielles (Event finder), les options testées par le moteur (Options), les décisions enregistrées et leur suivi (Decisions) : [analyst.md](/docs/product/analyst) |
-| Result | À droite | Le pic dans les deux passes, où ça casse, la comparaison à la réalité |
-| Recipe | À droite | Les tampons du scénario, et ce que le moteur reçoit pour chacun |
-| Frise | En bas | Le jour affiché, le couloir Context (les événements validés, placés d'après la date du jour 0 ; ce ne sont pas des tampons, le moteur ne les reçoit pas), les couloirs de tampons, la courbe d'occupation |
+| Scenario bar | Top | The open scenario, the horizon, the activity read, the Run button |
+| Tools | Top, centre | Inspect, starting conditions, outbreak, heat wave, measure, capacity |
+| Start here | Left | The three-step guide |
+| Layers | Left | What the map colours: occupancy, sick people, residents, added layers |
+| Analyst | Left | Four tabs: questions and their answers (Ask), the search for events in official sources (Event finder), the options tested by the engine (Options), the recorded decisions and their follow-up (Decisions): [The analyst](/docs/product/analyst) |
+| Result | Right | The peak in both passes, where it breaks, the comparison with reality |
+| Recipe | Right | The scenario's stamps, and what the engine receives for each |
+| Timeline | Bottom | The day shown, the Context lane (the validated events, placed from the date of day 0; they are not stamps, the engine does not receive them), the stamp lanes, the occupancy curve |
 
-Ce que fait un run, et comment se lisent ses résultats : [algorithms.md](/docs/product/algorithms), sections A4 à A7.
+What a run does, and how its results are read: [Algorithms](/docs/product/algorithms), sections A4 to A7.
 
-## L'apparence
+## How it looks
 
-La page suit le thème sombre du Studio ([../design/PALETTE.md](https://github.com/V1ktor7/obscyro/blob/main/design/PALETTE.md)). Trois choses lui sont propres :
+The page follows the Studio's dark theme ([design/PALETTE.md](https://github.com/V1ktor7/obscyro/blob/main/design/PALETTE.md)). Three things are its own:
 
-- **Le fond de carte est sombre** (`frontend/app/studio/map-style.ts`). Tout ce qui est dessiné sur la carte est choisi pour ce fond : un libellé a un halo sombre, un site sans occupation est un cercle vide.
-- **Les rampes vont du sombre au lumineux.** Le bas de l'échelle reste près du fond et chaque palier est plus lumineux : ce qui ressort est ce qui est élevé. La pression garde ses teintes : vert sous 90 %, jaune, orange, rouge, puis magenta à 200 % et plus. Les valeurs sont dans `HexTwinView.tsx` (`OCC_STEPS`, `SICK_STEPS`, `DENSITY_STEPS`) et `layers.ts`.
-- **Les pages de la section Twin sont des onglets au-dessus de la carte**, pas une colonne à côté : la carte garde toute la largeur.
+- **The basemap is dark** (`frontend/app/studio/map-style.ts`). Everything drawn on the map is chosen for that ground: a label has a dark halo, a site with no occupancy is an empty circle.
+- **The ramps go from dark to bright.** The low end of the scale stays close to the ground and each step up is brighter: what stands out is what is high. Pressure keeps its hues: green under 90 %, yellow, orange, red, then magenta at 200 % and over. The values are in `HexTwinView.tsx` (`OCC_STEPS`, `SICK_STEPS`, `DENSITY_STEPS`) and `layers.ts`.
+- **The pages of the Twin section are tabs above the map**, not a column beside it: the map keeps the full width.

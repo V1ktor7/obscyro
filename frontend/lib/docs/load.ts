@@ -9,10 +9,10 @@ const DOCS_ROOT = path.join(process.cwd(), "content", "docs");
  * How a page is written.
  *
  * `mdx` is a page written for the site: it may use the site's components.
- * `md` is plain Markdown, which is what the repository's own documentation is
- * (`content/docs/product`, copied from `docs/` by scripts/sync-docs.mjs). It is
- * compiled as Markdown, so a brace or an angle bracket in a sentence is a
- * character and not the start of an expression.
+ * `md` is plain Markdown, which is what the product pages are
+ * (`content/docs/product`, the English of the repository's `docs/`; see
+ * scripts/product-docs.mjs). It is compiled as Markdown, so a brace or an angle
+ * bracket in a sentence is a character and not the start of an expression.
  */
 export type DocFormat = "mdx" | "md";
 

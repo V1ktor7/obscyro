@@ -40,7 +40,7 @@ Le `--typeRoots` du frontend n'est pas décoratif : sans lui, un paquet de types
 
 ## Conventions
 
-- **Langue.** Réponses à la personne en français, en langage simple. Interface du produit en anglais. Messages de commit et documentation en français. Commentaires de code en anglais.
+- **Langue.** Réponses à la personne en français, en langage simple. Interface du produit en anglais. Messages de commit et documentation en français. Commentaires de code en anglais. Le site publie la documentation en anglais : chaque page de `docs/` qu'il publie a sa traduction dans `frontend/content/docs/product/`.
 - **Git.** On pousse directement sur `main` une fois testé. Un commit par changement cohérent, avec sa documentation.
 - **Cartes.** Sur une page qui montre une carte, tout panneau est un overlay repliable posé sur la carte (`OverlayPanel` dans `frontend/app/studio/map-overlay.tsx`). Jamais de panneau latéral.
 - **Thème.** Le Studio et le site public partagent un seul thème sombre (`:root` dans `frontend/app/globals.css`). Un écran nomme un rôle (`bg-surface`, `text-ink-muted`, `border-line`), jamais une couleur : ni `bg-white`, ni `text-gray-500`, ni hex dans une classe. Les rôles, et ce qui reste en valeurs littérales (cartes, graphiques) : [design/PALETTE.md](design/PALETTE.md).
@@ -75,7 +75,7 @@ Elles ne se négocient pas, et elles s'appliquent à tout ce qui touche à la bo
 | Le thème du Studio (un rôle de couleur, une rampe de carte, la navigation) | [design/PALETTE.md](design/PALETTE.md) |
 | Une migration | L'en-tête du fichier SQL |
 | Une fonction ajoutée ou modifiée, que quelqu'un qui utilise le produit peut voir | Une entrée datée en tête de [docs/changelog.md](docs/changelog.md), marquée **Nouvelle fonction** ou **Modification** |
-| N'importe quelle page de `docs/` | `npm run docs:sync` dans `frontend/` : le site publie ces pages sous `/docs/product` (copies dans `frontend/content/docs/product`), et un test du frontend échoue quand une copie est en retard sur sa source |
+| Une page de `docs/` que le site publie (`decision-loop`, `scenarios-page`, `analyst`, `algorithms`, `changelog`) | Sa traduction anglaise dans `frontend/content/docs/product/`, dans le même commit, puis `npm run docs:stamp` dans `frontend/`. Un test du frontend échoue tant que la page anglaise n'a pas suivi sa source ; `npm run docs:check` dit lesquelles sont en retard |
 | Une suppression | On retire la section et le schéma. Pas de documentation orpheline |
 
 Les schémas sont en Mermaid, pour qu'ils s'affichent sur GitHub et se relisent dans un diff. Un schéma se dessine d'après le code qu'on vient de lire, jamais de mémoire : un schéma faux est pire qu'un schéma absent. Chaque section d'algorithme nomme ses fichiers et ses tests, pour qu'on puisse vérifier.

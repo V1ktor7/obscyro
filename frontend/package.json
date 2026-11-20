@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "docs:sync": "node scripts/sync-docs.mjs",
-    "prebuild": "node scripts/sync-docs.mjs",
+    "docs:check": "node scripts/product-docs.mjs --check",
+    "docs:stamp": "node scripts/product-docs.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
