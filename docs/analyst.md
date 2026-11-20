@@ -118,13 +118,15 @@ Ce qui vient du modèle et ce qui n'en vient pas :
 
 | À l'écran | D'où ça vient |
 |---|---|
-| Le tableau : pic, sites avec une file, jours-patients d'attente, premier jour de file, pour le scénario tel quel et chaque option | Les runs du moteur, lus dans le relevé de chaque test. Jamais d'une phrase |
+| Les chiffres des cartes : pic, sites avec une file, jours-patients d'attente, premier jour de file, pour le scénario tel quel et chaque option. La barre et les cases les dessinent, elles n'ajoutent rien | Les runs du moteur, lus dans le relevé de chaque test. Jamais d'une phrase |
+| L'écart d'une option avec le scénario tel quel (« −7,049 vs as it is ») | Le programme : la soustraction des deux chiffres affichés, arrondis, pour qu'on puisse la refaire de tête |
+| Le décompte « 2 measured · 1 published · 3 assumption » d'une carte | Le programme : il compte les éléments de la liste par niveau. Les trois niveaux ne sont jamais additionnés |
 | Le niveau de preuve de chaque élément : Measured, Published, Assumption | Le programme, d'après d'où vient l'élément (jumeau, scénario, option, règle du moteur) |
 | Les tampons qu'ajoute « Add to scenario » | Le test : ce sont ceux que le moteur a reçus |
 | « What it does to the scenario » : ce que l'option ajoute, remplace et retire, quand elle ne fait pas qu'ajouter | Le programme, à partir des tampons. Le bouton dit alors « Apply to scenario » |
 | Le mécanisme en une phrase, ce que le test ne dit pas, la lecture, les arbitrages, les limites | Le modèle, chaque chiffre contrôlé par le vérificateur |
 
-Ce que l'onglet ne fait pas, par construction : classer les options (elles restent dans l'ordre des tests), en lister une qui n'a pas été testée, en cacher une qui l'a été, écrire dans le scénario. Les arbitrages de valeur sont présentés à part, sous « Yours to weigh ».
+Ce que l'onglet ne fait pas, par construction : classer les options (elles restent dans l'ordre des tests, et aucune carte n'est marquée comme la meilleure), en lister une qui n'a pas été testée, en cacher une qui l'a été, écrire dans le scénario. Les arbitrages de valeur sont présentés à part, sous « Yours to weigh ».
 
 Coût et durée sont bornés : trois tests au plus par objectif, et le scénario tel quel n'est lancé qu'une fois pour les trois, en une seule passe du moteur. Trois options font quatre passes. Pendant un test, l'onglet dit depuis combien de temps il tourne.
 
@@ -243,9 +245,17 @@ Les décisions sont dans `app.decision` (migration 061). Les événements accept
 
 **Context** (`ContextLane.tsx`) n'est pas dans le panneau mais dans la frise : le couloir des événements validés, au-dessus des couloirs de tampons. Un clic sur un événement l'ouvre : source, citation, qui l'a accepté, et de quoi le retirer.
 
-**Options** (`OptionsTab.tsx`), de haut en bas : sur quoi les options sont testées ; l'objectif, et des objectifs suggérés d'après le run à l'écran ; les tests, qui s'affichent pendant qu'ils tournent, avec la durée de ce qui est en cours ; le tableau ; une carte par option (mécanisme, sur quoi elle repose avec les niveaux de preuve, ce que le test ne dit pas, « Add to scenario », « Record decision ») ; la lecture ; les arbitrages laissés à la personne ; les limites ; ce sur quoi toutes les colonnes reposent ; les étapes. Un bandeau dit quand le scénario n'est plus celui qui a été testé, et pourquoi : une option ajoutée depuis l'onglet, plusieurs ajoutées ensemble, ou une modification faite ailleurs.
+**Options** (`OptionsTab.tsx`), de haut en bas : sur quoi les options sont testées ; l'objectif, et des objectifs suggérés d'après le run à l'écran ; les tests, qui s'affichent pendant qu'ils tournent, avec la durée de ce qui est en cours ; la carte du scénario tel quel, en pointillé ; une carte par option ; la lecture ; les arbitrages laissés à la personne ; les limites ; ce sur quoi toutes les options reposent ; les étapes. Un bandeau dit quand le scénario n'est plus celui qui a été testé, et pourquoi : une option ajoutée depuis l'onglet, plusieurs ajoutées ensemble, ou une modification faite ailleurs.
 
-**Decisions** (`DecisionsTab.tsx`) : les décisions du scénario ouvert d'abord, puis celles des autres scénarios du projet. Chacune montre qui l'a prise, quand, l'objectif, l'attendu sans et avec l'option, sur quoi elle reposait, et le suivi à la demande. L'onglet se lit même quand l'analyste est éteint : une décision est un enregistrement, pas une réponse.
+Une carte d'option se lit d'un coup d'œil et s'explique d'un clic (`option-cards.tsx`). En haut : sa lettre, son libellé, et ce à quoi le run aboutit en trois mots (« Nobody waits », ou « 4 sites with a queue »). Puis ses chiffres, dessinés :
+
+- les jours-patients d'attente, avec l'écart au scénario tel quel, et une barre. Toutes les barres de l'onglet sont à la même échelle, celle de la plus longue attente, et un trait y marque le scénario tel quel : on compare deux options sans lire un chiffre ;
+- les sites avec une file, « 3 of 34 », et une case par site, rouge quand il a une file. Au-delà de 60 sites, les cases deviennent une part de barre ;
+- le pic d'occupation et son jour, le premier jour où quelqu'un attend, et l'attente là où aucun site ne sert quand le scénario en a.
+
+Sous les chiffres, trois lignes repliées, qui s'ouvrent d'un clic : « Why this option » (le mécanisme, ce que l'option remplace ou retire, et l'étape qui l'a testée), « What it rests on » (chaque élément avec son niveau de preuve ; le décompte par niveau se lit sans ouvrir), « What this test does not say ». Une ligne dont le texte a perdu un chiffre s'ouvre toute seule : un retrait ne se cache pas derrière un clic. En bas, « Add to scenario » (ou « Apply to scenario ») et « Record decision ».
+
+**Decisions** (`DecisionsTab.tsx`) : les décisions du scénario ouvert d'abord, puis celles des autres scénarios du projet. Chacune est une carte du même dessin : qui l'a prise, quand, l'objectif, les chiffres attendus avec l'option (l'écart est donné contre le même run sans elle), puis, repliés, l'attendu sans l'option, le mécanisme, sur quoi elle reposait, ce que le test ne disait pas. Le suivi se demande d'un bouton. L'onglet se lit même quand l'analyste est éteint : une décision est un enregistrement, pas une réponse.
 
 **Ask**, de haut en bas :
 
@@ -398,4 +408,5 @@ Cette décision de test (« 40 beds at Lakeshore from day 10 instead of 60 ») r
 | Onglet Event finder | `frontend/app/studio/simulation/hex/EventFinderTab.tsx` |
 | Couloir Context de la frise | `frontend/app/studio/simulation/hex/ContextLane.tsx`, `context-lane.ts` |
 | Pièces communes aux onglets | `frontend/app/studio/simulation/hex/analyst-parts.tsx` |
+| Carte d'une option ou d'une décision : chiffres dessinés, écart, niveaux de preuve, lignes repliées | `frontend/app/studio/simulation/hex/option-cards.tsx`, tests `option-cards.test.tsx` |
 | Résumé du run | `frontend/app/studio/simulation/hex/run-digest.ts` |

@@ -9,6 +9,9 @@
  * run expected beside the observed ones and gives the gap. It stops there:
  * whether the decision held is the person's to judge, and a difference between
  * two series is not a verdict.
+ *
+ * A decision is drawn like the option it came from (`option-cards.tsx`): the
+ * expected figures as marks, the explanations folded under them.
  */
 
 import { Loader2 } from "lucide-react";
@@ -16,23 +19,16 @@ import { useCallback, useEffect, useState } from "react";
 
 import { cn } from "@/lib/cn";
 
-import { fetchFollowUp, listDecisions, type Decision, type FollowUp, type OptionFigures } from "../../analyst-api";
-import { EvidenceBadge, LABEL, OptionChanges } from "./analyst-parts";
+import { fetchFollowUp, listDecisions, type Decision, type FollowUp } from "../../analyst-api";
+import { LABEL, OptionChanges, Text } from "./analyst-parts";
+import { BasisList, EvidenceMeter, Figures, Fold, waitingScale } from "./option-cards";
 import { people } from "./results";
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
-const pct = (share: number | null) => (share === null ? "—" : `${Math.round(share * 100)} %`);
 const one = (n: number) => (Math.round(n * 10) / 10).toLocaleString("en-CA");
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" });
 const shortDate = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
-
-const ROWS: { label: string; of: (f: OptionFigures) => string }[] = [
-  { label: "Peak occupancy", of: (f) => pct(f.peakOccupancy) },
-  { label: "Sites with a queue", of: (f) => `${f.sitesWithQueue} of ${f.sitesWithActivity}` },
-  { label: "Patient-days waiting", of: (f) => (f.sitesWithQueue ? people(f.waitingDays) : "0") },
-  { label: "First day somebody waits", of: (f) => (f.firstQueueDay === null ? "nobody waits" : `day ${f.firstQueueDay}`) },
-];
 
 function Curves({ expected, observed, label }: { expected: number[]; observed: (number | null)[]; label: string }) {
   const W = 1000;
@@ -49,11 +45,11 @@ function Curves({ expected, observed, label }: { expected: number[]; observed: (
   return (
     <div className="relative">
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="block h-[100px] w-full" role="img" aria-label={label}>
-        <rect width={W} height={H} fill="#f6f7f9" />
-        <polyline points={line(expected)} fill="none" stroke="#2d72d2" strokeWidth={2} vectorEffect="non-scaling-stroke" />
-        <polyline points={line(observed)} fill="none" stroke="#1c2127" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+        <rect width={W} height={H} fill="#161616" />
+        <polyline points={line(expected)} fill="none" stroke="#4589ff" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+        <polyline points={line(observed)} fill="none" stroke="#f4f4f4" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
       </svg>
-      <span className="absolute right-1 top-0 rounded bg-white/90 px-1 text-[10px] tabular-nums text-ink-muted">{Math.round(top)}</span>
+      <span className="absolute right-1 top-0 rounded bg-surface/90 px-1 text-[10px] tabular-nums text-ink-muted">{Math.round(top)}</span>
     </div>
   );
 }
@@ -122,7 +118,8 @@ function DecisionCard({ env, d, here }: { env: string; d: Decision; here: boolea
   const [follow, setFollow] = useState<FollowUp | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [basisOpen, setBasisOpen] = useState(false);
+  const scale = waitingScale([d.expected.asItIs, d.expected.withOption]);
+  const unsaid = d.expected.notTested.length + d.expected.notes.length;
 
   async function compare() {
     setLoading(true);
@@ -137,69 +134,71 @@ function DecisionCard({ env, d, here }: { env: string; d: Decision; here: boolea
   }
 
   return (
-    <li className={cn("flex flex-col gap-1.5 rounded-md border p-2", here ? "border-line bg-white" : "border-line-soft bg-canvas-raised")}>
-      <span className="text-[12.5px] font-semibold text-ink">{d.optionLabel}</span>
-      <span className="text-[11.5px] text-ink-muted">
-        {d.decidedBy ?? "Someone"} · {day(d.decidedAt)} · {d.scenarioName}
-      </span>
-      <p className="text-[12px] text-ink-body">
-        <span className="text-ink-muted">Objective: </span>
-        {d.objective}
-      </p>
-      <table className="w-full border-collapse text-[11.5px] tabular-nums">
-        <caption className="sr-only">What was expected of this decision</caption>
-        <thead>
-          <tr className="text-left text-ink-muted">
-            <th scope="col" className="py-0.5 pr-2 font-normal">Expected · {d.expected.horizon} days · {d.expected.activity}</th>
-            <th scope="col" className="px-1.5 py-0.5 font-semibold">Without it</th>
-            <th scope="col" className="px-1.5 py-0.5 font-semibold text-brand-deep">With it</th>
-          </tr>
-        </thead>
-        <tbody>
-          {ROWS.map((r) => (
-            <tr key={r.label} className="border-t border-line-soft">
-              <th scope="row" className="py-0.5 pr-2 text-left font-normal text-ink-muted">{r.label}</th>
-              <td className="px-1.5 py-0.5 text-ink-body">{r.of(d.expected.asItIs)}</td>
-              <td className="px-1.5 py-0.5 font-semibold text-ink">{r.of(d.expected.withOption)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <p className="text-[10.5px] text-ink-faint">
-        From the run that tested the option (step {d.optionStep}): the result of a model under the scenario’s conditions, not a forecast.
-      </p>
-      <OptionChanges changes={d.expected.changes} heading="What it did to the scenario" />
+    <li className={cn("flex flex-col border", here ? "border-line bg-canvas-raised" : "border-line-soft")}>
+      <div className="flex flex-col gap-2 p-3">
+        <span className="text-[12.5px] font-semibold leading-snug text-ink">{d.optionLabel}</span>
+        <span className="text-[11px] text-ink-muted">
+          {d.decidedBy ?? "Someone"} · {day(d.decidedAt)} · {d.scenarioName}
+        </span>
+        <p className="text-[12px] text-ink-body">
+          <span className="text-ink-muted">Objective: </span>
+          {d.objective}
+        </p>
+        <span className={LABEL}>
+          Expected with it · {d.expected.horizon} days · {d.expected.activity}
+        </span>
+        <Figures figures={d.expected.withOption} against={d.expected.asItIs} beside="without it" scale={scale} />
+        <p className="text-[10.5px] text-ink-faint">
+          From the run that tested the option (step {d.optionStep}): the result of a model under the scenario’s conditions, not a forecast.
+          The tick on the bar is the same run without it.
+        </p>
+        <OptionChanges changes={d.expected.changes} heading="What it did to the scenario" />
+      </div>
 
-      <button type="button" aria-expanded={basisOpen} onClick={() => setBasisOpen((o) => !o)} className={cn(LABEL, "text-left hover:text-ink-body")}>
-        What it rested on · {d.expected.basis.length} {basisOpen ? "▾" : "▸"}
-      </button>
-      {basisOpen ? (
-        <ul className="flex flex-col gap-1">
-          {d.expected.basis.map((b, i) => (
-            <li key={i} className="flex items-start gap-1.5 text-[11.5px] text-ink-body">
-              <EvidenceBadge evidence={b.evidence} />
-              <span className="min-w-0">{b.element}</span>
-            </li>
-          ))}
-        </ul>
+      <Fold title="Expected without it">
+        <Figures figures={d.expected.asItIs} scale={scale} />
+      </Fold>
+      {d.expected.mechanism ? (
+        <Fold title="Why this option">
+          <p className="text-[12px] leading-relaxed text-ink-body">
+            <Text text={d.expected.mechanism} />
+          </p>
+        </Fold>
+      ) : null}
+      <Fold title="What it rested on" below={<EvidenceMeter items={d.expected.basis} />}>
+        <BasisList items={d.expected.basis} />
+      </Fold>
+      {unsaid ? (
+        <Fold title="What the test did not say" meta={<span className="text-[10.5px] tabular-nums text-ink-faint">{unsaid}</span>}>
+          <ul className="flex list-disc flex-col gap-0.5 pl-4 text-[11.5px] text-ink-body">
+            {d.expected.notTested.map((t, k) => (
+              <li key={k}><Text text={t} /></li>
+            ))}
+            {d.expected.notes.map((t) => (
+              <li key={t}>{t}</li>
+            ))}
+          </ul>
+        </Fold>
       ) : null}
 
-      {follow ? (
-        <div className="flex flex-col gap-1 border-t border-line-soft pt-1.5">
-          <span className={LABEL}>Expected against observed</span>
-          <FollowUpView f={follow} />
-        </div>
-      ) : null}
-      {error ? <p role="alert" className="rounded bg-danger-soft px-2 py-1 text-[11.5px] text-danger-ink">The follow-up could not be read: {error}</p> : null}
-      <button
-        type="button"
-        disabled={loading}
-        onClick={() => void compare()}
-        className="flex items-center gap-1 self-start rounded border border-line bg-white px-2 py-1 text-[11.5px] font-semibold text-ink hover:bg-canvas disabled:opacity-60"
-      >
-        {loading ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : null}
-        {follow ? "Compare again" : "Compare with observed"}
-      </button>
+      <div className="flex flex-col gap-1.5 border-t border-line-soft p-3">
+        {follow ? (
+          <>
+            <span className={LABEL}>Expected against observed</span>
+            <FollowUpView f={follow} />
+          </>
+        ) : null}
+        {error ? <p role="alert" className="bg-danger-soft px-2 py-1 text-[11.5px] text-danger-ink">The follow-up could not be read: {error}</p> : null}
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => void compare()}
+          className="flex h-7 items-center gap-1 self-start border border-line-strong bg-surface px-2.5 text-[11.5px] font-semibold text-ink hover:bg-surface-hover disabled:opacity-60"
+        >
+          {loading ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : null}
+          {follow ? "Compare again" : "Compare with observed"}
+        </button>
+      </div>
     </li>
   );
 }
@@ -234,7 +233,7 @@ export default function DecisionsTab({
     return (
       <div className="flex flex-col gap-2 p-3">
         <p role="alert" className="rounded bg-danger-soft px-2 py-1.5 text-[12px] text-danger-ink">The decisions could not be read: {error}</p>
-        <button type="button" onClick={() => void load()} className="self-start rounded border border-line px-2 py-1 text-[11.5px] hover:bg-canvas-raised">
+        <button type="button" onClick={() => void load()} className="self-start rounded border border-line px-2 py-1 text-[11.5px] hover:bg-surface-hover">
           Try again
         </button>
       </div>

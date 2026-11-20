@@ -159,33 +159,47 @@ describe("the options tab", () => {
 
   it("shows the scenario as it is beside each tested option, in the engine's own counts", async () => {
     await tested();
-    const table = await screen.findByRole("table", { name: "The scenario as it is beside each tested option" });
-    const cells = (name: string) =>
-      within(within(table).getByRole("row", { name: new RegExp(`^${name}`) }))
-        .getAllByRole("cell")
-        .map((c) => c.textContent);
-    expect(within(table).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["", "As it is", "Option A", "Option B"]);
-    expect(cells("Peak occupancy")).toEqual(["94 %day 24", "93 %day 24", "90 %day 24"]);
-    expect(cells("Sites with a queue")).toEqual(["8 of 34", "3 of 34", "0 of 34"]);
-    expect(cells("Patient-days waiting")).toEqual(["7,316", "267", "0"]);
-    expect(cells("First day somebody waits")).toEqual(["day 12", "day 15", "nobody waits"]);
+    const cards = [
+      await screen.findByRole("region", { name: "The scenario as it is" }),
+      screen.getByRole("region", { name: /^Option A/ }),
+      screen.getByRole("region", { name: /^Option B/ }),
+    ];
+    const figure = (term: string) => cards.map((card) => within(card).getByText(term).nextElementSibling?.textContent);
+    expect(figure("Peak occupancy")).toEqual(["94 % · day 24", "93 % · day 24", "90 % · day 24"]);
+    expect(figure("Sites with a queue")).toEqual(["8 of 34", "3 of 34", "0 of 34"]);
+    // Each option says how far it is from the scenario as it is: the two figures shown, subtracted.
+    expect(figure("Patient-days waiting")).toEqual(["7,316", "267−7,049 vs as it is", "0−7,316 vs as it is"]);
+    expect(figure("First day somebody waits")).toEqual(["day 12", "day 15", "nobody waits"]);
+    // What a card comes to is said in words as well as drawn.
+    expect(within(cards[0]!).getByText("8 sites with a queue")).toBeTruthy();
+    expect(within(cards[1]!).getByText("3 sites with a queue")).toBeTruthy();
+    expect(within(cards[2]!).getByText("Nobody waits")).toBeTruthy();
     // Said where the figures are: these are runs, in the order tested, and nothing ranks them.
     expect(screen.getByText(/Tested by the engine · 60 days · lit · not a forecast/)).toBeTruthy();
-    expect(screen.getByText(/In the order tested; nothing here ranks them/)).toBeTruthy();
-    expect(screen.getByText(/The table is the engine’s own counts, and every figure in the text was found/)).toBeTruthy();
+    expect(screen.getByText(/In the order\s+tested; nothing here ranks them/)).toBeTruthy();
+    expect(screen.queryByText(/best|recommended/i)).toBeNull();
+    expect(screen.getByText(/The figures on the cards are the engine’s own counts, and every figure in the text was found/)).toBeTruthy();
   });
 
   it("gives each thing an option rests on its level of evidence, and keeps the three apart", async () => {
     await tested();
     const a = await screen.findByRole("region", { name: /^Option A: Open 40 beds/ });
+    // The card is read first: the explanations are folded under it, one click away.
+    expect(within(a).queryByText(/only go to Lakeshore/)).toBeNull();
+    expect(within(a).queryAllByRole("listitem")).toEqual([]);
+    // What the run rests on is counted by level before it is opened, the three never added together.
+    expect(within(a).getByRole("button", { name: /What it rests on/ }).textContent).toMatch(/1 measured · 1 assumption/);
+    fireEvent.click(within(a).getByRole("button", { name: /Why this option/ }));
     expect(within(a).getByText(/only go to Lakeshore/)).toBeTruthy();
+    fireEvent.click(within(a).getByRole("button", { name: /What it rests on/ }));
+    fireEvent.click(within(a).getByRole("button", { name: /What this test does not say/ }));
     const items = within(a).getAllByRole("listitem").map((li) => li.textContent);
     expect(items).toContain("Assumption+40 lit at Lakeshore from day 10, open and staffed");
     expect(items).toContain("MeasuredLakeshore holds 234 lit today");
     expect(items).toContain("Whether 40 beds can be staffed.");
 
-    // What every column shares is one click away, with all three levels.
-    fireEvent.click(screen.getByRole("button", { name: /What every column rests on · 3/ }));
+    // What every option shares is one click away, with all three levels.
+    fireEvent.click(screen.getByRole("button", { name: /What every option rests on · 3/ }));
     expect(screen.getByText(/^34 sites provide lit/).previousSibling?.textContent).toBe("Measured");
     expect(screen.getByText(/^Heat wave/).previousSibling?.textContent).toBe("Published");
     expect(screen.getByText(/^Usual occupancy/).previousSibling?.textContent).toBe("Assumption");
@@ -210,7 +224,7 @@ describe("the options tab", () => {
     await within(a).findByRole("button", { name: "Added to the scenario" });
     expect(add).toHaveBeenCalledTimes(1);
     expect(add.mock.calls[0]![0]).toMatchObject({ step: "s2", stamps: [{ body: { kind: "capacity", facility: "f:lake", activity: "lit", amount: 40 }, start: 10, days: 50 }] });
-    expect(within(a).getByText(/Press Run: the result should show the figures of this column/)).toBeTruthy();
+    expect(within(a).getByText(/Press Run: the result should show the figures of this card/)).toBeTruthy();
     // It cannot be added twice.
     expect((within(a).getByRole("button", { name: "Added to the scenario" }) as HTMLButtonElement).disabled).toBe(true);
   });
@@ -236,11 +250,14 @@ describe("the options tab", () => {
     await tested([{ type: "done", result: result({ answer: proposal({ options: [fewer, without] }) }), exchangeId: "ex-1" }]);
 
     const a = await screen.findByRole("region", { name: /^Option A: 40 beds at Lakeshore instead of 60/ });
+    fireEvent.click(within(a).getByRole("button", { name: /Why this option/ }));
+    fireEvent.click(within(a).getByRole("button", { name: /What it rests on/ }));
     expect(within(a).getByText("What it does to the scenario")).toBeTruthy();
     expect(within(a).getAllByRole("listitem").map((li) => li.textContent)).toContain("Replaces +60 lit at Lakeshore from day 10 with +40 lit at Lakeshore from day 10");
     // Taking a choice out is one of the things the option rests on, with its level.
     expect(within(a).getAllByRole("listitem").map((li) => li.textContent)).toContain("AssumptionTakes out of the scenario: +60 lit at Lakeshore from day 10");
     const b = screen.getByRole("region", { name: /^Option B: Without the school closure/ });
+    fireEvent.click(within(b).getByRole("button", { name: /Why this option/ }));
     expect(within(b).getAllByRole("listitem").map((li) => li.textContent)).toContain("Removes Schools closed in Centre, days 8 to 17");
 
     // "Add" would be the wrong word: it takes a choice out.
@@ -251,10 +268,10 @@ describe("the options tab", () => {
     expect(add.mock.calls[0]![0]).toMatchObject({ step: "s2", retires: [{ id: "st-60", replacedBy: 0 }] });
     expect(within(a).getByText(/in place of the choices it replaced or removed\. Press Run/)).toBeTruthy();
 
-    // And the table says its columns are not all additions.
+    // And the note under the cards says they are not all additions.
     expect(screen.getByText(/a choice of the scenario replaced or removed/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /What every column rests on/ }));
-    expect(screen.getByText(/is in “As it is” and not in that option’s column/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /What every option rests on/ }));
+    expect(screen.getByText(/is in “As it is” and not in that option’s card/)).toBeTruthy();
   });
 
   it("writes nothing and says why when a choice the option replaces is gone from the scenario", async () => {
@@ -279,13 +296,14 @@ describe("the options tab", () => {
       { type: "done", result: result({ answer: proposal({ options: [option({ changes: [{ does: "adds", now: "+40 lit at Lakeshore from day 10", was: null }], retires: [] })] }) }), exchangeId: "ex-1" },
     ]);
     const a = await screen.findByRole("region", { name: /^Option A/ });
+    fireEvent.click(within(a).getByRole("button", { name: /Why this option/ }));
     expect(within(a).queryByText("What it does to the scenario")).toBeNull();
     expect(within(a).getByRole("button", { name: "Add to scenario" })).toBeTruthy();
   });
 
   it("says so when the scenario was edited elsewhere after the tests", async () => {
     const view = await tested();
-    await screen.findByRole("table");
+    await screen.findByRole("region", { name: "The scenario as it is" });
     expect(screen.queryByText(/The scenario was edited since these options were tested/)).toBeNull();
     view.rerender(
       <OptionsTab env="mtl" scenario={{ id: "sc1", name: "Omicron" }} run={null} horizon={60} activity="lit" scenarioKey="k2" siteName={() => null} onFocusSite={focus} onAdd={add} onRecorded={recorded} onOff={off} />,
@@ -309,7 +327,7 @@ describe("the options tab", () => {
     fireEvent.click(within(a).getByRole("button", { name: "Add to scenario" }));
     await within(a).findByRole("button", { name: "Added to the scenario" });
     // Not a warning: this is what the test was for.
-    expect(screen.getByText(/“Open 40 beds at Lakeshore from day 10” is now in the scenario: Run should give the figures of its column/)).toBeTruthy();
+    expect(screen.getByText(/“Open 40 beds at Lakeshore from day 10” is now in the scenario: Run should give the figures of its card/)).toBeTruthy();
     expect(screen.queryByText(/The scenario was edited since/)).toBeNull();
 
     writes("k1+a+b");
@@ -355,7 +373,7 @@ describe("the options tab", () => {
     expect((within(a).getByRole("button", { name: "Record decision" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("shows where a figure was removed from the text, and that the table is not affected", async () => {
+  it("shows where a figure was removed from the text, and that the cards are not affected", async () => {
     await tested([
       {
         type: "done",
@@ -367,18 +385,19 @@ describe("the options tab", () => {
         }),
       },
     ]);
-    expect((await screen.findByText(/1 figure was removed from the text/)).textContent).toMatch(/The table is the engine’s own counts and is not affected/);
+    expect((await screen.findByText(/1 figure was removed from the text/)).textContent).toMatch(/The figures on the\s+cards are the engine’s own counts and are not affected/);
+    // The fold that holds the place is open without a click: a removal is not hidden behind one.
     expect(screen.getByText("figure removed")).toBeTruthy();
   });
 
-  it("shows the tests as they run, and no table when nothing was delivered", async () => {
+  it("shows the tests as they run, and no card when nothing was delivered", async () => {
     await tested([
       { type: "status", message: "Testing an option in the engine" },
       { type: "step", step: TEST },
       { type: "done", result: result({ status: "incomplete", answer: null, message: "The analyst read for too long without delivering options.", steps: [TEST] }) },
     ]);
     expect((await screen.findByRole("alert")).textContent).toMatch(/read for too long/);
-    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryByRole("region")).toBeNull();
     // What was tested is still there to read.
     expect(screen.getByText(/Option tested in the engine: Open 40 beds at Lakeshore from day 10/)).toBeTruthy();
   });

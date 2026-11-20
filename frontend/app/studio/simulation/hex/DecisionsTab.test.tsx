@@ -93,18 +93,27 @@ describe("the decisions tab", () => {
     expect(within(card).getByText(/Dominique Roy · .*2026.* · Omicron/)).toBeTruthy();
     expect(within(card).getByText("Nobody should wait at Lakeshore.")).toBeTruthy();
 
-    const cells = (name: string) =>
-      within(within(card).getByRole("row", { name: new RegExp(`^${name}`) }))
-        .getAllByRole("cell")
-        .map((c) => c.textContent);
-    expect(cells("Peak occupancy")).toEqual(["94 %", "90 %"]);
-    expect(cells("Sites with a queue")).toEqual(["8 of 34", "0 of 34"]);
-    expect(cells("Patient-days waiting")).toEqual(["7,316", "0"]);
-    expect(cells("First day somebody waits")).toEqual(["day 12", "nobody waits"]);
+    // What was expected with the option is on the card, with its gap from the same run without it.
+    const figure = (term: string) => within(card).getAllByText(term).map((dt) => dt.nextElementSibling?.textContent);
+    expect(within(card).getByText("Expected with it · 60 days · lit")).toBeTruthy();
+    expect(figure("Peak occupancy")).toEqual(["90 % · day 24"]);
+    expect(figure("Sites with a queue")).toEqual(["0 of 34"]);
+    expect(figure("Patient-days waiting")).toEqual(["0−7,316 vs without it"]);
+    expect(figure("First day somebody waits")).toEqual(["nobody waits"]);
     // What is expected is a run, and the card says so.
     expect(within(card).getByText(/From the run that tested the option \(step s3\).*not a forecast/)).toBeTruthy();
 
-    fireEvent.click(within(card).getByRole("button", { name: /What it rested on · 2/ }));
+    // The run without it is one click away, in the same figures.
+    fireEvent.click(within(card).getByRole("button", { name: "Expected without it" }));
+    expect(figure("Peak occupancy")).toEqual(["90 % · day 24", "94 % · day 24"]);
+    expect(figure("Sites with a queue")).toEqual(["0 of 34", "8 of 34"]);
+    expect(figure("Patient-days waiting")).toEqual(["0−7,316 vs without it", "7,316"]);
+    expect(figure("First day somebody waits")).toEqual(["nobody waits", "day 12"]);
+
+    // So is what it rested on, counted by level before it is opened.
+    const rested = within(card).getByRole("button", { name: /What it rested on/ });
+    expect(rested.textContent).toMatch(/1 measured · 1 assumption/);
+    fireEvent.click(rested);
     expect(within(card).getByText("Lakeshore holds 234 lit today").previousSibling?.textContent).toBe("Measured");
   });
 

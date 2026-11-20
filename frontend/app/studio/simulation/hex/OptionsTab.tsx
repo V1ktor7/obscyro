@@ -7,8 +7,9 @@
  * The analyst proposes; the engine tests; a person decides. So three things
  * here are not the model's:
  *
- * - the table. Every figure in it is the engine's own count from a test, read
- *   from the test's record, beside the same scenario run as it stands;
+ * - the figures on the cards. Each is the engine's own count from a test, read
+ *   from the test's record, and drawn beside the same scenario run as it
+ *   stands: a bar for the waiting, a square per site for the queues;
  * - the level of evidence beside each thing a run rests on — measured,
  *   published or assumption — which the server assigns from where that thing
  *   comes from;
@@ -18,7 +19,12 @@
  *   decision" keeps the choice with the figures expected of it. Nothing happens
  *   to the scenario until one of them is pressed.
  *
- * Options are shown in the order they were tested. Nothing ranks them.
+ * Options are shown in the order they were tested. Nothing ranks them: no card
+ * is marked as the best one.
+ *
+ * A card is read at a glance and explained on a click: what the option does and
+ * why, what its run rests on, and what the test does not say are folded under
+ * it (see `option-cards.tsx`).
  */
 
 import { AlertTriangle, Check, Loader2, MapPin, Plus, ShieldCheck } from "lucide-react";
@@ -32,16 +38,14 @@ import {
   recordDecision,
   stepLabel,
   type AnalystStep,
-  type Basis,
-  type OptionFigures,
   type OptionsEvent,
   type OptionsResult,
   type ProposedOption,
   type RunDigest,
 } from "../../analyst-api";
-import { Elapsed, EvidenceBadge, LABEL, OptionChanges, Text, Trace } from "./analyst-parts";
+import { Elapsed, LABEL, OptionChanges, STRUCK, Text, Trace } from "./analyst-parts";
+import { BasisList, EvidenceMeter, Figures, Fold, Outcome, waitingScale } from "./option-cards";
 import { takesOut } from "./option-write";
-import { people } from "./results";
 
 const LETTERS = ["A", "B", "C"];
 
@@ -56,28 +60,6 @@ function suggestions(run: RunDigest | null): string[] {
   ];
 }
 
-const pct = (share: number | null) => (share === null ? "—" : `${Math.round(share * 100)} %`);
-
-/** The rows of the comparison: one figure of a run, written the way the Result panel writes it. */
-const ROWS: { label: string; of: (f: OptionFigures) => string; note?: (f: OptionFigures) => string | null }[] = [
-  { label: "Peak occupancy", of: (f) => pct(f.peakOccupancy), note: (f) => (f.peakDay === null ? null : `day ${f.peakDay}`) },
-  { label: "Sites with a queue", of: (f) => `${f.sitesWithQueue} of ${f.sitesWithActivity}` },
-  { label: "Patient-days waiting", of: (f) => (f.sitesWithQueue ? people(f.waitingDays) : "0") },
-  { label: "First day somebody waits", of: (f) => (f.firstQueueDay === null ? "nobody waits" : `day ${f.firstQueueDay}`) },
-];
-
-function BasisList({ items }: { items: Basis[] }) {
-  return (
-    <ul className="flex flex-col gap-1">
-      {items.map((b, i) => (
-        <li key={i} className="flex items-start gap-1.5 text-[11.5px] text-ink-body">
-          <EvidenceBadge evidence={b.evidence} />
-          <span className="min-w-0">{b.element}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 export default function OptionsTab({
   env,
@@ -278,6 +260,8 @@ export default function OptionsTab({
   const changed = moved && !addedOne;
   const focus = (proposal?.focusSites ?? []).map((id) => ({ id, name: siteName(id) })).filter((s): s is { id: string; name: string } => s.name !== null);
   const showStranded = proposal?.asItIs?.strandedWaitingDays != null;
+  // One scale for every bar, so the cards can be compared with each other.
+  const scale = proposal ? waitingScale([...(proposal.asItIs ? [proposal.asItIs] : []), ...proposal.options.map((o) => o.figures)]) : 1;
 
   function cite(id: string) {
     setTraceOpen(true);
@@ -311,10 +295,10 @@ export default function OptionsTab({
               }
             }}
             placeholder="What should change? “Nobody waits at this site”, “the fewest patient-days waiting with at most 100 beds added”…"
-            className="min-w-0 flex-1 resize-none rounded border border-line bg-white px-2 py-1.5 text-[12.5px] text-ink focus:border-brand focus:outline-none"
+            className="min-w-0 flex-1 resize-none rounded border border-line bg-surface px-2 py-1.5 text-[12.5px] text-ink focus:border-brand focus:outline-none"
           />
           {asking ? (
-            <button type="button" onClick={stop} className="rounded border border-line px-2.5 py-1.5 text-[12px] text-ink-body hover:bg-canvas-raised">
+            <button type="button" onClick={stop} className="rounded border border-line px-2.5 py-1.5 text-[12px] text-ink-body hover:bg-surface-hover">
               Stop
             </button>
           ) : (
@@ -335,7 +319,7 @@ export default function OptionsTab({
                 type="button"
                 disabled={!activity}
                 onClick={() => void test(s)}
-                className="rounded-full border border-line bg-white px-2.5 py-1 text-left text-[11.5px] text-ink-body hover:border-brand hover:bg-brand-soft disabled:opacity-50"
+                className="rounded-full border border-line bg-surface px-2.5 py-1 text-left text-[11.5px] text-ink-body hover:border-brand hover:bg-brand-soft disabled:opacity-50"
               >
                 {s}
               </button>
@@ -372,14 +356,14 @@ export default function OptionsTab({
               {addedOne ? (
                 <p role="status" className="flex items-start gap-1.5 rounded bg-brand-soft px-2 py-1.5 text-[11.5px] text-brand-deep">
                   <Check className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  “{addedOne.label}” is now in the scenario: Run should give the figures of its column. The other options
-                  were tested without it, so their columns no longer describe this scenario.
+                  “{addedOne.label}” is now in the scenario: Run should give the figures of its card. The other options
+                  were tested without it, so their cards no longer describe this scenario.
                 </p>
               ) : changed ? (
                 <p role="alert" className="flex items-start gap-1.5 rounded bg-warn-soft px-2 py-1.5 text-[11.5px] text-warn-ink">
                   <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                   {ownOnly
-                    ? `${added.length} options are now in the scenario together. No test covered them together: state the objective again, or run the scenario, before relying on a column.`
+                    ? `${added.length} options are now in the scenario together. No test covered them together: state the objective again, or run the scenario, before relying on a card.`
                     : "The scenario was edited since these options were tested. The figures below describe it as it was; state the objective again before relying on them."}
                 </p>
               ) : null}
@@ -387,66 +371,29 @@ export default function OptionsTab({
               {result!.verified ? (
                 <p className="flex items-start gap-1.5 rounded bg-ok-soft px-2 py-1.5 text-[11.5px] text-ok-ink">
                   <ShieldCheck className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  The table is the engine’s own counts, and every figure in the text was found in the steps it cites.
+                  The figures on the cards are the engine’s own counts, and every figure in the text was found in the steps it cites.
                 </p>
               ) : (
                 <p role="alert" className="flex items-start gap-1.5 rounded bg-warn-soft px-2 py-1.5 text-[11.5px] text-warn-ink">
                   <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                   {removed} figure{removed === 1 ? " was" : "s were"} removed from the text: the steps it cites did not hold{" "}
-                  {removed === 1 ? "it" : "them"}, or held {removed === 1 ? "it" : "them"} for another site. The table is the
-                  engine’s own counts and is not affected.
+                  {removed === 1 ? "it" : "them"}, or held {removed === 1 ? "it" : "them"} for another site. The figures on the
+                  cards are the engine’s own counts and are not affected.
                 </p>
               )}
 
               {proposal.asItIs && proposal.options.length ? (
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-2">
                   <span className={LABEL}>
                     Tested by the engine · {proposal.horizon} days · {proposal.activity} · not a forecast
                   </span>
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse text-[11.5px] tabular-nums">
-                      <caption className="sr-only">The scenario as it is beside each tested option</caption>
-                      <thead>
-                        <tr className="text-left text-ink-muted">
-                          <th scope="col" className="py-1 pr-2 font-normal" />
-                          <th scope="col" className="px-1.5 py-1 font-semibold">As it is</th>
-                          {proposal.options.map((o, i) => (
-                            <th key={o.step} scope="col" title={o.label} className="px-1.5 py-1 font-semibold text-brand-deep">
-                              Option {LETTERS[i]}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {ROWS.map((r) => (
-                          <tr key={r.label} className="border-t border-line-soft align-top">
-                            <th scope="row" className="py-1 pr-2 text-left font-normal text-ink-muted">{r.label}</th>
-                            {[proposal.asItIs!, ...proposal.options.map((o) => o.figures)].map((f, i) => (
-                              <td key={i} className={cn("px-1.5 py-1", i === 0 ? "text-ink-body" : "font-semibold text-ink")}>
-                                {r.of(f)}
-                                {r.note?.(f) ? <span className="block text-[10.5px] font-normal text-ink-faint">{r.note(f)}</span> : null}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                        {showStranded ? (
-                          <tr className="border-t border-line-soft align-top">
-                            <th scope="row" className="py-1 pr-2 text-left font-normal text-ink-muted">Patient-days waiting where no site serves</th>
-                            {[proposal.asItIs!, ...proposal.options.map((o) => o.figures)].map((f, i) => (
-                              <td key={i} className={cn("px-1.5 py-1", i === 0 ? "text-ink-body" : "font-semibold text-ink")}>
-                                {f.strandedWaitingDays === null ? "—" : people(f.strandedWaitingDays)}
-                              </td>
-                            ))}
-                          </tr>
-                        ) : null}
-                      </tbody>
-                    </table>
-                  </div>
-                  <p className="text-[10.5px] text-ink-faint">
-                    “As it is” is this scenario with the choices it already holds. Each option is the same run with its
-                    changes applied: stamps added and, where its card says so, a choice of the scenario replaced or removed.
-                    In the order tested; nothing here ranks them.
-                  </p>
+                  <section aria-label="The scenario as it is" className="flex flex-col gap-2.5 border border-dashed border-line-strong p-3">
+                    <div className="flex items-start gap-2">
+                      <span className="min-w-0 text-[12.5px] font-semibold text-ink">The scenario as it is</span>
+                      <span className="ml-auto"><Outcome figures={proposal.asItIs} /></span>
+                    </div>
+                    <Figures figures={proposal.asItIs} scale={scale} stranded={showStranded} />
+                  </section>
                 </div>
               ) : null}
 
@@ -455,29 +402,46 @@ export default function OptionsTab({
                 const isRecorded = recorded.includes(o.step);
                 // "Add" would be the wrong word for an option that takes a choice out.
                 const edits = takesOut(o);
+                const unsaid = o.notTested.length + o.notes.length;
                 return (
-                  <section key={o.step} aria-label={`Option ${LETTERS[i]}: ${o.label}`} className="flex flex-col gap-1.5 rounded-md border border-line-soft bg-canvas-raised p-2">
-                    <div className="flex items-start gap-1.5">
-                      <span className="mt-px rounded bg-brand-soft px-1 text-[10.5px] font-bold text-brand-deep">{LETTERS[i]}</span>
-                      <span className="min-w-0 text-[12.5px] font-semibold text-ink">{o.label}</span>
+                  <section key={o.step} aria-label={`Option ${LETTERS[i]}: ${o.label}`} className="flex flex-col border border-line bg-canvas-raised">
+                    <div className="flex flex-col gap-2.5 p-3">
+                      <div className="flex items-start gap-2">
+                        <span className="mt-px flex h-5 w-5 shrink-0 items-center justify-center bg-brand-soft text-[11px] font-bold text-brand-deep">{LETTERS[i]}</span>
+                        <span className="min-w-0 text-[12.5px] font-semibold leading-snug text-ink">{o.label}</span>
+                        <span className="ml-auto"><Outcome figures={o.figures} /></span>
+                      </div>
+                      <Figures figures={o.figures} against={proposal.asItIs} scale={scale} stranded={showStranded} />
+                    </div>
+
+                    <Fold
+                      title="Why this option"
+                      // Where a figure was taken out of the text is shown without a click.
+                      defaultOpen={o.mechanism.includes(STRUCK)}
+                      meta={<span className="text-[10.5px] text-ink-faint">tested in {o.step}</span>}
+                    >
+                      <p className="text-[12px] leading-relaxed text-ink-body">
+                        <Text text={o.mechanism} />
+                      </p>
+                      <OptionChanges changes={o.changes} heading="What it does to the scenario" />
                       <button
                         type="button"
                         onClick={() => cite(o.step)}
                         title="Open the step that tested it"
-                        className="ml-auto shrink-0 rounded border border-line-soft bg-white px-1.5 py-0.5 font-mono text-[10.5px] font-bold text-brand-deep hover:border-brand"
+                        className="self-start border border-line-soft bg-surface px-1.5 py-0.5 text-[10.5px] text-ink-body hover:border-brand"
                       >
-                        {o.step}
+                        Open step <span className="font-mono font-bold text-brand-deep">{o.step}</span>
                       </button>
-                    </div>
-                    <p className="text-[12px] leading-relaxed text-ink-body">
-                      <Text text={o.mechanism} />
-                    </p>
-                    <OptionChanges changes={o.changes} heading="What it does to the scenario" />
-                    <span className={LABEL}>What it rests on</span>
-                    <BasisList items={o.basis} />
-                    {o.notTested.length || o.notes.length ? (
-                      <>
-                        <span className={LABEL}>What this test does not say</span>
+                    </Fold>
+                    <Fold title="What it rests on" below={<EvidenceMeter items={o.basis} />}>
+                      <BasisList items={o.basis} />
+                    </Fold>
+                    {unsaid ? (
+                      <Fold
+                        title="What this test does not say"
+                        defaultOpen={o.notTested.some((t) => t.includes(STRUCK))}
+                        meta={<span className="text-[10.5px] tabular-nums text-ink-faint">{unsaid}</span>}
+                      >
                         <ul className="flex list-disc flex-col gap-0.5 pl-4 text-[11.5px] text-ink-body">
                           {o.notTested.map((t, k) => (
                             <li key={k}><Text text={t} /></li>
@@ -486,41 +450,53 @@ export default function OptionsTab({
                             <li key={t}>{t}</li>
                           ))}
                         </ul>
-                      </>
+                      </Fold>
                     ) : null}
-                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                      <button
-                        type="button"
-                        disabled={acting !== null || isAdded}
-                        onClick={() => void add(o)}
-                        title={edits ? "Writes its stamps into the recipe and takes out the choices it replaces or removes." : undefined}
-                        className="flex items-center gap-1 rounded border border-line bg-white px-2 py-1 text-[11.5px] font-semibold text-ink hover:bg-canvas disabled:opacity-60"
-                      >
-                        {acting === `add:${o.step}` ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : isAdded ? <Check className="h-3 w-3 text-ok-ink" aria-hidden="true" /> : <Plus className="h-3 w-3" aria-hidden="true" />}
-                        {edits ? (isAdded ? "Applied to the scenario" : "Apply to scenario") : isAdded ? "Added to the scenario" : "Add to scenario"}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={acting !== null || isRecorded || !exchangeId}
-                        onClick={() => void record(o)}
-                        title={exchangeId ? undefined : "This test was not journalled, so there is nothing to record a decision from. Test again."}
-                        className="flex items-center gap-1 rounded bg-brand px-2 py-1 text-[11.5px] font-semibold text-white disabled:opacity-60"
-                      >
-                        {acting === `record:${o.step}` ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : isRecorded ? <Check className="h-3 w-3" aria-hidden="true" /> : null}
-                        {isRecorded ? "Decision recorded" : "Record decision"}
-                      </button>
+
+                    <div className="flex flex-col gap-1.5 border-t border-line-soft p-3">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <button
+                          type="button"
+                          disabled={acting !== null || isAdded}
+                          onClick={() => void add(o)}
+                          title={edits ? "Writes its stamps into the recipe and takes out the choices it replaces or removes." : undefined}
+                          className="flex h-7 items-center gap-1 border border-line-strong bg-surface px-2.5 text-[11.5px] font-semibold text-ink hover:bg-surface-hover disabled:opacity-60"
+                        >
+                          {acting === `add:${o.step}` ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : isAdded ? <Check className="h-3 w-3 text-ok-ink" aria-hidden="true" /> : <Plus className="h-3 w-3" aria-hidden="true" />}
+                          {edits ? (isAdded ? "Applied to the scenario" : "Apply to scenario") : isAdded ? "Added to the scenario" : "Add to scenario"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={acting !== null || isRecorded || !exchangeId}
+                          onClick={() => void record(o)}
+                          title={exchangeId ? undefined : "This test was not journalled, so there is nothing to record a decision from. Test again."}
+                          className="flex h-7 items-center gap-1 bg-brand px-2.5 text-[11.5px] font-semibold text-white hover:bg-brand-deep disabled:opacity-60"
+                        >
+                          {acting === `record:${o.step}` ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : isRecorded ? <Check className="h-3 w-3" aria-hidden="true" /> : null}
+                          {isRecorded ? "Decision recorded" : "Record decision"}
+                        </button>
+                      </div>
+                      {isAdded ? (
+                        <p className="text-[11px] text-ink-muted">
+                          {edits
+                            ? "The recipe now holds its stamps, in place of the choices it replaced or removed. Press Run: the result should show the figures of this card."
+                            : "Its stamps are in the recipe. Press Run: the result should show the figures of this card."}
+                        </p>
+                      ) : null}
+                      {isRecorded ? <p className="text-[11px] text-ink-muted">Kept under Decisions, with these figures as what is expected.</p> : null}
                     </div>
-                    {isAdded ? (
-                      <p className="text-[11px] text-ink-muted">
-                        {edits
-                          ? "The recipe now holds its stamps, in place of the choices it replaced or removed. Press Run: the result should show the figures of this column."
-                          : "Its stamps are in the recipe. Press Run: the result should show the figures of this column."}
-                      </p>
-                    ) : null}
-                    {isRecorded ? <p className="text-[11px] text-ink-muted">Kept under Decisions, with these figures as what is expected.</p> : null}
                   </section>
                 );
               })}
+
+              {proposal.asItIs && proposal.options.length ? (
+                <p className="text-[10.5px] text-ink-faint">
+                  “As it is” is this scenario with the choices it already holds. Each option is the same run with its
+                  changes applied: stamps added and, where its card says so, a choice of the scenario replaced or removed.
+                  Every bar is drawn on the same scale, and the tick on it marks the scenario as it is. In the order
+                  tested; nothing here ranks them.
+                </p>
+              ) : null}
 
               {actionError ? <p role="alert" className="rounded bg-danger-soft px-2 py-1.5 text-[12px] text-danger-ink">{actionError}</p> : null}
 
@@ -578,12 +554,12 @@ export default function OptionsTab({
               {proposal.basis.length ? (
                 <div className="flex flex-col gap-1">
                   <button type="button" aria-expanded={basisOpen} onClick={() => setBasisOpen((o) => !o)} className={cn(LABEL, "text-left hover:text-ink-body")}>
-                    What every column rests on · {proposal.basis.length} {basisOpen ? "▾" : "▸"}
+                    What every option rests on · {proposal.basis.length} {basisOpen ? "▾" : "▸"}
                   </button>
                   {basisOpen ? <BasisList items={proposal.basis} /> : null}
                   {basisOpen && proposal.options.some(takesOut) ? (
                     <p className="text-[10.5px] text-ink-faint">
-                      A choice an option replaces or removes is in “As it is” and not in that option’s column.
+                      A choice an option replaces or removes is in “As it is” and not in that option’s card.
                     </p>
                   ) : null}
                 </div>
@@ -596,7 +572,7 @@ export default function OptionsTab({
                       key={s.id}
                       type="button"
                       onClick={() => onFocusSite(s.id)}
-                      className="flex items-center gap-1 rounded border border-line bg-white px-2 py-1 text-[11.5px] text-ink-body hover:border-brand hover:bg-brand-soft"
+                      className="flex items-center gap-1 rounded border border-line bg-surface px-2 py-1 text-[11.5px] text-ink-body hover:border-brand hover:bg-brand-soft"
                     >
                       <MapPin className="h-3 w-3 text-brand-deep" aria-hidden="true" /> {s.name}
                     </button>
