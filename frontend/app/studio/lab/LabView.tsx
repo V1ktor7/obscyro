@@ -11,23 +11,17 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 import {
   AlertTriangle,
   ArrowRight,
   Brain,
-  ChartLine,
   Check,
-  Code2,
-  GraduationCap,
   Loader2,
-  Activity,
   Play,
   Plus,
-  RadioTower,
   Trash2,
-  TrendingUp,
   X,
   Zap,
 } from "lucide-react";
@@ -38,6 +32,7 @@ import { listChannels, type DataChannel } from "../channels-api";
 import { numericColumns, parseCsvRows } from "../csv-parse";
 import FeedSimulatorTab from "./FeedSimulatorTab";
 import ForecastTab from "./ForecastTab";
+import { labTabFrom } from "./lab-tabs";
 import LiveForecastTab from "./LiveForecastTab";
 import ModelsTab from "./ModelsTab";
 import NotebookTab from "./NotebookTab";
@@ -56,23 +51,6 @@ import {
 } from "../lab-api";
 import { useStudio } from "../StudioShell";
 
-type Tab = "models" | "notebook" | "forecast" | "live" | "causality" | "train" | "compare" | "feed";
-
-const TABS: readonly Tab[] = [
-  "models",
-  "notebook",
-  "forecast",
-  "live",
-  "causality",
-  "train",
-  "compare",
-  "feed",
-];
-
-function tabFrom(value: string | null): Tab | null {
-  return value && (TABS as readonly string[]).includes(value) ? (value as Tab) : null;
-}
-
 const FIELD =
   "rounded border border-line bg-canvas px-2 py-1 text-xs text-ink focus:border-brand focus:outline-none";
 const LABEL = "mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-ink-faint";
@@ -85,29 +63,23 @@ export default function LabView() {
   const { hasKey, selectedEnv } = useStudio();
   const env = selectedEnv;
 
-  // The tab lives in the URL.
+  // The tab lives in the URL, and the Studio's own row of tabs is what
+  // changes it.
   //
-  // The rail links to `/studio/lab?tab=causality` and this screen used to
-  // ignore the parameter entirely: every one of those links opened Models, and
-  // the rail highlighted all of them at once because none of them changed
-  // anything. Reading it here is what makes them links; writing it back on a
-  // click is what keeps the highlight honest, and what makes a lab tab
-  // something you can send to somebody.
-  const router = useRouter();
-  const pathname = usePathname();
+  // The shell lists the lab's tabs above the page, one link each
+  // (`/studio/lab?tab=causality`; see `platform-nav.ts` and `lab-tabs.ts`).
+  // This screen reads the parameter and shows that tab: nothing here switches
+  // tabs. It used to carry a second row of the same eight, right under the
+  // first, and two rows that say the same thing make a reader wonder what the
+  // difference is.
+  //
+  // Two groups, in the order the shell lists them. Models, Notebook and
+  // Forecast fit a model to a table, whatever it came from. Live forecasts,
+  // Causality, Signal model (ARX) and Simulate vs reality work on live
+  // signals: the causality scan, the ARX model it feeds, and the comparison
+  // that replays it against reality.
   const params = useSearchParams();
-  const tab = tabFrom(params?.get("tab") ?? null) ?? "models";
-
-  const setTab = useCallback(
-    (next: Tab) => {
-      const q = new URLSearchParams(params?.toString() ?? "");
-      q.set("tab", next);
-      // Replace rather than push: seven tabs would otherwise bury the page the
-      // reader came from under seven back-button steps.
-      router.replace(`${pathname}?${q.toString()}`, { scroll: false });
-    },
-    [router, pathname, params],
-  );
+  const tab = labTabFrom(params?.get("tab") ?? null);
   const [error, setError] = useState<string | null>(null);
 
   // Context
@@ -284,43 +256,6 @@ export default function LabView() {
             )}
           </div>
         </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex shrink-0 gap-1 border-b border-line bg-surface px-4 py-1.5">
-        {(
-          [
-            // Two groups, in order. The first three fit a model to a table:
-            // any table, whatever it came from. The last four work on live
-            // signals — the causality scan, the ARX model it feeds, and the
-            // comparison that replays it against reality. Both are real, so
-            // both keep a tab, and each name says which one it is rather than
-            // leaving two tabs called "train".
-            ["models", "Models", GraduationCap],
-            ["notebook", "Notebook", Code2],
-            ["forecast", "Forecast", TrendingUp],
-            ["live", "Live forecasts", Activity],
-            ["causality", "Causality", Brain],
-            ["train", "Signal model (ARX)", ChartLine],
-            ["compare", "Simulate vs reality", ChartLine],
-            ["feed", "Feed simulator", RadioTower],
-          ] as const
-        ).map(([key, label, Icon]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setTab(key)}
-            className={cn(
-              "flex items-center gap-1.5 rounded px-3 py-1 text-xs",
-              tab === key
-                ? "bg-brand-soft font-medium text-brand-deep"
-                : "text-ink-muted hover:bg-surface-hover",
-            )}
-          >
-            <Icon className="h-3.5 w-3.5" />
-            {label}
-          </button>
-        ))}
       </div>
 
       {error ? (

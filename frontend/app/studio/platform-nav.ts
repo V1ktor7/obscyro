@@ -186,15 +186,16 @@ export const NAV_SECTIONS: NavSection[] = [
     href: "/studio/lab",
     groups: [
       {
-        // One entry per tab the lab actually has. Three of the seven were
-        // listed and four were reachable only by clicking inside the page.
+        // One entry per tab the lab has, in the lab's own order: the page
+        // has no row of tabs of its own, so an entry missing here is a tab
+        // nothing leads to (`lab/lab-tabs.test.ts` holds the two together).
         items: [
           { label: "Models", href: "/studio/lab?tab=models" },
           { label: "Notebook", href: "/studio/lab?tab=notebook" },
           { label: "Forecast", href: "/studio/lab?tab=forecast" },
           { label: "Live forecasts", href: "/studio/lab?tab=live" },
           { label: "Causality", href: "/studio/lab?tab=causality" },
-          { label: "Signal model", href: "/studio/lab?tab=train" },
+          { label: "Signal model (ARX)", href: "/studio/lab?tab=train" },
           { label: "Simulate vs reality", href: "/studio/lab?tab=compare" },
           { label: "Feed simulator", href: "/studio/lab?tab=feed" },
         ],

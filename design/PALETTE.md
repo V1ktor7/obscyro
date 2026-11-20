@@ -120,6 +120,12 @@ Une section qui a plus de huit pages (Ontology) garde une liste sur le côté : 
 rangée qui défile cache les pages au-delà de son bord. Code :
 `frontend/app/studio/PlatformRail.tsx`.
 
+Une page ne répète pas ces onglets. Quand ils désignent des vues d'une même
+page, comme les huit de Models, la page lit la vue dans l'adresse (`?tab=…`) et
+n'a pas de rangée à elle : deux rangées qui disent la même chose font chercher
+une différence qui n'existe pas. Un test tient la liste de la page et celle de
+la navigation ensemble (`frontend/app/studio/lab/lab-tabs.test.ts`).
+
 ## Ce qui reste en valeurs littérales
 
 Un attribut SVG, un style en ligne, un canevas ou une couche Mapbox ne peuvent
