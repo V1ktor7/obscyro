@@ -3,7 +3,7 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "ae8c9ce388868663"
+translatedFrom: "51b000c0df18806a"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
@@ -39,8 +39,6 @@ It also needs credit on the Claude account of that key. When there is none left,
 What the tools read from the twin (counts and capacities, never a person) is sent to the Claude API to write the answer. The panel says so at its foot.
 
 The Event finder tab uses the web search of the Claude API. It has no variable of its own: it works with the same key, on two conditions that are set in the Claude console and not in the product. Web search must be allowed for the organisation (it is by default; switched off, the request fails with an error from the model), and the project's domains must not fall outside a list the organisation may have restricted. It is billed on top of tokens: US$10 per 1,000 searches at the rate read on 2026-11-17 and read again on 2026-11-20, eight searches at most per request.
-
-State on 2026-11-17: in service in production, verified with the real model. The first test found two defects, fixed the same day (two sites swapped and a figure rounded twice, see “The rule of numbers”), then the reference questions all passed twice in a row (see below).
 
 ## The routes
 
@@ -166,53 +164,21 @@ The sources are set in the tab (“Sources searched”, Change): a list of domai
 
 Nothing from the twin leaves in a search. In that exchange the model has no reading tool, and its context names neither the project nor the scenario: it has only the request, the list of sources and today's date.
 
-State on 2026-11-17, in production, with the real model and the real search, on the scenario “Omicron · Montréal — calibrated on INSPQ”.
-
-- The request “What public health measures were in force in Montréal between 2021-12-13 and 2022-02-10? Include the curfew and the dates schools closed and reopened in Québec.” returned twelve candidates in five searches, with nothing removed. Among them the curfew, from 31 December 2021 to 17 January 2022 (quebec.ca), and the schools, closed from 21 December with a return to class on 17 January (inspq.qc.ca and quebec.ca). The passages of those two candidates were read back one by one: they say what the candidates take from them.
-- Two candidates arrived without a start date, because their passage did not give it: the screen asks to read it in the source.
-- Reject triggered no call to the server.
-- In the Ask tab, `list_events` answered that the calendar is empty and pointed to Event finder; a reference question about the twin gave its known figures again.
-- Accept, the Context lane and an answer that cites an event were exercised in production on 2026-11-20: the curfew and the school closure, accepted with one click, appear on the scenario's timeline, and the analyst cites them with their link when asked what was happening at the peak of admissions.
-- Observed cost of that request that day: 32 steps, 5 searches, about 319,000 tokens read and written. It has been reduced since: see below.
-
 ### What a search costs
 
-Measured in production on 2026-11-20, on the same reference request, with the model `claude-opus-5-5`. The journal keeps the tokens of each request per price (`usage.byRequest`), which made it possible to see where they went. Prices read the same day on the API's pricing page: $4 per million tokens read, $5 written to the cache, $0.20 read back from the cache, $20 written by the model, and $10 per 1,000 searches.
+An event search costs about 70 cents, at the API prices read on 2026-11-20. What costs is reading the pages a first time: each search launched returns ten pages, close to 15,000 tokens, or roughly 8 cents, and the model usually launches five or six per request, eight at most.
 
-| | Before | After |
-|---|---|---|
-| Requests to the model | 3 | 2 |
-| Searches launched | 5 | 6 |
-| Tokens written to the cache | 155,661 | 99,413 |
-| Tokens read back from the cache | 131,228 | 4,806 |
-| Tokens read at full price | 14 | 10 |
-| Tokens written by the model | 9,633 | 7,421 |
-| **Total tokens** | **296,536** | **111,650** |
-| **Price of the request** | **$1.05** | **$0.71** |
-| Candidates returned, nothing removed | 12 | 12 |
-| Duration | 87 s | 68 s |
+What the product does so as not to pay twice for the same pages:
 
-The total fell by 62 %, the price by 33 %. The two figures do not move together, and that is the finding that matters: **what costs is writing the pages once, not reading them again.** A search returns ten pages, about 14,800 tokens, or roughly 8 cents (7 cents of tokens, 1 cent of search). Reading those pages back from the cache is twenty-five times cheaper than writing them.
+- **The searches start together.** The instructions ask for them to be planned and launched in the same step, because a search launched on its own makes the model read again everything the earlier ones returned. It is an instruction, not a guarantee: if the model searches in several stages, the reading comes back.
+- **The delivery is made without the pages.** As soon as passages have been picked out, the candidates are delivered in a fresh conversation, which holds only the request, the searches made and the passages. The search tool is no longer offered there: the cap of eight searches holds for the whole exchange.
+- **The journal keeps the tokens of each request, per price** (`usage.byRequest`): read at full price, written to the cache, read back from the cache, written by the model, and the searches.
 
-Where the tokens went, and what was changed:
+What is not done, and why:
 
-| Finding | Change | Measured effect |
-|---|---|---|
-| Delivering the candidates, then correcting the delivery when a draft was sent back, set off again with all the pages: 162,706 input tokens, more than half the request. And the second request read nothing back from the first one's cache: its 76,421 tokens were written again, for 38 cents | Delivery happens in a fresh conversation, which holds only the request, the searches made and the passages noted. The pages no longer travel | Delivery goes from 162,706 input tokens to 5,967. The request goes from $1.05 to $0.70 |
-| Each search launched on its own makes everything the earlier ones returned be read again: 128,315 tokens read back for six searches | The instructions ask for the searches to be planned and launched together, in the same step | Reading back goes from 128,315 tokens to 4,806. The price hardly moves (2.5 cents): those tokens were already at the cache rate |
-
-What was not adopted, and why:
-
-- **Filtering of results by the API** (the search launched from its code sandbox, which keeps only the useful excerpts). The API's documentation says it: searches launched that way do not count towards the cap of an exchange with several requests, and that mode is not eligible for zero-data-retention commitments. The cap of eight searches has to hold, so the search is still called directly.
-- **Switching the cache off for this exchange.** The pages are no longer read back by another request, and writing them to the cache costs a quarter more than simply reading them: about 9 cents per request. But if the model launches one search after the others, everything before it is read again, and without a cache that reading would cost twenty times more. The cache stays, as an insurance.
-- **Lowering the cap of eight searches.** The model launched five or six on the reference request. The cap is a limit, not a target.
-
-What these measurements do not say:
-
-- **One request per state, not an average.** The number of searches changes from one time to the next (five, then six), and the price with it.
-- **Launching the searches together is an instruction, not a guarantee.** If the model searches in several stages, the reading back returns: the intermediate measurement, six searches launched over several steps, cost 230,735 tokens for the same price, $0.70.
-- **Why the second request did not read the cache back was not established.** The most likely explanation is in the API's documentation: a cache breakpoint looks for an entry only across the twenty blocks before it, and the first answer holds several dozen after the last page (one quoted sentence per block). The question no longer arises, since the pages no longer travel.
-- **The dates depend on the passages, and the passages change from one time to the next.** Over the three requests, the curfew came back once without its end date, once without its start date, once with both; the schools twice with both their dates. That was already true before these changes: a date is kept only if a passage states it, and the person completes it otherwise.
+- **Filtering of the results by the API** (the search launched from its code sandbox, which keeps only the useful extracts). The API's documentation says so: searches launched that way do not count towards the cap of an exchange with several requests, and that mode is not eligible for the commitments not to retain data. The cap of eight searches has to hold, so the search stays called directly.
+- **Turning the cache off for this exchange.** Writing the pages to the cache costs a quarter more than simply reading them. But if the model launches a search after the others, everything before it is read again, and without the cache that reading would cost twenty times more. The cache stays, as an insurance.
+- **Lowering the cap of eight searches.** The cap is a limit, not a target.
 
 ## The decisions
 
@@ -330,30 +296,9 @@ OBSCYRO_API_KEY="$(powershell.exe -NoProfile -Command Get-Clipboard | tr -d '\r\
 What is not judged: the quality of the writing. That still takes a person, who reads the answers with `--show`.
 
 - Each question is replayed twice by default: a set that passes once has not shown that it passes.
-- Four questions were added after the first real replay, for what it had shown to be fragile: three sites cited with one figure each (`three-sites`), the sites of a run with their waiting (`run-waiting-by-site`), two territories compared (`two-catchments`), a question asked in French (`in-french`). Their expected facts were recorded in production on 2026-11-20.
+- Four questions cover what proved fragile with the real model: three sites cited with one figure each (`three-sites`), the sites of a run with their waiting (`run-waiting-by-site`), two territories compared (`two-catchments`), a question asked in French (`in-french`).
 - The script exits with an error as soon as a question fails: it can serve as a guard before changing the instructions or a tool.
 - The expected facts are in the code (`QUESTIONS`). When the twin or the scenario changes, it is the question that gets corrected.
-
-### Latest replay
-
-2026-11-17, in production, model `claude-opus-5-5`, effort `medium`, scenario “Omicron · Montréal — calibrated on INSPQ” with its run on screen:
-
-| | |
-|---|---|
-| Questions | 13, replayed twice each: 26 answers |
-| Passed | 26 out of 26 |
-| Figures removed | none |
-| Median duration of an answer | 15.1 s |
-| Slowest answer | 38.8 s (a question about the run, 7 steps) |
-| Tokens per answer | from 11,500 to 61,800 |
-
-The effort stays at `medium`: at that duration there is nothing to gain by lowering it, and the replay passes with nothing removed.
-
-That replay was launched from the page, in the browser, with the same judging code (`judge`, `QUESTIONS`) as the script, and the digest of the run came from the page itself. It covered the thirteen questions of the time.
-
-Since 2026-11-20, the script no longer needs anything prepared by hand: the server does the run, and the key is given in the terminal. The run done by the server was verified in production that day: in 64 seconds, it returns the figures of the Result panel (94 % and 93 % at the peak, 8 then 3 sites out of 34 with a queue, 7,316 then 267 patient-days of waiting) and the order of the queues the questions expect.
-
-Four answers were read back by a person and compared with the Result panel: the order of the queues, the summary of the choices, the case with no run, and the question the tool cannot answer.
 
 **Code.** `backend/src/services/analyst-eval.ts` (the questions, the judging, the reading of a stream), `backend/scripts/analyst-eval.ts` (the replay), `serverRun` in `backend/src/services/scenario-run.ts` and the route `POST /v1/ontology/:env/analyst/run` in `backend/src/routes/analyst.ts` (the run done by the server). **Tests.** `analyst-eval.unit.test.ts`, `scenario-run.unit.test.ts`, `routes/analyst.unit.test.ts`.
 
@@ -367,7 +312,7 @@ Four answers were read back by a person and compared with the Result panel: the 
 - The title, the place and the gate of a candidate cannot be corrected on screen: only the dates can. A badly titled candidate is rejected.
 - An event has only a place written in words. It is tied to no territory of the twin, and the engine does not receive it: it is a marker for reading a run, not an input of the run.
 - The validated events are the project's, not a scenario's: every scenario of the project sees the same calendar.
-- An event search costs about 70 cents, measured on 2026-11-20: each search launched returns ten pages, close to 15,000 tokens, and no setting of the API lets you ask for fewer without giving up the cap on searches. The detail is in “What a search costs”.
+- An event search costs about 70 cents: each search launched returns ten pages, close to 15,000 tokens, and no setting of the API lets you ask for fewer without giving up the cap on searches. See “What a search costs”.
 - The twin holds no staff, no stocks and no history: the analyst says so, it does not fill the gap.
 - The run on screen is not kept when the page is reloaded; Run has to be launched again. Nor are the tested options: what remains are the recorded decisions and the journal.
 - An option is made of capacity and measures. A transfer of patients, staff, a stock, a new link between a site and a territory cannot be tested: the engine or the twin does not carry them. The analyst files them under the limits.
@@ -375,27 +320,9 @@ Four answers were read back by a person and compared with the Result panel: the 
 - An option can replace or remove a choice of the scenario, but not a starting condition or an event. Replacing a capacity by a measure is done in two changes of the same option: remove one, add the other.
 - Applying an option that removes a choice is done in two writes, the new stamp then the removal of the old one, and not in a single operation. If the second fails, the recipe keeps both stamps: the screen shows it, and the removal is done by hand. If the stamp to remove is no longer there at the time of the click, nothing is written.
 - The name of a choice (`choice-a`) holds for one exchange. A later question reads the recipe again and may give it another name.
-- An objective takes several minutes on the Montréal twin. The first test launches two passes of the engine (the scenario as it is, then the option) after reading the twin and computing the spread; the following ones, a single pass. Measured in production on 2026-11-18, on the demonstration scenario and the same objective (“How do we stop the queue at Lakeshore?”), three options tested:
-
-  | | Before (three passes on the first test) | After (two passes) |
-  |---|---|---|
-  | First test | 161 s | 64 s: one pass of 31 s, one of 32 s |
-  | Second and third tests | 30 s and 31 s | 33 s and 33 s |
-  | The three tests | 222 s | 130 s |
-  | The whole objective | five to six minutes | a little under three minutes |
-
-  The pass removed saves one pass, about thirty seconds. The rest of the gap on the first test comes from reading the twin, which an earlier step had already done in the second measurement and not in the first. The “As it is” column stayed the same: 93 %, 3 sites out of 34, 267 patient-days, first queue on day 20. One pass of the engine therefore takes about thirty seconds on this twin, and it is what sets the duration: to go faster the engine has to be sped up, not the analyst.
+- An objective takes a little under three minutes on the Montréal twin. One pass of the engine takes about thirty seconds there; the first test launches two (the scenario as it is, then the option) after reading the twin and computing the spread, the following ones a single pass. It is the engine that sets the duration: to go faster the engine has to be made faster, not the analyst.
 - The follow-up of a decision compares arrivals only (see “The decisions”).
-
-State on 2026-11-17: verified in production with the real model and the real engine, on the scenario “Omicron · Montréal — calibrated on INSPQ”.
-
-- An objective (“How do we stop the queue at Lakeshore?”) returned three tested options, with no figure removed, and the “As it is” column gives the figures of the Result panel again.
-- An option added to the scenario, then Run: the Result panel gives the figures of its column again (peak 92 %, 3 sites out of 34, 267 patient-days of waiting, first queue on day 20). Its stamps removed, the scenario came back to its 20 stamps and its original figures.
-- On 2026-11-20, an option that replaces a choice was applied with a click on “Apply to scenario”: “30 beds at Lakeshore from day 10 instead of 60”. The recipe stayed at 20 stamps, with a single stamp for Lakeshore (+30 on day 10) and no +60 left. Run then gave the column of the test again: peak at 93 % on day 36, 4 sites out of 34 with a queue, 359 patient-days of waiting, a queue at Lakeshore from day 30, of 8 people at most. The original choice was then put back and the +30 removed: the recipe has the same content as before (the stamp put back is a new row, placed last), and Run gives the earlier Result panel again to the character (3 sites out of 34, 267 patient-days). The refusal when the stamp to remove has disappeared was not provoked in production: it is held by the tests.
-- A recorded decision reads back in the Decisions tab, and its follow-up gives 2,954 expected arrivals against 2,944 observed over 60 days.
-- On 2026-11-20, after the move to cards: in production, the Decisions tab shows a recorded decision in the new design (“40 beds at Lakeshore from day 10 instead of 60”: 267 patient-days, 3 sites out of 34, peak 93 % on day 36, first queue on day 20), and a Run gives the known Result panel again (94 % then 93 %, 8 then 3 sites, 7,316 then 267 patient-days). The cards of the Options tab were looked at locally on simulated answers, and are held by the tests; an objective has not been replayed in production with the real model since that change.
-
-That test decision (“40 beds at Lakeshore from day 10 instead of 60”) stays in the list of the demonstration project: nothing on screen allows it to be deleted.
+- A recorded decision cannot be deleted on screen.
 
 ## Files
 

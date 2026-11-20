@@ -63,6 +63,8 @@ Elles ne se négocient pas, et elles s'appliquent à tout ce qui touche à la bo
 
 **Chaque ajout, modification ou suppression met à jour la documentation dans le même commit.** Un changement sans sa documentation n'est pas terminé.
 
+**La documentation dit ce que le produit fait** : une nouvelle fonction, une fonction modifiée, ses règles et ses limites. Un rapport de test, un rejeu ou une vérification en production (ce qui a été cliqué, mesuré, ce que l'essai a coûté) se note dans le commentaire de l'issue, pas dans `docs/`.
+
 | Ce qui change | Ce qu'on met à jour |
 |---|---|
 | Un algorithme (ajouté, modifié, supprimé) | Sa section **et son schéma** dans [docs/algorithms.md](docs/algorithms.md), et la table en tête du fichier |

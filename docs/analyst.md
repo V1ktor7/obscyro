@@ -34,8 +34,6 @@ Ce que les outils lisent du jumeau (des comptes et des capacités, jamais une pe
 
 L'onglet Event finder utilise la recherche web de l'API Claude. Elle n'a pas de variable à elle : elle marche avec la même clé, à deux conditions qui se règlent dans la console Claude et non dans le produit. La recherche web doit être permise pour l'organisation (elle l'est par défaut ; coupée, la demande échoue avec une erreur du modèle), et les domaines du projet ne doivent pas sortir d'une liste que l'organisation aurait restreinte. Elle est facturée en plus des jetons : 10 $ US pour 1 000 recherches au tarif lu le 2026-11-17 et relu le 2026-11-20, huit recherches au plus par demande.
 
-État au 2026-11-17 : en service en production, vérifié avec le vrai modèle. Le premier test a trouvé deux défauts, corrigés le jour même (une interversion de deux sites et un chiffre arrondi deux fois, voir « La règle des chiffres »), puis les questions de référence ont toutes passé deux fois de suite (voir plus bas).
-
 ## Les routes
 
 | Route | Ce qu'elle rend |
@@ -160,53 +158,21 @@ Les sources se règlent dans l'onglet (« Sources searched », Change) : une lis
 
 Rien du jumeau ne part dans une recherche. Dans cet échange le modèle n'a aucun outil de lecture, et son contexte ne nomme ni le projet ni le scénario : il n'a que la demande, la liste des sources et la date du jour.
 
-État au 2026-11-17, en production, avec le vrai modèle et la vraie recherche, sur le scénario « Omicron · Montréal — calibrated on INSPQ ».
-
-- La demande « What public health measures were in force in Montréal between 2021-12-13 and 2022-02-10? Include the curfew and the dates schools closed and reopened in Québec. » a rendu douze candidats en cinq recherches, sans rien de retiré. Parmi eux le couvre-feu, du 31 décembre 2021 au 17 janvier 2022 (quebec.ca), et les écoles, fermées à compter du 21 décembre avec un retour en classe le 17 janvier (inspq.qc.ca et quebec.ca). Les passages de ces deux candidats ont été relus un à un : ils disent ce que les candidats en retiennent.
-- Deux candidats sont arrivés sans date de début, parce que leur passage ne la donnait pas : l'écran demande de la lire dans la source.
-- Reject n'a déclenché aucun appel au serveur.
-- Dans l'onglet Ask, `list_events` a répondu que le calendrier est vide et a renvoyé vers Event finder ; une question de référence sur le jumeau a redonné ses chiffres connus.
-- Accept, le couloir Context et une réponse qui cite un événement ont été exercés en production le 2026-11-20 : le couvre-feu et la fermeture des écoles, acceptés d'un clic, apparaissent sur la frise du scénario, et l'analyste les cite avec leur lien quand on lui demande ce qui se passait au pic des admissions.
-- Coût observé de cette demande ce jour-là : 32 étapes, 5 recherches, environ 319 000 jetons lus et écrits. Il a été réduit depuis : voir ci-dessous.
-
 ### Ce que coûte une recherche
 
-Mesuré en production le 2026-11-20, sur la même demande de référence, avec le modèle `claude-opus-5-5`. Le journal garde les jetons de chaque requête par prix (`usage.byRequest`), ce qui a permis de voir où ils allaient. Prix lus le même jour sur la page de tarification de l'API : 4 $ par million de jetons lus, 5 $ écrits au cache, 0,20 $ relus du cache, 20 $ écrits par le modèle, et 10 $ pour 1 000 recherches.
+Une recherche d'événements coûte environ 70 cents, aux prix de l'API lus le 2026-11-20. Ce qui coûte, c'est de lire les pages une première fois : chaque recherche lancée renvoie dix pages, près de 15 000 jetons, soit à peu près 8 cents, et le modèle en lance en général cinq ou six par demande, huit au plus.
 
-| | Avant | Après |
-|---|---|---|
-| Requêtes au modèle | 3 | 2 |
-| Recherches lancées | 5 | 6 |
-| Jetons écrits au cache | 155 661 | 99 413 |
-| Jetons relus du cache | 131 228 | 4 806 |
-| Jetons lus au plein tarif | 14 | 10 |
-| Jetons écrits par le modèle | 9 633 | 7 421 |
-| **Total des jetons** | **296 536** | **111 650** |
-| **Prix de la demande** | **1,05 $** | **0,71 $** |
-| Candidats rendus, rien de retiré | 12 | 12 |
-| Durée | 87 s | 68 s |
+Ce que le produit fait pour ne pas payer deux fois les mêmes pages :
 
-Le total a baissé de 62 %, le prix de 33 %. Les deux chiffres ne bougent pas ensemble, et c'est le constat qui compte : **ce qui coûte, c'est d'écrire les pages une fois, pas de les relire.** Une recherche renvoie dix pages, environ 14 800 jetons, soit à peu près 8 cents (7 cents de jetons, 1 cent de recherche). Relire ces pages depuis le cache est vingt-cinq fois moins cher que de les écrire.
+- **Les recherches partent ensemble.** Les consignes demandent de les prévoir et de les lancer dans la même étape, parce qu'une recherche lancée seule fait relire tout ce que les précédentes ont renvoyé. C'est une consigne, pas une garantie : si le modèle cherche en plusieurs temps, la relecture revient.
+- **La livraison se fait sans les pages.** Dès que des passages sont relevés, les candidats sont livrés dans une conversation neuve, qui ne contient que la demande, les recherches faites et les passages. L'outil de recherche n'y est plus offert : le plafond de huit recherches tient pour tout l'échange.
+- **Le journal garde les jetons de chaque requête, par prix** (`usage.byRequest`) : lus au plein tarif, écrits au cache, relus du cache, écrits par le modèle, et les recherches.
 
-Où allaient les jetons, et ce qui a été changé :
-
-| Constat | Changement | Effet mesuré |
-|---|---|---|
-| La livraison des candidats, puis sa correction quand un brouillon était renvoyé, repartaient avec toutes les pages : 162 706 jetons d'entrée, plus de la moitié de la demande. Et la deuxième requête ne relisait rien du cache de la première : ses 76 421 jetons étaient réécrits, pour 38 cents | La livraison se fait dans une conversation neuve, qui ne contient que la demande, les recherches faites et les passages relevés. Les pages ne repartent plus | La livraison passe de 162 706 jetons d'entrée à 5 967. La demande passe de 1,05 $ à 0,70 $ |
-| Chaque recherche lancée seule fait relire tout ce que les précédentes ont renvoyé : 128 315 jetons relus pour six recherches | Les consignes demandent de prévoir les recherches et de les lancer ensemble, dans la même étape | La relecture passe de 128 315 jetons à 4 806. Le prix ne bouge presque pas (2,5 cents) : ces jetons-là étaient déjà au tarif du cache |
-
-Ce qui n'a pas été retenu, et pourquoi :
+Ce qui n'est pas fait, et pourquoi :
 
 - **Le filtrage des résultats par l'API** (la recherche lancée depuis son bac à code, qui ne garde que les extraits utiles). La documentation de l'API le dit : les recherches lancées ainsi ne comptent pas dans le plafond d'un échange à plusieurs requêtes, et ce mode n'est pas admissible aux engagements de non-conservation des données. Le plafond de huit recherches doit tenir, donc la recherche reste appelée directement.
-- **Couper le cache pour cet échange.** Les pages ne sont plus relues par une autre requête, et les écrire au cache coûte un quart de plus que de les lire simplement : environ 9 cents par demande. Mais si le modèle lance une recherche après les autres, tout ce qui précède est relu, et sans cache cette relecture coûterait vingt fois plus. Le cache reste, comme une assurance.
-- **Baisser le plafond de huit recherches.** Le modèle en a lancé cinq ou six sur la demande de référence. Le plafond est une limite, pas une cible.
-
-Ce que ces mesures ne disent pas :
-
-- **Une demande par état, pas une moyenne.** Le nombre de recherches change d'une fois à l'autre (cinq, puis six), et le prix avec lui.
-- **Lancer les recherches ensemble est une consigne, pas une garantie.** Si le modèle cherche en plusieurs temps, la relecture revient : la mesure intermédiaire, six recherches lancées en plusieurs étapes, a coûté 230 735 jetons pour le même prix, 0,70 $.
-- **Pourquoi la deuxième requête ne relisait pas le cache n'a pas été établi.** L'explication la plus probable est dans la documentation de l'API : un point de cache ne cherche une entrée que sur les vingt blocs qui le précèdent, et la première réponse en contient plusieurs dizaines après la dernière page (une phrase citée par bloc). La question ne se pose plus, puisque les pages ne repartent plus.
-- **Les dates tiennent aux passages, et les passages changent d'une fois à l'autre.** Sur les trois demandes, le couvre-feu est revenu une fois sans sa date de fin, une fois sans sa date de début, une fois avec les deux ; les écoles deux fois avec leurs deux dates. C'était déjà vrai avant ces changements : une date n'est gardée que si un passage l'énonce, et c'est la personne qui la complète sinon.
+- **Couper le cache pour cet échange.** Écrire les pages au cache coûte un quart de plus que de les lire simplement. Mais si le modèle lance une recherche après les autres, tout ce qui précède est relu, et sans cache cette relecture coûterait vingt fois plus. Le cache reste, comme une assurance.
+- **Baisser le plafond de huit recherches.** Le plafond est une limite, pas une cible.
 
 ## Les décisions
 
@@ -324,30 +290,9 @@ OBSCYRO_API_KEY="$(powershell.exe -NoProfile -Command Get-Clipboard | tr -d '\r\
 Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une personne, qui lit les réponses avec `--show`.
 
 - Chaque question est rejouée deux fois par défaut : un jeu qui passe une fois n'a pas montré qu'il passe.
-- Quatre questions ont été ajoutées après le premier rejeu réel, pour ce qu'il avait montré de fragile : trois sites cités avec un chiffre chacun (`three-sites`), les sites d'un run avec leur attente (`run-waiting-by-site`), deux territoires comparés (`two-catchments`), une question posée en français (`in-french`). Leurs faits attendus ont été relevés en production le 2026-11-20.
+- Quatre questions couvrent ce qui s'est montré fragile avec le vrai modèle : trois sites cités avec un chiffre chacun (`three-sites`), les sites d'un run avec leur attente (`run-waiting-by-site`), deux territoires comparés (`two-catchments`), une question posée en français (`in-french`).
 - Le script sort en erreur dès qu'une question échoue : il peut servir de garde avant de changer les consignes ou un outil.
 - Les faits attendus sont dans le code (`QUESTIONS`). Quand le jumeau ou le scénario change, c'est la question qu'on corrige.
-
-### Dernier rejeu
-
-2026-11-17, en production, modèle `claude-opus-5-5`, effort `medium`, scénario « Omicron · Montréal — calibrated on INSPQ » avec son run à l'écran :
-
-| | |
-|---|---|
-| Questions | 13, rejouées 2 fois chacune : 26 réponses |
-| Réussies | 26 sur 26 |
-| Chiffres retirés | aucun |
-| Durée médiane d'une réponse | 15,1 s |
-| Réponse la plus lente | 38,8 s (une question sur le run, 7 étapes) |
-| Jetons par réponse | de 11 500 à 61 800 |
-
-L'effort reste à `medium` : à cette durée il n'y a rien à gagner à le baisser, et le rejeu passe sans rien retirer.
-
-Ce rejeu a été lancé depuis la page, dans le navigateur, avec le même code de jugement (`judge`, `QUESTIONS`) que le script, et le résumé du run venait de la page elle-même. Il portait sur les treize questions d'alors.
-
-Depuis le 2026-11-20, le script n'a plus besoin de rien de préparé à la main : le serveur fait le run, et la clé se donne au terminal. Le run fait par le serveur a été vérifié en production ce jour-là : en 64 secondes, il rend les chiffres du panneau Result (94 % et 93 % au pic, 8 puis 3 sites sur 34 avec une file, 7 316 puis 267 jours-patients d'attente) et l'ordre des files que les questions attendent.
-
-Quatre réponses ont été relues par une personne et comparées au panneau Result : l'ordre des files, le résumé des choix, le cas sans run, et la question à laquelle l'outil ne peut pas répondre.
 
 **Code.** `backend/src/services/analyst-eval.ts` (les questions, le jugement, la lecture d'un flux), `backend/scripts/analyst-eval.ts` (le rejeu), `serverRun` dans `backend/src/services/scenario-run.ts` et la route `POST /v1/ontology/:env/analyst/run` dans `backend/src/routes/analyst.ts` (le run fait par le serveur). **Tests.** `analyst-eval.unit.test.ts`, `scenario-run.unit.test.ts`, `routes/analyst.unit.test.ts`.
 
@@ -361,7 +306,7 @@ Quatre réponses ont été relues par une personne et comparées au panneau Resu
 - Le titre, le lieu et la porte d'un candidat ne se corrigent pas à l'écran : seules les dates le peuvent. Un candidat mal titré se refuse.
 - Un événement n'a qu'un lieu écrit en mots. Il n'est relié à aucun territoire du jumeau, et le moteur ne le reçoit pas : c'est un repère pour lire un run, pas une entrée du run.
 - Les événements validés sont ceux du projet, pas d'un scénario : tous les scénarios du projet voient le même calendrier.
-- Une recherche d'événements coûte environ 70 cents, mesuré le 2026-11-20 : chaque recherche lancée renvoie dix pages, près de 15 000 jetons, et aucun réglage de l'API ne permet d'en demander moins sans renoncer au plafond de recherches. Le détail est dans « Ce que coûte une recherche ».
+- Une recherche d'événements coûte environ 70 cents : chaque recherche lancée renvoie dix pages, près de 15 000 jetons, et aucun réglage de l'API ne permet d'en demander moins sans renoncer au plafond de recherches. Voir « Ce que coûte une recherche ».
 - Le jumeau ne contient ni personnel, ni stocks, ni historique : l'analyste le dit, il ne le comble pas.
 - Le run à l'écran n'est pas gardé au rechargement de la page ; il faut relancer Run. Les options testées non plus : ce qui reste, ce sont les décisions enregistrées et le journal.
 - Une option est faite de capacité et de mesures. Un transfert de patients, du personnel, un stock, un lien nouveau entre un site et un territoire ne se testent pas : le moteur ou le jumeau ne les portent pas. L'analyste les range dans les limites.
@@ -369,27 +314,9 @@ Quatre réponses ont été relues par une personne et comparées au panneau Resu
 - Une option peut remplacer ou retirer un choix du scénario, mais pas une condition de départ ni un événement. Remplacer une capacité par une mesure se fait en deux changements de la même option : retirer l'une, ajouter l'autre.
 - Appliquer une option qui retire un choix se fait en deux écritures, le nouveau tampon puis le retrait de l'ancien, et non en une seule opération. Si la seconde échoue, la recette garde les deux tampons : l'écran le montre, et le retrait se fait à la main. Si le tampon à retirer n'est plus là au moment du clic, rien n'est écrit.
 - Le nom d'un choix (`choice-a`) vaut pour un échange. Une question suivante relit la recette et peut lui donner un autre nom.
-- Un objectif prend plusieurs minutes sur le jumeau de Montréal. Le premier test lance deux passes du moteur (le scénario tel quel, puis l'option) après avoir lu le jumeau et calculé la propagation ; les suivants, une seule. Mesuré en production le 2026-11-18, sur le scénario de démonstration et le même objectif (« How do we stop the queue at Lakeshore? »), trois options testées :
-
-  | | Avant (trois passes au premier test) | Après (deux passes) |
-  |---|---|---|
-  | Premier test | 161 s | 64 s : une passe de 31 s, une de 32 s |
-  | Deuxième et troisième tests | 30 s et 31 s | 33 s et 33 s |
-  | Les trois tests | 222 s | 130 s |
-  | L'objectif entier | cinq à six minutes | un peu moins de trois minutes |
-
-  La passe retirée fait gagner une passe, une trentaine de secondes. Le reste de l'écart sur le premier test vient de la lecture du jumeau, qu'une étape précédente avait déjà faite dans le second relevé et pas dans le premier. La colonne « As it is » est restée la même : 93 %, 3 sites sur 34, 267 jours-patients, première file au jour 20. Une passe du moteur prend donc une trentaine de secondes sur ce jumeau, et c'est elle qui fixe la durée : pour aller plus vite il faut accélérer le moteur, pas l'analyste.
+- Un objectif prend un peu moins de trois minutes sur le jumeau de Montréal. Une passe du moteur y prend une trentaine de secondes ; le premier test en lance deux (le scénario tel quel, puis l'option) après avoir lu le jumeau et calculé la propagation, les suivants une seule. C'est le moteur qui fixe la durée : pour aller plus vite il faut accélérer le moteur, pas l'analyste.
 - Le suivi d'une décision ne compare que des arrivées (voir « Les décisions »).
-
-État au 2026-11-17 : vérifié en production avec le vrai modèle et le vrai moteur, sur le scénario « Omicron · Montréal — calibrated on INSPQ ».
-
-- Un objectif (« How do we stop the queue at Lakeshore? ») a rendu trois options testées, sans aucun chiffre retiré, et la colonne « As it is » redonne les chiffres du panneau Result.
-- Une option ajoutée au scénario, puis Run : le panneau Result redonne les chiffres de sa colonne (pic 92 %, 3 sites sur 34, 267 jours-patients d'attente, première file au jour 20). Ses tampons retirés, le scénario est revenu à ses 20 tampons et à ses chiffres d'origine.
-- Le 2026-11-20, une option qui remplace un choix a été appliquée d'un clic sur « Apply to scenario » : « 30 beds at Lakeshore from day 10 instead of 60 ». La recette est restée à 20 tampons, avec un seul tampon pour Lakeshore (+30 au jour 10) et plus aucun +60. Run a alors redonné la colonne du test : pic à 93 % au jour 36, 4 sites sur 34 avec une file, 359 jours-patients d'attente, une file à Lakeshore à partir du jour 30, de 8 personnes au plus. Le choix d'origine a ensuite été remis et le +30 retiré : la recette a le même contenu qu'avant (le tampon remis est une nouvelle ligne, rangée en dernier), et Run redonne le panneau Result d'avant au caractère près (3 sites sur 34, 267 jours-patients). Le refus quand le tampon à retirer a disparu n'a pas été provoqué en production : il est tenu par les tests.
-- Une décision enregistrée se relit dans l'onglet Decisions, et son suivi donne 2 954 arrivées attendues contre 2 944 observées sur 60 jours.
-- Le 2026-11-20, après le passage aux cartes : en production, l'onglet Decisions redonne une décision enregistrée dans le nouveau dessin (« 40 beds at Lakeshore from day 10 instead of 60 » : 267 jours-patients, 3 sites sur 34, pic 93 % au jour 36, première file au jour 20), et un Run redonne le panneau Result connu (94 % puis 93 %, 8 puis 3 sites, 7 316 puis 267 jours-patients). Les cartes de l'onglet Options ont été regardées en local sur des réponses simulées, et sont tenues par les tests ; un objectif n'a pas été rejoué en production avec le vrai modèle depuis ce changement.
-
-Cette décision de test (« 40 beds at Lakeshore from day 10 instead of 60 ») reste dans la liste du projet de démonstration : rien à l'écran ne permet de la supprimer.
+- Une décision enregistrée ne se supprime pas à l'écran.
 
 ## Fichiers
 
