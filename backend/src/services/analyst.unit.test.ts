@@ -98,7 +98,19 @@ test("an answer whose figures are in the steps it cites is delivered as verified
   assert.deepEqual(out.answer!.followUps, ["a", "b", "c"]);
   assert.deepEqual(out.answer!.focusSites, ["u1"]);
   assert.deepEqual(out.steps.map((s) => [s.id, s.tool, s.ok]), [["s1", "lookup", true]]);
-  assert.deepEqual(out.usage, { requests: 2, inputTokens: 300, outputTokens: 40 });
+  // Every input token is counted, and the three prices it was billed at are kept apart,
+  // request by request: that is what says whether a long exchange re-read its cache.
+  assert.deepEqual(out.usage, {
+    requests: 2,
+    inputTokens: 300,
+    outputTokens: 40,
+    cacheWriteTokens: 0,
+    cacheReadTokens: 100,
+    byRequest: [
+      { input: 100, cacheWrite: 0, cacheRead: 50, output: 20 },
+      { input: 100, cacheWrite: 0, cacheRead: 50, output: 20 },
+    ],
+  });
 
   // What the model was told and asked: the question and its context, tools it
   // may choose from freely, a fallback for a safeguard that misfires.

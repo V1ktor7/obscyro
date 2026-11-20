@@ -67,12 +67,38 @@ export interface AnalystAnswer {
   focusSites: string[];
 }
 
+/**
+ * What one request to the model was billed for.
+ *
+ * Input is three things at three prices: read in full, written to the prompt
+ * cache (above the base price), or served from it (a small fraction of the
+ * base price). A long exchange is cheap or dear by how much of each request is
+ * the third kind, so the three are kept apart instead of summed.
+ */
+export interface RequestUsage {
+  /** Input no cache held, billed at the base price. */
+  input: number;
+  /** Input written to the cache by this request. */
+  cacheWrite: number;
+  /** Input served from the cache. */
+  cacheRead: number;
+  output: number;
+  /** Web searches the API ran inside this request; present only when the exchange could search. */
+  webSearches?: number;
+}
+
 export interface AnalystUsage {
   requests: number;
+  /** Every input token of every request, whatever it was billed at: the three kinds below, summed. */
   inputTokens: number;
   outputTokens: number;
   /** Web searches the API ran and billed; present only when the exchange could search. */
   webSearches?: number;
+  /** Of `inputTokens`, what was written to the cache and what was served from it. The rest was read in full. */
+  cacheWriteTokens: number;
+  cacheReadTokens: number;
+  /** One line per request, in order: where an exchange's tokens went, for the journal. */
+  byRequest: RequestUsage[];
 }
 
 /** What an exchange comes to: `A` is what was delivered, `F` a figure that had to be taken out of it. */
@@ -430,7 +456,15 @@ export async function converse<D, A, F>(
   ctx.known.absorb(question);
   const read: Reading = { steps, ledgers, question };
 
-  const usage: AnalystUsage = { requests: 0, inputTokens: 0, outputTokens: 0, ...(web ? { webSearches: 0 } : {}) };
+  const usage: AnalystUsage = {
+    requests: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    ...(web ? { webSearches: 0 } : {}),
+    cacheWriteTokens: 0,
+    cacheReadTokens: 0,
+    byRequest: [],
+  };
   let servedBy = ANALYST_MODEL;
   let rejected = 0;
   let nudges = 0;
@@ -481,11 +515,20 @@ export async function converse<D, A, F>(
       ],
       messages,
     });
+    const billed: RequestUsage = {
+      input: res.usage.input_tokens,
+      cacheWrite: res.usage.cache_creation_input_tokens ?? 0,
+      cacheRead: res.usage.cache_read_input_tokens ?? 0,
+      output: res.usage.output_tokens,
+      ...(web ? { webSearches: res.usage.server_tool_use?.web_search_requests ?? 0 } : {}),
+    };
     usage.requests += 1;
-    usage.inputTokens +=
-      res.usage.input_tokens + (res.usage.cache_read_input_tokens ?? 0) + (res.usage.cache_creation_input_tokens ?? 0);
-    usage.outputTokens += res.usage.output_tokens;
-    if (web) usage.webSearches = (usage.webSearches ?? 0) + (res.usage.server_tool_use?.web_search_requests ?? 0);
+    usage.inputTokens += billed.input + billed.cacheWrite + billed.cacheRead;
+    usage.outputTokens += billed.output;
+    usage.cacheWriteTokens += billed.cacheWrite;
+    usage.cacheReadTokens += billed.cacheRead;
+    usage.byRequest.push(billed);
+    if (web) usage.webSearches = (usage.webSearches ?? 0) + (billed.webSearches ?? 0);
     servedBy = res.model;
 
     if (res.stop_reason === "refusal") {

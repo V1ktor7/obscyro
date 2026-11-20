@@ -151,7 +151,19 @@ test("a search becomes candidates whose link, passage and dates come from what t
     ["s1", "web_search", true],
     ["s2", "web_passage", true],
   ]);
-  assert.deepEqual(out.usage, { requests: 2, inputTokens: 200, outputTokens: 40, webSearches: 1 });
+  assert.deepEqual(out.usage, {
+    requests: 2,
+    inputTokens: 200,
+    outputTokens: 40,
+    webSearches: 1,
+    cacheWriteTokens: 0,
+    cacheReadTokens: 0,
+    // The search ran inside the first request; the second only delivered.
+    byRequest: [
+      { input: 100, cacheWrite: 0, cacheRead: 0, output: 20, webSearches: 1 },
+      { input: 100, cacheWrite: 0, cacheRead: 0, output: 20, webSearches: 0 },
+    ],
+  });
   assert.deepEqual(events.map((e) => e.type), ["status", "step", "step", "status", "status", "done"]);
   assert.equal((events[0] as { message: string }).message, "Searching the allowed sources");
 });

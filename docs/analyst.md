@@ -190,6 +190,8 @@ Ce que la règle garantit : aucun chiffre affiché n'a été inventé, ni pris d
 
 Chaque échange est gardé dans `app.analyst_exchange` (migration 059) : la question ou l'objectif, le monde regardé, chaque étape avec son entrée, son résultat et son relevé, ce qui a été affiché, les chiffres retirés, le modèle et les jetons. La colonne `kind` dit si c'est une question (`ask`), un objectif (`options`, migration 060) ou une recherche d'événements (`events`, migration 062). Pour une recherche, le monde regardé est `web`, et les étapes sont les requêtes, les pages rendues et les passages cités. Rien n'est modifié après l'insertion.
 
+Les jetons sont gardés requête par requête (`usage.byRequest`) et par prix : ce qui a été lu au plein tarif (`input`), ce qui a été écrit au cache (`cacheWrite`), ce qui a été relu du cache (`cacheRead`), ce qui a été écrit par le modèle (`output`), et les recherches web lancées dans la requête. Un échange coûte peu ou cher selon la part de chaque requête qui est relue du cache : c'est ce que ce détail permet de vérifier après coup, au lieu de le supposer. Le total affiché à l'écran reste la somme de tous les jetons, quel que soit leur prix.
+
 L'identifiant de la ligne est choisi avant l'échange et part avec la ligne `done` du flux. C'est ce qui permet d'enregistrer une décision à partir d'un test : si l'écriture au journal a échoué, la décision est refusée et il faut tester à nouveau.
 
 Les décisions sont dans `app.decision` (migration 061). Les événements acceptés sont dans `app.health_event`, et les sources autorisées d'un projet dans `app.project_web_source` (migration 062).
