@@ -3,7 +3,7 @@
 title: "The decision loop"
 description: "Obscyro does not decide. It helps a person decide, by showing what is measured, what has been tried and what each option would change."
 source: "docs/decision-loop.md"
-translatedFrom: "8cdf5bd7b9d646f7"
+translatedFrom: "84a53113ea9111bc"
 ---
 
 Obscyro does not decide. It helps a person decide, by showing what is measured, what has been tried and what each option would change, leaving nothing to chance.
@@ -62,7 +62,7 @@ Putting the analyst into service ([issue 5](https://github.com/V1ktor7/obscyro/i
 3. Validated online search and the calendar of events: [issue 7](https://github.com/V1ktor7/obscyro/issues/7). **Done.** Next: reduce the token cost of a search ([issue 11](https://github.com/V1ktor7/obscyro/issues/11), **done**).
 4. Live: from the alert to the decision in one click. Six issues, in this order.
    1. The alert reaches every page, with a link to its unit: [issue 12](https://github.com/V1ktor7/obscyro/issues/12). **Done.** Next: keep the Response board readable when alerts close by themselves ([issue 18](https://github.com/V1ktor7/obscyro/issues/18)), give each alert the age of its own value ([issue 19](https://github.com/V1ktor7/obscyro/issues/19)).
-   2. A situation sheet opens from an alert, with the analyst inside: [issue 13](https://github.com/V1ktor7/obscyro/issues/13).
+   2. A situation card opens from an alert, with the analyst inside: [issue 13](https://github.com/V1ktor7/obscyro/issues/13). Delivered; what remains is to hear the analyst answer about live reading with the real model. Next: say that a unit can hold its capacity through its sub-units ([issue 21](https://github.com/V1ktor7/obscyro/issues/21)).
    3. Responses prepared per type of signal, committed with one click: [issue 14](https://github.com/V1ktor7/obscyro/issues/14).
    4. The prepared responses retested on the state of the moment, as soon as an alert opens: [issue 15](https://github.com/V1ktor7/obscyro/issues/15).
    5. The two option engines brought together, recorded responses and stamps: [issue 16](https://github.com/V1ktor7/obscyro/issues/16).

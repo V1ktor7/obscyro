@@ -56,7 +56,7 @@ La mise en service de l'analyste ([issue 5](https://github.com/V1ktor7/obscyro/i
 3. Recherche en ligne validée et calendrier d'événements : [issue 7](https://github.com/V1ktor7/obscyro/issues/7). **Fait.** Suite : réduire le coût en jetons d'une recherche ([issue 11](https://github.com/V1ktor7/obscyro/issues/11), **fait**).
 4. Le direct : de l'alerte à la décision en un clic. Six issues, dans cet ordre.
    1. L'alerte arrive sur toutes les pages, avec un lien vers son unité : [issue 12](https://github.com/V1ktor7/obscyro/issues/12). **Fait.** Suites : garder le tableau Response lisible quand les alertes se referment seules ([issue 18](https://github.com/V1ktor7/obscyro/issues/18)), donner à chaque alerte l'âge de sa propre valeur ([issue 19](https://github.com/V1ktor7/obscyro/issues/19)).
-   2. Une fiche de situation s'ouvre depuis une alerte, avec l'analyste dedans : [issue 13](https://github.com/V1ktor7/obscyro/issues/13).
+   2. Une fiche de situation s'ouvre depuis une alerte, avec l'analyste dedans : [issue 13](https://github.com/V1ktor7/obscyro/issues/13). Livré ; il reste à entendre l'analyste répondre sur le direct avec le vrai modèle. Suite : dire qu'une unité peut porter sa capacité par ses sous-unités ([issue 21](https://github.com/V1ktor7/obscyro/issues/21)).
    3. Des réponses préparées par type de signal, engagées d'un clic : [issue 14](https://github.com/V1ktor7/obscyro/issues/14).
    4. Les réponses préparées retestées sur l'état du moment, dès qu'une alerte s'ouvre : [issue 15](https://github.com/V1ktor7/obscyro/issues/15).
    5. Les deux moteurs d'options réunis, réponses enregistrées et tampons : [issue 16](https://github.com/V1ktor7/obscyro/issues/16).
