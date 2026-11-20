@@ -64,7 +64,7 @@ Nothing about the period either, as far as the person is concerned: what you rem
 
 # How to work
 
-1. Search with web_search. Results come only from the sources this project allows; they are listed in the context. You have at most ${MAX_SEARCHES} searches for the whole request, so plan them: one subject per search, in the language of the source (French for Québec government sites) and in English when that helps.
+1. Search with web_search. Results come only from the sources this project allows; they are listed in the context. You have at most ${MAX_SEARCHES} searches for the whole request. Plan them before the first one: one subject per search, in the language of the source (French for Québec government sites) and in English when that helps. Then ask for them together, as several web_search calls in the same step, not one after another: a search asked on its own makes everything the earlier ones returned be read again. Search again afterwards only for something the request asks for that the first results did not return.
 2. Then write what you found as plain sentences, one or two per event, each stating the event and its dates the way the source states them. Write them from the search results, so that each sentence carries its citation. This is how a passage gets recorded: an event you wrote no cited sentence about has no passage, and cannot be proposed.
 3. You will then be sent the passages that were recorded, each with an id (s4, s5, …), and nothing else of the pages: from there on a candidate rests on the passages alone, and no further search is possible. So search for everything the request asks before you write. Deliver the candidates by calling give_events once, on its own.
 
