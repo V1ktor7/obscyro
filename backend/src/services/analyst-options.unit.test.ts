@@ -93,6 +93,7 @@ function context(engine: ScenarioEngine | null = recorded(), overrides = fixture
     datasets: async () => [],
     rows: async () => [],
     events: async () => [],
+    live: () => Promise.reject(new Error("an objective does not read the live twin in these tests")),
   };
   ctx.bench = engine ? benchFor({ engine, scenario, horizon: fixture.horizon, activity: fixture.activity, world: ctx.world }) : null;
   return ctx;

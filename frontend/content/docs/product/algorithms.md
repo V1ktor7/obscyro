@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "48e56632eecba530"
+translatedFrom: "55634e9e3f22492e"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -47,6 +47,7 @@ Every algorithm of the product has its section here: what it is for, its diagram
 | [D6](#d6-twin-metrics) | Twin metrics | `backend/src/services/twin-metrics.ts` |
 | [D7](#d7-freshness-of-a-value) | Freshness of a value | `backend/src/services/observed-at.ts` |
 | [D8](#d8-zone-correspondence) | Zone correspondence | `backend/src/services/zone-correspondence.ts` |
+| [D9](#d9-live-reading-and-situation-card) | Live reading and situation card | `backend/src/services/live-reading.ts`, `situation.ts` |
 
 ---
 
@@ -65,7 +66,7 @@ sequenceDiagram
     participant M as Claude model
     participant O as Tools
     participant C as Closing
-    P->>B: question, objective or request, open scenario, run on screen
+    P->>B: question, objective or request, open scenario, run on screen,<br/>and what the person is looking at (page, unit, signal)
     loop at most 16 requests to the model
         B->>M: instructions of the closing, tools, exchange so far
         opt the exchange has online search (A10)
@@ -110,6 +111,8 @@ sequenceDiagram
 - A turn the API pauses (`pause_turn`) is sent back to it as it is, without a word from us: an added message would close the turn. A delivery requested at the same time as a search is refused once, while the search runs.
 - A tool's refusal (unknown name, no run on screen) is a step the model reads; it carries no citable figure. A failure on our side is never disguised as a refusal.
 - A tool can keep, beside its result, a full record (`Recorded`): it is shown and journalled, never sent to the model. So no sentence can rest on it.
+- What the person is looking at arrives as ids (`focus`: page, unit, signal). The server looks the names up itself, in this project only, and writes them into the context of the question: no text typed by the caller enters the instructions.
+- The tools read two sources, and each says which: the twin's export, which is what a run uses, and the live reading (D9), which is what the screens show.
 - A refusal by the model produces no invented answer.
 - If the person leaves, nothing more is asked of the model.
 - The identifier of the exchange is chosen before starting and leaves with the last line of the stream: it is what a decision will name (A9).
@@ -475,9 +478,9 @@ flowchart TD
     M --> N["List of what is missing, named"]
 ```
 
-**Rules.** A bed already occupied is not free capacity. A territory with no population figure still appears, at zero, in the list of gaps. A route has no throughput in the ontology: it comes out at zero, and that is reported. The read cap is `ROLLUP_INSTANCE_CAP`; reaching it is said, because everything else would be a silent underestimate.
+**Rules.** Only what is attached to a unit itself counts for it (`facilitiesFrom`): a hospital's wards are sites in their own right, and their beds are theirs. That is the difference with the unit page, which adds up everything under a unit (D6, D9). A bed already occupied is not free capacity. A territory with no population figure still appears, at zero, in the list of gaps. A route has no throughput in the ontology: it comes out at zero, and that is reported. The read cap is `ROLLUP_INSTANCE_CAP`; reaching it is said, because everything else would be a silent underestimate.
 
-**Code.** `backend/src/services/twin-export.ts`, `property-schema.ts`. **Tests.** `twin-export.unit.test.ts`, `scenario-lens-links.unit.test.ts`.
+**Code.** `backend/src/services/twin-export.ts` (`buildTwinExport`, `facilitiesFrom`), `property-schema.ts`. **Tests.** `twin-export.unit.test.ts`, `twin-figures.unit.test.ts`, `scenario-lens-links.unit.test.ts`.
 
 ## B2. One step of the event engine
 
@@ -865,9 +868,9 @@ flowchart LR
     C --> D["Value of the metric for the unit"]
 ```
 
-**Rules.** Nothing rests on a type name or a status value written in the code: “occupied beds over beds” is a definition, not a special case.
+**Rules.** Nothing rests on a type name or a status value written in the code: “occupied beds over beds” is a definition, not a special case. The value of a unit covers its whole subtree: a hospital's occupancy is that of its wards taken together, not an average of averages. The computation (`rollupFrom`) is kept apart from its database reads, and a test holds it against the twin's export on one twin: for a unit with no sub-unit the two give the same figure, and the page's figure for a unit is exactly the sum of the export's over everything under it.
 
-**Code.** `backend/src/services/twin-metrics.ts`, `twin.ts`. **Tests.** `twin-metrics.unit.test.ts`, `twin-self-rollup.unit.test.ts`.
+**Code.** `backend/src/services/twin-metrics.ts`, `twin.ts` (`rollupAllUnits`, `rollupFrom`). **Tests.** `twin-metrics.unit.test.ts`, `twin-self-rollup.unit.test.ts`, `twin-figures.unit.test.ts`.
 
 ## D7. Freshness of a value
 
@@ -903,3 +906,47 @@ flowchart TD
 **Rules.** Weighting by area misleads: a sewershed that covers 30 % of the hectares can carry 70 % of the people. Two plants at 500 copies per litre do not make 1,000.
 
 **Code.** `backend/src/services/zone-correspondence.ts`. **Tests.** `zone-correspondence.unit.test.ts`.
+
+## D9. Live reading and situation card
+
+**Purpose.** To say what is happening now, to the analyst and to the person alike, with the very figures the screens show and the age of each. An alert opens a card that reads in full without the language model.
+
+```mermaid
+flowchart TD
+    A["One live reading (readLive):<br/>reality only, once per question or per card"] --> B["Unit tree"]
+    A --> C["Computation of the unit page (rollupAllUnits):<br/>everything under the unit, sub-units included"]
+    A --> D["Alert feed of the banner (readAlertFeed)"]
+    A --> E["Measures the organisation defined,<br/>number of alert rules,<br/>open signals by stage"]
+    D --> F["Signals raised by the listed alerts:<br/>kind, stage, place in the workflow"]
+    B --> G["unitNow: measures rounded like the page,<br/>what stands under the unit by type,<br/>age of the reading, the unit's alerts"]
+    C --> G
+    D --> H["alertsNow: alerts, worst first,<br/>value, since when, age of the value,<br/>signal and stage, last check of the thresholds"]
+    E --> H
+    F --> H
+    G --> I["The analyst's unit_now tool"]
+    H --> J["The analyst's list_alerts tool"]
+    G --> K["Situation card: GET /situation<br/>named by a unit, an alert or a signal"]
+    H --> K
+    K --> L{"Is the named alert<br/>among the open alerts?"}
+    L -->|"yes"| M["Its reading, with the age of its value"]
+    L -->|"no"| N["The card says it is no longer open;<br/>the unit is read all the same"]
+    K --> O{"Is a signal named?"}
+    O -->|"yes, in this project"| P["Its kind, its stage and the path of its workflow,<br/>even if its alert has cleared"]
+    O -->|"yes, elsewhere"| Q["Refusal: signal not found"]
+    K --> R["A question already written by the program,<br/>from the unit and the alert"]
+```
+
+**Rules.**
+- **One reading, two readers.** What the analyst gets from `unit_now` and what the card shows for the same unit come out of the same function (`unitNow`), and likewise for an alert (`alertNow`). The screen and the analyst cannot give two figures for one ward.
+- **The screen's source, not the engine's.** The reading starts from the computation of the unit page and the alert feed of the banner, not from the export (B1): the export counts only what is attached to the unit itself. A test holds the two together (D6).
+- **Rounded like the page.** A measure is handed to the analyst as the page writes it: a percentage with no decimals, a ratio with two. It has no rounding to do, so it cannot round differently.
+- **An age says what it is worth.** Exact (“value read 37 min ago”), a floor (“value read at least 2 h ago”) when one of the unit's sources published no time, or unknown with its reason. These are the three cases of the banner (D5), in the same words. The time the data was written here is given apart: it is not the age of the value.
+- **Nothing open is not nothing to report.** The reading says how many alert rules exist and when the thresholds were last checked. With no rule at all, it says that nothing could have opened.
+- **Reality only.** No scenario raises an alert, and a live figure read through a “what if” would speak of a world that does not exist.
+- **No history.** The reading is that of now; it says so, to the analyst and on the card.
+- **The card does not wait for the model.** `GET /situation` calls no model and writes nothing. The question for the analyst is written by the program; asking it is the person's move.
+- **A signal is looked up in its project.** A signal of another project is not found, whoever the caller is. Decisions are not yet attached to a kind of signal: the card says so instead of listing any.
+- A unit and an aggregate value, never a person.
+
+**Code.** `backend/src/services/live-reading.ts` (`readLive`, `unitNow`, `alertsNow`, `alertNow`, `ageOfValue`, `shown`), `situation.ts` (`situationOf`, `preparedQuestion`), `backend/src/routes/situation.ts`, the tools `list_alerts` and `unit_now` in `analyst-tools.ts`.
+**Tests.** `live-reading.unit.test.ts`, `twin-figures.unit.test.ts`, `routes/situation.unit.test.ts`.

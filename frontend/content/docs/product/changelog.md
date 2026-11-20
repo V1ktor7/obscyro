@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "2b8441896add718d"
+translatedFrom: "970a82e5f116eece"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -15,6 +15,7 @@ An entry is written the day the change ships, in the same commit as the code. Si
 
 ## 20 November 2026
 
+- **New feature · Analyst.** The analyst reads what is happening now. You can ask it what is open and where: it returns the alerts, the value of each and its age, and the stage of its signal. You can ask it for the live figures of a unit: it gives the ones its page shows.
 - **Change · Analyst.** When the analyst's Claude account has no credit left, the screen says so, and says that an administrator has to add some. Before, it suggested trying again, which could change nothing.
 - **Change · Site.** The “Core API” section is removed from the site's documentation: nine pages, one per endpoint of the terminology API. The endpoints still exist; their reference is the one the API serves itself, at `/documentation`.
 - **New feature · Studio.** An “API keys” page in the Admin section. The key the browser uses is shown there in full, masked until you ask to see it, with a button to copy it. The other keys show how they start. You create a key there, which is shown once to be copied, and revoke one.

@@ -76,6 +76,9 @@ const ctx = (): AnalystContext => ({
   datasets: async () => [],
   rows: async () => [],
   events: async () => [],
+  live: async () => {
+    throw new ToolError("not used");
+  },
 });
 
 const answer = (paragraphs: { text: string; sources: string[] }[], extra: Record<string, unknown> = {}) =>

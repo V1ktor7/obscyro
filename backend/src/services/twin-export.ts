@@ -1,7 +1,7 @@
 import { config } from "../lib/config.js";
 import type { DbClient } from "../lib/db.js";
 import type { ReadLens } from "./ontology-lens.js";
-import { listInstancesForEnv, listLinksForEnv } from "./ontology.js";
+import { listInstancesForEnv, listLinksForEnv, type EnvInstanceRow, type EnvLinkRow } from "./ontology.js";
 import {
   IN_USE_VALUES,
   STATUS_KEYS,
@@ -281,83 +281,23 @@ function activityOf(typeName: string): string {
 }
 
 /**
- * `lens` decides *which* world is exported.
+ * What stands at each unit, from what was read: the objects placed there, and
+ * the capacity and census they add up to.
  *
- * Without it the engine can only ever stress the network as it stands today,
- * which is the smaller half of the question. A scenario holds proposed edits —
- * a new wing, a ward closed for renovation, a merger — so reading through it
- * turns "what does a flood cost us" into "what does a flood cost us *if we
- * build the wing first*". That second question is the one worth funding, and
- * every read below already accepted a lens; nothing was passing one.
+ * Kept apart from the reads so it can be checked without a database, and held
+ * against the roll-up the unit page shows for the same twin
+ * (`twin-figures.unit.test.ts`). Only what is attached to the unit itself
+ * counts here: a hospital's wards are sites of their own, and their beds are
+ * theirs. The roll-up (`rollupFrom` in `twin.ts`) adds a unit's whole subtree.
  */
-export async function buildTwinExport(
-  db: DbClient,
-  environmentId: string,
-  environmentSlug: string,
-  lens?: ReadLens,
-): Promise<SimExport> {
-  const [{ nodes }, instances, links, roleRows] = await Promise.all([
-    getUnitTree(db, environmentId, lens),
-    // The configured ceiling, not a literal. This read used to cap at 20 000
-    // while `rollupInstanceCap` said 50 000, and the query orders by age — so a
-    // twin holding 25 113 units of capacity exported 19 949 of them and dropped
-    // the oldest 5 000 without a word. Silent truncation is the worst failure
-    // an export can have: everything downstream completes and answers
-    // confidently about a network that is a fifth smaller than the real one.
-    listInstancesForEnv(db, environmentId, { limit: config.rollupInstanceCap, ...lens }),
-    listLinksForEnv(db, environmentId, lens),
-    db.query<{ name: string; sim_role: SimRole | null; property_schema: PropertyDef[] | null }>(
-      `SELECT name, sim_role, property_schema FROM app.ontology_object_types
-        WHERE organization_id = (SELECT organization_id FROM app.project WHERE id = $1)`,
-      [environmentId],
-    ),
-  ]);
-
-  const roleByType = new Map(roleRows.rows.map((r) => [r.name, r.sim_role]));
-
-  /**
-   * The declared schema, crossing whole.
-   *
-   * Every type travels, not only the ones that produced objects. A type with no
-   * role yields no instance and therefore no effect can land on it — but the
-   * engine saying "this type declares no role" is a better answer than the type
-   * being absent, which reads as a typo in the ontology.
-   */
-  const object_types: SimObjectType[] = roleRows.rows
-    .map((r) => ({
-      name: r.name,
-      role: r.sim_role,
-      properties: (r.property_schema ?? []).map((p) => ({
-        key: p.key,
-        type: p.type,
-        label: p.label ?? null,
-        unit: p.unit ?? null,
-        min: p.bounds?.min ?? null,
-        max: p.bounds?.max ?? null,
-        behaviour: behaviourOf(p),
-        mechanic: p.mechanic ?? null,
-      })),
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+export function facilitiesFrom(
+  nodes: readonly { id: string; name: string }[],
+  instances: readonly EnvInstanceRow[],
+  links: readonly EnvLinkRow[],
+  roleByType: ReadonlyMap<string, SimRole | null>,
+): { facilities: SimFacility[]; objects: SimObject[]; typesWithoutRole: Set<string>; placeOfUnit: Map<string, string> } {
   const unitIds = new Set(nodes.map((n) => n.id));
   const instanceById = new Map(instances.map((i) => [i.id, i]));
-  const gaps: SimGap[] = [];
-
-  // Reported first, because it invalidates every other number in the export. A
-  // full page means the read stopped at the ceiling and there may be more; the
-  // export cannot tell how many more without a second count, and saying "there
-  // may be more" is the honest answer rather than a figure it would have to
-  // guess at.
-  if (instances.length >= config.rollupInstanceCap) {
-    gaps.push({
-      code: "TWIN_TRUNCATED",
-      message:
-        `The read stopped at ${config.rollupInstanceCap} instances, which is its ceiling, ` +
-        `so part of the twin is missing from this export and every figure below is a ` +
-        `lower bound. Raise ROLLUP_INSTANCE_CAP or narrow the environment.`,
-      subjects: [],
-    });
-  }
 
   // What hangs off a unit becomes capacity or census there. Which of the two,
   // and under which of the four constraints, is read from the type's declared
@@ -459,6 +399,90 @@ export async function buildTwinExport(
     const location = place ? coordOf(instanceById.get(place)?.properties ?? {}) : null;
     return { id: n.id, name: n.name, location, resources, census };
   });
+
+  return { facilities, objects, typesWithoutRole, placeOfUnit };
+}
+
+/**
+ * `lens` decides *which* world is exported.
+ *
+ * Without it the engine can only ever stress the network as it stands today,
+ * which is the smaller half of the question. A scenario holds proposed edits —
+ * a new wing, a ward closed for renovation, a merger — so reading through it
+ * turns "what does a flood cost us" into "what does a flood cost us *if we
+ * build the wing first*". That second question is the one worth funding, and
+ * every read below already accepted a lens; nothing was passing one.
+ */
+export async function buildTwinExport(
+  db: DbClient,
+  environmentId: string,
+  environmentSlug: string,
+  lens?: ReadLens,
+): Promise<SimExport> {
+  const [{ nodes }, instances, links, roleRows] = await Promise.all([
+    getUnitTree(db, environmentId, lens),
+    // The configured ceiling, not a literal. This read used to cap at 20 000
+    // while `rollupInstanceCap` said 50 000, and the query orders by age — so a
+    // twin holding 25 113 units of capacity exported 19 949 of them and dropped
+    // the oldest 5 000 without a word. Silent truncation is the worst failure
+    // an export can have: everything downstream completes and answers
+    // confidently about a network that is a fifth smaller than the real one.
+    listInstancesForEnv(db, environmentId, { limit: config.rollupInstanceCap, ...lens }),
+    listLinksForEnv(db, environmentId, lens),
+    db.query<{ name: string; sim_role: SimRole | null; property_schema: PropertyDef[] | null }>(
+      `SELECT name, sim_role, property_schema FROM app.ontology_object_types
+        WHERE organization_id = (SELECT organization_id FROM app.project WHERE id = $1)`,
+      [environmentId],
+    ),
+  ]);
+
+  const roleByType = new Map(roleRows.rows.map((r) => [r.name, r.sim_role]));
+
+  /**
+   * The declared schema, crossing whole.
+   *
+   * Every type travels, not only the ones that produced objects. A type with no
+   * role yields no instance and therefore no effect can land on it — but the
+   * engine saying "this type declares no role" is a better answer than the type
+   * being absent, which reads as a typo in the ontology.
+   */
+  const object_types: SimObjectType[] = roleRows.rows
+    .map((r) => ({
+      name: r.name,
+      role: r.sim_role,
+      properties: (r.property_schema ?? []).map((p) => ({
+        key: p.key,
+        type: p.type,
+        label: p.label ?? null,
+        unit: p.unit ?? null,
+        min: p.bounds?.min ?? null,
+        max: p.bounds?.max ?? null,
+        behaviour: behaviourOf(p),
+        mechanic: p.mechanic ?? null,
+      })),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const unitIds = new Set(nodes.map((n) => n.id));
+  const instanceById = new Map(instances.map((i) => [i.id, i]));
+  const gaps: SimGap[] = [];
+
+  // Reported first, because it invalidates every other number in the export. A
+  // full page means the read stopped at the ceiling and there may be more; the
+  // export cannot tell how many more without a second count, and saying "there
+  // may be more" is the honest answer rather than a figure it would have to
+  // guess at.
+  if (instances.length >= config.rollupInstanceCap) {
+    gaps.push({
+      code: "TWIN_TRUNCATED",
+      message:
+        `The read stopped at ${config.rollupInstanceCap} instances, which is its ceiling, ` +
+        `so part of the twin is missing from this export and every figure below is a ` +
+        `lower bound. Raise ROLLUP_INSTANCE_CAP or narrow the environment.`,
+      subjects: [],
+    });
+  }
+
+  const { facilities, objects, typesWithoutRole, placeOfUnit } = facilitiesFrom(nodes, instances, links, roleByType);
 
   const empty = facilities.filter((f) => Object.keys(f.resources).length === 0);
   if (empty.length > 0) {

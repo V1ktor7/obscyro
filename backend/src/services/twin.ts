@@ -17,6 +17,8 @@ import {
   insertObjectInstance,
   listInstancesForEnv,
   listLinksForEnv,
+  type EnvInstanceRow,
+  type EnvLinkRow,
   type PropertyDef,
 } from "./ontology.js";
 
@@ -444,15 +446,11 @@ export async function rollupAllUnits(
   lens?: ReadLens,
 ): Promise<Map<string, UnitMetrics>> {
   const { nodes, edges } = await getUnitTree(db, environmentId, lens);
-  const unitIds = new Set(nodes.map((n) => n.id));
-  const descendants = buildDescendantMap(unitIds, edges);
-
   const allInstances = await listInstancesForEnv(db, environmentId, {
     limit: config.rollupInstanceCap,
     ...lens,
   });
   const links = await listLinksForEnv(db, environmentId, lens);
-  const now = Date.now();
 
   const { rows: orgRows } = await db.query<{ organization_id: string }>(
     `SELECT organization_id FROM app.project WHERE id = $1`,
@@ -462,9 +460,31 @@ export async function rollupAllUnits(
     ? await metricsForRollup(db, orgRows[0].organization_id)
     : [];
 
+  return rollupFrom(nodes, edges, allInstances, links, metricDefs, Date.now());
+}
+
+/**
+ * The roll-up, from what was read.
+ *
+ * Kept apart from the reads for two reasons. It can be checked without a
+ * database. And the figures the unit page shows can be held against the ones
+ * the simulation export gives for the same twin (`twin-figures.unit.test.ts`):
+ * two readings of one ward that nothing compared were free to disagree.
+ */
+export function rollupFrom(
+  nodes: readonly Pick<TwinUnitNode, "id">[],
+  edges: TwinTreeEdge[],
+  allInstances: readonly EnvInstanceRow[],
+  links: readonly EnvLinkRow[],
+  metricDefs: readonly MetricDef[],
+  now: number,
+): Map<string, UnitMetrics> {
+  const unitIds = new Set(nodes.map((n) => n.id));
+  const descendants = buildDescendantMap(unitIds, edges);
+
   const instanceById = new Map(allInstances.map((i) => [i.id, i]));
 
-  const locatedInByUnit = new Map<string, typeof allInstances>();
+  const locatedInByUnit = new Map<string, EnvInstanceRow[]>();
   for (const link of links) {
     if (!attaches(link)) continue;
     // The unit is the receiving end; the instance is the one that gives.
@@ -481,7 +501,7 @@ export async function rollupAllUnits(
 
   for (const unitId of unitIds) {
     const desc = descendants.get(unitId) ?? new Set([unitId]);
-    const linked: typeof allInstances = [];
+    const linked: EnvInstanceRow[] = [];
     for (const d of desc) {
       linked.push(...(locatedInByUnit.get(d) ?? []));
     }

@@ -205,7 +205,7 @@ export function anthropicModel(client: Anthropic): AnalystModel {
 // What the model is told.
 // ---------------------------------------------------------------------------
 
-export const SYSTEM_PROMPT = `You are the analyst inside Obscyro, a decision-support tool built on the digital twin of a health network. The person asking is a planner or a manager looking at the Scenarios map. They are not a modeller. They need to understand what the twin and the last simulation run show, well enough to decide something and to defend the decision to someone else.
+export const SYSTEM_PROMPT = `You are the analyst inside Obscyro, a decision-support tool built on the digital twin of a health network. The person asking is a planner or a manager working in the Studio; the context block says what they are looking at. They are not a modeller. They need to understand what the twin and the last simulation run show, well enough to decide something and to defend the decision to someone else.
 
 # What you know
 
@@ -239,6 +239,15 @@ This is the rule the whole product rests on, so it is enforced by a program, not
 - It keeps three things apart: what the twin records (a fact about the network), what a run produced (the result of a model under stated conditions, not a forecast), and what is an assumption of the scenario.
 - It is short: two to five paragraphs, a few sentences each. One idea per paragraph, each citing the steps it rests on.
 - It states the mechanism, not only the number: why a site queues while its neighbour has room, what the added beds changed and where.
+
+# What is open now
+
+list_alerts and unit_now read the network as it stands this minute: the open alerts, and a unit's figures exactly as its page shows them. Four rules go with them.
+
+- A live value is never given without its age. Write the age the tool gives ("value read 37 min ago", "at least 2 h ago"). When the age is unknown, say so, with the reason the tool gives. Acting fast on an old value is the danger.
+- No open alert is not good news by itself. Say when the thresholds were last checked, and when the project has no alert rule, say that nothing could have opened.
+- There is no history. You cannot say what was open earlier, or what changed since this morning: say that, do not infer it.
+- unit_now counts everything under a unit, its sub-units included, which is what the unit page shows. get_site counts what stands at a site itself, which is what a run uses. When the two could be confused, say which one you are giving.
 
 # Published events
 
@@ -305,10 +314,23 @@ const answerInput = z.object({
   focus_sites: z.array(z.string().max(80)).max(10),
 });
 
+/**
+ * What the person has in front of them when they ask from somewhere other than
+ * the Scenarios map. Resolved by the server from ids: no name here was typed by
+ * the caller.
+ */
+export interface AskFocus {
+  /** The Studio page, as its address names it. */
+  page: string | null;
+  unit: { id: string; name: string } | null;
+  signal: { id: string; title: string; kind: string; stage: string; step: string; unitId: string | null } | null;
+}
+
 export interface AskInput {
   question: string;
   /** What the person is looking at. */
   looking: "reality" | "scenario";
+  focus?: AskFocus | null;
 }
 
 function contextBlock(ctx: AnalystContext, input: AskInput): string {
@@ -330,6 +352,18 @@ function contextBlock(ctx: AnalystContext, input: AskInput): string {
     );
   } else {
     lines.push("No run is on screen.");
+  }
+  const focus = input.focus;
+  if (focus?.page) lines.push(`The person is on the "${focus.page}" page of the Studio.`);
+  if (focus?.unit) {
+    lines.push(`They have a unit selected: "${focus.unit.name}" (id ${focus.unit.id}). unit_now and list_alerts take this id.`);
+  }
+  if (focus?.signal) {
+    const s = focus.signal;
+    lines.push(
+      `They have a signal open: "${s.title}" (${s.kind}, at the stage "${s.stage}", step ${s.step})` +
+        (s.unitId ? `, about the unit with id ${s.unitId}.` : "."),
+    );
   }
   return lines.join("\n");
 }

@@ -41,6 +41,7 @@ Chaque algorithme du produit a ici sa section : à quoi il sert, son schéma, se
 | [D6](#d6-métriques-du-jumeau) | Métriques du jumeau | `backend/src/services/twin-metrics.ts` |
 | [D7](#d7-fraîcheur-dune-valeur) | Fraîcheur d'une valeur | `backend/src/services/observed-at.ts` |
 | [D8](#d8-correspondance-de-zones) | Correspondance de zones | `backend/src/services/zone-correspondence.ts` |
+| [D9](#d9-lecture-du-direct-et-fiche-de-situation) | Lecture du direct et fiche de situation | `backend/src/services/live-reading.ts`, `situation.ts` |
 
 ---
 
@@ -59,7 +60,7 @@ sequenceDiagram
     participant M as Modèle Claude
     participant O as Outils
     participant C as Clôture
-    P->>B: question, objectif ou demande, scénario ouvert, run à l'écran
+    P->>B: question, objectif ou demande, scénario ouvert, run à l'écran,<br/>et ce que la personne regarde (page, unité, signal)
     loop au plus 16 requêtes au modèle
         B->>M: consignes de la clôture, outils, échange jusqu'ici
         opt l'échange a la recherche en ligne (A10)
@@ -104,6 +105,8 @@ sequenceDiagram
 - Un tour que l'API met en pause (`pause_turn`) lui est renvoyé tel quel, sans un mot de notre part : un message ajouté fermerait le tour. Une livraison demandée en même temps qu'une recherche est refusée une fois, le temps que la recherche tourne.
 - Un refus d'outil (nom inconnu, pas de run à l'écran) est une étape que le modèle lit ; il ne porte aucun chiffre citable. Une panne de notre côté n'est jamais déguisée en refus.
 - Un outil peut garder, à côté de son résultat, un relevé complet (`Recorded`) : il est affiché et journalisé, jamais envoyé au modèle. Aucune phrase ne peut donc s'appuyer dessus.
+- Ce que la personne regarde arrive par identifiants (`focus` : page, unité, signal). Le serveur retrouve les noms lui-même, dans ce projet seulement, et les écrit dans le contexte de la question : aucun texte tapé par l'appelant n'entre dans les consignes.
+- Les outils lisent deux sources, et chacun dit laquelle : l'export du jumeau, qui est ce qu'un run utilise, et la lecture du direct (D9), qui est ce que les écrans montrent.
 - Un refus du modèle ne produit aucune réponse inventée.
 - Si la personne part, plus rien n'est demandé au modèle.
 - L'identifiant de l'échange est choisi avant de commencer et part avec la dernière ligne du flux : c'est lui qu'une décision nommera (A9).
@@ -469,9 +472,9 @@ flowchart TD
     M --> N["Liste de ce qui manque, nommé"]
 ```
 
-**Règles.** Un lit déjà occupé n'est pas de la capacité libre. Un territoire sans chiffre de population apparaît quand même, à zéro, dans la liste des manques. Une route n'a pas de débit dans l'ontologie : elle sort à zéro, et c'est signalé. Le plafond de lecture est `ROLLUP_INSTANCE_CAP` ; l'atteindre se dit, parce que tout le reste serait une sous-estimation silencieuse.
+**Règles.** Seul ce qui est rattaché à une unité elle-même compte pour elle (`facilitiesFrom`) : les services d'un hôpital sont des sites à part entière, et leurs lits sont les leurs. C'est la différence avec la page des unités, qui additionne tout ce qui est sous une unité (D6, D9). Un lit déjà occupé n'est pas de la capacité libre. Un territoire sans chiffre de population apparaît quand même, à zéro, dans la liste des manques. Une route n'a pas de débit dans l'ontologie : elle sort à zéro, et c'est signalé. Le plafond de lecture est `ROLLUP_INSTANCE_CAP` ; l'atteindre se dit, parce que tout le reste serait une sous-estimation silencieuse.
 
-**Code.** `backend/src/services/twin-export.ts`, `property-schema.ts`. **Tests.** `twin-export.unit.test.ts`, `scenario-lens-links.unit.test.ts`.
+**Code.** `backend/src/services/twin-export.ts` (`buildTwinExport`, `facilitiesFrom`), `property-schema.ts`. **Tests.** `twin-export.unit.test.ts`, `twin-figures.unit.test.ts`, `scenario-lens-links.unit.test.ts`.
 
 ## B2. Un pas du moteur d'événements
 
@@ -859,9 +862,9 @@ flowchart LR
     C --> D["Valeur de la métrique pour l'unité"]
 ```
 
-**Règles.** Rien ne repose sur un nom de type ou une valeur de statut écrits en dur : « lits occupés sur lits » est une définition, pas un cas particulier.
+**Règles.** Rien ne repose sur un nom de type ou une valeur de statut écrits en dur : « lits occupés sur lits » est une définition, pas un cas particulier. La valeur d'une unité couvre tout son sous-arbre : l'occupation d'un hôpital est celle de ses services réunis, pas une moyenne de moyennes. Le calcul (`rollupFrom`) est séparé de ses lectures en base, et un test le tient contre l'export du jumeau sur un même jumeau : pour une unité sans sous-unité les deux donnent le même chiffre, et le chiffre de la page pour une unité est exactement la somme de ceux de l'export sur tout ce qui est sous elle.
 
-**Code.** `backend/src/services/twin-metrics.ts`, `twin.ts`. **Tests.** `twin-metrics.unit.test.ts`, `twin-self-rollup.unit.test.ts`.
+**Code.** `backend/src/services/twin-metrics.ts`, `twin.ts` (`rollupAllUnits`, `rollupFrom`). **Tests.** `twin-metrics.unit.test.ts`, `twin-self-rollup.unit.test.ts`, `twin-figures.unit.test.ts`.
 
 ## D7. Fraîcheur d'une valeur
 
@@ -897,3 +900,47 @@ flowchart TD
 **Règles.** Pondérer par la surface trompe : un bassin qui couvre 30 % des hectares peut porter 70 % des gens. Deux usines à 500 copies par litre ne font pas 1 000.
 
 **Code.** `backend/src/services/zone-correspondence.ts`. **Tests.** `zone-correspondence.unit.test.ts`.
+
+## D9. Lecture du direct et fiche de situation
+
+**But.** Dire ce qui se passe maintenant, à l'analyste comme à la personne, avec les chiffres mêmes que les écrans montrent et l'âge de chacun. Une alerte ouvre une fiche qui se lit en entier sans le modèle de langage.
+
+```mermaid
+flowchart TD
+    A["Une lecture du direct (readLive) :<br/>réalité seulement, une fois par question ou par fiche"] --> B["Arbre des unités"]
+    A --> C["Calcul de la page des unités (rollupAllUnits) :<br/>tout ce qui est sous l'unité, sous-unités comprises"]
+    A --> D["Fil d'alertes du bandeau (readAlertFeed)"]
+    A --> E["Mesures définies par l'organisation,<br/>nombre de règles d'alerte,<br/>signaux ouverts par étape"]
+    D --> F["Signaux levés par les alertes listées :<br/>type, étape, rang dans le workflow"]
+    B --> G["unitNow : mesures arrondies comme la page,<br/>ce qui est sous l'unité par type,<br/>âge de la lecture, alertes de l'unité"]
+    C --> G
+    D --> H["alertsNow : alertes, la pire d'abord,<br/>valeur, depuis quand, âge de la valeur,<br/>signal et étape, dernière vérification des seuils"]
+    E --> H
+    F --> H
+    G --> I["Outil unit_now de l'analyste"]
+    H --> J["Outil list_alerts de l'analyste"]
+    G --> K["Fiche de situation : GET /situation<br/>nommée par une unité, une alerte ou un signal"]
+    H --> K
+    K --> L{"L'alerte nommée est-elle<br/>parmi les alertes ouvertes ?"}
+    L -->|"oui"| M["Sa lecture, avec l'âge de sa valeur"]
+    L -->|"non"| N["La fiche dit qu'elle n'est plus ouverte ;<br/>l'unité est lue quand même"]
+    K --> O{"Un signal est nommé ?"}
+    O -->|"oui, dans ce projet"| P["Son type, son étape et le chemin de son workflow,<br/>même si son alerte est retombée"]
+    O -->|"oui, ailleurs"| Q["Refus : signal introuvable"]
+    K --> R["Question déjà écrite par le programme,<br/>d'après l'unité et l'alerte"]
+```
+
+**Règles.**
+- **Une lecture, deux lecteurs.** Ce que l'analyste reçoit de `unit_now` et ce que la fiche montre pour la même unité sortent de la même fonction (`unitNow`), de même pour une alerte (`alertNow`). L'écran et l'analyste ne peuvent pas donner deux chiffres pour un même service.
+- **La source de l'écran, pas celle du moteur.** La lecture part du calcul de la page des unités et du fil d'alertes du bandeau, pas de l'export (B1) : l'export ne compte que ce qui est rattaché à l'unité elle-même. Un test tient les deux ensemble (D6).
+- **Arrondi comme la page.** Une mesure est rendue à l'analyste comme la page l'écrit : un pourcentage sans décimale, un rapport à deux décimales. Il n'a pas à arrondir, donc il ne peut pas arrondir autrement.
+- **Un âge dit ce qu'il vaut.** Exact (« value read 37 min ago »), plancher (« value read at least 2 h ago ») quand une des sources de l'unité n'a publié aucune heure, ou inconnu avec sa raison. Ce sont les trois cas du bandeau (D5), dans les mêmes mots. L'heure où la donnée a été écrite ici est donnée à part : ce n'est pas l'âge de la valeur.
+- **Rien d'ouvert n'est pas rien à signaler.** La lecture dit combien de règles d'alerte existent et quand les seuils ont été vérifiés pour la dernière fois. Sans aucune règle, elle dit que rien ne pouvait s'ouvrir.
+- **Réalité seulement.** Aucun scénario ne lève d'alerte, et un chiffre en direct lu à travers un « et si » parlerait d'un monde qui n'existe pas.
+- **Pas d'historique.** La lecture est celle de maintenant ; elle le dit, à l'analyste et sur la fiche.
+- **La fiche n'attend pas le modèle.** `GET /situation` n'appelle aucun modèle et n'écrit rien. La question à l'analyste est écrite par le programme ; la poser est un geste de la personne.
+- **Un signal se cherche dans son projet.** Un signal d'un autre projet est introuvable, qui que soit l'appelant. Les décisions ne sont pas encore rattachées à un type de signal : la fiche le dit au lieu d'en lister.
+- Une unité et une valeur agrégée, jamais une personne.
+
+**Code.** `backend/src/services/live-reading.ts` (`readLive`, `unitNow`, `alertsNow`, `alertNow`, `ageOfValue`, `shown`), `situation.ts` (`situationOf`, `preparedQuestion`), `backend/src/routes/situation.ts`, outils `list_alerts` et `unit_now` dans `analyst-tools.ts`.
+**Tests.** `live-reading.unit.test.ts`, `twin-figures.unit.test.ts`, `routes/situation.unit.test.ts`.

@@ -5,6 +5,7 @@ import { CalcError, UNIT_CONSTANTS, evaluate } from "./analyst-calc.js";
 import { Ledger, numbersIn } from "./analyst-verify.js";
 import type { DatasetRow } from "./datasets.js";
 import type { HealthEvent } from "./health-events.js";
+import { alertsNow, unitNow, type LiveReading, type LiveUnit } from "./live-reading.js";
 import type { ScenarioOverride } from "./scenario-overrides.js";
 import type { SimExport } from "./twin-export.js";
 
@@ -15,7 +16,8 @@ import type { SimExport } from "./twin-export.js";
  * gives has to rest on something it asked. So the tools below are the whole of
  * its knowledge of this network: the sites and what they hold, the catchments
  * and who serves them, what the open scenario changes, what the last run on
- * screen produced, and the series the project imported.
+ * screen produced, the series the project imported, and what is open right
+ * now: the alerts and a unit's live figures, read where the screens read them.
  *
  * They are plain functions of data already read — no model, no randomness, the
  * same answer to the same question — and they only read. Nothing here can
@@ -124,6 +126,11 @@ export interface AnalystContext {
   rows(datasetId: string): Promise<Record<string, unknown>[]>;
   /** The project's calendar: events a person accepted from official web sources, earliest first. */
   events(): Promise<HealthEvent[]>;
+  /**
+   * The twin as the live pages read it: the unit page's roll-up and the alert
+   * feed. Reality only, read once per question.
+   */
+  live(): Promise<LiveReading>;
   /** The question and everything read so far: what `calculate` may build on. */
   known: Ledger;
   /**
@@ -1054,6 +1061,45 @@ function dayZeroOf(scenario: AnalystScenario | null): string | null {
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// Now: what is open, and a unit's live figures.
+//
+// Read from the roll-up and the alert feed the screens show (`live-reading.ts`),
+// not from the export: a person looking at a unit page and asking about it has
+// to be told the number that page gives.
+// ---------------------------------------------------------------------------
+
+async function pickUnit(ctx: AnalystContext, query: string): Promise<{ live: LiveReading; unit: LiveUnit }> {
+  const live = await ctx.live();
+  if (live.units.length === 0) throw new ToolError("This twin has no unit.");
+  return { live, unit: pick(live.units, query, "unit") };
+}
+
+const listAlerts: AnalystTool = {
+  name: "list_alerts",
+  description:
+    "What is open right now: the project's open alerts, worst first, each with its unit, the measure and its value, since when it has been open, how old the value is, and the signal it raised with the stage that signal stands at. Also says how many alert rules exist and when the thresholds were last checked. Reality only. Use it for any question about what is open, alerting or needing attention now, in the whole project or at one unit. It has no history.",
+  input_schema: obj({ unit: { type: "string", description: "Only this unit's alerts: its name or its id. Leave out for the whole project." } }, []),
+  parse: z.object({ unit: z.string().trim().min(1).max(300).optional() }),
+  async run(ctx, input: { unit?: string }) {
+    if (!input.unit) return alertsNow(await ctx.live());
+    const { live, unit } = await pickUnit(ctx, input.unit);
+    return alertsNow(live, unit);
+  },
+};
+
+const unitNowTool: AnalystTool = {
+  name: "unit_now",
+  description:
+    "The live figures of one unit, exactly as the unit page shows them: each measure the organisation defined with its value, what stands under the unit by type, how old the reading is (or that its age is unknown, and why), and the unit's open alerts. Counts everything under the unit, its sub-units included. Reality only. Use it for a question about a unit now; use get_site for what a run counts at a site.",
+  input_schema: obj({ unit: { type: "string", description: "The unit's name or its id." } }, ["unit"]),
+  parse: z.object({ unit: z.string().trim().min(1).max(300) }),
+  async run(ctx, input: { unit: string }) {
+    const { live, unit } = await pickUnit(ctx, input.unit);
+    return unitNow(live, unit);
+  },
+};
+
 const DAY_MS = 86_400_000;
 const daysBetween = (from: string, to: string): number => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS);
 const dateAt = (origin: string, offset: number): string => new Date(Date.parse(`${origin}T00:00:00Z`) + offset * DAY_MS).toISOString().slice(0, 10);
@@ -1181,5 +1227,7 @@ export const READ_TOOLS: AnalystTool[] = [
   previewDataset,
   readSeries,
   listEvents,
+  listAlerts,
+  unitNowTool,
   calculate,
 ];

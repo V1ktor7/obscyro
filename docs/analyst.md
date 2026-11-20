@@ -49,10 +49,11 @@ L'onglet Event finder utilise la recherche web de l'API Claude. Elle n'a pas de 
 | `POST /v1/ontology/:env/health-events` | Accepte un candidat : il entre au calendrier |
 | `GET /v1/ontology/:env/health-events` | Le calendrier du projet, du plus ancien au plus récent (`from`, `to` pour une période) |
 | `DELETE /v1/ontology/:env/health-events/:id` | Retire un événement du calendrier |
+| `GET /v1/ontology/:env/situation` | La fiche de situation d'une unité, d'une alerte ou d'un signal (`unit`, `alert`, `signal`) : les chiffres en direct de l'unité avec leur âge, l'alerte, l'étape du signal et une question déjà écrite. N'appelle aucun modèle et n'écrit rien |
 | `GET /v1/ontology/:env/web-sources` | Les domaines où la recherche a le droit de chercher |
 | `PUT /v1/ontology/:env/web-sources` | Remplace cette liste |
 
-Corps de la question : `question`, `scenarioId` (ou `null`), `looking` (`reality` ou `scenario`), `run` (le résumé du run à l'écran, ou `null`).
+Corps de la question : `question`, `scenarioId` (ou `null`), `looking` (`reality` ou `scenario`), `run` (le résumé du run à l'écran, ou `null`), et `focus` (ou `null`) : ce que la personne a sous les yeux quand elle pose sa question ailleurs que sur la carte des scénarios, soit `page`, `unitId`, `signalId`. Ce sont des identifiants : le serveur retrouve lui-même les noms, et un identifiant qu'il ne trouve pas dans le projet est laissé de côté.
 
 Corps d'un objectif : `objective`, `scenarioId` (obligatoire : une option s'ajoute à un scénario), `horizon` et `activity` (ceux de la page, pour que le test réponde à ce que Run montrerait), `run`.
 
@@ -76,7 +77,7 @@ Une demande refusée avant de commencer (pas de session, analyste éteint, servi
 
 ## Les outils
 
-Aucun n'écrit. Onze lisent ; un douzième, `test_option`, fait tourner le moteur, et n'existe que dans l'onglet Options. Deux mondes : `reality`, le jumeau tel qu'il est ; `scenario`, le même jumeau lu à travers le scénario ouvert.
+Aucun n'écrit. Treize lisent ; un quatorzième, `test_option`, fait tourner le moteur, et n'existe que dans l'onglet Options. Deux mondes : `reality`, le jumeau tel qu'il est ; `scenario`, le même jumeau lu à travers le scénario ouvert.
 
 L'onglet Event finder est à part : il n'a aucun de ces outils. Il n'a que la recherche web de l'API (`web_search`), qui tourne chez Anthropic et non chez nous, et son outil de livraison. C'est ce qui garantit qu'une recherche ne peut rien emporter du jumeau.
 
@@ -92,10 +93,14 @@ L'onglet Event finder est à part : il n'a aucun de ces outils. Il n'a que la re
 | `preview_dataset` | Les premières lignes d'un jeu et les valeurs de ses colonnes de catégorie |
 | `read_series` | Une colonne lue comme série quotidienne : total, moyenne, extrêmes, valeurs |
 | `list_events` | Le calendrier : les événements validés, leurs dates, leur lieu, leur porte, la source qui les a publiés et le passage cité. Quand le jour 0 du scénario a une date, chaque événement est aussi placé sur les jours du run |
+| `list_alerts` | Ce qui est ouvert maintenant : les alertes, la pire d'abord, chacune avec son unité, sa mesure et sa valeur, depuis quand elle est ouverte, l'âge de la valeur, et le signal qu'elle a levé avec son étape. Dit aussi combien de règles d'alerte existent et quand les seuils ont été vérifiés. Pour tout le projet ou pour une unité |
+| `unit_now` | Les chiffres en direct d'une unité, tels que sa page les montre : chaque mesure définie par l'organisation, ce qui est sous l'unité par type, l'âge de la lecture (ou qu'il est inconnu, et pourquoi), ses alertes ouvertes |
 | `calculate` | Un calcul, sur des nombres déjà lus ou donnés dans la question |
 | `test_option` | Onglet Options seulement. Ajoute une option au scénario ouvert, le temps d'un run sur le serveur, et rend le scénario tel quel à côté du scénario avec l'option |
 
 Un outil qui ne peut pas répondre (nom inconnu, deux sites pour un nom, pas de run à l'écran, table qui contient plusieurs séries, option qu'on ne peut pas tester) le dit par un refus motivé que le modèle lit. Il ne devine jamais.
+
+**Le direct.** `list_alerts` et `unit_now` ne lisent pas l'export du jumeau comme les autres : ils lisent ce que lisent les écrans, le fil d'alertes du bandeau et le calcul de la page des unités ([algorithms.md](algorithms.md), D9). C'est voulu. La page d'une unité additionne tout ce qui est sous elle, ses sous-unités comprises ; l'export, lui, ne compte que ce qui est rattaché à l'unité elle-même, parce que c'est ce qu'un run utilise. Pour un service sans sous-unité les deux donnent le même chiffre ; pour un hôpital qui a des services, non. Une personne qui regarde la page d'une unité et interroge l'analyste doit recevoir le chiffre de cette page : `unit_now` le donne, arrondi comme la page l'écrit, et `get_site` reste la lecture du moteur. Trois règles vont avec le direct : une valeur ne se donne jamais sans son âge (exact, « au moins », ou inconnu avec sa raison) ; aucune alerte ouverte n'est pas une bonne nouvelle en soi (l'outil dit quand les seuils ont été vérifiés, et s'il n'existe aucune règle) ; et il n'y a pas d'historique.
 
 Le résumé du run à l'écran est construit par la page (`run-digest.ts`) avec les fonctions que lit déjà le panneau Result : l'analyste et le panneau ne peuvent pas diverger sur un chiffre. Le résumé d'une option testée est construit par le serveur (`scenario-run.ts`), et un test tient les deux ensemble : [algorithms.md](algorithms.md), section A4.
 
@@ -307,7 +312,9 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 - Un événement n'a qu'un lieu écrit en mots. Il n'est relié à aucun territoire du jumeau, et le moteur ne le reçoit pas : c'est un repère pour lire un run, pas une entrée du run.
 - Les événements validés sont ceux du projet, pas d'un scénario : tous les scénarios du projet voient le même calendrier.
 - Une recherche d'événements coûte environ 70 cents : chaque recherche lancée renvoie dix pages, près de 15 000 jetons, et aucun réglage de l'API ne permet d'en demander moins sans renoncer au plafond de recherches. Voir « Ce que coûte une recherche ».
-- Le jumeau ne contient ni personnel, ni stocks, ni historique : l'analyste le dit, il ne le comble pas.
+- Le jumeau ne contient ni personnel, ni stocks, ni historique : l'analyste le dit, il ne le comble pas. Il ne peut donc pas dire ce qui était ouvert plus tôt, ni ce qui a changé depuis ce matin.
+- L'âge d'un chiffre en direct est celui de la lecture de l'unité entière, le plus vieux de ses sources quand elle en a plusieurs.
+- Les signaux ouverts que `list_alerts` compte comprennent ceux dont l'alerte est retombée : ils peuvent être bien plus nombreux que les alertes ouvertes.
 - Le run à l'écran n'est pas gardé au rechargement de la page ; il faut relancer Run. Les options testées non plus : ce qui reste, ce sont les décisions enregistrées et le journal.
 - Une option est faite de capacité et de mesures. Un transfert de patients, du personnel, un stock, un lien nouveau entre un site et un territoire ne se testent pas : le moteur ou le jumeau ne les portent pas. L'analyste les range dans les limites.
 - Une option est testée sur le scénario tel qu'il est au moment du test. Ajouter une option puis une autre donne un scénario qu'aucun test n'a couvert : l'écran prévient, et il faut redire l'objectif.
@@ -323,6 +330,8 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 | Rôle | Fichier |
 |---|---|
 | Boucle, clôture d'une question, `give_answer` | `backend/src/services/analyst.ts` |
+| Lecture du direct, `list_alerts`, `unit_now` | `backend/src/services/live-reading.ts` |
+| Fiche de situation | `backend/src/services/situation.ts`, `backend/src/routes/situation.ts` |
 | Outils de lecture, résumé du run | `backend/src/services/analyst-tools.ts` |
 | Outil `test_option`, clôture d'un objectif, `give_options` | `backend/src/services/analyst-options.ts` |
 | Clôture d'une recherche d'événements, `give_events` | `backend/src/services/analyst-events.ts` |

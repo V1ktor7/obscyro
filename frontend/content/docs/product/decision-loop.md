@@ -3,7 +3,7 @@
 title: "The decision loop"
 description: "Obscyro does not decide. It helps a person decide, by showing what is measured, what has been tried and what each option would change."
 source: "docs/decision-loop.md"
-translatedFrom: "d167b3b06259fe8e"
+translatedFrom: "8ca8026ec17ba896"
 ---
 
 Obscyro does not decide. It helps a person decide, by showing what is measured, what has been tried and what each option would change, leaving nothing to chance.
@@ -44,7 +44,7 @@ The model orchestrates and explains. Facts come from tools; arithmetic, from a c
 | Step | State | Where |
 |---|---|---|
 | 1. Signal | **Delivered**: an alert reaches every page of the Studio. Thresholds are evaluated every five seconds, the shell reads a single alert feed every three seconds, a banner announces what has just opened, and one click leads to the unit or to the signal. The Response board refreshes on its own. Each alert says how old its value is, and what that age is worth. From the writing of a piece of data to its alert on screen: a little over nine seconds at worst. The alert does not offer a response yet: [issue 13](https://github.com/V1ktor7/obscyro/issues/13) and the ones after it. Still open: the Response board is buried under the signals of alerts that have cleared ([issue 18](https://github.com/V1ktor7/obscyro/issues/18)), and the age shown is that of the whole unit, at some hours a floor or an unknown ([issue 19](https://github.com/V1ktor7/obscyro/issues/19)) | [Algorithms](/docs/product/algorithms), D5 |
-| 2. Situation | **Delivered**: the analyst, Ask tab. Seventeen reference questions say what a good answer must contain | [The analyst](/docs/product/analyst) |
+| 2. Situation | **Delivered**: the analyst, Ask tab. Seventeen reference questions say what a good answer must contain. It also reads live: what is open now, and the figures of a unit as its page shows them, each with its age. The situation card has its reading on the server; its screen is in progress ([issue 13](https://github.com/V1ktor7/obscyro/issues/13)) | [The analyst](/docs/product/analyst) |
 | 3. Precedents | **Delivered**: Event finder tab. Online search in the sources the project authorises, candidates with a link and a quoted passage, accepted or rejected by a person, a calendar on the timeline that the analyst reads (`list_events`). An event is a dated marker: it is tied to no territory and does not enter the engine | [The analyst](/docs/product/analyst), [Algorithms](/docs/product/algorithms), A10 |
 | 4. Measured effects | To do. The measuring pieces exist (lags, replication across episodes) without being connected | [Algorithms](/docs/product/algorithms), C3 |
 | 5. Tested options | **Delivered**: Options tab. Up to three options per objective, each run through the engine on the server, with the same figures as the page (held by a test). Options made of capacity and measures only; an option can replace or remove a choice the scenario already holds | [The analyst](/docs/product/analyst), [Algorithms](/docs/product/algorithms), A4 and A8 |

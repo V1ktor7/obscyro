@@ -9,6 +9,7 @@ Une entrée est écrite le jour où le changement est livré, dans le même comm
 
 ## 20 novembre 2026
 
+- **Nouvelle fonction · Analyste.** L'analyste lit ce qui se passe maintenant. On peut lui demander ce qui est ouvert et où : il rend les alertes, la valeur de chacune et son âge, et l'étape de son signal. On peut lui demander les chiffres en direct d'une unité : il donne ceux que sa page montre.
 - **Modification · Analyste.** Quand le compte Claude de l'analyste n'a plus de crédit, l'écran le dit et précise qu'un administrateur doit en ajouter. Avant, il proposait de réessayer, ce qui ne pouvait rien changer.
 - **Modification · Site.** La section « Core API » est retirée de la documentation du site : neuf pages, une par point d'accès de l'API de terminologie. Les points d'accès existent toujours ; leur référence est celle que l'API sert elle-même, à l'adresse `/documentation`.
 - **Nouvelle fonction · Studio.** Une page « API keys » dans la section Admin. La clé que le navigateur utilise s'y affiche en entier, masquée tant qu'on ne demande pas à la voir, avec un bouton pour la copier. Les autres clés montrent leur début. On y crée une clé, qui s'affiche une fois pour être copiée, et on en révoque une.

@@ -63,7 +63,7 @@ const sealed = (): AnalystContext => {
   const never = async (): Promise<never> => {
     throw new ToolError("The event finder must not read the twin.");
   };
-  return { environment: "ile", scenario: null, run: null, known: new Ledger(), world: never, datasets: never, rows: never, events: never };
+  return { environment: "ile", scenario: null, run: null, known: new Ledger(), world: never, datasets: never, rows: never, events: never, live: never };
 };
 
 const DOMAINS = ["quebec.ca", "inspq.qc.ca"];

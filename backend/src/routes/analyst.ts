@@ -9,7 +9,7 @@ import { config } from "../lib/config.js";
 import type { DbClient } from "../lib/db.js";
 import { AppError, BadRequest, NotFound } from "../lib/errors.js";
 import { streamLines } from "../lib/ndjson.js";
-import { ANALYST_MODEL, anthropicModel, ask, converse, type LoopEvent, type LoopResult } from "../services/analyst.js";
+import { ANALYST_MODEL, anthropicModel, ask, converse, type AskFocus, type LoopEvent, type LoopResult } from "../services/analyst.js";
 import { eventSearch, eventsClosing } from "../services/analyst-events.js";
 import { OPTION_TOOLS, benchFor, optionsClosing } from "../services/analyst-options.js";
 import { ToolError, runDigestSchema, type AnalystContext, type WorldName } from "../services/analyst-tools.js";
@@ -17,6 +17,7 @@ import { serverRun, simServiceEngine } from "../services/scenario-run.js";
 import { Ledger } from "../services/analyst-verify.js";
 import { listDatasets, previewRows, type DatasetRow } from "../services/datasets.js";
 import { listHealthEvents, type HealthEvent } from "../services/health-events.js";
+import { readLive, signalsById, type LiveReading } from "../services/live-reading.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
 import { resolveEnvironment, type EnvironmentRow } from "../services/ontology.js";
 import { getOverlayScenario, listOverrides } from "../services/scenario-overrides.js";
@@ -56,6 +57,7 @@ function contextFor(
   const worlds = new Map<WorldName, Promise<SimExport>>();
   let datasets: Promise<DatasetRow[]> | null = null;
   let events: Promise<HealthEvent[]> | null = null;
+  let live: Promise<LiveReading> | null = null;
   const rows = new Map<string, Promise<Record<string, unknown>[]>>();
   return {
     environment: env.slug,
@@ -88,6 +90,10 @@ function contextFor(
     events() {
       events ??= listHealthEvents(db, env.id);
       return events;
+    },
+    live() {
+      live ??= readLive(db, env);
+      return live;
     },
   };
 }
@@ -201,7 +207,10 @@ const analystRoutes: FastifyPluginAsync = async (fastify) => {
           "Answers from what read-only tools return about the twin, and streams the reading as it happens: one JSON " +
           "object per line. `status` lines say what is being done, `step` lines carry each tool call with its input " +
           "and result, and the last line is `done` with the answer, the figures that were struck because no step " +
-          "held them, and the usage. A `failed` line replaces `done` when the model could not be reached.",
+          "held them, and the usage. A `failed` line replaces `done` when the model could not be reached. " +
+          "`focus` says what the person has in front of them when they ask from another page than Scenarios: the " +
+          "page, a unit, a signal, by id. The server looks the names up itself; an id it does not find in this " +
+          "project is left out, and the question is still answered.",
         tags: ["analyst"],
         params: z.object({ env: z.string().min(1) }),
         body: z.object({
@@ -211,6 +220,18 @@ const analystRoutes: FastifyPluginAsync = async (fastify) => {
           looking: z.enum(["reality", "scenario"]).default("reality"),
           /** The run on screen, as the page summarised it. */
           run: runDigestSchema.nullable().default(null),
+          /** What the person has in front of them, by id: names are looked up here, never taken from the caller. */
+          focus: z
+            .object({
+              page: z
+                .string()
+                .regex(/^[a-z][a-z-]{0,30}$/)
+                .optional(),
+              unitId: z.string().uuid().optional(),
+              signalId: z.string().uuid().optional(),
+            })
+            .nullable()
+            .default(null),
         }),
         // No response schema: the 200 is a stream of lines, not one document.
       },
@@ -236,11 +257,26 @@ const analystRoutes: FastifyPluginAsync = async (fastify) => {
       const ctx = contextFor(req.db, env, scenario, req.body.run);
       const exchangeId = randomUUID();
 
+      let focus: AskFocus | null = null;
+      if (req.body.focus) {
+        const { page, unitId, signalId } = req.body.focus;
+        const signal = signalId ? ((await signalsById(req.db, env.id, [signalId]))[0] ?? null) : null;
+        // The same reading the tools will use: looked up once, kept for the question.
+        const unit = unitId ? ((await ctx.live()).units.find((u) => u.id === unitId) ?? null) : null;
+        focus = {
+          page: page ?? null,
+          unit: unit ? { id: unit.id, name: unit.name } : null,
+          signal: signal
+            ? { id: signal.id, title: signal.title, kind: signal.type, stage: signal.stage, step: `${signal.stageNo} of ${signal.stages}`, unitId: signal.unitId }
+            : null,
+        };
+      }
+
       return streamLines<Line<LoopEvent<unknown, unknown>>>(reply, async (write, gone) => {
         let result: Exchange | null = null;
         let failure: string | null = null;
         try {
-          result = await ask(anthropicModel(client), ctx, { question: req.body.question, looking }, withExchange(write, exchangeId), undefined, gone);
+          result = await ask(anthropicModel(client), ctx, { question: req.body.question, looking, focus }, withExchange(write, exchangeId), undefined, gone);
         } catch (err) {
           req.log.error({ err }, "analyst failed");
           failure = failureMessage(err);

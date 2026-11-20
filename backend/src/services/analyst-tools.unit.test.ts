@@ -183,6 +183,8 @@ function ctxOf(over: Partial<AnalystContext> = {}): AnalystContext {
     datasets: async () => [DATASET],
     rows: async () => ROWS,
     events: async () => [],
+    // The live tools have their own file (`live-reading.unit.test.ts`).
+    live: () => Promise.reject(new ToolError("No live reading in this test.")),
     ...over,
   };
 }

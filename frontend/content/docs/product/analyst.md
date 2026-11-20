@@ -3,7 +3,7 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "51b000c0df18806a"
+translatedFrom: "0b2acefbfa37d63d"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
@@ -55,10 +55,11 @@ The Event finder tab uses the web search of the Claude API. It has no variable o
 | `POST /v1/ontology/:env/health-events` | Accepts a candidate: it enters the calendar |
 | `GET /v1/ontology/:env/health-events` | The project's calendar, oldest to most recent (`from`, `to` for a period) |
 | `DELETE /v1/ontology/:env/health-events/:id` | Removes an event from the calendar |
+| `GET /v1/ontology/:env/situation` | The situation card of a unit, an alert or a signal (`unit`, `alert`, `signal`): the unit's live figures with their age, the alert, the stage of the signal and a question already written. Calls no model and writes nothing |
 | `GET /v1/ontology/:env/web-sources` | The domains the search is allowed to look in |
 | `PUT /v1/ontology/:env/web-sources` | Replaces that list |
 
-Body of a question: `question`, `scenarioId` (or `null`), `looking` (`reality` or `scenario`), `run` (the digest of the run on screen, or `null`).
+Body of a question: `question`, `scenarioId` (or `null`), `looking` (`reality` or `scenario`), `run` (the digest of the run on screen, or `null`), and `focus` (or `null`): what the person has in front of them when they ask from somewhere other than the scenario map, namely `page`, `unitId`, `signalId`. These are ids: the server looks the names up itself, and an id it does not find in the project is left out.
 
 Body of an objective: `objective`, `scenarioId` (required: an option is added to a scenario), `horizon` and `activity` (the page's own, so that the test answers what Run would show), `run`.
 
@@ -82,7 +83,7 @@ A request refused before it starts (no session, analyst off, simulation service 
 
 ## The tools
 
-None of them writes. Eleven read; a twelfth, `test_option`, runs the engine, and exists only in the Options tab. Two worlds: `reality`, the twin as it is; `scenario`, the same twin read through the open scenario.
+None of them writes. Thirteen read; a fourteenth, `test_option`, runs the engine, and exists only in the Options tab. Two worlds: `reality`, the twin as it is; `scenario`, the same twin read through the open scenario.
 
 The Event finder tab is apart: it has none of these tools. It has only the API's web search (`web_search`), which runs at Anthropic and not with us, and its delivery tool. That is what guarantees a search can take nothing from the twin with it.
 
@@ -98,10 +99,14 @@ The Event finder tab is apart: it has none of these tools. It has only the API's
 | `preview_dataset` | The first rows of a dataset and the values of its category columns |
 | `read_series` | A column read as a daily series: total, mean, extremes, values |
 | `list_events` | The calendar: the validated events, their dates, their place, their gate, the source that published them and the passage quoted. When day 0 of the scenario has a date, each event is also placed on the days of the run |
+| `list_alerts` | What is open now: the alerts, worst first, each with its unit, its measure and its value, since when it has been open, the age of the value, and the signal it raised with its stage. Also says how many alert rules exist and when the thresholds were last checked. For the whole project or for one unit |
+| `unit_now` | The live figures of a unit, as its page shows them: each measure the organisation defined, what stands under the unit by type, the age of the reading (or that it is unknown, and why), its open alerts |
 | `calculate` | A calculation, on numbers already read or given in the question |
 | `test_option` | Options tab only. Adds an option to the open scenario, for the time of a run on the server, and returns the scenario as it is beside the scenario with the option |
 
 A tool that cannot answer (unknown name, two sites for one name, no run on screen, a table that holds several series, an option that cannot be tested) says so with a reasoned refusal that the model reads. It never guesses.
+
+**Live.** `list_alerts` and `unit_now` do not read the twin's export as the others do: they read what the screens read, the alert feed of the banner and the computation of the unit page ([Algorithms](/docs/product/algorithms), D9). That is deliberate. A unit's page adds up everything under it, its sub-units included; the export counts only what is attached to the unit itself, because that is what a run uses. For a ward with no sub-unit the two give the same figure; for a hospital that has wards, they do not. A person looking at a unit's page and asking the analyst has to be given that page's figure: `unit_now` gives it, rounded the way the page writes it, and `get_site` remains the engine's reading. Three rules go with live reading: a value is never given without its age (exact, “at least”, or unknown with its reason); no open alert is not good news in itself (the tool says when the thresholds were checked, and whether no rule exists at all); and there is no history.
 
 The digest of the run on screen is built by the page (`run-digest.ts`) with the functions the Result panel already reads: the analyst and the panel cannot diverge on a figure. The digest of a tested option is built by the server (`scenario-run.ts`), and a test holds the two together: [Algorithms](/docs/product/algorithms), section A4.
 
@@ -313,7 +318,9 @@ What is not judged: the quality of the writing. That still takes a person, who r
 - An event has only a place written in words. It is tied to no territory of the twin, and the engine does not receive it: it is a marker for reading a run, not an input of the run.
 - The validated events are the project's, not a scenario's: every scenario of the project sees the same calendar.
 - An event search costs about 70 cents: each search launched returns ten pages, close to 15,000 tokens, and no setting of the API lets you ask for fewer without giving up the cap on searches. See “What a search costs”.
-- The twin holds no staff, no stocks and no history: the analyst says so, it does not fill the gap.
+- The twin holds no staff, no stocks and no history: the analyst says so, it does not fill the gap. So it cannot say what was open earlier, or what changed since this morning.
+- The age of a live figure is that of the reading of the whole unit, the oldest of its sources when it has several.
+- The open signals `list_alerts` counts include those whose alert has cleared: they can be far more numerous than the open alerts.
 - The run on screen is not kept when the page is reloaded; Run has to be launched again. Nor are the tested options: what remains are the recorded decisions and the journal.
 - An option is made of capacity and measures. A transfer of patients, staff, a stock, a new link between a site and a territory cannot be tested: the engine or the twin does not carry them. The analyst files them under the limits.
 - An option is tested on the scenario as it is at the time of the test. Adding one option then another gives a scenario no test covered: the screen warns, and the objective has to be stated again.
@@ -329,6 +336,8 @@ What is not judged: the quality of the writing. That still takes a person, who r
 | Role | File |
 |---|---|
 | Loop, closing of a question, `give_answer` | `backend/src/services/analyst.ts` |
+| Live reading, `list_alerts`, `unit_now` | `backend/src/services/live-reading.ts` |
+| Situation card | `backend/src/services/situation.ts`, `backend/src/routes/situation.ts` |
 | Reading tools, digest of the run | `backend/src/services/analyst-tools.ts` |
 | The `test_option` tool, closing of an objective, `give_options` | `backend/src/services/analyst-options.ts` |
 | Closing of an event search, `give_events` | `backend/src/services/analyst-events.ts` |
