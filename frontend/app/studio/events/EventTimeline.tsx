@@ -108,7 +108,7 @@ export default function EventTimeline({
   const ticks = tickMarks(horizon);
 
   return (
-    <section className="rounded-lg border border-line bg-white p-4">
+    <section className="rounded-lg border border-line bg-surface p-4">
       <div className="mb-3 flex items-baseline justify-between">
         <h2 className="text-xs font-medium text-ink">When each effect bites</h2>
         <p className="text-[11px] text-ink-faint">
@@ -147,7 +147,7 @@ export default function EventTimeline({
                     className={`absolute top-0 h-8 cursor-grab rounded border ${
                       isFocused
                         ? "border-brand bg-brand-soft"
-                        : "border-line bg-white hover:border-brand"
+                        : "border-line bg-surface hover:border-brand"
                     } focus:outline-none focus:ring-2 focus:ring-brand`}
                     style={{
                       left: `${track.left * 100}%`,

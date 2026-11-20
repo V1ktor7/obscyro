@@ -84,7 +84,7 @@ export default function ScenarioGuide({
                     type="button"
                     disabled={a.busy}
                     onClick={a.run}
-                    className="flex items-center gap-1 rounded border border-brand bg-brand-soft px-2 py-1 text-[11.5px] font-semibold text-brand-deep hover:bg-white disabled:opacity-60"
+                    className="flex items-center gap-1 rounded border border-brand bg-brand-soft px-2 py-1 text-[11.5px] font-semibold text-brand-deep hover:bg-surface-hover disabled:opacity-60"
                   >
                     {a.busy ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : null}
                     {a.label}

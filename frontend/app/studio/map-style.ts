@@ -6,11 +6,11 @@
  */
 export const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 
-// Obscyro's own Standard basemap: land and water desaturated to the app's
-// canvas so the flow arcs and site markers are the only saturated things on
-// screen. Edited in Mapbox Studio, not here — publishing a new version there
-// reaches this map without a redeploy. Owned by the same account as the token.
-export const STYLE_STANDARD = "mapbox://styles/victormorency7/cmsddjrmc002c01s99df7adnp";
+// Mapbox's own dark basemap: grey land on darker water, close to the Studio's
+// ground (Gray 100), so the cells, the flow arcs and the site markers are the
+// only saturated things on screen. Everything drawn on a map (ramps, halos,
+// outlines) is chosen for this ground: a light basemap would need them redone.
+export const STYLE_STANDARD = "mapbox://styles/mapbox/dark-v11";
 export const STYLE_SATELLITE = "mapbox://styles/mapbox/satellite-streets-v12";
 
 /** A map opens on the whole globe, turned towards the network, and stays there. */

@@ -49,7 +49,7 @@ function Vals({ items, on, onPick }: { items: { v: string; label: string; note?:
       {items.map((o) => (
         <button key={o.v} type="button" aria-pressed={on(o.v)} onClick={() => onPick(o.v)}
           className={cn("flex flex-col items-start rounded border px-2 py-1 text-left font-mono text-[11.5px] leading-tight",
-            on(o.v) ? "border-brand bg-brand-soft text-brand-deep" : "border-line bg-white text-ink-body hover:border-brand")}>
+            on(o.v) ? "border-brand bg-brand-soft text-brand-deep" : "border-line bg-surface text-ink-body hover:border-brand")}>
           {o.label}
           {o.note ? <small className="font-sans text-[10px] text-ink-faint">{o.note}</small> : null}
         </button>
@@ -61,9 +61,9 @@ function Vals({ items, on, onPick }: { items: { v: string; label: string; note?:
 function Checks<T extends { id: string; name: string }>({ list, checked, onToggle, extra, filter }: { list: T[]; checked: (id: string) => boolean; onToggle: (id: string, on: boolean) => void; extra: (t: T) => string; filter?: string }) {
   const q = (filter ?? "").trim().toLowerCase();
   return (
-    <div className="grid max-h-56 grid-cols-1 gap-x-3 overflow-y-auto rounded border border-line-soft bg-white p-1.5 sm:grid-cols-2">
+    <div className="grid max-h-56 grid-cols-1 gap-x-3 overflow-y-auto rounded border border-line-soft bg-surface p-1.5 sm:grid-cols-2">
       {list.filter((t) => !q || t.name.toLowerCase().includes(q)).map((t) => (
-        <label key={t.id} className="flex min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-[11.5px] hover:bg-canvas">
+        <label key={t.id} className="flex min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-[11.5px] hover:bg-surface-hover">
           <input type="checkbox" checked={checked(t.id)} onChange={(ev) => onToggle(t.id, ev.target.checked)} />
           <span className="min-w-0 flex-1 truncate text-ink-body" title={t.name}>{t.name}</span>
           <em className="not-italic tabular-nums text-ink-faint">{extra(t)}</em>
@@ -308,7 +308,7 @@ export default function EffectEditor({ e, mem, k, tw, ctx, targets, change }: {
         <div key="a" className="flex flex-wrap gap-1.5">
           {([["step", "Steady"], ["ramp", "Builds up"], ["pulse", `One ${u1(ctx)}`], ["gaussian", "Peaks and fades"]] as const).map(([s, l]) => (
             <button key={s} type="button" aria-pressed={p.shape === s} onClick={() => change(() => applyShape(e, ctx, s))}
-              className={cn("flex flex-col items-center gap-0.5 rounded-md border px-2.5 py-1 text-[11px]", p.shape === s ? "border-brand bg-brand-soft text-brand-deep" : "border-line bg-white text-ink-body hover:border-brand")}>
+              className={cn("flex flex-col items-center gap-0.5 rounded-md border px-2.5 py-1 text-[11px]", p.shape === s ? "border-brand bg-brand-soft text-brand-deep" : "border-line bg-surface text-ink-body hover:border-brand")}>
               <ShapeIcon shape={s} />{l}
             </button>
           ))}

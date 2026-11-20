@@ -42,9 +42,9 @@ export interface TreeItem {
 }
 
 const TONE: Record<"ok" | "warn" | "danger", string> = {
-  ok: "bg-emerald-500",
-  warn: "bg-amber-400",
-  danger: "bg-rose-500",
+  ok: "bg-ok",
+  warn: "bg-warn",
+  danger: "bg-danger",
 };
 
 /**
@@ -233,7 +233,7 @@ function Row({
     <>
       <div
         className={`group flex items-center gap-1 px-1 py-0.5 ${
-          selected ? "bg-brand-soft" : "hover:bg-canvas"
+          selected ? "bg-brand-soft" : "hover:bg-surface-hover"
         } ${allHidden ? "opacity-45" : ""}`}
         style={{ paddingLeft: 4 + depth * 12 }}
       >
@@ -262,7 +262,7 @@ function Row({
             onClick={() => onToggleHidden(ids, !allHidden)}
             aria-label={`${allHidden ? "Show" : "Hide"} ${item.label}`}
             title={allHidden ? "Show" : "Hide"}
-            className="shrink-0 rounded px-0.5 text-[#8f99a8] hover:text-ink"
+            className="shrink-0 rounded px-0.5 text-ink-faint hover:text-ink"
           >
             {allHidden ? (
               <EyeOff className="h-3 w-3" />
@@ -303,7 +303,7 @@ function Row({
             onClick={() => onSolo(ids)}
             aria-label={`Show only ${item.label}`}
             title="Show only this"
-            className="shrink-0 rounded px-1 text-[9px] uppercase tracking-wide text-[#8f99a8] opacity-0 hover:text-brand focus:opacity-100 group-hover:opacity-100"
+            className="shrink-0 rounded px-1 text-[9px] uppercase tracking-wide text-ink-faint opacity-0 hover:text-brand focus:opacity-100 group-hover:opacity-100"
           >
             only
           </button>

@@ -84,12 +84,12 @@ export default function LinkBehaviourDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/20 pt-[8vh]"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 pt-[8vh]"
       onClick={onClose}
       role="presentation"
     >
       <div
-        className="flex max-h-[80vh] w-[460px] flex-col overflow-hidden rounded-md border border-line bg-white shadow-lg"
+        className="flex max-h-[80vh] w-[460px] flex-col overflow-hidden rounded-md border border-line bg-surface shadow-lg"
         onClick={(e) => e.stopPropagation()}
         role="presentation"
       >
@@ -101,7 +101,7 @@ export default function LinkBehaviourDialog({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded p-0.5 text-ink-faint hover:bg-canvas-raised hover:text-ink-body"
+            className="rounded p-0.5 text-ink-faint hover:bg-surface-hover hover:text-ink-body"
           >
             <X className="h-3.5 w-3.5" />
           </button>

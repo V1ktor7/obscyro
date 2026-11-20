@@ -61,7 +61,7 @@ const STEPS = [
 ] as const;
 
 const FIELD =
-  "rounded border border-line bg-white px-2 py-1.5 text-[12.5px] text-ink focus:border-brand focus:outline-none";
+  "rounded border border-line bg-surface px-2 py-1.5 text-[12.5px] text-ink focus:border-brand focus:outline-none";
 const LABEL = "text-[11px] font-semibold uppercase tracking-wide text-ink-faint";
 const DATASET_CAP = 50_000;
 // The datasets route takes the API's default body (1 MiB). Larger files still
@@ -276,16 +276,16 @@ export default function AddDataPanel({
   const roleInfo = ROLES.find((r) => r.key === role)!;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-auto bg-ink/30 p-4 sm:p-8">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-auto bg-black/60 p-4 sm:p-8">
       <div role="dialog" aria-modal="true" aria-labelledby="add-data-title" className="flex w-full max-w-[1040px] flex-col overflow-hidden rounded-lg border border-line bg-canvas shadow-xl">
-        <div className="flex items-start justify-between gap-3 border-b border-line bg-white px-5 py-4">
+        <div className="flex items-start justify-between gap-3 border-b border-line bg-surface px-5 py-4">
           <div>
             <h2 id="add-data-title" className="text-[18px] font-bold text-ink">Add data to the twin</h2>
             <p className="text-[12.5px] text-ink-muted">
               Whatever you add lands on the same hexes as everything else, so it can sit next to any other layer.
             </p>
           </div>
-          <button type="button" onClick={onClose} disabled={writing} aria-label="Close" className="rounded p-1.5 text-ink-muted hover:bg-canvas-raised disabled:opacity-50">
+          <button type="button" onClick={onClose} disabled={writing} aria-label="Close" className="rounded p-1.5 text-ink-muted hover:bg-surface-hover disabled:opacity-50">
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
@@ -306,11 +306,11 @@ export default function AddDataPanel({
                   onClick={() => setStep(n)}
                   className={cn(
                     "grid grid-cols-[26px_minmax(0,1fr)] items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left",
-                    on ? "border-brand bg-brand-soft" : "border-line bg-white",
-                    reachable && "hover:bg-canvas-raised",
+                    on ? "border-brand bg-brand-soft" : "border-line bg-surface",
+                    reachable && "hover:bg-surface-hover",
                   )}
                 >
-                  <span className={cn("flex h-[26px] w-[26px] items-center justify-center rounded-full text-[12px] font-bold", done ? "bg-ok text-white" : on ? "bg-brand text-white" : "bg-canvas-raised text-ink-body")}>
+                  <span className={cn("flex h-[26px] w-[26px] items-center justify-center rounded-full text-[12px] font-bold", done ? "bg-ok text-inverse" : on ? "bg-brand text-white" : "bg-canvas-raised text-ink-body")}>
                     {done ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : n}
                   </span>
                   <span className="flex flex-col">
@@ -322,7 +322,7 @@ export default function AddDataPanel({
             })}
           </nav>
 
-          <section className="flex min-w-0 flex-[999_1_560px] flex-col gap-4 rounded-lg border border-line bg-white p-5">
+          <section className="flex min-w-0 flex-[999_1_560px] flex-col gap-4 rounded-lg border border-line bg-surface p-5">
             <h3 ref={heading} tabIndex={-1} className="text-[17px] font-bold text-ink focus:outline-none">
               {step === 1 ? "Drop a file, or paste a table" : step === 2 ? "Where is it?" : step === 3 ? "What is it?" : `“${label.trim()}” is a layer now`}
             </h3>
@@ -343,7 +343,7 @@ export default function AddDataPanel({
                   }}
                   className={cn(
                     "flex cursor-pointer flex-wrap items-center justify-between gap-3 rounded-lg border-2 border-dashed px-4 py-5",
-                    dragging ? "border-brand bg-brand-soft" : "border-[#8fa8d6] bg-[#f4f8fd]",
+                    dragging ? "border-brand bg-brand-soft" : "border-brand-line bg-canvas-raised",
                   )}
                 >
                   <span className="flex items-center gap-3">
@@ -385,7 +385,7 @@ export default function AddDataPanel({
                     placeholder={"code_installation,lits\n53324349,88"}
                     className={cn(FIELD, "font-mono")}
                   />
-                  <button type="button" disabled={!paste.trim()} onClick={() => take({ name: "Pasted table", bytes: paste.length, encoding: "pasted" }, paste)} className="self-start rounded border border-line px-3 py-1.5 text-[12.5px] hover:bg-canvas-raised disabled:opacity-50">
+                  <button type="button" disabled={!paste.trim()} onClick={() => take({ name: "Pasted table", bytes: paste.length, encoding: "pasted" }, paste)} className="self-start rounded border border-line px-3 py-1.5 text-[12.5px] hover:bg-surface-hover disabled:opacity-50">
                     Read pasted text
                   </button>
                 </div>
@@ -438,7 +438,7 @@ export default function AddDataPanel({
                 {candidates && !matching ? (
                   <>
                     {where?.kind === "match" ? (
-                      <div className="rounded-lg border border-[#b9e2cf] bg-ok-soft px-4 py-3">
+                      <div className="rounded-lg border border-ok-line bg-ok-soft px-4 py-3">
                         <p className="font-semibold text-ok-ink">
                           {where.candidate.column} names {where.candidate.target === "site" ? "sites" : "catchments"} the twin already has
                         </p>
@@ -455,7 +455,7 @@ export default function AddDataPanel({
                       {candidates.map((c) => {
                         const on = where?.kind === "match" && where.candidate === c;
                         return (
-                          <label key={`${c.column}|${c.type}|${c.property}`} className={cn("flex cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2.5", on ? "border-brand bg-brand-soft" : "border-line hover:bg-canvas-raised")}>
+                          <label key={`${c.column}|${c.type}|${c.property}`} className={cn("flex cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2.5", on ? "border-brand bg-brand-soft" : "border-line hover:bg-surface-hover")}>
                             <input type="radio" name="where" checked={on} onChange={() => setWhere({ kind: "match", candidate: c })} className="mt-1 accent-brand" />
                             <span className="flex min-w-0 flex-col">
                               <span className="text-[13px] font-semibold text-ink">
@@ -469,7 +469,7 @@ export default function AddDataPanel({
                         );
                       })}
                       {latLon ? (
-                        <label className={cn("flex cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2.5", where?.kind === "points" ? "border-brand bg-brand-soft" : "border-line hover:bg-canvas-raised")}>
+                        <label className={cn("flex cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2.5", where?.kind === "points" ? "border-brand bg-brand-soft" : "border-line hover:bg-surface-hover")}>
                           <input type="radio" name="where" checked={where?.kind === "points"} onChange={() => setWhere({ kind: "points" })} className="mt-1 accent-brand" />
                           <span className="flex flex-col">
                             <span className="text-[13px] font-semibold text-ink">
@@ -501,7 +501,7 @@ export default function AddDataPanel({
                             </span>{" "}
                             Their rows are set aside and named, never dropped silently: a missing site would read as a place with nothing.
                           </span>
-                          <button type="button" aria-expanded={showUnmatched} onClick={() => setShowUnmatched((v) => !v)} className="rounded border border-warn-line bg-white px-2.5 py-1 text-[12px]">
+                          <button type="button" aria-expanded={showUnmatched} onClick={() => setShowUnmatched((v) => !v)} className="rounded border border-warn-line bg-surface px-2.5 py-1 text-[12px]">
                             {showUnmatched ? "Hide" : "Review"}
                           </button>
                         </div>
@@ -523,7 +523,7 @@ export default function AddDataPanel({
                 <fieldset className="flex flex-col gap-1.5">
                   <legend className={cn(LABEL, "mb-1")}>It is…</legend>
                   {ROLES.map((r) => (
-                    <label key={r.key} className={cn("flex cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2", role === r.key ? "border-brand bg-brand-soft" : "border-line hover:bg-canvas-raised")}>
+                    <label key={r.key} className={cn("flex cursor-pointer items-start gap-2.5 rounded-md border px-3 py-2", role === r.key ? "border-brand bg-brand-soft" : "border-line hover:bg-surface-hover")}>
                       <input type="radio" name="role" checked={role === r.key} onChange={() => setRole(r.key)} className="mt-1 accent-brand" />
                       <span className="flex flex-col">
                         <span className="text-[13px] font-semibold text-ink">{r.title}</span>
@@ -594,14 +594,14 @@ export default function AddDataPanel({
                           {(col?.top ?? []).map((t) => {
                             const on = f.values.includes(t.value);
                             return (
-                              <label key={t.value} className={cn("flex cursor-pointer items-center gap-1.5 rounded border px-2 py-1 text-[12px]", on ? "border-[#0f6b6b] bg-[#e6f4f4]" : "border-line")}>
+                              <label key={t.value} className={cn("flex cursor-pointer items-center gap-1.5 rounded border px-2 py-1 text-[12px]", on ? "border-teal bg-teal-soft" : "border-line")}>
                                 <input
                                   type="checkbox"
                                   checked={on}
                                   onChange={() =>
                                     setFilters(filters.map((x, j) => (j === i ? { ...x, values: on ? x.values.filter((v) => v !== t.value) : [...x.values, t.value] } : x)))
                                   }
-                                  className="accent-[#0f6b6b]"
+                                  className="accent-teal"
                                 />
                                 {t.value} <span className="text-ink-faint">({t.count})</span>
                               </label>
@@ -612,7 +612,7 @@ export default function AddDataPanel({
                     );
                   })}
                   {filters.length < 2 && filterable.length > 0 ? (
-                    <button type="button" onClick={() => setFilters([...filters, { column: filterable[0]!.name, values: [] }])} className="self-start rounded border border-line px-2.5 py-1 text-[12px] hover:bg-canvas-raised">
+                    <button type="button" onClick={() => setFilters([...filters, { column: filterable[0]!.name, values: [] }])} className="self-start rounded border border-line px-2.5 py-1 text-[12px] hover:bg-surface-hover">
                       Add a filter
                     </button>
                   ) : null}
@@ -628,7 +628,7 @@ export default function AddDataPanel({
                     {AGGREGATES.map((a) => {
                       const disabled = !valueColumn ? a.key !== "count" : a.key === "count";
                       return (
-                        <label key={a.key} className={cn("flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-[12.5px] font-semibold", aggregate === a.key ? "border-[#0f6b6b] bg-[#0f6b6b] text-white" : "border-line", disabled ? "opacity-40" : "cursor-pointer")}>
+                        <label key={a.key} className={cn("flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-[12.5px] font-semibold", aggregate === a.key ? "border-teal bg-teal text-inverse" : "border-line", disabled ? "opacity-40" : "cursor-pointer")}>
                           <input type="radio" name="aggregate" disabled={disabled} checked={aggregate === a.key} onChange={() => setAggregate(a.key)} className="sr-only" />
                           {a.label}
                         </label>
@@ -680,7 +680,7 @@ export default function AddDataPanel({
             ) : null}
 
             <div className="mt-auto flex justify-between gap-2 border-t border-line-soft pt-3">
-              <button type="button" onClick={() => (step === 1 || step === 4 ? onClose() : setStep(step - 1))} disabled={writing} className="rounded border border-line px-4 py-2 text-[13px] hover:bg-canvas-raised disabled:opacity-50">
+              <button type="button" onClick={() => (step === 1 || step === 4 ? onClose() : setStep(step - 1))} disabled={writing} className="rounded border border-line px-4 py-2 text-[13px] hover:bg-surface-hover disabled:opacity-50">
                 {step === 1 ? "Cancel" : step === 4 ? "Close" : "Back"}
               </button>
               <button type="button" onClick={() => void next()} disabled={!canNext} className="flex items-center gap-1.5 rounded bg-brand px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50">

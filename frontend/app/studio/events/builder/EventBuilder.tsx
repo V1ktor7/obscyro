@@ -120,7 +120,7 @@ export default function EventBuilder({ env, snapshot, targets, initial, twinScen
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const checks = useMemo(() => eventChecks(items, tw, ctx, name), [items, tw, ctx, name, rev]);
   const editingWhere = !!open && open.key === sel && open.k === "where";
-  const fg = selIt ? colourOf(selIt.key) : "#2d72d2";
+  const fg = selIt ? colourOf(selIt.key) : "#4589ff";
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const picture = useMemo(() => mapPicture(selIt, tw, ctx, dayIn, editingWhere, fg), [selIt, tw, ctx, dayIn, editingWhere, fg, rev]);
 
@@ -233,7 +233,7 @@ export default function EventBuilder({ env, snapshot, targets, initial, twinScen
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-canvas">
       {/* ---- the event itself, one line ---- */}
-      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-white px-3 py-2">
+      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-surface px-3 py-2">
         <button type="button" onClick={onClose} title="Back to the list of events" className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-xs text-ink-muted hover:text-ink">
           <ArrowLeft className="h-3.5 w-3.5" />Events
         </button>
@@ -271,7 +271,7 @@ export default function EventBuilder({ env, snapshot, targets, initial, twinScen
             </div>
             <div ref={cards} className="flex flex-col gap-2">
               {items.length === 0 && !picking ? (
-                <div className="rounded-md border border-dashed border-line bg-white p-4 text-[12.5px] leading-relaxed text-ink-muted">
+                <div className="rounded-md border border-dashed border-line bg-surface p-4 text-[12.5px] leading-relaxed text-ink-muted">
                   <b className="mb-1 block text-sm text-ink">What happens?</b>
                   An event is a set of changes to your network, placed in time: more patients arrive, a site loses beds, equipment goes out of service, care takes longer, smoke or heat brings people in.
                   Add the first one below, or start from a profile.
@@ -297,7 +297,7 @@ export default function EventBuilder({ env, snapshot, targets, initial, twinScen
           </section>
 
           {items.length ? (
-            <section className="rounded-md border border-line bg-white p-3">
+            <section className="rounded-md border border-line bg-surface p-3">
               <div className="mb-2 flex flex-wrap items-baseline gap-2">
                 <h2 className="text-sm font-semibold text-ink">Over time</h2>
                 <span className="text-[11.5px] text-ink-faint">Drag a bar to move it, its ends to resize it. Drag the ruler to look at another {u1(ctx)}.</span>
@@ -309,7 +309,7 @@ export default function EventBuilder({ env, snapshot, targets, initial, twinScen
         </div>
 
         {/* ---- right: where, how much, what is wrong ---- */}
-        <aside className="flex min-h-0 flex-col border-t border-line bg-white lg:overflow-y-auto lg:border-l lg:border-t-0">
+        <aside className="flex min-h-0 flex-col border-t border-line bg-surface lg:overflow-y-auto lg:border-l lg:border-t-0">
           <Panel title="Where it lands" sub={selIt ? `${u1(ctx)} ${dayIn}` : undefined}>
             <WhereItLands tw={tw} picture={picture} colour={fg} onPickSite={pickSite} onPickPop={pickPop} onPickPoint={pickPoint} />
             {picture.hint ? <p className="mt-1.5 text-[11.5px] font-medium text-brand-deep">{picture.hint}</p> : null}
@@ -355,7 +355,7 @@ function ChecksList({ fix, note, items, ctx, colourOf, onGoto }: { fix: Check[];
     const it = c.i != null ? items[c.i] : null;
     return (
       <button key={`${kind}-${k}`} type="button" onClick={() => onGoto(c)}
-        className={cn("flex w-full items-start gap-1.5 rounded px-1.5 py-1 text-left text-[11.5px] leading-snug hover:bg-canvas", kind === "fix" ? "text-warn-ink" : "text-ink-body")}>
+        className={cn("flex w-full items-start gap-1.5 rounded px-1.5 py-1 text-left text-[11.5px] leading-snug hover:bg-surface-hover", kind === "fix" ? "text-warn-ink" : "text-ink-body")}>
         <i className="mt-1 h-2 w-2 shrink-0 rounded-full" style={{ background: it ? colourOf(it.key) : "transparent" }} />
         {kind === "fix" ? <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0" /> : <Info className="mt-px h-3.5 w-3.5 shrink-0 text-ink-faint" />}
         <span>{c.t}</span>
@@ -383,7 +383,7 @@ function ChangeCard({ it, items, tw, ctx, targets, colour, selected, open, eng, 
   const dupId = taken.includes(itemId(it));
   return (
     <div data-card={it.key} onClick={(ev) => { if (!(ev.target as HTMLElement).closest("button,input,select,label,textarea,a")) onSelect(); }}
-      className={cn("rounded-md border bg-white px-3 py-2.5 transition-colors", selected ? "border-brand shadow-[0_0_0_1px_var(--tw-shadow-color)] shadow-brand/30" : "border-line hover:border-ink-ghost")}>
+      className={cn("rounded-md border bg-surface px-3 py-2.5 transition-colors", selected ? "border-brand shadow-[0_0_0_1px_var(--tw-shadow-color)] shadow-brand/30" : "border-line hover:border-ink-ghost")}>
       <div className="flex items-start gap-2">
         <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colour }} />
         <p className="min-w-0 flex-1 text-[13px] leading-[1.9] text-ink-body">
@@ -421,7 +421,7 @@ function ChangeCard({ it, items, tw, ctx, targets, colour, selected, open, eng, 
             <span className="text-[11px] text-ink-faint">what the run reports as the reason something happened</span>
           </label>
           {it.kind === "exposure" ? <p className={HELP}>Sent as plain arrival changes, recomputed from this helper every time the event is saved. The engine never sees the helper itself.</p> : null}
-          <pre className="max-h-64 overflow-auto rounded border border-line-soft bg-white p-2 font-mono text-[11px] leading-snug text-ink-body">{json}</pre>
+          <pre className="max-h-64 overflow-auto rounded border border-line-soft bg-surface p-2 font-mono text-[11px] leading-snug text-ink-body">{json}</pre>
         </div>
       ) : null}
     </div>
@@ -431,7 +431,7 @@ function ChangeCard({ it, items, tw, ctx, targets, colour, selected, open, eng, 
 function IconBtn({ label, onClick, children, on, danger }: { label: string; onClick: () => void; children: React.ReactNode; on?: boolean; danger?: boolean }) {
   return (
     <button type="button" title={label} aria-label={label} aria-pressed={on} onClick={onClick}
-      className={cn("flex h-6 w-6 items-center justify-center rounded text-ink-faint hover:bg-canvas", on && "bg-brand-soft text-brand-deep", danger ? "hover:text-danger" : "hover:text-ink")}>
+      className={cn("flex h-6 w-6 items-center justify-center rounded text-ink-faint hover:bg-surface-hover", on && "bg-brand-soft text-brand-deep", danger ? "hover:text-danger" : "hover:text-ink")}>
       {children}
     </button>
   );

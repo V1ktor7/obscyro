@@ -21,7 +21,7 @@ export function MicroLabel({
   return (
     <span
       className={cn(
-        "text-[10px] font-medium uppercase tracking-wide text-[#8f99a8]",
+        "text-[10px] font-medium uppercase tracking-wide text-ink-faint",
         className,
       )}
     >
@@ -42,7 +42,7 @@ export function PanelHead({
   return (
     <div
       className={cn(
-        "flex shrink-0 items-center justify-between gap-2 border-b border-[#d3d8de] px-3 py-1.5",
+        "flex shrink-0 items-center justify-between gap-2 border-b border-line px-3 py-1.5",
         className,
       )}
     >
@@ -62,7 +62,7 @@ export function Chip({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded border border-[#d3d8de] bg-white px-2 py-0.5 text-[10px] text-[#5f6b7c]",
+        "inline-flex items-center gap-1.5 rounded border border-line bg-surface px-2 py-0.5 text-[10px] text-ink-muted",
         className,
       )}
     >
@@ -75,7 +75,7 @@ export function Sparkline({
   values,
   width = 64,
   height = 18,
-  stroke = "#2d72d2",
+  stroke = "#4589ff",
   className,
 }: {
   values: number[];
@@ -117,22 +117,22 @@ export function KpiCell({
   spark?: number[];
 }) {
   return (
-    <div className="relative flex flex-col justify-center overflow-hidden rounded-md bg-white px-3 py-2 shadow-[inset_0_0_0_1px_#e5e8eb]">
+    <div className="relative flex flex-col justify-center overflow-hidden rounded-md bg-surface px-3 py-2 shadow-[inset_0_0_0_1px_#333333]">
       <MicroLabel>{label}</MicroLabel>
       <span
         className={cn(
           "text-lg font-semibold leading-tight",
           tone === "crit"
-            ? "text-rose-600"
+            ? "text-danger"
             : tone === "warn"
-              ? "text-amber-600"
-              : "text-[#1c2127]",
+              ? "text-warn-ink"
+              : "text-ink",
         )}
       >
         {value}
       </span>
       {sub ? (
-        <span className="truncate text-[10px] text-[#8f99a8]">{sub}</span>
+        <span className="truncate text-[10px] text-ink-faint">{sub}</span>
       ) : null}
       {spark && spark.length > 1 ? (
         <Sparkline
@@ -158,7 +158,7 @@ export function ModeToggle<T extends string>({
   return (
     <div
       className={cn(
-        "inline-flex rounded border border-[#d3d8de] bg-white",
+        "inline-flex rounded border border-line bg-surface",
         className,
       )}
     >
@@ -170,8 +170,8 @@ export function ModeToggle<T extends string>({
           className={cn(
             "px-3 py-1 text-[10px] font-medium uppercase tracking-wide transition-colors",
             value === o.value
-              ? "bg-[#e7f2fd] text-[#215db0]"
-              : "text-[#5f6b7c] hover:text-[#1c2127]",
+              ? "bg-brand-soft text-brand-deep"
+              : "text-ink-muted hover:text-ink",
           )}
         >
           {o.label}
@@ -200,7 +200,7 @@ export function GaugeArc({
   const off = c * (1 - drawn / 100);
   const color =
     pct == null
-      ? "#8f99a8"
+      ? "#a8a8a8"
       : pct >= 95
         ? SEV_HEX.critical
         : pct >= 80
@@ -213,7 +213,7 @@ export function GaugeArc({
         cy={size / 2}
         r={r}
         fill="none"
-        stroke="#e5e8eb"
+        stroke="#333333"
         strokeWidth={5}
       />
       <circle
@@ -231,7 +231,7 @@ export function GaugeArc({
         x={size / 2}
         y={size / 2 + 4}
         textAnchor="middle"
-        className="fill-[#1c2127] text-[13px] font-semibold"
+        className="fill-ink text-[13px] font-semibold"
       >
         {pct == null ? "—" : `${Math.round(pct)}%`}
       </text>
@@ -244,7 +244,7 @@ export function GaugeArc({
  * legend shows — green <80, amber 80-95, red >=95 — so the rail, grid,
  * gauge, and canvas all agree on what "healthy" looks like.
  */
-export const OCC_OK_HEX = "#1d9e75";
+export const OCC_OK_HEX = "#42be65";
 
 export function occFillColor(pct: number): string {
   if (pct >= 95) return SEV_HEX.critical;

@@ -210,16 +210,16 @@ export default function FluxView() {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className="pointer-events-auto rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-md"
+            className="pointer-events-auto rounded-lg border border-line bg-surface px-3 py-2 shadow-md"
           >
-            <div className="text-[10px] font-medium text-gray-800">{t.title}</div>
-            <div className="text-[9px] text-gray-500">{t.detail}</div>
+            <div className="text-[10px] font-medium text-ink">{t.title}</div>
+            <div className="text-[9px] text-ink-muted">{t.detail}</div>
           </div>
         ))}
       </div>
 
       {/* Top bar */}
-      <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2">
+      <div className="flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2">
         <MicroLabel>Data flux</MicroLabel>
         <Chip>{sources.length} sources</Chip>
         <Chip>{allDetections.length} detections</Chip>
@@ -229,11 +229,11 @@ export default function FluxView() {
         <button
           type="button"
           onClick={() => setDrawerOpen((o) => !o)}
-          className="relative ml-auto rounded border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+          className="relative ml-auto rounded border border-line px-2 py-1 text-xs text-ink-body hover:bg-surface-hover"
         >
           🔔
           {allDetections.length > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] text-white">
+            <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-danger text-[9px] text-inverse">
               {Math.min(allDetections.length, 9)}
             </span>
           )}
@@ -242,10 +242,10 @@ export default function FluxView() {
 
       <div className="flex min-h-0 flex-1 gap-2">
         {/* Sources rail */}
-        <aside className="flex w-52 shrink-0 flex-col gap-1 overflow-y-auto rounded-lg border border-gray-200 bg-white p-2">
+        <aside className="flex w-52 shrink-0 flex-col gap-1 overflow-y-auto rounded-lg border border-line bg-surface p-2">
           <PanelHead title={<MicroLabel>Sources</MicroLabel>} />
           {sources.length === 0 ? (
-            <p className="text-[10px] text-gray-400">No ingest sources yet</p>
+            <p className="text-[10px] text-ink-faint">No ingest sources yet</p>
           ) : (
             sources.map((s) => {
               const st = sourceStats.get(s.id);
@@ -259,8 +259,8 @@ export default function FluxView() {
                   className={cn(
                     "w-full rounded border px-2 py-1.5 text-left text-[10px]",
                     selectedSourceId === s.id
-                      ? "border-indigo-300 bg-indigo-50"
-                      : "border-gray-100 hover:border-gray-200",
+                      ? "border-indigo-400 bg-indigo-400/15"
+                      : "border-line-soft hover:border-line",
                   )}
                 >
                   <div className="flex items-center gap-1.5">
@@ -275,14 +275,14 @@ export default function FluxView() {
                               : "stream"
                       }
                     />
-                    <span className="truncate font-medium text-gray-800">
+                    <span className="truncate font-medium text-ink">
                       {s.name}
                     </span>
                   </div>
-                  <div className="mt-0.5 text-[9px] text-gray-400">
+                  <div className="mt-0.5 text-[9px] text-ink-faint">
                     {s.type}/{s.method}
                   </div>
-                  <div className="mt-0.5 text-[9px] text-gray-500">
+                  <div className="mt-0.5 text-[9px] text-ink-muted">
                     Last{" "}
                     {st?.lastEventAt ? timeAgo(st.lastEventAt) : "—"} ·{" "}
                     {st?.eventsPerMin != null
@@ -297,11 +297,11 @@ export default function FluxView() {
 
         {/* Center */}
         <main className="flex min-w-0 flex-1 flex-col gap-2">
-          <div className="min-h-[200px] flex-1 rounded-lg border border-gray-200 bg-white p-2">
+          <div className="min-h-[200px] flex-1 rounded-lg border border-line bg-surface p-2">
             <PanelHead title={<MicroLabel>Flow canvas</MicroLabel>} />
             <FluxCanvas sources={sources} metrics={metrics} />
           </div>
-          <div className="max-h-36 overflow-y-auto rounded-lg border border-gray-200 bg-white p-2">
+          <div className="max-h-36 overflow-y-auto rounded-lg border border-line bg-surface p-2">
             <PanelHead title={<MicroLabel>Ingest log</MicroLabel>} />
             <div className="space-y-0.5 text-[9px]">
               {logLines.map((l, i) => (
@@ -309,24 +309,24 @@ export default function FluxView() {
                   key={i}
                   className={cn(
                     "flex gap-2",
-                    l.kind === "detect" ? "text-amber-700" : "text-gray-600",
+                    l.kind === "detect" ? "text-warn-ink" : "text-ink-muted",
                   )}
                 >
-                  <span className="shrink-0 text-gray-400">
+                  <span className="shrink-0 text-ink-faint">
                     {l.ts.slice(11, 19)}
                   </span>
                   <span className="truncate">{l.text}</span>
                 </div>
               ))}
               {!logLines.length && (
-                <span className="text-gray-400">No events yet</span>
+                <span className="text-ink-faint">No events yet</span>
               )}
             </div>
           </div>
         </main>
 
         {/* Detections panel */}
-        <aside className="flex w-56 shrink-0 flex-col gap-2 overflow-y-auto rounded-lg border border-gray-200 bg-white p-2">
+        <aside className="flex w-56 shrink-0 flex-col gap-2 overflow-y-auto rounded-lg border border-line bg-surface p-2">
           <PanelHead title={<MicroLabel>Detections</MicroLabel>} />
           {(["real", "heuristic"] as const).map((tier) => {
             const items = allDetections.filter((d) => d.tier === tier);
@@ -337,7 +337,7 @@ export default function FluxView() {
                   {tier === "real" ? "Real (L4–6 + twin)" : "Client heuristics"}
                 </MicroLabel>
                 {items.length === 0 ? (
-                  <p className="text-[9px] text-gray-400">None</p>
+                  <p className="text-[9px] text-ink-faint">None</p>
                 ) : (
                   items.map((d) => (
                     <DetectionCard
@@ -357,13 +357,13 @@ export default function FluxView() {
 
       {/* Notification drawer */}
       {drawerOpen && (
-        <div className="absolute inset-y-0 right-0 z-30 w-72 border-l border-gray-200 bg-white p-3 shadow-lg">
+        <div className="absolute inset-y-0 right-0 z-30 w-72 border-l border-line bg-surface p-3 shadow-lg">
           <div className="mb-2 flex items-center justify-between">
             <MicroLabel>Notifications</MicroLabel>
             <button
               type="button"
               onClick={() => setDrawerOpen(false)}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-ink-faint hover:text-ink-muted"
             >
               ×
             </button>
@@ -379,7 +379,7 @@ export default function FluxView() {
               />
             ))}
             {!allDetections.length && (
-              <p className="text-[10px] text-gray-400">No detections</p>
+              <p className="text-[10px] text-ink-faint">No detections</p>
             )}
           </div>
         </div>
@@ -413,23 +413,23 @@ function DetectionCard({
         : SEV_HEX.info;
 
   return (
-    <div className="mb-2 rounded border border-gray-100 p-2 text-[10px]">
+    <div className="mb-2 rounded border border-line-soft p-2 text-[10px]">
       <div className="flex items-start gap-1.5">
         <span
           className="mt-0.5 h-2 w-2 shrink-0 rounded-full"
           style={{ backgroundColor: color }}
         />
         <div className="min-w-0 flex-1">
-          <div className="font-medium text-gray-800">{d.title}</div>
-          <div className="text-[9px] text-gray-500">{d.detail}</div>
+          <div className="font-medium text-ink">{d.title}</div>
+          <div className="text-[9px] text-ink-muted">{d.detail}</div>
           <span
             className={cn(
               "mt-1 inline-block rounded px-1 text-[8px] uppercase",
               d.tier === "real"
-                ? "bg-emerald-50 text-emerald-700"
+                ? "bg-ok-soft text-ok-ink"
                 : d.tier === "heuristic"
-                  ? "bg-amber-50 text-amber-700"
-                  : "bg-violet-50 text-violet-700",
+                  ? "bg-warn-soft text-warn-ink"
+                  : "bg-scenario-soft text-scenario",
             )}
           >
             {tierLabel}
@@ -437,10 +437,10 @@ function DetectionCard({
         </div>
       </div>
       {triage ? (
-        <div className="mt-2 rounded bg-gray-50 p-1.5 text-[9px] text-gray-600">
-          <span className="text-[8px] text-violet-600">LLM · preview</span>
+        <div className="mt-2 rounded bg-canvas-raised p-1.5 text-[9px] text-ink-muted">
+          <span className="text-[8px] text-scenario">LLM · preview</span>
           <p>{triage.text}</p>
-          <span className="text-gray-400">
+          <span className="text-ink-faint">
             confidence {(triage.confidence * 100).toFixed(0)}%
           </span>
         </div>
@@ -448,7 +448,7 @@ function DetectionCard({
         <button
           type="button"
           onClick={onTriage}
-          className="mt-1 text-[9px] text-indigo-600 hover:underline"
+          className="mt-1 text-[9px] text-indigo-300 hover:underline"
         >
           Preview triage
         </button>

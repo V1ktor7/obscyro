@@ -66,8 +66,9 @@ export function cellValues(grid: HexGrid, layer: LayerInput): { values: (number 
   return { values: buckets.map((b) => (b.length ? combine(b, layer.aggregate) : null)), outside };
 }
 
-export const LAYER_COLOURS = ["#d8efec", "#9fd8d0", "#4fb3a6", "#1e8e83", "#0f6b6b"];
-export const LAYER_EMPTY = "#f6f7f9";
+// Low to high on a dark basemap: each step is brighter than the one before.
+export const LAYER_COLOURS = ["#0b3233", "#005d5d", "#007d79", "#08bdba", "#3ddbd9"];
+export const LAYER_EMPTY = "#262626";
 
 export function fmtNumber(v: number): string {
   const a = Math.abs(v);

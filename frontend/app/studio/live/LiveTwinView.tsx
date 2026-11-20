@@ -214,7 +214,7 @@ export default function LiveTwinView() {
 
   if (!hasKey) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-white">
+      <div className="flex flex-1 items-center justify-center bg-surface">
         <p className="max-w-sm text-center text-sm text-ink-muted">
           Sign in and create an API key to view the live digital twin.
         </p>
@@ -224,7 +224,7 @@ export default function LiveTwinView() {
 
   if (!env) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-white">
+      <div className="flex flex-1 items-center justify-center bg-surface">
         <p className="text-sm text-ink-muted">Select an environment in the header.</p>
       </div>
     );
@@ -232,7 +232,7 @@ export default function LiveTwinView() {
 
   if (!isOperations) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-white p-6">
+      <div className="flex flex-1 items-center justify-center bg-surface p-6">
         <Card className="max-w-md p-6 text-center">
           {/*
             This used to read "Switch env type in Ontology Manager", which sent
@@ -381,7 +381,7 @@ export default function LiveTwinView() {
             type="button"
             onClick={() => setShowMetrics(true)}
             title="Live metrics"
-            className="absolute right-3 top-3 rounded-md border border-line bg-white p-1.5 text-ink-muted shadow-sm hover:border-brand hover:text-brand"
+            className="absolute right-3 top-3 rounded-md border border-line bg-surface p-1.5 text-ink-muted shadow-sm hover:border-brand hover:text-brand"
           >
             <Activity className="h-4 w-4" />
           </button>

@@ -54,7 +54,7 @@ const SEVERITIES: { value: TwinAlertSeverity; label: string; tone: string }[] = 
 ];
 
 const FIELD =
-  "w-full rounded border border-line bg-white px-2 py-1.5 text-[11.5px] text-ink focus:border-brand focus:outline-none";
+  "w-full rounded border border-line bg-surface px-2 py-1.5 text-[11.5px] text-ink focus:border-brand focus:outline-none";
 const LABEL = "text-[10px] font-medium uppercase tracking-wide text-ink-faint";
 
 /** Unit kinds a rule can be limited to. Empty means every unit. */
@@ -205,8 +205,8 @@ export default function AlertRuleEditor({
   const draftSignal = wiredTo(metric);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/20 pt-[8vh]">
-      <div className="flex max-h-[80vh] w-[760px] overflow-hidden rounded-md border border-line bg-white shadow-lg">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 pt-[8vh]">
+      <div className="flex max-h-[80vh] w-[760px] overflow-hidden rounded-md border border-line bg-surface shadow-lg">
         {/* list */}
         <aside className="flex w-[280px] shrink-0 flex-col border-r border-line">
           <div className="flex items-center gap-2 border-b border-line-soft px-3 py-2">
@@ -215,7 +215,7 @@ export default function AlertRuleEditor({
               type="button"
               onClick={startNew}
               title="New rule"
-              className="rounded p-0.5 text-ink-faint hover:bg-canvas-raised hover:text-brand"
+              className="rounded p-0.5 text-ink-faint hover:bg-surface-hover hover:text-brand"
             >
               <Plus className="h-3.5 w-3.5" />
             </button>
@@ -237,7 +237,7 @@ export default function AlertRuleEditor({
                       "flex w-full items-start gap-2 border-l-[3px] px-3 py-1.5 text-left",
                       editing !== "new" && editing?.id === r.id
                         ? "border-l-brand bg-brand-soft"
-                        : "border-l-transparent hover:bg-canvas-raised",
+                        : "border-l-transparent hover:bg-surface-hover",
                     )}
                   >
                     <span className="min-w-0 flex-1">
@@ -285,7 +285,7 @@ export default function AlertRuleEditor({
             <button
               type="button"
               onClick={onClose}
-              className="rounded p-0.5 text-ink-faint hover:bg-canvas-raised hover:text-ink-body"
+              className="rounded p-0.5 text-ink-faint hover:bg-surface-hover hover:text-ink-body"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -431,7 +431,7 @@ export default function AlertRuleEditor({
                         <select
                           value={wireTo}
                           onChange={(e) => setWireTo(e.target.value)}
-                          className="min-w-0 flex-1 rounded border border-ok/40 bg-white px-1.5 py-1 text-[10.5px] text-ink focus:border-brand focus:outline-none"
+                          className="min-w-0 flex-1 rounded border border-ok/40 bg-surface px-1.5 py-1 text-[10.5px] text-ink focus:border-brand focus:outline-none"
                         >
                           <option value="">raise it as…</option>
                           {signalTypes
@@ -446,7 +446,7 @@ export default function AlertRuleEditor({
                           type="button"
                           disabled={!wireTo || busy}
                           onClick={() => void wire()}
-                          className="shrink-0 rounded border border-ok/40 bg-white px-2 py-1 text-[10.5px] font-medium text-ok-ink disabled:opacity-40"
+                          className="shrink-0 rounded border border-ok/40 bg-surface px-2 py-1 text-[10.5px] font-medium text-ok-ink disabled:opacity-40"
                         >
                           Rewire
                         </button>
@@ -477,7 +477,7 @@ export default function AlertRuleEditor({
                         <select
                           value={wireTo}
                           onChange={(e) => setWireTo(e.target.value)}
-                          className="min-w-0 flex-1 rounded border border-warn-line bg-white px-1.5 py-1 text-[10.5px] text-ink focus:border-brand focus:outline-none"
+                          className="min-w-0 flex-1 rounded border border-warn-line bg-surface px-1.5 py-1 text-[10.5px] text-ink focus:border-brand focus:outline-none"
                         >
                           <option value="">raise it as…</option>
                           {signalTypes
@@ -493,7 +493,7 @@ export default function AlertRuleEditor({
                           type="button"
                           disabled={!wireTo || busy}
                           onClick={() => void wire()}
-                          className="shrink-0 rounded border border-warn-line bg-white px-2 py-1 text-[10.5px] font-medium text-warn-ink disabled:opacity-40"
+                          className="shrink-0 rounded border border-warn-line bg-surface px-2 py-1 text-[10.5px] font-medium text-warn-ink disabled:opacity-40"
                         >
                           Wire it
                         </button>

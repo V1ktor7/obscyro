@@ -222,23 +222,23 @@ const NODE_ACCENTS: Record<
   NodeType,
   { text: string; bar: string; border: string; hex: string }
 > = {
-  input: { text: "text-sky-600", bar: "bg-sky-400", border: "border-sky-400", hex: "#0284c7" },
-  dataset: { text: "text-sky-600", bar: "bg-sky-400", border: "border-sky-400", hex: "#0284c7" },
-  rest: { text: "text-sky-600", bar: "bg-sky-400", border: "border-sky-400", hex: "#0284c7" },
-  source: { text: "text-sky-600", bar: "bg-sky-400", border: "border-sky-400", hex: "#0284c7" },
-  webhook: { text: "text-sky-600", bar: "bg-sky-400", border: "border-sky-400", hex: "#0284c7" },
-  formatDetect: { text: "text-amber-600", bar: "bg-amber-400", border: "border-amber-400", hex: "#d97706" },
-  transform: { text: "text-cyan-600", bar: "bg-cyan-400", border: "border-cyan-400", hex: "#0891b2" },
-  mapping: { text: "text-indigo-600", bar: "bg-indigo-400", border: "border-indigo-400", hex: "#4f46e5" },
-  validation: { text: "text-amber-600", bar: "bg-amber-400", border: "border-amber-400", hex: "#d97706" },
-  concept: { text: "text-violet-600", bar: "bg-violet-400", border: "border-violet-400", hex: "#7c3aed" },
-  context: { text: "text-violet-600", bar: "bg-violet-400", border: "border-violet-400", hex: "#7c3aed" },
-  decision: { text: "text-amber-600", bar: "bg-amber-400", border: "border-amber-400", hex: "#d97706" },
-  saveOntology: { text: "text-slate-600", bar: "bg-slate-500", border: "border-slate-500", hex: "#475569" },
-  ontologySource: { text: "text-slate-600", bar: "bg-slate-500", border: "border-slate-500", hex: "#475569" },
-  terminology: { text: "text-teal-600", bar: "bg-teal-400", border: "border-teal-400", hex: "#0d9488" },
-  output: { text: "text-emerald-600", bar: "bg-emerald-400", border: "border-emerald-400", hex: "#059669" },
-  custom: { text: "text-slate-500", bar: "bg-slate-400", border: "border-slate-400", hex: "#64748b" },
+  input: { text: "text-sky-300", bar: "bg-sky-400", border: "border-sky-400", hex: "#33b1ff" },
+  dataset: { text: "text-sky-300", bar: "bg-sky-400", border: "border-sky-400", hex: "#33b1ff" },
+  rest: { text: "text-sky-300", bar: "bg-sky-400", border: "border-sky-400", hex: "#33b1ff" },
+  source: { text: "text-sky-300", bar: "bg-sky-400", border: "border-sky-400", hex: "#33b1ff" },
+  webhook: { text: "text-sky-300", bar: "bg-sky-400", border: "border-sky-400", hex: "#33b1ff" },
+  formatDetect: { text: "text-warn-ink", bar: "bg-warn", border: "border-warn", hex: "#f1c21b" },
+  transform: { text: "text-teal", bar: "bg-teal", border: "border-teal", hex: "#33b1ff" },
+  mapping: { text: "text-indigo-300", bar: "bg-indigo-400", border: "border-indigo-400", hex: "#818cf8" },
+  validation: { text: "text-warn-ink", bar: "bg-warn", border: "border-warn", hex: "#f1c21b" },
+  concept: { text: "text-scenario", bar: "bg-scenario", border: "border-scenario-line", hex: "#a56eff" },
+  context: { text: "text-scenario", bar: "bg-scenario", border: "border-scenario-line", hex: "#a56eff" },
+  decision: { text: "text-warn-ink", bar: "bg-warn", border: "border-warn", hex: "#f1c21b" },
+  saveOntology: { text: "text-ink-muted", bar: "bg-ink-ghost", border: "border-line-strong", hex: "#c6c6c6" },
+  ontologySource: { text: "text-ink-muted", bar: "bg-ink-ghost", border: "border-line-strong", hex: "#c6c6c6" },
+  terminology: { text: "text-teal", bar: "bg-teal", border: "border-teal", hex: "#08bdba" },
+  output: { text: "text-ok-ink", bar: "bg-ok", border: "border-ok", hex: "#42be65" },
+  custom: { text: "text-ink-muted", bar: "bg-ink-ghost", border: "border-line-strong", hex: "#a8a8a8" },
 };
 
 const DEMO_RESULTS: DemoResult[] = [
@@ -1086,9 +1086,9 @@ function NodeIcon({ type }: { type: NodeType }) {
 
 function Chip({ label, value }: { label: string; value: string }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded border border-gray-300 bg-gray-50 px-1.5 py-0.5 text-[10px] text-gray-600">
-      <span className="text-gray-400">{label}</span>
-      <span className="font-medium text-gray-700">{value}</span>
+    <span className="inline-flex items-center gap-1 rounded border border-line-strong bg-canvas-raised px-1.5 py-0.5 text-[10px] text-ink-muted">
+      <span className="text-ink-faint">{label}</span>
+      <span className="font-medium text-ink-body">{value}</span>
     </span>
   );
 }
@@ -1096,9 +1096,9 @@ function Chip({ label, value }: { label: string; value: string }) {
 function DecisionBadge({ decision }: { decision: DemoResult["decision"] }) {
   // Restrained severity color: accept = emerald, flag = amber, escalate = rose.
   const styles: Record<DemoResult["decision"], string> = {
-    accept: "border border-emerald-300 bg-emerald-50 text-emerald-700",
-    flag: "border border-amber-300 bg-amber-50 text-amber-700",
-    escalate: "border border-rose-300 bg-rose-50 text-rose-700",
+    accept: "border border-ok-line bg-ok-soft text-ok-ink",
+    flag: "border border-warn-line bg-warn-soft text-warn-ink",
+    escalate: "border border-danger-line bg-danger-soft text-danger-ink",
   };
   return (
     <span
@@ -1144,8 +1144,8 @@ function Palette({
 }) {
   const items = PALETTE.filter((item) => item.variants.includes(variant));
   return (
-    <aside className="w-48 shrink-0 border-r border-gray-200 bg-white p-3">
-      <div className="mb-2 text-[10px] uppercase tracking-wide text-gray-400">
+    <aside className="w-48 shrink-0 border-r border-line bg-surface p-3">
+      <div className="mb-2 text-[10px] uppercase tracking-wide text-ink-faint">
         Nodes
       </div>
       <div className="flex flex-col gap-1.5">
@@ -1159,7 +1159,7 @@ function Palette({
               e.dataTransfer.setData("application/x-node-type", item.type);
               e.dataTransfer.effectAllowed = "copy";
             }}
-            className="flex cursor-grab items-center gap-2 rounded-md border border-gray-200 bg-white px-2.5 py-2 text-left text-xs text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50 active:cursor-grabbing"
+            className="flex cursor-grab items-center gap-2 rounded-md border border-line bg-surface px-2.5 py-2 text-left text-xs text-ink-body transition-colors hover:border-line-strong hover:bg-surface-hover active:cursor-grabbing"
           >
             <span className={NODE_ACCENTS[item.type].text}>
               <NodeIcon type={item.type} />
@@ -1168,7 +1168,7 @@ function Palette({
           </button>
         ))}
       </div>
-      <p className="mt-3 text-[10px] leading-relaxed text-gray-400">
+      <p className="mt-3 text-[10px] leading-relaxed text-ink-faint">
         Click or drag a node onto the canvas. Drag from a node&apos;s right dot
         to another node&apos;s left dot to connect them.
       </p>
@@ -2116,27 +2116,27 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
   // -----------------------------------------------------------------------
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-white text-gray-900">
+    <div className="flex min-h-0 flex-1 flex-col bg-surface text-ink">
       {/* Editor toolbar — Reset / Run for the current graph */}
-      <div className="flex h-10 shrink-0 items-center justify-between border-b border-gray-200 px-4">
-        <span className="text-[10px] uppercase tracking-wide text-gray-400">
+      <div className="flex h-10 shrink-0 items-center justify-between border-b border-line px-4">
+        <span className="text-[10px] uppercase tracking-wide text-ink-faint">
           {variant === "parser" ? "Ontology Parser" : "Data Studio"}
         </span>
         <div className="flex items-center gap-3">
           {runError ? (
-            <span className="hidden max-w-xs truncate text-[10px] text-rose-600 sm:inline">
+            <span className="hidden max-w-xs truncate text-[10px] text-danger sm:inline">
               {runError}
             </span>
           ) : null}
           <button
             type="button"
             onClick={reset}
-            className="rounded-md border border-gray-200 px-3 py-1.5 text-xs text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-900"
+            className="rounded-md border border-line px-3 py-1.5 text-xs text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
           >
             Reset
           </button>
           {continuousRun ? (
-            <span className="hidden text-[10px] text-indigo-600 sm:inline">
+            <span className="hidden text-[10px] text-indigo-300 sm:inline">
               {running
                 ? "Continuous · running…"
                 : nextRunInSec != null
@@ -2149,7 +2149,7 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
             onChange={(e) => setContinuousIntervalMs(Number(e.target.value))}
             disabled={continuousRun}
             title="Continuous run interval"
-            className="hidden rounded-md border border-gray-200 bg-white px-2 py-1.5 text-[10px] text-gray-600 sm:block disabled:text-gray-300"
+            className="hidden rounded-md border border-line bg-surface px-2 py-1.5 text-[10px] text-ink-muted sm:block disabled:text-ink-ghost"
           >
             <option value={5000}>5s</option>
             <option value={10000}>10s</option>
@@ -2161,10 +2161,10 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
             disabled={!getStoredKey()}
             title={continuousRun ? "Stop continuous run" : "Run workflow on a loop"}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors disabled:text-gray-300",
+              "inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors disabled:text-ink-ghost",
               continuousRun
-                ? "border-indigo-600 bg-indigo-50 text-indigo-700"
-                : "border-gray-200 text-gray-600 hover:border-gray-400 hover:text-gray-900",
+                ? "border-indigo-400 bg-indigo-400/15 text-indigo-300"
+                : "border-line text-ink-muted hover:border-line-strong hover:text-ink",
             )}
           >
             <svg
@@ -2190,8 +2190,8 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
             className={cn(
               "inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs font-medium transition-colors",
               running
-                ? "bg-indigo-300 text-white"
-                : "bg-indigo-600 text-white hover:bg-indigo-500",
+                ? "bg-indigo-400 text-inverse"
+                : "bg-indigo-600 text-white hover:bg-indigo-400",
             )}
           >
             <svg
@@ -2215,7 +2215,7 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
         {/* Canvas */}
         <div
           ref={canvasRef}
-          className="relative min-w-0 flex-1 overflow-hidden bg-white"
+          className="relative min-w-0 flex-1 overflow-hidden bg-surface"
           style={{
             backgroundImage:
               "radial-gradient(circle, rgba(0,0,0,0.06) 1px, transparent 1px)",
@@ -2313,7 +2313,7 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
                       d={pathD(g)}
                       fill="none"
                       stroke={
-                        active ? ACCENT_HEX : selected ? "#475569" : EDGE_HEX
+                        active ? ACCENT_HEX : selected ? "#c6c6c6" : EDGE_HEX
                       }
                       strokeWidth={active || selected ? 2.5 : 1.5}
                     />
@@ -2342,13 +2342,13 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
                           cx={mid.x}
                           cy={mid.y}
                           r={9}
-                          fill="#fff"
-                          stroke="#475569"
+                          fill="#262626"
+                          stroke="#c6c6c6"
                           strokeWidth={1.5}
                         />
                         <path
                           d={`M ${mid.x - 3.5},${mid.y - 3.5} L ${mid.x + 3.5},${mid.y + 3.5} M ${mid.x + 3.5},${mid.y - 3.5} L ${mid.x - 3.5},${mid.y + 3.5}`}
-                          stroke="#475569"
+                          stroke="#c6c6c6"
                           strokeWidth={1.5}
                           strokeLinecap="round"
                         />
@@ -2387,7 +2387,7 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
                         d={pathD(g)}
                         fill="none"
                         stroke={
-                          pendingEdge.previewValid ? ACCENT_HEX : "#f43f5e"
+                          pendingEdge.previewValid ? ACCENT_HEX : "#ff8389"
                         }
                         strokeWidth={2}
                         strokeDasharray="5 4"
@@ -2459,14 +2459,14 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
                 <div
                   key={node.id}
                   className={cn(
-                    "absolute select-none overflow-hidden rounded-lg border bg-white shadow-sm transition-shadow",
+                    "absolute select-none overflow-hidden rounded-lg border bg-surface shadow-sm transition-shadow",
                     isActive
-                      ? "border-indigo-500 ring-2 ring-indigo-500/20"
+                      ? "border-indigo-400 ring-2 ring-indigo-400/20"
                       : hasError
-                        ? "border-rose-400 ring-2 ring-rose-400/20"
+                        ? "border-danger ring-2 ring-danger/20"
                         : isSelected
-                          ? "border-gray-700"
-                          : "border-gray-300 hover:border-gray-400",
+                          ? "border-line-strong"
+                          : "border-line-strong hover:border-line-strong",
                   )}
                   style={{
                     left: node.x,
@@ -2507,7 +2507,7 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
                           return next;
                         });
                       }}
-                      className="absolute right-1 top-1 z-10 flex h-5 w-5 items-center justify-center rounded bg-white text-[10px] text-gray-500 shadow-sm ring-1 ring-gray-200 hover:bg-rose-50 hover:text-rose-600"
+                      className="absolute right-1 top-1 z-10 flex h-5 w-5 items-center justify-center rounded bg-surface text-[10px] text-ink-muted shadow-sm ring-1 ring-line hover:bg-danger-soft hover:text-danger"
                     >
                       ×
                     </button>
@@ -2526,13 +2526,13 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
                     onPointerUp={(e) => endConnect(e, node)}
                     title="Input"
                     className={cn(
-                      "absolute -left-2 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 bg-white transition-transform hover:scale-125",
+                      "absolute -left-2 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 bg-surface transition-transform hover:scale-125",
                       connectReject?.nodeId === node.id
-                        ? "animate-pulse border-rose-400 ring-2 ring-rose-300"
+                        ? "animate-pulse border-danger ring-2 ring-danger-line"
                         : connectHover?.nodeId === node.id
                           ? connectHover.valid
-                            ? "border-indigo-500 ring-2 ring-indigo-300"
-                            : "border-rose-400 ring-2 ring-rose-300"
+                            ? "border-indigo-400 ring-2 ring-indigo-400"
+                            : "border-danger ring-2 ring-danger-line"
                           : accent.border,
                     )}
                   />
@@ -2552,7 +2552,7 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
                           onPointerDown={(e) => startConnect(e, node, branch)}
                           title={`Output: ${branch}`}
                           className={cn(
-                            "absolute -right-2 h-3.5 w-3.5 -translate-y-1/2 cursor-crosshair rounded-full border-2 bg-white transition-transform hover:scale-125",
+                            "absolute -right-2 h-3.5 w-3.5 -translate-y-1/2 cursor-crosshair rounded-full border-2 bg-surface transition-transform hover:scale-125",
                             accent.border,
                           )}
                           style={{ top: `${relY}%` }}
@@ -2564,35 +2564,35 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
                       onPointerDown={(e) => startConnect(e, node)}
                       title="Drag to connect"
                       className={cn(
-                        "absolute -right-2 top-1/2 h-4 w-4 -translate-y-1/2 cursor-crosshair rounded-full border-2 bg-white transition-transform hover:scale-125",
+                        "absolute -right-2 top-1/2 h-4 w-4 -translate-y-1/2 cursor-crosshair rounded-full border-2 bg-surface transition-transform hover:scale-125",
                         accent.border,
                       )}
                     />
                   )}
 
-                  <div className="flex items-center gap-2 border-b border-gray-100 px-3 py-2 pl-4">
+                  <div className="flex items-center gap-2 border-b border-line-soft px-3 py-2 pl-4">
                     <span className={accent.text}>
                       <NodeIcon type={node.type} />
                     </span>
-                    <span className="truncate text-xs font-medium text-gray-800">
+                    <span className="truncate text-xs font-medium text-ink">
                       {node.title}
                     </span>
                   </div>
-                  <div className="px-3 py-2 pl-4 text-[11px] text-gray-500">
+                  <div className="px-3 py-2 pl-4 text-[11px] text-ink-muted">
                     {showResults ? (
                       <div className="flex flex-col gap-2">
                         {results!.map((r, i) => (
                           <div
                             key={i}
-                            className="rounded-md border border-gray-200 bg-gray-50 p-2"
+                            className="rounded-md border border-line bg-canvas-raised p-2"
                           >
                             <div className="mb-1 flex items-center justify-between gap-2">
-                              <code className="text-[11px] text-gray-900">
+                              <code className="text-[11px] text-ink">
                                 {r.code}
                               </code>
                               <DecisionBadge decision={r.decision} />
                             </div>
-                            <div className="mb-1 truncate text-[10px] text-gray-500">
+                            <div className="mb-1 truncate text-[10px] text-ink-muted">
                               {r.display}
                             </div>
                             <div className="flex flex-wrap gap-1">
@@ -2605,19 +2605,19 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
                       </div>
                     ) : webhookPayload ? (
                       <div>
-                        <span className="mb-1 block text-[9px] uppercase tracking-wide text-sky-600">
+                        <span className="mb-1 block text-[9px] uppercase tracking-wide text-sky-300">
                           Received
                         </span>
-                        <pre className="max-h-24 overflow-auto rounded border border-gray-200 bg-gray-50 p-1.5 font-mono text-[9px] leading-snug text-gray-700">
+                        <pre className="max-h-24 overflow-auto rounded border border-line bg-canvas-raised p-1.5 font-mono text-[9px] leading-snug text-ink-body">
                           {JSON.stringify(node.config.lastEventPayload, null, 2)}
                         </pre>
                       </div>
                     ) : formatDetected ? (
                       <div>
-                        <span className="mb-1 block text-[9px] uppercase tracking-wide text-amber-600">
+                        <span className="mb-1 block text-[9px] uppercase tracking-wide text-warn-ink">
                           Detected
                         </span>
-                        <span className="inline-flex items-center rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800">
+                        <span className="inline-flex items-center rounded border border-warn-line bg-warn-soft px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-warn-ink">
                           {formatDetected}
                         </span>
                       </div>
@@ -2626,8 +2626,8 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
                         className={cn(
                           "text-[10px] leading-snug",
                           saveGlance.kind === "error"
-                            ? "text-rose-600"
-                            : "text-slate-600",
+                            ? "text-danger"
+                            : "text-ink-muted",
                         )}
                       >
                         {formatSaveOntologyGlance(saveGlance)}
@@ -2637,34 +2637,34 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
                         {FORMAT_BRANCHES.map((branch) => (
                           <li
                             key={branch}
-                            className="flex items-center justify-between text-[9px] uppercase tracking-wide text-gray-400"
+                            className="flex items-center justify-between text-[9px] uppercase tracking-wide text-ink-faint"
                           >
                             <span>{branch}</span>
-                            <span className="text-gray-300">→</span>
+                            <span className="text-ink-ghost">→</span>
                           </li>
                         ))}
                       </ul>
                     ) : hasError ? (
-                      <span className="text-[10px] text-rose-600">
+                      <span className="text-[10px] text-danger">
                         {nodeErrors.get(node.id)}
                       </span>
                     ) : node.type === "transform" && nodeOut?.records?.length ? (
-                      <span className="text-[10px] text-cyan-700">
+                      <span className="text-[10px] text-teal">
                         {nodeOut.records.length} record{nodeOut.records.length === 1 ? "" : "s"}
                       </span>
                     ) : node.type === "mapping" && nodeOut?.instances?.length ? (
-                      <span className="text-[10px] text-indigo-700">
+                      <span className="text-[10px] text-indigo-300">
                         {nodeOut.instances.length} → {node.config.objectType || "type"}
                       </span>
                     ) : node.type === "validation" && nodeOut?.validationReport ? (
-                      <span className="text-[10px] text-amber-700">
+                      <span className="text-[10px] text-warn-ink">
                         {nodeOut.validationReport.valid} valid
                         {nodeOut.validationReport.invalid > 0
                           ? ` · ${nodeOut.validationReport.invalid} invalid`
                           : ""}
                       </span>
                     ) : (
-                      <span className="text-[10px] uppercase tracking-wide text-gray-400">
+                      <span className="text-[10px] uppercase tracking-wide text-ink-faint">
                         {node.type}
                       </span>
                     )}
@@ -2702,18 +2702,18 @@ export default function StudioEditor({ variant }: { variant: StudioVariant }) {
                 onEnvChange={handleEnvChange}
               />
             ) : selectedIds.size > 1 ? (
-              <aside className="flex w-80 shrink-0 flex-col border-l border-gray-200 bg-white p-4">
-                <p className="text-sm font-medium text-gray-800">
+              <aside className="flex w-80 shrink-0 flex-col border-l border-line bg-surface p-4">
+                <p className="text-sm font-medium text-ink">
                   {selectedIds.size} nodes selected
                 </p>
-                <p className="mt-2 text-[11px] text-gray-500">
+                <p className="mt-2 text-[11px] text-ink-muted">
                   Press Delete or Backspace to remove them. Shift-click or
                   shift-drag to adjust selection.
                 </p>
                 <button
                   type="button"
                   onClick={deleteSelection}
-                  className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 hover:bg-rose-100"
+                  className="mt-4 rounded-md border border-danger-line bg-danger-soft px-3 py-2 text-xs text-danger-ink hover:bg-danger-soft"
                 >
                   Delete selected
                 </button>
@@ -2793,22 +2793,22 @@ function Inspector({
   return (
     <aside
       className={cn(
-        "flex shrink-0 flex-col border-l border-gray-200 bg-white",
+        "flex shrink-0 flex-col border-l border-line bg-surface",
         wide ? "w-[26rem]" : "w-80",
       )}
     >
-      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-line px-4 py-3">
         <div className="flex items-center gap-2">
           <span className={accent.text}>
             <NodeIcon type={node.type} />
           </span>
-          <span className="text-sm font-medium text-gray-800">{node.title}</span>
+          <span className="text-sm font-medium text-ink">{node.title}</span>
         </div>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close inspector"
-          className="rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+          className="rounded-md p-1 text-ink-faint transition-colors hover:bg-surface-hover hover:text-ink-body"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
             <path d="M18 6 6 18M6 6l12 12" />
@@ -2816,7 +2816,7 @@ function Inspector({
         </button>
       </div>
 
-      <div className="border-b border-gray-200 px-4 py-2">
+      <div className="border-b border-line px-4 py-2">
         <button
           type="button"
           onClick={onRunNode}
@@ -2824,19 +2824,19 @@ function Inspector({
           className={cn(
             "inline-flex w-full items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
             running
-              ? "bg-gray-200 text-gray-400"
-              : "bg-indigo-600 text-white hover:bg-indigo-500",
+              ? "bg-line text-ink-faint"
+              : "bg-indigo-600 text-white hover:bg-indigo-400",
           )}
         >
           <Play className="h-3 w-3" />
           {running ? "Running…" : "Run this node"}
         </button>
-        <p className="mt-1.5 text-[10px] leading-relaxed text-gray-400">
+        <p className="mt-1.5 text-[10px] leading-relaxed text-ink-faint">
           Runs this node and everything it depends on upstream.
         </p>
       </div>
 
-      <div className="flex border-b border-gray-200">
+      <div className="flex border-b border-line">
         {(["input", "parameters", "output"] as InspectorIoTab[]).map((tab) => (
           <button
             key={tab}
@@ -2845,8 +2845,8 @@ function Inspector({
             className={cn(
               "flex-1 py-2 text-center text-[10px] uppercase tracking-[0.12em] transition-colors",
               ioTab === tab
-                ? "border-b-2 border-gray-900 text-gray-900"
-                : "text-gray-400 hover:text-gray-600",
+                ? "border-b-2 border-ink text-ink"
+                : "text-ink-faint hover:text-ink-muted",
             )}
           >
             {tab}
@@ -2875,7 +2875,7 @@ function Inspector({
                     "flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
                     mode === m
                       ? "bg-brand text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200",
+                      : "bg-canvas-raised text-ink-muted hover:bg-surface-hover",
                   )}
                 >
                   {m === "lowcode" ? "Low-code" : "Code"}
@@ -2898,7 +2898,7 @@ function Inspector({
               />
             ) : (
               <div className="flex flex-col">
-                <p className="mb-2 text-[11px] text-gray-400">
+                <p className="mb-2 text-[11px] text-ink-faint">
                   Editable pseudo-JS. In a real deployment this compiles to the same
                   behavior as the form.
                 </p>
@@ -2906,7 +2906,7 @@ function Inspector({
                   value={node.code}
                   onChange={(e) => onCode(e.target.value)}
                   spellCheck={false}
-                  className="h-72 w-full resize-none rounded-md border border-gray-200 bg-gray-50 p-3 text-[12px] leading-relaxed text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+                  className="h-72 w-full resize-none rounded-md border border-line bg-canvas-raised p-3 text-[12px] leading-relaxed text-ink focus:border-line-strong focus:outline-none focus:ring-2 focus:ring-line"
                 />
               </div>
             )}
@@ -2915,7 +2915,7 @@ function Inspector({
 
         {ioTab === "output" ? (
           error ? (
-            <div className="rounded-md border border-rose-300 bg-rose-50 p-2.5 text-[11px] text-rose-700">
+            <div className="rounded-md border border-danger-line bg-danger-soft p-2.5 text-[11px] text-danger-ink">
               {error}
             </div>
           ) : (
@@ -2937,7 +2937,7 @@ function Inspector({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="mb-4 block">
-      <span className="mb-1.5 block text-xs font-medium text-gray-700">
+      <span className="mb-1.5 block text-xs font-medium text-ink-body">
         {label}
       </span>
       {children}
@@ -2985,14 +2985,14 @@ function DatasetNodeConfig({
           className={cn(
             "flex cursor-pointer flex-col items-center gap-1 rounded-md border border-dashed px-3 py-5 text-center transition-colors",
             dragOver
-              ? "border-sky-400 bg-sky-50"
-              : "border-gray-300 bg-gray-50 hover:border-gray-400",
+              ? "border-sky-400 bg-sky-400/15"
+              : "border-line-strong bg-canvas-raised hover:border-line-strong",
           )}
         >
-          <span className="text-xs font-medium text-gray-700">
+          <span className="text-xs font-medium text-ink-body">
             {node.config.csvFileName || "Drop a CSV here, or click to browse"}
           </span>
-          <span className="text-[10px] text-gray-400">
+          <span className="text-[10px] text-ink-faint">
             first row = column names · comma, semicolon, or tab delimited
           </span>
           <input
@@ -3009,11 +3009,11 @@ function DatasetNodeConfig({
         </div>
       </Field>
       {rows.length > 0 ? (
-        <div className="mb-4 rounded-md border border-gray-200 bg-white px-2.5 py-2 text-[11px] text-gray-600">
-          <span className="font-medium text-gray-800">
+        <div className="mb-4 rounded-md border border-line bg-surface px-2.5 py-2 text-[11px] text-ink-muted">
+          <span className="font-medium text-ink">
             {rows.length.toLocaleString()} rows · {columns.length} columns
           </span>
-          <span className="mt-0.5 block truncate text-gray-400">{columns.join(", ")}</span>
+          <span className="mt-0.5 block truncate text-ink-faint">{columns.join(", ")}</span>
         </div>
       ) : null}
       <Field label="Or paste CSV text">
@@ -3022,7 +3022,7 @@ function DatasetNodeConfig({
           onChange={(e) => onConfig({ csvText: e.target.value })}
           rows={5}
           placeholder={"mrn,ward,occupancy\n48-2210,ED,42"}
-          className="w-full resize-none rounded-md border border-gray-200 bg-gray-50 p-2.5 text-[11px] text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+          className="w-full resize-none rounded-md border border-line bg-canvas-raised p-2.5 text-[11px] text-ink focus:border-line-strong focus:outline-none focus:ring-2 focus:ring-line"
         />
       </Field>
     </>
@@ -3053,7 +3053,7 @@ function Slider({
         step={step}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="w-full accent-indigo-600"
+        className="w-full accent-indigo-400"
       />
     </Field>
   );
@@ -3130,7 +3130,7 @@ function LowCodeForm({
             value={node.config.sampleText ?? ""}
             onChange={(e) => onConfig({ sampleText: e.target.value })}
             rows={5}
-            className="w-full resize-none rounded-md border border-gray-200 bg-gray-50 p-2.5 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+            className="w-full resize-none rounded-md border border-line bg-canvas-raised p-2.5 text-xs text-ink focus:border-line-strong focus:outline-none focus:ring-2 focus:ring-line"
           />
         </Field>
       );
@@ -3154,7 +3154,7 @@ function LowCodeForm({
               value={node.config.payloadJson ?? ""}
               onChange={(e) => onConfig({ payloadJson: e.target.value })}
               rows={8}
-              className="w-full resize-none rounded-md border border-gray-200 bg-gray-50 p-2.5 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+              className="w-full resize-none rounded-md border border-line bg-canvas-raised p-2.5 text-xs text-ink focus:border-line-strong focus:outline-none focus:ring-2 focus:ring-line"
             />
           </Field>
           <button
@@ -3175,11 +3175,11 @@ function LowCodeForm({
                 setIngestBusy(false);
               }
             }}
-            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-xs hover:bg-gray-50"
+            className="w-full rounded-md border border-line-strong bg-surface px-3 py-2 text-xs hover:bg-surface-hover"
           >
             POST to /v1/ingest
           </button>
-          {ingestMsg ? <p className="mt-2 text-[10px] text-gray-500">{ingestMsg}</p> : null}
+          {ingestMsg ? <p className="mt-2 text-[10px] text-ink-muted">{ingestMsg}</p> : null}
         </>
       );
 
@@ -3215,10 +3215,10 @@ function LowCodeForm({
               value={node.config.recordsPath ?? ""}
               onChange={(e) => onConfig({ recordsPath: e.target.value })}
               placeholder="e.g. data.items — leave blank for top-level array"
-              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 font-mono text-[11px] text-gray-800 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+              className="w-full rounded-md border border-line bg-canvas-raised px-2.5 py-2 font-mono text-[11px] text-ink placeholder:text-ink-faint focus:border-line-strong focus:outline-none focus:ring-2 focus:ring-line"
             />
           </Field>
-          <label className="mb-2 flex items-center gap-2 text-xs text-gray-700">
+          <label className="mb-2 flex items-center gap-2 text-xs text-ink-body">
             <input
               type="checkbox"
               checked={node.config.transformTrim ?? true}
@@ -3226,7 +3226,7 @@ function LowCodeForm({
             />
             Trim whitespace on string fields
           </label>
-          <label className="mb-2 flex items-center gap-2 text-xs text-gray-700">
+          <label className="mb-2 flex items-center gap-2 text-xs text-ink-body">
             <input
               type="checkbox"
               checked={node.config.transformDropEmpty ?? true}
@@ -3234,7 +3234,7 @@ function LowCodeForm({
             />
             Drop empty / null fields
           </label>
-          <p className="text-[11px] leading-relaxed text-gray-400">
+          <p className="text-[11px] leading-relaxed text-ink-faint">
             Normalizes ingested data into clean records (the dbt / Spark /
             OpenRefine stage) for mapping.
           </p>
@@ -3256,7 +3256,7 @@ function LowCodeForm({
     case "validation":
       return (
         <>
-          <label className="mb-2 flex items-center gap-2 text-xs text-gray-700">
+          <label className="mb-2 flex items-center gap-2 text-xs text-ink-body">
             <input
               type="checkbox"
               checked={node.config.strictValidation ?? false}
@@ -3264,7 +3264,7 @@ function LowCodeForm({
             />
             Strict — fail the run if any instance is invalid
           </label>
-          <p className="text-[11px] leading-relaxed text-gray-400">
+          <p className="text-[11px] leading-relaxed text-ink-faint">
             Checks each mapped instance against the property schema defined for
             its object type in the Ontology Manager. Invalid rows are dropped
             (or, in strict mode, stop the run).
@@ -3291,7 +3291,7 @@ function LowCodeForm({
             step={0.01}
             onChange={(v) => onConfig({ marginMin: v })}
           />
-          <p className="text-[11px] leading-relaxed text-gray-400">
+          <p className="text-[11px] leading-relaxed text-ink-faint">
             Spans above the cosine threshold with sufficient margin resolve to a
             single SNOMED code; otherwise they flag for review.
           </p>
@@ -3314,7 +3314,7 @@ function LowCodeForm({
                 }
               }}
               placeholder="Add trigger…"
-              className="min-w-0 flex-1 rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+              className="min-w-0 flex-1 rounded-md border border-line bg-canvas-raised px-2.5 py-1.5 text-xs text-ink focus:border-line-strong focus:outline-none focus:ring-2 focus:ring-line"
             />
             <button
               type="button"
@@ -3333,7 +3333,7 @@ function LowCodeForm({
             {triggers.map((trig, i) => (
               <span
                 key={`${trig}-${i}`}
-                className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-gray-700"
+                className="inline-flex items-center gap-1 rounded-md border border-line bg-canvas-raised px-2 py-1 text-[11px] text-ink-body"
               >
                 {trig}
                 <button
@@ -3344,14 +3344,14 @@ function LowCodeForm({
                     })
                   }
                   aria-label={`Remove ${trig}`}
-                  className="text-gray-400 hover:text-gray-900"
+                  className="text-ink-faint hover:text-ink"
                 >
                   ×
                 </button>
               </span>
             ))}
             {triggers.length === 0 ? (
-              <span className="text-[11px] text-gray-400">No triggers yet.</span>
+              <span className="text-[11px] text-ink-faint">No triggers yet.</span>
             ) : null}
           </div>
         </Field>
@@ -3367,7 +3367,7 @@ function LowCodeForm({
               onChange={(e) =>
                 onConfig({ destination: e.target.value as Destination })
               }
-              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+              className="w-full rounded-md border border-line bg-canvas-raised px-2.5 py-2 text-xs text-ink focus:border-line-strong focus:outline-none focus:ring-2 focus:ring-line"
             >
               <option value="research">research</option>
               <option value="problem_list">problem_list</option>
@@ -3381,7 +3381,7 @@ function LowCodeForm({
             step={0.01}
             onChange={(v) => onConfig({ acceptThreshold: v })}
           />
-          <p className="text-[11px] leading-relaxed text-gray-400">
+          <p className="text-[11px] leading-relaxed text-ink-faint">
             Below the threshold a concept is flagged; unresolved or uncertain
             assertions escalate.
           </p>
@@ -3398,7 +3398,7 @@ function LowCodeForm({
                 targetSystem: e.target.value as NodeConfig["targetSystem"],
               })
             }
-            className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+            className="w-full rounded-md border border-line bg-canvas-raised px-2.5 py-2 text-xs text-ink focus:border-line-strong focus:outline-none focus:ring-2 focus:ring-line"
           >
             <option value="icd10">ICD-10</option>
             <option value="icdo">ICD-O</option>
@@ -3423,7 +3423,7 @@ function LowCodeForm({
                 onConfig({ ontologyEnv: e.target.value || undefined });
               }}
               disabled={saveEnvs.length === 0}
-              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10 disabled:text-gray-400"
+              className="w-full rounded-md border border-line bg-canvas-raised px-2.5 py-2 text-xs text-ink focus:border-line-strong focus:outline-none focus:ring-2 focus:ring-line disabled:text-ink-faint"
             >
               {saveEnvs.length === 0 ? (
                 <option value="">No entity environments — create one first</option>
@@ -3437,7 +3437,7 @@ function LowCodeForm({
             </select>
           </Field>
           {entityEnvironments.length === 0 && environments.length > 0 ? (
-            <p className="text-[11px] text-amber-700">
+            <p className="text-[11px] text-warn-ink">
               Only entity environments accept clinical findings. Create an entity
               environment in Ontology mode.
             </p>
@@ -3446,7 +3446,7 @@ function LowCodeForm({
             <select
               value={node.config.objectType ?? "ClinicalFinding"}
               onChange={(e) => onConfig({ objectType: e.target.value })}
-              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+              className="w-full rounded-md border border-line bg-canvas-raised px-2.5 py-2 text-xs text-ink focus:border-line-strong focus:outline-none focus:ring-2 focus:ring-line"
             >
               {(envObjectTypes.includes("ClinicalFinding")
                 ? envObjectTypes
@@ -3466,17 +3466,17 @@ function LowCodeForm({
                 onConfig({ patientIdentifierSource: e.target.value })
               }
               placeholder="e.g. P-001 or payload.patientId"
-              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+              className="w-full rounded-md border border-line bg-canvas-raised px-2.5 py-2 text-xs text-ink placeholder:text-ink-faint focus:border-line-strong focus:outline-none focus:ring-2 focus:ring-line"
             />
           </Field>
-          <p className="text-[11px] leading-relaxed text-gray-400">
+          <p className="text-[11px] leading-relaxed text-ink-faint">
             Matched on this identifier only — never on name. No identifier →
             saved unlinked.
           </p>
           {envSlug ? (
-            <p className="text-[10px] text-gray-400">
+            <p className="text-[10px] text-ink-faint">
               Writes real data to{" "}
-              <span className="font-medium text-gray-600">{envName}</span>
+              <span className="font-medium text-ink-muted">{envName}</span>
             </p>
           ) : null}
         </>
@@ -3495,7 +3495,7 @@ function LowCodeForm({
                 onConfig({ ontologyEnv: e.target.value || undefined });
               }}
               disabled={environments.length === 0}
-              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10 disabled:text-gray-400"
+              className="w-full rounded-md border border-line bg-canvas-raised px-2.5 py-2 text-xs text-ink focus:border-line-strong focus:outline-none focus:ring-2 focus:ring-line disabled:text-ink-faint"
             >
               {environments.length === 0 ? (
                 <option value="">No environments — sign in first</option>
@@ -3512,7 +3512,7 @@ function LowCodeForm({
             <select
               value={node.config.objectType ?? ""}
               onChange={(e) => onConfig({ objectType: e.target.value || undefined })}
-              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+              className="w-full rounded-md border border-line bg-canvas-raised px-2.5 py-2 text-xs text-ink focus:border-line-strong focus:outline-none focus:ring-2 focus:ring-line"
             >
               <option value="">All types</option>
               {envObjectTypes.map((name) => (
@@ -3528,7 +3528,7 @@ function LowCodeForm({
               value={node.config.ontologyWhere ?? ""}
               onChange={(e) => onConfig({ ontologyWhere: e.target.value })}
               placeholder="assertion:affirmed,subject:patient"
-              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 font-mono text-[11px] text-gray-800 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+              className="w-full rounded-md border border-line bg-canvas-raised px-2.5 py-2 font-mono text-[11px] text-ink placeholder:text-ink-faint focus:border-line-strong focus:outline-none focus:ring-2 focus:ring-line"
             />
           </Field>
           <Field label="Limit">
@@ -3540,10 +3540,10 @@ function LowCodeForm({
               onChange={(e) =>
                 onConfig({ ontologyLimit: Number(e.target.value) || 50 })
               }
-              className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+              className="w-full rounded-md border border-line bg-canvas-raised px-2.5 py-2 text-xs text-ink focus:border-line-strong focus:outline-none focus:ring-2 focus:ring-line"
             />
           </Field>
-          <p className="text-[11px] leading-relaxed text-gray-400">
+          <p className="text-[11px] leading-relaxed text-ink-faint">
             Reads instances from the ontology to feed downstream workflow nodes.
           </p>
         </>
@@ -3553,12 +3553,12 @@ function LowCodeForm({
     case "output":
       return (
         <div>
-          <span className="mb-2 block text-xs font-medium text-gray-700">
+          <span className="mb-2 block text-xs font-medium text-ink-body">
             Enriched result
           </span>
-          <p className="mb-3 text-[10px] leading-relaxed text-gray-500">
+          <p className="mb-3 text-[10px] leading-relaxed text-ink-muted">
             To persist findings, add a{" "}
-            <span className="font-medium text-gray-700">Save to ontology</span>{" "}
+            <span className="font-medium text-ink-body">Save to ontology</span>{" "}
             node between Decision and Output, then run the pipeline.
           </p>
 
@@ -3567,19 +3567,19 @@ function LowCodeForm({
               {results.map((r, i) => (
                 <div
                   key={i}
-                  className="rounded-md border border-gray-200 bg-gray-50 p-2.5"
+                  className="rounded-md border border-line bg-canvas-raised p-2.5"
                 >
                   <div className="mb-1 flex items-center justify-between gap-2">
-                    <code className="text-xs text-gray-900">
+                    <code className="text-xs text-ink">
                       {r.code}
                     </code>
                     <DecisionBadge decision={r.decision} />
                   </div>
-                  <div className="mb-1.5 text-[11px] text-gray-500">
+                  <div className="mb-1.5 text-[11px] text-ink-muted">
                     {r.display} · &ldquo;{r.span}&rdquo;
                   </div>
                   {r.translation ? (
-                    <div className="mb-1.5 text-[10px] text-gray-600">
+                    <div className="mb-1.5 text-[10px] text-ink-muted">
                       → {r.translation}
                     </div>
                   ) : null}
@@ -3592,7 +3592,7 @@ function LowCodeForm({
               ))}
             </div>
           ) : (
-            <p className="text-[11px] text-gray-400">
+            <p className="text-[11px] text-ink-faint">
               Press Run to populate the enriched output.
             </p>
           )}
@@ -3602,7 +3602,7 @@ function LowCodeForm({
     case "custom":
     default:
       return (
-        <p className="text-[11px] leading-relaxed text-gray-400">
+        <p className="text-[11px] leading-relaxed text-ink-faint">
           This node has no form fields. Switch to the Code tab to define its
           behavior.
         </p>

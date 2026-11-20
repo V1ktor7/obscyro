@@ -108,7 +108,7 @@ export function Text({ text }: { text: string }) {
 
 export function StepRow({ step, open, onToggle }: { step: AnalystStep; open: boolean; onToggle: () => void }) {
   return (
-    <li className={cn("rounded-md border", open ? "border-brand bg-white" : "border-line-soft bg-canvas-raised")}>
+    <li className={cn("rounded-md border", open ? "border-brand bg-surface" : "border-line-soft bg-canvas-raised")}>
       <button
         type="button"
         aria-expanded={open}

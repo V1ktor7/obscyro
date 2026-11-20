@@ -44,7 +44,7 @@ const SEV: Record<Severity, { dot: string; border: string; chip: string; label: 
   warn: {
     dot: "bg-warn",
     border: "border-l-warn",
-    chip: "bg-warn-soft text-[#8a5a12]",
+    chip: "bg-warn-soft text-warn-ink",
     label: "avertissement",
   },
   info: {
@@ -247,7 +247,7 @@ export default function ResponseView() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-white px-4 py-2">
+      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-surface px-4 py-2">
         <span className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">
           Response
         </span>
@@ -277,7 +277,7 @@ export default function ResponseView() {
 
       <div className="flex min-h-0 flex-1">
         {/* domaines */}
-        <aside className="flex w-[190px] shrink-0 flex-col overflow-y-auto border-r border-line bg-white">
+        <aside className="flex w-[190px] shrink-0 flex-col overflow-y-auto border-r border-line bg-surface">
           <div className="flex items-center gap-1 px-3 py-2">
             <p className="flex-1 text-[10px] font-medium uppercase tracking-wide text-ink-faint">
               Domaines
@@ -286,7 +286,7 @@ export default function ResponseView() {
               type="button"
               title="Nouveau domaine"
               onClick={() => setCreatingDomain(true)}
-              className="rounded p-0.5 text-ink-faint hover:bg-canvas-raised hover:text-brand"
+              className="rounded p-0.5 text-ink-faint hover:bg-surface-hover hover:text-brand"
             >
               <Plus className="h-3.5 w-3.5" />
             </button>
@@ -311,7 +311,7 @@ export default function ResponseView() {
                   "group flex items-center gap-1 border-l-[3px] pr-1.5",
                   domain === d.domain
                     ? "border-l-brand bg-brand-soft"
-                    : "border-l-transparent hover:bg-canvas-raised",
+                    : "border-l-transparent hover:bg-surface-hover",
                 )}
               >
                 <button
@@ -361,7 +361,7 @@ export default function ResponseView() {
                     "rounded border px-2 py-0.5 text-[11px]",
                     workflowId === w.id
                       ? "border-brand bg-brand-soft font-medium text-brand-deep"
-                      : "border-line bg-white text-ink-muted",
+                      : "border-line bg-surface text-ink-muted",
                   )}
                 >
                   {w.name}
@@ -384,7 +384,7 @@ export default function ResponseView() {
                 return (
                   <div
                     key={st.id}
-                    className="flex min-h-[240px] flex-col rounded-md border border-line bg-white"
+                    className="flex min-h-[240px] flex-col rounded-md border border-line bg-surface"
                   >
                     <div className="flex items-center gap-1.5 border-b border-line-soft px-2.5 py-1.5">
                       <span className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">
@@ -398,7 +398,7 @@ export default function ResponseView() {
                           ✓
                         </span>
                       ) : null}
-                      <span className="ml-auto rounded bg-[#f1f3f5] px-1.5 text-[10px] font-semibold text-ink-muted">
+                      <span className="ml-auto rounded bg-canvas-raised px-1.5 text-[10px] font-semibold text-ink-muted">
                         {cards.length}
                       </span>
                     </div>
@@ -422,7 +422,7 @@ export default function ResponseView() {
 
         {/* détail — seulement quand un signal est choisi, sinon le tableau étouffe */}
         {selected ? (
-          <aside className="w-[310px] shrink-0 overflow-y-auto border-l border-line bg-white">
+          <aside className="w-[310px] shrink-0 overflow-y-auto border-l border-line bg-surface">
             <Detail
               signal={selected}
               env={selectedEnv}
@@ -499,8 +499,8 @@ function NewDomainDialog({
   const label = "text-[10px] font-medium uppercase tracking-wide text-ink-faint";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/20 pt-[12vh]">
-      <div className="w-[380px] rounded-md border border-line bg-white shadow-lg">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 pt-[12vh]">
+      <div className="w-[380px] rounded-md border border-line bg-surface shadow-lg">
         <div className="border-b border-line-soft px-4 py-2.5">
           <p className="text-xs font-medium text-ink">New domain</p>
           <p className="mt-1 text-[10.5px] leading-snug text-ink-faint">
@@ -604,7 +604,7 @@ function Card({
       type="button"
       onClick={() => onPick(s.id)}
       className={cn(
-        "rounded border border-l-[3px] bg-white p-2 text-left",
+        "rounded border border-l-[3px] bg-surface p-2 text-left",
         sv.border,
         sel === s.id ? "border-brand bg-brand-soft" : "border-line hover:border-brand",
       )}
@@ -653,7 +653,7 @@ function Detail({
             {signal.signalTypeName}
           </span>
           {signal.originKind === "twin_alert" ? (
-            <span className="ml-auto rounded bg-[#f1f3f5] px-1.5 py-0.5 text-[9px] text-ink-muted">
+            <span className="ml-auto rounded bg-canvas-raised px-1.5 py-0.5 text-[9px] text-ink-muted">
               raised automatically
             </span>
           ) : null}
@@ -662,7 +662,7 @@ function Detail({
             onClick={onClose}
             title="Fermer"
             className={cn(
-              "shrink-0 rounded p-0.5 text-ink-faint hover:bg-canvas-raised hover:text-ink-body",
+              "shrink-0 rounded p-0.5 text-ink-faint hover:bg-surface-hover hover:text-ink-body",
               signal.originKind === "twin_alert" ? "" : "ml-auto",
             )}
           >
@@ -681,7 +681,7 @@ function Detail({
         {signal.subjectKind === "object_instance" && signal.subjectId ? (
           <Link
             href={unitHref(signal.subjectId, env)}
-            className="mt-2 inline-flex rounded border border-line bg-white px-2 py-1 text-[11px] font-semibold text-ink hover:border-brand hover:bg-brand-soft"
+            className="mt-2 inline-flex rounded border border-line bg-surface px-2 py-1 text-[11px] font-semibold text-ink hover:border-brand hover:bg-brand-soft"
           >
             Open unit
           </Link>
@@ -701,7 +701,7 @@ function Detail({
                   ? "bg-brand font-semibold text-white"
                   : i < idx
                     ? "bg-ok-soft text-ok-ink"
-                    : "bg-[#f1f3f5] text-ink-faint",
+                    : "bg-canvas-raised text-ink-faint",
               )}
             >
               {s.name}

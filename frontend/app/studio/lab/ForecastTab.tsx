@@ -150,7 +150,7 @@ export default function ForecastTab({
               id="fc-dataset"
               value={datasetId}
               onChange={(e) => setDatasetId(e.target.value)}
-              className="w-full rounded border border-[#d3d8de] px-2 py-1 text-xs"
+              className="w-full rounded border border-line px-2 py-1 text-xs"
             >
               <option value="">Choisir…</option>
               {datasets.map((d) => (
@@ -166,7 +166,7 @@ export default function ForecastTab({
               id="fc-time"
               value={timeColumn}
               onChange={(e) => setTimeColumn(e.target.value)}
-              className="w-full rounded border border-[#d3d8de] px-2 py-1 text-xs"
+              className="w-full rounded border border-line px-2 py-1 text-xs"
             >
               <option value="">Choisir…</option>
               {columns.map((c) => (
@@ -182,7 +182,7 @@ export default function ForecastTab({
               id="fc-target"
               value={target}
               onChange={(e) => setTarget(e.target.value)}
-              className="w-full rounded border border-[#d3d8de] px-2 py-1 text-xs"
+              className="w-full rounded border border-line px-2 py-1 text-xs"
             >
               <option value="">Choisir…</option>
               {columns
@@ -196,9 +196,9 @@ export default function ForecastTab({
           </Field>
 
           <Field label={`Explanatory series (${exog.length})`}>
-            <div className="max-h-40 overflow-y-auto rounded border border-[#d3d8de]">
+            <div className="max-h-40 overflow-y-auto rounded border border-line">
               {columns.filter((c) => c !== timeColumn && c !== target).length === 0 ? (
-                <p className="px-2 py-3 text-center text-[11px] text-[#8f99a8]">
+                <p className="px-2 py-3 text-center text-[11px] text-ink-faint">
                   No other columns.
                 </p>
               ) : (
@@ -207,7 +207,7 @@ export default function ForecastTab({
                   .map((c) => (
                     <label
                       key={c}
-                      className="flex cursor-pointer items-center gap-2 border-b border-[#eef1f4] px-2 py-1 last:border-b-0 hover:bg-[#f6f7f9]"
+                      className="flex cursor-pointer items-center gap-2 border-b border-line-faint px-2 py-1 last:border-b-0 hover:bg-surface-hover"
                     >
                       <input
                         type="checkbox"
@@ -219,13 +219,13 @@ export default function ForecastTab({
                           )
                         }
                       />
-                      <span className="truncate text-[11px] text-[#1c2127]">{c}</span>
+                      <span className="truncate text-[11px] text-ink">{c}</span>
                     </label>
                   ))
               )}
             </div>
             {exog.length > 0 ? (
-              <p className="mt-1 text-[11px] leading-relaxed text-[#935610]">
+              <p className="mt-1 text-[11px] leading-relaxed text-warn-ink">
                 The model can be scored, but not extended past the data: nobody knows
                 the future values of these columns.
               </p>
@@ -239,7 +239,7 @@ export default function ForecastTab({
               id="fc-estimator"
               value={estimator}
               onChange={(e) => setEstimator(e.target.value)}
-              className="w-full rounded border border-[#d3d8de] px-2 py-1 text-xs"
+              className="w-full rounded border border-line px-2 py-1 text-xs"
             >
               {estimators.map((e) => (
                 <option key={e.key} value={e.key}>
@@ -271,7 +271,7 @@ export default function ForecastTab({
               onChange={(e) => setHorizon(Number(e.target.value))}
               className="w-full"
             />
-            <p className="mt-1 text-[11px] leading-relaxed text-[#5f6b7c]">
+            <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
               Predicting tomorrow and predicting three weeks out are different
               problems. The model is trained directly for the horizon you choose, and the
               score belongs to that horizon.
@@ -286,14 +286,14 @@ export default function ForecastTab({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Admissions, 7 days out"
-              className="w-full rounded border border-[#d3d8de] px-2 py-1 text-xs"
+              className="w-full rounded border border-line px-2 py-1 text-xs"
             />
           </Field>
           <button
             type="button"
             onClick={() => void fit()}
             disabled={!ready || busy}
-            className="flex w-full items-center justify-center gap-2 rounded bg-[#2d72d2] px-3 py-2 text-xs font-medium text-white hover:bg-[#215db0] disabled:opacity-40"
+            className="flex w-full items-center justify-center gap-2 rounded bg-brand px-3 py-2 text-xs font-medium text-white hover:bg-brand-deep disabled:opacity-40"
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
             {busy ? "Scoring…" : "Score and train"}
@@ -306,17 +306,17 @@ export default function ForecastTab({
           <Result model={last} steps={steps} setSteps={setSteps} onProject={() => void project(last)} busy={busy} curve={curve} />
         ) : null}
 
-        <div className="rounded border border-[#d3d8de] bg-white">
-          <div className="border-b border-[#d3d8de] px-3 py-2 text-xs font-medium text-[#1c2127]">
+        <div className="rounded border border-line bg-surface">
+          <div className="border-b border-line px-3 py-2 text-xs font-medium text-ink">
             Trained forecasts
           </div>
           {models.length === 0 ? (
-            <p className="px-3 py-8 text-center text-[11px] text-[#8f99a8]">
+            <p className="px-3 py-8 text-center text-[11px] text-ink-faint">
               None yet. The panel on the left builds one.
             </p>
           ) : (
             <table className="w-full text-left text-[11px]">
-              <thead className="bg-[#f6f7f9] text-[#5f6b7c]">
+              <thead className="bg-canvas text-ink-muted">
                 <tr>
                   <th className="px-3 py-1.5 font-medium">Name</th>
                   <th className="px-3 py-1.5 font-medium">Series</th>
@@ -328,19 +328,19 @@ export default function ForecastTab({
                 {models.map((m) => (
                   <tr
                     key={m.id}
-                    className="cursor-pointer border-t border-[#eef1f4] hover:bg-[#f6f7f9]"
+                    className="cursor-pointer border-t border-line-faint hover:bg-surface-hover"
                     onClick={() => {
                       setLast(m);
                       setCurve(null);
                     }}
                   >
-                    <td className="px-3 py-1.5 text-[#1c2127]">{m.name}</td>
-                    <td className="px-3 py-1.5 text-[#5f6b7c]">{m.target}</td>
-                    <td className="px-3 py-1.5 tabular-nums text-[#5f6b7c]">{m.horizon}</td>
+                    <td className="px-3 py-1.5 text-ink">{m.name}</td>
+                    <td className="px-3 py-1.5 text-ink-muted">{m.target}</td>
+                    <td className="px-3 py-1.5 tabular-nums text-ink-muted">{m.horizon}</td>
                     <td
                       className={cn(
                         "px-3 py-1.5 tabular-nums",
-                        (m.metrics.mase ?? 9) >= 1 ? "text-[#c23030]" : "text-[#1c6e42]",
+                        (m.metrics.mase ?? 9) >= 1 ? "text-danger" : "text-ok-ink",
                       )}
                     >
                       {m.metrics.mase ?? "—"}
@@ -377,10 +377,10 @@ function Result({
   const min = Math.min(...(curve?.points.map((p) => p.value) ?? [0]), 0);
 
   return (
-    <div className="rounded border border-[#d3d8de] bg-white">
-      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[#d3d8de] px-3 py-2">
-        <span className="text-xs font-medium text-[#1c2127]">{model.name}</span>
-        <span className="text-[11px] text-[#5f6b7c]">
+    <div className="rounded border border-line bg-surface">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line px-3 py-2">
+        <span className="text-xs font-medium text-ink">{model.name}</span>
+        <span className="text-[11px] text-ink-muted">
           {model.estimator} · {model.timeLags} lags · horizon {model.horizon} ·{" "}
           {model.nTrain.toLocaleString("en-CA")} points
         </span>
@@ -389,53 +389,53 @@ function Result({
       {model.warnings.map((w) => (
         <div
           key={w}
-          className="flex items-start gap-2 border-b border-[#f0d9b5] bg-[#fdf6ec] px-3 py-2 text-[11px] leading-relaxed text-[#935610]"
+          className="flex items-start gap-2 border-b border-warn-line bg-warn-soft px-3 py-2 text-[11px] leading-relaxed text-warn-ink"
         >
           <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>{w}</span>
         </div>
       ))}
 
-      <div className="grid gap-px bg-[#eef1f4] sm:grid-cols-3">
-        <div className="bg-white p-3">
-          <p className="text-[10px] uppercase tracking-wide text-[#8f99a8]">MASE</p>
+      <div className="grid gap-px bg-canvas-raised sm:grid-cols-3">
+        <div className="bg-surface p-3">
+          <p className="text-[10px] uppercase tracking-wide text-ink-faint">MASE</p>
           <p
             className={cn(
               "mt-1 text-2xl font-semibold tabular-nums",
-              beatsNaive ? "text-[#1c6e42]" : "text-[#c23030]",
+              beatsNaive ? "text-ok-ink" : "text-danger",
             )}
           >
             {Number.isFinite(mase) ? mase : "—"}
           </p>
-          <p className="mt-1 text-[10px] leading-relaxed text-[#8f99a8]">
+          <p className="mt-1 text-[10px] leading-relaxed text-ink-faint">
             The error divided by that of repeating the last known value. Below 1 the
             model is worth something; above it, it is not.
           </p>
         </div>
-        <div className="bg-white p-3">
-          <p className="text-[10px] uppercase tracking-wide text-[#8f99a8]">MAE</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums text-[#1c2127]">
+        <div className="bg-surface p-3">
+          <p className="text-[10px] uppercase tracking-wide text-ink-faint">MAE</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-ink">
             {model.metrics.mae ?? "—"}
           </p>
-          <p className="mt-1 text-[10px] text-[#8f99a8]">
+          <p className="mt-1 text-[10px] text-ink-faint">
             naive: {model.metrics.naive_mae ?? "—"}
           </p>
         </div>
-        <div className="bg-white p-3">
-          <p className="text-[10px] uppercase tracking-wide text-[#8f99a8]">RMSE</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums text-[#1c2127]">
+        <div className="bg-surface p-3">
+          <p className="text-[10px] uppercase tracking-wide text-ink-faint">RMSE</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-ink">
             {model.metrics.rmse ?? "—"}
           </p>
         </div>
       </div>
 
       {model.folds.length > 0 ? (
-        <div className="border-t border-[#d3d8de]">
-          <p className="px-3 pt-2 text-[10px] uppercase tracking-wide text-[#8f99a8]">
+        <div className="border-t border-line">
+          <p className="px-3 pt-2 text-[10px] uppercase tracking-wide text-ink-faint">
             Every scoring origin
           </p>
           <table className="w-full text-left text-[11px]">
-            <thead className="text-[#8f99a8]">
+            <thead className="text-ink-faint">
               <tr>
                 <th className="px-3 py-1 font-normal">Origin</th>
                 <th className="px-3 py-1 font-normal">Trained on</th>
@@ -445,14 +445,14 @@ function Result({
             </thead>
             <tbody>
               {model.folds.map((f) => (
-                <tr key={f.origin} className="border-t border-[#eef1f4]">
-                  <td className="px-3 py-1 text-[#5f6b7c]">{f.origin.slice(0, 10)}</td>
-                  <td className="px-3 py-1 tabular-nums text-[#5f6b7c]">{f.nTrain}</td>
-                  <td className="px-3 py-1 tabular-nums text-[#5f6b7c]">{f.nTest}</td>
+                <tr key={f.origin} className="border-t border-line-faint">
+                  <td className="px-3 py-1 text-ink-muted">{f.origin.slice(0, 10)}</td>
+                  <td className="px-3 py-1 tabular-nums text-ink-muted">{f.nTrain}</td>
+                  <td className="px-3 py-1 tabular-nums text-ink-muted">{f.nTest}</td>
                   <td
                     className={cn(
                       "px-3 py-1 tabular-nums",
-                      f.mase >= 1 ? "text-[#c23030]" : "text-[#1c6e42]",
+                      f.mase >= 1 ? "text-danger" : "text-ok-ink",
                     )}
                   >
                     {f.mase}
@@ -464,30 +464,30 @@ function Result({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-end gap-3 border-t border-[#d3d8de] px-3 py-2">
+      <div className="flex flex-wrap items-end gap-3 border-t border-line px-3 py-2">
         <label className="block">
-          <span className="mb-1 block text-[11px] text-[#5f6b7c]">Extend by</span>
+          <span className="mb-1 block text-[11px] text-ink-muted">Extend by</span>
           <input
             type="number"
             min={1}
             max={365}
             value={steps}
             onChange={(e) => setSteps(Math.max(1, Math.min(365, Number(e.target.value) || 14)))}
-            className="w-20 rounded border border-[#d3d8de] px-2 py-1 text-xs tabular-nums"
+            className="w-20 rounded border border-line px-2 py-1 text-xs tabular-nums"
           />
         </label>
         <button
           type="button"
           onClick={onProject}
           disabled={busy || model.exog.length > 0}
-          className="rounded border border-[#d3d8de] px-3 py-1.5 text-xs text-[#1c2127] hover:bg-[#f6f7f9] disabled:opacity-40"
+          className="rounded border border-line px-3 py-1.5 text-xs text-ink hover:bg-surface-hover disabled:opacity-40"
         >
           Extend the series
         </button>
       </div>
 
       {curve ? (
-        <div className="border-t border-[#d3d8de] p-3">
+        <div className="border-t border-line p-3">
           <svg viewBox="0 0 600 120" className="h-auto w-full" role="img" aria-label="Forecast">
             <polyline
               points={curve.points
@@ -498,11 +498,11 @@ function Result({
                 })
                 .join(" ")}
               fill="none"
-              stroke="#2d72d2"
+              stroke="#4589ff"
               strokeWidth={1.6}
             />
           </svg>
-          <p className="mt-2 text-[10px] leading-relaxed text-[#935610]">{curve.note}</p>
+          <p className="mt-2 text-[10px] leading-relaxed text-warn-ink">{curve.note}</p>
         </div>
       ) : null}
     </div>
@@ -511,8 +511,8 @@ function Result({
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded border border-[#d3d8de] bg-white">
-      <div className="border-b border-[#d3d8de] px-3 py-2 text-xs font-medium text-[#1c2127]">
+    <section className="rounded border border-line bg-surface">
+      <div className="border-b border-line px-3 py-2 text-xs font-medium text-ink">
         {title}
       </div>
       <div className="flex flex-col gap-3 p-3">{children}</div>
@@ -532,11 +532,11 @@ function Field({
   return (
     <div className="block">
       {htmlFor ? (
-        <label htmlFor={htmlFor} className="mb-1 block text-[11px] text-[#5f6b7c]">
+        <label htmlFor={htmlFor} className="mb-1 block text-[11px] text-ink-muted">
           {label}
         </label>
       ) : (
-        <p className="mb-1 text-[11px] text-[#5f6b7c]">{label}</p>
+        <p className="mb-1 text-[11px] text-ink-muted">{label}</p>
       )}
       {children}
     </div>

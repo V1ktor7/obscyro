@@ -56,7 +56,7 @@ export default function EventPreview({ snapshot, event, onEdit }: { snapshot: Si
   const colour = (key: string) => TINTS[Math.max(0, drawn.findIndex((it) => it.key === key)) % TINTS.length]![1];
 
   return (
-    <section className="rounded-md border border-line bg-white p-4">
+    <section className="rounded-md border border-line bg-surface p-4">
       <div className="mb-2 flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold text-ink">{event.name}</h2>

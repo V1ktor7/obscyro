@@ -15,8 +15,8 @@ import type {
 } from "./source-schema";
 
 const inputCls =
-  "w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10";
-const labelCls = "mb-1 block text-xs font-medium text-gray-700";
+  "w-full rounded-md border border-line bg-canvas-raised px-2.5 py-2 text-xs text-ink focus:border-line-strong focus:outline-none focus:ring-2 focus:ring-line";
+const labelCls = "mb-1 block text-xs font-medium text-ink-body";
 
 const METHODS: HttpMethod[] = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 const AUTH_TYPES: { value: AuthType; label: string; disabled?: boolean }[] = [
@@ -46,11 +46,11 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <details open={defaultOpen} className="mb-3 rounded-md border border-gray-200">
-      <summary className="cursor-pointer select-none px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+    <details open={defaultOpen} className="mb-3 rounded-md border border-line">
+      <summary className="cursor-pointer select-none px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
         {title}
       </summary>
-      <div className="border-t border-gray-100 p-2.5">{children}</div>
+      <div className="border-t border-line-soft p-2.5">{children}</div>
     </details>
   );
 }
@@ -65,12 +65,12 @@ function Toggle({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="mb-2 flex items-center gap-2 text-xs text-gray-700">
+    <label className="mb-2 flex items-center gap-2 text-xs text-ink-body">
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="h-3.5 w-3.5 accent-gray-900"
+        className="h-3.5 w-3.5 accent-brand"
       />
       {label}
     </label>
@@ -106,7 +106,7 @@ function KeyValueRows({
             type="button"
             onClick={() => onChange(rows.filter((_, idx) => idx !== i))}
             aria-label="Remove row"
-            className="shrink-0 rounded-md border border-gray-300 px-2 text-gray-500 hover:bg-gray-50"
+            className="shrink-0 rounded-md border border-line-strong px-2 text-ink-muted hover:bg-surface-hover"
           >
             ×
           </button>
@@ -115,7 +115,7 @@ function KeyValueRows({
       <button
         type="button"
         onClick={() => onChange([...rows, { name: "", value: "" }])}
-        className="mt-1 self-start rounded-md border border-gray-300 bg-white px-2.5 py-1 text-[11px] text-gray-600 hover:bg-gray-50"
+        className="mt-1 self-start rounded-md border border-line-strong bg-surface px-2.5 py-1 text-[11px] text-ink-muted hover:bg-surface-hover"
       >
         + Add
       </button>
@@ -256,7 +256,7 @@ export default function SourceNodeForm({
             className={inputCls}
           />
         )}
-        <p className="mt-2 text-[10px] leading-relaxed text-gray-400">
+        <p className="mt-2 text-[10px] leading-relaxed text-ink-faint">
           Secrets are sent only at request time to the server-side egress and are
           never persisted in the graph.
         </p>
@@ -542,14 +542,14 @@ export default function SourceNodeForm({
         {busy ? "Fetching…" : "Test fetch"}
       </button>
 
-      {error && <p className="mt-2 text-[11px] text-rose-600">{error}</p>}
+      {error && <p className="mt-2 text-[11px] text-danger">{error}</p>}
       {result && (
         <div className="mt-2">
-          <p className="text-[11px] text-gray-500">
+          <p className="text-[11px] text-ink-muted">
             {result.status} {result.statusText} · {result.pages} page
             {result.pages === 1 ? "" : "s"}
           </p>
-          <pre className="mt-1 max-h-48 overflow-auto rounded-md border border-gray-200 bg-gray-50 p-2 font-mono text-[10px] text-gray-700">
+          <pre className="mt-1 max-h-48 overflow-auto rounded-md border border-line bg-canvas-raised p-2 font-mono text-[10px] text-ink-body">
             {preview}
           </pre>
         </div>

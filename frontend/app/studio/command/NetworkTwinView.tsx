@@ -126,12 +126,12 @@ const MONTREAL: [number, number] = [-73.5673, 45.5017];
  * without relying on colour alone.
  */
 const LAYER_STYLES: { color: string; width: number; dash?: number[] }[] = [
-  { color: "#2d72d2", width: 3 },
-  { color: "#d9822b", width: 2.5, dash: [1.5, 1.5] },
-  { color: "#5b4a86", width: 1.8, dash: [0.8, 2.2] },
-  { color: "#1d9e75", width: 2.2, dash: [3, 1.5] },
-  { color: "#c23030", width: 2, dash: [2, 2] },
-  { color: "#8a94a0", width: 1.6, dash: [1, 3] },
+  { color: "#4589ff", width: 3 },
+  { color: "#f1c21b", width: 2.5, dash: [1.5, 1.5] },
+  { color: "#a56eff", width: 1.8, dash: [0.8, 2.2] },
+  { color: "#42be65", width: 2.2, dash: [3, 1.5] },
+  { color: "#fa4d56", width: 2, dash: [2, 2] },
+  { color: "#a8a8a8", width: 1.6, dash: [1, 3] },
 ];
 
 function stylesKey(env: string): string {
@@ -959,9 +959,9 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         paint: {
           "text-color": ["get", "couleur"],
           "text-opacity": ["case", ["get", "dimmed"], 0.25, 1],
-          // On imagery the ground is dark, so the halo that makes a label
-          // legible has to invert with it.
-          "text-halo-color": styleMode === "satellite" ? "#0b0f14" : "#ffffff",
+          // The halo is what makes a label legible, and it takes the colour
+          // of the ground under it: both basemaps are dark.
+          "text-halo-color": styleMode === "satellite" ? "#0b0f14" : "#161616",
           "text-halo-width": 1.6,
         },
       });
@@ -981,7 +981,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         paint: {
           "circle-radius": ["+", ["get", "r"], ["get", "queue"]],
           "circle-color": "rgba(0,0,0,0)",
-          "circle-stroke-color": "#c23030",
+          "circle-stroke-color": "#fa4d56",
           "circle-stroke-width": 1.2,
           "circle-stroke-opacity": 0.45,
         },
@@ -996,7 +996,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
           "circle-radius": ["get", "r"],
           "circle-color": ["get", "colour"],
           "circle-opacity": 0.9,
-          "circle-stroke-color": "#ffffff",
+          "circle-stroke-color": "#161616",
           "circle-stroke-width": 0.8,
         },
       });
@@ -1010,7 +1010,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         type: "fill",
         source: DRAW_SRC,
         filter: ["==", ["geometry-type"], "Polygon"],
-        paint: { "fill-color": "#2d72d2", "fill-opacity": 0.14 },
+        paint: { "fill-color": "#4589ff", "fill-opacity": 0.14 },
       });
     }
     if (!map.getLayer(DRAW_LINE)) {
@@ -1020,7 +1020,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         source: DRAW_SRC,
         filter: ["!=", ["geometry-type"], "Point"],
         paint: {
-          "line-color": "#2d72d2",
+          "line-color": "#4589ff",
           "line-width": 2,
           "line-dasharray": [2, 1.5],
         },
@@ -1034,8 +1034,8 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         filter: ["==", ["geometry-type"], "Point"],
         paint: {
           "circle-radius": 4,
-          "circle-color": "#ffffff",
-          "circle-stroke-color": "#2d72d2",
+          "circle-color": "#161616",
+          "circle-stroke-color": "#4589ff",
           "circle-stroke-width": 2,
         },
       });
@@ -1179,7 +1179,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         const el = document.createElement("div");
         const sev = site.worstAlertSeverity;
         const ring =
-          sev === "critical" ? "#e11d48" : sev === "warn" ? "#d97706" : "#059669";
+          sev === "critical" ? "#fa4d56" : sev === "warn" ? "#f1c21b" : "#42be65";
         // A 38px white disc with the name always above it works for a dozen
         // sites and collapses into a wall of overlapping labels at 190. Three
         // changes, each carrying one fact instead of stacking them:
@@ -1216,7 +1216,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         el.innerHTML = `
           <div style="position:relative;display:flex;flex-direction:column;align-items:center;">
             <div class="site-dot" style="width:${size}px;height:${size}px;border-radius:${sensor ? "2px" : "50%"};background:${fill};opacity:.85;border:${alerted ? `2px solid ${ring}` : "1px solid rgba(255,255,255,.9)"};box-shadow:0 1px 3px rgba(0,0,0,.3);"></div>
-            <div class="site-name" style="display:none;position:absolute;bottom:${size + 4}px;font-size:11px;font-weight:600;color:#1c2127;background:rgba(255,255,255,.94);padding:1px 6px;border-radius:4px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.2);">${site.name}${cap ? ` · ${cap}` : ""}${shown !== null ? ` · ${formatValue(shown, badgeUnit)}` : ""}</div>
+            <div class="site-name" style="display:none;position:absolute;bottom:${size + 4}px;font-size:11px;font-weight:600;color:#f4f4f4;background:rgba(38,38,38,.96);padding:1px 6px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.5);">${site.name}${cap ? ` · ${cap}` : ""}${shown !== null ? ` · ${formatValue(shown, badgeUnit)}` : ""}</div>
           </div>`;
         const nameEl = el.querySelector<HTMLElement>(".site-name");
         const showName = (on: boolean) => {
@@ -1477,8 +1477,8 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
 
   if (!hasKey) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-white">
-        <p className="max-w-sm text-center text-sm text-gray-500">
+      <div className="flex flex-1 items-center justify-center bg-surface">
+        <p className="max-w-sm text-center text-sm text-ink-muted">
           Sign in and create an API key to see the network twin.
         </p>
       </div>
@@ -1486,20 +1486,20 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   }
 
   return (
-    <div className="relative min-h-0 flex-1 overflow-hidden bg-[#f6f7f9]">
+    <div className="relative min-h-0 flex-1 overflow-hidden bg-canvas">
       {/* The map is the page. Everything else floats on it: the layer above
           lets clicks through to the map, each panel takes them back. */}
       <div className="absolute inset-0">
         {!MAPBOX_TOKEN ? (
             <div className="flex h-full items-center justify-center p-6">
-              <div className="max-w-md rounded-md border border-[#d3d8de] bg-white p-5 text-sm text-[#404854]">
-                <p className="mb-2 font-semibold text-[#1c2127]">Mapbox token missing</p>
+              <div className="max-w-md rounded-md border border-line bg-surface p-5 text-sm text-ink-body">
+                <p className="mb-2 font-semibold text-ink">Mapbox token missing</p>
                 <p className="mb-2 text-xs leading-relaxed">
-                  Add <code className="rounded bg-[#f6f7f9] px-1">NEXT_PUBLIC_MAPBOX_TOKEN</code>{" "}
-                  to <code className="rounded bg-[#f6f7f9] px-1">frontend/.env.local</code> and to
+                  Add <code className="rounded bg-canvas px-1">NEXT_PUBLIC_MAPBOX_TOKEN</code>{" "}
+                  to <code className="rounded bg-canvas px-1">frontend/.env.local</code> and to
                   the Vercel project environment variables, then restart / redeploy.
                 </p>
-                <p className="text-xs text-[#8f99a8]">
+                <p className="text-xs text-ink-faint">
                   Create a public token at mapbox.com → Access tokens (default public scopes).
                 </p>
               </div>
@@ -1513,28 +1513,28 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
 
       <div className="pointer-events-none absolute inset-0 flex flex-col gap-2 p-3">
         <div className={cn(OVERLAY_BAR, "flex shrink-0 flex-wrap items-center gap-2 px-3 py-2")}>
-        <span className="flex h-6 w-6 items-center justify-center rounded bg-[#e7f2fd] text-[#2d72d2]">
+        <span className="flex h-6 w-6 items-center justify-center rounded bg-brand-soft text-brand">
           <Globe2 className="h-3.5 w-3.5" />
         </span>
-        <span className="text-[13px] font-semibold text-[#1c2127]">Live twin · network</span>
-        <span className="rounded border border-[#d3d8de] px-2 py-0.5 text-[11px] text-[#404854]">
+        <span className="text-[13px] font-semibold text-ink">Live twin · network</span>
+        <span className="rounded border border-line px-2 py-0.5 text-[11px] text-ink-body">
           {env ?? "no environment"}
         </span>
         {network ? (
-          <span className="flex items-center gap-1.5 rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          <span className="flex items-center gap-1.5 rounded bg-ok-soft px-2 py-0.5 text-[11px] font-medium text-ok-ink">
+            <span className="h-1.5 w-1.5 rounded-full bg-ok" />
             live · {hiddenIds.size > 0 ? `${network.sites.filter((s) => !isSiteHidden(s, hiddenIds)).length} of ` : ""}
             {network.sites.length} site{network.sites.length === 1 ? "" : "s"}
           </span>
         ) : null}
         {missingCoords > 0 ? (
-          <span className="rounded bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">
+          <span className="rounded bg-warn-soft px-2 py-0.5 text-[11px] text-warn-ink">
             {missingCoords} site{missingCoords === 1 ? "" : "s"} without coordinates — set
             latitude/longitude in Manager
           </span>
         ) : null}
         {placing ? (
-          <span className="flex items-center gap-1.5 rounded bg-[#e7f2fd] px-2 py-0.5 text-[11px] font-medium text-[#215db0]">
+          <span className="flex items-center gap-1.5 rounded bg-brand-soft px-2 py-0.5 text-[11px] font-medium text-brand-deep">
             <MapPin className="h-3 w-3" />
             {placing.mode === "add"
               ? "click the map to place the new site"
@@ -1545,7 +1545,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
           </span>
         ) : null}
         {drawing ? (
-          <span className="flex items-center gap-1.5 rounded bg-[#e7f2fd] px-2 py-0.5 text-[11px] font-medium text-[#215db0]">
+          <span className="flex items-center gap-1.5 rounded bg-brand-soft px-2 py-0.5 text-[11px] font-medium text-brand-deep">
             <Spline className="h-3 w-3" />
             {drawing.fromId === null
               ? "click the site the flow starts from"
@@ -1572,7 +1572,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         <button
           type="button"
           onClick={() => void load()}
-          className="flex items-center gap-1 rounded border border-[#d3d8de] bg-white px-2 py-1 text-[11px] text-[#404854] hover:border-[#2d72d2]"
+          className="flex items-center gap-1 rounded border border-line bg-surface px-2 py-1 text-[11px] text-ink-body hover:border-brand"
         >
           {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
           Refresh
@@ -1584,8 +1584,8 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
           className={cn(
             "flex items-center gap-1 rounded px-2.5 py-1.5 text-xs font-medium",
             placing?.mode === "add"
-              ? "bg-[#e7f2fd] text-[#215db0]"
-              : "bg-[#2d72d2] text-white hover:bg-[#215db0] disabled:bg-[#c5cbd3]",
+              ? "bg-brand-soft text-brand-deep"
+              : "bg-brand text-white hover:bg-brand-deep disabled:bg-ink-ghost",
           )}
         >
           <Plus className="h-3.5 w-3.5" />
@@ -1606,8 +1606,8 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
           className={cn(
             "flex items-center gap-1 rounded px-2.5 py-1.5 text-xs font-medium",
             drawing
-              ? "bg-[#e7f2fd] text-[#215db0]"
-              : "border border-[#d3d8de] bg-white text-[#404854] hover:border-[#2d72d2] disabled:text-[#c5cbd3]",
+              ? "bg-brand-soft text-brand-deep"
+              : "border border-line bg-surface text-ink-body hover:border-brand disabled:text-ink-ghost",
           )}
         >
           <Spline className="h-3.5 w-3.5" />
@@ -1642,7 +1642,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
             "flex items-center gap-1 rounded px-2.5 py-1.5 text-xs font-medium",
             drawArea
               ? "bg-brand-soft text-brand-deep"
-              : "border border-line bg-white text-ink-body hover:border-brand disabled:text-ink-ghost",
+              : "border border-line bg-surface text-ink-body hover:border-brand disabled:text-ink-ghost",
           )}
         >
           <Hexagon className="h-3.5 w-3.5" />
@@ -1653,7 +1653,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
           disabled={!env || !MAPBOX_TOKEN}
           onClick={() => setShowCoverage(true)}
           title="Overlaps between areas, and sites covered by none"
-          className="flex items-center gap-1 rounded border border-line bg-white px-2.5 py-1.5 text-xs font-medium text-ink-body hover:border-brand disabled:text-ink-ghost"
+          className="flex items-center gap-1 rounded border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink-body hover:border-brand disabled:text-ink-ghost"
         >
           <Shapes className="h-3.5 w-3.5" />
           Coverage
@@ -1666,7 +1666,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
         </div>
 
         {error ? (
-        <div className="pointer-events-auto flex shrink-0 items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-[11px] text-rose-700 shadow-sm">
+        <div className="pointer-events-auto flex shrink-0 items-center gap-2 rounded-lg border border-danger-line bg-danger-soft px-3 py-1.5 text-[11px] text-danger-ink shadow-sm">
           <span className="min-w-0 flex-1 truncate">{error}</span>
           <button type="button" onClick={() => setError(null)} aria-label="Dismiss error">
             <X className="h-3 w-3" />
@@ -1681,7 +1681,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
             onClick={() => setRailOpen(true)}
             aria-label="Show the panel"
             title="Show layers, saved views and the explorer"
-            className={cn(OVERLAY_BAR, "flex shrink-0 items-center gap-2 px-3 py-2 text-[12px] font-semibold text-ink hover:text-[#2d72d2]")}
+            className={cn(OVERLAY_BAR, "flex shrink-0 items-center gap-2 px-3 py-2 text-[12px] font-semibold text-ink hover:text-brand")}
           >
             <PanelLeftOpen className="h-4 w-4" />
             Explorer · layers · views
@@ -1699,7 +1699,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
           {/* Tabs rather than three stacked sections: each one gets the whole
               panel height instead of a share of it, and the explorer is a tree
               of 241 rows that a 42% slice made unusable. */}
-          <div className="flex shrink-0 items-center gap-0.5 border-b border-[#e5e8eb] px-1 py-1">
+          <div className="flex shrink-0 items-center gap-0.5 border-b border-line-soft px-1 py-1">
             {/* The tabs scroll and the close button does not. Laid out as one
                 row they shared the rail's 288px, and the fifth tab pushed the
                 button off its edge — a control that leaves the screen when a
@@ -1721,8 +1721,8 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                 className={cn(
                   "shrink-0 rounded px-2 py-1 text-[11px]",
                   panelTab === id
-                    ? "bg-[#e7f2fd] font-medium text-[#215db0]"
-                    : "text-[#5f6b7c] hover:bg-[#f6f7f9]",
+                    ? "bg-brand-soft font-medium text-brand-deep"
+                    : "text-ink-muted hover:bg-surface-hover",
                 )}
               >
                 {label}
@@ -1734,7 +1734,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               onClick={() => setRailOpen(false)}
               aria-label="Hide the panel"
               title="Hide the panel"
-              className="shrink-0 rounded p-1 text-[#8f99a8] hover:bg-[#f6f7f9] hover:text-[#1c2127]"
+              className="shrink-0 rounded p-1 text-ink-faint hover:bg-surface-hover hover:text-ink"
             >
               <PanelLeftClose className="h-4 w-4" />
             </button>
@@ -1771,13 +1771,13 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                   title={`${linkType} · ${count} link${count === 1 ? "" : "s"}`}
                   onClick={() => setLayers((cur) => ({ ...cur, [linkType]: !on }))}
                   className={cn(
-                    "flex items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-canvas",
+                    "flex items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-surface-hover",
                     on ? "text-ink" : "text-ink-faint",
                   )}
                 >
                   <span
                     className="h-[3px] w-4 shrink-0 rounded"
-                    style={{ background: on ? style.color : "#d3d8de" }}
+                    style={{ background: on ? style.color : "#393939" }}
                   />
                   <span className="min-w-0 flex-1 truncate">{linkType}</span>
                   <span className="shrink-0 text-[10px] tabular-nums text-ink-faint">{count}</span>
@@ -1803,7 +1803,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                 aria-label="Colour boundaries by"
                 value={choropleth}
                 onChange={(e) => setChoropleth(e.target.value)}
-                className="mx-2 w-[calc(100%-1rem)] rounded border border-[#d3d8de] px-2 py-1 text-xs"
+                className="mx-2 w-[calc(100%-1rem)] rounded border border-line px-2 py-1 text-xs"
               >
                 <option value="">None</option>
                 {choroplethOptions.map((o) => (
@@ -1831,14 +1831,14 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                   {/* A boundary with no value keeps its own tint. Counting them
                       is what stops the map reading as complete when it is not. */}
                   {choroplethLegend.missing > 0 ? (
-                    <p className="pt-1 text-[10px] leading-snug text-[#935610]">
+                    <p className="pt-1 text-[10px] leading-snug text-warn-ink">
                       {choroplethLegend.missing} boundar
                       {choroplethLegend.missing > 1 ? "ies carry" : "y carries"} no value and
                       keep{choroplethLegend.missing > 1 ? "" : "s"} its own tint.
                     </p>
                   ) : null}
                   {waveIntensity ? (
-                    <p className="pt-1 text-[10px] leading-snug text-[#935610]">
+                    <p className="pt-1 text-[10px] leading-snug text-warn-ink">
                       A run is playing, and it owns the fill. The choropleth returns when the
                       replay is cleared.
                     </p>
@@ -1861,7 +1861,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
             <select
               value={badgeMetric}
               onChange={(e) => setBadgeMetric(e.target.value)}
-              className="mt-1.5 w-full rounded border border-line bg-white px-2 py-1.5 text-[11.5px] text-ink focus:border-brand focus:outline-none"
+              className="mt-1.5 w-full rounded border border-line bg-surface px-2 py-1.5 text-[11.5px] text-ink focus:border-brand focus:outline-none"
             >
               {twinMetrics.length === 0 ? (
                 <option value="occupancy">Occupancy</option>
@@ -1892,7 +1892,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               because capacity is not a question a sensor has an answer to.
             </p>
           </div>
-          <p className="px-2 pt-3 text-[10px] leading-relaxed text-[#8f99a8]">
+          <p className="px-2 pt-3 text-[10px] leading-relaxed text-ink-faint">
             node ring = alert severity · badge = {badgeLabel.toLowerCase()} · arcs = flows between
             sites
           </p>
@@ -1901,11 +1901,11 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
 
           {panelTab === "views" ? (
           <>
-          <p className="px-2 pb-1 pt-1 text-[10px] font-medium uppercase tracking-[0.12em] text-[#8f99a8]">
+          <p className="px-2 pb-1 pt-1 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-faint">
             Saved views
           </p>
           {savedViews.length === 0 ? (
-            <p className="px-2 py-1 text-[10.5px] text-[#8f99a8]">
+            <p className="px-2 py-1 text-[10.5px] text-ink-faint">
               none yet — frame the map, then save
             </p>
           ) : (
@@ -1914,9 +1914,9 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                 key={v.name}
                 type="button"
                 onClick={() => applyView(v)}
-                className="flex items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-[#404854] hover:bg-[#f6f7f9]"
+                className="flex items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-ink-body hover:bg-surface-hover"
               >
-                <Eye className="h-3 w-3 shrink-0 text-[#8f99a8]" />
+                <Eye className="h-3 w-3 shrink-0 text-ink-faint" />
                 <span className="truncate">{v.name}</span>
               </button>
             ))
@@ -1924,7 +1924,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
           <button
             type="button"
             onClick={saveCurrentView}
-            className="mt-1 flex items-center gap-1.5 rounded border border-dashed border-[#c5cbd3] px-2 py-1 text-[11px] text-[#5f6b7c] hover:border-[#2d72d2] hover:text-[#2d72d2]"
+            className="mt-1 flex items-center gap-1.5 rounded border border-dashed border-line-strong px-2 py-1 text-[11px] text-ink-muted hover:border-brand hover:text-brand"
           >
             <Save className="h-3 w-3" />
             save current view
@@ -2012,20 +2012,20 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
 
           {/* The dialogs a click on the map opens, over the middle of it. */}
                 {pendingPos ? (
-                <div className="pointer-events-auto absolute left-1/2 top-6 z-20 w-72 -translate-x-1/2 rounded-md border border-[#d3d8de] bg-white p-3 shadow-lg">
-                  <p className="mb-2 text-xs font-semibold text-[#1c2127]">New site</p>
+                <div className="pointer-events-auto absolute left-1/2 top-6 z-20 w-72 -translate-x-1/2 rounded-md border border-line bg-surface p-3 shadow-lg">
+                  <p className="mb-2 text-xs font-semibold text-ink">New site</p>
                   <input
                     value={siteName}
                     onChange={(e) => setSiteName(e.target.value)}
                     placeholder="e.g. Hôpital Nord"
                     autoFocus
-                    className="mb-2 w-full rounded border border-[#d3d8de] bg-[#f6f7f9] px-2 py-1.5 text-xs text-[#1c2127] focus:border-[#2d72d2] focus:outline-none"
+                    className="mb-2 w-full rounded border border-line bg-canvas px-2 py-1.5 text-xs text-ink focus:border-brand focus:outline-none"
                   />
                   <div className="mb-2 flex items-center gap-2">
                     <select
                       value={siteKind}
                       onChange={(e) => setSiteKind(e.target.value)}
-                      className="flex-1 rounded border border-[#d3d8de] bg-[#f6f7f9] px-2 py-1.5 text-xs text-[#1c2127] focus:border-[#2d72d2] focus:outline-none"
+                      className="flex-1 rounded border border-line bg-canvas px-2 py-1.5 text-xs text-ink focus:border-brand focus:outline-none"
                     >
                       <option value="hospital">Hospital</option>
                       <option value="clinic">Clinic</option>
@@ -2034,7 +2034,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                       <option value="supplier">Supplier</option>
                       <option value="other">Other</option>
                     </select>
-                    <span className="text-[10px] text-[#8f99a8]">
+                    <span className="text-[10px] text-ink-faint">
                       {pendingPos[1].toFixed(4)}, {pendingPos[0].toFixed(4)}
                     </span>
                   </div>
@@ -2042,7 +2042,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                     <button
                       type="button"
                       onClick={() => setPendingPos(null)}
-                      className="rounded border border-[#d3d8de] px-2.5 py-1 text-xs text-[#404854]"
+                      className="rounded border border-line px-2.5 py-1 text-xs text-ink-body"
                     >
                       Cancel
                     </button>
@@ -2050,7 +2050,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                       type="button"
                       disabled={savingSite}
                       onClick={() => void createSite()}
-                      className="rounded bg-[#2d72d2] px-2.5 py-1 text-xs font-medium text-white hover:bg-[#215db0] disabled:bg-[#c5cbd3]"
+                      className="rounded bg-brand px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-deep disabled:bg-ink-ghost"
                     >
                       {savingSite ? "Creating…" : "Create site"}
                     </button>
@@ -2059,7 +2059,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               ) : null}
 
               {drawArea ? (
-                <div className="pointer-events-auto absolute left-1/2 top-6 z-20 w-80 -translate-x-1/2 rounded-md border border-line bg-white p-3 shadow-lg">
+                <div className="pointer-events-auto absolute left-1/2 top-6 z-20 w-80 -translate-x-1/2 rounded-md border border-line bg-surface p-3 shadow-lg">
                   <p className="mb-1 text-xs font-semibold text-ink">
                     Area for {drawArea.instanceName}
                   </p>
@@ -2131,7 +2131,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                   type="button"
                   onClick={toggleProjection}
                   title={projection === "globe" ? "Switch to flat map" : "Switch to globe"}
-                  className="flex h-8 w-8 items-center justify-center rounded border border-[#d3d8de] bg-white text-[#404854] shadow-sm hover:border-[#2d72d2]"
+                  className="flex h-8 w-8 items-center justify-center rounded border border-line bg-surface text-ink-body shadow-sm hover:border-brand"
                 >
                   {projection === "globe" ? (
                     <MapIcon className="h-4 w-4" />
@@ -2143,7 +2143,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                   type="button"
                   onClick={toggleStyle}
                   title={styleMode === "standard" ? "Satellite imagery" : "3D standard style"}
-                  className="flex h-8 w-8 items-center justify-center rounded border border-[#d3d8de] bg-white text-[#404854] shadow-sm hover:border-[#2d72d2]"
+                  className="flex h-8 w-8 items-center justify-center rounded border border-line bg-surface text-ink-body shadow-sm hover:border-brand"
                 >
                   {styleMode === "standard" ? (
                     <Satellite className="h-4 w-4" />
@@ -2156,7 +2156,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                   onClick={wholeGlobe}
                   aria-label="Whole globe"
                   title="Whole globe"
-                  className="flex h-8 w-8 items-center justify-center rounded border border-[#d3d8de] bg-white text-[#404854] shadow-sm hover:border-[#2d72d2]"
+                  className="flex h-8 w-8 items-center justify-center rounded border border-line bg-surface text-ink-body shadow-sm hover:border-brand"
                 >
                   <Earth className="h-4 w-4" />
                 </button>
@@ -2166,7 +2166,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                   disabled={!network?.sites.length}
                   aria-label="Fit the network"
                   title="Fit the network"
-                  className="flex h-8 w-8 items-center justify-center rounded border border-[#d3d8de] bg-white text-[#404854] shadow-sm hover:border-[#2d72d2] disabled:text-[#c5cbd3]"
+                  className="flex h-8 w-8 items-center justify-center rounded border border-line bg-surface text-ink-body shadow-sm hover:border-brand disabled:text-ink-ghost"
                 >
                   <Scan className="h-4 w-4" />
                 </button>
@@ -2179,23 +2179,23 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                 className={cn(
                   "h-2 w-2 rounded-full",
                   selected.worstAlertSeverity === "critical"
-                    ? "bg-rose-500"
+                    ? "bg-danger"
                     : selected.worstAlertSeverity === "warn"
-                      ? "bg-amber-400"
-                      : "bg-emerald-500",
+                      ? "bg-warn"
+                      : "bg-ok",
                 )}
               />
-              <span className="text-[13px] font-semibold text-[#1c2127]">{selected.name}</span>
+              <span className="text-[13px] font-semibold text-ink">{selected.name}</span>
               <button
                 type="button"
                 onClick={() => setSelectedId(null)}
-                className="ml-auto text-[#8f99a8] hover:text-[#1c2127]"
+                className="ml-auto text-ink-faint hover:text-ink"
                 aria-label="Close inspector"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
-            <p className="mb-2 text-[10.5px] text-[#8f99a8]">{selected.kind}</p>
+            <p className="mb-2 text-[10.5px] text-ink-faint">{selected.kind}</p>
             {/* What this site carries, not one measure chosen for everybody.
                 A station of the air quality network has no stretchers, so the
                 single occupancy row read "—" while the map beside it painted
@@ -2292,7 +2292,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                 beside it cannot disagree. The list below can be shorter — only
                 the most recent alerts are fetched — and says so rather than
                 leaving the difference to be noticed. */}
-            <p className="mb-1 mt-3 text-[10px] font-medium uppercase tracking-[0.12em] text-[#8f99a8]">
+            <p className="mb-1 mt-3 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-faint">
               Open alerts · {selected.openAlertCount}
             </p>
             {selectedAlerts.slice(0, 4).map((a) => (
@@ -2301,14 +2301,14 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                 className={cn(
                   "mb-1.5 rounded border px-2 py-1.5",
                   a.severity === "critical"
-                    ? "border-rose-200 bg-rose-50"
-                    : "border-amber-200 bg-amber-50",
+                    ? "border-danger-line bg-danger-soft"
+                    : "border-warn-line bg-warn-soft",
                 )}
               >
                 <p
                   className={cn(
                     "text-[10.5px] font-medium",
-                    a.severity === "critical" ? "text-rose-700" : "text-amber-700",
+                    a.severity === "critical" ? "text-danger-ink" : "text-warn-ink",
                   )}
                 >
                   {a.message}
@@ -2316,13 +2316,13 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               </div>
             ))}
             {selectedAlerts.length === 0 ? (
-              <p className="text-[10.5px] text-[#8f99a8]">
+              <p className="text-[10.5px] text-ink-faint">
                 {selected.openAlertCount > 0
                   ? "Open, but not in the alerts fetched for this window."
                   : "none"}
               </p>
             ) : selectedAlerts.length > 4 ? (
-              <p className="text-[10px] text-[#8f99a8]">
+              <p className="text-[10px] text-ink-faint">
                 {selectedAlerts.length - 4} more, not shown.
               </p>
             ) : null}
@@ -2331,7 +2331,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               <button
                 type="button"
                 onClick={() => setPlacing({ mode: "move", siteId: selected.id })}
-                className="flex items-center gap-1.5 rounded border border-[#d3d8de] px-2.5 py-1.5 text-xs text-[#404854] hover:border-[#2d72d2]"
+                className="flex items-center gap-1.5 rounded border border-line px-2.5 py-1.5 text-xs text-ink-body hover:border-brand"
               >
                 <MapPin className="h-3.5 w-3.5" />
                 Edit location
@@ -2339,14 +2339,14 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               <button
                 type="button"
                 onClick={onDrillIn}
-                className="flex items-center gap-1.5 rounded bg-[#2d72d2] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#215db0]"
+                className="flex items-center gap-1.5 rounded bg-brand px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-deep"
               >
                 <Building2 className="h-3.5 w-3.5" />
                 Open unit canvas
               </button>
               <Link
                 href="/studio/flux"
-                className="flex items-center gap-1.5 rounded border border-[#d3d8de] px-2.5 py-1.5 text-xs text-[#404854] hover:border-[#2d72d2]"
+                className="flex items-center gap-1.5 rounded border border-line px-2.5 py-1.5 text-xs text-ink-body hover:border-brand"
               >
                 <HeartPulse className="h-3.5 w-3.5" />
                 Data health
@@ -2425,13 +2425,13 @@ function MetricRow({
       title={title}
       className={cn(
         "flex items-center justify-between gap-2 py-1 text-[11px]",
-        !last && "border-b border-[#eef1f4]",
+        !last && "border-b border-line-faint",
       )}
     >
-      <span className="min-w-0 truncate text-[#8f99a8]">{label}</span>
+      <span className="min-w-0 truncate text-ink-faint">{label}</span>
       <span className="flex shrink-0 items-baseline gap-1.5">
-        {note ? <span className="text-[10px] text-[#8f99a8]">{note}</span> : null}
-        <span className={cn("font-medium", danger ? "text-rose-600" : "text-[#1c2127]")}>
+        {note ? <span className="text-[10px] text-ink-faint">{note}</span> : null}
+        <span className={cn("font-medium", danger ? "text-danger" : "text-ink")}>
           {value}
         </span>
       </span>
@@ -2478,10 +2478,10 @@ function EventTimeline({
           type="button"
           aria-expanded={open}
           onClick={() => setOpen((o) => !o)}
-          className="flex items-center gap-1 text-[11px] font-semibold text-[#1c2127] hover:text-[#2d72d2]"
+          className="flex items-center gap-1 text-[11px] font-semibold text-ink hover:text-brand"
         >
           Event timeline
-          <ChevronDown className={cn("h-3.5 w-3.5 text-[#8f99a8] transition-transform", open && "rotate-180")} aria-hidden="true" />
+          <ChevronDown className={cn("h-3.5 w-3.5 text-ink-faint transition-transform", open && "rotate-180")} aria-hidden="true" />
         </button>
         {[24, 72].map((h) => (
           <button
@@ -2491,14 +2491,14 @@ function EventTimeline({
             className={cn(
               "rounded px-2 py-0.5 text-[10.5px]",
               windowHours === h
-                ? "bg-[#e7f2fd] font-medium text-[#215db0]"
-                : "border border-[#d3d8de] text-[#8f99a8]",
+                ? "bg-brand-soft font-medium text-brand-deep"
+                : "border border-line text-ink-faint",
             )}
           >
             {h} h
           </button>
         ))}
-        <span className="ml-auto text-[10.5px] text-[#8f99a8]">
+        <span className="ml-auto text-[10.5px] text-ink-faint">
           {alertEvents.length} alerts · {feeds.length} feed events in window
         </span>
       </div>
@@ -2509,18 +2509,18 @@ function EventTimeline({
         role="img"
         aria-label="Timeline lanes for alerts and feed events"
       >
-        <line x1={70} y1={18} x2={W - 10} y2={18} stroke="#e5e8eb" strokeWidth="1" />
-        <line x1={70} y1={46} x2={W - 10} y2={46} stroke="#e5e8eb" strokeWidth="1" />
-        <text x={4} y={21} fontSize="9" fill="#8f99a8">
+        <line x1={70} y1={18} x2={W - 10} y2={18} stroke="#333333" strokeWidth="1" />
+        <line x1={70} y1={46} x2={W - 10} y2={46} stroke="#333333" strokeWidth="1" />
+        <text x={4} y={21} fontSize="9" fill="#a8a8a8">
           ALERTS
         </text>
-        <text x={4} y={49} fontSize="9" fill="#8f99a8">
+        <text x={4} y={49} fontSize="9" fill="#a8a8a8">
           FEEDS
         </text>
-        <text x={70} y={62} fontSize="8.5" fill="#8f99a8">
+        <text x={70} y={62} fontSize="8.5" fill="#a8a8a8">
           −{windowHours} h
         </text>
-        <text x={W - 10} y={62} textAnchor="end" fontSize="8.5" fill="#8f99a8">
+        <text x={W - 10} y={62} textAnchor="end" fontSize="8.5" fill="#a8a8a8">
           now
         </text>
         {alertEvents.map((a) => (
@@ -2531,10 +2531,10 @@ function EventTimeline({
             r={a.severity === "critical" ? 5 : 4}
             fill={
               a.severity === "critical"
-                ? "#e11d48"
+                ? "#fa4d56"
                 : a.severity === "warn"
-                  ? "#d97706"
-                  : "#2d72d2"
+                  ? "#f1c21b"
+                  : "#4589ff"
             }
             opacity="0.85"
           >
@@ -2542,7 +2542,7 @@ function EventTimeline({
           </circle>
         ))}
         {feeds.map((e) => (
-          <rect key={e.id} x={x(e.receivedAt) - 1} y={41} width={2} height={10} fill="#2d72d2" opacity="0.6">
+          <rect key={e.id} x={x(e.receivedAt) - 1} y={41} width={2} height={10} fill="#4589ff" opacity="0.6">
             <title>ingest event · {new Date(e.receivedAt).toLocaleString()}</title>
           </rect>
         ))}
@@ -2594,12 +2594,12 @@ function FlowPanel({
     relationship !== "" && !busy && !duplicate && (!defining || (!!fromType && !!toType));
 
   const field =
-    "w-full rounded border border-[#d3d8de] bg-[#f6f7f9] px-2 py-1.5 text-xs text-[#1c2127] focus:border-[#2d72d2] focus:outline-none";
+    "w-full rounded border border-line bg-canvas px-2 py-1.5 text-xs text-ink focus:border-brand focus:outline-none";
 
   return (
-    <div className="pointer-events-auto absolute left-1/2 top-6 z-20 w-80 -translate-x-1/2 rounded-md border border-[#d3d8de] bg-white p-3 shadow-lg">
-      <p className="text-xs font-semibold text-[#1c2127]">New flow</p>
-      <p className="mb-2 mt-0.5 text-[11px] leading-snug text-[#5f6b7c]">
+    <div className="pointer-events-auto absolute left-1/2 top-6 z-20 w-80 -translate-x-1/2 rounded-md border border-line bg-surface p-3 shadow-lg">
+      <p className="text-xs font-semibold text-ink">New flow</p>
+      <p className="mb-2 mt-0.5 text-[11px] leading-snug text-ink-muted">
         {fromName} → {toName}
       </p>
 
@@ -2619,7 +2619,7 @@ function FlowPanel({
           <button
             type="button"
             onClick={() => setDefining(true)}
-            className="mb-2 text-[11px] text-[#2d72d2] hover:underline"
+            className="mb-2 text-[11px] text-brand hover:underline"
           >
             define a new relationship
           </button>
@@ -2634,18 +2634,18 @@ function FlowPanel({
             className={cn(field, "mb-1.5")}
           />
           {fromType && toType ? (
-            <p className="mb-2 rounded bg-[#fdf6ec] px-2 py-1.5 text-[10.5px] leading-snug text-[#935610]">
+            <p className="mb-2 rounded bg-warn-soft px-2 py-1.5 text-[10.5px] leading-snug text-warn-ink">
               This adds <b className="font-semibold">{fromType} → {toType}</b> to the ontology
               schema. Every environment in your organization gets it.
             </p>
           ) : (
-            <p className="mb-2 rounded bg-[#fdf1f1] px-2 py-1.5 text-[10.5px] leading-snug text-[#a82255]">
+            <p className="mb-2 rounded bg-danger-soft px-2 py-1.5 text-[10.5px] leading-snug text-danger-ink">
               One of these sites has no object type on record, so a new relationship cannot be
               defined from here.
             </p>
           )}
           {duplicate ? (
-            <p className="mb-2 text-[10.5px] text-[#a82255]">
+            <p className="mb-2 text-[10.5px] text-danger-ink">
               A link type already goes by that name.
             </p>
           ) : null}
@@ -2653,7 +2653,7 @@ function FlowPanel({
             <button
               type="button"
               onClick={() => setDefining(false)}
-              className="mb-2 text-[11px] text-[#2d72d2] hover:underline"
+              className="mb-2 text-[11px] text-brand hover:underline"
             >
               use an existing relationship
             </button>
@@ -2665,7 +2665,7 @@ function FlowPanel({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded border border-[#d3d8de] px-2.5 py-1 text-xs text-[#404854]"
+          className="rounded border border-line px-2.5 py-1 text-xs text-ink-body"
         >
           Cancel
         </button>
@@ -2673,7 +2673,7 @@ function FlowPanel({
           type="button"
           disabled={!ready}
           onClick={() => onSave(relationship, defining)}
-          className="rounded bg-[#2d72d2] px-2.5 py-1 text-xs font-medium text-white hover:bg-[#215db0] disabled:bg-[#c5cbd3]"
+          className="rounded bg-brand px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-deep disabled:bg-ink-ghost"
         >
           {busy ? "Saving…" : defining ? "Define & draw" : "Draw flow"}
         </button>

@@ -52,8 +52,8 @@ function Spark({ p, tw, ctx }: { p: Profile; tw: BuilderTwin; ctx: Ctx }) {
     const hi = c.curves.high.map((y, k) => `${X(k)},${Y(y)}`), lo = c.curves.low.map((y, k) => `${X(k)},${Y(y)}`).reverse();
     return (
       <svg viewBox="0 0 240 34" preserveAspectRatio="none" aria-hidden="true" className="h-8 w-full">
-        <polygon points={[...hi, ...lo].join(" ")} fill="#2d72d2" fillOpacity={0.14} />
-        <path d={v.map((y, k) => `${k ? "L" : "M"}${X(k)},${Y(y)}`).join(" ")} fill="none" stroke="#2d72d2" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+        <polygon points={[...hi, ...lo].join(" ")} fill="#4589ff" fillOpacity={0.14} />
+        <path d={v.map((y, k) => `${k ? "L" : "M"}${X(k)},${Y(y)}`).join(" ")} fill="none" stroke="#4589ff" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
       </svg>
     );
   }
@@ -74,14 +74,14 @@ function CurveChart({ c, label }: { c: Pick<Coef, "curves" | "icu" | "days" | "f
   const range = hasRange(c as Coef);
   return (
     <>
-      <svg viewBox={`0 0 ${W} ${Hh}`} role="img" aria-label="Arrivals per 1,000 residents a day, by day of the episode" className="block h-auto w-full rounded-md border border-line-soft bg-white">
-        {[0, 0.5, 1].map((fr) => { const v = (top / 1.08) * fr; return <g key={fr}><line x1={L} x2={W - R} y1={Y(v)} y2={Y(v)} stroke="#eef1f4" /><text x={L - 4} y={Y(v) + 3} textAnchor="end" fontSize="9" fill="#8f99a8">{sig(v)}</text></g>; })}
-        {[0, Math.round((n - 1) / 2), n - 1].map((d) => <text key={d} x={X(d)} y={Hh - 5} textAnchor="middle" fontSize="9" fill="#8f99a8">{c.from ? addDays(c.from, d).slice(5) : `day ${d}`}</text>)}
-        {range ? <polygon points={[...pts(c.curves!.high), ...pts(c.curves!.low).reverse()].join(" ")} fill="#2d72d2" fillOpacity={0.14} /> : null}
-        <polyline points={pts(c.curves!.central).join(" ")} fill="none" stroke="#2d72d2" strokeWidth={1.8} />
-        {c.icu ? <polyline points={pts(c.icu).join(" ")} fill="none" stroke="#a82255" strokeWidth={1.3} strokeDasharray="4 3" /> : null}
+      <svg viewBox={`0 0 ${W} ${Hh}`} role="img" aria-label="Arrivals per 1,000 residents a day, by day of the episode" className="block h-auto w-full rounded-md border border-line-soft bg-surface">
+        {[0, 0.5, 1].map((fr) => { const v = (top / 1.08) * fr; return <g key={fr}><line x1={L} x2={W - R} y1={Y(v)} y2={Y(v)} stroke="#2c2c2c" /><text x={L - 4} y={Y(v) + 3} textAnchor="end" fontSize="9" fill="#a8a8a8">{sig(v)}</text></g>; })}
+        {[0, Math.round((n - 1) / 2), n - 1].map((d) => <text key={d} x={X(d)} y={Hh - 5} textAnchor="middle" fontSize="9" fill="#a8a8a8">{c.from ? addDays(c.from, d).slice(5) : `day ${d}`}</text>)}
+        {range ? <polygon points={[...pts(c.curves!.high), ...pts(c.curves!.low).reverse()].join(" ")} fill="#4589ff" fillOpacity={0.14} /> : null}
+        <polyline points={pts(c.curves!.central).join(" ")} fill="none" stroke="#4589ff" strokeWidth={1.8} />
+        {c.icu ? <polyline points={pts(c.icu).join(" ")} fill="none" stroke="#ff8389" strokeWidth={1.3} strokeDasharray="4 3" /> : null}
       </svg>
-      <Key items={[["#2d72d2", range ? "central: the median region" : label ?? "per 1,000 residents, a day"], ...(range ? [["#2d72d2", "10th to 90th percentile of the regions", "band"] as [string, string, "band"]] : []), ...(c.icu ? [["#a82255", "intensive care (reference only)", "dash"] as [string, string, "dash"]] : [])]} />
+      <Key items={[["#4589ff", range ? "central: the median region" : label ?? "per 1,000 residents, a day"], ...(range ? [["#4589ff", "10th to 90th percentile of the regions", "band"] as [string, string, "band"]] : []), ...(c.icu ? [["#ff8389", "intensive care (reference only)", "dash"] as [string, string, "dash"]] : [])]} />
     </>
   );
 }
@@ -90,13 +90,13 @@ function ItemsTimeline({ items, tw }: { items: Item[]; tw: BuilderTwin }) {
   const W = 380, rowH = 22, L = 150, wins = items.map(itemWindow), end = Math.max(1, ...wins.map((w) => w[1])) + 1;
   const X = (d: number) => L + (d / end) * (W - L - 6), Hh = 8 + items.length * rowH + 14;
   return (
-    <svg viewBox={`0 0 ${W} ${Hh}`} role="img" aria-label="When each change applies" className="block h-auto w-full rounded-md border border-line-soft bg-white">
+    <svg viewBox={`0 0 ${W} ${Hh}`} role="img" aria-label="When each change applies" className="block h-auto w-full rounded-md border border-line-soft bg-surface">
       {items.map((it, k) => {
         const [a, b] = wins[k]!, y = 4 + k * rowH, col = TINTS[k % TINTS.length]![1];
-        return <g key={k}><text x={6} y={y + 13} fontSize="10.5" fill="#404854">{itemLabel(it, tw).slice(0, 26)}</text><rect x={X(a)} y={y + 3} width={Math.max(3, X(b + 1) - X(a))} height={14} rx={3} fill={col} fillOpacity={0.25} stroke={col} /></g>;
+        return <g key={k}><text x={6} y={y + 13} fontSize="10.5" fill="#e0e0e0">{itemLabel(it, tw).slice(0, 26)}</text><rect x={X(a)} y={y + 3} width={Math.max(3, X(b + 1) - X(a))} height={14} rx={3} fill={col} fillOpacity={0.25} stroke={col} /></g>;
       })}
-      <text x={L} y={Hh - 4} fontSize="9" fill="#8f99a8">day 0</text>
-      <text x={W - 6} y={Hh - 4} textAnchor="end" fontSize="9" fill="#8f99a8">day {end - 1}</text>
+      <text x={L} y={Hh - 4} fontSize="9" fill="#a8a8a8">day 0</text>
+      <text x={W - 6} y={Hh - 4} textAnchor="end" fontSize="9" fill="#a8a8a8">day {end - 1}</text>
     </svg>
   );
 }
@@ -263,7 +263,7 @@ function Create({ env, tw, ctx, items, onSaved, onCancel }: { env: string; tw: B
   const ex = COVID.example;
 
   return (
-    <div className="mb-4 flex flex-col gap-2 rounded-md border border-brand bg-white p-3"
+    <div className="mb-4 flex flex-col gap-2 rounded-md border border-brand bg-surface p-3"
       onDragOver={(ev) => { if (mode === "data") ev.preventDefault(); }}
       onDrop={(ev) => { if (mode !== "data") return; ev.preventDefault(); void load(ev.dataTransfer.files?.[0]); }}>
       <div className="flex items-center gap-2"><h2 className="text-sm font-semibold text-ink">Create a profile</h2><button type="button" className={cn(BTN_SM, "ml-auto")} onClick={onCancel}>Cancel</button></div>
@@ -344,7 +344,7 @@ function Create({ env, tw, ctx, items, onSaved, onCancel }: { env: string; tw: B
         <>
           <p className={HELP}>Keep the changes of the event you are building, as a profile anyone can drop into another event. Their days are kept relative to the first one.</p>
           {items.length ? (
-            <div className="flex flex-col gap-1 rounded border border-line-soft bg-white p-1.5">
+            <div className="flex flex-col gap-1 rounded border border-line-soft bg-surface p-1.5">
               {items.map((it) => (
                 <label key={it.key} className="flex items-start gap-1.5 text-[11.5px] text-ink-body">
                   <input type="checkbox" className="mt-0.5" checked={picked.includes(it.key)} onChange={(ev) => set({ picked: ev.target.checked ? [...picked, it.key] : picked.filter((k) => k !== it.key) })} />
@@ -418,12 +418,12 @@ export default function ProfileCatalogue({ env, tw, ctx, mode, focus = null, ite
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-canvas">
-      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-white px-4 py-2">
+      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-surface px-4 py-2">
         <BookOpen className="h-4 w-4 text-ink-faint" />
         <h1 className="text-sm font-semibold text-ink">Profiles</h1>
         <span className="text-[11.5px] text-ink-faint">{all.length} profiles{mode === "pick" ? " · pick one to add it to the event you are writing" : ""}</span>
         <Seg label="Type of profile" value={type} onChange={setType} options={PROFILE_TYPES.map(([v, l]) => ({ v, label: l }))} />
-        <span className="flex items-center gap-1.5 rounded-md border border-line bg-white px-2">
+        <span className="flex items-center gap-1.5 rounded-md border border-line bg-surface px-2">
           <Search className="h-3.5 w-3.5 text-ink-faint" />
           <input type="search" value={q} onChange={(ev) => setQ(ev.target.value)} placeholder="Smoke, COVID, flood…" aria-label="Search profiles" className="h-[26px] w-40 bg-transparent text-xs focus:outline-none" />
         </span>
@@ -443,7 +443,7 @@ export default function ProfileCatalogue({ env, tw, ctx, mode, focus = null, ite
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
                   {ps.map((p) => (
                     <button key={p.id} type="button" onClick={() => setSel(p.id)} aria-pressed={p.id === sel}
-                      className={cn("flex flex-col gap-1 rounded-md border bg-white p-2.5 text-left", p.id === sel ? "border-brand ring-1 ring-brand/30" : "border-line hover:border-ink-ghost")}>
+                      className={cn("flex flex-col gap-1 rounded-md border bg-surface p-2.5 text-left", p.id === sel ? "border-brand ring-1 ring-brand/30" : "border-line hover:border-ink-ghost")}>
                       <span className="flex items-start gap-2"><b className="flex-1 text-[12.5px] font-semibold leading-snug text-ink">{p.name}</b><span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium", TIER_CLS[p.tier] ?? "bg-canvas text-ink-muted")}>{p.tier}</span></span>
                       <Spark p={p} tw={tw} ctx={ctx} />
                       <span className="text-[11.5px] leading-snug text-ink-body">{p.summary}</span>
@@ -457,7 +457,7 @@ export default function ProfileCatalogue({ env, tw, ctx, mode, focus = null, ite
           {!keep.length ? <p className={HELP}>No profile matches “{q}”.</p> : null}
           {!saved.length && !loadError && type === "mine" ? <p className={HELP}>You have not saved a profile yet. Create one from your data, from an exposure, or from an event.</p> : null}
         </div>
-        <aside className="min-h-0 border-t border-line bg-white p-4 lg:overflow-y-auto lg:border-l lg:border-t-0">
+        <aside className="min-h-0 border-t border-line bg-surface p-4 lg:overflow-y-auto lg:border-l lg:border-t-0">
           <Detail p={selected} tw={tw} ctx={ctx} mode={mode} onUse={onUse} onStartNew={onStartNew} onDelete={(p) => void remove(p)} />
         </aside>
       </div>

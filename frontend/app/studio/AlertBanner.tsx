@@ -53,7 +53,7 @@ function ages(a: FeedAlert, serverNow: string): { text: string; why: string | un
 }
 
 function AlertLinks({ a, env, onGo }: { a: FeedAlert; env: string | null; onGo?: () => void }) {
-  const cls = "rounded border border-line bg-white px-2 py-0.5 text-[11px] font-semibold text-ink hover:border-brand hover:bg-brand-soft";
+  const cls = "rounded border border-line bg-surface px-2 py-0.5 text-[11px] font-semibold text-ink hover:border-brand hover:bg-brand-soft";
   return (
     <span className="flex shrink-0 flex-wrap gap-1.5">
       <Link href={unitHref(a.unitId, env)} onClick={onGo} className={cls}>
@@ -109,7 +109,7 @@ export function AlertPill({ env }: { env: string | null }) {
             ? "border-warn-line bg-warn-soft text-warn-ink"
             : critical
               ? "border-danger/40 bg-danger-soft text-danger-ink"
-              : "border-line bg-white text-ink-body",
+              : "border-line bg-surface text-ink-body",
         )}
       >
         {stale ? <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" /> : <BellRing className="h-3.5 w-3.5" aria-hidden="true" />}
@@ -117,7 +117,7 @@ export function AlertPill({ env }: { env: string | null }) {
         {warn ? <span className="tabular-nums font-normal">{warn} warn</span> : null}
         {!critical && !warn && info ? <span className="tabular-nums font-normal">{info} info</span> : null}
         {total === 0 ? <span>Alerts</span> : null}
-        {news ? <span className="rounded bg-danger px-1 text-[10px] text-white">{news} new</span> : null}
+        {news ? <span className="rounded bg-danger px-1 text-[10px] text-inverse">{news} new</span> : null}
         {stale ? <span className="font-normal">· not updating</span> : null}
       </button>
 
@@ -128,7 +128,7 @@ export function AlertPill({ env }: { env: string | null }) {
           <div
             role="dialog"
             aria-label="Open alerts"
-            className="absolute right-0 top-full z-50 mt-1.5 flex max-h-[70vh] w-[440px] max-w-[calc(100vw-1.5rem)] flex-col rounded-md border border-line bg-white shadow-lg"
+            className="absolute right-0 top-full z-50 mt-1.5 flex max-h-[70vh] w-[440px] max-w-[calc(100vw-1.5rem)] flex-col rounded-md border border-line bg-surface shadow-lg"
           >
             <div className="flex flex-col gap-1 border-b border-line-soft px-3 py-2">
               <p className="text-[12.5px] font-semibold text-ink">
@@ -177,7 +177,7 @@ function AlertRow({ a, env, serverNow, first, onGo }: { a: FeedAlert; env: strin
       <div className="flex items-start gap-2">
         <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", tone.dot)} title={tone.label} />
         <p className="min-w-0 flex-1 break-words text-[12px] font-semibold leading-snug text-ink">{a.message}</p>
-        {first ? <span className="shrink-0 rounded bg-danger px-1 text-[10px] font-bold text-white">new</span> : null}
+        {first ? <span className="shrink-0 rounded bg-danger px-1 text-[10px] font-bold text-inverse">new</span> : null}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 pl-4">
         <span className="text-[11px] text-ink-muted" title={ages(a, serverNow).why}>
@@ -218,7 +218,7 @@ export function AlertStrip({ env }: { env: string | null }) {
             onClick={() => dismiss(a.id)}
             aria-label={`Stop announcing: ${a.message}`}
             title="Stop announcing it here. The alert stays open."
-            className="rounded p-0.5 text-ink-muted hover:bg-white/60 hover:text-ink"
+            className="rounded p-0.5 text-ink-muted hover:bg-surface-hover/60 hover:text-ink"
           >
             <X className="h-3.5 w-3.5" aria-hidden="true" />
           </button>

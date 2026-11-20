@@ -70,12 +70,12 @@ const ICON: Record<NodeKind, typeof Database> = {
 };
 
 const TONE: Record<string, { bg: string; fg: string }> = {
-  Input: { bg: "bg-[#e8f6f0]", fg: "text-[#12684c]" },
-  Clean: { bg: "bg-[#f0edf7]", fg: "text-[#5b4a86]" },
-  Shape: { bg: "bg-[#f0edf7]", fg: "text-[#5b4a86]" },
-  Combine: { bg: "bg-[#f0edf7]", fg: "text-[#5b4a86]" },
-  Clinical: { bg: "bg-[#fdeef4]", fg: "text-[#a82255]" },
-  Output: { bg: "bg-[#e7f2fd]", fg: "text-[#215db0]" },
+  Input: { bg: "bg-ok-soft", fg: "text-ok-ink" },
+  Clean: { bg: "bg-scenario-soft", fg: "text-scenario" },
+  Shape: { bg: "bg-scenario-soft", fg: "text-scenario" },
+  Combine: { bg: "bg-scenario-soft", fg: "text-scenario" },
+  Clinical: { bg: "bg-danger-soft", fg: "text-danger-ink" },
+  Output: { bg: "bg-brand-soft", fg: "text-brand-deep" },
 };
 
 function uid(): string {
@@ -253,14 +253,14 @@ export default function PipelinesView() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#d3d8de] bg-white px-4 py-2">
+      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-surface px-4 py-2">
         <select
           value={current?.id ?? ""}
           onChange={(e) => {
             const p = pipelines.find((x) => x.id === e.target.value);
             if (p) void getPipeline(p.id).then(open).catch(() => open(p));
           }}
-          className="rounded border border-[#d3d8de] px-2 py-1 text-xs focus:border-[#2d72d2] focus:outline-none"
+          className="rounded border border-line px-2 py-1 text-xs focus:border-brand focus:outline-none"
         >
           {pipelines.length === 0 ? <option value="">no pipelines yet</option> : null}
           {pipelines.map((p) => (
@@ -283,13 +283,13 @@ export default function PipelinesView() {
               setError((e as Error).message);
             }
           }}
-          className="flex items-center gap-1 rounded border border-[#d3d8de] px-2 py-1 text-xs text-[#404854]"
+          className="flex items-center gap-1 rounded border border-line px-2 py-1 text-xs text-ink-body"
         >
           <Plus className="h-3 w-3" /> New
         </button>
 
         {dirty ? (
-          <span className="rounded bg-[#fdf6ec] px-1.5 py-0.5 text-[10px] font-medium text-[#8a5a12]">
+          <span className="rounded bg-warn-soft px-1.5 py-0.5 text-[10px] font-medium text-warn-ink">
             unsaved
           </span>
         ) : null}
@@ -327,34 +327,34 @@ export default function PipelinesView() {
             className={cn(
               "flex items-center gap-1.5 rounded border px-2 py-1 text-[11px] font-medium",
               current.status === "live"
-                ? "border-[#1d9e75] bg-[#e8f6f0] text-[#12684c]"
-                : "border-[#d3d8de] text-[#5f6b7c]",
+                ? "border-ok bg-ok-soft text-ok-ink"
+                : "border-line text-ink-muted",
             )}
           >
             <span
               className={cn(
                 "h-1.5 w-1.5 rounded-full",
-                current.status === "live" ? "animate-pulse bg-[#1d9e75]" : "bg-[#c5cbd3]",
+                current.status === "live" ? "animate-pulse bg-ok" : "bg-ink-ghost",
               )}
             />
             {current.status === "live" ? "Live" : "Go live"}
           </button>
         ) : null}
         {error ? (
-          <span className="max-w-[42ch] truncate text-[11px] text-[#a82255]" title={error}>
+          <span className="max-w-[42ch] truncate text-[11px] text-danger-ink" title={error}>
             {error}
           </span>
         ) : null}
 
         <div className="ml-auto flex items-center gap-1.5">
-          <span className="text-[10px] uppercase tracking-wide text-[#8f99a8]">
+          <span className="text-[10px] uppercase tracking-wide text-ink-faint">
             {nodes.length} nodes · {edges.length} edges
           </span>
           <button
             type="button"
             disabled={!current || busy !== null}
             onClick={() => void handlePreview()}
-            className="flex items-center gap-1.5 rounded border border-[#d3d8de] px-2.5 py-1 text-xs font-medium text-[#404854] disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded border border-line px-2.5 py-1 text-xs font-medium text-ink-body disabled:opacity-50"
           >
             {busy === "preview" ? (
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -367,7 +367,7 @@ export default function PipelinesView() {
             type="button"
             disabled={!current || busy !== null || !dirty}
             onClick={() => void handleSave()}
-            className="flex items-center gap-1.5 rounded border border-[#d3d8de] px-2.5 py-1 text-xs font-medium text-[#404854] disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded border border-line px-2.5 py-1 text-xs font-medium text-ink-body disabled:opacity-50"
           >
             {busy === "save" ? (
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -380,7 +380,7 @@ export default function PipelinesView() {
             type="button"
             disabled={!current || busy !== null}
             onClick={() => void handleRun()}
-            className="flex items-center gap-1.5 rounded border border-[#215db0] bg-[#2d72d2] px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded border border-brand-deep bg-brand px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50"
           >
             {busy === "run" ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
             Run
@@ -437,10 +437,10 @@ function Palette({
   }, [catalogue]);
 
   return (
-    <aside className="w-[184px] shrink-0 overflow-y-auto border-r border-[#d3d8de] bg-white">
+    <aside className="w-[184px] shrink-0 overflow-y-auto border-r border-line bg-surface">
       {groups.map(({ g, items }) => (
         <div key={g} className="py-1.5">
-          <p className="px-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-[#8f99a8]">
+          <p className="px-3 pb-1 text-[10px] font-medium uppercase tracking-wide text-ink-faint">
             {g}
           </p>
           {items.map((m) => {
@@ -452,7 +452,7 @@ function Palette({
                 type="button"
                 onClick={() => onAdd(m)}
                 title={m.description}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-[#f6f7f9]"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-surface-hover"
               >
                 <span
                   className={cn(
@@ -464,7 +464,7 @@ function Palette({
                   <Icon className="h-3 w-3" />
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate text-[11.5px] font-medium text-[#1c2127]">
+                  <span className="block truncate text-[11.5px] font-medium text-ink">
                     {m.label}
                   </span>
                 </span>
@@ -473,7 +473,7 @@ function Palette({
           })}
         </div>
       ))}
-      <p className="border-t border-[#e5e8eb] px-3 py-2 text-[10.5px] leading-snug text-[#8f99a8]">
+      <p className="border-t border-line-soft px-3 py-2 text-[10.5px] leading-snug text-ink-faint">
         Click to add. Use the dot on a node&apos;s right edge to connect it to the next one.
       </p>
     </aside>
@@ -524,9 +524,9 @@ const Canvas = function Canvas({
 
   return (
     <div
-      className="relative min-w-0 flex-1 overflow-auto bg-[#f6f7f9]"
+      className="relative min-w-0 flex-1 overflow-auto bg-canvas"
       style={{
-        backgroundImage: "radial-gradient(#dfe3e8 1px, transparent 1px)",
+        backgroundImage: "radial-gradient(#393939 1px, transparent 1px)",
         backgroundSize: "16px 16px",
       }}
       onClick={() => connecting && onCancelConnect()}
@@ -543,7 +543,7 @@ const Canvas = function Canvas({
             markerHeight="5"
             orient="auto"
           >
-            <path d="M0,0 L10,5 L0,10 z" fill="#8a94a0" />
+            <path d="M0,0 L10,5 L0,10 z" fill="#a8a8a8" />
           </marker>
         </defs>
         {edges.map((e, i) => {
@@ -560,7 +560,7 @@ const Canvas = function Canvas({
               key={i}
               d={`M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2 - 8},${y2}`}
               fill="none"
-              stroke="#8a94a0"
+              stroke="#a8a8a8"
               strokeWidth={1.6}
               markerEnd="url(#pipe-arrow)"
             />
@@ -579,9 +579,9 @@ const Canvas = function Canvas({
           <div
             key={n.id}
             className={cn(
-              "absolute rounded-md border bg-white shadow-sm",
-              sel === n.id ? "border-[#2d72d2] ring-2 ring-[#e7f2fd]" : "border-[#d3d8de]",
-              connecting?.from === n.id && "ring-2 ring-[#2d72d2]",
+              "absolute rounded-md border bg-surface shadow-sm",
+              sel === n.id ? "border-brand ring-2 ring-brand-soft" : "border-line",
+              connecting?.from === n.id && "ring-2 ring-brand",
             )}
             style={{ left: n.x, top: n.y, width: NODE_W }}
             onMouseDown={(e) => {
@@ -591,18 +591,18 @@ const Canvas = function Canvas({
             onClick={(e) => e.stopPropagation()}
             role="presentation"
           >
-            <div className="flex items-center gap-1.5 border-b border-[#e5e8eb] px-2 py-1.5">
-              <Icon className="h-3 w-3 shrink-0 text-[#5f6b7c]" />
-              <span className="min-w-0 flex-1 truncate text-[11.5px] font-semibold text-[#1c2127]">
+            <div className="flex items-center gap-1.5 border-b border-line-soft px-2 py-1.5">
+              <Icon className="h-3 w-3 shrink-0 text-ink-muted" />
+              <span className="min-w-0 flex-1 truncate text-[11.5px] font-semibold text-ink">
                 {n.name}
               </span>
             </div>
-            <div className="flex items-center justify-between px-2 py-1 text-[10px] text-[#8f99a8]">
+            <div className="flex items-center justify-between px-2 py-1 text-[10px] text-ink-faint">
               {stat ? (
                 <>
                   <span>{stat.out.toLocaleString()} rows</span>
                   {stat.dropped > 0 ? (
-                    <span className="font-medium text-[#d9822b]">−{stat.dropped}</span>
+                    <span className="font-medium text-warn">−{stat.dropped}</span>
                   ) : null}
                 </>
               ) : (
@@ -611,7 +611,7 @@ const Canvas = function Canvas({
               {/* A node that would stop the run says so where it stands. */}
               {nodeIssues.length > 0 ? (
                 <span
-                  className="ml-auto font-medium text-[#935610]"
+                  className="ml-auto font-medium text-warn-ink"
                   title={nodeIssues.map((i) => i.message).join("\n")}
                 >
                   ⚠ {nodeIssues.length}
@@ -656,7 +656,7 @@ const Canvas = function Canvas({
       })}
 
       {nodes.length === 0 ? (
-        <p className="absolute left-1/2 top-24 -translate-x-1/2 text-xs text-[#8f99a8]">
+        <p className="absolute left-1/2 top-24 -translate-x-1/2 text-xs text-ink-faint">
           Add an input from the palette to start.
         </p>
       ) : null}
@@ -687,11 +687,11 @@ function Port({
       }}
       aria-label={side === "in" ? "Connect into this node" : "Start a connection"}
       className={cn(
-        "absolute flex h-3.5 w-3.5 items-center justify-center rounded-full border bg-white text-[7px] font-bold",
+        "absolute flex h-3.5 w-3.5 items-center justify-center rounded-full border bg-surface text-[7px] font-bold",
         side === "in" ? "-left-[7px]" : "-right-[7px]",
         active && side === "in"
-          ? "border-[#2d72d2] bg-[#e7f2fd] text-[#215db0]"
-          : "border-[#8f99a8] text-[#8f99a8] hover:border-[#2d72d2] hover:bg-[#e7f2fd]",
+          ? "border-brand bg-brand-soft text-brand-deep"
+          : "border-line-strong text-ink-faint hover:border-brand hover:bg-brand-soft",
       )}
       style={{ top: `calc(50% + ${offset}px)`, transform: "translateY(-50%)" }}
     >
@@ -703,8 +703,8 @@ function Port({
 // --- inspector --------------------------------------------------------------
 
 const F =
-  "mt-1 w-full rounded border border-[#d3d8de] px-2 py-1 text-[11.5px] focus:border-[#2d72d2] focus:outline-none";
-const L = "mt-2.5 block text-[10px] font-medium uppercase tracking-wide text-[#8f99a8]";
+  "mt-1 w-full rounded border border-line px-2 py-1 text-[11.5px] focus:border-brand focus:outline-none";
+const L = "mt-2.5 block text-[10px] font-medium uppercase tracking-wide text-ink-faint";
 
 function Inspector({
   node,
@@ -727,8 +727,8 @@ function Inspector({
 }) {
   if (!node) {
     return (
-      <aside className="w-[300px] shrink-0 border-l border-[#d3d8de] bg-white p-4">
-        <p className="text-[11.5px] leading-relaxed text-[#8f99a8]">
+      <aside className="w-[300px] shrink-0 border-l border-line bg-surface p-4">
+        <p className="text-[11.5px] leading-relaxed text-ink-faint">
           Select a node to configure it. After a preview, each node shows what went in and what
           came out — that is how you find where rows were lost.
         </p>
@@ -772,16 +772,16 @@ function Inspector({
   );
 
   return (
-    <aside className="w-[300px] shrink-0 overflow-y-auto border-l border-[#d3d8de] bg-white">
-      <div className="flex items-center justify-between border-b border-[#d3d8de] px-3 py-2">
-        <span className="text-[10px] font-medium uppercase tracking-wide text-[#8f99a8]">
+    <aside className="w-[300px] shrink-0 overflow-y-auto border-l border-line bg-surface">
+      <div className="flex items-center justify-between border-b border-line px-3 py-2">
+        <span className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">
           {node.kind.replace("_", " ")}
         </span>
         <button
           type="button"
           onClick={onDelete}
           aria-label="Delete node"
-          className="text-[#8f99a8] hover:text-[#a82255]"
+          className="text-ink-faint hover:text-danger-ink"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
@@ -856,7 +856,7 @@ function Inspector({
               placeholder="unit_index"
               className={F}
             />
-            <p className="mt-1 text-[10px] leading-snug text-[#8f99a8]">
+            <p className="mt-1 text-[10px] leading-snug text-ink-faint">
               The rows are otherwise identical. Without a number on each, an upsert keyed
               on the source columns collapses thirty beds back into one.
             </p>
@@ -870,7 +870,7 @@ function Inspector({
               inputMode="numeric"
               className={F}
             />
-            <p className="mt-1 text-[10px] leading-snug text-[#8f99a8]">
+            <p className="mt-1 text-[10px] leading-snug text-ink-faint">
               A column read as a capacity that is really an amount would expand to
               millions of rows. Past this, the row is dropped and named instead.
             </p>
@@ -880,9 +880,9 @@ function Inspector({
         {node.kind === "select" ? (
           <>
             <label className={L}>Keep these columns</label>
-            <div className="mt-1 max-h-40 space-y-0.5 overflow-y-auto rounded border border-[#e5e8eb] p-1.5">
+            <div className="mt-1 max-h-40 space-y-0.5 overflow-y-auto rounded border border-line-soft p-1.5">
               {columns.length === 0 ? (
-                <p className="text-[10.5px] text-[#8f99a8]">Preview to see the columns.</p>
+                <p className="text-[10.5px] text-ink-faint">Preview to see the columns.</p>
               ) : (
                 columns.map((c) => {
                   const keep = (cfg.keep as string[] | undefined) ?? [];
@@ -898,7 +898,7 @@ function Inspector({
                             keep: on ? base.filter((x) => x !== c) : [...base, c],
                           });
                         }}
-                        className="h-3 w-3 accent-[#2d72d2]"
+                        className="h-3 w-3 accent-brand"
                       />
                       <span className="truncate">{c}</span>
                     </label>
@@ -935,9 +935,9 @@ function Inspector({
             {cfg.op !== "constant" && cfg.op !== "format" ? (
               <>
                 <label className={L}>From columns</label>
-                <div className="mt-1 max-h-28 space-y-0.5 overflow-y-auto rounded border border-[#e5e8eb] p-1.5">
+                <div className="mt-1 max-h-28 space-y-0.5 overflow-y-auto rounded border border-line-soft p-1.5">
                   {columns.length === 0 ? (
-                    <p className="text-[10.5px] text-[#8f99a8]">Preview to see the columns.</p>
+                    <p className="text-[10.5px] text-ink-faint">Preview to see the columns.</p>
                   ) : (
                     columns.map((c) => {
                       const list = (cfg.columns as string[] | undefined) ?? [];
@@ -953,7 +953,7 @@ function Inspector({
                                   : [...list, c],
                               })
                             }
-                            className="h-3 w-3 accent-[#2d72d2]"
+                            className="h-3 w-3 accent-brand"
                           />
                           <span className="truncate">{c}</span>
                         </label>
@@ -1022,18 +1022,18 @@ function Inspector({
                   placeholder="{date}T{heure:02}:00"
                   className={F}
                 />
-                <p className="mt-1 text-[10px] leading-relaxed text-[#8f99a8]">
+                <p className="mt-1 text-[10px] leading-relaxed text-ink-faint">
                   {"{column}"} drops a column in. {"{column:02}"} pads it on the left with zeros
                   to two characters — which is how a source publishing the hour as 9 becomes a
                   timestamp something can read. A row missing any part of the pattern gets
                   nothing rather than a value with a hole in it.
                 </p>
                 {columns.length > 0 ? (
-                  <p className="mt-1 text-[10px] leading-relaxed text-[#8f99a8]">
+                  <p className="mt-1 text-[10px] leading-relaxed text-ink-faint">
                     Columns here: {columns.join(", ")}
                   </p>
                 ) : (
-                  <p className="mt-1 text-[10.5px] text-[#8f99a8]">Preview to see the columns.</p>
+                  <p className="mt-1 text-[10.5px] text-ink-faint">Preview to see the columns.</p>
                 )}
               </>
             ) : null}
@@ -1061,7 +1061,7 @@ function Inspector({
                       list[i] = { ...c, column: e.target.value };
                       onConfig({ casts: list });
                     }}
-                    className="min-w-0 flex-1 rounded border border-[#d3d8de] px-1.5 py-1 text-[11px]"
+                    className="min-w-0 flex-1 rounded border border-line px-1.5 py-1 text-[11px]"
                   >
                     <option value="">column</option>
                     {columns.map((x) => (
@@ -1077,7 +1077,7 @@ function Inspector({
                       list[i] = { ...c, to: e.target.value };
                       onConfig({ casts: list });
                     }}
-                    className="rounded border border-[#d3d8de] px-1.5 py-1 text-[11px]"
+                    className="rounded border border-line px-1.5 py-1 text-[11px]"
                   >
                     <option value="string">text</option>
                     <option value="number">number</option>
@@ -1093,7 +1093,7 @@ function Inspector({
                       onConfig({ casts: list });
                     }}
                     aria-label="Remove"
-                    className="text-[#8f99a8] hover:text-[#a82255]"
+                    className="text-ink-faint hover:text-danger-ink"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -1109,7 +1109,7 @@ function Inspector({
                     ],
                   })
                 }
-                className="text-[11px] text-[#2d72d2] hover:underline"
+                className="text-[11px] text-brand hover:underline"
               >
                 + add
               </button>
@@ -1158,7 +1158,7 @@ function Inspector({
               placeholder="r_"
               className={F}
             />
-            <p className="mt-1 text-[10.5px] leading-snug text-[#8f99a8]">
+            <p className="mt-1 text-[10.5px] leading-snug text-ink-faint">
               Without a prefix, columns that exist on both sides get{" "}
               <code className="text-[10px]">_right</code> appended rather than overwriting the left
               value.
@@ -1177,7 +1177,7 @@ function Inspector({
               placeholder="note.body"
               className={F}
             />
-            <p className="mt-1 text-[10.5px] leading-snug text-[#8f99a8]">
+            <p className="mt-1 text-[10.5px] leading-snug text-ink-faint">
               Only needed when the column holds JSON rather than plain text.
             </p>
             <label className={L}>Write the text as</label>
@@ -1219,11 +1219,11 @@ function Inspector({
                 type="checkbox"
                 checked={cfg.withContexts !== false}
                 onChange={(e) => onConfig({ withContexts: e.target.checked })}
-                className="h-3 w-3 accent-[#2d72d2]"
+                className="h-3 w-3 accent-brand"
               />
               Capture assertion, subject and certainty
             </label>
-            <p className="mt-2 rounded bg-[#e7f2fd] px-2 py-1.5 text-[10.5px] leading-snug text-[#215db0]">
+            <p className="mt-2 rounded bg-brand-soft px-2 py-1.5 text-[10.5px] leading-snug text-brand-deep">
               This node fans out — one note becomes one row per concept found. Rows going up here
               is expected. A note that yields nothing is counted as dropped rather than vanishing.
             </p>
@@ -1253,14 +1253,14 @@ function Inspector({
               <option value="drop">discard it</option>
             </select>
             {cfg.onLow === "drop" ? (
-              <p className="mt-1 rounded bg-[#fdf6ec] px-2 py-1.5 text-[10.5px] leading-snug text-[#8a5a12]">
+              <p className="mt-1 rounded bg-warn-soft px-2 py-1.5 text-[10.5px] leading-snug text-warn-ink">
                 A discarded clinical finding is gone with no record. Review keeps it recoverable.
               </p>
             ) : null}
             <label className={L}>Treat as duplicate when these match</label>
-            <div className="mt-1 max-h-32 space-y-0.5 overflow-y-auto rounded border border-[#e5e8eb] p-1.5">
+            <div className="mt-1 max-h-32 space-y-0.5 overflow-y-auto rounded border border-line-soft p-1.5">
               {columns.length === 0 ? (
-                <p className="text-[10.5px] text-[#8f99a8]">Preview to see the columns.</p>
+                <p className="text-[10.5px] text-ink-faint">Preview to see the columns.</p>
               ) : (
                 columns.map((c) => {
                   const list = (cfg.dedupeOn as string[] | undefined) ?? [];
@@ -1276,7 +1276,7 @@ function Inspector({
                               : [...list, c],
                           })
                         }
-                        className="h-3 w-3 accent-[#2d72d2]"
+                        className="h-3 w-3 accent-brand"
                       />
                       <span className="truncate">{c}</span>
                     </label>
@@ -1317,14 +1317,14 @@ function Inspector({
               className={F}
             />
             <label className={L}>Identity — the key rows upsert on</label>
-            <div className="mt-1 max-h-32 space-y-0.5 overflow-y-auto rounded border border-[#e5e8eb] p-1.5">
+            <div className="mt-1 max-h-32 space-y-0.5 overflow-y-auto rounded border border-line-soft p-1.5">
               {(() => {
                 const ident = (cfg.identityProperties as string[] | undefined) ?? [];
                 // Same reason as the column pickers: a saved key has to stay
                 // visible and checked before any preview has run.
                 const listed = [...columns, ...ident.filter((c) => !columns.includes(c))];
                 return listed.length === 0 ? (
-                  <p className="text-[10.5px] text-[#8f99a8]">
+                  <p className="text-[10.5px] text-ink-faint">
                     Preview to list the columns, then pick the key.
                   </p>
                 ) : (
@@ -1340,33 +1340,33 @@ function Inspector({
                               : [...ident, c],
                           })
                         }
-                        className="h-3 w-3 accent-[#2d72d2]"
+                        className="h-3 w-3 accent-brand"
                       />
                       <span className="truncate">{c}</span>
                       {!columns.includes(c) && columns.length > 0 ? (
-                        <span className="shrink-0 text-[9.5px] text-[#935610]">not produced</span>
+                        <span className="shrink-0 text-[9.5px] text-warn-ink">not produced</span>
                       ) : null}
                     </label>
                   ))
                 );
               })()}
             </div>
-            <p className="mt-1 rounded bg-[#fdf6ec] px-2 py-1.5 text-[10.5px] leading-snug text-[#8a5a12]">
+            <p className="mt-1 rounded bg-warn-soft px-2 py-1.5 text-[10.5px] leading-snug text-warn-ink">
               The key has to be unique per row. Pick too few columns and every run overwrites the
               same instance — 294 rows quietly become 6.
             </p>
             {/* An hourly count turned into instances only ever grows: a room
                 that drops from 54 stretchers to 50 keeps the last four. */}
-            <label className="mt-3 flex items-start gap-1.5 text-[11px] text-[#1c2127]">
+            <label className="mt-3 flex items-start gap-1.5 text-[11px] text-ink">
               <input
                 type="checkbox"
                 checked={cfg.retireUnwritten === true}
                 onChange={(e) => onConfig({ retireUnwritten: e.target.checked })}
-                className="mt-0.5 h-3 w-3 accent-[#2d72d2]"
+                className="mt-0.5 h-3 w-3 accent-brand"
               />
               <span>Each run is the complete set — remove what it did not write</span>
             </label>
-            <p className="mt-1 text-[10px] leading-relaxed text-[#8f99a8]">
+            <p className="mt-1 text-[10px] leading-relaxed text-ink-faint">
               For a feed that publishes everything that exists right now. Removes nothing when the
               run wrote nothing, skipped a row, was truncated, or would remove more than half of
               what exists — a feed that changes does not lose half of itself at once; a broken file
@@ -1386,7 +1386,7 @@ function Inspector({
                         list[i] = { ...m, from: e.target.value };
                         onConfig({ columnMapping: list });
                       }}
-                      className="min-w-0 flex-1 rounded border border-[#d3d8de] px-1.5 py-1 text-[11px]"
+                      className="min-w-0 flex-1 rounded border border-line px-1.5 py-1 text-[11px]"
                     >
                       <option value="">column</option>
                       {columns.map((x) => (
@@ -1405,7 +1405,7 @@ function Inspector({
                         onConfig({ columnMapping: list });
                       }}
                       placeholder="property"
-                      className="min-w-0 flex-1 rounded border border-[#d3d8de] px-1.5 py-1 text-[11px]"
+                      className="min-w-0 flex-1 rounded border border-line px-1.5 py-1 text-[11px]"
                     />
                     <button
                       type="button"
@@ -1416,7 +1416,7 @@ function Inspector({
                         onConfig({ columnMapping: list });
                       }}
                       aria-label="Remove"
-                      className="text-[#8f99a8] hover:text-[#a82255]"
+                      className="text-ink-faint hover:text-danger-ink"
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -1433,7 +1433,7 @@ function Inspector({
                     ],
                   })
                 }
-                className="text-[11px] text-[#2d72d2] hover:underline"
+                className="text-[11px] text-brand hover:underline"
               >
                 + add
               </button>
@@ -1450,12 +1450,12 @@ function Inspector({
                   onConfig({ linkRules: list });
                 };
                 return (
-                  <div key={i} className="rounded border border-[#e5e8eb] bg-[#f8f9fa] p-1.5">
+                  <div key={i} className="rounded border border-line-soft bg-canvas-raised p-1.5">
                     <div className="flex items-center gap-1">
                       <select
                         value={r.fromColumn ?? ""}
                         onChange={(e) => patch({ fromColumn: e.target.value })}
-                        className="min-w-0 flex-1 rounded border border-[#d3d8de] px-1.5 py-1 text-[11px]"
+                        className="min-w-0 flex-1 rounded border border-line px-1.5 py-1 text-[11px]"
                       >
                         <option value="">column</option>
                         {columns.map((c) => (
@@ -1474,25 +1474,25 @@ function Inspector({
                           })
                         }
                         aria-label="Remove link rule"
-                        className="text-[#8f99a8] hover:text-[#a82255]"
+                        className="text-ink-faint hover:text-danger-ink"
                       >
                         <X className="h-3 w-3" />
                       </button>
                     </div>
                     <div className="mt-1 flex items-center gap-1">
-                      <span className="text-[10px] text-[#8f99a8]">matches</span>
+                      <span className="text-[10px] text-ink-faint">matches</span>
                       <input
                         value={r.targetType ?? ""}
                         onChange={(e) => patch({ targetType: e.target.value })}
                         placeholder="OrgUnit"
-                        className="min-w-0 flex-1 rounded border border-[#d3d8de] px-1.5 py-1 text-[11px]"
+                        className="min-w-0 flex-1 rounded border border-line px-1.5 py-1 text-[11px]"
                       />
-                      <span className="text-[10px] text-[#8f99a8]">.</span>
+                      <span className="text-[10px] text-ink-faint">.</span>
                       <input
                         value={r.targetProperty ?? ""}
                         onChange={(e) => patch({ targetProperty: e.target.value })}
                         placeholder="name"
-                        className="min-w-0 flex-1 rounded border border-[#d3d8de] px-1.5 py-1 text-[11px]"
+                        className="min-w-0 flex-1 rounded border border-line px-1.5 py-1 text-[11px]"
                       />
                     </div>
                     <div className="mt-1 flex items-center gap-1">
@@ -1501,7 +1501,7 @@ function Inspector({
                         onChange={(e) =>
                           patch({ direction: e.target.value as "out" | "in" })
                         }
-                        className="rounded border border-[#d3d8de] px-1.5 py-1 text-[11px]"
+                        className="rounded border border-line px-1.5 py-1 text-[11px]"
                       >
                         <option value="out">this →</option>
                         <option value="in">← this</option>
@@ -1510,7 +1510,7 @@ function Inspector({
                         value={r.linkType ?? ""}
                         onChange={(e) => patch({ linkType: e.target.value })}
                         placeholder="located_in"
-                        className="min-w-0 flex-1 rounded border border-[#d3d8de] px-1.5 py-1 text-[11px]"
+                        className="min-w-0 flex-1 rounded border border-line px-1.5 py-1 text-[11px]"
                       />
                     </div>
                   </div>
@@ -1532,12 +1532,12 @@ function Inspector({
                     ],
                   })
                 }
-                className="text-[11px] text-[#2d72d2] hover:underline"
+                className="text-[11px] text-brand hover:underline"
               >
                 + add link
               </button>
             </div>
-            <p className="mt-1 text-[10.5px] leading-snug text-[#8f99a8]">
+            <p className="mt-1 text-[10.5px] leading-snug text-ink-faint">
               The twin counts a patient toward a unit only when they are linked to it. A column
               holding the unit name is not enough on its own.
             </p>
@@ -1546,25 +1546,25 @@ function Inspector({
       </div>
 
       {stat ? (
-        <div className="border-t border-[#e5e8eb] px-3 py-2">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-[#8f99a8]">
+        <div className="border-t border-line-soft px-3 py-2">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">
             This run
           </p>
           <div className="mt-1 grid grid-cols-3 gap-1.5 text-center">
-            <div className="rounded bg-[#f8f9fa] py-1">
-              <p className="text-[10px] text-[#8f99a8]">in</p>
+            <div className="rounded bg-canvas-raised py-1">
+              <p className="text-[10px] text-ink-faint">in</p>
               <p className="text-xs font-semibold">{stat.in.toLocaleString()}</p>
             </div>
-            <div className="rounded bg-[#f8f9fa] py-1">
-              <p className="text-[10px] text-[#8f99a8]">out</p>
+            <div className="rounded bg-canvas-raised py-1">
+              <p className="text-[10px] text-ink-faint">out</p>
               <p className="text-xs font-semibold">{stat.out.toLocaleString()}</p>
             </div>
-            <div className="rounded bg-[#f8f9fa] py-1">
-              <p className="text-[10px] text-[#8f99a8]">dropped</p>
+            <div className="rounded bg-canvas-raised py-1">
+              <p className="text-[10px] text-ink-faint">dropped</p>
               <p
                 className={cn(
                   "text-xs font-semibold",
-                  stat.dropped > 0 ? "text-[#d9822b]" : "text-[#1c2127]",
+                  stat.dropped > 0 ? "text-warn" : "text-ink",
                 )}
               >
                 {stat.dropped.toLocaleString()}
@@ -1574,16 +1574,16 @@ function Inspector({
 
           {stat.linked !== undefined || stat.unresolved !== undefined ? (
             <div className="mt-1.5 grid grid-cols-2 gap-1.5 text-center">
-              <div className="rounded bg-[#f8f9fa] py-1">
-                <p className="text-[10px] text-[#8f99a8]">links made</p>
+              <div className="rounded bg-canvas-raised py-1">
+                <p className="text-[10px] text-ink-faint">links made</p>
                 <p className="text-xs font-semibold">{(stat.linked ?? 0).toLocaleString()}</p>
               </div>
-              <div className="rounded bg-[#f8f9fa] py-1">
-                <p className="text-[10px] text-[#8f99a8]">no match</p>
+              <div className="rounded bg-canvas-raised py-1">
+                <p className="text-[10px] text-ink-faint">no match</p>
                 <p
                   className={cn(
                     "text-xs font-semibold",
-                    (stat.unresolved ?? 0) > 0 ? "text-[#d9822b]" : "text-[#1c2127]",
+                    (stat.unresolved ?? 0) > 0 ? "text-warn" : "text-ink",
                   )}
                 >
                   {(stat.unresolved ?? 0).toLocaleString()}
@@ -1592,7 +1592,7 @@ function Inspector({
             </div>
           ) : null}
           {(stat.unresolved ?? 0) > 0 ? (
-            <p className="mt-1.5 rounded bg-[#fdf6ec] px-2 py-1.5 text-[10.5px] leading-snug text-[#8a5a12]">
+            <p className="mt-1.5 rounded bg-warn-soft px-2 py-1.5 text-[10.5px] leading-snug text-warn-ink">
               {stat.unresolved} row{stat.unresolved === 1 ? "" : "s"} named a target that does not
               exist in the ontology. The instances were written; they are just not attached, so the
               twin will not count them.
@@ -1623,19 +1623,19 @@ function Inspector({
       ) : null}
 
       {sample ? (
-        <div className="border-t border-[#e5e8eb] px-3 py-2">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-[#8f99a8]">
+        <div className="border-t border-line-soft px-3 py-2">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">
             Output — first row
           </p>
-          <pre className="mt-1 max-h-48 overflow-auto rounded bg-[#f8f9fa] p-1.5 font-mono text-[10px] leading-snug text-[#404854]">
+          <pre className="mt-1 max-h-48 overflow-auto rounded bg-canvas-raised p-1.5 font-mono text-[10px] leading-snug text-ink-body">
             {JSON.stringify(sample, null, 1)}
           </pre>
           {inputSample && node.kind !== "dataset_input" ? (
             <>
-              <p className="mt-2 text-[10px] font-medium uppercase tracking-wide text-[#8f99a8]">
+              <p className="mt-2 text-[10px] font-medium uppercase tracking-wide text-ink-faint">
                 Input — first row
               </p>
-              <pre className="mt-1 max-h-32 overflow-auto rounded bg-[#f8f9fa] p-1.5 font-mono text-[10px] leading-snug text-[#8f99a8]">
+              <pre className="mt-1 max-h-32 overflow-auto rounded bg-canvas-raised p-1.5 font-mono text-[10px] leading-snug text-ink-faint">
                 {JSON.stringify(inputSample, null, 1)}
               </pre>
             </>
@@ -1644,7 +1644,7 @@ function Inspector({
       ) : null}
 
       {nodes.length > 0 && !run ? (
-        <p className="border-t border-[#e5e8eb] px-3 py-2 text-[10.5px] leading-snug text-[#8f99a8]">
+        <p className="border-t border-line-soft px-3 py-2 text-[10.5px] leading-snug text-ink-faint">
           Run a preview to populate the column pickers — they list what the upstream node actually
           produced, not what you hope it did.
         </p>

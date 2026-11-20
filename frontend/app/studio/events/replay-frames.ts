@@ -117,10 +117,10 @@ export function bandOf(worst: number): "quiet" | "busy" | "strained" | "full" {
 }
 
 export const BAND_COLOUR: Record<ReturnType<typeof bandOf>, string> = {
-  quiet: "#1d9e75",
-  busy: "#d9822b",
-  strained: "#c23030",
-  full: "#7a1414",
+  quiet: "#42be65",
+  busy: "#f1c21b",
+  strained: "#fa4d56",
+  full: "#ee5396",
 };
 
 /**

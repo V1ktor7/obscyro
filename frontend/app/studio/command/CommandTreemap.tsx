@@ -161,7 +161,7 @@ export default function CommandTreemap({
   if (!snapshot || snapshot.nodes.length === 0) {
     return (
       <div ref={ref} className="flex min-h-0 flex-1 items-center justify-center p-6">
-        <p className="text-sm text-[#8f99a8]">
+        <p className="text-sm text-ink-faint">
           No OrgUnits in this environment. Seed the CHUM demo to get started.
         </p>
       </div>
@@ -196,7 +196,7 @@ export default function CommandTreemap({
                 key={n.id}
                 className={cn(
                   "absolute rounded-md border transition-opacity",
-                  selected ? "border-[#2d72d2] ring-1 ring-[#b5d4f4]" : "border-[#d3d8de]",
+                  selected ? "border-brand ring-1 ring-brand-line" : "border-line",
                   dimmed && "opacity-40",
                 )}
                 style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
@@ -211,11 +211,11 @@ export default function CommandTreemap({
                     className="h-1.5 w-1.5 shrink-0 rounded-full"
                     style={{ background: severityHex(n.worstAlertSeverity) }}
                   />
-                  <CellIcon kind={n.kind} className="h-3.5 w-3.5 shrink-0 text-[#8f99a8]" />
-                  <span className="truncate text-[11.5px] font-semibold text-[#1c2127]">
+                  <CellIcon kind={n.kind} className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
+                  <span className="truncate text-[11.5px] font-semibold text-ink">
                     {n.name}
                   </span>
-                  <span className="ml-auto shrink-0 text-[10px] font-medium text-[#8f99a8]">
+                  <span className="ml-auto shrink-0 text-[10px] font-medium text-ink-faint">
                     {node.children.length}
                   </span>
                 </button>
@@ -230,7 +230,7 @@ export default function CommandTreemap({
               onClick={() => onSelectUnit(n.id)}
               className={cn(
                 "absolute flex flex-col justify-between overflow-hidden rounded-md border p-1.5 text-left transition-opacity",
-                selected ? "ring-2 ring-[#2d72d2]" : "",
+                selected ? "ring-2 ring-brand" : "",
                 dimmed && "opacity-40",
               )}
               style={{
@@ -239,7 +239,7 @@ export default function CommandTreemap({
                 width: rect.w,
                 height: rect.h,
                 background: tone.bg,
-                borderColor: selected ? "#2d72d2" : tone.border,
+                borderColor: selected ? "#4589ff" : tone.border,
               }}
             >
               <span className="flex items-start gap-1">
@@ -269,7 +269,7 @@ export default function CommandTreemap({
               ) : null}
               {n.openAlertCount > 0 && rect.w > 40 ? (
                 <span
-                  className="absolute right-1 top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-1 text-[8px] font-bold text-white"
+                  className="absolute right-1 top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-1 text-[8px] font-bold text-inverse"
                   style={{
                     background:
                       n.worstAlertSeverity === "critical"
@@ -284,16 +284,16 @@ export default function CommandTreemap({
           );
         })}
       </div>
-      <div className="mt-2 flex items-center gap-2 text-[10.5px] text-[#8f99a8]">
+      <div className="mt-2 flex items-center gap-2 text-[10.5px] text-ink-faint">
         <span>size = capacity</span>
         <span>·</span>
         <span>color = occupancy</span>
         <span className="ml-auto flex items-center gap-1">
-          <span className="h-2 w-3.5 rounded-sm" style={{ background: "#e8f4ec" }} />
+          <span className="h-2 w-3.5 rounded-sm" style={{ background: "#12301c" }} />
           &lt;80%
-          <span className="ml-1 h-2 w-3.5 rounded-sm" style={{ background: "#fdf0e6" }} />
+          <span className="ml-1 h-2 w-3.5 rounded-sm" style={{ background: "#33290a" }} />
           80–95%
-          <span className="ml-1 h-2 w-3.5 rounded-sm" style={{ background: "#fceaef" }} />
+          <span className="ml-1 h-2 w-3.5 rounded-sm" style={{ background: "#3b1518" }} />
           &ge;95%
         </span>
       </div>

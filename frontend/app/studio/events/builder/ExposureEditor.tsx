@@ -25,7 +25,7 @@ function Choice({ on, onClick, children, note }: { on: boolean; onClick: () => v
   return (
     <button type="button" aria-pressed={on} onClick={onClick}
       className={cn("flex flex-col items-start rounded border px-2 py-1 text-left text-[11.5px] leading-tight",
-        on ? "border-brand bg-brand-soft text-brand-deep" : "border-line bg-white text-ink-body hover:border-brand")}>
+        on ? "border-brand bg-brand-soft text-brand-deep" : "border-line bg-surface text-ink-body hover:border-brand")}>
       {children}
       {note ? <small className="text-[10px] text-ink-faint">{note}</small> : null}
     </button>
@@ -209,9 +209,9 @@ export default function ExposureEditor({ x, k, tw, ctx, change, onOpenProfile }:
     );
     if (x.where.mode === "some") {
       body.push(
-        <div key="b" className="grid max-h-56 grid-cols-1 gap-x-3 overflow-y-auto rounded border border-line-soft bg-white p-1.5 sm:grid-cols-2">
+        <div key="b" className="grid max-h-56 grid-cols-1 gap-x-3 overflow-y-auto rounded border border-line-soft bg-surface p-1.5 sm:grid-cols-2">
           {pops.map((p) => (
-            <label key={p.id} className="flex min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-[11.5px] hover:bg-canvas">
+            <label key={p.id} className="flex min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-[11.5px] hover:bg-surface-hover">
               <input type="checkbox" checked={x.where.pops.includes(p.id)} onChange={(ev) => change(() => { x.where.pops = toggle(x.where.pops, p.id, ev.target.checked); })} />
               <span className="min-w-0 flex-1 truncate text-ink-body" title={p.name}>{p.name}</span>
               <em className="not-italic tabular-nums text-ink-faint">{fmt(p.size)}</em>
@@ -223,7 +223,7 @@ export default function ExposureEditor({ x, k, tw, ctx, change, onOpenProfile }:
     }
     if (x.where.mode === "each") {
       body.push(
-        <div key="b" className="grid max-h-72 grid-cols-1 gap-x-3 overflow-y-auto rounded border border-line-soft bg-white p-1.5 sm:grid-cols-2">
+        <div key="b" className="grid max-h-72 grid-cols-1 gap-x-3 overflow-y-auto rounded border border-line-soft bg-surface p-1.5 sm:grid-cols-2">
           {pops.map((p) => (
             <label key={p.id} className="flex min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-[11.5px]">
               <span className="min-w-0 flex-1 truncate text-ink-body" title={p.name}>{p.name}</span>

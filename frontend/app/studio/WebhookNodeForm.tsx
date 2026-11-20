@@ -20,8 +20,8 @@ import {
 } from "./webhook-schema";
 
 const inputCls =
-  "w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10";
-const labelCls = "mb-1 block text-xs font-medium text-gray-700";
+  "w-full rounded-md border border-line bg-canvas-raised px-2.5 py-2 text-xs text-ink focus:border-line-strong focus:outline-none focus:ring-2 focus:ring-line";
+const labelCls = "mb-1 block text-xs font-medium text-ink-body";
 
 const AUTH_TYPES: { value: WebhookAuthType; label: string }[] = [
   { value: "none", label: "None" },
@@ -48,11 +48,11 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <details open={defaultOpen} className="mb-3 rounded-md border border-gray-200">
-      <summary className="cursor-pointer select-none px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+    <details open={defaultOpen} className="mb-3 rounded-md border border-line">
+      <summary className="cursor-pointer select-none px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
         {title}
       </summary>
-      <div className="border-t border-gray-100 p-2.5">{children}</div>
+      <div className="border-t border-line-soft p-2.5">{children}</div>
     </details>
   );
 }
@@ -67,12 +67,12 @@ function Toggle({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="mb-2 flex items-center gap-2 text-xs text-gray-700">
+    <label className="mb-2 flex items-center gap-2 text-xs text-ink-body">
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="h-3.5 w-3.5 accent-gray-900"
+        className="h-3.5 w-3.5 accent-brand"
       />
       {label}
     </label>
@@ -108,7 +108,7 @@ function HeaderRows({
             type="button"
             onClick={() => onChange(rows.filter((_, idx) => idx !== i))}
             aria-label="Remove header"
-            className="shrink-0 rounded-md border border-gray-300 px-2 text-gray-500 hover:bg-gray-50"
+            className="shrink-0 rounded-md border border-line-strong px-2 text-ink-muted hover:bg-surface-hover"
           >
             ×
           </button>
@@ -117,7 +117,7 @@ function HeaderRows({
       <button
         type="button"
         onClick={() => onChange([...rows, { name: "", value: "" }])}
-        className="mt-1 self-start rounded-md border border-gray-300 bg-white px-2.5 py-1 text-[11px] text-gray-600 hover:bg-gray-50"
+        className="mt-1 self-start rounded-md border border-line-strong bg-surface px-2.5 py-1 text-[11px] text-ink-muted hover:bg-surface-hover"
       >
         + Add header
       </button>
@@ -243,7 +243,7 @@ export default function WebhookNodeForm({
         >
           {busy ? "Creating…" : "Create webhook"}
         </button>
-        {msg && <p className="mt-2 text-[10px] text-gray-500">{msg}</p>}
+        {msg && <p className="mt-2 text-[10px] text-ink-muted">{msg}</p>}
       </div>
     );
   }
@@ -256,16 +256,16 @@ export default function WebhookNodeForm({
         <input
           readOnly
           value={config.webhookUrl ?? ""}
-          className="min-w-0 flex-1 rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-[10px] text-gray-700"
+          className="min-w-0 flex-1 rounded-md border border-line bg-canvas-raised px-2.5 py-2 text-[10px] text-ink-body"
         />
         <button
           type="button"
           onClick={copyUrl}
           aria-label="Copy webhook URL"
-          className="inline-flex items-center justify-center rounded-md border border-gray-300 px-2 text-gray-600 hover:bg-gray-50"
+          className="inline-flex items-center justify-center rounded-md border border-line-strong px-2 text-ink-muted hover:bg-surface-hover"
         >
           {copied ? (
-            <Check className="h-3.5 w-3.5 text-emerald-600" />
+            <Check className="h-3.5 w-3.5 text-ok-ink" />
           ) : (
             <Copy className="h-3.5 w-3.5" />
           )}
@@ -286,7 +286,7 @@ export default function WebhookNodeForm({
             </option>
           ))}
         </select>
-        <p className="mt-1 text-[10px] leading-relaxed text-gray-400">
+        <p className="mt-1 text-[10px] leading-relaxed text-ink-faint">
           A request with a different method gets a clear 405 message instead of a
           confusing 404 (e.g. opening the URL in a browser does a GET).
         </p>
@@ -349,7 +349,7 @@ export default function WebhookNodeForm({
             className={inputCls}
           />
         )}
-        <p className="mt-2 text-[10px] leading-relaxed text-gray-400">
+        <p className="mt-2 text-[10px] leading-relaxed text-ink-faint">
           Basic and header secrets are stored as SHA-256 hashes and never returned.
           The JWT secret is stored server-side to verify signatures.
         </p>
@@ -357,8 +357,8 @@ export default function WebhookNodeForm({
 
       {/* Respond */}
       <Section title="Respond" defaultOpen>
-        <p className="mb-2 text-[10px] leading-relaxed text-gray-400">
-          Mode: <span className="font-medium text-gray-600">Immediately</span>. The
+        <p className="mb-2 text-[10px] leading-relaxed text-ink-faint">
+          Mode: <span className="font-medium text-ink-muted">Immediately</span>. The
           webhook stores the event and responds at once (store-and-poll). “When last
           node finishes” is not supported.
         </p>
@@ -466,7 +466,7 @@ export default function WebhookNodeForm({
           type="button"
           disabled={testBusy}
           onClick={sendTest}
-          className="flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+          className="flex-1 rounded-md border border-line-strong bg-surface px-3 py-2 text-xs text-ink-body hover:bg-surface-hover disabled:opacity-40"
         >
           {testBusy ? "Sending…" : "Send test request"}
         </button>
@@ -475,19 +475,19 @@ export default function WebhookNodeForm({
         type="button"
         disabled={busy}
         onClick={() => createSource(true)}
-        className="mt-1.5 w-full rounded-md border border-gray-200 bg-white px-3 py-1.5 text-[11px] text-gray-500 hover:bg-gray-50 disabled:opacity-40"
+        className="mt-1.5 w-full rounded-md border border-line bg-surface px-3 py-1.5 text-[11px] text-ink-muted hover:bg-surface-hover disabled:opacity-40"
       >
         Regenerate URL
       </button>
 
-      {msg && <p className="mt-2 text-[10px] text-gray-500">{msg}</p>}
+      {msg && <p className="mt-2 text-[10px] text-ink-muted">{msg}</p>}
 
       {config.lastEventPayload != null && (
         <div className="mt-3">
-          <span className="mb-1 block text-[9px] uppercase tracking-wide text-sky-600">
+          <span className="mb-1 block text-[9px] uppercase tracking-wide text-sky-300">
             Latest received payload
           </span>
-          <pre className="max-h-40 overflow-auto rounded-md border border-gray-200 bg-gray-50 p-2 font-mono text-[10px] leading-snug text-gray-700">
+          <pre className="max-h-40 overflow-auto rounded-md border border-line bg-canvas-raised p-2 font-mono text-[10px] leading-snug text-ink-body">
             {JSON.stringify(config.lastEventPayload, null, 2)}
           </pre>
         </div>

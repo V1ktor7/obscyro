@@ -523,7 +523,7 @@ export default function EventsView() {
               <select
                 value={twinScenarioId}
                 onChange={(e) => setTwinScenarioId(e.target.value)}
-                className="w-full rounded-md border border-line bg-white px-2.5 py-2 text-xs text-ink focus:border-brand focus:outline-none"
+                className="w-full rounded-md border border-line bg-surface px-2.5 py-2 text-xs text-ink focus:border-brand focus:outline-none"
               >
                 <option value={LIVE}>Live twin — the network as it stands</option>
                 {scenarios.map((s) => (
@@ -745,7 +745,7 @@ export default function EventsView() {
                           onChange={(e) =>
                             setSizes((prev) => ({ ...prev, [p.id]: e.target.value }))
                           }
-                          className="w-24 rounded-md border border-line bg-white px-2 py-1 text-right text-xs text-ink focus:border-brand focus:outline-none"
+                          className="w-24 rounded-md border border-line bg-surface px-2 py-1 text-right text-xs text-ink focus:border-brand focus:outline-none"
                         />
                       </label>
                     ))}
@@ -760,7 +760,7 @@ export default function EventsView() {
                       inputMode="numeric"
                       value={routeCapacity}
                       onChange={(e) => setRouteCapacity(e.target.value)}
-                      className="w-24 rounded-md border border-line bg-white px-2 py-1 text-right text-xs text-ink focus:border-brand focus:outline-none"
+                      className="w-24 rounded-md border border-line bg-surface px-2 py-1 text-right text-xs text-ink focus:border-brand focus:outline-none"
                     />
                   </label>
                 ) : null}
@@ -897,7 +897,7 @@ function Results({ result }: { result: SimComparison }) {
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-line bg-white p-4">
+    <section className="rounded-lg border border-line bg-surface p-4">
       <h2 className="mb-3 text-xs font-medium text-ink">{title}</h2>
       {children}
     </section>

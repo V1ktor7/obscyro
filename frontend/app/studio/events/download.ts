@@ -12,10 +12,11 @@
  * A standalone copy of a live `<svg>`.
  *
  * The element on screen inherits from the page. The file will not, so the
- * namespace and an explicit background go in, and the width and height are
+ * namespace and an explicit background go in (the Studio ground by default,
+ * because the drawing is coloured for it), and the width and height are
  * written from the viewBox rather than left to the CSS that sized it.
  */
-export function standaloneSvg(svg: SVGSVGElement, background = "#ffffff"): string {
+export function standaloneSvg(svg: SVGSVGElement, background = "#161616"): string {
   const clone = svg.cloneNode(true) as SVGSVGElement;
   const box = svg.viewBox.baseVal;
   const w = box && box.width ? box.width : svg.clientWidth || 800;

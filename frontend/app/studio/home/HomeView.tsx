@@ -81,12 +81,12 @@ interface HomePayload {
 /** Project kind -> badge tone. Mirrors the environment badge in the shell. */
 function kindTone(kind: string): { bg: string; text: string; label: string } {
   if (kind === "operations") {
-    return { bg: "bg-[#fdf0e6]", text: "text-[#935610]", label: "PRODUCTION" };
+    return { bg: "bg-warn-soft", text: "text-warn-ink", label: "PRODUCTION" };
   }
   if (kind === "reference") {
-    return { bg: "bg-[#e7f2fd]", text: "text-[#215db0]", label: "REFERENCE" };
+    return { bg: "bg-brand-soft", text: "text-brand-deep", label: "REFERENCE" };
   }
-  return { bg: "bg-[#e8f4ec]", text: "text-[#1c6e42]", label: "SANDBOX" };
+  return { bg: "bg-ok-soft", text: "text-ok-ink", label: "SANDBOX" };
 }
 
 function ago(iso: string | null): string {
@@ -229,12 +229,12 @@ export default function HomeView() {
   }
 
   if (!hasKey) {
-    return <p className="p-8 text-sm text-[#8f99a8]">Sign in to see your projects.</p>;
+    return <p className="p-8 text-sm text-ink-faint">Sign in to see your projects.</p>;
   }
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <Loader2 className="h-5 w-5 animate-spin text-[#8f99a8]" />
+        <Loader2 className="h-5 w-5 animate-spin text-ink-faint" />
       </div>
     );
   }
@@ -244,30 +244,30 @@ export default function HomeView() {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3.5">
       {error ? (
-        <p className="mb-3 rounded border border-[#f4c0d1] bg-[#fceaef] px-3 py-2 text-xs text-[#a82255]">
+        <p className="mb-3 rounded border border-danger-line bg-danger-soft px-3 py-2 text-xs text-danger-ink">
           {error}
         </p>
       ) : null}
 
       {/* Context bar: which legal boundary you are inside */}
       {org ? (
-        <div className="mb-3.5 flex flex-wrap items-center gap-2.5 rounded-lg border border-[#d3d8de] bg-[#f6f7f9] px-3 py-2">
+        <div className="mb-3.5 flex flex-wrap items-center gap-2.5 rounded-lg border border-line bg-canvas px-3 py-2">
           {org.parent ? (
             <>
-              <Network className="h-4 w-4 text-[#5f6b7c]" />
+              <Network className="h-4 w-4 text-ink-muted" />
               <span className="font-medium">{org.parent.name}</span>
-              <Badge className="border border-[#d3d8de] bg-white text-[#5f6b7c]">
+              <Badge className="border border-line bg-surface text-ink-muted">
                 NETWORK
               </Badge>
-              <ChevronRight className="h-3.5 w-3.5 text-[#8f99a8]" />
+              <ChevronRight className="h-3.5 w-3.5 text-ink-faint" />
             </>
           ) : null}
-          <Building2 className="h-4 w-4 text-[#215db0]" />
-          <span className="font-medium text-[#215db0]">{org.name}</span>
-          <Badge className="bg-[#e7f2fd] text-[#215db0]">
+          <Building2 className="h-4 w-4 text-brand-deep" />
+          <span className="font-medium text-brand-deep">{org.name}</span>
+          <Badge className="bg-brand-soft text-brand-deep">
             {org.kind === "network" ? "NETWORK" : "INSTITUTION"} · YOUR ORG
           </Badge>
-          <span className="ml-auto text-[10.5px] text-[#8f99a8]">
+          <span className="ml-auto text-[10.5px] text-ink-faint">
             custodian of everything below
           </span>
         </div>
@@ -276,7 +276,7 @@ export default function HomeView() {
       {/* Projects */}
       <div className="mb-2 flex items-baseline gap-2">
         <h1 className="text-[15px] font-medium">Your projects</h1>
-        <span className="text-[11px] text-[#8f99a8]">{data?.projects.length ?? 0}</span>
+        <span className="text-[11px] text-ink-faint">{data?.projects.length ?? 0}</span>
         {naming ? (
           <span className="ml-auto">
             <NameField
@@ -292,7 +292,7 @@ export default function HomeView() {
             type="button"
             onClick={() => setNaming(true)}
             disabled={creating}
-            className="ml-auto flex items-center gap-1 text-[11.5px] text-[#215db0] hover:underline disabled:opacity-50"
+            className="ml-auto flex items-center gap-1 text-[11.5px] text-brand-deep hover:underline disabled:opacity-50"
           >
             {creating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
             New project
@@ -332,15 +332,15 @@ export default function HomeView() {
                   }
                 }}
                 className={cn(
-                  "cursor-pointer rounded-xl border bg-white p-3 text-left transition-colors hover:border-[#2d72d2]",
-                  empty ? "border-dashed border-[#d3d8de]" : "border-[#d3d8de]",
+                  "cursor-pointer rounded-xl border bg-surface p-3 text-left transition-colors hover:border-brand",
+                  empty ? "border-dashed border-line" : "border-line",
                 )}
               >
                 <div className="mb-1.5 flex items-center gap-1.5">
-                  <FolderPlus className="h-[15px] w-[15px] text-[#215db0]" />
+                  <FolderPlus className="h-[15px] w-[15px] text-brand-deep" />
                   <span className="truncate font-medium">{p.name}</span>
                   {p.liveChannelCount > 0 ? (
-                    <Star className="h-3 w-3 fill-[#d97706] text-[#d97706]" />
+                    <Star className="h-3 w-3 fill-warn text-warn" />
                   ) : null}
                   <button
                     type="button"
@@ -353,7 +353,7 @@ export default function HomeView() {
                     }}
                     aria-label={`Delete ${p.name}`}
                     title="Delete project"
-                    className="ml-auto rounded p-0.5 text-[#8f99a8] hover:bg-rose-50 hover:text-rose-600"
+                    className="ml-auto rounded p-0.5 text-ink-faint hover:bg-danger-soft hover:text-danger"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -361,20 +361,20 @@ export default function HomeView() {
                 <Badge className={cn(tone.bg, tone.text)}>{tone.label}</Badge>
                 {empty ? (
                   <>
-                    <p className="mt-1.5 text-[11px] text-[#8f99a8]">Nothing here yet.</p>
-                    <p className="mt-1 text-[11px] text-[#215db0]">Import a dataset →</p>
+                    <p className="mt-1.5 text-[11px] text-ink-faint">Nothing here yet.</p>
+                    <p className="mt-1 text-[11px] text-brand-deep">Import a dataset →</p>
                   </>
                 ) : (
                   <>
-                    <p className="mt-1.5 text-[11px] text-[#5f6b7c]">
+                    <p className="mt-1.5 text-[11px] text-ink-muted">
                       {p.objectTypeCount} object types · {p.instanceCount.toLocaleString()}{" "}
                       instances
                     </p>
-                    <p className="text-[11px] text-[#5f6b7c]">
+                    <p className="text-[11px] text-ink-muted">
                       {p.datasetCount} dataset{p.datasetCount === 1 ? "" : "s"}
                       {p.liveChannelCount > 0 ? ` · ${p.liveChannelCount} channel live` : ""}
                     </p>
-                    <p className="mt-1 text-[10.5px] text-[#8f99a8]">{ago(p.lastActivityAt)}</p>
+                    <p className="mt-1 text-[10.5px] text-ink-faint">{ago(p.lastActivityAt)}</p>
                   </>
                 )}
               </div>
@@ -382,9 +382,9 @@ export default function HomeView() {
           })}
         </div>
       ) : (
-        <div className="rounded-xl border border-dashed border-[#d3d8de] bg-[#f6f7f9] px-6 py-10 text-center">
-          <p className="text-sm font-medium text-[#1c2127]">Create your first project</p>
-          <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-[#5f6b7c]">
+        <div className="rounded-xl border border-dashed border-line bg-canvas px-6 py-10 text-center">
+          <p className="text-sm font-medium text-ink">Create your first project</p>
+          <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-ink-muted">
             A project holds your datasets, pipelines, and the object types that model your
             domain. Everything you build lives inside one.
           </p>
@@ -394,7 +394,7 @@ export default function HomeView() {
       {/* Shared seam */}
       <div className="mb-2 mt-4 flex items-baseline gap-2">
         <h2 className="text-[15px] font-medium">Shared in this network</h2>
-        <span className="text-[11px] text-[#8f99a8]">{data?.sharedProjects.length ?? 0}</span>
+        <span className="text-[11px] text-ink-faint">{data?.sharedProjects.length ?? 0}</span>
       </div>
       {data && data.sharedProjects.length > 0 ? (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2.5">
@@ -403,22 +403,22 @@ export default function HomeView() {
               key={p.id}
               type="button"
               onClick={() => open(p)}
-              className="rounded-xl border border-[#b5d4f4] bg-[#e7f2fd] p-3 text-left"
+              className="rounded-xl border border-brand-line bg-brand-soft p-3 text-left"
             >
               <div className="flex items-center gap-1.5">
-                <UsersRound className="h-[15px] w-[15px] text-[#215db0]" />
-                <span className="truncate font-medium text-[#215db0]">{p.name}</span>
+                <UsersRound className="h-[15px] w-[15px] text-brand-deep" />
+                <span className="truncate font-medium text-brand-deep">{p.name}</span>
               </div>
             </button>
           ))}
         </div>
       ) : (
-        <div className="rounded-xl border border-[#d3d8de] bg-white px-4 py-3">
-          <p className="flex flex-wrap items-center gap-2 text-xs text-[#5f6b7c]">
-            <Lock className="h-3.5 w-3.5 text-[#1c6e42]" />
+        <div className="rounded-xl border border-line bg-surface px-4 py-3">
+          <p className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+            <Lock className="h-3.5 w-3.5 text-ok-ink" />
             No shared projects yet. A shared project is how organizations collaborate —
             shared ontology and aggregates only.
-            <span className="text-[#8f99a8]">
+            <span className="text-ink-faint">
               No patient records cross the organization boundary.
             </span>
           </p>
@@ -428,15 +428,15 @@ export default function HomeView() {
       {/* Activity + checklist */}
       <div className="mt-4 grid gap-3 md:grid-cols-[1.35fr_1fr]">
         <div>
-          <p className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.05em] text-[#8f99a8]">
+          <p className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.05em] text-ink-faint">
             Recent activity
           </p>
-          <div className="rounded-xl border border-[#d3d8de] bg-white px-3">
+          <div className="rounded-xl border border-line bg-surface px-3">
             {data && data.activity.length > 0 ? (
               <>
                 {data.pendingReviewCount > 0 ? (
-                  <div className="flex items-baseline gap-2 border-b border-[#e5e8eb] py-1.5 text-[11.5px]">
-                    <span className="flex-1 text-[#935610]">
+                  <div className="flex items-baseline gap-2 border-b border-line-soft py-1.5 text-[11.5px]">
+                    <span className="flex-1 text-warn-ink">
                       {data.pendingReviewCount} item
                       {data.pendingReviewCount === 1 ? "" : "s"} awaiting review
                     </span>
@@ -445,23 +445,23 @@ export default function HomeView() {
                 {data.activity.map((a) => (
                   <div
                     key={a.id}
-                    className="flex items-baseline gap-2 border-b border-[#e5e8eb] py-1.5 text-[11.5px] last:border-b-0"
+                    className="flex items-baseline gap-2 border-b border-line-soft py-1.5 text-[11.5px] last:border-b-0"
                   >
-                    <Box className="h-3.5 w-3.5 shrink-0 self-center text-[#215db0]" />
+                    <Box className="h-3.5 w-3.5 shrink-0 self-center text-brand-deep" />
                     <span className="min-w-0 flex-1 truncate">
-                      <span className="text-[11px] text-[#215db0]">{a.action}</span>
+                      <span className="text-[11px] text-brand-deep">{a.action}</span>
                       {a.resourceType ? (
-                        <span className="text-[#8f99a8]"> · {a.resourceType}</span>
+                        <span className="text-ink-faint"> · {a.resourceType}</span>
                       ) : null}
                     </span>
-                    <span className="shrink-0 text-[10.5px] text-[#8f99a8]">
+                    <span className="shrink-0 text-[10.5px] text-ink-faint">
                       {ago(a.createdAt)}
                     </span>
                   </div>
                 ))}
               </>
             ) : (
-              <p className="py-3 text-[11.5px] text-[#8f99a8]">
+              <p className="py-3 text-[11.5px] text-ink-faint">
                 Actions appear here as soon as anyone changes something.
               </p>
             )}
@@ -469,18 +469,18 @@ export default function HomeView() {
         </div>
 
         <div>
-          <p className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.05em] text-[#8f99a8]">
+          <p className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.05em] text-ink-faint">
             Next steps
           </p>
-          <div className="rounded-xl border border-[#d3d8de] bg-[#f6f7f9] px-3 py-2">
+          <div className="rounded-xl border border-line bg-canvas px-3 py-2">
             {(data?.nextSteps ?? []).map((s) => (
               <div key={s.id} className="flex items-center gap-1.5 py-0.5 text-[11.5px]">
                 {s.done ? (
-                  <Check className="h-3.5 w-3.5 text-[#1c6e42]" />
+                  <Check className="h-3.5 w-3.5 text-ok-ink" />
                 ) : (
-                  <Circle className="h-3.5 w-3.5 text-[#8f99a8]" />
+                  <Circle className="h-3.5 w-3.5 text-ink-faint" />
                 )}
-                <span className={cn(s.done && "text-[#8f99a8] line-through")}>{s.label}</span>
+                <span className={cn(s.done && "text-ink-faint line-through")}>{s.label}</span>
               </div>
             ))}
           </div>
@@ -542,7 +542,7 @@ export function DeleteProjectDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       onClick={onCancel}
     >
       <div
@@ -550,27 +550,27 @@ export function DeleteProjectDialog({
         aria-modal="true"
         aria-label={`Delete ${project.name}`}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-xl border border-[#d3d8de] bg-white p-4 shadow-lg"
+        className="w-full max-w-md rounded-xl border border-line bg-surface p-4 shadow-lg"
       >
-        <h2 className="text-sm font-medium text-[#1c2127]">Delete “{project.name}”?</h2>
+        <h2 className="text-sm font-medium text-ink">Delete “{project.name}”?</h2>
 
         {!contents ? (
-          <p className="mt-2 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs leading-relaxed text-[#7c4a03]">
+          <p className="mt-2 rounded border border-warn-line bg-warn-soft px-2 py-1.5 text-xs leading-relaxed text-warn-ink">
             {countsError ?? "Could not read what this project holds."} The delete below still
             works — it just cannot tell you in advance what goes.
           </p>
         ) : holds.length === 0 ? (
-          <p className="mt-2 text-xs leading-relaxed text-[#5f6b7c]">
+          <p className="mt-2 text-xs leading-relaxed text-ink-muted">
             This project is empty. Nothing is lost.
           </p>
         ) : (
           <>
-            <p className="mt-2 text-xs leading-relaxed text-[#5f6b7c]">
+            <p className="mt-2 text-xs leading-relaxed text-ink-muted">
               This deletes the project and everything filed under it:
             </p>
             <ul className="mt-2 flex flex-col gap-0.5">
               {holds.map(([n, noun]) => (
-                <li key={noun} className="text-xs text-[#1c2127]">
+                <li key={noun} className="text-xs text-ink">
                   <strong className="font-medium tabular-nums">{n.toLocaleString()}</strong>{" "}
                   {noun}
                   {n === 1 ? "" : "s"}
@@ -580,12 +580,12 @@ export function DeleteProjectDialog({
           </>
         )}
 
-        <p className="mt-3 text-xs leading-relaxed text-rose-700">
+        <p className="mt-3 text-xs leading-relaxed text-danger-ink">
           There is no undo, and nothing is exported first.
         </p>
 
-        <label className="mt-3 block text-[11px] text-[#5f6b7c]">
-          Type <strong className="font-medium text-[#1c2127]">{project.name}</strong> to confirm
+        <label className="mt-3 block text-[11px] text-ink-muted">
+          Type <strong className="font-medium text-ink">{project.name}</strong> to confirm
           <input
             autoFocus
             value={typed}
@@ -595,7 +595,7 @@ export function DeleteProjectDialog({
               if (e.key === "Enter" && typed.trim() === project.name) onConfirm();
             }}
             aria-label="Type the project name to confirm"
-            className="mt-1 w-full rounded border border-[#d3d8de] px-2 py-1.5 text-xs focus:border-rose-500 focus:outline-none"
+            className="mt-1 w-full rounded border border-line px-2 py-1.5 text-xs focus:border-danger focus:outline-none"
           />
         </label>
 
@@ -603,7 +603,7 @@ export function DeleteProjectDialog({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded px-3 py-1.5 text-xs text-[#5f6b7c] hover:text-[#1c2127]"
+            className="rounded px-3 py-1.5 text-xs text-ink-muted hover:text-ink"
           >
             Cancel
           </button>
@@ -611,7 +611,7 @@ export function DeleteProjectDialog({
             type="button"
             onClick={onConfirm}
             disabled={busy || typed.trim() !== project.name}
-            className="rounded bg-rose-600 px-3 py-1.5 text-xs text-white hover:bg-rose-700 disabled:bg-[#d3d8de]"
+            className="rounded bg-danger px-3 py-1.5 text-xs text-inverse hover:bg-danger disabled:bg-line"
           >
             {busy ? "Deleting…" : "Delete permanently"}
           </button>

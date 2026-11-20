@@ -38,7 +38,7 @@ export function OverlayPanel({
   return (
     <section
       className={cn(
-        "pointer-events-auto flex max-h-full min-h-0 flex-col overflow-hidden rounded-lg border border-line bg-white/95 shadow-sm backdrop-blur",
+        "pointer-events-auto flex max-h-full min-h-0 flex-col overflow-hidden rounded-lg border border-line bg-surface/95 shadow-sm backdrop-blur",
         className,
       )}
     >
@@ -46,7 +46,7 @@ export function OverlayPanel({
         type="button"
         aria-expanded={open}
         onClick={onToggle}
-        className="flex w-full shrink-0 items-center gap-2 px-3 py-2 text-left hover:bg-canvas-raised"
+        className="flex w-full shrink-0 items-center gap-2 px-3 py-2 text-left hover:bg-surface-hover"
       >
         <span className="shrink-0 text-[12px] font-semibold text-ink">{title}</span>
         {meta ? <span className="min-w-0 truncate text-[11px] text-ink-muted">{meta}</span> : null}
@@ -64,4 +64,4 @@ export function OverlayPanel({
 
 /** The same frame without a fold, for bars that are always there. */
 export const OVERLAY_BAR =
-  "pointer-events-auto rounded-lg border border-line bg-white/95 shadow-sm backdrop-blur";
+  "pointer-events-auto rounded-lg border border-line bg-surface/95 shadow-sm backdrop-blur";

@@ -141,28 +141,28 @@ export default function ScenarioPanel({
   const unitName = (id: string | null) =>
     units.find((u) => u.id === id)?.name ?? (id ? `${id.slice(0, 8)}…` : "—");
 
-  const F = "rounded border border-[#d3d8de] bg-white px-2 py-1 text-xs focus:outline-none";
+  const F = "rounded border border-line bg-surface px-2 py-1 text-xs focus:outline-none";
 
   return (
-    <div className="shrink-0 border-b border-[#d3d8de] bg-[#faf9fc] px-3 py-2">
+    <div className="shrink-0 border-b border-line bg-scenario-soft px-3 py-2">
       <div className="flex items-center gap-2">
-        <span className="text-[10px] font-medium uppercase tracking-wide text-[#5b4a86]">
+        <span className="text-[10px] font-medium uppercase tracking-wide text-scenario">
           Scenario edits
         </span>
-        <span className="text-[10px] text-[#8f99a8]">
+        <span className="text-[10px] text-ink-faint">
           {overrides.length === 0
             ? "none yet — this scenario currently resolves to reality"
             : `${overrides.length} edit${overrides.length === 1 ? "" : "s"}`}
         </span>
         {error ? (
-          <span className="max-w-[40ch] truncate text-[11px] text-[#a82255]" title={error}>
+          <span className="max-w-[40ch] truncate text-[11px] text-danger-ink" title={error}>
             {error}
           </span>
         ) : null}
         <button
           type="button"
           onClick={onClose}
-          className="ml-auto text-[11px] text-[#5f6b7c] hover:text-[#1c2127]"
+          className="ml-auto text-[11px] text-ink-muted hover:text-ink"
         >
           Hide
         </button>
@@ -174,16 +174,16 @@ export default function ScenarioPanel({
           {overrides.map((o) => (
             <span
               key={o.id}
-              className="flex items-center gap-1.5 rounded border border-[#d9d2e6] bg-white px-2 py-0.5 text-[10.5px] text-[#404854]"
+              className="flex items-center gap-1.5 rounded border border-scenario-line bg-surface px-2 py-0.5 text-[10.5px] text-ink-body"
             >
               <b className="font-medium">{o.op.replace("_", " ")}</b>
               {o.targetId ? unitName(o.targetId) : (o.targetLocalKey ?? "")}
               {o.op === "set_property" ? (
-                <span className="text-[#8f99a8]">
+                <span className="text-ink-faint">
                   {String(o.payload.property ?? "")}={String(o.payload.value ?? "")}
                 </span>
               ) : null}
-              <span className="text-[#8f99a8]">
+              <span className="text-ink-faint">
                 d{Math.round(o.effectiveOffsetHours / 24)}
                 {o.durationHours ? `+${Math.round(o.durationHours / 24)}d` : ""}
               </span>
@@ -191,7 +191,7 @@ export default function ScenarioPanel({
                 type="button"
                 onClick={() => void remove(o.id)}
                 aria-label="Remove edit"
-                className="text-[#8f99a8] hover:text-[#a82255]"
+                className="text-ink-faint hover:text-danger-ink"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -201,7 +201,7 @@ export default function ScenarioPanel({
       ) : null}
 
       {issues.length > 0 ? (
-        <p className="mt-1.5 rounded bg-[#fdf6ec] px-2 py-1 text-[10.5px] leading-snug text-[#8a5a12]">
+        <p className="mt-1.5 rounded bg-warn-soft px-2 py-1 text-[10.5px] leading-snug text-warn-ink">
           {issues.map((i) => i.message).join(" ")}
         </p>
       ) : null}
@@ -249,7 +249,7 @@ export default function ScenarioPanel({
           </>
         ) : null}
 
-        <span className="text-[10px] text-[#8f99a8]">from day</span>
+        <span className="text-[10px] text-ink-faint">from day</span>
         <input
           type="number"
           min={0}
@@ -257,7 +257,7 @@ export default function ScenarioPanel({
           onChange={(e) => setDay(Number(e.target.value))}
           className={cn(F, "w-14")}
         />
-        <span className="text-[10px] text-[#8f99a8]">for</span>
+        <span className="text-[10px] text-ink-faint">for</span>
         <input
           type="number"
           min={1}
@@ -266,18 +266,18 @@ export default function ScenarioPanel({
           placeholder="∞"
           className={cn(F, "w-14")}
         />
-        <span className="text-[10px] text-[#8f99a8]">days</span>
+        <span className="text-[10px] text-ink-faint">days</span>
 
         <button
           type="button"
           disabled={busy || !unitId}
           onClick={() => void add()}
-          className="flex items-center gap-1.5 rounded border border-[#7961a8] bg-[#f0edf7] px-2.5 py-1 text-xs font-medium text-[#5b4a86] disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded border border-scenario-line bg-scenario-soft px-2.5 py-1 text-xs font-medium text-scenario disabled:opacity-50"
         >
           {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
           Add edit
         </button>
-        <span className="text-[10px] text-[#8f99a8]">
+        <span className="text-[10px] text-ink-faint">
           the twin picks this up on its next tick
         </span>
       </div>

@@ -32,7 +32,7 @@ describe("occupancy over capacity", () => {
   it("reads as critical past the threshold, not merely at the top of the ring", () => {
     const { container } = render(<GaugeArc pct={137} />);
     const arc = container.querySelectorAll("circle")[1]!;
-    expect(arc.getAttribute("stroke")).toBe("#f43f5e");
+    expect(arc.getAttribute("stroke")).toBe("#fa4d56");
   });
 
   it("says nothing at all when the figure is missing", () => {

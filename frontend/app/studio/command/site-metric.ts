@@ -89,14 +89,14 @@ export function ruleForMetric(
 }
 
 const COLOURS: Record<MetricBand, string> = {
-  absent: "#c5cbd3",
-  calm: "#059669",
-  near: "#d97706",
-  over: "#e11d48",
+  absent: "#6f6f6f",
+  calm: "#42be65",
+  near: "#f1c21b",
+  over: "#fa4d56",
   // Deliberately not on the green–amber–red axis: a metric nobody thresholded
   // has no good or bad, and borrowing that axis would imply a judgement the
   // data does not carry.
-  unbanded: "#5b7fa6",
+  unbanded: "#78a9ff",
 };
 
 export function bandColour(band: MetricBand): string {

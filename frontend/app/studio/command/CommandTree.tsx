@@ -128,7 +128,7 @@ export default function CommandTree({
   if (!snapshot || snapshot.nodes.length === 0) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-        <p className="text-sm text-[#8f99a8]">
+        <p className="text-sm text-ink-faint">
           No OrgUnits in this environment. Seed the CHUM demo to get started.
         </p>
       </div>
@@ -148,7 +148,7 @@ export default function CommandTree({
       <div className="relative" style={{ width, height }}>
         <svg className="pointer-events-none absolute inset-0" width={width} height={height}>
           {edges.map((e, i) => (
-            <path key={i} d={elbow(e)} fill="none" stroke="#c5cbd3" strokeWidth={1.3} />
+            <path key={i} d={elbow(e)} fill="none" stroke="#6f6f6f" strokeWidth={1.3} />
           ))}
         </svg>
 
@@ -165,7 +165,7 @@ export default function CommandTree({
               key={n.id}
               className={cn(
                 "absolute rounded-md border transition-opacity",
-                selected ? "ring-2 ring-[#2d72d2]" : "",
+                selected ? "ring-2 ring-brand" : "",
                 dimmed && "opacity-35",
               )}
               style={{
@@ -173,8 +173,8 @@ export default function CommandTree({
                 top: y,
                 width: NODE_W,
                 height: NODE_H,
-                background: isLeaf ? tone.bg : "#ffffff",
-                borderColor: selected ? "#2d72d2" : isLeaf ? tone.border : "#d3d8de",
+                background: isLeaf ? tone.bg : "#262626",
+                borderColor: selected ? "#4589ff" : isLeaf ? tone.border : "#393939",
               }}
             >
               <button
@@ -190,23 +190,23 @@ export default function CommandTree({
                   <NodeIcon
                     kind={n.kind}
                     className="h-3.5 w-3.5 shrink-0"
-                    style={{ color: isLeaf ? tone.text : "#8f99a8" }}
+                    style={{ color: isLeaf ? tone.text : "#a8a8a8" }}
                   />
                   <span
                     className="truncate text-[11.5px] font-medium"
-                    style={{ color: isLeaf ? tone.text : "#1c2127" }}
+                    style={{ color: isLeaf ? tone.text : "#f4f4f4" }}
                     title={n.name}
                   >
                     {n.name}
                   </span>
                 </span>
                 <span className="flex items-center justify-between">
-                  <span className="text-[9px] font-medium uppercase tracking-wide text-[#8f99a8]">
+                  <span className="text-[9px] font-medium uppercase tracking-wide text-ink-faint">
                     {n.kind}
                   </span>
                   <span
                     className="text-[13px] font-semibold leading-none"
-                    style={{ color: isLeaf ? tone.text : "#404854" }}
+                    style={{ color: isLeaf ? tone.text : "#e0e0e0" }}
                   >
                     {isLeaf ? metricVal : `${node.children.length}`}
                   </span>
@@ -214,7 +214,7 @@ export default function CommandTree({
               </button>
               {n.openAlertCount > 0 ? (
                 <span
-                  className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white"
+                  className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-inverse"
                   style={{
                     background:
                       n.worstAlertSeverity === "critical"
@@ -236,7 +236,7 @@ export default function CommandTree({
                       return next;
                     })
                   }
-                  className="absolute -bottom-2 left-1/2 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full border border-[#d3d8de] bg-white text-[9px] leading-none text-[#5f6b7c] hover:border-[#2d72d2] hover:text-[#2d72d2]"
+                  className="absolute -bottom-2 left-1/2 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full border border-line bg-surface text-[9px] leading-none text-ink-muted hover:border-brand hover:text-brand"
                   title={isCol ? "Expand" : "Collapse"}
                   aria-label={isCol ? "Expand branch" : "Collapse branch"}
                 >

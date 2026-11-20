@@ -55,7 +55,7 @@ function suggestions(period: { origin: string; horizon: number } | null): string
   ];
 }
 
-const FIELD = "rounded border border-line bg-white px-1.5 py-1 text-[11.5px] text-ink focus:border-brand focus:outline-none";
+const FIELD = "rounded border border-line bg-surface px-1.5 py-1 text-[11.5px] text-ink focus:border-brand focus:outline-none";
 
 export default function EventFinderTab({
   env,
@@ -229,10 +229,10 @@ export default function EventFinderTab({
               }
             }}
             placeholder="What measures were in force in Montréal between 2021-12-01 and 2022-02-28?"
-            className="min-w-0 flex-1 resize-none rounded border border-line bg-white px-2 py-1.5 text-[12.5px] text-ink focus:border-brand focus:outline-none"
+            className="min-w-0 flex-1 resize-none rounded border border-line bg-surface px-2 py-1.5 text-[12.5px] text-ink focus:border-brand focus:outline-none"
           />
           {searching ? (
-            <button type="button" onClick={stop} className="rounded border border-line px-2.5 py-1.5 text-[12px] text-ink-body hover:bg-canvas-raised">
+            <button type="button" onClick={stop} className="rounded border border-line px-2.5 py-1.5 text-[12px] text-ink-body hover:bg-surface-hover">
               Stop
             </button>
           ) : (
@@ -254,7 +254,7 @@ export default function EventFinderTab({
                 key={s}
                 type="button"
                 onClick={() => suggest(s)}
-                className="rounded-full border border-line bg-white px-2.5 py-1 text-left text-[11.5px] text-ink-body hover:border-brand hover:bg-brand-soft"
+                className="rounded-full border border-line bg-surface px-2.5 py-1 text-left text-[11.5px] text-ink-body hover:border-brand hover:bg-brand-soft"
               >
                 {s}
               </button>
@@ -317,7 +317,7 @@ export default function EventFinderTab({
                   }
                   const corrected = d.start !== (c.startDate ?? "") || d.end !== (c.endDate ?? "");
                   return (
-                    <li key={c.id} aria-label={c.title} className={cn("flex flex-col gap-1.5 rounded-md border p-2", done ? "border-ok-ink/40 bg-ok-soft/40" : "border-line-soft bg-white")}>
+                    <li key={c.id} aria-label={c.title} className={cn("flex flex-col gap-1.5 rounded-md border p-2", done ? "border-ok-ink/40 bg-ok-soft/40" : "border-line-soft bg-surface")}>
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span title={DOOR_LABEL[c.door].title} className="rounded bg-canvas px-1 py-px text-[9.5px] font-bold uppercase tracking-wide text-ink-body">
                           {DOOR_LABEL[c.door].label}
@@ -417,7 +417,7 @@ export default function EventFinderTab({
                               type="button"
                               disabled={acting !== null}
                               onClick={() => setRejected((r) => [...r, c.id])}
-                              className="flex items-center gap-1 rounded border border-line bg-white px-2 py-1 text-[11.5px] font-semibold text-ink hover:bg-canvas disabled:opacity-60"
+                              className="flex items-center gap-1 rounded border border-line bg-surface px-2 py-1 text-[11.5px] font-semibold text-ink hover:bg-surface-hover disabled:opacity-60"
                             >
                               <X className="h-3 w-3" aria-hidden="true" /> Reject
                             </button>
@@ -533,7 +533,7 @@ function Sources({ env, locked }: { env: string; locked: boolean }) {
         value={text}
         onChange={(e) => setText(e.target.value)}
         spellCheck={false}
-        className="resize-y rounded border border-line bg-white px-2 py-1 font-mono text-[11.5px] text-ink focus:border-brand focus:outline-none"
+        className="resize-y rounded border border-line bg-surface px-2 py-1 font-mono text-[11.5px] text-ink focus:border-brand focus:outline-none"
       />
       <p className="text-[11px] text-ink-muted">
         Write a domain like quebec.ca, without https://. It covers its subdomains. Results come from these sources only, for
@@ -544,10 +544,10 @@ function Sources({ env, locked }: { env: string; locked: boolean }) {
         <button type="button" disabled={saving} onClick={() => void save()} className="flex items-center gap-1 rounded bg-brand px-2 py-1 text-[11.5px] font-semibold text-white disabled:opacity-60">
           {saving ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : null} Save
         </button>
-        <button type="button" disabled={saving} onClick={() => setText(sources.defaults.join("\n"))} className="rounded border border-line bg-white px-2 py-1 text-[11.5px] text-ink-body hover:bg-canvas disabled:opacity-60">
+        <button type="button" disabled={saving} onClick={() => setText(sources.defaults.join("\n"))} className="rounded border border-line bg-surface px-2 py-1 text-[11.5px] text-ink-body hover:bg-surface-hover disabled:opacity-60">
           Starting list
         </button>
-        <button type="button" disabled={saving} onClick={() => setEditing(false)} className="rounded border border-line bg-white px-2 py-1 text-[11.5px] text-ink-body hover:bg-canvas disabled:opacity-60">
+        <button type="button" disabled={saving} onClick={() => setEditing(false)} className="rounded border border-line bg-surface px-2 py-1 text-[11.5px] text-ink-body hover:bg-surface-hover disabled:opacity-60">
           Cancel
         </button>
       </div>

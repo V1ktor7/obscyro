@@ -37,8 +37,8 @@ export default function FluxCanvas({
     <svg viewBox={`0 0 ${w} ${h}`} className="h-full w-full min-h-[180px]">
       <defs>
         <linearGradient id="flowGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#6366f1" stopOpacity={0.2} />
-          <stop offset="100%" stopColor="#6366f1" stopOpacity={0.05} />
+          <stop offset="0%" stopColor="#818cf8" stopOpacity={0.2} />
+          <stop offset="100%" stopColor="#818cf8" stopOpacity={0.05} />
         </linearGradient>
       </defs>
 
@@ -54,14 +54,14 @@ export default function FluxCanvas({
               width={100}
               height={28}
               rx={4}
-              fill={pulse ? "#eef2ff" : "#f8fafc"}
-              stroke="#c7d2fe"
+              fill={pulse ? "#1e2248" : "#303030"}
+              stroke="#4a4fb0"
               strokeWidth={1}
             />
-            <text x={sourceX + 8} y={y + 12} fontSize={9} fill="#334155" fontWeight={600}>
+            <text x={sourceX + 8} y={y + 12} fontSize={9} fill="#e0e0e0" fontWeight={600}>
               {s.name.slice(0, 14)}
             </text>
-            <text x={sourceX + 8} y={y + 22} fontSize={7} fill="#94a3b8">
+            <text x={sourceX + 8} y={y + 22} fontSize={7} fill="#a8a8a8">
               {s.type}/{s.method}
             </text>
             <line
@@ -69,7 +69,7 @@ export default function FluxCanvas({
               y1={y + 14}
               x2={stageStart - 8}
               y2={y + 14}
-              stroke="#6366f1"
+              stroke="#818cf8"
               strokeWidth={1}
               strokeDasharray={pulse ? "0" : "4 3"}
               opacity={0.5}
@@ -79,7 +79,7 @@ export default function FluxCanvas({
       })}
 
       {sources.length === 0 && (
-        <text x={sourceX} y={60} fontSize={10} fill="#94a3b8">
+        <text x={sourceX} y={60} fontSize={10} fill="#a8a8a8">
           No sources — attach flux
         </text>
       )}
@@ -97,16 +97,16 @@ export default function FluxCanvas({
               height={40}
               rx={4}
               fill="url(#flowGrad)"
-              stroke="#e2e8f0"
+              stroke="#393939"
               strokeWidth={1}
             />
-            <text x={x + 44} y={y + 24} fontSize={9} fill="#64748b" textAnchor="middle">
+            <text x={x + 44} y={y + 24} fontSize={9} fill="#a8a8a8" textAnchor="middle">
               {label}
             </text>
             {i < STAGES.length - 1 && (
               <polygon
                 points={`${x + 92},${y + 20} ${x + 100},${y + 16} ${x + 100},${y + 24}`}
-                fill="#cbd5e1"
+                fill="#525252"
               />
             )}
           </g>
@@ -120,11 +120,11 @@ export default function FluxCanvas({
         width={170}
         height={h - 32}
         rx={6}
-        fill="#fafafa"
-        stroke="#e2e8f0"
+        fill="#303030"
+        stroke="#393939"
         strokeWidth={1}
       />
-      <text x={twinX + 85} y={32} fontSize={9} fill="#6366f1" textAnchor="middle" fontWeight={600}>
+      <text x={twinX + 85} y={32} fontSize={9} fill="#818cf8" textAnchor="middle" fontWeight={600}>
         Digital Twin
       </text>
       {types.slice(0, 8).map((t, i) => {
@@ -132,25 +132,25 @@ export default function FluxCanvas({
         const fresh =
           t.fetchedAgeSeconds != null
             ? t.fetchedAgeSeconds < 300
-              ? "#10b981"
+              ? "#42be65"
               : t.fetchedAgeSeconds < 3600
-                ? "#f59e0b"
-                : "#f43f5e"
-            : "#94a3b8";
+                ? "#f1c21b"
+                : "#ff8389"
+            : "#a8a8a8";
         return (
           <g key={t.typeName}>
             <circle cx={twinX + 12} cy={y - 3} r={3} fill={fresh} />
-            <text x={twinX + 20} y={y} fontSize={8} fill="#475569">
+            <text x={twinX + 20} y={y} fontSize={8} fill="#c6c6c6">
               {t.typeName} ({t.count})
             </text>
-            <text x={twinX + 155} y={y} fontSize={7} fill="#94a3b8" textAnchor="end">
+            <text x={twinX + 155} y={y} fontSize={7} fill="#a8a8a8" textAnchor="end">
               {t.fetchedAgeSeconds != null ? `${t.fetchedAgeSeconds}s` : "—"}
             </text>
           </g>
         );
       })}
       {!types.length && (
-        <text x={twinX + 85} y={h / 2} fontSize={9} fill="#94a3b8" textAnchor="middle">
+        <text x={twinX + 85} y={h / 2} fontSize={9} fill="#a8a8a8" textAnchor="middle">
           No metrics yet
         </text>
       )}
@@ -161,7 +161,7 @@ export default function FluxCanvas({
         y1={h / 2}
         x2={twinX - 4}
         y2={h / 2}
-        stroke="#6366f1"
+        stroke="#818cf8"
         strokeWidth={1.5}
         markerEnd="url(#arrow)"
         opacity={0.4 + (tick % 3) * 0.1}

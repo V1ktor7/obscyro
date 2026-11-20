@@ -45,9 +45,9 @@ const PLOT: PlotBox = {
   padBottom: 34,
 };
 
-const AXIS = "#8f99a8";
-const GRID = "#eef1f4";
-const SERIES = "#2d72d2";
+const AXIS = "#a8a8a8";
+const GRID = "#2c2c2c";
+const SERIES = "#4589ff";
 
 function Empty({ note }: { note: string }) {
   return (
@@ -348,8 +348,8 @@ function TableCard({ card }: { card: Card }) {
 }
 
 
-const BAND = "#c6dbf5";
-const REAL = "#1c2127";
+const BAND = "#16305f";
+const REAL = "#f4f4f4";
 
 /** The horizontal grid and its labels, shared by the two time-axis cards. */
 function Grid({ ticks, scale }: { ticks: number[]; scale: ReturnType<typeof scaleFor> }) {
@@ -516,7 +516,7 @@ export default function CardChart({
   return (
     <section
       className={cn(
-        "flex flex-col overflow-hidden rounded-md border border-line bg-white",
+        "flex flex-col overflow-hidden rounded-md border border-line bg-surface",
         className,
       )}
     >

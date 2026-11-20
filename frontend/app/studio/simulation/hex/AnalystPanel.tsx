@@ -315,7 +315,7 @@ function AskTab({
                   type="button"
                   aria-pressed={looking === key}
                   onClick={() => setLooking(key)}
-                  className={cn("px-2 py-1", looking === key ? "bg-brand-soft font-semibold text-brand-deep" : "bg-white text-ink-body hover:bg-canvas-raised")}
+                  className={cn("px-2 py-1", looking === key ? "bg-brand-soft font-semibold text-brand-deep" : "bg-surface text-ink-body hover:bg-surface-hover")}
                 >
                   {label}
                 </button>
@@ -350,10 +350,10 @@ function AskTab({
               }
             }}
             placeholder="Ask about the sites, the catchments, the scenario or the run…"
-            className="min-w-0 flex-1 resize-none rounded border border-line bg-white px-2 py-1.5 text-[12.5px] text-ink focus:border-brand focus:outline-none"
+            className="min-w-0 flex-1 resize-none rounded border border-line bg-surface px-2 py-1.5 text-[12.5px] text-ink focus:border-brand focus:outline-none"
           />
           {asking ? (
-            <button type="button" onClick={stop} className="rounded border border-line px-2.5 py-1.5 text-[12px] text-ink-body hover:bg-canvas-raised">
+            <button type="button" onClick={stop} className="rounded border border-line px-2.5 py-1.5 text-[12px] text-ink-body hover:bg-surface-hover">
               Stop
             </button>
           ) : (
@@ -374,7 +374,7 @@ function AskTab({
                 key={s}
                 type="button"
                 onClick={() => void ask(s)}
-                className="rounded-full border border-line bg-white px-2.5 py-1 text-left text-[11.5px] text-ink-body hover:border-brand hover:bg-brand-soft"
+                className="rounded-full border border-line bg-surface px-2.5 py-1 text-left text-[11.5px] text-ink-body hover:border-brand hover:bg-brand-soft"
               >
                 {s}
               </button>
@@ -497,7 +497,7 @@ function AskTab({
                         key={s.id}
                         type="button"
                         onClick={() => onFocusSite(s.id)}
-                        className="flex items-center gap-1 rounded border border-line bg-white px-2 py-1 text-[11.5px] text-ink-body hover:border-brand hover:bg-brand-soft"
+                        className="flex items-center gap-1 rounded border border-line bg-surface px-2 py-1 text-[11.5px] text-ink-body hover:border-brand hover:bg-brand-soft"
                       >
                         <MapPin className="h-3 w-3 text-brand-deep" aria-hidden="true" /> {s.name}
                       </button>
@@ -516,7 +516,7 @@ function AskTab({
                         type="button"
                         disabled={asking}
                         onClick={() => void ask(f)}
-                        className="rounded-full border border-line bg-white px-2.5 py-1 text-left text-[11.5px] text-ink-body hover:border-brand hover:bg-brand-soft disabled:opacity-50"
+                        className="rounded-full border border-line bg-surface px-2.5 py-1 text-left text-[11.5px] text-ink-body hover:border-brand hover:bg-brand-soft disabled:opacity-50"
                       >
                         {f}
                       </button>

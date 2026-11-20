@@ -54,7 +54,7 @@ export default function Picker({ tw, snapshot, onPick, onClose }: { tw: BuilderT
   const shown = groups.map(([title, rows]) => [title, rows.filter((r) => !needle || r.text.includes(needle) || title.toLowerCase().includes(needle))] as const).filter(([, rows]) => rows.length);
 
   return (
-    <div className="rounded-md border border-brand bg-white shadow-sm">
+    <div className="rounded-md border border-brand bg-surface shadow-sm">
       <div className="flex items-center gap-2 border-b border-line-soft px-2.5 py-1.5">
         <Search className="h-3.5 w-3.5 text-ink-faint" />
         <input ref={input} type="search" value={q} onChange={(ev) => setQ(ev.target.value)} onKeyDown={(ev) => { if (ev.key === "Escape") onClose(); }}

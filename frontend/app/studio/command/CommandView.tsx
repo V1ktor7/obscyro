@@ -343,8 +343,8 @@ export default function CommandView() {
 
   if (!hasKey) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-white">
-        <p className="max-w-sm text-center text-sm text-[#5f6b7c]">
+      <div className="flex flex-1 items-center justify-center bg-surface">
+        <p className="max-w-sm text-center text-sm text-ink-muted">
           Sign in and create an API key to view the live digital twin.
         </p>
       </div>
@@ -352,8 +352,8 @@ export default function CommandView() {
   }
   if (!env) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-white">
-        <p className="text-sm text-[#5f6b7c]">
+      <div className="flex flex-1 items-center justify-center bg-surface">
+        <p className="text-sm text-ink-muted">
           Select an environment in the header.
         </p>
       </div>
@@ -361,9 +361,9 @@ export default function CommandView() {
   }
   if (!isOperations) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-white p-6">
+      <div className="flex flex-1 items-center justify-center bg-surface p-6">
         <Card className="max-w-md p-6 text-center">
-          <p className="text-sm text-[#5f6b7c]">
+          <p className="text-sm text-ink-muted">
             Twin Command requires an <strong>operations</strong> environment.
             Switch env type in Ontology Manager, or seed a demo skeleton here.
           </p>
@@ -375,7 +375,7 @@ export default function CommandView() {
             {seeding ? "Seeding…" : "Seed CHUM demo"}
           </Button>
           {error ? (
-            <p className="mt-2 text-xs text-rose-600">{error}</p>
+            <p className="mt-2 text-xs text-danger">{error}</p>
           ) : null}
         </Card>
       </div>
@@ -383,11 +383,11 @@ export default function CommandView() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-white">
+    <div className="flex min-h-0 flex-1 flex-col bg-surface">
       {/* ---- Command strip ---- */}
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#d3d8de] bg-[#f6f7f9]/60 px-3 py-1.5">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-canvas/60 px-3 py-1.5">
         <Chip>
-          ENV <b className="font-semibold text-[#1c2127]">{env}</b> ·{" "}
+          ENV <b className="font-semibold text-ink">{env}</b> ·{" "}
           {envMeta?.type}
         </Chip>
         <Chip>
@@ -406,8 +406,8 @@ export default function CommandView() {
             className={cn(
               "rounded border px-2 py-1 text-xs focus:outline-none",
               scenarioId
-                ? "border-[#7961a8] bg-[#f0edf7] font-medium text-[#5b4a86]"
-                : "border-[#d3d8de] bg-white text-[#404854]",
+                ? "border-scenario-line bg-scenario-soft font-medium text-scenario"
+                : "border-line bg-surface text-ink-body",
             )}
           >
             <option value="">Reality</option>
@@ -449,7 +449,7 @@ export default function CommandView() {
           <button
             type="button"
             onClick={() => setNamingScenario(true)}
-            className="rounded border border-[#d3d8de] bg-white px-2 py-1 text-xs text-[#404854]"
+            className="rounded border border-line bg-surface px-2 py-1 text-xs text-ink-body"
           >
             + Scenario
           </button>
@@ -458,35 +458,35 @@ export default function CommandView() {
           <>
             {/* A twin showing scenario numbers that look exactly like reality
                 is the dangerous state; the banner is deliberately hard to miss. */}
-            <span className="rounded bg-[#5b4a86] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+            <span className="rounded bg-scenario px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
               Scenario — not reality
             </span>
             <button
               type="button"
               onClick={() => setShowEdits((v) => !v)}
-              className="rounded border border-[#7961a8] bg-[#f0edf7] px-2 py-1 text-xs font-medium text-[#5b4a86]"
+              className="rounded border border-scenario-line bg-scenario-soft px-2 py-1 text-xs font-medium text-scenario"
             >
               {showEdits ? "Hide edits" : "Edits"}
             </button>
           </>
         ) : null}
         <span className="relative">
-          <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8f99a8]" />
+          <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-faint" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search units…"
-            className="w-56 rounded border border-[#d3d8de] bg-white py-1 pl-7 pr-2 text-xs text-[#1c2127] placeholder:text-[#8f99a8] focus:border-[#2d72d2] focus:outline-none"
+            className="w-56 rounded border border-line bg-surface py-1 pl-7 pr-2 text-xs text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none"
           />
         </span>
         <div className="ml-auto flex items-center gap-2">
-          <div className="inline-flex rounded border border-[#d3d8de] bg-white">
-            <span className="bg-[#e7f2fd] px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-[#215db0]">
+          <div className="inline-flex rounded border border-line bg-surface">
+            <span className="bg-brand-soft px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-brand-deep">
               Live
             </span>
             <Link
               href="/studio/lab"
-              className="px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-[#5f6b7c] hover:text-[#1c2127]"
+              className="px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-ink-muted hover:text-ink"
             >
               Model Lab
             </Link>
@@ -499,7 +499,7 @@ export default function CommandView() {
           >
             {seeding ? "Seeding…" : "Seed demo"}
           </Button>
-          <span className="text-[10px] text-[#8f99a8]">
+          <span className="text-[10px] text-ink-faint">
             {snapshot
               ? `computed ${new Date(snapshot.computedAt).toLocaleTimeString("en-CA", { hour12: false })}`
               : ""}
@@ -516,14 +516,14 @@ export default function CommandView() {
       ) : null}
 
       {error ? (
-        <p className="mx-3 mt-2 rounded border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-700">
+        <p className="mx-3 mt-2 rounded border border-danger-line bg-danger-soft px-2 py-1 text-xs text-danger-ink">
           {error}
         </p>
       ) : null}
 
       {/* ---- KPI strip ---- */}
       {kpis ? (
-        <div className="grid shrink-0 grid-cols-2 gap-2 border-b border-[#d3d8de] bg-[#f6f7f9] px-3 py-2.5 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid shrink-0 grid-cols-2 gap-2 border-b border-line bg-canvas px-3 py-2.5 sm:grid-cols-3 lg:grid-cols-6">
           <KpiCell
             label="Avg occupancy"
             value={kpis.avgOcc != null ? `${Math.round(kpis.avgOcc)}%` : "—"}
@@ -585,14 +585,14 @@ export default function CommandView() {
       {/* ---- Main 3-column zone ---- */}
       <div className="flex min-h-0 flex-1">
         {/* Left: ontology tree */}
-        <aside className="flex w-60 shrink-0 flex-col border-r border-[#d3d8de] bg-white">
+        <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-surface">
           <PanelHead
             title="Ontology · OrgUnits"
             right={
               <MicroLabel>{snapshot?.nodes.length ?? 0} units</MicroLabel>
             }
           />
-          <div className="flex shrink-0 flex-wrap gap-1 border-b border-[#e5e8eb] px-2 py-1.5">
+          <div className="flex shrink-0 flex-wrap gap-1 border-b border-line-soft px-2 py-1.5">
             <KindChip
               label="All"
               active={kindFilter == null}
@@ -617,8 +617,8 @@ export default function CommandView() {
         </aside>
 
         {/* Center: treemap / tree / grid */}
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#f6f7f9]">
-          <div className="flex shrink-0 items-center gap-2 border-b border-[#d3d8de] bg-white px-3 py-2">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-canvas">
+          <div className="flex shrink-0 items-center gap-2 border-b border-line bg-surface px-3 py-2">
             <ModeToggle
               value={view}
               options={
@@ -633,7 +633,7 @@ export default function CommandView() {
             <select
               value={displayMetric}
               onChange={(e) => handleMetricChange(e.target.value)}
-              className="ml-auto rounded border border-[#d3d8de] bg-white px-2 py-1 text-[11px] text-[#5f6b7c] focus:border-[#2d72d2] focus:outline-none"
+              className="ml-auto rounded border border-line bg-surface px-2 py-1 text-[11px] text-ink-muted focus:border-brand focus:outline-none"
             >
               {DISPLAY_METRIC_OPTIONS.map((o) => (
                 <option key={o.key} value={o.key}>
@@ -672,7 +672,7 @@ export default function CommandView() {
         </main>
 
         {/* Right: inspector */}
-        <aside className="w-80 shrink-0 overflow-y-auto border-l border-[#d3d8de] bg-white">
+        <aside className="w-80 shrink-0 overflow-y-auto border-l border-line bg-surface">
           {selectedUnitId ? (
             <InspectorPanel
               unitId={selectedUnitId}
@@ -683,7 +683,7 @@ export default function CommandView() {
               onClose={() => setSelectedUnitId(null)}
             />
           ) : (
-            <p className="px-6 py-12 text-center text-xs leading-relaxed text-[#8f99a8]">
+            <p className="px-6 py-12 text-center text-xs leading-relaxed text-ink-faint">
               Select a unit on the treemap,
               <br />
               tree, or grid to inspect
@@ -698,11 +698,11 @@ export default function CommandView() {
           one are the same number in the same cell, and only this line tells
           them apart. */}
       {replayFrame ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-[#f0d9b5] bg-[#fdf6ec] px-3 py-1.5 text-[11px] text-[#935610]">
+        <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-warn-line bg-warn-soft px-3 py-1.5 text-[11px] text-warn-ink">
           <span className="font-medium">Replay · step {replayFrame.step}</span>
           <span>{replayFrame.waiting.toLocaleString("fr-CA")} waiting</span>
           <span>{replayFrame.full} at capacity</span>
-          <span className="text-[#8f99a8]">
+          <span className="text-ink-faint">
             {coverage.covered} of {coverage.total} units in this run — the rest are blank,
             not current
           </span>
@@ -711,7 +711,7 @@ export default function CommandView() {
         <AlertRibbon alerts={alerts} snapshot={snapshot} />
       )}
 
-      <div className="shrink-0 border-t border-[#d3d8de]">
+      <div className="shrink-0 border-t border-line">
         <ReplayPanel env={env} twinScenarioId={null} onFrame={setReplayFrame} />
       </div>
     </div>
@@ -736,8 +736,8 @@ function KindChip({
       className={cn(
         "rounded border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide transition-colors",
         active
-          ? "border-[#b5d4f4] bg-[#e7f2fd] text-[#215db0]"
-          : "border-[#d3d8de] text-[#5f6b7c] hover:text-[#1c2127]",
+          ? "border-brand-line bg-brand-soft text-brand-deep"
+          : "border-line text-ink-muted hover:text-ink",
       )}
     >
       {label}
@@ -788,7 +788,7 @@ function TreeRail({
   });
 
   if (!snapshot) {
-    return <p className="px-3 py-4 text-[11px] text-[#8f99a8]">Loading…</p>;
+    return <p className="px-3 py-4 text-[11px] text-ink-faint">Loading…</p>;
   }
 
   return (
@@ -803,8 +803,8 @@ function TreeRail({
             className={cn(
               "mx-1.5 flex items-center gap-2 rounded py-1.5 pr-2 text-left transition-colors",
               selectedUnitId === node.id
-                ? "bg-[#e7f2fd]"
-                : "hover:bg-[#f6f7f9]",
+                ? "bg-brand-soft"
+                : "hover:bg-surface-hover",
             )}
             style={{ paddingLeft: 8 + depth * 12, width: "calc(100% - 12px)" }}
           >
@@ -812,22 +812,22 @@ function TreeRail({
               className="h-1.5 w-1.5 shrink-0 rounded-full"
               style={{ background: severityHex(node.worstAlertSeverity) }}
             />
-            <KindIcon kind={node.kind} className="h-3.5 w-3.5 shrink-0 text-[#8f99a8]" />
+            <KindIcon kind={node.kind} className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
             <span
               className={cn(
                 "min-w-0 flex-1 truncate text-xs",
                 selectedUnitId === node.id
-                  ? "font-medium text-[#215db0]"
-                  : "text-[#1c2127]",
+                  ? "font-medium text-brand-deep"
+                  : "text-ink",
               )}
             >
               {node.name}
             </span>
-            <span className="shrink-0 text-[9px] font-medium uppercase tracking-wide text-[#8f99a8]">
+            <span className="shrink-0 text-[9px] font-medium uppercase tracking-wide text-ink-faint">
               {node.kind.slice(0, 4)}
             </span>
             {occ != null ? (
-              <span className="relative h-1.5 w-9 shrink-0 rounded bg-[#e5e8eb]">
+              <span className="relative h-1.5 w-9 shrink-0 rounded bg-line">
                 <span
                   className="absolute inset-y-0 left-0 rounded"
                   style={{
@@ -841,7 +841,7 @@ function TreeRail({
         );
       })}
       {visible.length === 0 ? (
-        <p className="px-3 py-4 text-[11px] text-[#8f99a8]">No matching units.</p>
+        <p className="px-3 py-4 text-[11px] text-ink-faint">No matching units.</p>
       ) : null}
     </div>
   );
@@ -864,7 +864,7 @@ function GridTable({
     "occ",
   );
   if (!snapshot) {
-    return <p className="px-4 py-12 text-xs text-[#8f99a8]">Loading…</p>;
+    return <p className="px-4 py-12 text-xs text-ink-faint">Loading…</p>;
   }
   const q = search.trim().toLowerCase();
   const rows = snapshot.nodes
@@ -882,8 +882,8 @@ function GridTable({
   const th = (label: string, key?: typeof sortKey) => (
     <th
       className={cn(
-        "sticky top-0 border-b border-[#d3d8de] bg-white px-2.5 py-2 text-left text-[9px] font-medium uppercase tracking-wide text-[#8f99a8]",
-        key && "cursor-pointer hover:text-[#5f6b7c]",
+        "sticky top-0 border-b border-line bg-surface px-2.5 py-2 text-left text-[9px] font-medium uppercase tracking-wide text-ink-faint",
+        key && "cursor-pointer hover:text-ink-muted",
       )}
       onClick={key ? () => setSortKey(key) : undefined}
     >
@@ -916,10 +916,10 @@ function GridTable({
                 key={n.id}
                 onClick={() => onSelect(n.id)}
                 className={cn(
-                  "cursor-pointer border-b border-[#e5e8eb]",
+                  "cursor-pointer border-b border-line-soft",
                   selectedUnitId === n.id
-                    ? "bg-[#e7f2fd]"
-                    : "hover:bg-[#f6f7f9]",
+                    ? "bg-brand-soft"
+                    : "hover:bg-surface-hover",
                 )}
               >
                 <td className="px-2.5 py-1.5">
@@ -928,14 +928,14 @@ function GridTable({
                     style={{ background: severityHex(n.worstAlertSeverity) }}
                   />
                 </td>
-                <td className="px-2.5 py-1.5 text-[#1c2127]">{n.name}</td>
-                <td className="px-2.5 py-1.5 text-[10px] uppercase tracking-wide text-[#8f99a8]">
+                <td className="px-2.5 py-1.5 text-ink">{n.name}</td>
+                <td className="px-2.5 py-1.5 text-[10px] uppercase tracking-wide text-ink-faint">
                   {n.kind}
                 </td>
-                <td className="px-2.5 py-1.5 text-[11px] text-[#5f6b7c]">
+                <td className="px-2.5 py-1.5 text-[11px] text-ink-muted">
                   {occ != null ? (
                     <span className="inline-flex items-center gap-1.5">
-                      <span className="relative inline-block h-1.5 w-14 rounded bg-[#e5e8eb] align-middle">
+                      <span className="relative inline-block h-1.5 w-14 rounded bg-line align-middle">
                         <span
                           className="absolute inset-y-0 left-0 rounded"
                           style={{
@@ -950,19 +950,19 @@ function GridTable({
                     "—"
                   )}
                 </td>
-                <td className="px-2.5 py-1.5 text-[11px] text-[#5f6b7c]">
+                <td className="px-2.5 py-1.5 text-[11px] text-ink-muted">
                   {formatTwinMetric(n.metrics, "count:Patient")}
                 </td>
-                <td className="px-2.5 py-1.5 text-[11px] text-[#5f6b7c]">
+                <td className="px-2.5 py-1.5 text-[11px] text-ink-muted">
                   {formatTwinMetric(n.metrics, "count:Bed")}
                 </td>
-                <td className="px-2.5 py-1.5 text-[11px] text-[#5f6b7c]">
+                <td className="px-2.5 py-1.5 text-[11px] text-ink-muted">
                   {n.metrics.linkedInstanceCount}
                 </td>
-                <td className="px-2.5 py-1.5 text-[11px] text-[#5f6b7c]">
+                <td className="px-2.5 py-1.5 text-[11px] text-ink-muted">
                   {formatTwinMetric(n.metrics, "freshnessSeconds")}
                 </td>
-                <td className="px-2.5 py-1.5 text-[11px] text-[#5f6b7c]">
+                <td className="px-2.5 py-1.5 text-[11px] text-ink-muted">
                   {n.openAlertCount || ""}
                 </td>
               </tr>
@@ -991,17 +991,17 @@ function InspectorPanel({
 }) {
   return (
     <div>
-      <div className="border-b border-[#d3d8de] px-3.5 py-3">
+      <div className="border-b border-line px-3.5 py-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#e7f2fd] text-[#215db0]">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-soft text-brand-deep">
               <KindIcon kind={node?.kind ?? "org"} className="h-4 w-4" />
             </span>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-[#1c2127]">
+              <p className="truncate text-sm font-semibold text-ink">
                 {node?.name ?? "Unit"}
               </p>
-              <p className="mt-0.5 text-[10px] text-[#8f99a8]">
+              <p className="mt-0.5 text-[10px] text-ink-faint">
                 <span className="tabular-nums">{unitId.slice(0, 8)}…</span>
                 {node?.kind ? ` · ${node.kind}` : ""}
               </p>
@@ -1010,26 +1010,26 @@ function InspectorPanel({
           <button
             type="button"
             onClick={onClose}
-            className="rounded border border-[#d3d8de] px-2 py-0.5 text-[9px] font-medium uppercase text-[#5f6b7c] hover:bg-[#f6f7f9]"
+            className="rounded border border-line px-2 py-0.5 text-[9px] font-medium uppercase text-ink-muted hover:bg-surface-hover"
           >
             ✕
           </button>
         </div>
         {loading || !detail ? (
-          <p className="mt-3 text-[11px] text-[#8f99a8]">Loading…</p>
+          <p className="mt-3 text-[11px] text-ink-faint">Loading…</p>
         ) : (
           <div className="mt-2 flex items-center gap-3">
             <GaugeArc pct={detail.metrics.occupancyPct} />
             <div className="grid flex-1 grid-cols-2 gap-2">
-              <div className="rounded border border-[#d3d8de] bg-[#f6f7f9]/60 px-2 py-1.5">
+              <div className="rounded border border-line bg-canvas/60 px-2 py-1.5">
                 <MicroLabel>Linked</MicroLabel>
-                <p className="text-sm font-semibold text-[#1c2127]">
+                <p className="text-sm font-semibold text-ink">
                   {detail.metrics.linkedInstanceCount}
                 </p>
               </div>
-              <div className="rounded border border-[#d3d8de] bg-[#f6f7f9]/60 px-2 py-1.5">
+              <div className="rounded border border-line bg-canvas/60 px-2 py-1.5">
                 <MicroLabel>Freshness</MicroLabel>
-                <p className="text-sm font-semibold text-[#1c2127]">
+                <p className="text-sm font-semibold text-ink">
                   {formatReadingAge(
                     detail.metrics.freshnessSeconds,
                     detail.metrics.freshnessBasis,
@@ -1044,17 +1044,17 @@ function InspectorPanel({
       {detail ? (
         <>
           {Object.keys(detail.metrics.instanceCountByType).length > 0 ? (
-            <div className="border-b border-[#d3d8de] px-3.5 py-3">
+            <div className="border-b border-line px-3.5 py-3">
               <MicroLabel>Instances by type</MicroLabel>
               <div className="mt-1.5">
                 {Object.entries(detail.metrics.instanceCountByType).map(
                   ([t, c]) => (
                     <div
                       key={t}
-                      className="flex justify-between border-b border-dotted border-[#e5e8eb] py-0.5 text-[11px] text-[#5f6b7c]"
+                      className="flex justify-between border-b border-dotted border-line-soft py-0.5 text-[11px] text-ink-muted"
                     >
                       <span>{t}</span>
-                      <b className="text-[#1c2127]">{c}</b>
+                      <b className="text-ink">{c}</b>
                     </div>
                   ),
                 )}
@@ -1062,33 +1062,33 @@ function InspectorPanel({
             </div>
           ) : null}
 
-          <div className="border-b border-[#d3d8de] px-3.5 py-3">
+          <div className="border-b border-line px-3.5 py-3">
             <MicroLabel>Open alerts ({detail.alerts.length})</MicroLabel>
             {detail.alerts.length === 0 ? (
-              <p className="mt-1.5 text-[11px] text-[#8f99a8]">
+              <p className="mt-1.5 text-[11px] text-ink-faint">
                 None — nominal
               </p>
             ) : (
               detail.alerts.map((a) => (
                 <div
                   key={a.id}
-                  className="mt-2 rounded border border-[#d3d8de] bg-[#f6f7f9]/50 px-2.5 py-2"
+                  className="mt-2 rounded border border-line bg-canvas/50 px-2.5 py-2"
                   style={{
                     borderLeft: `3px solid ${SEV_HEX[a.severity]}`,
                   }}
                 >
-                  <p className="text-[11px] leading-snug text-[#5f6b7c]">
+                  <p className="text-[11px] leading-snug text-ink-muted">
                     {a.message}
                   </p>
                   <div className="mt-1.5 flex items-center justify-between">
-                    <span className="text-[9px] text-[#8f99a8]">
+                    <span className="text-[9px] text-ink-faint">
                       {a.metric} = {a.value}
                       {a.createdAt ? ` · ${timeAgo(a.createdAt)}` : ""}
                     </span>
                     <button
                       type="button"
                       onClick={() => onAck(a.id)}
-                      className="rounded border border-[#d3d8de] px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-[#215db0] hover:bg-[#e7f2fd]"
+                      className="rounded border border-line px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-brand-deep hover:bg-brand-soft"
                     >
                       Ack
                     </button>
@@ -1105,9 +1105,9 @@ function InspectorPanel({
                 {detail.recommendations.map((r, i) => (
                   <p
                     key={i}
-                    className="relative py-1 pl-4 text-[11px] leading-snug text-[#5f6b7c]"
+                    className="relative py-1 pl-4 text-[11px] leading-snug text-ink-muted"
                   >
-                    <span className="absolute left-0 text-[#215db0]">
+                    <span className="absolute left-0 text-brand-deep">
                       →
                     </span>
                     {r}
@@ -1152,11 +1152,11 @@ function AlertRibbon({
     20 + ((windowMin - minAgo) / windowMin) * Math.max(0, width - 40);
 
   return (
-    <footer className="flex h-24 shrink-0 flex-col border-t border-[#d3d8de] bg-[#f6f7f9]/40">
+    <footer className="flex h-24 shrink-0 flex-col border-t border-line bg-canvas/40">
       <PanelHead
         title={`Alert timeline · last ${windowMin} min`}
         right={
-          <span className="flex gap-3 text-[9px] font-medium tracking-wide text-[#8f99a8]">
+          <span className="flex gap-3 text-[9px] font-medium tracking-wide text-ink-faint">
             {(["critical", "warn", "info"] as const).map((s) => (
               <span key={s} className="inline-flex items-center gap-1">
                 <i
@@ -1178,7 +1178,7 @@ function AlertRibbon({
               y1={h / 2}
               x2={width - 20}
               y2={h / 2}
-              stroke="#e5e8eb"
+              stroke="#333333"
             />
             {[15, 10, 5, 0].map((m) => (
               <g key={m}>
@@ -1187,13 +1187,13 @@ function AlertRibbon({
                   y1={h / 2 - 4}
                   x2={x(m)}
                   y2={h / 2 + 4}
-                  stroke="#d3d8de"
+                  stroke="#393939"
                 />
                 <text
                   x={x(m)}
                   y={h - 6}
                   textAnchor="middle"
-                  className="fill-[#8f99a8] text-[8px]"
+                  className="fill-ink-faint text-[8px]"
                 >
                   {m === 0 ? "now" : `-${m}m`}
                 </text>
@@ -1227,7 +1227,7 @@ function AlertRibbon({
                 x={width / 2}
                 y={h / 2 - 10}
                 textAnchor="middle"
-                className="fill-[#8f99a8] text-[10px]"
+                className="fill-ink-faint text-[10px]"
               >
                 No alerts in the last {windowMin} minutes
               </text>

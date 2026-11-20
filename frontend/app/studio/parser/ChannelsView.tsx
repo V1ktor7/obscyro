@@ -71,18 +71,18 @@ const STEP_VISUALS: Record<
   ChannelStepType,
   { Icon: LucideIcon; bg: string; text: string }
 > = {
-  intake: { Icon: Webhook, bg: "bg-[#e7f2fd]", text: "text-[#215db0]" },
-  transform: { Icon: Wand2, bg: "bg-[#f2ebfb]", text: "text-[#6b3fa0]" },
-  map: { Icon: ArrowRightLeft, bg: "bg-[#e6f7f2]", text: "text-[#0f6b58]" },
-  extract: { Icon: Search, bg: "bg-[#e7f2fd]", text: "text-[#215db0]" },
-  validate: { Icon: ShieldCheck, bg: "bg-[#fdf0e6]", text: "text-[#935610]" },
-  save: { Icon: Database, bg: "bg-[#e8f4ec]", text: "text-[#1c6e42]" },
+  intake: { Icon: Webhook, bg: "bg-brand-soft", text: "text-brand-deep" },
+  transform: { Icon: Wand2, bg: "bg-scenario-soft", text: "text-scenario" },
+  map: { Icon: ArrowRightLeft, bg: "bg-ok-soft", text: "text-ok-ink" },
+  extract: { Icon: Search, bg: "bg-brand-soft", text: "text-brand-deep" },
+  validate: { Icon: ShieldCheck, bg: "bg-warn-soft", text: "text-warn-ink" },
+  save: { Icon: Database, bg: "bg-ok-soft", text: "text-ok-ink" },
 };
 
 const STATUS_META: Record<ChannelStatus, { label: string; dot: string; chip: string }> = {
-  live: { label: "Live", dot: "bg-emerald-500", chip: "bg-emerald-50 text-emerald-700" },
-  paused: { label: "Paused", dot: "bg-amber-400", chip: "bg-amber-50 text-amber-700" },
-  draft: { label: "Draft", dot: "bg-gray-300", chip: "bg-[#f6f7f9] text-[#5f6b7c]" },
+  live: { label: "Live", dot: "bg-ok", chip: "bg-ok-soft text-ok-ink" },
+  paused: { label: "Paused", dot: "bg-warn", chip: "bg-warn-soft text-warn-ink" },
+  draft: { label: "Draft", dot: "bg-ink-ghost", chip: "bg-canvas text-ink-muted" },
 };
 
 const SAMPLE_NOTE =
@@ -406,8 +406,8 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
 
   if (!hasKey) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-white">
-        <p className="max-w-sm text-center text-sm text-gray-500">
+      <div className="flex flex-1 items-center justify-center bg-surface">
+        <p className="max-w-sm text-center text-sm text-ink-muted">
           Sign in and create an API key to build data channels.
         </p>
       </div>
@@ -415,21 +415,21 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#f6f7f9]">
+    <div className="flex min-h-0 flex-1 flex-col bg-canvas">
       {/* Top bar */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-[#d3d8de] bg-white px-4 py-2">
-        <span className="flex h-6 w-6 items-center justify-center rounded bg-[#e7f2fd] text-[#2d72d2]">
+      <div className="flex shrink-0 items-center gap-3 border-b border-line bg-surface px-4 py-2">
+        <span className="flex h-6 w-6 items-center justify-center rounded bg-brand-soft text-brand">
           <Webhook className="h-3.5 w-3.5" />
         </span>
-        <span className="text-[13px] font-semibold text-[#1c2127]">Data channels</span>
-        <span className="hidden rounded border border-[#d3d8de] px-2 py-0.5 text-[11px] text-[#404854] sm:inline">
+        <span className="text-[13px] font-semibold text-ink">Data channels</span>
+        <span className="hidden rounded border border-line px-2 py-0.5 text-[11px] text-ink-body sm:inline">
           {env ?? "no environment"}
         </span>
         <span className="flex-1" />
         <button
           type="button"
           onClick={onOpenGraph}
-          className="text-[11px] text-[#5f6b7c] hover:text-[#2d72d2] hover:underline"
+          className="text-[11px] text-ink-muted hover:text-brand hover:underline"
         >
           Advanced: graph editor
         </button>
@@ -437,7 +437,7 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
           type="button"
           disabled={!env}
           onClick={() => setShowNewForm((v) => !v)}
-          className="flex items-center gap-1 rounded bg-[#2d72d2] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#215db0] disabled:bg-[#c5cbd3]"
+          className="flex items-center gap-1 rounded bg-brand px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-deep disabled:bg-ink-ghost"
         >
           <Plus className="h-3.5 w-3.5" />
           New channel
@@ -445,7 +445,7 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
       </div>
 
       {error ? (
-        <div className="flex items-center gap-2 border-b border-rose-200 bg-rose-50 px-4 py-1.5 text-[11px] text-rose-700">
+        <div className="flex items-center gap-2 border-b border-danger-line bg-danger-soft px-4 py-1.5 text-[11px] text-danger-ink">
           <span className="min-w-0 flex-1 truncate">{error}</span>
           <button type="button" onClick={() => setError(null)} aria-label="Dismiss error">
             <X className="h-3 w-3" />
@@ -454,7 +454,7 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
       ) : null}
 
       {nlpDown && !nlpNoticeDismissed ? (
-        <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-[11px] text-amber-700">
+        <div className="flex items-center gap-2 border-b border-warn-line bg-warn-soft px-4 py-1.5 text-[11px] text-warn-ink">
           <AlertTriangle className="h-3 w-3 shrink-0" />
           <span className="min-w-0 flex-1 truncate">
             Extraction service unreachable — incoming data is queued and will retry automatically.
@@ -471,12 +471,12 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
 
       <div className="flex min-h-0 flex-1">
         {/* Channel list rail */}
-        <aside className="flex w-52 shrink-0 flex-col overflow-y-auto border-r border-[#d3d8de] bg-white">
-          <div className="px-3 pb-1 pt-2.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[#8f99a8]">
+        <aside className="flex w-52 shrink-0 flex-col overflow-y-auto border-r border-line bg-surface">
+          <div className="px-3 pb-1 pt-2.5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-faint">
             Channels · {channels.length}
           </div>
           {showNewForm ? (
-            <div className="mx-2 mb-1 flex flex-col gap-1.5 rounded border border-[#d3d8de] p-2">
+            <div className="mx-2 mb-1 flex flex-col gap-1.5 rounded border border-line p-2">
               <input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
@@ -485,13 +485,13 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                 }}
                 placeholder="e.g. ED admission notes"
                 autoFocus
-                className="w-full rounded border border-[#d3d8de] bg-[#f6f7f9] px-2 py-1 text-xs text-[#1c2127] focus:border-[#2d72d2] focus:outline-none"
+                className="w-full rounded border border-line bg-canvas px-2 py-1 text-xs text-ink focus:border-brand focus:outline-none"
               />
               <button
                 type="button"
                 disabled={!newName.trim() || busy}
                 onClick={() => void handleCreate()}
-                className="rounded bg-[#2d72d2] px-2 py-1 text-[11px] font-medium text-white hover:bg-[#215db0] disabled:bg-[#c5cbd3]"
+                className="rounded bg-brand px-2 py-1 text-[11px] font-medium text-white hover:bg-brand-deep disabled:bg-ink-ghost"
               >
                 Create channel
               </button>
@@ -499,7 +499,7 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
           ) : null}
           <div className="flex flex-col gap-0.5 px-2 pb-2">
             {channels.length === 0 ? (
-              <p className="px-2 py-1 text-[11px] text-[#8f99a8]">
+              <p className="px-2 py-1 text-[11px] text-ink-faint">
                 {env ? "No channels yet — create one." : "Select an environment."}
               </p>
             ) : (
@@ -513,7 +513,7 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                     onClick={() => setSelectedSlug(c.slug)}
                     className={cn(
                       "rounded px-2 py-1.5 text-left transition-colors",
-                      active ? "bg-[#e7f2fd]" : "hover:bg-[#f6f7f9]",
+                      active ? "bg-brand-soft" : "hover:bg-surface-hover",
                     )}
                   >
                     <span className="flex items-center gap-1.5">
@@ -521,13 +521,13 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                       <span
                         className={cn(
                           "truncate text-xs",
-                          active ? "font-medium text-[#215db0]" : "text-[#1c2127]",
+                          active ? "font-medium text-brand-deep" : "text-ink",
                         )}
                       >
                         {c.name}
                       </span>
                     </span>
-                    <span className="ml-3 block text-[10px] text-[#8f99a8]">
+                    <span className="ml-3 block text-[10px] text-ink-faint">
                       {c.status === "draft"
                         ? "draft"
                         : `${meta.label.toLowerCase()} · ${c.stats.runsToday} run${c.stats.runsToday === 1 ? "" : "s"} today`}
@@ -543,7 +543,7 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
         <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
           {!selected ? (
             <div className="flex flex-1 items-center justify-center">
-              <p className="max-w-sm text-center text-sm text-[#5f6b7c]">
+              <p className="max-w-sm text-center text-sm text-ink-muted">
                 {env
                   ? "Create a channel to define a reusable parse pipeline."
                   : "Select or create an environment first."}
@@ -553,7 +553,7 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
             <div className="flex flex-col gap-3 p-4">
               {/* Header */}
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-[15px] font-semibold text-[#1c2127]">{selected.name}</h2>
+                <h2 className="text-[15px] font-semibold text-ink">{selected.name}</h2>
                 <span
                   className={cn(
                     "flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[11px] font-medium",
@@ -571,7 +571,7 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                     type="button"
                     disabled={busy}
                     onClick={() => void handleSaveSteps()}
-                    className="rounded bg-[#2d72d2] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#215db0] disabled:bg-[#c5cbd3]"
+                    className="rounded bg-brand px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-deep disabled:bg-ink-ghost"
                   >
                     Save changes
                   </button>
@@ -579,7 +579,7 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                 <button
                   type="button"
                   onClick={() => setTestOpen(true)}
-                  className="flex items-center gap-1 rounded border border-[#d3d8de] bg-white px-2.5 py-1.5 text-xs text-[#404854] hover:border-[#2d72d2]"
+                  className="flex items-center gap-1 rounded border border-line bg-surface px-2.5 py-1.5 text-xs text-ink-body hover:border-brand"
                 >
                   <Play className="h-3 w-3" />
                   Test run
@@ -588,7 +588,7 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                   type="button"
                   disabled={busy}
                   onClick={() => void handleStatusToggle()}
-                  className="flex items-center gap-1 rounded border border-[#d3d8de] bg-white px-2.5 py-1.5 text-xs text-[#404854] hover:border-[#2d72d2]"
+                  className="flex items-center gap-1 rounded border border-line bg-surface px-2.5 py-1.5 text-xs text-ink-body hover:border-brand"
                 >
                   {selected.status === "live" ? (
                     <>
@@ -606,7 +606,7 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                   type="button"
                   disabled={busy}
                   onClick={() => void handleDelete()}
-                  className="rounded border border-[#d3d8de] bg-white p-1.5 text-[#8f99a8] hover:border-rose-300 hover:text-rose-600"
+                  className="rounded border border-line bg-surface p-1.5 text-ink-faint hover:border-danger-line hover:text-danger"
                   aria-label="Delete channel"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -682,7 +682,7 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
               </div>
 
               {/* Recent runs: click one to inspect each step input/output */}
-              <div className="flex flex-col gap-1 border-t border-[#d3d8de] pt-2 text-[11px] text-[#8f99a8]">
+              <div className="flex flex-col gap-1 border-t border-line pt-2 text-[11px] text-ink-faint">
                 {runs.length === 0 ? (
                   <span>No runs yet — try a test run.</span>
                 ) : (
@@ -694,17 +694,17 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                           setExpandedRunId((cur) => (cur === r.id ? null : r.id))
                         }
                         className={cn(
-                          "flex w-full items-center gap-1 rounded px-1 py-0.5 text-left hover:bg-[#f6f7f9]",
-                          expandedRunId === r.id && "bg-[#f6f7f9]",
+                          "flex w-full items-center gap-1 rounded px-1 py-0.5 text-left hover:bg-surface-hover",
+                          expandedRunId === r.id && "bg-canvas",
                         )}
                         title={r.error ?? undefined}
                       >
                         {r.status === "failed" ? (
-                          <X className="h-3 w-3 shrink-0 text-rose-500" />
+                          <X className="h-3 w-3 shrink-0 text-danger" />
                         ) : r.status === "flagged" ? (
-                          <AlertTriangle className="h-3 w-3 shrink-0 text-amber-500" />
+                          <AlertTriangle className="h-3 w-3 shrink-0 text-warn" />
                         ) : (
-                          <Check className="h-3 w-3 shrink-0 text-emerald-600" />
+                          <Check className="h-3 w-3 shrink-0 text-ok-ink" />
                         )}
                         <span className="truncate">
                           {new Date(r.createdAt).toLocaleTimeString()} · {r.conceptCount} concepts ·{" "}
@@ -723,7 +723,7 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                         r.stepIo.length > 0 ? (
                           <StepIoList entries={r.stepIo} />
                         ) : (
-                          <p className="px-1 py-1 text-[10px] text-[#8f99a8]">
+                          <p className="px-1 py-1 text-[10px] text-ink-faint">
                             No step snapshots for this run (recorded before step
                             capture existed).
                           </p>
@@ -736,16 +736,16 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
 
               {/* Review queue: flagged extractions awaiting a human decision */}
               {reviewItems.length > 0 ? (
-                <div className="rounded-md border border-amber-200 bg-white">
-                  <div className="flex items-center gap-2 border-b border-amber-100 bg-amber-50/60 px-3 py-2">
-                    <Inbox className="h-3.5 w-3.5 text-amber-600" />
-                    <span className="text-xs font-semibold text-[#1c2127]">
+                <div className="rounded-md border border-warn-line bg-surface">
+                  <div className="flex items-center gap-2 border-b border-warn-line bg-warn-soft/60 px-3 py-2">
+                    <Inbox className="h-3.5 w-3.5 text-warn-ink" />
+                    <span className="text-xs font-semibold text-ink">
                       Review queue
                     </span>
-                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                    <span className="rounded bg-warn-soft px-1.5 py-0.5 text-[10px] font-semibold text-warn-ink">
                       {reviewPending} pending
                     </span>
-                    <span className="ml-auto text-[10px] text-[#8f99a8]">
+                    <span className="ml-auto text-[10px] text-ink-faint">
                       flagged extractions are kept here, not discarded
                     </span>
                   </div>
@@ -753,15 +753,15 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                     {reviewItems.map((item) => (
                       <div
                         key={item.id}
-                        className="flex items-center gap-2 border-b border-[#f0f2f5] px-3 py-1.5 last:border-b-0"
+                        className="flex items-center gap-2 border-b border-line-faint px-3 py-1.5 last:border-b-0"
                       >
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center gap-1.5">
-                            <span className="truncate text-xs font-medium text-[#1c2127]">
+                            <span className="truncate text-xs font-medium text-ink">
                               {item.span}
                             </span>
                             {item.code ? (
-                              <span className="shrink-0 rounded bg-[#e7f2fd] px-1 py-0.5 text-[9px] text-[#215db0]">
+                              <span className="shrink-0 rounded bg-brand-soft px-1 py-0.5 text-[9px] text-brand-deep">
                                 {item.code}
                               </span>
                             ) : null}
@@ -769,14 +769,14 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                               className={cn(
                                 "shrink-0 rounded px-1 py-0.5 text-[9px] font-medium",
                                 item.decision === "escalate"
-                                  ? "bg-rose-50 text-rose-700"
-                                  : "bg-amber-50 text-amber-700",
+                                  ? "bg-danger-soft text-danger-ink"
+                                  : "bg-warn-soft text-warn-ink",
                               )}
                             >
                               {item.decision}
                             </span>
                           </span>
-                          <span className="block truncate text-[10px] text-[#8f99a8]">
+                          <span className="block truncate text-[10px] text-ink-faint">
                             {item.display ?? item.span}
                             {item.confidence !== null
                               ? ` · ${(item.confidence * 100).toFixed(0)}%`
@@ -788,7 +788,7 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                           type="button"
                           disabled={resolvingId !== null}
                           onClick={() => void handleResolveReview(item.id, "confirm")}
-                          className="shrink-0 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                          className="shrink-0 rounded border border-ok-line bg-ok-soft px-2 py-1 text-[10px] font-medium text-ok-ink hover:bg-ok-soft disabled:opacity-50"
                         >
                           {resolvingId === item.id ? "…" : "Confirm & save"}
                         </button>
@@ -796,7 +796,7 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                           type="button"
                           disabled={resolvingId !== null}
                           onClick={() => void handleResolveReview(item.id, "reject")}
-                          className="shrink-0 rounded border border-[#d3d8de] px-2 py-1 text-[10px] font-medium text-[#5f6b7c] hover:bg-[#f6f7f9] disabled:opacity-50"
+                          className="shrink-0 rounded border border-line px-2 py-1 text-[10px] font-medium text-ink-muted hover:bg-surface-hover disabled:opacity-50"
                         >
                           Reject
                         </button>
@@ -811,15 +811,15 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
 
         {/* Test run drawer */}
         {testOpen && selected ? (
-          <aside className="flex w-[26rem] shrink-0 flex-col border-l border-[#d3d8de] bg-white">
-            <div className="flex items-center justify-between border-b border-[#d3d8de] px-3 py-2">
-              <span className="text-xs font-semibold text-[#1c2127]">
+          <aside className="flex w-[26rem] shrink-0 flex-col border-l border-line bg-surface">
+            <div className="flex items-center justify-between border-b border-line px-3 py-2">
+              <span className="text-xs font-semibold text-ink">
                 Test run · {selected.name}
               </span>
               <button
                 type="button"
                 onClick={() => setTestOpen(false)}
-                className="text-[#8f99a8] hover:text-[#1c2127]"
+                className="text-ink-faint hover:text-ink"
                 aria-label="Close test run panel"
               >
                 <X className="h-3.5 w-3.5" />
@@ -831,13 +831,13 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                 onChange={(e) => setTestText(e.target.value)}
                 rows={6}
                 placeholder="Paste clinical text or a JSON payload…"
-                className="w-full resize-y rounded border border-[#d3d8de] bg-[#f6f7f9] px-2.5 py-2 text-xs text-[#1c2127] focus:border-[#2d72d2] focus:outline-none"
+                className="w-full resize-y rounded border border-line bg-canvas px-2.5 py-2 text-xs text-ink focus:border-brand focus:outline-none"
               />
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setTestText(SAMPLE_NOTE)}
-                  className="text-[11px] text-[#5f6b7c] hover:text-[#2d72d2] hover:underline"
+                  className="text-[11px] text-ink-muted hover:text-brand hover:underline"
                 >
                   use sample note
                 </button>
@@ -846,7 +846,7 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                   type="button"
                   disabled={runStage !== null && runStage !== "done" && !runError}
                   onClick={() => void handleTestRun()}
-                  className="flex items-center gap-1 rounded bg-[#2d72d2] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#215db0] disabled:bg-[#c5cbd3]"
+                  className="flex items-center gap-1 rounded bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-deep disabled:bg-ink-ghost"
                 >
                   {runStage !== null && runStage !== "done" && !runError ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
@@ -858,7 +858,7 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
               </div>
 
               {runError ? (
-                <p className="rounded border border-rose-200 bg-rose-50 px-2 py-1.5 text-[11px] text-rose-700">
+                <p className="rounded border border-danger-line bg-danger-soft px-2 py-1.5 text-[11px] text-danger-ink">
                   {runError}
                 </p>
               ) : null}
@@ -877,86 +877,86 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
 
               {outcome ? (
                 <>
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#5f6b7c]">
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-ink-muted">
                     <span>
                       {outcome.rows.length} concepts · {outcome.acceptedCount} accepted ·{" "}
                       {outcome.flaggedCount} flagged · {(outcome.durationMs / 1000).toFixed(1)}s
                     </span>
                     {outcome.persisted ? (
-                      <span className="rounded bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-700">
+                      <span className="rounded bg-ok-soft px-1.5 py-0.5 font-medium text-ok-ink">
                         {outcome.persisted.objectIds.length} saved to{" "}
                         {outcome.persisted.objectType}
                       </span>
                     ) : null}
                   </div>
-                  <div className="overflow-hidden rounded border border-[#d3d8de]">
+                  <div className="overflow-hidden rounded border border-line">
                     <table className="w-full border-collapse text-left text-[11px]">
                       <thead>
-                        <tr className="text-[10px] uppercase tracking-wide text-[#8f99a8]">
-                          <th className="border-b border-[#d3d8de] px-2 py-1.5 font-medium">
+                        <tr className="text-[10px] uppercase tracking-wide text-ink-faint">
+                          <th className="border-b border-line px-2 py-1.5 font-medium">
                             Term
                           </th>
-                          <th className="border-b border-[#d3d8de] px-2 py-1.5 font-medium">
+                          <th className="border-b border-line px-2 py-1.5 font-medium">
                             SNOMED
                           </th>
-                          <th className="border-b border-[#d3d8de] px-2 py-1.5 font-medium">
+                          <th className="border-b border-line px-2 py-1.5 font-medium">
                             Conf.
                           </th>
-                          <th className="border-b border-[#d3d8de] px-2 py-1.5 font-medium">
+                          <th className="border-b border-line px-2 py-1.5 font-medium">
                             Context
                           </th>
-                          <th className="border-b border-[#d3d8de] px-2 py-1.5 font-medium">
+                          <th className="border-b border-line px-2 py-1.5 font-medium">
                             Decision
                           </th>
                         </tr>
                       </thead>
                       <tbody>
                         {outcome.rows.map((r, i) => (
-                          <tr key={`${r.span}-${i}`} className="text-[#404854]">
-                            <td className="border-b border-[#e5e8eb] px-2 py-1.5 font-medium text-[#1c2127]">
+                          <tr key={`${r.span}-${i}`} className="text-ink-body">
+                            <td className="border-b border-line-soft px-2 py-1.5 font-medium text-ink">
                               {r.span}
                             </td>
-                            <td className="border-b border-[#e5e8eb] px-2 py-1.5 text-[10px]">
+                            <td className="border-b border-line-soft px-2 py-1.5 text-[10px]">
                               {r.code ?? "—"}
                             </td>
-                            <td className="border-b border-[#e5e8eb] px-2 py-1.5">
-                              <div className="h-1 w-12 overflow-hidden rounded bg-[#eef1f4]">
+                            <td className="border-b border-line-soft px-2 py-1.5">
+                              <div className="h-1 w-12 overflow-hidden rounded bg-canvas-raised">
                                 <div
                                   className={cn(
                                     "h-full",
                                     r.confidence >= 0.8
-                                      ? "bg-emerald-500"
+                                      ? "bg-ok"
                                       : r.confidence >= 0.6
-                                        ? "bg-amber-400"
-                                        : "bg-rose-400",
+                                        ? "bg-warn"
+                                        : "bg-danger",
                                   )}
                                   style={{ width: `${Math.round(r.confidence * 100)}%` }}
                                 />
                               </div>
                             </td>
-                            <td className="border-b border-[#e5e8eb] px-2 py-1.5">
+                            <td className="border-b border-line-soft px-2 py-1.5">
                               <span
                                 className={cn(
                                   "rounded px-1 py-0.5 text-[10px] font-medium",
                                   r.assertion === "negated"
-                                    ? "bg-rose-50 text-rose-700"
+                                    ? "bg-danger-soft text-danger-ink"
                                     : r.assertion === "affirmed"
-                                      ? "bg-emerald-50 text-emerald-700"
-                                      : "bg-[#eef1f4] text-[#5f6b7c]",
+                                      ? "bg-ok-soft text-ok-ink"
+                                      : "bg-canvas-raised text-ink-muted",
                                 )}
                               >
                                 {r.assertion}
                               </span>
                             </td>
-                            <td className="border-b border-[#e5e8eb] px-2 py-1.5">
+                            <td className="border-b border-line-soft px-2 py-1.5">
                               <span
                                 className={cn(
                                   "rounded px-1 py-0.5 text-[10px] font-medium",
                                   r.decision === "accept"
-                                    ? "bg-emerald-50 text-emerald-700"
+                                    ? "bg-ok-soft text-ok-ink"
                                     : r.decision === "duplicate"
-                                      ? "bg-[#eef1f4] text-[#5f6b7c]"
-                                      : "bg-amber-50 text-amber-700",
+                                      ? "bg-canvas-raised text-ink-muted"
+                                      : "bg-warn-soft text-warn-ink",
                                 )}
                               >
                                 {r.decision}
@@ -966,7 +966,7 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
                         ))}
                         {outcome.rows.length === 0 ? (
                           <tr>
-                            <td className="px-2 py-1.5 text-[#8f99a8]" colSpan={5}>
+                            <td className="px-2 py-1.5 text-ink-faint" colSpan={5}>
                               No concepts found in this input.
                             </td>
                           </tr>
@@ -990,16 +990,16 @@ export default function ChannelsView({ onOpenGraph }: { onOpenGraph: () => void 
 
 function StatCard({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
-    <div className="rounded-md bg-white px-3 py-2 shadow-[inset_0_0_0_1px_#e5e8eb]">
+    <div className="rounded-md bg-surface px-3 py-2 shadow-[inset_0_0_0_1px_#333333]">
       <p
         className={cn(
           "text-[10px] font-medium uppercase tracking-wide",
-          warn ? "text-amber-600" : "text-[#8f99a8]",
+          warn ? "text-warn-ink" : "text-ink-faint",
         )}
       >
         {label}
       </p>
-      <p className={cn("text-base font-semibold", warn ? "text-amber-600" : "text-[#1c2127]")}>
+      <p className={cn("text-base font-semibold", warn ? "text-warn-ink" : "text-ink")}>
         {value}
       </p>
     </div>
@@ -1016,7 +1016,7 @@ function StepInserter({
   const [open, setOpen] = useState(false);
   return (
     <div className="flex items-center gap-1.5 py-0.5 pl-4">
-      <span className="h-3 w-px bg-[#c5cbd3]" />
+      <span className="h-3 w-px bg-ink-ghost" />
       {open ? (
         <span className="flex items-center gap-1">
           {types.map((t) => (
@@ -1027,7 +1027,7 @@ function StepInserter({
                 onInsert(t);
                 setOpen(false);
               }}
-              className="rounded border border-[#d3d8de] bg-white px-1.5 py-0.5 text-[10px] text-[#404854] hover:border-[#2d72d2] hover:text-[#2d72d2]"
+              className="rounded border border-line bg-surface px-1.5 py-0.5 text-[10px] text-ink-body hover:border-brand hover:text-brand"
             >
               {STEP_LABELS[t]}
             </button>
@@ -1035,7 +1035,7 @@ function StepInserter({
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="text-[#8f99a8]"
+            className="text-ink-faint"
             aria-label="Cancel add step"
           >
             <X className="h-3 w-3" />
@@ -1045,7 +1045,7 @@ function StepInserter({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex items-center gap-1 text-[10px] text-[#8f99a8] hover:text-[#2d72d2]"
+          className="flex items-center gap-1 text-[10px] text-ink-faint hover:text-brand"
         >
           <Plus className="h-3 w-3" />
           add step
@@ -1067,7 +1067,7 @@ interface IntakeContext {
 /** Per-step input/output snapshots for a run — the debugging view. */
 function StepIoList({ entries }: { entries: StepIoEntry[] }) {
   return (
-    <div className="mb-1 flex flex-col gap-1 rounded border border-[#e5e8eb] bg-[#fafbfc] p-2">
+    <div className="mb-1 flex flex-col gap-1 rounded border border-line-soft bg-canvas-raised p-2">
       {entries.map((e, i) => {
         const visuals = STEP_VISUALS[e.type as ChannelStepType];
         const Icon = visuals?.Icon;
@@ -1085,21 +1085,21 @@ function StepIoList({ entries }: { entries: StepIoEntry[] }) {
                   <Icon className="h-2.5 w-2.5" />
                 </span>
               ) : null}
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-[#5f6b7c]">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
                 {e.type}
               </span>
-              {e.note ? <span className="text-[10px] text-[#8f99a8]">{e.note}</span> : null}
+              {e.note ? <span className="text-[10px] text-ink-faint">{e.note}</span> : null}
             </span>
             <div className="grid grid-cols-2 gap-1">
               <div className="min-w-0">
-                <span className="block text-[9px] uppercase tracking-wide text-[#8f99a8]">in</span>
-                <pre className="max-h-24 overflow-auto whitespace-pre-wrap break-all rounded bg-white p-1 font-mono text-[9.5px] leading-snug text-[#404854] ring-1 ring-[#e5e8eb]">
+                <span className="block text-[9px] uppercase tracking-wide text-ink-faint">in</span>
+                <pre className="max-h-24 overflow-auto whitespace-pre-wrap break-all rounded bg-surface p-1 font-mono text-[9.5px] leading-snug text-ink-body ring-1 ring-line-soft">
                   {e.input || "—"}
                 </pre>
               </div>
               <div className="min-w-0">
-                <span className="block text-[9px] uppercase tracking-wide text-[#8f99a8]">out</span>
-                <pre className="max-h-24 overflow-auto whitespace-pre-wrap break-all rounded bg-white p-1 font-mono text-[9.5px] leading-snug text-[#404854] ring-1 ring-[#e5e8eb]">
+                <span className="block text-[9px] uppercase tracking-wide text-ink-faint">out</span>
+                <pre className="max-h-24 overflow-auto whitespace-pre-wrap break-all rounded bg-surface p-1 font-mono text-[9.5px] leading-snug text-ink-body ring-1 ring-line-soft">
                   {e.output || "—"}
                 </pre>
               </div>
@@ -1137,8 +1137,8 @@ function StepCard({
   return (
     <div
       className={cn(
-        "rounded-md border bg-white",
-        step.enabled ? "border-[#d3d8de]" : "border-dashed border-[#c5cbd3] opacity-70",
+        "rounded-md border bg-surface",
+        step.enabled ? "border-line" : "border-dashed border-line-strong opacity-70",
       )}
     >
       <div className="flex items-center gap-2.5 px-3 py-2">
@@ -1147,30 +1147,30 @@ function StepCard({
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2">
-            <span className="text-xs font-medium text-[#1c2127]">{STEP_LABELS[step.type]}</span>
+            <span className="text-xs font-medium text-ink">{STEP_LABELS[step.type]}</span>
             <button
               type="button"
               onClick={onToggle}
               className={cn(
                 "rounded px-1.5 py-0.5 text-[10px] font-medium",
                 step.enabled
-                  ? "bg-emerald-50 text-emerald-700"
-                  : "bg-[#eef1f4] text-[#8f99a8]",
+                  ? "bg-ok-soft text-ok-ink"
+                  : "bg-canvas-raised text-ink-faint",
               )}
             >
               {step.enabled ? "on" : "off"}
             </button>
           </span>
-          <span className="block truncate text-[10px] text-[#8f99a8]">
+          <span className="block truncate text-[10px] text-ink-faint">
             {stepSummary(step)}
           </span>
         </span>
-        <span className="flex shrink-0 items-center gap-1 text-[#8f99a8]">
+        <span className="flex shrink-0 items-center gap-1 text-ink-faint">
           <button
             type="button"
             disabled={index === 0}
             onClick={() => onMove(-1)}
-            className="rounded p-0.5 hover:text-[#2d72d2] disabled:opacity-30"
+            className="rounded p-0.5 hover:text-brand disabled:opacity-30"
             aria-label="Move step up"
           >
             <ChevronUp className="h-3.5 w-3.5" />
@@ -1179,7 +1179,7 @@ function StepCard({
             type="button"
             disabled={index === total - 1}
             onClick={() => onMove(1)}
-            className="rounded p-0.5 hover:text-[#2d72d2] disabled:opacity-30"
+            className="rounded p-0.5 hover:text-brand disabled:opacity-30"
             aria-label="Move step down"
           >
             <ChevronDown className="h-3.5 w-3.5" />
@@ -1188,7 +1188,7 @@ function StepCard({
             <button
               type="button"
               onClick={onRemove}
-              className="rounded p-0.5 hover:text-rose-600"
+              className="rounded p-0.5 hover:text-danger"
               aria-label="Remove step"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -1197,7 +1197,7 @@ function StepCard({
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
-            className={cn("rounded p-0.5", expanded ? "text-[#2d72d2]" : "hover:text-[#2d72d2]")}
+            className={cn("rounded p-0.5", expanded ? "text-brand" : "hover:text-brand")}
             aria-label="Step settings"
           >
             <Settings2 className="h-3.5 w-3.5" />
@@ -1205,7 +1205,7 @@ function StepCard({
         </span>
       </div>
       {expanded ? (
-        <div className="border-t border-[#e5e8eb] px-3 py-2.5">
+        <div className="border-t border-line-soft px-3 py-2.5">
           <StepConfigForm step={step} onConfig={onConfig} envTypes={envTypes} intake={intake} />
         </div>
       ) : null}
@@ -1214,8 +1214,8 @@ function StepCard({
 }
 
 const FIELD =
-  "w-full rounded border border-[#d3d8de] bg-[#f6f7f9] px-2 py-1 text-xs text-[#1c2127] focus:border-[#2d72d2] focus:outline-none";
-const LABEL = "mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-[#8f99a8]";
+  "w-full rounded border border-line bg-canvas px-2 py-1 text-xs text-ink focus:border-brand focus:outline-none";
+const LABEL = "mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-ink-faint";
 
 function StepConfigForm({
   step,
@@ -1284,7 +1284,7 @@ function StepConfigForm({
               <div className="flex flex-col gap-1">
                 <span className={LABEL}>Webhook URL (POST payloads here)</span>
                 <WebhookUrlRow url={intake.webhookUrl} />
-                <p className="text-[10px] text-[#8f99a8]">
+                <p className="text-[10px] text-ink-faint">
                   Payloads run this channel server-side while it is live. Send{" "}
                   <span className="rounded bg-canvas-raised px-1 ring-1 ring-line-soft">
                     {'{ "text": "…" }'}
@@ -1299,7 +1299,7 @@ function StepConfigForm({
                   type="button"
                   disabled={intake.provisioning}
                   onClick={intake.onProvision}
-                  className="flex items-center gap-1 rounded bg-[#2d72d2] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#215db0] disabled:bg-[#c5cbd3]"
+                  className="flex items-center gap-1 rounded bg-brand px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-deep disabled:bg-ink-ghost"
                 >
                   {intake.provisioning ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
@@ -1308,14 +1308,14 @@ function StepConfigForm({
                   )}
                   Generate webhook URL
                 </button>
-                <span className="text-[10px] text-[#8f99a8]">
+                <span className="text-[10px] text-ink-faint">
                   Creates a dedicated inbound webhook for this channel.
                 </span>
               </div>
             )
           ) : null}
           {mode === "source" && intake?.sourceId ? (
-            <p className="text-[10px] text-[#8f99a8]">
+            <p className="text-[10px] text-ink-faint">
               New events on this source run the channel server-side while it is live.
             </p>
           ) : null}
@@ -1393,7 +1393,7 @@ function StepConfigForm({
                   placeholder="payload key (e.g. mrn or lab.value)"
                   className={FIELD}
                 />
-                <ArrowRightLeft className="h-3 w-3 shrink-0 text-[#8f99a8]" />
+                <ArrowRightLeft className="h-3 w-3 shrink-0 text-ink-faint" />
                 <input
                   value={rule.to}
                   onChange={(e) =>
@@ -1405,7 +1405,7 @@ function StepConfigForm({
                 <button
                   type="button"
                   onClick={() => setRules(rules.filter((_, j) => j !== i))}
-                  className="shrink-0 rounded p-0.5 text-[#8f99a8] hover:text-rose-600"
+                  className="shrink-0 rounded p-0.5 text-ink-faint hover:text-danger"
                   aria-label="Remove mapping"
                 >
                   <Trash2 className="h-3 w-3" />
@@ -1415,12 +1415,12 @@ function StepConfigForm({
             <button
               type="button"
               onClick={() => setRules([...rules, { from: "", to: "" }])}
-              className="self-start text-[11px] text-[#2d72d2] hover:underline"
+              className="self-start text-[11px] text-brand hover:underline"
             >
               + add mapping
             </button>
           </div>
-          <p className="text-[10px] leading-relaxed text-[#8f99a8]">
+          <p className="text-[10px] leading-relaxed text-ink-faint">
             Structured JSON payloads are mapped key-by-key onto the selected object
             type and saved directly — the NLP extract/validate steps are skipped.
             Arrays map each object (max 100 per payload).
@@ -1534,7 +1534,7 @@ function WebhookUrlRow({ url }: { url: string }) {
           setCopied(true);
           setTimeout(() => setCopied(false), 1500);
         }}
-        className="shrink-0 rounded border border-[#d3d8de] bg-white px-2 text-[#5f6b7c] hover:border-[#2d72d2] hover:text-[#2d72d2]"
+        className="shrink-0 rounded border border-line bg-surface px-2 text-ink-muted hover:border-brand hover:text-brand"
         aria-label="Copy webhook URL"
       >
         {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
@@ -1568,10 +1568,10 @@ function StageProgress({
             className={cn(
               "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px]",
               done
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                ? "border-ok-line bg-ok-soft text-ok-ink"
                 : running
-                  ? "border-[#2d72d2] bg-[#e7f2fd] text-[#215db0]"
-                  : "border-[#d3d8de] text-[#8f99a8]",
+                  ? "border-brand bg-brand-soft text-brand-deep"
+                  : "border-line text-ink-faint",
             )}
           >
             {done ? (

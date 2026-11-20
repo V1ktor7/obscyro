@@ -399,7 +399,7 @@ export default function ReplayPanel({
                       key={o.id}
                       className={cn(
                         "rounded border px-2 py-1.5",
-                        o.dominated ? "border-line bg-sunk/40" : "border-line bg-white",
+                        o.dominated ? "border-line bg-sunk/40" : "border-line bg-surface",
                       )}
                     >
                       <div className="flex items-baseline gap-2">
@@ -528,7 +528,7 @@ function Verdict({ trunk, branch }: { trunk: Run; branch: Run }) {
   );
 }
 
-const LINE = ["#215db0", "#c23030", "#1d9e75", "#8f5cc4", "#d9822b"];
+const LINE = ["#78a9ff", "#fa4d56", "#42be65", "#be95ff", "#f1c21b"];
 
 function QueueChart({ runs, showing, step }: { runs: Run[]; showing: string; step: number }) {
   const W = 240;
@@ -549,14 +549,14 @@ function QueueChart({ runs, showing, step }: { runs: Run[]; showing: string; ste
           points={r.frames.map((f, j) => `${x(j)},${y(f.waiting)}`).join(" ")}
         />
       ))}
-      <line x1={x(step)} y1={0} x2={x(step)} y2={H} stroke="#8f99a8" strokeWidth={1} />
+      <line x1={x(step)} y1={0} x2={x(step)} y2={H} stroke="#a8a8a8" strokeWidth={1} />
     </svg>
   );
 }
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded border border-line bg-white px-2 py-1.5">
+    <div className="rounded border border-line bg-surface px-2 py-1.5">
       <div className="text-sm tabular-nums text-ink">{value.toLocaleString("en-CA")}</div>
       <div className="text-[10px] text-ink-faint">{label}</div>
     </div>

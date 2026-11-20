@@ -16,7 +16,7 @@ import { readsUnavailable, type BActivity, type BuilderTwin } from "./twin";
 import { HELP, Key, MiniChart, Rich, type Series } from "./ui";
 import { arrivalsAt } from "./engine";
 
-const SEV_COLOURS = ["#215db0", "#935610", "#6b3fa0", "#0f6b68", "#a82255", "#1c6e42"];
+const SEV_COLOURS = ["#78a9ff", "#fddc69", "#be95ff", "#3ddbd9", "#ff7eb6", "#6fdc8c"];
 
 function Big({ items }: { items: [string, string][] }) {
   return (
@@ -44,14 +44,14 @@ export default function ApplyPanel({ it, items, tw, ctx, day, colour }: { it: It
     const others = items.filter((o) => o !== it).flatMap((o) => (o.kind === "exposure" ? exposureEffects(o.x, tw, ctx) : [o.e])).filter((e) => fam(e) === "arrivals");
     const other = Array.from({ length: H }, (_, t) => Array.from(arrivalsAt(t, others, tw.pops, tw.severities).values()).reduce((a, b) => a + b, 0));
     const showOther = other.some((v) => v > 0);
-    const series: Series[] = [...(ci ? [{ band: [lo!, hi!] as [number[], number[]], c: colour }] : []), { v: mid, c: colour, w: 1.8 }, ...(showOther ? [{ v: other, c: "#8f99a8", dash: true }] : [])];
+    const series: Series[] = [...(ci ? [{ band: [lo!, hi!] as [number[], number[]], c: colour }] : []), { v: mid, c: colour, w: 1.8 }, ...(showOther ? [{ v: other, c: "#a8a8a8", dash: true }] : [])];
     const here = Object.entries(exposureByTerritory(x, tw, ctx, day)).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 5);
     return (
       <div>
         <Big items={[[`${sign(mid[at]!)}${sig(Math.abs(mid[at]!))}`, `arrivals a ${u1(ctx)} at the most, ${u1(ctx)} ${at}${ci ? ` · ${rangeLabel(c)} ${sig(lo![at]!)}–${sig(hi![at]!)}` : ""}`],
           [fmt(sum(mid), 1), `over the run${ci ? ` · ${fmt(sum(lo!), 1)}–${fmt(sum(hi!), 1)}` : ""}`]]} />
         <MiniChart series={series} horizon={H} day={day} label="Arrivals this change adds, by step" />
-        <Key items={[[colour, "this change"], ...(ci ? [[colour, rangeLabel(c), "band"] as [string, string, "band"]] : []), ...(showOther ? [["#8f99a8", "every other arrival change", "dash"] as [string, string, "dash"]] : [])]} />
+        <Key items={[[colour, "this change"], ...(ci ? [[colour, rangeLabel(c), "band"] as [string, string, "band"]] : []), ...(showOther ? [["#a8a8a8", "every other arrival change", "dash"] as [string, string, "dash"]] : [])]} />
         <p className="mt-2 text-[11.5px] text-ink-body">On {u1(ctx)} {day}: {here.length ? here.map(([id, v], k) => <span key={id}>{k ? " · " : ""}{tw.popById.get(id)?.name ?? id} <b className="tabular-nums">{sign(v)}{sig(Math.abs(v))}</b></span>) : "nothing"}.</p>
         <p className={HELP}>{c.kind === "rr" ? `Usual rate × (${c.rr}^(rise ÷ ${c.per}) − 1), per territory and per ${u1(ctx)}, times its residents. ` : ""}Nothing is simulated: this is only what the change feeds in.{ci ? bandNote(c) : ""}</p>
       </div>
@@ -100,8 +100,8 @@ export default function ApplyPanel({ it, items, tw, ctx, day, colour }: { it: It
             <div key={a.id}>
               <Big items={[[`${fmt(base)} → ${fmt(ext, 1)}`, `${a.id} at ${sites.length} site${sites.length === 1 ? "" : "s"}, at the furthest (${u1(ctx)} ${at})`],
                 [`${ext >= base ? "+" : "−"}${sig((Math.abs(ext - base) / a.total) * 100)} %`, `of the network's ${fmt(a.total)}`]]} />
-              <MiniChart zero={false} series={[{ v: alone.map(() => base), c: "#8f99a8", dash: true }, { v: alone, c: colour, fill: true }, ...(differs ? [{ v: every, c: "#1c2127", w: 1.2 }] : [])]} horizon={H} day={day} label={`Capacity of ${a.id} by step`} />
-              <Key items={[["#8f99a8", "as it stands", "dash"], [colour, "with this change"], ...(differs ? [["#1c2127", "with every capacity change"] as [string, string]] : [])]} />
+              <MiniChart zero={false} series={[{ v: alone.map(() => base), c: "#a8a8a8", dash: true }, { v: alone, c: colour, fill: true }, ...(differs ? [{ v: every, c: "#f4f4f4", w: 1.2 }] : [])]} horizon={H} day={day} label={`Capacity of ${a.id} by step`} />
+              <Key items={[["#a8a8a8", "as it stands", "dash"], [colour, "with this change"], ...(differs ? [["#f4f4f4", "with every capacity change"] as [string, string]] : [])]} />
               <p className="mt-2 text-[11.5px] text-ink-body">On {u1(ctx)} {day}: <b className="tabular-nums">{fmt(alone[day] ?? 0, 1)}</b> of {fmt(base)}.</p>
             </div>
           );
@@ -143,8 +143,8 @@ export default function ApplyPanel({ it, items, tw, ctx, day, colour }: { it: It
   return (
     <div>
       <Big items={[[fmt(most), `of ${fmt(T.n)} written at the most`], ...(isStatus ? [[`${fmt(freeBase)} → ${fmt(ext!)}`, `free ${T.name} in the network`] as [string, string]] : [])]} />
-      <MiniChart series={isStatus ? [{ v: free.map(() => freeBase), c: "#8f99a8", dash: true }, { v: free, c: "#1c2127", w: 1.3 }, { v: counts, c: colour, fill: true }] : [{ v: counts, c: colour, fill: true }]} horizon={H} day={day} label="Objects written by step" />
-      <Key items={[[colour, "objects written"], ...(isStatus ? [["#1c2127", "free in the network"], ["#8f99a8", "free as it stands", "dash"]] as [string, string, "dash"?][] : [])] as [string, string, "dash"?][]} />
+      <MiniChart series={isStatus ? [{ v: free.map(() => freeBase), c: "#a8a8a8", dash: true }, { v: free, c: "#f4f4f4", w: 1.3 }, { v: counts, c: colour, fill: true }] : [{ v: counts, c: colour, fill: true }]} horizon={H} day={day} label="Objects written by step" />
+      <Key items={[[colour, "objects written"], ...(isStatus ? [["#f4f4f4", "free in the network"], ["#a8a8a8", "free as it stands", "dash"]] as [string, string, "dash"?][] : [])] as [string, string, "dash"?][]} />
       <p className="mt-2 text-[11.5px] text-ink-body">On {u1(ctx)} {day}: <b className="tabular-nums">{fmt(counts[day] ?? 0)}</b> written{isStatus ? <> · <b className="tabular-nums">{fmt(free[day] ?? 0)}</b> free</> : null}.</p>
       <p className={HELP}>{isStatus && readsUnavailable(tw, key, e.value) ? `The twin read ${fmt(T.n - freeBase)} of ${fmt(T.n)} as already in use. Writing an object that is already out of service frees nothing and takes nothing.` : "An object is written or it is not: there is no partial switch."}</p>
     </div>

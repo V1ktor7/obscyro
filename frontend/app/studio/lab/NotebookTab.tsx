@@ -89,15 +89,15 @@ export default function NotebookTab({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-end gap-3 rounded border border-[#d3d8de] bg-white px-3 py-2">
+      <div className="flex flex-wrap items-end gap-3 rounded border border-line bg-surface px-3 py-2">
         <label className="block">
-          <span className="mb-1 block text-[11px] text-[#5f6b7c]">
+          <span className="mb-1 block text-[11px] text-ink-muted">
             Dataset bound to <code className="font-mono">df</code>
           </span>
           <select
             value={datasetId}
             onChange={(e) => setDatasetId(e.target.value)}
-            className="rounded border border-[#d3d8de] px-2 py-1 text-xs"
+            className="rounded border border-line px-2 py-1 text-xs"
           >
             <option value="">None — df will be empty</option>
             {datasets.map((d) => (
@@ -109,14 +109,14 @@ export default function NotebookTab({
         </label>
 
         <label className="block">
-          <span className="mb-1 block text-[11px] text-[#5f6b7c]">Timeout (s)</span>
+          <span className="mb-1 block text-[11px] text-ink-muted">Timeout (s)</span>
           <input
             type="number"
             min={1}
             max={120}
             value={timeoutS}
             onChange={(e) => setTimeoutS(Math.min(120, Math.max(1, Number(e.target.value) || 30)))}
-            className="w-20 rounded border border-[#d3d8de] px-2 py-1 text-xs tabular-nums"
+            className="w-20 rounded border border-line px-2 py-1 text-xs tabular-nums"
           />
         </label>
 
@@ -124,12 +124,12 @@ export default function NotebookTab({
           type="button"
           onClick={() => void run()}
           disabled={busy || !env || !code.trim()}
-          className="ml-auto flex items-center gap-1.5 rounded bg-[#2d72d2] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#215db0] disabled:opacity-40"
+          className="ml-auto flex items-center gap-1.5 rounded bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-deep disabled:opacity-40"
         >
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
           {busy ? "Running…" : "Run"}
         </button>
-        <span className="text-[10px] text-[#8f99a8]">Ctrl + Enter</span>
+        <span className="text-[10px] text-ink-faint">Ctrl + Enter</span>
       </div>
 
       <textarea
@@ -139,20 +139,20 @@ export default function NotebookTab({
         onKeyDown={onKeyDown}
         spellCheck={false}
         rows={16}
-        className="w-full resize-y rounded border border-[#d3d8de] bg-[#0d1117] p-3 font-mono text-[12px] leading-relaxed text-[#e6edf3] outline-none focus:border-[#2d72d2]"
+        className="w-full resize-y rounded border border-line bg-[#0d1117] p-3 font-mono text-[12px] leading-relaxed text-[#e6edf3] outline-none focus:border-brand"
       />
 
       {out ? (
-        <div className="rounded border border-[#d3d8de] bg-white">
-          <div className="flex flex-wrap items-center gap-3 border-b border-[#d3d8de] px-3 py-1.5 text-[11px]">
+        <div className="rounded border border-line bg-surface">
+          <div className="flex flex-wrap items-center gap-3 border-b border-line px-3 py-1.5 text-[11px]">
             <span
               className={
-                out.ok ? "font-medium text-[#1c6e42]" : "font-medium text-[#c23030]"
+                out.ok ? "font-medium text-ok-ink" : "font-medium text-danger"
               }
             >
               {out.timedOut ? "Interrompu" : out.ok ? "Done" : "Erreur"}
             </span>
-            <span className="text-[#8f99a8]">{out.durationMs} ms</span>
+            <span className="text-ink-faint">{out.durationMs} ms</span>
           </div>
 
           {out.stdout ? (
@@ -165,7 +165,7 @@ export default function NotebookTab({
             <Pane label="result" body={JSON.stringify(out.result, null, 2)} />
           ) : null}
           {!out.stdout && !out.stderr && out.result == null ? (
-            <p className="px-3 py-4 text-[11px] text-[#8f99a8]">
+            <p className="px-3 py-4 text-[11px] text-ink-faint">
               The cell ran without printing anything or assigning to{" "}
               <code className="font-mono">result</code>.
             </p>
@@ -175,7 +175,7 @@ export default function NotebookTab({
 
       {/* Not boilerplate: the reader is about to run arbitrary code and should
           know exactly what that does and does not touch. */}
-      <div className="flex items-start gap-2 rounded border border-[#f0d9b5] bg-[#fdf6ec] px-3 py-2 text-[11px] leading-relaxed text-[#935610]">
+      <div className="flex items-start gap-2 rounded border border-warn-line bg-warn-soft px-3 py-2 text-[11px] leading-relaxed text-warn-ink">
         <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <span>
           The cell runs in a separate process whose environment is rebuilt from nothing:
@@ -198,12 +198,12 @@ function Pane({
   tone?: "error";
 }) {
   return (
-    <div className="border-b border-[#eef1f4] last:border-b-0">
-      <p className="px-3 pt-2 text-[10px] uppercase tracking-wide text-[#8f99a8]">{label}</p>
+    <div className="border-b border-line-faint last:border-b-0">
+      <p className="px-3 pt-2 text-[10px] uppercase tracking-wide text-ink-faint">{label}</p>
       <pre
         className={
           "max-h-72 overflow-auto px-3 pb-2 pt-1 font-mono text-[11px] leading-relaxed " +
-          (tone === "error" ? "text-[#c23030]" : "text-[#1c2127]")
+          (tone === "error" ? "text-danger" : "text-ink")
         }
       >
         {body}

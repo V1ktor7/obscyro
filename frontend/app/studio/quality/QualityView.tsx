@@ -89,8 +89,8 @@ export default function QualityView() {
 
   if (!hasKey) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-white">
-        <p className="max-w-sm text-center text-sm text-gray-500">
+      <div className="flex flex-1 items-center justify-center bg-surface">
+        <p className="max-w-sm text-center text-sm text-ink-muted">
           Sign in and create an API key to run data-quality scans.
         </p>
       </div>
@@ -99,8 +99,8 @@ export default function QualityView() {
 
   if (!env) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-white">
-        <p className="text-sm text-gray-500">Select an environment in the header.</p>
+      <div className="flex flex-1 items-center justify-center bg-surface">
+        <p className="text-sm text-ink-muted">Select an environment in the header.</p>
       </div>
     );
   }
@@ -110,24 +110,24 @@ export default function QualityView() {
       <div className="mx-auto max-w-4xl space-y-6">
         <div className="flex flex-wrap items-center gap-3">
           <label className="flex flex-1 items-center gap-2 min-w-[200px]">
-            <span className="shrink-0 text-[10px] uppercase tracking-wide text-gray-400">
+            <span className="shrink-0 text-[10px] uppercase tracking-wide text-ink-faint">
               where
             </span>
             <input
               value={whereInput}
               onChange={(e) => setWhereInput(e.target.value)}
               placeholder="key=value, key2=value2"
-              className="flex-1 rounded-md border border-gray-200 px-2 py-1 text-xs focus:border-gray-400 focus:outline-none"
+              className="flex-1 rounded-md border border-line px-2 py-1 text-xs focus:border-line-strong focus:outline-none"
             />
           </label>
           <label className="flex items-center gap-2">
-            <span className="shrink-0 text-[10px] uppercase tracking-wide text-gray-400">
+            <span className="shrink-0 text-[10px] uppercase tracking-wide text-ink-faint">
               severity
             </span>
             <select
               value={severityFilter}
               onChange={(e) => setSeverityFilter(e.target.value as typeof severityFilter)}
-              className="rounded-md border border-gray-200 px-2 py-1 text-xs focus:border-gray-400 focus:outline-none"
+              className="rounded-md border border-line px-2 py-1 text-xs focus:border-line-strong focus:outline-none"
             >
               <option value="all">All</option>
               <option value="error">Error</option>
@@ -141,13 +141,13 @@ export default function QualityView() {
         </div>
 
         {error ? (
-          <p className="rounded border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+          <p className="rounded border border-danger-line bg-danger-soft px-3 py-2 text-xs text-danger-ink">
             {error}
           </p>
         ) : null}
 
         <section>
-          <h2 className="mb-3 text-[10px] uppercase tracking-wide text-gray-400">
+          <h2 className="mb-3 text-[10px] uppercase tracking-wide text-ink-faint">
             Quality layers
           </h2>
           <div className="space-y-2">
@@ -159,30 +159,30 @@ export default function QualityView() {
                   className={cn(
                     "flex items-center gap-3 rounded-lg border px-3 py-2.5",
                     layer.disabled
-                      ? "border-gray-100 bg-gray-50 opacity-60"
+                      ? "border-line-soft bg-canvas-raised opacity-60"
                       : count > 0
-                        ? "border-amber-200 bg-amber-50/50"
-                        : "border-gray-200 bg-white",
+                        ? "border-warn-line bg-warn-soft/50"
+                        : "border-line bg-surface",
                   )}
                 >
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand text-[10px] text-white">
                     {layer.layer}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-gray-800">{layer.label}</p>
-                    <p className="text-[10px] text-gray-400">{layer.description}</p>
+                    <p className="text-xs font-medium text-ink">{layer.label}</p>
+                    <p className="text-[10px] text-ink-faint">{layer.description}</p>
                   </div>
                   {layer.disabled ? (
                     <StatusChip tone="neutral">disabled</StatusChip>
                   ) : (
-                    <span className="text-sm font-semibold text-gray-700">{count}</span>
+                    <span className="text-sm font-semibold text-ink-body">{count}</span>
                   )}
                 </div>
               );
             })}
           </div>
           {summary ? (
-            <p className="mt-2 text-[11px] text-gray-400">
+            <p className="mt-2 text-[11px] text-ink-faint">
               {summary.flagCount} flag{summary.flagCount !== 1 ? "s" : ""} total
               {summary.bySeverity.error
                 ? ` · ${summary.bySeverity.error} error`
@@ -194,18 +194,18 @@ export default function QualityView() {
         </section>
 
         <section>
-          <h2 className="mb-2 text-[10px] uppercase tracking-wide text-gray-400">
+          <h2 className="mb-2 text-[10px] uppercase tracking-wide text-ink-faint">
             Open flags
           </h2>
           {loadingFlags ? (
-            <p className="text-sm text-gray-400">Loading flags…</p>
+            <p className="text-sm text-ink-faint">Loading flags…</p>
           ) : flags.length === 0 ? (
-            <p className="text-sm text-gray-400">No open flags. Run a scan to detect issues.</p>
+            <p className="text-sm text-ink-faint">No open flags. Run a scan to detect issues.</p>
           ) : (
-            <div className="overflow-x-auto rounded border border-gray-200">
+            <div className="overflow-x-auto rounded border border-line">
               <table className="w-full border-collapse text-left text-xs">
                 <thead>
-                  <tr className="border-b border-gray-200 bg-gray-50 text-[10px] uppercase tracking-wide text-gray-400">
+                  <tr className="border-b border-line bg-canvas-raised text-[10px] uppercase tracking-wide text-ink-faint">
                     <th className="px-2 py-1.5 font-medium">Instance</th>
                     <th className="px-2 py-1.5 font-medium">Layer</th>
                     <th className="px-2 py-1.5 font-medium">Severity</th>
@@ -216,18 +216,18 @@ export default function QualityView() {
                 </thead>
                 <tbody>
                   {flags.map((f) => (
-                    <tr key={f.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="px-2 py-1.5 text-[10px] text-gray-600">
+                    <tr key={f.id} className="border-b border-line-soft hover:bg-surface-hover">
+                      <td className="px-2 py-1.5 text-[10px] text-ink-muted">
                         {f.instanceId.slice(0, 8)}…
                       </td>
-                      <td className="px-2 py-1.5 text-gray-500">L{f.layer}</td>
+                      <td className="px-2 py-1.5 text-ink-muted">L{f.layer}</td>
                       <td className="px-2 py-1.5">
                         <StatusChip tone={severityTone(f.severity)}>{f.severity}</StatusChip>
                       </td>
-                      <td className="max-w-[200px] truncate px-2 py-1.5 text-gray-700">
+                      <td className="max-w-[200px] truncate px-2 py-1.5 text-ink-body">
                         {f.message}
                       </td>
-                      <td className="max-w-[120px] truncate px-2 py-1.5 text-gray-400">
+                      <td className="max-w-[120px] truncate px-2 py-1.5 text-ink-faint">
                         {f.observedValue ?? "—"}
                       </td>
                       <td className="px-2 py-1.5">
@@ -236,7 +236,7 @@ export default function QualityView() {
                             type="button"
                             disabled={updatingId === f.id}
                             onClick={() => void handleFlagAction(f.id, "reviewed")}
-                            className="rounded border border-gray-200 px-1.5 py-0.5 text-[10px] text-gray-600 hover:border-gray-400 disabled:opacity-50"
+                            className="rounded border border-line px-1.5 py-0.5 text-[10px] text-ink-muted hover:border-line-strong disabled:opacity-50"
                           >
                             Review
                           </button>
@@ -244,7 +244,7 @@ export default function QualityView() {
                             type="button"
                             disabled={updatingId === f.id}
                             onClick={() => void handleFlagAction(f.id, "dismissed")}
-                            className="rounded border border-gray-200 px-1.5 py-0.5 text-[10px] text-gray-600 hover:border-gray-400 disabled:opacity-50"
+                            className="rounded border border-line px-1.5 py-0.5 text-[10px] text-ink-muted hover:border-line-strong disabled:opacity-50"
                           >
                             Dismiss
                           </button>

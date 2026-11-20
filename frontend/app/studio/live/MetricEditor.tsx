@@ -37,7 +37,7 @@ const UNITS: { value: TwinMetricUnit; label: string; hint: string }[] = [
 const AGGS = ["count", "sum", "mean", "min", "max"] as const;
 
 const FIELD =
-  "w-full rounded border border-line bg-white px-2 py-1.5 text-[11.5px] text-ink focus:border-brand focus:outline-none";
+  "w-full rounded border border-line bg-surface px-2 py-1.5 text-[11.5px] text-ink focus:border-brand focus:outline-none";
 const LABEL = "text-[10px] font-medium uppercase tracking-wide text-ink-faint";
 
 function emptySelector(): TwinMetricSelector {
@@ -173,8 +173,8 @@ export default function MetricEditor({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/20 pt-[8vh]">
-      <div className="flex max-h-[80vh] w-[720px] overflow-hidden rounded-md border border-line bg-white shadow-lg">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 pt-[8vh]">
+      <div className="flex max-h-[80vh] w-[720px] overflow-hidden rounded-md border border-line bg-surface shadow-lg">
         {/* list */}
         <aside className="flex w-[230px] shrink-0 flex-col border-r border-line">
           <div className="flex items-center gap-2 border-b border-line-soft px-3 py-2">
@@ -183,7 +183,7 @@ export default function MetricEditor({
               type="button"
               onClick={startNew}
               title="New metric"
-              className="rounded p-0.5 text-ink-faint hover:bg-canvas-raised hover:text-brand"
+              className="rounded p-0.5 text-ink-faint hover:bg-surface-hover hover:text-brand"
             >
               <Plus className="h-3.5 w-3.5" />
             </button>
@@ -198,7 +198,7 @@ export default function MetricEditor({
                   "flex w-full items-center gap-2 border-l-[3px] px-3 py-1.5 text-left",
                   editing !== "new" && editing?.key === m.key
                     ? "border-l-brand bg-brand-soft"
-                    : "border-l-transparent hover:bg-canvas-raised",
+                    : "border-l-transparent hover:bg-surface-hover",
                 )}
               >
                 <span className="min-w-0 flex-1 truncate text-[11.5px] font-medium text-ink">
@@ -233,7 +233,7 @@ export default function MetricEditor({
             <button
               type="button"
               onClick={onClose}
-              className="rounded p-0.5 text-ink-faint hover:bg-canvas-raised hover:text-ink-body"
+              className="rounded p-0.5 text-ink-faint hover:bg-surface-hover hover:text-ink-body"
             >
               <X className="h-3.5 w-3.5" />
             </button>

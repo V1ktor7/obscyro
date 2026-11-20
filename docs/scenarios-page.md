@@ -40,3 +40,11 @@ flowchart TD
 | Frise | En bas | Le jour affiché, le couloir Context (les événements validés, placés d'après la date du jour 0 ; ce ne sont pas des tampons, le moteur ne les reçoit pas), les couloirs de tampons, la courbe d'occupation |
 
 Ce que fait un run, et comment se lisent ses résultats : [algorithms.md](algorithms.md), sections A4 à A7.
+
+## L'apparence
+
+La page suit le thème sombre du Studio ([../design/PALETTE.md](../design/PALETTE.md)). Trois choses lui sont propres :
+
+- **Le fond de carte est sombre** (`frontend/app/studio/map-style.ts`). Tout ce qui est dessiné sur la carte est choisi pour ce fond : un libellé a un halo sombre, un site sans occupation est un cercle vide.
+- **Les rampes vont du sombre au lumineux.** Le bas de l'échelle reste près du fond et chaque palier est plus lumineux : ce qui ressort est ce qui est élevé. La pression garde ses teintes : vert sous 90 %, jaune, orange, rouge, puis magenta à 200 % et plus. Les valeurs sont dans `HexTwinView.tsx` (`OCC_STEPS`, `SICK_STEPS`, `DENSITY_STEPS`) et `layers.ts`.
+- **Les pages de la section Twin sont des onglets au-dessus de la carte**, pas une colonne à côté : la carte garde toute la largeur.

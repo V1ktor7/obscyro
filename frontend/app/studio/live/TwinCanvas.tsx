@@ -139,7 +139,7 @@ export default function TwinCanvas({
             <div
               key={node.id}
               className={cn(
-                "absolute cursor-pointer rounded-md border bg-white shadow-sm transition-colors",
+                "absolute cursor-pointer rounded-md border bg-surface shadow-sm transition-colors",
                 isSelected ? "border-brand ring-2 ring-brand-soft" : "border-line",
               )}
               style={{ left: pos.x, top: pos.y, width: TREE_NODE_W, minHeight: TREE_NODE_H }}
@@ -177,7 +177,7 @@ export default function TwinCanvas({
                     }}
                     aria-label={`Details for ${node.name}`}
                     title="Details"
-                    className="shrink-0 rounded p-0.5 text-ink-faint hover:bg-canvas-raised hover:text-brand"
+                    className="shrink-0 rounded p-0.5 text-ink-faint hover:bg-surface-hover hover:text-brand"
                   >
                     <Info className="h-3 w-3" />
                   </button>
@@ -197,7 +197,7 @@ export default function TwinCanvas({
               </div>
 
               {node.openAlertCount > 0 ? (
-                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-warn px-1 text-[9px] font-medium text-white">
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-warn px-1 text-[9px] font-medium text-inverse">
                   {node.openAlertCount}
                 </span>
               ) : null}

@@ -23,10 +23,11 @@ import { formatValue, siteRamp } from "./chart-geometry";
 import type { Card } from "../dashboards-api";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
-const STYLE = "mapbox://styles/victormorency7/cmsddjrmc002c01s99df7adnp";
+// The same basemap as every other Studio map (see ../map-style.ts).
+const STYLE = "mapbox://styles/mapbox/dark-v11";
 
 /** Quiet to loaded. Ends at the danger red the rest of the studio uses. */
-const RAMP = ["#2d72d2", "#54a0d8", "#e5b53f", "#e08b2f", "#c23030"];
+const RAMP = ["#4589ff", "#33b1ff", "#f1c21b", "#ff832b", "#fa4d56"];
 
 function colourAt(t: number): string {
   const i = Math.min(RAMP.length - 1, Math.max(0, Math.round(t * (RAMP.length - 1))));
@@ -51,7 +52,7 @@ export default function MapCard({ card }: { card: Card }) {
           name: s.name,
           // A site with no reading gets no ramp colour at all; the layer draws
           // it hollow so it cannot be mistaken for the quiet end of the scale.
-          colour: t == null ? "#ffffff" : colourAt(t),
+          colour: t == null ? "#161616" : colourAt(t),
           read: t == null ? 0 : 1,
           label:
             s.value == null
@@ -95,7 +96,7 @@ export default function MapCard({ card }: { card: Card }) {
             "circle-color": ["get", "colour"],
             "circle-opacity": ["case", ["==", ["get", "read"], 1], 0.9, 0.15],
             "circle-stroke-width": 1.5,
-            "circle-stroke-color": ["case", ["==", ["get", "read"], 1], "#ffffff", "#8f99a8"],
+            "circle-stroke-color": ["case", ["==", ["get", "read"], 1], "#161616", "#a8a8a8"],
           },
         });
         setReady(true);
@@ -167,7 +168,7 @@ export default function MapCard({ card }: { card: Card }) {
           <span className="ml-1">quiet → saturated</span>
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full border border-ink-ghost bg-white" />
+          <span className="h-2.5 w-2.5 rounded-full border border-ink-ghost bg-surface" />
           no reading
         </span>
       </div>

@@ -94,7 +94,7 @@ export default function LiveView() {
 
   if (!hasKey) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-white">
+      <div className="flex flex-1 items-center justify-center bg-surface">
         <p className="max-w-sm text-center text-sm text-ink-muted">
           Sign in and create an API key to view live metrics.
         </p>
@@ -104,7 +104,7 @@ export default function LiveView() {
 
   if (!env) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-white">
+      <div className="flex flex-1 items-center justify-center bg-surface">
         <p className="text-sm text-ink-muted">Select an environment in the header.</p>
       </div>
     );
@@ -187,7 +187,7 @@ export default function LiveView() {
         )}
       </div>
 
-      <aside className="w-full shrink-0 border-t border-line bg-white p-4 lg:w-72 lg:border-l lg:border-t-0">
+      <aside className="w-full shrink-0 border-t border-line bg-surface p-4 lg:w-72 lg:border-l lg:border-t-0">
         <h2 className="mb-3 text-[10px] uppercase tracking-wide text-ink-faint">
           Instance score
         </h2>

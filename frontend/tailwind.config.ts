@@ -1,6 +1,27 @@
 import type { Config } from "tailwindcss";
 import typography from "@tailwindcss/typography";
 
+/**
+ * A Studio colour, read from a CSS variable.
+ *
+ * The variables hold three numbers ("38 38 38"), not a hex value, so that an
+ * opacity suffix (`bg-surface/95`, `border-danger/40`) still works. Their
+ * values are in `app/globals.css`: the light ones on `:root`, the Studio's on
+ * `.theme-g100`.
+ */
+const studio = (name: string) => `rgb(var(--s-${name}) / <alpha-value>)`;
+
+/**
+ * Brand blue is three blues once the ground is dark.
+ *
+ * A filled button wants the deep one (white text has to stay readable on it), a
+ * link wants the pale one (it is text on a dark panel), and a one-pixel outline
+ * wants the one in between. The class name stays `brand` everywhere; what it
+ * gives depends on what is being painted. On `:root` the three are the same.
+ */
+const brandText = { brand: { DEFAULT: studio("brand-text"), deep: studio("brand-text-deep") } };
+const brandEdge = { brand: { DEFAULT: studio("brand-edge"), deep: studio("brand-text") } };
+
 const config: Config = {
   content: [
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
@@ -25,46 +46,50 @@ const config: Config = {
       colors: {
         // --- Studio palette -------------------------------------------------
         //
-        // The Studio's colours were written as hex literals — `text-[#8f99a8]`
-        // appears 332 times, `border-[#d3d8de]` 291 — which means restyling
-        // anything is hundreds of edits and drifting is invisible. These are
-        // the same values, named.
-        //
-        // The reference is the Ontology › Discover view: canvas, white cards,
-        // one border colour, four text weights.
-        //
-        // Purely additive. Nothing renders differently until call sites are
-        // migrated, which is deliberate: the tokens land first so the migration
-        // is mechanical and reviewable.
+        // Every colour the Studio paints with has a name here and a value in
+        // `app/globals.css`. A screen never writes a hex value: it names a
+        // role, and the theme says what that role looks like. The Studio runs
+        // on the dark theme (`.theme-g100`, IBM Carbon Gray 100); the light
+        // values on `:root` are what the public site's product tour draws with.
         ink: {
-          DEFAULT: "#1c2127", // headings, primary text
-          body: "#404854",
-          muted: "#5f6b7c",
-          faint: "#8f99a8", // labels, metadata
-          ghost: "#c5cbd3", // disabled, inactive dots
+          DEFAULT: studio("ink"), // headings, primary text
+          body: studio("ink-body"),
+          muted: studio("ink-muted"),
+          faint: studio("ink-faint"), // labels, metadata
+          ghost: studio("ink-ghost"), // disabled, inactive dots
         },
+        // Text on something filled with `ink`, or with a severity colour.
+        inverse: studio("inverse"),
         line: {
-          DEFAULT: "#d3d8de", // panel and card borders
-          soft: "#e5e8eb", // dividers inside a panel
-          faint: "#eef1f4", // row separators
+          DEFAULT: studio("line"), // panel and card borders
+          soft: studio("line-soft"), // dividers inside a panel
+          faint: studio("line-faint"), // row separators
+          strong: studio("line-strong"), // a border that has to be seen: a field, a handle
         },
         canvas: {
-          DEFAULT: "#f6f7f9", // the page behind white cards
-          raised: "#f8f9fa", // inset blocks on white
+          DEFAULT: studio("canvas"), // the page behind the panels
+          raised: studio("canvas-raised"), // inset blocks on a panel
+        },
+        surface: {
+          DEFAULT: studio("surface"), // panels, cards, fields
+          hover: studio("surface-hover"), // a row or a quiet button under the pointer
         },
         brand: {
-          DEFAULT: "#2d72d2",
-          deep: "#215db0", // text and borders on brand-soft
-          soft: "#e7f2fd", // selected rows, active chips
+          DEFAULT: studio("brand"), // a filled button
+          deep: studio("brand-deep"), // the same button under the pointer
+          soft: studio("brand-soft"), // selected rows, active chips
+          line: studio("brand-line"), // the border of something on brand-soft
         },
         // Severity. `ink` variants exist because the mid tone fails contrast on
         // its own soft background.
-        ok: { DEFAULT: "#1d9e75", soft: "#e8f6f0", ink: "#1c6e42" },
-        warn: { DEFAULT: "#d9822b", soft: "#fdf6ec", line: "#f0d9b5", ink: "#935610" },
-        danger: { DEFAULT: "#c23030", soft: "#fdf1f1", ink: "#a82255" },
+        ok: { DEFAULT: studio("ok"), soft: studio("ok-soft"), line: studio("ok-line"), ink: studio("ok-ink") },
+        warn: { DEFAULT: studio("warn"), soft: studio("warn-soft"), line: studio("warn-line"), ink: studio("warn-ink") },
+        danger: { DEFAULT: studio("danger"), soft: studio("danger-soft"), line: studio("danger-line"), ink: studio("danger-ink") },
         // Scenario overlay — deliberately not a severity. It means "you are not
         // looking at reality", which is a different axis from "this is bad".
-        scenario: { DEFAULT: "#5b4a86", soft: "#f0edf7" },
+        scenario: { DEFAULT: studio("scenario"), soft: studio("scenario-soft"), line: studio("scenario-line") },
+        // Capacity an option adds. Not a severity either.
+        teal: { DEFAULT: studio("teal"), soft: studio("teal-soft") },
 
         bg: {
           DEFAULT: "var(--bg-primary)",
@@ -103,8 +128,28 @@ const config: Config = {
         "accent-soft": "0 12px 24px -16px rgba(17,17,17,0.20)",
         "code": "0 24px 64px -24px rgba(0,0,0,0.5)",
       },
+      textColor: brandText,
+      placeholderColor: brandText,
+      textDecorationColor: brandEdge,
+      borderColor: brandEdge,
+      ringColor: brandEdge,
+      outlineColor: brandEdge,
+      accentColor: brandEdge,
+      fill: brandEdge,
+      stroke: brandEdge,
+      // A fill that carries white text: the pale purple of `scenario` cannot.
+      backgroundColor: { scenario: { DEFAULT: studio("scenario-fill") } },
+      // The Studio's corners are square. Each radius reads a variable the theme
+      // sets to zero, and falls back to Tailwind's own value everywhere else.
+      // `rounded-full` is untouched: a dot and a pill stay round.
       borderRadius: {
-        xl: "0.875rem",
+        sm: "var(--radius-sm, 0.125rem)",
+        DEFAULT: "var(--radius, 0.25rem)",
+        md: "var(--radius-md, 0.375rem)",
+        lg: "var(--radius-lg, 0.5rem)",
+        xl: "var(--radius-xl, 0.875rem)",
+        "2xl": "var(--radius-2xl, 1rem)",
+        "3xl": "var(--radius-3xl, 1.5rem)",
       },
       keyframes: {
         "fade-in": {

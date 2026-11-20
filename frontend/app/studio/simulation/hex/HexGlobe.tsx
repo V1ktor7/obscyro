@@ -248,7 +248,7 @@ const HexGlobe = forwardRef<GlobeHandle, {
           source: "hex-world",
           filter: ["==", ["get", "r"], 1],
           maxzoom: 2.6,
-          paint: { "line-color": "#404854", "line-opacity": 0.22, "line-width": 0.6 },
+          paint: { "line-color": "#8d8d8d", "line-opacity": 0.22, "line-width": 0.6 },
         });
         layer({
           id: "hex-world-2",
@@ -257,7 +257,7 @@ const HexGlobe = forwardRef<GlobeHandle, {
           filter: ["==", ["get", "r"], 2],
           minzoom: 2.6,
           maxzoom: 7,
-          paint: { "line-color": "#404854", "line-opacity": 0.18, "line-width": 0.6 },
+          paint: { "line-color": "#8d8d8d", "line-opacity": 0.18, "line-width": 0.6 },
         });
         for (let l = LEVELS - 1; l >= 0; l--) {
           layer({
@@ -273,21 +273,21 @@ const HexGlobe = forwardRef<GlobeHandle, {
           type: "line",
           source: "hex-cells",
           filter: ["==", ["get", "l"], 0],
-          paint: { "line-color": "#ffffff", "line-width": 0.6, "line-opacity": 0.9 },
+          paint: { "line-color": "#161616", "line-width": 0.6, "line-opacity": 0.9 },
         });
         layer({
           id: "hex-selected",
           type: "line",
           source: "hex-cells",
           filter: ["==", ["get", "i"], -2],
-          paint: { "line-color": "#1c2127", "line-width": 2.5 },
+          paint: { "line-color": "#ffffff", "line-width": 2.5 },
         });
         layer({
           id: "hex-areas-fill",
           type: "fill",
           source: "hex-areas",
           filter: ["==", ["get", "kind"], "area"],
-          paint: { "fill-color": "#5b4a86", "fill-opacity": ["case", ["get", "on"], 0.1, 0] },
+          paint: { "fill-color": "#be95ff", "fill-opacity": ["case", ["get", "on"], 0.14, 0] },
         });
         layer({
           id: "hex-areas-line",
@@ -295,7 +295,7 @@ const HexGlobe = forwardRef<GlobeHandle, {
           source: "hex-areas",
           filter: ["==", ["get", "kind"], "area"],
           paint: {
-            "line-color": "#5b4a86",
+            "line-color": "#be95ff",
             "line-width": 2,
             "line-dasharray": [3, 2],
             "line-opacity": ["case", ["get", "on"], 1, 0.45],
@@ -307,7 +307,7 @@ const HexGlobe = forwardRef<GlobeHandle, {
           source: "hex-areas",
           filter: ["==", ["get", "kind"], "label"],
           layout: { "text-field": ["get", "t"], "text-size": 11.5, "text-anchor": "bottom", "text-allow-overlap": true },
-          paint: { "text-color": "#5b4a86", "text-halo-color": "#ffffff", "text-halo-width": 1.5 },
+          paint: { "text-color": "#be95ff", "text-halo-color": "#161616", "text-halo-width": 1.5 },
         });
         layer({
           id: "hex-sites",
@@ -316,7 +316,7 @@ const HexGlobe = forwardRef<GlobeHandle, {
           paint: {
             "circle-radius": ["interpolate", ["linear"], ["zoom"], 3, 2.5, 9, 5, 13, 8],
             "circle-color": ["get", "c"],
-            "circle-stroke-color": "#1c2127",
+            "circle-stroke-color": "#f4f4f4",
             "circle-stroke-width": 1,
           },
         });
@@ -332,7 +332,7 @@ const HexGlobe = forwardRef<GlobeHandle, {
             "text-offset": [0, 1.1],
             "text-anchor": "top",
           },
-          paint: { "text-color": "#1c2127", "text-halo-color": "#ffffff", "text-halo-width": 1.5 },
+          paint: { "text-color": "#f4f4f4", "text-halo-color": "#161616", "text-halo-width": 1.5 },
         });
         layer({
           id: "hex-seeds",
@@ -340,8 +340,8 @@ const HexGlobe = forwardRef<GlobeHandle, {
           source: "hex-seeds",
           paint: {
             "circle-radius": ["interpolate", ["linear"], ["zoom"], 3, 4, 10, 8],
-            "circle-color": "#a82255",
-            "circle-stroke-color": "#ffffff",
+            "circle-color": "#fa4d56",
+            "circle-stroke-color": "#161616",
             "circle-stroke-width": 2.5,
           },
         });
@@ -475,7 +475,7 @@ const HexGlobe = forwardRef<GlobeHandle, {
   if (!MAPBOX_TOKEN) {
     return (
       <div className={cn("flex items-center justify-center bg-canvas p-6", className)}>
-        <div className="max-w-md rounded-md border border-line bg-white p-5 text-sm text-ink-body">
+        <div className="max-w-md rounded-md border border-line bg-surface p-5 text-sm text-ink-body">
           <p className="mb-2 font-semibold text-ink">Mapbox token missing</p>
           <p className="text-xs leading-relaxed">
             Add <code className="rounded bg-canvas px-1">NEXT_PUBLIC_MAPBOX_TOKEN</code> to the environment, then
@@ -504,7 +504,7 @@ export default HexGlobe;
  */
 export function GlobeControls({ globe, className }: { globe: RefObject<GlobeHandle>; className?: string }) {
   const control =
-    "flex h-8 w-8 items-center justify-center rounded border border-line bg-white/95 text-ink-body shadow-sm hover:border-brand hover:text-brand";
+    "flex h-8 w-8 items-center justify-center rounded border border-line bg-surface/95 text-ink-body shadow-sm hover:border-brand hover:text-brand";
   return (
     <div className={cn("pointer-events-auto flex flex-col gap-1", className)}>
       <button type="button" className={control} aria-label="Zoom in" title="Zoom in" onClick={() => globe.current?.zoomIn()}>

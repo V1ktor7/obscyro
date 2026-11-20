@@ -104,16 +104,16 @@ export interface ShapeFeatureCollection {
  * palette of six is never the reason two neighbours end up alike.
  */
 export const AUTO_TINTS = [
-  "#2d72d2",
-  "#1d9e75",
-  "#d9822b",
-  "#8f5cc4",
-  "#c23030",
-  "#0f6f7a",
+  "#4589ff",
+  "#42be65",
+  "#ff832b",
+  "#be95ff",
+  "#fa4d56",
+  "#08bdba",
 ] as const;
 
 /** Used only when a shape has no neighbours and no declaration to go on. */
-export const UNCOLOURED = "#8a94a6";
+export const UNCOLOURED = "#8d8d8d";
 
 /**
  * The ramp a played run is drawn with: one hue family, pale to deep.
@@ -121,9 +121,10 @@ export const UNCOLOURED = "#8a94a6";
  * Categorical tints are wrong here for the reason `AUTO_TINTS` exists at all —
  * they are meant to be distinguishable, not ordered, and a reader cannot tell
  * which of violet and orange is more. A quantity needs a ramp somebody can rank
- * at a glance, so this one only ever gets darker and warmer.
+ * at a glance, so this one only ever gets brighter and warmer: on a dark
+ * basemap the low end stays near the ground and the high end stands out.
  */
-export const WAVE_RAMP = ["#fbf0d9", "#e8a33d", "#a8261f"] as const;
+export const WAVE_RAMP = ["#3d3212", "#d2861b", "#fa4d56"] as const;
 
 /** Vertices are matched at ~10 cm, which is finer than the source's precision. */
 function vertexKeys(geometry: InstanceShape["geometry"]): string[] {

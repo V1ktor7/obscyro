@@ -28,11 +28,11 @@ import {
 } from "../forecast-loops-api";
 import { RULE, addDays, buildLoop, madeOf, targetOf, type Loop } from "./loop-rules";
 
-const BTN = "inline-flex items-center gap-1.5 rounded border border-line bg-white px-2.5 py-1 text-[12px] text-ink-body hover:border-brand hover:text-brand disabled:opacity-50";
+const BTN = "inline-flex items-center gap-1.5 rounded border border-line bg-surface px-2.5 py-1 text-[12px] text-ink-body hover:border-brand hover:text-brand disabled:opacity-50";
 const BTN_P = "inline-flex items-center gap-1.5 rounded bg-brand px-2.5 py-1 text-[12px] font-medium text-white hover:bg-brand-deep disabled:opacity-50";
-const PANEL = "rounded-md border border-line bg-white p-3";
+const PANEL = "rounded-md border border-line bg-surface p-3";
 const H2 = "text-[13px] font-semibold text-ink";
-const FIELD = "rounded border border-line bg-white px-2 py-1 text-[12px] text-ink focus:border-brand focus:outline-none";
+const FIELD = "rounded border border-line bg-surface px-2 py-1 text-[12px] text-ink focus:border-brand focus:outline-none";
 
 const fmt = (n: number, d = 0) => Number(n).toLocaleString("en-CA", { maximumFractionDigits: d, minimumFractionDigits: d });
 const r1 = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? "—" : fmt(v, 1));
@@ -81,30 +81,30 @@ function Chart({ L: loop, day, spec, h, real, unit }: { L: Loop; day: string; sp
     <svg viewBox={`0 0 ${W} ${Hh}`} className="h-auto w-full" role="img" aria-label={`${unit} known, forecasts made this morning and earlier forecasts at ${h} days`}>
       {grid.map((v) => (
         <g key={v}>
-          <line x1={Lp} x2={W - R} y1={Y(v)} y2={Y(v)} stroke="#eef1f4" />
-          <text x={Lp - 5} y={Y(v) + 3} textAnchor="end" fontSize={10} fill="#8f99a8">{v}</text>
+          <line x1={Lp} x2={W - R} y1={Y(v)} y2={Y(v)} stroke="#2c2c2c" />
+          <text x={Lp - 5} y={Y(v) + 3} textAnchor="end" fontSize={10} fill="#a8a8a8">{v}</text>
         </g>
       ))}
-      {days.map((s, k) => (s.endsWith("-01") || s.endsWith("-15") ? <text key={s} x={X(k)} y={Hh - 6} textAnchor="middle" fontSize={10} fill="#8f99a8">{shortLabel(s)}</text> : null))}
-      <rect x={xm} y={T} width={Math.max(0, W - R - xm)} height={Hh - T - B} fill="#f8f9fa" />
+      {days.map((s, k) => (s.endsWith("-01") || s.endsWith("-15") ? <text key={s} x={X(k)} y={Hh - 6} textAnchor="middle" fontSize={10} fill="#a8a8a8">{shortLabel(s)}</text> : null))}
+      <rect x={xm} y={T} width={Math.max(0, W - R - xm)} height={Hh - T - B} fill="#303030" />
       {bands.length > 1 ? (
         <polygon
           points={[...bands.map((p) => `${X(at(p.s)).toFixed(1)},${Y(p.f + p.b![1]).toFixed(1)}`), ...bands.slice().reverse().map((p) => `${X(at(p.s)).toFixed(1)},${Y(p.f + p.b![0]).toFixed(1)}`)].join(" ")}
-          fill="#2d72d2" fillOpacity={0.13}
+          fill="#4589ff" fillOpacity={0.13}
         />
       ) : null}
-      {real ? <path d={path(days.map((s) => (s >= yday ? loop.obs(s) : null)))} fill="none" stroke="#8f99a8" strokeWidth={1.4} strokeDasharray="3 3" /> : null}
-      <path d={path(days.map((s) => (s < day ? loop.obs(s) : null)))} fill="none" stroke="#1c2127" strokeWidth={1.6} />
-      {past.map((v, k) => (v == null ? null : <circle key={k} cx={X(k)} cy={Y(v)} r={2.2} fill="#d9822b" />))}
+      {real ? <path d={path(days.map((s) => (s >= yday ? loop.obs(s) : null)))} fill="none" stroke="#a8a8a8" strokeWidth={1.4} strokeDasharray="3 3" /> : null}
+      <path d={path(days.map((s) => (s < day ? loop.obs(s) : null)))} fill="none" stroke="#f4f4f4" strokeWidth={1.6} />
+      {past.map((v, k) => (v == null ? null : <circle key={k} cx={X(k)} cy={Y(v)} r={2.2} fill="#f1c21b" />))}
       {last != null && pts.length ? (
         <>
-          <line x1={X(at(yday))} x2={X(at(pts[pts.length - 1]!.s))} y1={Y(last)} y2={Y(last)} stroke="#8f99a8" strokeWidth={1.2} strokeDasharray="6 4" />
-          <path d={`M${X(at(yday)).toFixed(1)},${Y(last).toFixed(1)} ${pts.map((p) => `L${X(at(p.s)).toFixed(1)},${Y(p.f).toFixed(1)}`).join(" ")}`} fill="none" stroke="#2d72d2" strokeWidth={2} />
-          {pts.map((p) => <circle key={p.h} cx={X(at(p.s))} cy={Y(p.f)} r={p.h === h ? 4.2 : 3} fill={p.h === h ? "#2d72d2" : "#fff"} stroke="#2d72d2" strokeWidth={1.6} />)}
+          <line x1={X(at(yday))} x2={X(at(pts[pts.length - 1]!.s))} y1={Y(last)} y2={Y(last)} stroke="#a8a8a8" strokeWidth={1.2} strokeDasharray="6 4" />
+          <path d={`M${X(at(yday)).toFixed(1)},${Y(last).toFixed(1)} ${pts.map((p) => `L${X(at(p.s)).toFixed(1)},${Y(p.f).toFixed(1)}`).join(" ")}`} fill="none" stroke="#4589ff" strokeWidth={2} />
+          {pts.map((p) => <circle key={p.h} cx={X(at(p.s))} cy={Y(p.f)} r={p.h === h ? 4.2 : 3} fill={p.h === h ? "#4589ff" : "#262626"} stroke="#4589ff" strokeWidth={1.6} />)}
         </>
       ) : null}
-      <line x1={xm} x2={xm} y1={T} y2={Hh - B} stroke="#1c2127" />
-      <text x={xm + 4} y={T + 10} fontSize={10} fill="#1c2127">this morning</text>
+      <line x1={xm} x2={xm} y1={T} y2={Hh - B} stroke="#f4f4f4" />
+      <text x={xm + 4} y={T + 10} fontSize={10} fill="#f4f4f4">this morning</text>
     </svg>
   );
 }
@@ -410,7 +410,7 @@ export default function LiveForecastTab({ env, onError }: { env: string | null; 
                 const s = targetOf(day, hh), f = L.forecast(spec, hh, day), b = L.bandOf(spec, hh, day), a = L.obs(s);
                 return (
                   <button key={hh} type="button" onClick={() => setH(hh)}
-                    className={cn("flex flex-col rounded border px-2 py-1.5 text-left", hh === h ? "border-brand bg-brand-soft" : "border-line bg-white hover:border-brand")}>
+                    className={cn("flex flex-col rounded border px-2 py-1.5 text-left", hh === h ? "border-brand bg-brand-soft" : "border-line bg-surface hover:border-brand")}>
                     <span className="text-[11px] text-ink-faint">in {hh} day{hh === 1 ? "" : "s"} · {dayLabel(s)}</span>
                     <b className="text-[18px] font-semibold tabular-nums text-ink">{f == null ? "—" : fmt(f)}</b>
                     <span className="text-[10.5px] text-ink-muted">{b && f != null ? `80 %: ${fmt(Math.max(0, f + b[0]))} to ${fmt(f + b[1])}` : `range after ${RULE.minPoints} scored`}</span>
@@ -424,18 +424,18 @@ export default function LiveForecastTab({ env, onError }: { env: string | null; 
               <span className="text-ink-muted">Earlier forecasts shown at</span>
               <span className="inline-flex overflow-hidden rounded border border-line">
                 {L.horizons.map((hh) => (
-                  <button key={hh} type="button" onClick={() => setH(hh)} className={cn("px-2 py-0.5 text-[11.5px]", hh === h ? "bg-brand text-white" : "bg-white hover:bg-canvas")}>{hh} d</button>
+                  <button key={hh} type="button" onClick={() => setH(hh)} className={cn("px-2 py-0.5 text-[11.5px]", hh === h ? "bg-brand text-white" : "bg-surface hover:bg-surface-hover")}>{hh} d</button>
                 ))}
               </span>
               <label className="ml-2 inline-flex items-center gap-1.5"><input type="checkbox" checked={real} onChange={(e) => setReal(e.target.checked)} />Show what happened next</label>
             </div>
             <Legend items={[
-              ["#1c2127", `${unit}, as known that morning`, "line"],
-              ...(real ? [["#8f99a8", "what happened next (not known that morning)", "dash"] as [string, string, "dash"]] : []),
-              ["#d9822b", `what was forecast ${h} day${h === 1 ? "" : "s"} earlier`, "dots"],
-              ["#2d72d2", "this morning's forecast", "line"],
-              ["#2d72d2", "80 % of our own past errors", "band"],
-              ["#8f99a8", "naive: same as yesterday", "dash"],
+              ["#f4f4f4", `${unit}, as known that morning`, "line"],
+              ...(real ? [["#a8a8a8", "what happened next (not known that morning)", "dash"] as [string, string, "dash"]] : []),
+              ["#f1c21b", `what was forecast ${h} day${h === 1 ? "" : "s"} earlier`, "dots"],
+              ["#4589ff", "this morning's forecast", "line"],
+              ["#4589ff", "80 % of our own past errors", "band"],
+              ["#a8a8a8", "naive: same as yesterday", "dash"],
             ]} />
           </section>
 
@@ -524,13 +524,13 @@ export default function LiveForecastTab({ env, onError }: { env: string | null; 
               {L.events.map((e, k) => {
                 const i = L.days.indexOf(e.day);
                 if (i < 0) return null;
-                if (e.kind === "retrain" || e.kind === "start") return <i key={k} className="absolute top-0 h-2 w-px bg-[#c5cbd3]" style={{ left: `${pos(i)}%` }} />;
-                if (e.kind === "alert") return <i key={k} className="absolute h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-[#d9822b]" style={{ left: `${pos(i)}%`, top: `${10 + L.horizons.indexOf(e.h) * 2}px` }} title={`${e.day}: drift alert at ${e.h} days`} />;
-                if (e.kind === "promote") return <i key={k} className="absolute top-0 h-2 w-2 -translate-x-1/2 rotate-45 bg-[#2d72d2]" style={{ left: `${pos(i)}%` }} title={`${e.day}: model replaced`} />;
+                if (e.kind === "retrain" || e.kind === "start") return <i key={k} className="absolute top-0 h-2 w-px bg-ink-ghost" style={{ left: `${pos(i)}%` }} />;
+                if (e.kind === "alert") return <i key={k} className="absolute h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-warn" style={{ left: `${pos(i)}%`, top: `${10 + L.horizons.indexOf(e.h) * 2}px` }} title={`${e.day}: drift alert at ${e.h} days`} />;
+                if (e.kind === "promote") return <i key={k} className="absolute top-0 h-2 w-2 -translate-x-1/2 rotate-45 bg-brand" style={{ left: `${pos(i)}%` }} title={`${e.day}: model replaced`} />;
                 return null;
               })}
             </div>
-            <input type="range" aria-label="Morning" className="w-full accent-[#2d72d2]" min={0} max={lastIdx} value={idx}
+            <input type="range" aria-label="Morning" className="w-full accent-brand" min={0} max={lastIdx} value={idx}
               onChange={(e) => { setPlaying(false); setDayIdx(Number(e.target.value)); }} />
             <div className="flex justify-between text-[10.5px] text-ink-faint"><span>{dayLabel(L.days[0]!, true)}</span><span>{dayLabel(L.days[lastIdx]!, true)}</span></div>
           </section>
@@ -587,7 +587,7 @@ export default function LiveForecastTab({ env, onError }: { env: string | null; 
                   : e.kind === "clear" ? `Back within expected error at ${e.h} days (${r1(e.live)} against ${r1(e.expected)}).` : "";
                 return (
                   <button key={k} type="button" onClick={() => { setPlaying(false); setDayIdx(L.days.indexOf(e.day)); }}
-                    className="flex gap-2 rounded px-1 py-0.5 text-left text-[11.5px] leading-snug text-ink-body hover:bg-canvas">
+                    className="flex gap-2 rounded px-1 py-0.5 text-left text-[11.5px] leading-snug text-ink-body hover:bg-surface-hover">
                     <span className="w-20 shrink-0 text-ink-faint">{dayLabel(e.day)}</span>
                     <span className={e.kind === "alert" ? "text-warn-ink" : ""}>{t}</span>
                   </button>

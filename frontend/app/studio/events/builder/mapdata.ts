@@ -26,12 +26,12 @@ export interface MapPicture {
   hint: string | null;
 }
 
-const GREY = "#8f99a8", GHOST = "#c5cbd3";
+const GREY = "#a8a8a8", GHOST = "#6f6f6f";
 const siteR = (cap: number) => 3 + Math.sqrt(cap) / 6;
 const capOf = (c: Record<string, number>) => Object.values(c).reduce((n, v) => n + v, 0);
 
 function quietSites(tw: BuilderTwin): Dot[] {
-  return tw.sites.map((s) => ({ id: s.id, lat: s.lat, lon: s.lon, r: siteR(capOf(s.capacity)), fill: "#ffffff", opacity: 1, stroke: GREY, strokeWidth: 1, dashed: false, info: baseInfo(s.name, s.capacity) }));
+  return tw.sites.map((s) => ({ id: s.id, lat: s.lat, lon: s.lon, r: siteR(capOf(s.capacity)), fill: "#161616", opacity: 1, stroke: GREY, strokeWidth: 1, dashed: false, info: baseInfo(s.name, s.capacity) }));
 }
 function baseInfo(name: string, cap: Record<string, number>): string {
   const parts = Object.entries(cap).filter(([, v]) => v > 0).map(([k, v]) => `${fmt(v)} ${k}`);
@@ -107,7 +107,7 @@ export function mapPicture(it: Item | null, tw: BuilderTwin, ctx: Ctx, day: numb
       }
     }
     const inScope = !!r && !r.out && !r.late;
-    return { id: s.id, lat: s.lat, lon: s.lon, r: siteR(capOf(s.capacity)), fill: inScope ? fg : "#ffffff", opacity: inScope ? 0.15 + 0.85 * frac : 1,
+    return { id: s.id, lat: s.lat, lon: s.lon, r: siteR(capOf(s.capacity)), fill: inScope ? fg : "#161616", opacity: inScope ? 0.15 + 0.85 * frac : 1,
       stroke: inScope ? fg : r ? GREY : GHOST, strokeWidth: inScope ? 1.6 : 1, dashed: !!r && !inScope, info: `${baseInfo(s.name, s.capacity)}\n${line}` };
   });
   if (e.spatial) {

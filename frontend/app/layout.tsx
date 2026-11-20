@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Sans, Inter, JetBrains_Mono } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans, Inter, JetBrains_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
 
 import SiteChrome from "@/components/site/SiteChrome";
@@ -19,7 +19,8 @@ const inter = Inter({
 // straight-legged g — which is exactly what a default grotesque does not.
 const plex = IBM_Plex_Sans({
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
+  // 300 is the Studio: its large figures are set light.
+  weight: ["300", "400", "500", "600"],
   variable: "--font-display",
   display: "swap",
 });
@@ -27,6 +28,15 @@ const plex = IBM_Plex_Sans({
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
+  display: "swap",
+});
+
+// The Studio sets code, step ids and figures in Plex Mono, to go with Plex
+// Sans. The theme points --font-mono at it (.theme-g100 in globals.css).
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-plex-mono",
   display: "swap",
 });
 
@@ -86,7 +96,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="light">
       <body
-        className={`${inter.variable} ${plex.variable} ${jetbrainsMono.variable} min-h-screen bg-bg-primary font-sans text-fg-primary antialiased`}
+        className={`${inter.variable} ${plex.variable} ${jetbrainsMono.variable} ${plexMono.variable} min-h-screen bg-bg-primary font-sans text-fg-primary antialiased`}
       >
         <LocaleProvider>
           <SiteChrome>{children}</SiteChrome>

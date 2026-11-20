@@ -111,7 +111,7 @@ export default function Timeline({ items, tw, ctx, day, selected, colourOf, onSe
         {Array.from({ length: Math.ceil(H / every) }, (_, k) => k * every).map((t) => (
           <b key={t} className="absolute top-1 -translate-x-1/2 font-normal tabular-nums" style={{ left: `${((t + 0.5) / H) * 100}%` }}>{t}</b>
         ))}
-        <span className="absolute -top-0.5 z-10 -translate-x-1/2 whitespace-nowrap rounded bg-ink px-1.5 py-0.5 text-[10px] text-white" style={{ left: ruler }}>{u1(ctx)} {day}</span>
+        <span className="absolute -top-0.5 z-10 -translate-x-1/2 whitespace-nowrap rounded bg-ink px-1.5 py-0.5 text-[10px] text-inverse" style={{ left: ruler }}>{u1(ctx)} {day}</span>
       </div>
       {items.map((it) => {
         const fg = colourOf(it.key), sel = it.key === selected;
@@ -138,16 +138,16 @@ export default function Timeline({ items, tw, ctx, day, selected, colourOf, onSe
         const label = itemLabel(it, tw);
         return [
           <button key={`n-${it.key}`} type="button" onClick={() => onSelect(it.key)} title={itemId(it)}
-            className={cn("flex min-w-0 items-center gap-1.5 rounded px-1.5 py-1 text-left text-[11.5px]", sel ? "bg-brand-soft text-brand-deep" : "text-ink-body hover:bg-canvas")}>
+            className={cn("flex min-w-0 items-center gap-1.5 rounded px-1.5 py-1 text-left text-[11.5px]", sel ? "bg-brand-soft text-brand-deep" : "text-ink-body hover:bg-surface-hover")}>
             <i className="h-2 w-2 shrink-0 rounded-full" style={{ background: fg }} />
             <span className="truncate">{label}</span>
           </button>,
-          <div key={`l-${it.key}`} data-lane className="relative h-8 rounded border border-line-soft bg-white">
+          <div key={`l-${it.key}`} data-lane className="relative h-8 rounded border border-line-soft bg-surface">
             <svg viewBox={`0 0 ${H} 1`} preserveAspectRatio="none" aria-hidden="true" className="absolute inset-0 h-full w-full">
               <path d={d} fill={fg} fillOpacity={first >= H ? 0 : 0.22} stroke={fg} strokeWidth={1.3} vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
             </svg>
             <div onPointerDown={(ev) => startBar(ev, it, "m")} title={it.kind === "exposure" ? "The exposure. The curve is the arrivals it brings." : itemId(it)}
-              className={cn("absolute inset-y-0.5 cursor-grab touch-none rounded border-2 active:cursor-grabbing", sel ? "bg-white/30" : "bg-transparent")}
+              className={cn("absolute inset-y-0.5 cursor-grab touch-none rounded border-2 active:cursor-grabbing", sel ? "bg-surface/30" : "bg-transparent")}
               style={{ left: `${(first / H) * 100}%`, width: `${Math.max(((last - first + 1) / H) * 100, 0.8)}%`, borderColor: fg, borderStyle: dashed ? "dashed" : "solid" }}>
               {resizable ? <>
                 <span onPointerDown={(ev) => startBar(ev, it, "l")} className="absolute inset-y-0 -left-1 w-2 cursor-ew-resize" aria-hidden="true" />

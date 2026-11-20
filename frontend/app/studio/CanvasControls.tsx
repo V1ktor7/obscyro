@@ -18,12 +18,12 @@ export default function CanvasControls({
   onFit,
 }: Props) {
   return (
-    <div className="pointer-events-auto absolute bottom-4 right-4 z-20 flex flex-col gap-1 rounded-lg border border-gray-200 bg-white/95 p-1 shadow-sm backdrop-blur-sm">
+    <div className="pointer-events-auto absolute bottom-4 right-4 z-20 flex flex-col gap-1 rounded-lg border border-line bg-surface/95 p-1 shadow-sm backdrop-blur-sm">
       <button
         type="button"
         onClick={onZoomIn}
         title="Zoom in"
-        className="rounded px-2.5 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+        className="rounded px-2.5 py-1.5 text-sm text-ink-muted hover:bg-surface-hover"
       >
         +
       </button>
@@ -31,7 +31,7 @@ export default function CanvasControls({
         type="button"
         onClick={onResetZoom}
         title="Reset zoom to 100%"
-        className="rounded px-2 py-1 text-[10px] text-gray-500 hover:bg-gray-100"
+        className="rounded px-2 py-1 text-[10px] text-ink-muted hover:bg-surface-hover"
       >
         {Math.round(zoom * 100)}%
       </button>
@@ -39,7 +39,7 @@ export default function CanvasControls({
         type="button"
         onClick={onZoomOut}
         title="Zoom out"
-        className="rounded px-2.5 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+        className="rounded px-2.5 py-1.5 text-sm text-ink-muted hover:bg-surface-hover"
       >
         −
       </button>
@@ -48,7 +48,7 @@ export default function CanvasControls({
         onClick={onFit}
         title="Fit to content"
         className={cn(
-          "rounded border-t border-gray-100 px-2 py-1.5 text-[9px] uppercase tracking-wide text-gray-500 hover:bg-gray-100",
+          "rounded border-t border-line-soft px-2 py-1.5 text-[9px] uppercase tracking-wide text-ink-muted hover:bg-surface-hover",
         )}
       >
         Fit

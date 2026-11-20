@@ -23,7 +23,7 @@ import { cn } from "@/lib/cn";
 export const GRAPH_NODE_W = 168;
 
 /** Edge stroke and arrowhead. Reads on white without competing with the nodes. */
-export const GRAPH_EDGE = "#8a94a0";
+export const GRAPH_EDGE = "#a8a8a8";
 
 type GraphNodeProps = {
   name: string;
@@ -76,7 +76,7 @@ export function GraphNode({
   return (
     <div
       className={cn(
-        "absolute rounded-md border bg-white shadow-sm transition-colors",
+        "absolute rounded-md border bg-surface shadow-sm transition-colors",
         selected ? "border-brand ring-2 ring-brand-soft" : "border-line",
         targeted && "border-brand ring-2 ring-brand",
         dimmed && "opacity-40",
@@ -123,7 +123,7 @@ export function GraphNode({
       </div>
 
       {badge ? (
-        <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-warn px-1 text-[9px] font-medium text-white">
+        <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-warn px-1 text-[9px] font-medium text-inverse">
           {badge}
         </span>
       ) : null}
@@ -151,7 +151,7 @@ export function GraphPort({
   return (
     <span
       className={cn(
-        "absolute flex h-3.5 w-3.5 items-center justify-center rounded-full border bg-white text-[7px] font-bold",
+        "absolute flex h-3.5 w-3.5 items-center justify-center rounded-full border bg-surface text-[7px] font-bold",
         side === "in" ? "-left-[7px]" : "-right-[7px]",
         active
           ? "border-brand bg-brand-soft text-brand-deep"

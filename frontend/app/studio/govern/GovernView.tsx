@@ -40,9 +40,9 @@ interface ReviewItem {
 }
 
 const OUTCOME_TONE: Record<string, string> = {
-  success: "bg-[#e8f4ec] text-[#1c6e42]",
-  denied: "bg-[#fdf0e6] text-[#935610]",
-  error: "bg-[#fceaef] text-[#a82255]",
+  success: "bg-ok-soft text-ok-ink",
+  denied: "bg-warn-soft text-warn-ink",
+  error: "bg-danger-soft text-danger-ink",
 };
 
 export default function GovernView() {
@@ -108,32 +108,32 @@ export default function GovernView() {
   }, [events]);
 
   if (!hasKey) {
-    return <p className="p-8 text-sm text-[#8f99a8]">Sign in to view governance.</p>;
+    return <p className="p-8 text-sm text-ink-faint">Sign in to view governance.</p>;
   }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-      <header className="border-b border-[#d3d8de] bg-white px-5 py-3">
+      <header className="border-b border-line bg-surface px-5 py-3">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#e7f2fd] text-[#215db0]">
+          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-soft text-brand-deep">
             <ShieldCheck className="h-4 w-4" />
           </span>
           <h1 className="text-[15px] font-medium">
             {view === "audit" ? "Audit log" : "Review queue"}
           </h1>
           {view === "audit" ? (
-            <span className="inline-flex items-center gap-1 rounded border border-[#d3d8de] px-2 py-0.5 text-[10.5px] text-[#5f6b7c]">
+            <span className="inline-flex items-center gap-1 rounded border border-line px-2 py-0.5 text-[10.5px] text-ink-muted">
               <Lock className="h-3 w-3" />
               append-only
             </span>
           ) : (
-            <span className="rounded border border-[#d3d8de] px-2 py-0.5 text-[10.5px] text-[#5f6b7c]">
+            <span className="rounded border border-line px-2 py-0.5 text-[10.5px] text-ink-muted">
               {pendingCount} pending
             </span>
           )}
-          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-[#8f99a8]" /> : null}
+          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-ink-faint" /> : null}
         </div>
-        <p className="mt-1 text-[11px] text-[#8f99a8]">
+        <p className="mt-1 text-[11px] text-ink-faint">
           {view === "audit"
             ? "Every privileged action. Rows cannot be edited or deleted, including by an owner."
             : "Extractions the pipeline would not save on its own. Confirm to persist, reject to close."}
@@ -141,7 +141,7 @@ export default function GovernView() {
       </header>
 
       {error ? (
-        <p className="mx-5 mt-3 rounded border border-[#f4c0d1] bg-[#fceaef] px-3 py-2 text-xs text-[#a82255]">
+        <p className="mx-5 mt-3 rounded border border-danger-line bg-danger-soft px-3 py-2 text-xs text-danger-ink">
           {error}
         </p>
       ) : null}
@@ -153,14 +153,14 @@ export default function GovernView() {
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="Filter by action prefix, e.g. admin."
-              className="w-64 rounded border border-[#d3d8de] px-2.5 py-1.5 text-xs focus:border-[#2d72d2] focus:outline-none"
+              className="w-64 rounded border border-line px-2.5 py-1.5 text-xs focus:border-brand focus:outline-none"
             />
             {grouped.map(([head, n]) => (
               <button
                 key={head}
                 type="button"
                 onClick={() => setFilter(head)}
-                className="rounded border border-[#d3d8de] px-2 py-1 text-[10.5px] text-[#5f6b7c] hover:border-[#2d72d2] hover:text-[#215db0]"
+                className="rounded border border-line px-2 py-1 text-[10.5px] text-ink-muted hover:border-brand hover:text-brand-deep"
               >
                 {head} · {n}
               </button>
@@ -173,9 +173,9 @@ export default function GovernView() {
               body="Actions appear here as soon as anyone creates a type, runs a channel, or changes a role."
             />
           ) : (
-            <div className="overflow-hidden rounded-md border border-[#d3d8de]">
+            <div className="overflow-hidden rounded-md border border-line">
               <table className="w-full text-left text-xs">
-                <thead className="bg-[#f6f7f9] text-[10px] uppercase tracking-wide text-[#8f99a8]">
+                <thead className="bg-canvas text-[10px] uppercase tracking-wide text-ink-faint">
                   <tr>
                     <th className="px-3 py-1.5 font-medium">When</th>
                     <th className="px-3 py-1.5 font-medium">Actor</th>
@@ -186,20 +186,20 @@ export default function GovernView() {
                 </thead>
                 <tbody>
                   {events.map((e) => (
-                    <tr key={e.id} className="border-t border-[#e5e8eb]">
-                      <td className="whitespace-nowrap px-3 py-1.5 text-[11px] text-[#5f6b7c]">
+                    <tr key={e.id} className="border-t border-line-soft">
+                      <td className="whitespace-nowrap px-3 py-1.5 text-[11px] text-ink-muted">
                         {new Date(e.createdAt).toLocaleString("en-CA", { hour12: false })}
                       </td>
-                      <td className="px-3 py-1.5 text-[#1c2127]">{e.actorEmail ?? "—"}</td>
-                      <td className="px-3 py-1.5 text-[11px] text-[#215db0]">{e.action}</td>
-                      <td className="px-3 py-1.5 text-[#5f6b7c]">
+                      <td className="px-3 py-1.5 text-ink">{e.actorEmail ?? "—"}</td>
+                      <td className="px-3 py-1.5 text-[11px] text-brand-deep">{e.action}</td>
+                      <td className="px-3 py-1.5 text-ink-muted">
                         {e.resourceType ?? "—"}
                       </td>
                       <td className="px-3 py-1.5">
                         <span
                           className={cn(
                             "rounded px-1.5 py-0.5 text-[10px] font-medium",
-                            OUTCOME_TONE[e.outcome] ?? "bg-[#f6f7f9] text-[#5f6b7c]",
+                            OUTCOME_TONE[e.outcome] ?? "bg-canvas text-ink-muted",
                           )}
                         >
                           {e.outcome}
@@ -224,29 +224,29 @@ export default function GovernView() {
               {items.map((i) => (
                 <div
                   key={i.id}
-                  className="flex items-center gap-3 rounded-md border border-[#d3d8de] bg-white px-3 py-2"
+                  className="flex items-center gap-3 rounded-md border border-line bg-surface px-3 py-2"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-medium text-[#1c2127]">{i.span}</p>
-                    <p className="truncate text-[11px] text-[#8f99a8]">
+                    <p className="truncate text-xs font-medium text-ink">{i.span}</p>
+                    <p className="truncate text-[11px] text-ink-faint">
                       {i.channelName} · {i.objectType}
                       {i.code ? ` · ${i.code}` : ""}
                     </p>
                   </div>
-                  <span className="rounded bg-[#fdf0e6] px-1.5 py-0.5 text-[10px] font-medium text-[#935610]">
+                  <span className="rounded bg-warn-soft px-1.5 py-0.5 text-[10px] font-medium text-warn-ink">
                     {i.decision}
                   </span>
                   <button
                     type="button"
                     onClick={() => void resolve(i.id, "confirmed")}
-                    className="rounded border border-[#9fe1cb] bg-[#e8f4ec] px-2 py-1 text-[11px] font-medium text-[#1c6e42]"
+                    className="rounded border border-ok-line bg-ok-soft px-2 py-1 text-[11px] font-medium text-ok-ink"
                   >
                     Confirm
                   </button>
                   <button
                     type="button"
                     onClick={() => void resolve(i.id, "rejected")}
-                    className="rounded border border-[#d3d8de] px-2 py-1 text-[11px] text-[#5f6b7c]"
+                    className="rounded border border-line px-2 py-1 text-[11px] text-ink-muted"
                   >
                     Reject
                   </button>
@@ -262,9 +262,9 @@ export default function GovernView() {
 
 function EmptyState({ title, body }: { title: string; body: string }) {
   return (
-    <div className="rounded-md border border-dashed border-[#d3d8de] bg-[#f6f7f9] px-6 py-10 text-center">
-      <p className="text-sm font-medium text-[#1c2127]">{title}</p>
-      <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-[#5f6b7c]">{body}</p>
+    <div className="rounded-md border border-dashed border-line bg-canvas px-6 py-10 text-center">
+      <p className="text-sm font-medium text-ink">{title}</p>
+      <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-ink-muted">{body}</p>
     </div>
   );
 }

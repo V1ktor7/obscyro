@@ -7,7 +7,8 @@ import Header from "@/components/site/Header";
 import Footer from "@/components/site/Footer";
 
 // The /studio editor is a full-screen app surface, so we drop the marketing
-// chrome (header, footer) on those routes.
+// chrome (header, footer) on those routes and give it its own theme: every
+// Studio page is drawn under `.theme-g100` (globals.css), set here once.
 export default function SiteChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const bare = pathname?.startsWith("/studio") ?? false;
@@ -17,7 +18,7 @@ export default function SiteChrome({ children }: { children: ReactNode }) {
   const light = !bare;
 
   if (bare) {
-    return <main className="min-h-screen">{children}</main>;
+    return <main className="theme-g100 min-h-screen">{children}</main>;
   }
 
   return (

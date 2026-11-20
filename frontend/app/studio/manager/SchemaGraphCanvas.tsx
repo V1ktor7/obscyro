@@ -215,7 +215,7 @@ export default function SchemaGraphCanvas({
                     textAnchor="middle"
                     className="fill-ink-muted"
                     fontSize={9.5}
-                    stroke="#ffffff"
+                    stroke="#161616"
                     strokeWidth={3}
                     paintOrder="stroke"
                   >
@@ -236,7 +236,7 @@ export default function SchemaGraphCanvas({
                 <path
                   d={pathD(g)}
                   fill="none"
-                  stroke="#2d72d2"
+                  stroke="#4589ff"
                   strokeWidth={1.5}
                   strokeDasharray="6 4"
                 />

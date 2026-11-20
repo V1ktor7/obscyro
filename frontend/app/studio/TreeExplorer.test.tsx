@@ -80,7 +80,7 @@ describe("what a collapsed row says", () => {
     // "No data" and "fine" are different, and colouring the first like the
     // second is how a panel lies quietly.
     const { container } = render(<TreeExplorer items={[{ id: "x", label: "X", tone: null }]} />);
-    expect(container.querySelector(".bg-emerald-500")).toBeNull();
+    expect(container.querySelector(".bg-ok")).toBeNull();
   });
 });
 

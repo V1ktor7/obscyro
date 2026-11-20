@@ -70,13 +70,13 @@ export default function SchemaMappingPanel({
   return (
     <div className="flex flex-col gap-3">
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-gray-700">
+        <span className="mb-1 block text-xs font-medium text-ink-body">
           Target object type
         </span>
         <select
           value={objectType}
           onChange={(e) => onObjectTypeChange(e.target.value)}
-          className="w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+          className="w-full rounded-md border border-line bg-canvas-raised px-2.5 py-2 text-xs text-ink focus:border-line-strong focus:outline-none focus:ring-2 focus:ring-line"
         >
           <option value="">Select a type…</option>
           {envTypes.map((t) => (
@@ -89,7 +89,7 @@ export default function SchemaMappingPanel({
 
       {sourcePaths.length > 0 ? (
         <div>
-          <span className="mb-1 block text-[9px] uppercase tracking-wide text-gray-400">
+          <span className="mb-1 block text-[9px] uppercase tracking-wide text-ink-faint">
             Source fields
           </span>
           <div className="flex flex-wrap gap-1">
@@ -101,7 +101,7 @@ export default function SchemaMappingPanel({
                   e.dataTransfer.setData(FIELD_PATH_MIME, path);
                   e.dataTransfer.effectAllowed = "copy";
                 }}
-                className="cursor-grab rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] text-sky-800 active:cursor-grabbing"
+                className="cursor-grab rounded border border-sky-400/40 bg-sky-400/15 px-1.5 py-0.5 text-[10px] text-sky-300 active:cursor-grabbing"
               >
                 {path}
               </span>
@@ -109,7 +109,7 @@ export default function SchemaMappingPanel({
           </div>
         </div>
       ) : (
-        <p className="text-[11px] text-amber-700">
+        <p className="text-[11px] text-warn-ink">
           Run upstream nodes to discover source fields, or use Auto-match after
           running.
         </p>
@@ -118,21 +118,21 @@ export default function SchemaMappingPanel({
       {selectedType ? (
         <>
           <div className="flex items-center justify-between">
-            <span className="text-[9px] uppercase tracking-wide text-gray-400">
+            <span className="text-[9px] uppercase tracking-wide text-ink-faint">
               Ontology properties
             </span>
             <button
               type="button"
               onClick={handleAutoMatch}
               disabled={sourcePaths.length === 0}
-              className="rounded border border-gray-200 px-2 py-0.5 text-[10px] text-gray-600 hover:border-gray-400 disabled:text-gray-300"
+              className="rounded border border-line px-2 py-0.5 text-[10px] text-ink-muted hover:border-line-strong disabled:text-ink-ghost"
             >
               Auto-match
             </button>
           </div>
 
           {selectedType.propertySchema.length === 0 ? (
-            <p className="text-[11px] text-gray-400">
+            <p className="text-[11px] text-ink-faint">
               This type has no properties. Add them in Ontology Manager.
             </p>
           ) : (
@@ -156,7 +156,7 @@ export default function SchemaMappingPanel({
           )}
         </>
       ) : (
-        <p className="text-[11px] text-gray-400">
+        <p className="text-[11px] text-ink-faint">
           Select an object type to see its properties from the Ontology Manager.
         </p>
       )}
@@ -198,35 +198,35 @@ function PropertyDropRow({
       className={cn(
         "rounded-md border px-2 py-1.5 transition-colors",
         over
-          ? "border-indigo-400 bg-indigo-50"
+          ? "border-indigo-400 bg-indigo-400/15"
           : source
-            ? "border-emerald-200 bg-emerald-50/50"
-            : "border-gray-200 bg-gray-50",
+            ? "border-ok-line bg-ok-soft/50"
+            : "border-line bg-canvas-raised",
       )}
     >
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <span className="text-xs font-medium text-gray-800">{propertyKey}</span>
-          <span className="ml-1.5 text-[9px] text-gray-400">{propertyType}</span>
+          <span className="text-xs font-medium text-ink">{propertyKey}</span>
+          <span className="ml-1.5 text-[9px] text-ink-faint">{propertyType}</span>
           {label ? (
-            <span className="ml-1 text-[10px] text-gray-500">· {label}</span>
+            <span className="ml-1 text-[10px] text-ink-muted">· {label}</span>
           ) : null}
         </div>
         {source ? (
           <button
             type="button"
             onClick={onClear}
-            className="shrink-0 text-[10px] text-gray-400 hover:text-rose-600"
+            className="shrink-0 text-[10px] text-ink-faint hover:text-danger"
           >
             clear
           </button>
         ) : null}
       </div>
-      <div className="mt-0.5 text-[10px] text-gray-600">
+      <div className="mt-0.5 text-[10px] text-ink-muted">
         {source ? (
-          <span className="text-emerald-700">← {source}</span>
+          <span className="text-ok-ink">← {source}</span>
         ) : (
-          <span className="text-gray-400">Drop source field here</span>
+          <span className="text-ink-faint">Drop source field here</span>
         )}
       </div>
     </div>

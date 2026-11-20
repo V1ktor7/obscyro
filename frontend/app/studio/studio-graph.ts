@@ -14,8 +14,8 @@ export const DEFAULT_INPUT_MAX_CONNECTIONS = 1;
 export const ZOOM_MIN = 0.25;
 export const ZOOM_MAX = 2;
 
-export const ACCENT_HEX = "#4f46e5"; // indigo — active edges / travelling token
-export const EDGE_HEX = "#cbd5e1"; // slate-300 — idle edges
+export const ACCENT_HEX = "#818cf8"; // indigo — active edges / travelling token
+export const EDGE_HEX = "#525252"; // slate-300 — idle edges
 
 export type Point = { x: number; y: number };
 

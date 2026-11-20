@@ -160,7 +160,7 @@ export default function ModelsTab({
               id="lab-dataset"
               value={datasetId}
               onChange={(e) => setDatasetId(e.target.value)}
-              className="w-full rounded border border-[#d3d8de] px-2 py-1 text-xs"
+              className="w-full rounded border border-line px-2 py-1 text-xs"
             >
               <option value="">Choisir…</option>
               {datasets.map((d) => (
@@ -180,7 +180,7 @@ export default function ModelsTab({
                 setFeatures((f) => f.filter((c) => c !== e.target.value));
               }}
               disabled={!columns.length}
-              className="w-full rounded border border-[#d3d8de] px-2 py-1 text-xs disabled:bg-[#f6f7f9]"
+              className="w-full rounded border border-line px-2 py-1 text-xs disabled:bg-canvas"
             >
               <option value="">Choisir…</option>
               {columns.map((c) => (
@@ -192,9 +192,9 @@ export default function ModelsTab({
           </Field>
 
           <Field label={`Features (${features.length})`}>
-            <div className="max-h-52 overflow-y-auto rounded border border-[#d3d8de]">
+            <div className="max-h-52 overflow-y-auto rounded border border-line">
               {columns.length === 0 ? (
-                <p className="px-2 py-3 text-center text-[11px] text-[#8f99a8]">
+                <p className="px-2 py-3 text-center text-[11px] text-ink-faint">
                   Choose a dataset first.
                 </p>
               ) : (
@@ -203,7 +203,7 @@ export default function ModelsTab({
                   .map((c) => (
                     <label
                       key={c}
-                      className="flex cursor-pointer items-center gap-2 border-b border-[#eef1f4] px-2 py-1 last:border-b-0 hover:bg-[#f6f7f9]"
+                      className="flex cursor-pointer items-center gap-2 border-b border-line-faint px-2 py-1 last:border-b-0 hover:bg-surface-hover"
                     >
                       <input
                         type="checkbox"
@@ -215,7 +215,7 @@ export default function ModelsTab({
                           )
                         }
                       />
-                      <span className="truncate text-[11px] text-[#1c2127]">{c}</span>
+                      <span className="truncate text-[11px] text-ink">{c}</span>
                     </label>
                   ))
               )}
@@ -229,7 +229,7 @@ export default function ModelsTab({
               id="lab-estimator"
               value={estimator}
               onChange={(e) => setEstimator(e.target.value)}
-              className="w-full rounded border border-[#d3d8de] px-2 py-1 text-xs"
+              className="w-full rounded border border-line px-2 py-1 text-xs"
             >
               <optgroup label="Regression — predict a number">
                 {estimators
@@ -251,7 +251,7 @@ export default function ModelsTab({
               </optgroup>
             </select>
             {chosen?.note ? (
-              <p className="mt-1 text-[11px] leading-relaxed text-[#5f6b7c]">{chosen.note}</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">{chosen.note}</p>
             ) : null}
           </Field>
 
@@ -260,7 +260,7 @@ export default function ModelsTab({
               <div className="flex flex-col gap-1.5">
                 {Object.entries(chosen?.params ?? {}).map(([key, def]) => (
                   <label key={key} className="flex items-center gap-2">
-                    <span className="w-32 shrink-0 truncate font-mono text-[11px] text-[#5f6b7c]">
+                    <span className="w-32 shrink-0 truncate font-mono text-[11px] text-ink-muted">
                       {key}
                     </span>
                     <input
@@ -274,7 +274,7 @@ export default function ModelsTab({
                           [key]: raw === "" ? null : Number.isFinite(num) ? num : raw,
                         }));
                       }}
-                      className="min-w-0 flex-1 rounded border border-[#d3d8de] px-2 py-1 font-mono text-[11px]"
+                      className="min-w-0 flex-1 rounded border border-line px-2 py-1 font-mono text-[11px]"
                     />
                   </label>
                 ))}
@@ -289,12 +289,12 @@ export default function ModelsTab({
               id="lab-split"
               value={split}
               onChange={(e) => setSplit(e.target.value as SplitMode)}
-              className="w-full rounded border border-[#d3d8de] px-2 py-1 text-xs"
+              className="w-full rounded border border-line px-2 py-1 text-xs"
             >
               <option value="random">Random</option>
               <option value="chronological">Chronological</option>
             </select>
-            <p className="mt-1 text-[11px] leading-relaxed text-[#5f6b7c]">
+            <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
               On data ordered in time, a random split trains on the future and tests on
               the past. The score goes up and nothing on screen says why.
             </p>
@@ -306,7 +306,7 @@ export default function ModelsTab({
                 id="lab-time"
                 value={timeColumn}
                 onChange={(e) => setTimeColumn(e.target.value)}
-                className="w-full rounded border border-[#d3d8de] px-2 py-1 text-xs"
+                className="w-full rounded border border-line px-2 py-1 text-xs"
               >
                 <option value="">Choisir…</option>
                 {columns.map((c) => (
@@ -322,7 +322,7 @@ export default function ModelsTab({
                 id="lab-time"
                 value={timeColumn}
                 onChange={(e) => setTimeColumn(e.target.value)}
-                className="w-full rounded border border-[#d3d8de] px-2 py-1 text-xs"
+                className="w-full rounded border border-line px-2 py-1 text-xs"
               >
                 <option value="">Aucune</option>
                 {columns.map((c) => (
@@ -331,7 +331,7 @@ export default function ModelsTab({
                   </option>
                 ))}
               </select>
-              <p className="mt-1 text-[11px] text-[#8f99a8]">
+              <p className="mt-1 text-[11px] text-ink-faint">
                 Name one and the lab will warn you that a random split inflates the
                 score.
               </p>
@@ -358,14 +358,14 @@ export default function ModelsTab({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Occupancy from capacity"
-              className="w-full rounded border border-[#d3d8de] px-2 py-1 text-xs"
+              className="w-full rounded border border-line px-2 py-1 text-xs"
             />
           </Field>
           <button
             type="button"
             onClick={() => void fit()}
             disabled={!ready || busy}
-            className="flex w-full items-center justify-center gap-2 rounded bg-[#2d72d2] px-3 py-2 text-xs font-medium text-white hover:bg-[#215db0] disabled:opacity-40"
+            className="flex w-full items-center justify-center gap-2 rounded bg-brand px-3 py-2 text-xs font-medium text-white hover:bg-brand-deep disabled:opacity-40"
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
             {busy ? "Training…" : "Train"}
@@ -377,17 +377,17 @@ export default function ModelsTab({
       <div className="flex flex-col gap-4">
         {last ? <Result model={last} /> : null}
 
-        <div className="rounded border border-[#d3d8de] bg-white">
-          <div className="border-b border-[#d3d8de] px-3 py-2 text-xs font-medium text-[#1c2127]">
+        <div className="rounded border border-line bg-surface">
+          <div className="border-b border-line px-3 py-2 text-xs font-medium text-ink">
             Trained models
           </div>
           {models.length === 0 ? (
-            <p className="px-3 py-8 text-center text-[11px] text-[#8f99a8]">
+            <p className="px-3 py-8 text-center text-[11px] text-ink-faint">
               No models yet. The panel on the left builds one.
             </p>
           ) : (
             <table className="w-full text-left text-[11px]">
-              <thead className="bg-[#f6f7f9] text-[#5f6b7c]">
+              <thead className="bg-canvas text-ink-muted">
                 <tr>
                   <th className="px-3 py-1.5 font-medium">Name</th>
                   <th className="px-3 py-1.5 font-medium">Target</th>
@@ -402,20 +402,20 @@ export default function ModelsTab({
                   return (
                     <tr
                       key={m.id}
-                      className="cursor-pointer border-t border-[#eef1f4] hover:bg-[#f6f7f9]"
+                      className="cursor-pointer border-t border-line-faint hover:bg-surface-hover"
                       onClick={() => setLast(m)}
                     >
-                      <td className="px-3 py-1.5 text-[#1c2127]">{m.name}</td>
-                      <td className="px-3 py-1.5 text-[#5f6b7c]">{m.target}</td>
-                      <td className="px-3 py-1.5 text-[#5f6b7c]">{m.estimator}</td>
+                      <td className="px-3 py-1.5 text-ink">{m.name}</td>
+                      <td className="px-3 py-1.5 text-ink-muted">{m.target}</td>
+                      <td className="px-3 py-1.5 text-ink-muted">{m.estimator}</td>
                       <td
                         className={cn(
                           "px-3 py-1.5 tabular-nums",
                           lift == null
-                            ? "text-[#8f99a8]"
+                            ? "text-ink-faint"
                             : lift <= 0
-                              ? "text-[#c23030]"
-                              : "text-[#1c6e42]",
+                              ? "text-danger"
+                              : "text-ok-ink",
                         )}
                       >
                         {lift == null ? "—" : `${Math.round(lift * 100)} %`}
@@ -427,7 +427,7 @@ export default function ModelsTab({
                             e.stopPropagation();
                             void remove(m.id);
                           }}
-                          className="text-[#8f99a8] hover:text-[#c23030]"
+                          className="text-ink-faint hover:text-danger"
                           aria-label={`Delete ${m.name}`}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -457,10 +457,10 @@ function Result({ model }: { model: LabModel }) {
   const maxWeight = Math.max(...model.importances.map((i) => Math.abs(i.weight)), 1e-9);
 
   return (
-    <div className="rounded border border-[#d3d8de] bg-white">
-      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-[#d3d8de] px-3 py-2">
-        <span className="text-xs font-medium text-[#1c2127]">{model.name}</span>
-        <span className="text-[11px] text-[#5f6b7c]">
+    <div className="rounded border border-line bg-surface">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line px-3 py-2">
+        <span className="text-xs font-medium text-ink">{model.name}</span>
+        <span className="text-[11px] text-ink-muted">
           {model.estimator} · {model.task === "regression" ? "regression" : "classification"} ·{" "}
           {model.nTrain.toLocaleString("en-CA")} train /{" "}
           {model.nTest.toLocaleString("fr-CA")} test
@@ -473,38 +473,38 @@ function Result({ model }: { model: LabModel }) {
       {model.warnings.map((w) => (
         <div
           key={w}
-          className="flex items-start gap-2 border-b border-[#f0d9b5] bg-[#fdf6ec] px-3 py-2 text-[11px] leading-relaxed text-[#935610]"
+          className="flex items-start gap-2 border-b border-warn-line bg-warn-soft px-3 py-2 text-[11px] leading-relaxed text-warn-ink"
         >
           <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>{w}</span>
         </div>
       ))}
 
-      <div className="grid gap-px bg-[#eef1f4] sm:grid-cols-3">
-        <div className="bg-white p-3">
-          <p className="text-[10px] uppercase tracking-wide text-[#8f99a8]">
+      <div className="grid gap-px bg-canvas-raised sm:grid-cols-3">
+        <div className="bg-surface p-3">
+          <p className="text-[10px] uppercase tracking-wide text-ink-faint">
             Lift over baseline
           </p>
           <p
             className={cn(
               "mt-1 text-2xl font-semibold tabular-nums",
-              lift == null ? "text-[#8f99a8]" : lift <= 0 ? "text-[#c23030]" : "text-[#1c6e42]",
+              lift == null ? "text-ink-faint" : lift <= 0 ? "text-danger" : "text-ok-ink",
             )}
           >
             {lift == null ? "—" : `${Math.round(lift * 100)} %`}
           </p>
-          <p className="mt-1 text-[10px] leading-relaxed text-[#8f99a8]">
+          <p className="mt-1 text-[10px] leading-relaxed text-ink-faint">
             The share of the error a model ignoring every feature would have made, and
             that this one removes.
           </p>
         </div>
         {keys.map((k) => (
-          <div key={k} className="bg-white p-3">
-            <p className="text-[10px] uppercase tracking-wide text-[#8f99a8]">{k}</p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums text-[#1c2127]">
+          <div key={k} className="bg-surface p-3">
+            <p className="text-[10px] uppercase tracking-wide text-ink-faint">{k}</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-ink">
               {model.metrics[k]}
             </p>
-            <p className="mt-1 text-[10px] text-[#8f99a8]">
+            <p className="mt-1 text-[10px] text-ink-faint">
               baseline: {model.baseline[k] ?? "—"}
             </p>
           </div>
@@ -512,19 +512,19 @@ function Result({ model }: { model: LabModel }) {
       </div>
 
       {model.importances.length > 0 ? (
-        <div className="border-t border-[#d3d8de] p-3">
-          <p className="mb-2 text-[10px] uppercase tracking-wide text-[#8f99a8]">
+        <div className="border-t border-line p-3">
+          <p className="mb-2 text-[10px] uppercase tracking-wide text-ink-faint">
             What the model leans on
           </p>
           <div className="flex flex-col gap-1">
             {model.importances.slice(0, 12).map((i) => (
               <div key={i.feature} className="flex items-center gap-2">
-                <span className="w-52 shrink-0 truncate font-mono text-[10px] text-[#5f6b7c]">
+                <span className="w-52 shrink-0 truncate font-mono text-[10px] text-ink-muted">
                   {i.feature}
                 </span>
-                <span className="h-2 min-w-0 flex-1 bg-[#eef1f4]">
+                <span className="h-2 min-w-0 flex-1 bg-canvas-raised">
                   <span
-                    className="block h-2 bg-[#2d72d2]"
+                    className="block h-2 bg-brand"
                     style={{ width: `${(Math.abs(i.weight) / maxWeight) * 100}%` }}
                   />
                 </span>
@@ -539,8 +539,8 @@ function Result({ model }: { model: LabModel }) {
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded border border-[#d3d8de] bg-white">
-      <div className="border-b border-[#d3d8de] px-3 py-2 text-xs font-medium text-[#1c2127]">
+    <section className="rounded border border-line bg-surface">
+      <div className="border-b border-line px-3 py-2 text-xs font-medium text-ink">
         {title}
       </div>
       <div className="flex flex-col gap-3 p-3">{children}</div>
@@ -570,11 +570,11 @@ function Field({
   return (
     <div className="block">
       {htmlFor ? (
-        <label htmlFor={htmlFor} className="mb-1 block text-[11px] text-[#5f6b7c]">
+        <label htmlFor={htmlFor} className="mb-1 block text-[11px] text-ink-muted">
           {label}
         </label>
       ) : (
-        <p className="mb-1 text-[11px] text-[#5f6b7c]">{label}</p>
+        <p className="mb-1 text-[11px] text-ink-muted">{label}</p>
       )}
       {children}
     </div>

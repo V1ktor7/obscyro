@@ -123,20 +123,20 @@ const NODE_META: Record<
     writes?: boolean;
   }
 > = {
-  dataset: { label: "Dataset (CSV)", menuHint: "manual file import", category: "Inputs", icon: Database, block: "bg-[#e7f2fd] text-[#215db0]" },
-  text: { label: "Text input", menuHint: "paste clinical text", category: "Inputs", icon: FileText, block: "bg-[#e7f2fd] text-[#215db0]" },
-  feedSim: { label: "Feed simulator", menuHint: "objects sent by simulator streams", category: "Inputs", icon: RadioTower, block: "bg-[#e7f2fd] text-[#215db0]" },
-  ontologySource: { label: "Ontology source", menuHint: "fetch instances by type", category: "Inputs", icon: Boxes, block: "bg-[#e7f2fd] text-[#215db0]" },
-  extractMap: { label: "Extract + map to SNOMED", menuHint: "NLP concepts + contexts", category: "Mapping", icon: ScanSearch, block: "bg-[#f2ebfb] text-[#6b3fa0]" },
-  crosswalk: { label: "Crosswalk (terminology)", menuHint: "SNOMED → ICD-10 · ICD-O · CTV3", category: "Mapping", icon: Languages, block: "bg-[#f2ebfb] text-[#6b3fa0]" },
-  ucum: { label: "UCUM normalize", menuHint: "unit conversion", category: "Mapping", icon: Ruler, block: "bg-[#f2ebfb] text-[#6b3fa0]" },
-  filter: { label: "Filter rows", menuHint: "column · operator · value", category: "Filter + clean", icon: Filter, block: "bg-[#e9f5f4] text-[#0f6b68]" },
-  formula: { label: "Formula", menuHint: "derive column (JS expression)", category: "Filter + clean", icon: Calculator, block: "bg-[#e9f5f4] text-[#0f6b68]" },
-  aggregate: { label: "Aggregate", menuHint: "group by · count · sum · avg", category: "Filter + clean", icon: Sigma, block: "bg-[#e9f5f4] text-[#0f6b68]" },
-  merge: { label: "Merge inputs", menuHint: "union or join multiple sources", category: "Filter + clean", icon: GitMerge, block: "bg-[#e9f5f4] text-[#0f6b68]" },
-  saveOntology: { label: "Save to ontology", menuHint: "records → instances", category: "Act + serve", icon: Box, block: "bg-[#f2ebfb] text-[#6b3fa0]", writes: true },
-  exportCsv: { label: "Export CSV", menuHint: "download output", category: "Act + serve", icon: FileDown, block: "bg-[#e8f4ec] text-[#1c6e42]", writes: true },
-  httpExport: { label: "HTTP export", menuHint: "POST rows to an external URL", category: "Act + serve", icon: Send, block: "bg-[#e8f4ec] text-[#1c6e42]", writes: true },
+  dataset: { label: "Dataset (CSV)", menuHint: "manual file import", category: "Inputs", icon: Database, block: "bg-brand-soft text-brand-deep" },
+  text: { label: "Text input", menuHint: "paste clinical text", category: "Inputs", icon: FileText, block: "bg-brand-soft text-brand-deep" },
+  feedSim: { label: "Feed simulator", menuHint: "objects sent by simulator streams", category: "Inputs", icon: RadioTower, block: "bg-brand-soft text-brand-deep" },
+  ontologySource: { label: "Ontology source", menuHint: "fetch instances by type", category: "Inputs", icon: Boxes, block: "bg-brand-soft text-brand-deep" },
+  extractMap: { label: "Extract + map to SNOMED", menuHint: "NLP concepts + contexts", category: "Mapping", icon: ScanSearch, block: "bg-scenario-soft text-scenario" },
+  crosswalk: { label: "Crosswalk (terminology)", menuHint: "SNOMED → ICD-10 · ICD-O · CTV3", category: "Mapping", icon: Languages, block: "bg-scenario-soft text-scenario" },
+  ucum: { label: "UCUM normalize", menuHint: "unit conversion", category: "Mapping", icon: Ruler, block: "bg-scenario-soft text-scenario" },
+  filter: { label: "Filter rows", menuHint: "column · operator · value", category: "Filter + clean", icon: Filter, block: "bg-teal-soft text-teal" },
+  formula: { label: "Formula", menuHint: "derive column (JS expression)", category: "Filter + clean", icon: Calculator, block: "bg-teal-soft text-teal" },
+  aggregate: { label: "Aggregate", menuHint: "group by · count · sum · avg", category: "Filter + clean", icon: Sigma, block: "bg-teal-soft text-teal" },
+  merge: { label: "Merge inputs", menuHint: "union or join multiple sources", category: "Filter + clean", icon: GitMerge, block: "bg-teal-soft text-teal" },
+  saveOntology: { label: "Save to ontology", menuHint: "records → instances", category: "Act + serve", icon: Box, block: "bg-scenario-soft text-scenario", writes: true },
+  exportCsv: { label: "Export CSV", menuHint: "download output", category: "Act + serve", icon: FileDown, block: "bg-ok-soft text-ok-ink", writes: true },
+  httpExport: { label: "HTTP export", menuHint: "POST rows to an external URL", category: "Act + serve", icon: Send, block: "bg-ok-soft text-ok-ink", writes: true },
 };
 
 const CATEGORIES = ["Inputs", "Mapping", "Filter + clean", "Act + serve"];
@@ -476,8 +476,8 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
 
   if (!hasKey) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-white">
-        <p className="max-w-sm text-center text-sm text-gray-500">
+      <div className="flex flex-1 items-center justify-center bg-surface">
+        <p className="max-w-sm text-center text-sm text-ink-muted">
           Sign in and create an API key to build flows in Data Studio.
         </p>
       </div>
@@ -494,24 +494,24 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
   const selectedResult = selected ? results.get(selected.id) ?? null : null;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#f6f7f9]">
+    <div className="flex min-h-0 flex-1 flex-col bg-canvas">
       {/* Toolbar */}
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#d3d8de] bg-white px-4 py-2">
-        <span className="flex h-6 w-6 items-center justify-center rounded bg-[#f2ebfb] text-[#6b3fa0]">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-surface px-4 py-2">
+        <span className="flex h-6 w-6 items-center justify-center rounded bg-scenario-soft text-scenario">
           <Box className="h-3.5 w-3.5" />
         </span>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-44 rounded border border-transparent bg-transparent px-1 py-0.5 text-[13px] font-semibold text-[#1c2127] hover:border-[#d3d8de] focus:border-[#2d72d2] focus:outline-none"
+          className="w-44 rounded border border-transparent bg-transparent px-1 py-0.5 text-[13px] font-semibold text-ink hover:border-line focus:border-brand focus:outline-none"
           aria-label="Flow name"
         />
-        <span className="flex items-center gap-1 rounded border border-[#d3d8de] px-2 py-0.5 text-[11px] text-[#404854]">
-          <GitBranch className="h-3 w-3 text-[#8f99a8]" />
+        <span className="flex items-center gap-1 rounded border border-line px-2 py-0.5 text-[11px] text-ink-body">
+          <GitBranch className="h-3 w-3 text-ink-faint" />
           local draft
         </span>
         {issues.length === 0 ? (
-          <span className="flex items-center gap-1 rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+          <span className="flex items-center gap-1 rounded bg-ok-soft px-2 py-0.5 text-[11px] font-medium text-ok-ink">
             <CheckCircle2 className="h-3 w-3" />
             no errors
           </span>
@@ -522,20 +522,20 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
               setSelectedId(issues[0].node.id);
               setInspectorOpen(true);
             }}
-            className="flex items-center gap-1 rounded bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700"
+            className="flex items-center gap-1 rounded bg-warn-soft px-2 py-0.5 text-[11px] font-medium text-warn-ink"
           >
             <AlertTriangle className="h-3 w-3" />
             {issues.length} node{issues.length === 1 ? "" : "s"} need config
           </button>
         )}
         {runStage ? (
-          <span className="text-[11px] text-[#8f99a8]">running · {runStage}…</span>
+          <span className="text-[11px] text-ink-faint">running · {runStage}…</span>
         ) : null}
         <span className="flex-1" />
         <button
           type="button"
           onClick={onOpenLegacy}
-          className="text-[11px] text-[#5f6b7c] hover:text-[#2d72d2] hover:underline"
+          className="text-[11px] text-ink-muted hover:text-brand hover:underline"
         >
           legacy editor
         </button>
@@ -543,7 +543,7 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
           type="button"
           disabled={running !== null}
           onClick={() => void execute(false)}
-          className="flex items-center gap-1 rounded border border-[#d3d8de] bg-white px-2.5 py-1.5 text-xs text-[#404854] hover:border-[#2d72d2] disabled:opacity-50"
+          className="flex items-center gap-1 rounded border border-line bg-surface px-2.5 py-1.5 text-xs text-ink-body hover:border-brand disabled:opacity-50"
         >
           {running === "preview" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
           Preview
@@ -552,7 +552,7 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
           type="button"
           disabled={running !== null}
           onClick={() => void execute(true)}
-          className="flex items-center gap-1 rounded bg-[#2d72d2] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#215db0] disabled:bg-[#c5cbd3]"
+          className="flex items-center gap-1 rounded bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-deep disabled:bg-ink-ghost"
         >
           {running === "run" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
           Run flow
@@ -560,7 +560,7 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
       </div>
 
       {error ? (
-        <div className="flex items-center gap-2 border-b border-rose-200 bg-rose-50 px-4 py-1.5 text-[11px] text-rose-700">
+        <div className="flex items-center gap-2 border-b border-danger-line bg-danger-soft px-4 py-1.5 text-[11px] text-danger-ink">
           <span className="min-w-0 flex-1 truncate">{error}</span>
           <button type="button" onClick={() => setError(null)} aria-label="Dismiss error">
             <X className="h-3 w-3" />
@@ -576,7 +576,7 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
         onPointerDown={() => setSelectedId(null)}
         className="relative min-h-0 flex-1 overflow-auto"
         style={{
-          backgroundImage: "radial-gradient(#d3d8de 1px, transparent 1px)",
+          backgroundImage: "radial-gradient(#393939 1px, transparent 1px)",
           backgroundSize: "18px 18px",
         }}
       >
@@ -594,7 +594,7 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
               };
               return (
                 <g key={e.id}>
-                  <path d={pathD(g)} fill="none" stroke="#8f99a8" strokeWidth={1.4} />
+                  <path d={pathD(g)} fill="none" stroke="#a8a8a8" strokeWidth={1.4} />
                   <path
                     d={pathD(g)}
                     fill="none"
@@ -620,7 +620,7 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
                     c2: { x: 0, y: 0 },
                   };
                   return (
-                    <path d={pathD(g)} fill="none" stroke="#2d72d2" strokeWidth={1.4} strokeDasharray="4 3" />
+                    <path d={pathD(g)} fill="none" stroke="#4589ff" strokeWidth={1.4} strokeDasharray="4 3" />
                   );
                 })()
               : null}
@@ -645,9 +645,9 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
                   }
                 }}
                 className={cn(
-                  "absolute flex cursor-grab select-none items-stretch rounded-md border bg-white shadow-sm",
-                  isSelected ? "border-[#2d72d2] ring-1 ring-[#2d72d2]" : "border-[#c5cbd3]",
-                  node.type === "saveOntology" ? "bg-[#f6f1fc]" : "",
+                  "absolute flex cursor-grab select-none items-stretch rounded-md border bg-surface shadow-sm",
+                  isSelected ? "border-brand ring-1 ring-brand" : "border-line-strong",
+                  node.type === "saveOntology" ? "bg-scenario-soft" : "",
                 )}
                 style={{ left: node.x, top: node.y, width: NODE_W, height: NODE_H }}
               >
@@ -660,17 +660,17 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
                   <Icon className="h-4 w-4" />
                 </span>
                 <span className="min-w-0 flex-1 px-2 py-1.5">
-                  <span className="block truncate text-[11.5px] font-medium leading-tight text-[#1c2127]">
+                  <span className="block truncate text-[11.5px] font-medium leading-tight text-ink">
                     {node.name}
                   </span>
                   <span
                     className={cn(
                       "block truncate text-[10px] leading-tight",
                       result?.status === "error"
-                        ? "text-rose-600"
+                        ? "text-danger"
                         : issue
-                          ? "text-amber-600"
-                          : "text-[#8f99a8]",
+                          ? "text-warn-ink"
+                          : "text-ink-faint",
                     )}
                   >
                     {result?.summary ?? issue ?? meta.menuHint}
@@ -678,9 +678,9 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
                 </span>
                 <span className="flex shrink-0 items-center gap-1 pr-1.5">
                   {result?.status === "error" || issue ? (
-                    <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                    <AlertTriangle className="h-3.5 w-3.5 text-warn" />
                   ) : result ? (
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                    <CheckCircle2 className="h-3.5 w-3.5 text-ok-ink" />
                   ) : null}
                   <button
                     type="button"
@@ -690,7 +690,7 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
                       setSelectedId(node.id);
                       setInspectorOpen(true);
                     }}
-                    className="rounded p-0.5 text-[#8f99a8] hover:text-[#2d72d2]"
+                    className="rounded p-0.5 text-ink-faint hover:text-brand"
                     aria-label={`Configure ${node.name}`}
                   >
                     <Settings2 className="h-3.5 w-3.5" />
@@ -698,7 +698,7 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
                 </span>
                 {/* ports */}
                 <span
-                  className="absolute -left-[5px] top-1/2 h-[9px] w-[9px] -translate-y-1/2 rounded-full border-2 border-[#8f99a8] bg-white"
+                  className="absolute -left-[5px] top-1/2 h-[9px] w-[9px] -translate-y-1/2 rounded-full border-2 border-line-strong bg-surface"
                   aria-hidden="true"
                 />
                 <span
@@ -706,7 +706,7 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
                     e.stopPropagation();
                     setConnectFrom(node.id);
                   }}
-                  className="absolute -right-[5px] top-1/2 h-[9px] w-[9px] -translate-y-1/2 cursor-crosshair rounded-full border-2 border-[#2d72d2] bg-white hover:bg-[#e7f2fd]"
+                  className="absolute -right-[5px] top-1/2 h-[9px] w-[9px] -translate-y-1/2 cursor-crosshair rounded-full border-2 border-brand bg-surface hover:bg-brand-soft"
                   aria-hidden="true"
                 />
               </div>
@@ -715,7 +715,7 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
         </div>
 
         {/* Minimap */}
-        <div className="pointer-events-none sticky bottom-2 left-full mr-2 h-[52px] w-[92px] -translate-x-full rounded border border-[#d3d8de] bg-white/90 p-1">
+        <div className="pointer-events-none sticky bottom-2 left-full mr-2 h-[52px] w-[92px] -translate-x-full rounded border border-line bg-surface/90 p-1">
           <div className="relative h-full w-full">
             {nodes.map((n) => (
               <span
@@ -732,15 +732,15 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
       </div>
 
       {/* Bottom split: preview + add-node menu */}
-      <div className="flex h-56 shrink-0 border-t border-[#d3d8de] bg-white">
-        <div className="flex min-w-0 flex-1 flex-col border-r border-[#d3d8de]">
-          <div className="flex items-center gap-2 border-b border-[#e5e8eb] px-3 py-1.5">
-            <Eye className="h-3.5 w-3.5 text-[#2d72d2]" />
-            <span className="text-xs font-semibold text-[#1c2127]">
+      <div className="flex h-56 shrink-0 border-t border-line bg-surface">
+        <div className="flex min-w-0 flex-1 flex-col border-r border-line">
+          <div className="flex items-center gap-2 border-b border-line-soft px-3 py-1.5">
+            <Eye className="h-3.5 w-3.5 text-brand" />
+            <span className="text-xs font-semibold text-ink">
               Preview{selected ? ` · ${selected.name}` : ""}
             </span>
             {selectedResult?.rows ? (
-              <span className="rounded border border-[#d3d8de] px-1.5 py-0.5 text-[10px] text-[#8f99a8]">
+              <span className="rounded border border-line px-1.5 py-0.5 text-[10px] text-ink-faint">
                 {Math.min(selectedResult.rows.length, 50)} of{" "}
                 {selectedResult.rows.length.toLocaleString()} rows
               </span>
@@ -748,11 +748,11 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
           </div>
           <div className="min-h-0 flex-1 overflow-auto">
             {!selected ? (
-              <p className="p-3 text-[11px] text-[#8f99a8]">
+              <p className="p-3 text-[11px] text-ink-faint">
                 Select a node, then Preview to see its output here.
               </p>
             ) : !selectedResult ? (
-              <p className="p-3 text-[11px] text-[#8f99a8]">
+              <p className="p-3 text-[11px] text-ink-faint">
                 Not run yet — Preview executes the flow without writing anywhere.
               </p>
             ) : selectedResult.rows && selectedResult.rows.length > 0 ? (
@@ -764,7 +764,7 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
                       .map((h) => (
                         <th
                           key={h}
-                          className="border-b border-[#d3d8de] px-2.5 py-1 font-sans text-[10px] font-medium uppercase tracking-wide text-[#8f99a8]"
+                          className="border-b border-line px-2.5 py-1 font-sans text-[10px] font-medium uppercase tracking-wide text-ink-faint"
                         >
                           {h}
                         </th>
@@ -773,11 +773,11 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
                 </thead>
                 <tbody>
                   {selectedResult.rows.slice(0, 50).map((r, i) => (
-                    <tr key={i} className="text-[#404854]">
+                    <tr key={i} className="text-ink-body">
                       {Object.keys(selectedResult.rows![0])
                         .slice(0, 8)
                         .map((h) => (
-                          <td key={h} className="max-w-[180px] truncate border-b border-[#eef1f4] px-2.5 py-1">
+                          <td key={h} className="max-w-[180px] truncate border-b border-line-faint px-2.5 py-1">
                             {r[h] === null || r[h] === undefined ? "—" : String(r[h])}
                           </td>
                         ))}
@@ -786,11 +786,11 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
                 </tbody>
               </table>
             ) : selectedResult.text ? (
-              <pre className="whitespace-pre-wrap p-3 font-mono text-[10.5px] text-[#404854]">
+              <pre className="whitespace-pre-wrap p-3 font-mono text-[10.5px] text-ink-body">
                 {selectedResult.text.slice(0, 2000)}
               </pre>
             ) : (
-              <p className={cn("p-3 text-[11px]", selectedResult.status === "error" ? "text-rose-600" : "text-[#8f99a8]")}>
+              <p className={cn("p-3 text-[11px]", selectedResult.status === "error" ? "text-danger" : "text-ink-faint")}>
                 {selectedResult.summary}
               </p>
             )}
@@ -798,20 +798,20 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
         </div>
 
         <div className="flex w-[340px] shrink-0 flex-col">
-          <div className="flex items-center gap-2 border-b border-[#e5e8eb] px-3 py-1.5">
-            <Search className="h-3.5 w-3.5 text-[#8f99a8]" />
+          <div className="flex items-center gap-2 border-b border-line-soft px-3 py-1.5">
+            <Search className="h-3.5 w-3.5 text-ink-faint" />
             <input
               value={menuSearch}
               onChange={(e) => setMenuSearch(e.target.value)}
               placeholder="Search transforms…"
-              className="min-w-0 flex-1 bg-transparent text-xs text-[#1c2127] placeholder:text-[#8f99a8] focus:outline-none"
+              className="min-w-0 flex-1 bg-transparent text-xs text-ink placeholder:text-ink-faint focus:outline-none"
             />
-            <span className="rounded border border-[#d3d8de] px-1.5 py-0.5 text-[10px] text-[#8f99a8]">
+            <span className="rounded border border-line px-1.5 py-0.5 text-[10px] text-ink-faint">
               add node
             </span>
           </div>
           <div className="flex min-h-0 flex-1">
-            <div className="flex w-[104px] shrink-0 flex-col gap-0.5 border-r border-[#e5e8eb] p-1.5">
+            <div className="flex w-[104px] shrink-0 flex-col gap-0.5 border-r border-line-soft p-1.5">
               {CATEGORIES.map((c) => (
                 <button
                   key={c}
@@ -823,8 +823,8 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
                   className={cn(
                     "rounded px-2 py-1 text-left text-[11px]",
                     menuCat === c && !menuSearch
-                      ? "bg-[#e7f2fd] font-medium text-[#215db0]"
-                      : "text-[#5f6b7c] hover:bg-[#f6f7f9]",
+                      ? "bg-brand-soft font-medium text-brand-deep"
+                      : "text-ink-muted hover:bg-surface-hover",
                   )}
                 >
                   {c}
@@ -840,18 +840,18 @@ export default function DataStudioView({ onOpenLegacy }: { onOpenLegacy: () => v
                     key={t}
                     type="button"
                     onClick={() => addNode(t)}
-                    className="flex items-center gap-2 rounded px-2 py-1 text-left text-[11.5px] text-[#1c2127] hover:bg-[#f6f7f9]"
+                    className="flex items-center gap-2 rounded px-2 py-1 text-left text-[11.5px] text-ink hover:bg-surface-hover"
                   >
-                    <Icon className="h-3.5 w-3.5 shrink-0 text-[#2d72d2]" />
+                    <Icon className="h-3.5 w-3.5 shrink-0 text-brand" />
                     <span className="truncate">{meta.label}</span>
-                    <span className="ml-auto shrink-0 truncate text-[10px] text-[#8f99a8]">
+                    <span className="ml-auto shrink-0 truncate text-[10px] text-ink-faint">
                       {meta.menuHint}
                     </span>
                   </button>
                 );
               })}
               {menuItems.length === 0 ? (
-                <p className="px-2 py-1 text-[11px] text-[#8f99a8]">No matching transforms.</p>
+                <p className="px-2 py-1 text-[11px] text-ink-faint">No matching transforms.</p>
               ) : null}
             </div>
           </div>
@@ -1322,8 +1322,8 @@ async function executeNode(
 // ---------------------------------------------------------------------------
 
 const FIELD =
-  "w-full rounded border border-[#d3d8de] bg-[#f6f7f9] px-2 py-1.5 text-xs text-[#1c2127] focus:border-[#2d72d2] focus:outline-none";
-const LABEL = "mb-1 block text-[10px] font-medium uppercase tracking-wide text-[#8f99a8]";
+  "w-full rounded border border-line bg-canvas px-2 py-1.5 text-xs text-ink focus:border-brand focus:outline-none";
+const LABEL = "mb-1 block text-[10px] font-medium uppercase tracking-wide text-ink-faint";
 
 function NodeInspector({
   node,
@@ -1354,21 +1354,21 @@ function NodeInspector({
   const csvRows = node.type === "dataset" ? parseCsvRows(node.config.csvText ?? "") : [];
 
   return (
-    <div className="fixed inset-y-0 right-0 z-30 flex w-80 flex-col border-l border-[#d3d8de] bg-white shadow-xl">
-      <div className="flex items-center gap-2 border-b border-[#d3d8de] px-3 py-2">
+    <div className="fixed inset-y-0 right-0 z-30 flex w-80 flex-col border-l border-line bg-surface shadow-xl">
+      <div className="flex items-center gap-2 border-b border-line px-3 py-2">
         <span className={cn("flex h-6 w-6 items-center justify-center rounded", meta.block)}>
           <meta.icon className="h-3.5 w-3.5" />
         </span>
-        <span className="text-xs font-semibold text-[#1c2127]">{meta.label}</span>
+        <span className="text-xs font-semibold text-ink">{meta.label}</span>
         {meta.writes ? (
-          <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+          <span className="rounded bg-warn-soft px-1.5 py-0.5 text-[10px] font-medium text-warn-ink">
             writes on Run
           </span>
         ) : null}
         <button
           type="button"
           onClick={onClose}
-          className="ml-auto text-[#8f99a8] hover:text-[#1c2127]"
+          className="ml-auto text-ink-faint hover:text-ink"
           aria-label="Close inspector"
         >
           <X className="h-3.5 w-3.5" />
@@ -1398,13 +1398,13 @@ function NodeInspector({
               onClick={() => fileRef.current?.click()}
               className={cn(
                 "mb-2 flex cursor-pointer flex-col items-center gap-1 rounded-md border border-dashed px-3 py-5 text-center",
-                dragOver ? "border-[#2d72d2] bg-[#e7f2fd]" : "border-[#c5cbd3] bg-[#f6f7f9]",
+                dragOver ? "border-brand bg-brand-soft" : "border-line-strong bg-canvas",
               )}
             >
-              <span className="text-xs font-medium text-[#1c2127]">
+              <span className="text-xs font-medium text-ink">
                 {node.config.csvFileName || "Drop a CSV here, or click to browse"}
               </span>
-              <span className="text-[10px] text-[#8f99a8]">first row = column names</span>
+              <span className="text-[10px] text-ink-faint">first row = column names</span>
               <input
                 ref={fileRef}
                 type="file"
@@ -1418,7 +1418,7 @@ function NodeInspector({
               />
             </div>
             {csvRows.length > 0 ? (
-              <p className="mb-2 text-[11px] text-[#5f6b7c]">
+              <p className="mb-2 text-[11px] text-ink-muted">
                 {csvRows.length.toLocaleString()} rows ·{" "}
                 {Object.keys(csvRows[0]).length} columns ·{" "}
                 {Object.keys(numericColumns(csvRows)).length} numeric
@@ -1463,7 +1463,7 @@ function NodeInspector({
                 />
               </label>
             </div>
-            <p className="mt-2 text-[10.5px] leading-relaxed text-[#8f99a8]">
+            <p className="mt-2 text-[10.5px] leading-relaxed text-ink-faint">
               Reads the most recent objects sent by Model Lab → Feed simulator streams
               (server-side send log). Leave the filter empty for all streams; each row
               carries _stream and _sent_at columns.
@@ -1504,7 +1504,7 @@ function NodeInspector({
                 className={FIELD}
               />
             </label>
-            <p className="mt-2 text-[10.5px] leading-relaxed text-[#8f99a8]">
+            <p className="mt-2 text-[10.5px] leading-relaxed text-ink-faint">
               Rows are the flattened instance properties plus an <code>id</code> column —
               chain into Save to ontology (update mode) to edit and write back, or HTTP
               export to post elsewhere.
@@ -1664,7 +1664,7 @@ function NodeInspector({
                 className={cn(FIELD, "text-[11px]")}
               />
             </label>
-            <p className="mt-2 text-[10.5px] leading-relaxed text-[#8f99a8]">
+            <p className="mt-2 text-[10.5px] leading-relaxed text-ink-faint">
               A <code>count</code> column is always emitted per group. Supported functions:
               sum, avg, min, max.
             </p>
@@ -1708,7 +1708,7 @@ function NodeInspector({
                 </label>
               </div>
             ) : null}
-            <p className="mt-2 text-[10.5px] leading-relaxed text-[#8f99a8]">
+            <p className="mt-2 text-[10.5px] leading-relaxed text-ink-faint">
               Connect two or more upstream nodes into this node&apos;s input port. Joins
               fold left-to-right from the first connected input.
             </p>
@@ -1738,7 +1738,7 @@ function NodeInspector({
                 </select>
               </label>
             </div>
-            <p className="mt-2 text-[10.5px] leading-relaxed text-[#8f99a8]">
+            <p className="mt-2 text-[10.5px] leading-relaxed text-ink-faint">
               {(node.config.mode || "create") === "update"
                 ? "Update writes each row's properties onto the instance in its id column (rows without an id are skipped). Feed it from an Ontology source node."
                 : "Run creates up to 200 instances per execution (Preview only counts). Run a Data Flux quality scan afterwards to gate what came in."}
@@ -1792,7 +1792,7 @@ function NodeInspector({
                 className={cn(FIELD, "resize-y text-[11px]")}
               />
             </label>
-            <p className="mt-2 text-[10.5px] leading-relaxed text-[#8f99a8]">
+            <p className="mt-2 text-[10.5px] leading-relaxed text-ink-faint">
               Sends JSON through the platform&apos;s server-side HTTP proxy on Run
               (Preview shows a dry-run summary) — no CORS limits, and the request
               originates from the backend.
@@ -1811,11 +1811,11 @@ function NodeInspector({
           </label>
         ) : null}
       </div>
-      <div className="border-t border-[#d3d8de] p-3">
+      <div className="border-t border-line p-3">
         <button
           type="button"
           onClick={onRemove}
-          className="flex items-center gap-1 rounded border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs text-rose-700 hover:bg-rose-100"
+          className="flex items-center gap-1 rounded border border-danger-line bg-danger-soft px-2.5 py-1.5 text-xs text-danger-ink hover:bg-danger-soft"
         >
           <Trash2 className="h-3 w-3" />
           Delete node

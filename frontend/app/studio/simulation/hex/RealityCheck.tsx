@@ -25,7 +25,7 @@ import { listDatasets, type Dataset } from "../../datasets-api";
 import { dateOfDay, type RealityConfig } from "./reality";
 
 const LABEL = "text-[10px] font-semibold uppercase tracking-wide text-ink-faint";
-const FIELD = "min-w-0 rounded border border-line bg-white px-2 py-1 text-[12px] text-ink focus:border-brand focus:outline-none";
+const FIELD = "min-w-0 rounded border border-line bg-surface px-2 py-1 text-[12px] text-ink focus:border-brand focus:outline-none";
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const one = (n: number) => (Math.round(n * 10) / 10).toLocaleString("en-CA");
@@ -68,13 +68,13 @@ function Chart({
   return (
     <div className="relative">
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="block h-[120px] w-full" role="img" aria-label={label}>
-        <rect width={W} height={H} fill="#f6f7f9" />
-        <polyline points={line(events)} fill="none" stroke="#8f99a8" strokeWidth={2} vectorEffect="non-scaling-stroke" />
-        <polyline points={line(full)} fill="none" stroke="#2d72d2" strokeWidth={2} vectorEffect="non-scaling-stroke" />
-        <polyline points={line(observed)} fill="none" stroke="#1c2127" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
-        <line x1={x(day)} x2={x(day)} y1={0} y2={H} stroke="#1c2127" strokeWidth={1} strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
+        <rect width={W} height={H} fill="#161616" />
+        <polyline points={line(events)} fill="none" stroke="#a8a8a8" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+        <polyline points={line(full)} fill="none" stroke="#4589ff" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+        <polyline points={line(observed)} fill="none" stroke="#f4f4f4" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+        <line x1={x(day)} x2={x(day)} y1={0} y2={H} stroke="#f4f4f4" strokeWidth={1} strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
       </svg>
-      <span className="absolute right-1 top-0 rounded bg-white/90 px-1 text-[10px] tabular-nums text-ink-muted">{Math.round(top)}</span>
+      <span className="absolute right-1 top-0 rounded bg-surface/90 px-1 text-[10px] tabular-nums text-ink-muted">{Math.round(top)}</span>
     </div>
   );
 }
@@ -232,7 +232,7 @@ export default function RealityCheck({
         {formError ? <p role="alert" className="rounded bg-danger-soft px-2 py-1 text-[11.5px] text-danger-ink">{formError}</p> : null}
         <div className="flex gap-1.5">
           <button type="button" disabled={busy || !datasets?.length} onClick={save} className="rounded bg-brand px-2.5 py-1 text-[12px] font-semibold text-white disabled:opacity-50">Compare</button>
-          <button type="button" onClick={() => setEditing(false)} className="rounded border border-line px-2.5 py-1 text-[12px] hover:bg-canvas-raised">Cancel</button>
+          <button type="button" onClick={() => setEditing(false)} className="rounded border border-line px-2.5 py-1 text-[12px] hover:bg-surface-hover">Cancel</button>
         </div>
       </div>
     );
@@ -243,7 +243,7 @@ export default function RealityCheck({
       <div className="flex flex-col gap-1.5">
         <span className={LABEL}>Reality check</span>
         <p className="text-[12px] text-ink-muted">Nothing observed is set beside this scenario yet.</p>
-        <button type="button" onClick={open} className="self-start rounded border border-line bg-white px-2.5 py-1 text-[12px] font-semibold text-ink hover:bg-canvas-raised">
+        <button type="button" onClick={open} className="self-start rounded border border-line bg-surface px-2.5 py-1 text-[12px] font-semibold text-ink hover:bg-surface-hover">
           Compare with observed data
         </button>
       </div>
@@ -297,8 +297,8 @@ export default function RealityCheck({
         </>
       )}
       <div className="flex gap-1.5">
-        <button type="button" disabled={busy} onClick={open} className="rounded border border-line bg-white px-2 py-1 text-[11.5px] hover:bg-canvas-raised disabled:opacity-50">Change</button>
-        <button type="button" disabled={busy} onClick={onClear} className="rounded border border-line bg-white px-2 py-1 text-[11.5px] text-ink-muted hover:bg-canvas-raised disabled:opacity-50">Stop comparing</button>
+        <button type="button" disabled={busy} onClick={open} className="rounded border border-line bg-surface px-2 py-1 text-[11.5px] hover:bg-surface-hover disabled:opacity-50">Change</button>
+        <button type="button" disabled={busy} onClick={onClear} className="rounded border border-line bg-surface px-2 py-1 text-[11.5px] text-ink-muted hover:bg-surface-hover disabled:opacity-50">Stop comparing</button>
       </div>
     </div>
   );

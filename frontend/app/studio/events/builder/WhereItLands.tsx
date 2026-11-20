@@ -70,7 +70,7 @@ export default function WhereItLands({ tw, picture, colour, onPickSite, onPickPo
           "circle-stroke-color": ["get", "stroke"], "circle-stroke-width": ["get", "sw"], "circle-stroke-opacity": ["get", "so"] } });
         map.addLayer({ id: "wil-ring", type: "line", source: "wil-ring", paint: { "line-color": colour, "line-width": 1.4, "line-dasharray": [3, 2] } });
         map.addLayer({ id: "wil-front", type: "line", source: "wil-front", paint: { "line-color": colour, "line-width": 2 } });
-        map.addLayer({ id: "wil-centre", type: "circle", source: "wil-centre", paint: { "circle-radius": 5, "circle-color": "#ffffff", "circle-stroke-color": colour, "circle-stroke-width": 2.5 } });
+        map.addLayer({ id: "wil-centre", type: "circle", source: "wil-centre", paint: { "circle-radius": 5, "circle-color": "#161616", "circle-stroke-color": colour, "circle-stroke-width": 2.5 } });
         setReady(true);
       });
       const show = (ev: MapLayerMouseEvent) => {
@@ -140,7 +140,7 @@ export default function WhereItLands({ tw, picture, colour, onPickSite, onPickPo
         title="Show every site of the twin"
         aria-label="Show every site of the twin"
         onClick={() => { const map = mapRef.current; if (map && tw.bounds) { const [[s, w], [n, e]] = tw.bounds; map.fitBounds([[w, s], [e, n]], { padding: 28, maxZoom: 11 }); } }}
-        className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded border border-line bg-white/95 text-ink-body shadow-sm hover:border-brand hover:text-brand"
+        className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded border border-line bg-surface/95 text-ink-body shadow-sm hover:border-brand hover:text-brand"
       >
         <Scan className="h-3.5 w-3.5" />
       </button>

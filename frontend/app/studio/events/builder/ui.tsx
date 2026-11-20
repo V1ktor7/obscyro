@@ -6,10 +6,10 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
 
-export const BTN = "inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-md border border-line bg-white px-2.5 text-xs text-ink-body hover:border-brand hover:text-brand-deep disabled:cursor-not-allowed disabled:opacity-50";
+export const BTN = "inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-md border border-line bg-surface px-2.5 text-xs text-ink-body hover:border-brand hover:text-brand-deep disabled:cursor-not-allowed disabled:opacity-50";
 export const BTN_P = "inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-md border border-brand-deep bg-brand px-3 text-xs font-medium text-white hover:bg-brand-deep disabled:cursor-not-allowed disabled:border-ink-ghost disabled:bg-ink-ghost";
-export const BTN_SM = "inline-flex h-6 items-center gap-1 whitespace-nowrap rounded border border-line bg-white px-2 text-[11.5px] text-ink-body hover:border-brand hover:text-brand-deep";
-export const IN = "h-[26px] rounded border border-line bg-white px-2 text-xs text-ink focus:border-brand focus:outline-none";
+export const BTN_SM = "inline-flex h-6 items-center gap-1 whitespace-nowrap rounded border border-line bg-surface px-2 text-[11.5px] text-ink-body hover:border-brand hover:text-brand-deep";
+export const IN = "h-[26px] rounded border border-line bg-surface px-2 text-xs text-ink focus:border-brand focus:outline-none";
 export const LBL = "text-[10px] font-medium uppercase tracking-wide text-ink-faint";
 export const HELP = "text-[11.5px] leading-snug text-ink-muted";
 
@@ -32,7 +32,7 @@ export function Rich({ text }: { text: string }) {
 
 export function Seg<T extends string>({ value, options, onChange, label }: { value: T; options: { v: T; label: ReactNode; disabled?: string }[]; onChange: (v: T) => void; label?: string }) {
   return (
-    <span role="group" aria-label={label} className="inline-flex flex-wrap overflow-hidden rounded-md border border-line bg-white">
+    <span role="group" aria-label={label} className="inline-flex flex-wrap overflow-hidden rounded-md border border-line bg-surface">
       {options.map((o) => (
         <button
           key={o.v}
@@ -43,7 +43,7 @@ export function Seg<T extends string>({ value, options, onChange, label }: { val
           onClick={() => onChange(o.v)}
           className={cn(
             "h-[26px] border-r border-line-soft px-2.5 text-xs last:border-r-0",
-            o.v === value ? "bg-brand-soft font-medium text-brand-deep" : "text-ink-body hover:bg-canvas",
+            o.v === value ? "bg-brand-soft font-medium text-brand-deep" : "text-ink-body hover:bg-surface-hover",
             o.disabled && "cursor-not-allowed text-ink-ghost hover:bg-transparent",
           )}
         >
@@ -100,18 +100,18 @@ export function MiniChart({ series, horizon, day, label, zero = true, height = 1
   const every = horizon <= 40 ? 10 : horizon <= 120 ? 20 : 60;
   const path = (arr: (number | null)[]) => arr.map((v, t) => (v == null ? "" : `${t ? "L" : "M"}${X(t).toFixed(1)},${Y(v).toFixed(1)} L${X(t + 1).toFixed(1)},${Y(v).toFixed(1)}`)).join(" ");
   return (
-    <svg viewBox={`0 0 ${W} ${Hh}`} role="img" aria-label={label} className="block h-auto w-full rounded-md border border-line-soft bg-white">
+    <svg viewBox={`0 0 ${W} ${Hh}`} role="img" aria-label={label} className="block h-auto w-full rounded-md border border-line-soft bg-surface">
       {[0, 0.5, 1].map((fr) => {
         const v = lo + (top / 1.08 - lo) * fr;
         return (
           <g key={fr}>
-            <line x1={L} x2={W - R} y1={Y(v)} y2={Y(v)} stroke="#eef1f4" />
-            <text x={L - 4} y={Y(v) + 3} textAnchor="end" fontSize="9" fill="#8f99a8">{Math.abs(v) >= 100 ? Math.round(v) : Number(v.toPrecision(2))}</text>
+            <line x1={L} x2={W - R} y1={Y(v)} y2={Y(v)} stroke="#2c2c2c" />
+            <text x={L - 4} y={Y(v) + 3} textAnchor="end" fontSize="9" fill="#a8a8a8">{Math.abs(v) >= 100 ? Math.round(v) : Number(v.toPrecision(2))}</text>
           </g>
         );
       })}
       {Array.from({ length: Math.ceil(horizon / every) }, (_, k) => k * every).map((t) => (
-        <text key={t} x={X(t + 0.5)} y={Hh - 5} textAnchor="middle" fontSize="9" fill="#8f99a8">{t}</text>
+        <text key={t} x={X(t + 0.5)} y={Hh - 5} textAnchor="middle" fontSize="9" fill="#a8a8a8">{t}</text>
       ))}
       {series.map((s, k) => {
         if (s.band) {
@@ -129,7 +129,7 @@ export function MiniChart({ series, horizon, day, label, zero = true, height = 1
           </g>
         );
       })}
-      <line x1={X(day + 0.5)} x2={X(day + 0.5)} y1={T} y2={Hh - B} stroke="#1c2127" />
+      <line x1={X(day + 0.5)} x2={X(day + 0.5)} y1={T} y2={Hh - B} stroke="#f4f4f4" />
     </svg>
   );
 }
@@ -155,4 +155,4 @@ export function Key({ items }: { items: [string, string, ("dash" | "dots" | "ban
 }
 
 /** The six categorical tints the Studio gives types: they mean nothing, they only tell changes apart. */
-export const TINTS: [string, string][] = [["#e7f2fd", "#215db0"], ["#e8f4ec", "#1c6e42"], ["#fdf0e6", "#935610"], ["#f2ebfb", "#6b3fa0"], ["#fceaef", "#a82255"], ["#e9f5f4", "#0f6b68"]];
+export const TINTS: [string, string][] = [["#16305f", "#a6c8ff"], ["#12301c", "#6fdc8c"], ["#33290a", "#fddc69"], ["#2a1f45", "#be95ff"], ["#3a1528", "#ffafd2"], ["#0b3233", "#3ddbd9"]];

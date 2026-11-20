@@ -152,7 +152,7 @@ describe("a layer on the hexes", () => {
     expect(r.legend).toHaveLength(5);
     expect(r.legend[0]!.label).toBe("under 3 beds");
     expect(r.legend[4]!.label).toBe("9 beds and over");
-    expect(r.colourOf(null)).toBe("#f6f7f9");
+    expect(r.colourOf(null)).toBe("#262626");
     expect(r.colourOf(10)).toBe(r.legend[4]!.colour);
     expect(quantileRamp([5, 5, 5]).legend).toHaveLength(1);
   });

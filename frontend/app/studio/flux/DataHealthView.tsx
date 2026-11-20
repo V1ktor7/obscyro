@@ -60,10 +60,10 @@ interface Feed {
 }
 
 const STATUS_DOT: Record<Feed["status"], string> = {
-  flowing: "bg-emerald-500",
-  warn: "bg-amber-400",
-  stalled: "bg-rose-500",
-  idle: "bg-gray-300",
+  flowing: "bg-ok",
+  warn: "bg-warn",
+  stalled: "bg-danger",
+  idle: "bg-ink-ghost",
 };
 
 export default function DataHealthView() {
@@ -255,8 +255,8 @@ export default function DataHealthView() {
 
   if (!hasKey) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-white">
-        <p className="max-w-sm text-center text-sm text-gray-500">
+      <div className="flex flex-1 items-center justify-center bg-surface">
+        <p className="max-w-sm text-center text-sm text-ink-muted">
           Sign in and create an API key to monitor data health.
         </p>
       </div>
@@ -264,23 +264,23 @@ export default function DataHealthView() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#f6f7f9]">
+    <div className="flex min-h-0 flex-1 flex-col bg-canvas">
       {/* Top bar */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-[#d3d8de] bg-white px-4 py-2">
-        <span className="flex h-6 w-6 items-center justify-center rounded bg-[#e8f4ec] text-[#1c6e42]">
+      <div className="flex shrink-0 items-center gap-3 border-b border-line bg-surface px-4 py-2">
+        <span className="flex h-6 w-6 items-center justify-center rounded bg-ok-soft text-ok-ink">
           <HeartPulse className="h-3.5 w-3.5" />
         </span>
-        <span className="text-[13px] font-semibold text-[#1c2127]">Data health</span>
-        <span className="hidden rounded border border-[#d3d8de] px-2 py-0.5 text-[11px] text-[#404854] sm:inline">
+        <span className="text-[13px] font-semibold text-ink">Data health</span>
+        <span className="hidden rounded border border-line px-2 py-0.5 text-[11px] text-ink-body sm:inline">
           {env ?? "no environment"}
         </span>
         <span className="flex-1" />
-        {scanInfo ? <span className="text-[11px] text-[#8f99a8]">{scanInfo}</span> : null}
+        {scanInfo ? <span className="text-[11px] text-ink-faint">{scanInfo}</span> : null}
         <button
           type="button"
           disabled={!env || scanning}
           onClick={() => void handleScan()}
-          className="flex items-center gap-1 rounded bg-[#2d72d2] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#215db0] disabled:bg-[#c5cbd3]"
+          className="flex items-center gap-1 rounded bg-brand px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-deep disabled:bg-ink-ghost"
         >
           {scanning ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -292,7 +292,7 @@ export default function DataHealthView() {
       </div>
 
       {error ? (
-        <div className="flex items-center gap-2 border-b border-rose-200 bg-rose-50 px-4 py-1.5 text-[11px] text-rose-700">
+        <div className="flex items-center gap-2 border-b border-danger-line bg-danger-soft px-4 py-1.5 text-[11px] text-danger-ink">
           <span className="min-w-0 flex-1 truncate">{error}</span>
           <button type="button" onClick={() => setError(null)} aria-label="Dismiss error">
             <X className="h-3 w-3" />
@@ -302,13 +302,13 @@ export default function DataHealthView() {
 
       <div className="flex min-h-0 flex-1">
         {/* Feed rail */}
-        <aside className="flex w-52 shrink-0 flex-col overflow-y-auto border-r border-[#d3d8de] bg-white">
-          <div className="px-3 pb-1 pt-2.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[#8f99a8]">
+        <aside className="flex w-52 shrink-0 flex-col overflow-y-auto border-r border-line bg-surface">
+          <div className="px-3 pb-1 pt-2.5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-faint">
             Feeds · {feeds.length}
           </div>
           <div className="flex flex-col gap-0.5 px-2 pb-2">
             {feeds.length === 0 ? (
-              <p className="px-2 py-1 text-[11px] text-[#8f99a8]">
+              <p className="px-2 py-1 text-[11px] text-ink-faint">
                 {env
                   ? "No feeds yet — create channels in Ontology Parser."
                   : "Select an environment."}
@@ -323,7 +323,7 @@ export default function DataHealthView() {
                     onClick={() => setSelectedFeed(f.id)}
                     className={cn(
                       "rounded px-2 py-1.5 text-left transition-colors",
-                      active ? "bg-[#e7f2fd]" : "hover:bg-[#f6f7f9]",
+                      active ? "bg-brand-soft" : "hover:bg-surface-hover",
                     )}
                   >
                     <span className="flex items-center gap-1.5">
@@ -331,7 +331,7 @@ export default function DataHealthView() {
                       <span
                         className={cn(
                           "truncate text-xs",
-                          active ? "font-medium text-[#215db0]" : "text-[#1c2127]",
+                          active ? "font-medium text-brand-deep" : "text-ink",
                         )}
                       >
                         {f.name}
@@ -341,10 +341,10 @@ export default function DataHealthView() {
                       className={cn(
                         "ml-3 block truncate text-[10px]",
                         f.status === "stalled"
-                          ? "text-rose-600"
+                          ? "text-danger"
                           : active
-                            ? "text-[#215db0]"
-                            : "text-[#8f99a8]",
+                            ? "text-brand-deep"
+                            : "text-ink-faint",
                       )}
                     >
                       {f.status === "stalled" ? "stalled" : f.detail}
@@ -372,16 +372,16 @@ export default function DataHealthView() {
 
           {/* Live flow for the selected feed */}
           <section>
-            <SectionHead icon={Waves} tone="text-[#2d72d2]" title={`Live flow${feed ? ` · ${feed.name}` : ""}`}>
+            <SectionHead icon={Waves} tone="text-brand" title={`Live flow${feed ? ` · ${feed.name}` : ""}`}>
               {flags.length > 0 ? (
-                <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">
+                <span className="rounded bg-warn-soft px-1.5 py-0.5 text-[11px] font-medium text-warn-ink">
                   {flags.length} open flag{flags.length === 1 ? "" : "s"}
                 </span>
               ) : null}
             </SectionHead>
-            <div className="rounded-md border border-[#d3d8de] bg-white p-3">
+            <div className="rounded-md border border-line bg-surface p-3">
               <FlowDiagram feed={feed} openFlags={flags.length} savedToday={totals.savedToday} />
-              <p className="mt-1 text-[10.5px] text-[#8f99a8]">
+              <p className="mt-1 text-[10.5px] text-ink-faint">
                 select a feed in the rail to trace its flow · only quality-passed records reach
                 the ontology
               </p>
@@ -390,8 +390,8 @@ export default function DataHealthView() {
 
           {/* Quality layers */}
           <section>
-            <SectionHead icon={ShieldCheck} tone="text-amber-600" title="Quality layers">
-              <span className="rounded border border-[#d3d8de] px-1.5 py-0.5 text-[11px] text-[#8f99a8]">
+            <SectionHead icon={ShieldCheck} tone="text-warn-ink" title="Quality layers">
+              <span className="rounded border border-line px-1.5 py-0.5 text-[11px] text-ink-faint">
                 open flags by layer
               </span>
             </SectionHead>
@@ -399,14 +399,14 @@ export default function DataHealthView() {
               {LAYER_META.map((l) => {
                 const count = byLayer.get(l.layer) ?? 0;
                 return (
-                  <div key={l.layer} className="rounded-md bg-white px-3 py-2 shadow-[inset_0_0_0_1px_#e5e8eb]">
-                    <p className="text-[10px] font-medium uppercase tracking-wide text-[#8f99a8]">
+                  <div key={l.layer} className="rounded-md bg-surface px-3 py-2 shadow-[inset_0_0_0_1px_#333333]">
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">
                       L{l.layer} {l.label.split(" ")[0]}
                     </p>
                     <p
                       className={cn(
                         "text-sm font-semibold",
-                        count > 0 ? "text-amber-600" : "text-[#1c2127]",
+                        count > 0 ? "text-warn-ink" : "text-ink",
                       )}
                     >
                       {count}
@@ -419,8 +419,8 @@ export default function DataHealthView() {
 
           {/* Findings */}
           <section>
-            <SectionHead icon={Inbox} tone="text-rose-600" title="Findings">
-              <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[11px] font-medium text-rose-700">
+            <SectionHead icon={Inbox} tone="text-danger" title="Findings">
+              <span className="rounded bg-danger-soft px-1.5 py-0.5 text-[11px] font-medium text-danger-ink">
                 {totals.openFindings} open
               </span>
               <span className="ml-auto flex gap-1">
@@ -439,8 +439,8 @@ export default function DataHealthView() {
                     className={cn(
                       "rounded px-2 py-0.5 text-[11px]",
                       filter === key
-                        ? "bg-[#e7f2fd] font-medium text-[#215db0]"
-                        : "border border-[#d3d8de] text-[#8f99a8] hover:text-[#404854]",
+                        ? "bg-brand-soft font-medium text-brand-deep"
+                        : "border border-line text-ink-faint hover:text-ink-body",
                     )}
                   >
                     {label}
@@ -475,7 +475,7 @@ export default function DataHealthView() {
                 />
               ))}
               {shownDetections.length === 0 && shownFlags.length === 0 ? (
-                <p className="rounded-md border border-dashed border-[#c5cbd3] bg-white px-4 py-5 text-center text-xs text-[#8f99a8]">
+                <p className="rounded-md border border-dashed border-line-strong bg-surface px-4 py-5 text-center text-xs text-ink-faint">
                   No open findings — feeds are flowing and the last scan came back clean.
                 </p>
               ) : null}
@@ -493,16 +493,16 @@ export default function DataHealthView() {
 
 function StatCard({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
-    <div className="rounded-md bg-white px-3 py-2 shadow-[inset_0_0_0_1px_#e5e8eb]">
+    <div className="rounded-md bg-surface px-3 py-2 shadow-[inset_0_0_0_1px_#333333]">
       <p
         className={cn(
           "text-[10px] font-medium uppercase tracking-wide",
-          warn ? "text-amber-600" : "text-[#8f99a8]",
+          warn ? "text-warn-ink" : "text-ink-faint",
         )}
       >
         {label}
       </p>
-      <p className={cn("text-base font-semibold", warn ? "text-amber-600" : "text-[#1c2127]")}>
+      <p className={cn("text-base font-semibold", warn ? "text-warn-ink" : "text-ink")}>
         {value}
       </p>
     </div>
@@ -523,7 +523,7 @@ function SectionHead({
   return (
     <div className="mb-2 flex items-center gap-2">
       <Icon className={cn("h-4 w-4", tone)} />
-      <h3 className="text-[13px] font-semibold text-[#1c2127]">{title}</h3>
+      <h3 className="text-[13px] font-semibold text-ink">{title}</h3>
       {children}
     </div>
   );
@@ -549,35 +549,35 @@ function FlowDiagram({
       <path
         d="M112,48 H 208"
         fill="none"
-        stroke={stalled ? "#e11d48" : "#2d72d2"}
+        stroke={stalled ? "#fa4d56" : "#4589ff"}
         strokeWidth="1.5"
         strokeDasharray={stalled ? "2 5" : "5 4"}
       />
-      <path d="M338,48 H 448" fill="none" stroke="#059669" strokeWidth="1.5" strokeDasharray="5 4" />
-      <path d="M300,30 Q 330,10 388,10" fill="none" stroke="#d97706" strokeWidth="1.2" strokeDasharray="2 4" />
-      <rect x="8" y="28" width="104" height="40" rx="7" fill={stalled ? "#fceaef" : "#e7f2fd"} />
-      <text x="60" y="45" textAnchor="middle" fontSize="10" fill={stalled ? "#a82255" : "#215db0"}>
+      <path d="M338,48 H 448" fill="none" stroke="#42be65" strokeWidth="1.5" strokeDasharray="5 4" />
+      <path d="M300,30 Q 330,10 388,10" fill="none" stroke="#f1c21b" strokeWidth="1.2" strokeDasharray="2 4" />
+      <rect x="8" y="28" width="104" height="40" rx="7" fill={stalled ? "#3b1518" : "#16305f"} />
+      <text x="60" y="45" textAnchor="middle" fontSize="10" fill={stalled ? "#ff8389" : "#78a9ff"}>
         {feed ? (feed.name.length > 16 ? `${feed.name.slice(0, 15)}…` : feed.name) : "feed"}
       </text>
-      <text x="60" y="58" textAnchor="middle" fontSize="8.5" fill={stalled ? "#a82255" : "#5a8fc7"}>
+      <text x="60" y="58" textAnchor="middle" fontSize="8.5" fill={stalled ? "#ff8389" : "#78a9ff"}>
         {feed ? (stalled ? "stalled" : feed.detail.length > 22 ? `${feed.detail.slice(0, 21)}…` : feed.detail) : ""}
       </text>
-      <rect x="208" y="28" width="130" height="40" rx="7" fill="#fdf0e6" />
-      <text x="273" y="45" textAnchor="middle" fontSize="10" fill="#935610">
+      <rect x="208" y="28" width="130" height="40" rx="7" fill="#33290a" />
+      <text x="273" y="45" textAnchor="middle" fontSize="10" fill="#fddc69">
         quality gate · L1–L6
       </text>
-      <text x="273" y="58" textAnchor="middle" fontSize="8.5" fill="#b07b3a">
+      <text x="273" y="58" textAnchor="middle" fontSize="8.5" fill="#fddc69">
         {openFlags} held back
       </text>
-      <rect x="448" y="28" width="130" height="40" rx="7" fill="#f2ebfb" />
-      <text x="513" y="45" textAnchor="middle" fontSize="10" fill="#6b3fa0">
+      <rect x="448" y="28" width="130" height="40" rx="7" fill="#2a1f45" />
+      <text x="513" y="45" textAnchor="middle" fontSize="10" fill="#be95ff">
         ontology
       </text>
-      <text x="513" y="58" textAnchor="middle" fontSize="8.5" fill="#8f6cc0">
+      <text x="513" y="58" textAnchor="middle" fontSize="8.5" fill="#be95ff">
         {savedToday.toLocaleString()} saved today
       </text>
-      <rect x="388" y="2" width="118" height="17" rx="5" fill="#fdf0e6" />
-      <text x="447" y="14" textAnchor="middle" fontSize="8.5" fill="#935610">
+      <rect x="388" y="2" width="118" height="17" rx="5" fill="#33290a" />
+      <text x="447" y="14" textAnchor="middle" fontSize="8.5" fill="#fddc69">
         flags → findings inbox
       </text>
     </svg>
@@ -606,15 +606,15 @@ function FindingCard({
   onDismiss?: () => void;
 }) {
   const tones = {
-    danger: { box: "bg-rose-50 text-rose-600", chip: "bg-rose-50 text-rose-700" },
-    warn: { box: "bg-amber-50 text-amber-600", chip: "bg-amber-50 text-amber-700" },
-    info: { box: "bg-[#f6f7f9] text-[#8f99a8]", chip: "bg-[#eef1f4] text-[#5f6b7c]" },
+    danger: { box: "bg-danger-soft text-danger", chip: "bg-danger-soft text-danger-ink" },
+    warn: { box: "bg-warn-soft text-warn-ink", chip: "bg-warn-soft text-warn-ink" },
+    info: { box: "bg-canvas text-ink-faint", chip: "bg-canvas-raised text-ink-muted" },
   }[tone];
   return (
     <div
       className={cn(
-        "flex items-start gap-2.5 rounded-md border bg-white px-3 py-2.5",
-        tone === "danger" ? "border-rose-200" : "border-[#d3d8de]",
+        "flex items-start gap-2.5 rounded-md border bg-surface px-3 py-2.5",
+        tone === "danger" ? "border-danger-line" : "border-line",
       )}
     >
       <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded", tones.box)}>
@@ -622,22 +622,22 @@ function FindingCard({
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs font-medium text-[#1c2127]">{title}</span>
+          <span className="text-xs font-medium text-ink">{title}</span>
           <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-medium", tones.chip)}>
             {severity}
           </span>
-          <span className="rounded border border-[#d3d8de] px-1.5 py-0.5 text-[10px] text-[#8f99a8]">
+          <span className="rounded border border-line px-1.5 py-0.5 text-[10px] text-ink-faint">
             {origin}
           </span>
         </span>
-        <span className="mt-0.5 block truncate text-[11px] text-[#8f99a8]">{detail}</span>
+        <span className="mt-0.5 block truncate text-[11px] text-ink-faint">{detail}</span>
       </span>
       {onReview ? (
         <button
           type="button"
           disabled={busy}
           onClick={onReview}
-          className="shrink-0 rounded border border-[#d3d8de] px-2.5 py-1 text-[11px] text-[#404854] hover:border-emerald-400 hover:text-emerald-700 disabled:opacity-50"
+          className="shrink-0 rounded border border-line px-2.5 py-1 text-[11px] text-ink-body hover:border-ok hover:text-ok-ink disabled:opacity-50"
         >
           review
         </button>
@@ -647,13 +647,13 @@ function FindingCard({
           type="button"
           disabled={busy}
           onClick={onDismiss}
-          className="shrink-0 px-1.5 py-1 text-[11px] text-[#8f99a8] hover:text-[#404854] disabled:opacity-50"
+          className="shrink-0 px-1.5 py-1 text-[11px] text-ink-faint hover:text-ink-body disabled:opacity-50"
         >
           dismiss
         </button>
       ) : null}
       {tone === "danger" && !onReview ? (
-        <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0 text-rose-400" />
+        <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0 text-danger" />
       ) : null}
     </div>
   );

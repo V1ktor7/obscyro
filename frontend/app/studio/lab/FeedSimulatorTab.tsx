@@ -45,8 +45,8 @@ import {
 } from "../feed-sim";
 
 const FIELD =
-  "rounded border border-[#d3d8de] bg-[#f6f7f9] px-2 py-1.5 text-xs text-[#1c2127] focus:border-[#2d72d2] focus:outline-none";
-const LABEL = "mb-1 block text-[10px] font-medium uppercase tracking-wide text-[#8f99a8]";
+  "rounded border border-line bg-canvas px-2 py-1.5 text-xs text-ink focus:border-brand focus:outline-none";
+const LABEL = "mb-1 block text-[10px] font-medium uppercase tracking-wide text-ink-faint";
 
 export default function FeedSimulatorTab({ env }: { env: string | null }) {
   const [streams, setStreams] = useState<FeedStream[]>([]);
@@ -234,7 +234,7 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
   }
 
   if (!env) {
-    return <p className="text-sm text-[#5f6b7c]">Select an environment first.</p>;
+    return <p className="text-sm text-ink-muted">Select an environment first.</p>;
   }
 
   const now = Date.now();
@@ -254,7 +254,7 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
   return (
     <div className="flex min-h-0 flex-col gap-2">
       {error ? (
-        <div className="flex items-center gap-2 rounded border border-rose-200 bg-rose-50 px-3 py-1.5 text-[11px] text-rose-700">
+        <div className="flex items-center gap-2 rounded border border-danger-line bg-danger-soft px-3 py-1.5 text-[11px] text-danger-ink">
           <span className="min-w-0 flex-1 truncate">{error}</span>
           <button type="button" onClick={() => setError(null)} aria-label="Dismiss error">
             <X className="h-3 w-3" />
@@ -263,8 +263,8 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
       ) : null}
       <div className="flex min-h-0 gap-3">
         {/* Streams rail */}
-        <aside className="flex w-52 shrink-0 flex-col gap-0.5 rounded-md border border-[#d3d8de] bg-white p-2">
-          <p className="px-1 pb-1 text-[10px] font-medium uppercase tracking-[0.12em] text-[#8f99a8]">
+        <aside className="flex w-52 shrink-0 flex-col gap-0.5 rounded-md border border-line bg-surface p-2">
+          <p className="px-1 pb-1 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-faint">
             Streams · {streams.length}
           </p>
           {streams.map((s) => {
@@ -276,26 +276,26 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
                 onClick={() => setSelectedId(s.id)}
                 className={cn(
                   "rounded px-2 py-1.5 text-left",
-                  active ? "bg-[#e7f2fd]" : "hover:bg-[#f6f7f9]",
+                  active ? "bg-brand-soft" : "hover:bg-surface-hover",
                 )}
               >
                 <span className="flex items-center gap-1.5">
                   <span
                     className={cn(
                       "h-1.5 w-1.5 shrink-0 rounded-full",
-                      s.status === "running" ? "bg-emerald-500" : "bg-gray-300",
+                      s.status === "running" ? "bg-ok" : "bg-ink-ghost",
                     )}
                   />
                   <span
                     className={cn(
                       "truncate text-xs",
-                      active ? "font-medium text-[#215db0]" : "text-[#1c2127]",
+                      active ? "font-medium text-brand-deep" : "text-ink",
                     )}
                   >
                     {s.name}
                   </span>
                 </span>
-                <span className="ml-3 block truncate text-[10px] text-[#8f99a8]">
+                <span className="ml-3 block truncate text-[10px] text-ink-faint">
                   {s.status === "running" ? `${s.config.ratePerSec}/s · ` : "paused · "}
                   {s.sentCount.toLocaleString()} sent
                   {s.lastError ? ` · ${s.lastError}` : ""}
@@ -306,12 +306,12 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
           <button
             type="button"
             onClick={() => void handleCreate()}
-            className="mt-1 flex items-center gap-1.5 rounded border border-dashed border-[#c5cbd3] px-2 py-1.5 text-[11px] text-[#5f6b7c] hover:border-[#2d72d2] hover:text-[#2d72d2]"
+            className="mt-1 flex items-center gap-1.5 rounded border border-dashed border-line-strong px-2 py-1.5 text-[11px] text-ink-muted hover:border-brand hover:text-brand"
           >
             <Plus className="h-3 w-3" />
             new stream
           </button>
-          <p className="mt-auto px-1 pt-2 text-[10px] leading-relaxed text-[#8f99a8]">
+          <p className="mt-auto px-1 pt-2 text-[10px] leading-relaxed text-ink-faint">
             {totals.running} running · {totals.sent.toLocaleString()} sent · {totals.failed} failed
             — streams run on the server, even with this page closed
           </p>
@@ -319,8 +319,8 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
 
         {/* Stream editor */}
         {!selected || !draft ? (
-          <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-[#c5cbd3] bg-white p-8">
-            <p className="text-sm text-[#5f6b7c]">Create a stream to start feeding the network.</p>
+          <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-line-strong bg-surface p-8">
+            <p className="text-sm text-ink-muted">Create a stream to start feeding the network.</p>
           </div>
         ) : (
           <div className="flex min-w-0 flex-1 flex-col gap-3">
@@ -329,16 +329,16 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
               <input
                 value={draftName}
                 onChange={(e) => setDraftName(e.target.value)}
-                className="w-44 rounded border border-transparent bg-transparent px-1 py-0.5 text-[13px] font-semibold text-[#1c2127] hover:border-[#d3d8de] focus:border-[#2d72d2] focus:outline-none"
+                className="w-44 rounded border border-transparent bg-transparent px-1 py-0.5 text-[13px] font-semibold text-ink hover:border-line focus:border-brand focus:outline-none"
                 aria-label="Stream name"
               />
               {surgeActive ? (
-                <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-700">
+                <span className="rounded bg-danger-soft px-1.5 py-0.5 text-[10px] font-medium text-danger-ink">
                   surge active
                 </span>
               ) : null}
               {stallActive ? (
-                <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                <span className="rounded bg-warn-soft px-1.5 py-0.5 text-[10px] font-medium text-warn-ink">
                   stalled
                 </span>
               ) : null}
@@ -348,7 +348,7 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
                   type="button"
                   disabled={busy}
                   onClick={() => void handleSave()}
-                  className="rounded bg-[#2d72d2] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#215db0] disabled:bg-[#c5cbd3]"
+                  className="rounded bg-brand px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-deep disabled:bg-ink-ghost"
                 >
                   Save changes
                 </button>
@@ -356,7 +356,7 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
               <button
                 type="button"
                 onClick={() => void handleInject("surge")}
-                className="flex items-center gap-1 rounded border border-rose-200 px-2 py-1 text-[11px] text-rose-700 hover:bg-rose-50"
+                className="flex items-center gap-1 rounded border border-danger-line px-2 py-1 text-[11px] text-danger-ink hover:bg-danger-soft"
               >
                 <Ambulance className="h-3 w-3" />
                 Surge ×4 · 30 min
@@ -364,7 +364,7 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
               <button
                 type="button"
                 onClick={() => void handleInject("stall")}
-                className="flex items-center gap-1 rounded border border-amber-200 px-2 py-1 text-[11px] text-amber-700 hover:bg-amber-50"
+                className="flex items-center gap-1 rounded border border-warn-line px-2 py-1 text-[11px] text-warn-ink hover:bg-warn-soft"
               >
                 <Unplug className="h-3 w-3" />
                 Stall · 15 min
@@ -376,8 +376,8 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
                 className={cn(
                   "flex items-center gap-1 rounded px-3 py-1.5 text-xs font-medium",
                   selected.status === "running"
-                    ? "border border-[#d3d8de] bg-white text-[#404854]"
-                    : "bg-[#2d72d2] text-white hover:bg-[#215db0] disabled:bg-[#c5cbd3]",
+                    ? "border border-line bg-surface text-ink-body"
+                    : "bg-brand text-white hover:bg-brand-deep disabled:bg-ink-ghost",
                 )}
               >
                 {selected.status === "running" ? (
@@ -391,7 +391,7 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
                 type="button"
                 disabled={busy}
                 onClick={() => void handleDelete()}
-                className="rounded border border-[#d3d8de] p-1.5 text-[#8f99a8] hover:border-rose-300 hover:text-rose-600"
+                className="rounded border border-line p-1.5 text-ink-faint hover:border-danger-line hover:text-danger"
                 aria-label="Delete stream"
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -399,12 +399,12 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
             </div>
 
             {/* Target */}
-            <div className="rounded-md border border-[#d3d8de] bg-white p-3">
+            <div className="rounded-md border border-line bg-surface p-3">
               <div className="mb-2 flex items-center gap-2">
-                <Webhook className="h-4 w-4 text-[#2d72d2]" />
-                <span className="text-[13px] font-semibold text-[#1c2127]">Target</span>
+                <Webhook className="h-4 w-4 text-brand" />
+                <span className="text-[13px] font-semibold text-ink">Target</span>
                 {selected.lastError ? (
-                  <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                  <span className="rounded bg-warn-soft px-1.5 py-0.5 text-[10px] font-medium text-warn-ink">
                     {selected.lastError}
                   </span>
                 ) : null}
@@ -422,8 +422,8 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
                       className={cn(
                         "rounded px-2 py-0.5 text-[11px]",
                         draft.targetMode === m
-                          ? "bg-[#e7f2fd] font-medium text-[#215db0]"
-                          : "border border-[#d3d8de] text-[#8f99a8]",
+                          ? "bg-brand-soft font-medium text-brand-deep"
+                          : "border border-line text-ink-faint",
                       )}
                     >
                       {label}
@@ -456,10 +456,10 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
             </div>
 
             {/* Object source */}
-            <div className="rounded-md border border-[#d3d8de] bg-white p-3">
+            <div className="rounded-md border border-line bg-surface p-3">
               <div className="mb-2 flex items-center gap-2">
-                <FileCode className="h-4 w-4 text-[#6b3fa0]" />
-                <span className="text-[13px] font-semibold text-[#1c2127]">Object source</span>
+                <FileCode className="h-4 w-4 text-scenario" />
+                <span className="text-[13px] font-semibold text-ink">Object source</span>
                 <span className="ml-auto flex gap-1">
                   {(
                     [
@@ -474,8 +474,8 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
                       className={cn(
                         "rounded px-2 py-0.5 text-[11px]",
                         draft.templateMode === m
-                          ? "bg-[#e7f2fd] font-medium text-[#215db0]"
-                          : "border border-[#d3d8de] text-[#8f99a8]",
+                          ? "bg-brand-soft font-medium text-brand-deep"
+                          : "border border-line text-ink-faint",
                       )}
                     >
                       {label}
@@ -503,7 +503,7 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
                         </option>
                       ))}
                     </select>
-                    <span className="text-[10.5px] text-[#8f99a8]">
+                    <span className="text-[10.5px] text-ink-faint">
                       variables: patient.mrn · lab.code/value/unit · site · now · seq …
                     </span>
                   </div>
@@ -516,7 +516,7 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
                     />
                     <div>
                       <span className={LABEL}>Preview (sample values)</span>
-                      <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded border border-[#d3d8de] bg-[#f6f7f9] p-2 font-mono text-[10.5px] text-[#5f6b7c]">
+                      <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded border border-line bg-canvas p-2 font-mono text-[10.5px] text-ink-muted">
                         {previewTemplate(draft.template, previewRow)}
                       </pre>
                     </div>
@@ -526,13 +526,13 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
                 <>
                   <div
                     onClick={() => fileRef.current?.click()}
-                    className="mb-2 flex cursor-pointer flex-col items-center gap-1 rounded-md border border-dashed border-[#c5cbd3] bg-[#f6f7f9] px-3 py-4 text-center hover:border-[#2d72d2]"
+                    className="mb-2 flex cursor-pointer flex-col items-center gap-1 rounded-md border border-dashed border-line-strong bg-canvas px-3 py-4 text-center hover:border-brand"
                   >
-                    <Upload className="h-4 w-4 text-[#8f99a8]" />
-                    <span className="text-xs font-medium text-[#1c2127]">
+                    <Upload className="h-4 w-4 text-ink-faint" />
+                    <span className="text-xs font-medium text-ink">
                       Import a dataset (CSV / TSV) — add as many as you need
                     </span>
-                    <span className="text-[10px] text-[#8f99a8]">
+                    <span className="text-[10px] text-ink-faint">
                       rows are sent in order as JSON objects · 2,000 rows max per stream
                     </span>
                     <input
@@ -552,10 +552,10 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
                       {draft.datasets.map((d, i) => (
                         <div
                           key={`${d.name}-${i}`}
-                          className="flex items-center gap-2 rounded border border-[#e5e8eb] px-2 py-1 text-[11px] text-[#404854]"
+                          className="flex items-center gap-2 rounded border border-line-soft px-2 py-1 text-[11px] text-ink-body"
                         >
                           <span className="truncate font-medium">{d.name}</span>
-                          <span className="text-[#8f99a8]">
+                          <span className="text-ink-faint">
                             {d.rows.length.toLocaleString()} rows
                           </span>
                           <button
@@ -563,14 +563,14 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
                             onClick={() =>
                               patchDraft({ datasets: draft.datasets.filter((_, j) => j !== i) })
                             }
-                            className="ml-auto text-[#8f99a8] hover:text-rose-600"
+                            className="ml-auto text-ink-faint hover:text-danger"
                             aria-label={`Remove ${d.name}`}
                           >
                             <X className="h-3 w-3" />
                           </button>
                         </div>
                       ))}
-                      <div className="flex items-center gap-3 text-[10.5px] text-[#8f99a8]">
+                      <div className="flex items-center gap-3 text-[10.5px] text-ink-faint">
                         <span>
                           {datasetRowCount.toLocaleString()} rows total · server position #
                           {selected.datasetIndex + 1}
@@ -581,8 +581,8 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
                           className={cn(
                             "rounded px-1.5 py-0.5 text-[10px]",
                             draft.datasetLoop
-                              ? "bg-[#e7f2fd] font-medium text-[#215db0]"
-                              : "border border-[#d3d8de]",
+                              ? "bg-brand-soft font-medium text-brand-deep"
+                              : "border border-line",
                           )}
                         >
                           {draft.datasetLoop ? "loop: on" : "loop: off"}
@@ -596,10 +596,10 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
 
             {/* Rate + realism */}
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-              <div className="rounded-md border border-[#d3d8de] bg-white p-3">
+              <div className="rounded-md border border-line bg-surface p-3">
                 <div className="mb-2 flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-[#2d72d2]" />
-                  <span className="text-[13px] font-semibold text-[#1c2127]">Rate and rhythm</span>
+                  <Activity className="h-4 w-4 text-brand" />
+                  <span className="text-[13px] font-semibold text-ink">Rate and rhythm</span>
                 </div>
                 <Knob
                   label="Objects/sec"
@@ -611,15 +611,15 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
                   onChange={(v) => patchDraft({ ratePerSec: v })}
                 />
                 <div className="mb-2 flex items-center gap-2 text-[11.5px]">
-                  <span className="w-28 text-[#5f6b7c]">Day/night curve</span>
+                  <span className="w-28 text-ink-muted">Day/night curve</span>
                   <button
                     type="button"
                     onClick={() => patchDraft({ diurnal: !draft.diurnal })}
                     className={cn(
                       "rounded px-2 py-0.5 text-[10.5px]",
                       draft.diurnal
-                        ? "bg-[#e7f2fd] font-medium text-[#215db0]"
-                        : "border border-[#d3d8de] text-[#8f99a8]",
+                        ? "bg-brand-soft font-medium text-brand-deep"
+                        : "border border-line text-ink-faint",
                     )}
                   >
                     {draft.diurnal ? "on · peak 10h–18h" : "off · flat"}
@@ -644,10 +644,10 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
                   onChange={(v) => patchDraft({ maxCount: v })}
                 />
               </div>
-              <div className="rounded-md border border-[#d3d8de] bg-white p-3">
+              <div className="rounded-md border border-line bg-surface p-3">
                 <div className="mb-2 flex items-center gap-2">
-                  <Bolt className="h-4 w-4 text-amber-600" />
-                  <span className="text-[13px] font-semibold text-[#1c2127]">Realism</span>
+                  <Bolt className="h-4 w-4 text-warn-ink" />
+                  <span className="text-[13px] font-semibold text-ink">Realism</span>
                 </div>
                 <Knob
                   label="Abnormal values"
@@ -689,11 +689,11 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
             </div>
 
             {/* Send log */}
-            <div className="rounded-md border border-[#d3d8de] bg-white p-3">
+            <div className="rounded-md border border-line bg-surface p-3">
               <div className="mb-1 flex items-center gap-2">
-                <Terminal className="h-3.5 w-3.5 text-[#8f99a8]" />
-                <span className="text-xs font-semibold text-[#1c2127]">Send log</span>
-                <span className="ml-auto text-[10.5px] text-[#8f99a8]">
+                <Terminal className="h-3.5 w-3.5 text-ink-faint" />
+                <span className="text-xs font-semibold text-ink">Send log</span>
+                <span className="ml-auto text-[10.5px] text-ink-faint">
                   {selected.sentCount.toLocaleString()} sent · {selected.failedCount} failed
                   {selected.lastSentAt
                     ? ` · last ${new Date(selected.lastSentAt).toLocaleTimeString()}`
@@ -702,22 +702,22 @@ export default function FeedSimulatorTab({ env }: { env: string | null }) {
               </div>
               {sends.length > 0 ? (
                 sends.map((s) => (
-                  <p key={s.id} className="m-0 text-[10.5px] leading-relaxed text-[#5f6b7c]">
+                  <p key={s.id} className="m-0 text-[10.5px] leading-relaxed text-ink-muted">
                     {new Date(s.createdAt).toLocaleTimeString()} ·{" "}
                     {summarizePayload(s.payload)}
                     {s.statusCode !== null ? (
-                      <span className={s.statusCode < 300 ? " text-emerald-600" : " text-rose-600"}>
+                      <span className={s.statusCode < 300 ? " text-ok-ink" : " text-danger"}>
                         {" "}
                         · {s.statusCode}
                       </span>
                     ) : (
-                      <span className="text-rose-600"> · network error</span>
+                      <span className="text-danger"> · network error</span>
                     )}
-                    {s.note ? <span className="text-amber-600"> · {s.note}</span> : null}
+                    {s.note ? <span className="text-warn-ink"> · {s.note}</span> : null}
                   </p>
                 ))
               ) : (
-                <p className="m-0 text-[11px] text-[#8f99a8]">
+                <p className="m-0 text-[11px] text-ink-faint">
                   Nothing sent yet — set a target and press Start. The stream keeps running after
                   you close this page.
                 </p>
@@ -764,7 +764,7 @@ function Knob({
 }) {
   return (
     <div className="mb-2 flex items-center gap-2 text-[11.5px]">
-      <span className="w-28 shrink-0 text-[#5f6b7c]">{label}</span>
+      <span className="w-28 shrink-0 text-ink-muted">{label}</span>
       <input
         type="range"
         min={min}
@@ -774,7 +774,7 @@ function Knob({
         onChange={(e) => onChange(Number(e.target.value))}
         className="min-w-0 flex-1"
       />
-      <span className="w-16 shrink-0 text-right font-medium text-[#1c2127]">{display}</span>
+      <span className="w-16 shrink-0 text-right font-medium text-ink">{display}</span>
     </div>
   );
 }

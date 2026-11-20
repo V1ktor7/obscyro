@@ -127,7 +127,7 @@ export default function PolicyComposer({
 
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-canvas">
-      <div className="flex items-center justify-between border-b border-line bg-white px-6 py-3">
+      <div className="flex items-center justify-between border-b border-line bg-surface px-6 py-3">
         <div className="flex-1">
           <input
             value={name}
@@ -178,7 +178,7 @@ export default function PolicyComposer({
           return (
             <section
               key={i}
-              className="rounded-lg border border-line bg-white p-4"
+              className="rounded-lg border border-line bg-surface p-4"
               aria-label={`Rule ${i + 1}`}
             >
               <div className="mb-3 flex items-center gap-2">
@@ -368,7 +368,7 @@ export default function PolicyComposer({
           <button
             type="button"
             onClick={() => setRules((p) => [...p, blankRule(`r${p.length + 1}`)])}
-            className="rounded-md border border-line bg-white px-3 py-1.5 text-xs text-ink-body hover:border-ink-ghost"
+            className="rounded-md border border-line bg-surface px-3 py-1.5 text-xs text-ink-body hover:border-ink-ghost"
           >
             Add a rule
           </button>
@@ -388,7 +388,7 @@ export default function PolicyComposer({
                 }),
               ])
             }
-            className="rounded-md border border-line bg-white px-3 py-1.5 text-xs text-ink-body hover:border-ink-ghost"
+            className="rounded-md border border-line bg-surface px-3 py-1.5 text-xs text-ink-body hover:border-ink-ghost"
           >
             One demand rule per catchment ({snapshot.populations.length})
           </button>
@@ -452,7 +452,7 @@ function Select({
       aria-label={label}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="max-w-[16rem] rounded-md border border-line bg-white px-2 py-1 text-xs text-ink focus:border-brand focus:outline-none"
+      className="max-w-[16rem] rounded-md border border-line bg-surface px-2 py-1 text-xs text-ink focus:border-brand focus:outline-none"
     >
       {allowBlank ? <option value="">—</option> : null}
       {options.map((o) => (
@@ -485,7 +485,7 @@ function Num({
         aria-label={label}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-24 rounded-md border border-line bg-white px-2 py-1 text-right text-xs text-ink focus:border-brand focus:outline-none"
+        className="w-24 rounded-md border border-line bg-surface px-2 py-1 text-right text-xs text-ink focus:border-brand focus:outline-none"
       />
       {suffix ? <span className="text-[11px] text-ink-faint">{suffix}</span> : null}
     </span>

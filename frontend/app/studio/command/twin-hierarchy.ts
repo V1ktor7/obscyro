@@ -97,11 +97,11 @@ export interface OccTone {
   border: string;
 }
 
-const TONE_OK: OccTone = { bg: "#e8f4ec", text: "#1c6e42", bar: "#1d9e75", border: "#9fe1cb" };
-const TONE_WARN: OccTone = { bg: "#fdf0e6", text: "#935610", bar: "#d97706", border: "#f5c4b3" };
-const TONE_CRIT: OccTone = { bg: "#fceaef", text: "#a82255", bar: "#e11d48", border: "#f4c0d1" };
-const TONE_NONE: OccTone = { bg: "#eef2f6", text: "#5f6b7c", bar: "#c5cbd3", border: "#d3d8de" };
-const TONE_INFO: OccTone = { bg: "#e7f2fd", text: "#215db0", bar: "#2d72d2", border: "#b5d4f4" };
+const TONE_OK: OccTone = { bg: "#12301c", text: "#6fdc8c", bar: "#42be65", border: "#1f5b33" };
+const TONE_WARN: OccTone = { bg: "#33290a", text: "#fddc69", bar: "#f1c21b", border: "#684e00" };
+const TONE_CRIT: OccTone = { bg: "#3b1518", text: "#ff8389", bar: "#fa4d56", border: "#75252b" };
+const TONE_NONE: OccTone = { bg: "#2c2c2c", text: "#c6c6c6", bar: "#6f6f6f", border: "#393939" };
+const TONE_INFO: OccTone = { bg: "#16305f", text: "#78a9ff", bar: "#4589ff", border: "#2a4f8f" };
 
 /** Color a unit by occupancy: green <80, amber 80–95, red ≥95, neutral if none. */
 export function occTone(node: TwinUnitNode): OccTone {

@@ -16,6 +16,7 @@ Ailleurs dans le dépôt :
 | [../simulation-service/README.md](../simulation-service/README.md) | Le service de simulation : lancer, tester, modèles lourds |
 | [../nlp-service/README.md](../nlp-service/README.md) | Le service d'extraction clinique |
 | [../backend/DEPLOY.md](../backend/DEPLOY.md) | Le déploiement de l'API et ses variables d'environnement |
+| [../design/PALETTE.md](../design/PALETTE.md) | Le thème du Studio : les rôles de couleur, où ils se règlent, les rampes des cartes |
 | [../design/](../design/) | Notes et maquettes de conception |
 
 ## La règle

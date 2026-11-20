@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { createIngestSource, type IngestSource } from "@/lib/platform-api";
 
 const inputCls =
-  "w-full rounded-md border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10";
+  "w-full rounded-md border border-line bg-canvas-raised px-2.5 py-2 text-xs text-ink focus:border-line-strong focus:outline-none focus:ring-2 focus:ring-line";
 
 export default function AttachFluxModal({
   open,
@@ -57,18 +57,18 @@ export default function AttachFluxModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-      <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-4 shadow-lg">
-        <h2 className="mb-3 text-sm font-semibold text-gray-900">Attach flux source</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-md rounded-lg border border-line bg-surface p-4 shadow-lg">
+        <h2 className="mb-3 text-sm font-semibold text-ink">Attach flux source</h2>
 
         {created ? (
           <div className="space-y-3 text-xs">
-            <p className="text-gray-600">
+            <p className="text-ink-muted">
               Source <strong>{created.name}</strong> created ({created.type}).
             </p>
             {created.webhookUrl && (
               <div>
-                <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-gray-500">
+                <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-ink-muted">
                   Webhook URL
                 </label>
                 <div className="flex gap-1">
@@ -76,16 +76,16 @@ export default function AttachFluxModal({
                   <button
                     type="button"
                     onClick={() => void copyUrl(created.webhookUrl!)}
-                    className="shrink-0 rounded border border-gray-200 px-2 text-gray-600 hover:bg-gray-50"
+                    className="shrink-0 rounded border border-line px-2 text-ink-muted hover:bg-surface-hover"
                   >
                     {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                   </button>
                 </div>
               </div>
             )}
-            <p className="text-[10px] text-gray-400">
+            <p className="text-[10px] text-ink-faint">
               For HTTP polling workspace nodes, configure outbound polling in{" "}
-              <a href="/studio/workspace" className="text-indigo-600 hover:underline">
+              <a href="/studio/workspace" className="text-indigo-300 hover:underline">
                 Studio Obscyro
               </a>{" "}
               — polling is not a persisted ingest source.
@@ -96,14 +96,14 @@ export default function AttachFluxModal({
           </div>
         ) : (
           <>
-            <label className="mb-2 block text-xs font-medium text-gray-700">Name</label>
+            <label className="mb-2 block text-xs font-medium text-ink-body">Name</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Lab HL7 feed"
               className={`${inputCls} mb-3`}
             />
-            <label className="mb-2 block text-xs font-medium text-gray-700">Type</label>
+            <label className="mb-2 block text-xs font-medium text-ink-body">Type</label>
             <select
               value={type}
               onChange={(e) => setType(e.target.value as "webhook" | "rest")}
@@ -112,7 +112,7 @@ export default function AttachFluxModal({
               <option value="webhook">Webhook (inbound POST)</option>
               <option value="rest">REST push</option>
             </select>
-            {error && <p className="mb-2 text-xs text-rose-600">{error}</p>}
+            {error && <p className="mb-2 text-xs text-danger">{error}</p>}
             <div className="flex justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={handleClose}>
                 Cancel

@@ -59,7 +59,7 @@ export default function EventLibrary({
               <button
                 type="button"
                 onClick={() => onOpen(e)}
-                className="w-full rounded-lg border border-line bg-white p-3 text-left hover:border-brand focus:border-brand focus:outline-none"
+                className="w-full rounded-lg border border-line bg-surface p-3 text-left hover:border-brand focus:border-brand focus:outline-none"
               >
                 <span className="block truncate text-xs text-ink">{e.name}</span>
                 <span className="mt-0.5 block truncate text-[11px] text-ink-faint">
@@ -100,7 +100,7 @@ export default function EventLibrary({
 
 function EmptyState({ onCreate }: { onCreate: () => void }) {
   return (
-    <div className="rounded-lg border border-dashed border-line bg-white p-6">
+    <div className="rounded-lg border border-dashed border-line bg-surface p-6">
       <h3 className="text-xs font-medium text-ink">No events yet</h3>
       <p className="mt-1 max-w-xl text-[11px] leading-relaxed text-ink-faint">
         An event is a set of changes to your network, placed in time: a wing

@@ -14,6 +14,162 @@
   --card-bg: #ffffff;
   --code-bg: #0a0a0a;
   --code-fg: #ededed;
+
+  /*
+   * The Studio palette, light. Each value is three numbers so that Tailwind can
+   * add an opacity to it (see `studio()` in tailwind.config.ts). The Studio
+   * itself no longer draws with these: it runs under `.theme-g100` below. They
+   * stay for the product tour on the public site, which shows the Studio's
+   * components on a white page.
+   */
+  --s-ink: 28 33 39;
+  --s-ink-body: 64 72 84;
+  --s-ink-muted: 95 107 124;
+  --s-ink-faint: 143 153 168;
+  --s-ink-ghost: 197 203 211;
+  --s-inverse: 255 255 255;
+  --s-line: 211 216 222;
+  --s-line-soft: 229 232 235;
+  --s-line-faint: 238 241 244;
+  --s-line-strong: 156 163 175;
+  --s-canvas: 246 247 249;
+  --s-canvas-raised: 248 249 250;
+  --s-surface: 255 255 255;
+  --s-surface-hover: 246 247 249;
+  --s-brand: 45 114 210;
+  --s-brand-deep: 33 93 176;
+  --s-brand-soft: 231 242 253;
+  --s-brand-line: 181 212 244;
+  --s-brand-text: 45 114 210;
+  --s-brand-text-deep: 33 93 176;
+  --s-brand-edge: 45 114 210;
+  --s-ok: 29 158 117;
+  --s-ok-soft: 232 246 240;
+  --s-ok-line: 159 225 203;
+  --s-ok-ink: 28 110 66;
+  --s-warn: 217 130 43;
+  --s-warn-soft: 253 246 236;
+  --s-warn-line: 240 217 181;
+  --s-warn-ink: 147 86 16;
+  --s-danger: 194 48 48;
+  --s-danger-soft: 253 241 241;
+  --s-danger-line: 244 192 209;
+  --s-danger-ink: 168 34 85;
+  --s-scenario: 91 74 134;
+  --s-scenario-fill: 91 74 134;
+  --s-scenario-soft: 240 237 247;
+  --s-scenario-line: 217 210 230;
+  --s-teal: 15 107 104;
+  --s-teal-soft: 233 245 244;
+}
+
+/*
+ * The Studio theme: IBM Carbon Gray 100.
+ *
+ * A dark ground (Gray 100), panels one step lighter (Gray 90), one blue, and
+ * square corners. Colour is kept for what it means: red for a queue or a site
+ * over capacity, yellow for what needs a look, green for what was checked,
+ * purple for what is a model's output and not the network.
+ *
+ * It is set once, on the element that wraps every Studio page (SiteChrome), so
+ * a screen only ever names a role (`bg-surface`, `text-ink-muted`) and this
+ * block says what the role looks like. The public site does not carry the
+ * class and is not affected.
+ *
+ * Text sizes in the Studio are small, so the greys used for text are the ones
+ * that keep a 4.5:1 contrast on a panel: #a8a8a8 is the faintest text there is.
+ */
+.theme-g100 {
+  color-scheme: dark;
+
+  --s-ink: 244 244 244; /* Gray 10 */
+  --s-ink-body: 224 224 224; /* Gray 20 */
+  --s-ink-muted: 198 198 198; /* Gray 30 */
+  --s-ink-faint: 168 168 168; /* Gray 40 */
+  --s-ink-ghost: 111 111 111; /* Gray 60 */
+  --s-inverse: 22 22 22;
+  --s-line: 57 57 57; /* Gray 80 */
+  --s-line-soft: 51 51 51;
+  --s-line-faint: 44 44 44;
+  --s-line-strong: 82 82 82; /* Gray 70 */
+  --s-canvas: 22 22 22; /* Gray 100: the ground */
+  --s-canvas-raised: 48 48 48;
+  --s-surface: 38 38 38; /* Gray 90: panels */
+  --s-surface-hover: 51 51 51;
+  --s-brand: 15 98 254; /* Blue 60: a filled button */
+  --s-brand-deep: 3 83 233;
+  --s-brand-soft: 22 48 95;
+  --s-brand-line: 42 79 143;
+  --s-brand-text: 120 169 255; /* Blue 40: a link */
+  --s-brand-text-deep: 166 200 255; /* Blue 30: text on brand-soft */
+  --s-brand-edge: 69 137 255; /* Blue 50: an outline, a mark */
+  --s-ok: 66 190 101; /* Green 40 */
+  --s-ok-soft: 18 48 28;
+  --s-ok-line: 31 91 51;
+  --s-ok-ink: 111 220 140; /* Green 30 */
+  --s-warn: 241 194 27; /* Yellow 30 */
+  --s-warn-soft: 51 41 10;
+  --s-warn-line: 104 78 0; /* Yellow 70 */
+  --s-warn-ink: 253 220 105; /* Yellow 20 */
+  --s-danger: 250 77 86; /* Red 50 */
+  --s-danger-soft: 59 21 24;
+  --s-danger-line: 117 37 43;
+  --s-danger-ink: 255 179 184; /* Red 30 */
+  --s-scenario: 190 149 255; /* Purple 40 */
+  --s-scenario-fill: 138 63 252; /* Purple 60 */
+  --s-scenario-soft: 42 31 69;
+  --s-scenario-line: 90 63 160;
+  --s-teal: 61 219 217; /* Teal 30 */
+  --s-teal-soft: 11 50 51;
+
+  /* The shared components (Button, Card, the prose styles) read these. */
+  --bg-primary: #161616;
+  --bg-secondary: #262626;
+  --bg-tertiary: #393939;
+  --text-primary: #f4f4f4;
+  --text-secondary: #c6c6c6;
+  --border-subtle: #393939;
+  --accent: #0f62fe;
+  --accent-fg: #ffffff;
+  --card-bg: #262626;
+
+  --radius-sm: 0px;
+  --radius: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+
+  /* IBM Plex, the face the theme was drawn for. */
+  --font-sans: var(--font-display);
+  --font-mono: var(--font-plex-mono);
+  font-family: var(--font-sans), "Helvetica Neue", Arial, sans-serif;
+
+  background-color: rgb(var(--s-canvas));
+  color: rgb(var(--s-ink));
+}
+
+/* What shows behind the Studio when the page is pulled past its edge, and the
+   colour of native scrollbars and form controls. */
+html:has(.theme-g100) {
+  color-scheme: dark;
+  background-color: #161616;
+}
+html:has(.theme-g100) body {
+  background-color: #161616;
+}
+
+.theme-g100 ::selection {
+  background-color: #0f62fe;
+  color: #ffffff;
+}
+
+/* Carbon's focus ring: white, inside the control. A control that draws its own
+   (`focus:outline-none` with a border) keeps its own. */
+.theme-g100 :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: -2px;
 }
 
 /*

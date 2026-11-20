@@ -106,7 +106,7 @@ export default function CommandPalette({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/20 pt-[12vh]"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 pt-[12vh]"
       onClick={onClose}
       role="presentation"
     >
@@ -114,11 +114,11 @@ export default function CommandPalette({
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
-        className="w-[520px] overflow-hidden rounded-lg border border-[#d3d8de] bg-white shadow-lg"
+        className="w-[520px] overflow-hidden rounded-lg border border-line bg-surface shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2 border-b border-[#d3d8de] px-3 py-2.5">
-          <Search className="h-4 w-4 shrink-0 text-[#8f99a8]" />
+        <div className="flex items-center gap-2 border-b border-line px-3 py-2.5">
+          <Search className="h-4 w-4 shrink-0 text-ink-faint" />
           <input
             ref={inputRef}
             value={q}
@@ -138,16 +138,16 @@ export default function CommandPalette({
             }}
             placeholder="Search or run a command…"
             aria-label="Search or run a command"
-            className="flex-1 text-sm text-[#1c2127] placeholder:text-[#8f99a8] focus:outline-none"
+            className="flex-1 text-sm text-ink placeholder:text-ink-faint focus:outline-none"
           />
-          <kbd className="rounded border border-[#d3d8de] px-1.5 text-[10px] text-[#8f99a8]">
+          <kbd className="rounded border border-line px-1.5 text-[10px] text-ink-faint">
             esc
           </kbd>
         </div>
 
         <div className="max-h-[320px] overflow-y-auto py-1">
           {results.length === 0 ? (
-            <p className="px-3 py-6 text-center text-xs text-[#8f99a8]">
+            <p className="px-3 py-6 text-center text-xs text-ink-faint">
               Nothing matches “{q}”.
             </p>
           ) : (
@@ -156,7 +156,7 @@ export default function CommandPalette({
               return (
                 <div key={entry.id}>
                   {entry.group !== prevGroup ? (
-                    <p className="px-3 pb-1 pt-2 text-[9.5px] font-medium uppercase tracking-[0.06em] text-[#8f99a8]">
+                    <p className="px-3 pb-1 pt-2 text-[9.5px] font-medium uppercase tracking-[0.06em] text-ink-faint">
                       {entry.group}
                     </p>
                   ) : null}
@@ -166,7 +166,7 @@ export default function CommandPalette({
                     onClick={() => choose(entry)}
                     className={cn(
                       "block w-full px-3 py-1.5 text-left text-xs",
-                      i === cursor ? "bg-[#e7f2fd] text-[#215db0]" : "text-[#1c2127]",
+                      i === cursor ? "bg-brand-soft text-brand-deep" : "text-ink",
                     )}
                   >
                     {entry.label}

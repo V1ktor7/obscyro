@@ -47,7 +47,7 @@ import {
 import { AlertPill, AlertStrip } from "./AlertBanner";
 import { AlertFeedProvider } from "./AlertFeed";
 import CommandPalette from "./CommandPalette";
-import PlatformRail from "./PlatformRail";
+import PlatformRail, { SectionTabs } from "./PlatformRail";
 
 type StudioContextValue = {
   hasKey: boolean;
@@ -88,15 +88,15 @@ export function useStudio(): StudioContextValue {
 
 function HealthPill({ health }: { health: HealthStatus | "checking" }) {
   const map: Record<HealthStatus | "checking", { dot: string; label: string }> = {
-    checking: { dot: "bg-gray-300", label: "Checking API…" },
-    ok: { dot: "bg-emerald-500", label: "Live — connected to API" },
-    degraded: { dot: "bg-amber-500", label: "Degraded — database issue" },
-    offline: { dot: "bg-gray-400", label: "Offline — API unreachable" },
+    checking: { dot: "bg-ink-ghost", label: "Checking API…" },
+    ok: { dot: "bg-ok", label: "Live — connected to API" },
+    degraded: { dot: "bg-warn", label: "Degraded — database issue" },
+    offline: { dot: "bg-ink-ghost", label: "Offline — API unreachable" },
   };
   const { dot, label } = map[health];
   return (
-    <span className="hidden items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[10px] text-gray-500 sm:inline-flex">
-      <span className={cn("h-1.5 w-1.5 rounded-full", dot)} />
+    <span className="hidden items-center gap-1.5 whitespace-nowrap text-[12px] text-ink-muted lg:inline-flex">
+      <span className={cn("h-2 w-2 rounded-full", dot, health === "ok" && "shadow-[0_0_0_3px_rgb(var(--s-ok)/0.18)]")} />
       {label}
     </span>
   );
@@ -302,8 +302,8 @@ export default function StudioShell({ children }: { children: ReactNode }) {
 
   if (!ready) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white">
-        <div className="h-8 w-8 animate-pulse rounded-full bg-gray-200" />
+      <div className="flex min-h-screen items-center justify-center bg-canvas">
+        <div className="h-8 w-8 animate-pulse rounded-full bg-line" />
       </div>
     );
   }
@@ -316,45 +316,40 @@ export default function StudioShell({ children }: { children: ReactNode }) {
      */}
      <AlertFeedProvider env={selectedEnv} enabled={hasKey}>
       {/*
-        `--accent` is #111111 globally — the marketing site's black, and what
-        `Button variant="primary"` paints with. Inside the Studio the primary
-        action colour is brand blue; scoping the variable here turns every black
-        button in the product blue at once, without touching the public pages.
+        The colours, the type and the square corners all come from the theme
+        (`.theme-g100` in globals.css, set on the element that wraps the
+        Studio). The shell is the ground: panels sit one step lighter on it.
       */}
-      <div
-        className="flex h-screen flex-col bg-white text-ink"
-        style={
-          {
-            "--accent": "#2d72d2",
-            "--accent-fg": "#ffffff",
-          } as React.CSSProperties
-        }
-      >
-        <header className="flex h-11 shrink-0 items-center gap-3 border-b border-[#d3d8de] bg-[#f6f7f9] px-3">
-          <Link href="/studio/home" className="flex items-baseline gap-1.5">
-            <span className="text-sm font-medium lowercase tracking-tight">obscyro</span>
+      <div className="flex h-screen flex-col bg-canvas text-ink">
+        <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line bg-canvas px-4">
+          <Link href="/studio/home" className="flex items-baseline gap-1.5 whitespace-nowrap text-[16px] tracking-tight">
+            <span className="font-semibold text-ink">Obscyro</span>
+            <span className="font-light text-ink-faint">Studio</span>
           </Link>
 
           {identity?.organizationName ? (
-            <span className="hidden items-center gap-1.5 rounded border border-[#d3d8de] bg-white px-2 py-1 text-[11.5px] text-[#1c2127] sm:inline-flex">
-              <Building2 className="h-3.5 w-3.5 text-[#215db0]" />
-              {identity.organizationName}
-            </span>
+            <>
+              <span className="hidden h-6 w-px bg-line sm:block" aria-hidden="true" />
+              <span className="hidden items-center gap-2 whitespace-nowrap text-[13px] text-ink-muted sm:inline-flex">
+                <Building2 className="h-4 w-4" />
+                {identity.organizationName}
+              </span>
+            </>
           ) : null}
 
           <button
             type="button"
             onClick={() => setPaletteOpen(true)}
-            className="mx-auto hidden w-[280px] items-center gap-2 rounded border border-[#d3d8de] bg-white px-2.5 py-1 text-[11.5px] text-[#8f99a8] transition-colors hover:border-[#2d72d2] md:flex"
+            className="mx-auto hidden h-8 w-[320px] items-center gap-2.5 border-b border-line-strong bg-surface px-3 text-[13px] text-ink-faint transition-colors hover:bg-surface-hover md:flex"
           >
-            <Search className="h-3.5 w-3.5" />
+            <Search className="h-4 w-4" />
             Search or run a command
-            <kbd className="ml-auto rounded border border-[#d3d8de] px-1 text-[10px]">
+            <kbd className="ml-auto border border-line-strong px-1 font-mono text-[11px]">
               ⌘K
             </kbd>
           </button>
 
-          <div className="ml-auto flex items-center gap-2.5">
+          <div className="ml-auto flex items-center gap-3">
             <AlertPill env={selectedEnv} />
             <EnvBadge env={currentEnv} />
             {currentEnv ? (
@@ -378,7 +373,7 @@ export default function StudioShell({ children }: { children: ReactNode }) {
             <button
               type="button"
               onClick={signOut}
-              className="rounded px-2 py-1.5 text-[11.5px] text-[#5f6b7c] transition-colors hover:text-[#1c2127]"
+              className="h-8 whitespace-nowrap px-2 text-[12px] text-ink-muted transition-colors hover:bg-surface hover:text-ink"
             >
               Sign out
             </button>
@@ -388,13 +383,18 @@ export default function StudioShell({ children }: { children: ReactNode }) {
         <AlertStrip env={selectedEnv} />
 
         <div className="flex min-h-0 flex-1">
-          <Suspense fallback={<div className="w-14 shrink-0 border-r border-[#d3d8de] bg-[#f6f7f9]" />}>
+          <Suspense fallback={<div className="w-14 shrink-0 border-r border-line bg-canvas" />}>
             <PlatformRail capabilities={identity?.capabilities?.length ? identity.capabilities : null} />
           </Suspense>
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <Suspense fallback={<div className="h-11 shrink-0 border-b border-line bg-canvas" />}>
+              <SectionTabs />
+            </Suspense>
+            {children}
+          </div>
         </div>
 
-        <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-[#d3d8de] bg-[#f6f7f9] px-3 text-[10.5px] text-[#5f6b7c]">
+        <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-line bg-canvas px-4 text-[11px] text-ink-faint">
           <span>{identity?.email ?? "—"}</span>
           {identity?.roles?.length ? <span>· {identity.roles[0]}</span> : null}
           <span className="ml-auto">{selectedEnv ?? "no environment"}</span>
@@ -443,7 +443,7 @@ function EnvSwitcher({
         onChange={(e) => onSelect(e.target.value)}
         aria-label="Environment"
         title="Switch environment"
-        className="cursor-pointer appearance-none rounded border border-transparent bg-transparent py-0.5 pl-1 pr-5 text-[11.5px] font-medium text-ink hover:border-line hover:bg-white focus:border-brand focus:outline-none"
+        className="cursor-pointer appearance-none rounded border border-transparent bg-transparent py-0.5 pl-1 pr-5 text-[11.5px] font-medium text-ink hover:border-line hover:bg-surface-hover focus:border-brand focus:outline-none"
       >
         {environments.map((e) => (
           <option key={e.slug} value={e.slug}>
@@ -460,10 +460,10 @@ function EnvBadge({ env }: { env: EnvironmentSummary | undefined }) {
   if (!env) return null;
   const tone =
     env.type === "operations"
-      ? { bg: "bg-[#fdf0e6]", text: "text-[#935610]", border: "border-[#f5c4b3]", label: "PRODUCTION" }
+      ? { bg: "bg-warn-soft", text: "text-warn-ink", border: "border-warn-line", label: "PRODUCTION" }
       : env.type === "reference"
-        ? { bg: "bg-[#e7f2fd]", text: "text-[#215db0]", border: "border-[#b5d4f4]", label: "REFERENCE" }
-        : { bg: "bg-[#e8f4ec]", text: "text-[#1c6e42]", border: "border-[#9fe1cb]", label: "SANDBOX" };
+        ? { bg: "bg-brand-soft", text: "text-brand-deep", border: "border-brand-line", label: "REFERENCE" }
+        : { bg: "bg-ok-soft", text: "text-ok-ink", border: "border-ok-line", label: "SANDBOX" };
   return (
     <span
       className={cn(

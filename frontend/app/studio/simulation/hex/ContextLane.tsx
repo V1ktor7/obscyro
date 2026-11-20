@@ -97,7 +97,7 @@ export default function ContextLane({
             onClick={() => show(p.event.id === openId ? null : p.event.id)}
             title={`${p.event.title} · ${p.event.startsOn}${p.event.endsOn ? ` to ${p.event.endsOn}` : ""} · published, not part of the run`}
             className={cn(
-              "absolute min-w-[10px] overflow-hidden text-ellipsis whitespace-nowrap border border-brand-deep bg-white px-1.5 text-left text-[11px] font-semibold text-brand-deep hover:bg-brand-soft",
+              "absolute min-w-[10px] overflow-hidden text-ellipsis whitespace-nowrap border border-brand-deep bg-surface px-1.5 text-left text-[11px] font-semibold text-brand-deep hover:bg-brand-soft",
               p.startsBefore ? "rounded-r border-l-0" : p.endsAfter ? "rounded-l border-r-0" : "rounded",
               p.event.id === openId && "bg-brand-soft ring-2 ring-ink",
             )}
@@ -126,14 +126,14 @@ export default function ContextLane({
       {open ? (
         <>
           <span />
-          <div aria-label={`Event: ${open.title}`} className="flex flex-col gap-1 rounded border border-line-soft bg-white p-2 text-[11.5px] text-ink-body">
+          <div aria-label={`Event: ${open.title}`} className="flex flex-col gap-1 rounded border border-line-soft bg-surface p-2 text-[11.5px] text-ink-body">
             <div className="flex flex-wrap items-center gap-1.5">
               <span title={DOOR_LABEL[open.door].title} className="rounded bg-canvas px-1 py-px text-[9.5px] font-bold uppercase tracking-wide">
                 {DOOR_LABEL[open.door].label}
               </span>
               <EvidenceBadge evidence="published" />
               <WebChip url={open.sourceUrl} title={open.sourceTitle ?? undefined} />
-              <button type="button" onClick={() => show(null)} aria-label="Close" className="ml-auto rounded p-0.5 text-ink-muted hover:bg-canvas-raised">
+              <button type="button" onClick={() => show(null)} aria-label="Close" className="ml-auto rounded p-0.5 text-ink-muted hover:bg-surface-hover">
                 <X className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             </div>
@@ -165,15 +165,15 @@ export default function ContextLane({
               {confirming ? (
                 <>
                   <span className="text-ink-muted">Remove it from the calendar? The analyst will no longer see it.</span>
-                  <button type="button" disabled={removing} onClick={() => void remove(open.id)} className="rounded border border-danger-ink bg-white px-2 py-0.5 text-[11px] font-semibold text-danger-ink hover:bg-danger-soft disabled:opacity-60">
+                  <button type="button" disabled={removing} onClick={() => void remove(open.id)} className="rounded border border-danger-ink bg-surface px-2 py-0.5 text-[11px] font-semibold text-danger-ink hover:bg-danger-soft disabled:opacity-60">
                     Yes, remove
                   </button>
-                  <button type="button" disabled={removing} onClick={() => setConfirming(false)} className="rounded border border-line bg-white px-2 py-0.5 text-[11px] hover:bg-canvas disabled:opacity-60">
+                  <button type="button" disabled={removing} onClick={() => setConfirming(false)} className="rounded border border-line bg-surface px-2 py-0.5 text-[11px] hover:bg-surface-hover disabled:opacity-60">
                     Keep
                   </button>
                 </>
               ) : (
-                <button type="button" onClick={() => setConfirming(true)} className="rounded border border-line bg-white px-2 py-0.5 text-[11px] hover:bg-canvas">
+                <button type="button" onClick={() => setConfirming(true)} className="rounded border border-line bg-surface px-2 py-0.5 text-[11px] hover:bg-surface-hover">
                   Remove from the calendar
                 </button>
               )}

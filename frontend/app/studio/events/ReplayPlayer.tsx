@@ -126,7 +126,7 @@ export default function ReplayPlayer({
             setPolicy(e.target.value);
             setPlaying(false);
           }}
-          className="rounded-md border border-line bg-white px-2 py-1 text-xs text-ink focus:border-brand focus:outline-none"
+          className="rounded-md border border-line bg-surface px-2 py-1 text-xs text-ink focus:border-brand focus:outline-none"
         >
           {options.map((o) => (
             <option key={o.id} value={o.id}>
@@ -148,7 +148,7 @@ export default function ReplayPlayer({
           aria-label="Speed"
           value={speed}
           onChange={(e) => setSpeed(Number(e.target.value))}
-          className="rounded-md border border-line bg-white px-2 py-1 text-xs text-ink focus:border-brand focus:outline-none"
+          className="rounded-md border border-line bg-surface px-2 py-1 text-xs text-ink focus:border-brand focus:outline-none"
         >
           {[2, 6, 15, 30].map((s) => (
             <option key={s} value={s}>
@@ -238,7 +238,7 @@ export default function ReplayPlayer({
           y1={0}
           x2={(step / Math.max(1, frames.length - 1)) * W}
           y2={70}
-          stroke="#8f99a8"
+          stroke="#a8a8a8"
           strokeWidth={1}
         />
       </svg>
@@ -251,21 +251,21 @@ export default function ReplayPlayer({
         <button
           type="button"
           onClick={() => void grab(mapRef, "png", `step-${frame?.step ?? 0}`)}
-          className="rounded-md border border-line bg-white px-2.5 py-1 text-[11px] text-ink-body hover:border-ink-ghost"
+          className="rounded-md border border-line bg-surface px-2.5 py-1 text-[11px] text-ink-body hover:border-ink-ghost"
         >
           Map, this step (PNG)
         </button>
         <button
           type="button"
           onClick={() => void grab(mapRef, "svg", `step-${frame?.step ?? 0}`)}
-          className="rounded-md border border-line bg-white px-2.5 py-1 text-[11px] text-ink-body hover:border-ink-ghost"
+          className="rounded-md border border-line bg-surface px-2.5 py-1 text-[11px] text-ink-body hover:border-ink-ghost"
         >
           SVG
         </button>
         <button
           type="button"
           onClick={() => void grab(curveRef, "png", "queue")}
-          className="rounded-md border border-line bg-white px-2.5 py-1 text-[11px] text-ink-body hover:border-ink-ghost"
+          className="rounded-md border border-line bg-surface px-2.5 py-1 text-[11px] text-ink-body hover:border-ink-ghost"
         >
           Queue curve (PNG)
         </button>
@@ -281,7 +281,7 @@ export default function ReplayPlayer({
               "text/csv",
             )
           }
-          className="rounded-md border border-line bg-white px-2.5 py-1 text-[11px] text-ink-body hover:border-ink-ghost"
+          className="rounded-md border border-line bg-surface px-2.5 py-1 text-[11px] text-ink-body hover:border-ink-ghost"
         >
           Queue as CSV
         </button>
@@ -306,7 +306,7 @@ export default function ReplayPlayer({
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-md border border-line bg-white px-3 py-2">
+    <div className="rounded-md border border-line bg-surface px-3 py-2">
       <div className="text-lg tabular-nums text-ink">{value.toLocaleString("en-CA")}</div>
       <div className="text-[11px] text-ink-faint">{label}</div>
     </div>

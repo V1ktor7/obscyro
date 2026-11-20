@@ -254,7 +254,7 @@ export default function DashboardsView() {
   return (
     <div className="flex h-full min-h-0">
       {/* Boards rail */}
-      <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-white">
+      <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-surface">
         <div className="flex items-center justify-between border-b border-line-soft px-3 py-2.5">
           <span className="text-xs font-medium uppercase tracking-wide text-ink-faint">
             Dashboards
@@ -263,7 +263,7 @@ export default function DashboardsView() {
             type="button"
             onClick={() => setNewName("")}
             disabled={busy || !env}
-            className="rounded p-1 text-ink-muted hover:bg-canvas hover:text-ink disabled:opacity-40"
+            className="rounded p-1 text-ink-muted hover:bg-surface-hover hover:text-ink disabled:opacity-40"
             title="New dashboard"
           >
             <Plus className="h-4 w-4" />
@@ -296,7 +296,7 @@ export default function DashboardsView() {
               <button
                 type="button"
                 onClick={() => setNewName(null)}
-                className="rounded border border-line px-2 py-1 text-[11px] text-ink-muted hover:bg-canvas"
+                className="rounded border border-line px-2 py-1 text-[11px] text-ink-muted hover:bg-surface-hover"
               >
                 Cancel
               </button>
@@ -321,7 +321,7 @@ export default function DashboardsView() {
               }}
               className={cn(
                 "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm",
-                b.id === openId ? "bg-brand-soft text-brand-deep" : "text-ink-body hover:bg-canvas",
+                b.id === openId ? "bg-brand-soft text-brand-deep" : "text-ink-body hover:bg-surface-hover",
               )}
             >
               <span className="truncate">{b.name}</span>
@@ -333,7 +333,7 @@ export default function DashboardsView() {
 
       {/* Board */}
       <div className="flex min-w-0 flex-1 flex-col bg-canvas">
-        <header className="flex items-center justify-between gap-4 border-b border-line bg-white px-5 py-3">
+        <header className="flex items-center justify-between gap-4 border-b border-line bg-surface px-5 py-3">
           <div className="min-w-0">
             <h1 className="truncate text-base font-semibold text-ink">
               {open?.name ?? "Dashboards"}
@@ -390,7 +390,7 @@ export default function DashboardsView() {
           )}
 
           {!loading && open && cards.length === 0 && (
-            <div className="mx-auto max-w-md rounded-md border border-dashed border-line bg-white px-6 py-10 text-center">
+            <div className="mx-auto max-w-md rounded-md border border-dashed border-line bg-surface px-6 py-10 text-center">
               <LayoutGrid className="mx-auto mb-3 h-6 w-6 text-ink-ghost" />
               <p className="text-sm text-ink-body">This dashboard is empty.</p>
               <p className="mt-1 text-xs text-ink-faint">
@@ -573,9 +573,9 @@ function CardPicker({
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-ink/20" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex justify-end bg-black/60" onClick={onClose}>
       <div
-        className="flex h-full w-[640px] max-w-full flex-col bg-white shadow-xl"
+        className="flex h-full w-[640px] max-w-full flex-col bg-surface shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="border-b border-line px-5 py-3">
@@ -595,7 +595,7 @@ function CardPicker({
                 "rounded px-2.5 py-1 text-xs",
                 family === f.key
                   ? "bg-brand-soft font-medium text-brand-deep"
-                  : "text-ink-muted hover:bg-canvas",
+                  : "text-ink-muted hover:bg-surface-hover",
               )}
             >
               {f.label}
@@ -631,7 +631,7 @@ function CardPicker({
                       "flex w-full items-center justify-between gap-3 rounded border px-3 py-2 text-left",
                       d.datasetId === dsId
                         ? "border-brand bg-brand-soft"
-                        : "border-line hover:bg-canvas",
+                        : "border-line hover:bg-surface-hover",
                     )}
                   >
                     <span className="min-w-0">
@@ -689,7 +689,7 @@ function CardPicker({
                             "flex items-start gap-2 rounded border px-3 py-2 text-left",
                             kind === o.kind
                               ? "border-brand bg-brand-soft"
-                              : "border-line hover:bg-canvas",
+                              : "border-line hover:bg-surface-hover",
                           )}
                         >
                           <Icon className="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" />
@@ -828,7 +828,7 @@ function CardPicker({
           <button
             type="button"
             onClick={onClose}
-            className="rounded border border-line px-3 py-1.5 text-xs text-ink-muted hover:bg-canvas"
+            className="rounded border border-line px-3 py-1.5 text-xs text-ink-muted hover:bg-surface-hover"
           >
             Cancel
           </button>
@@ -933,7 +933,7 @@ function TwinPanel({
               }}
               className={cn(
                 "rounded border px-3 py-2 text-left",
-                state === key ? "border-brand bg-brand-soft" : "border-line hover:bg-canvas",
+                state === key ? "border-brand bg-brand-soft" : "border-line hover:bg-surface-hover",
               )}
             >
               <span className="block text-sm text-ink">{label}</span>

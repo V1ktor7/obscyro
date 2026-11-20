@@ -74,12 +74,12 @@ function tabFrom(value: string | null): Tab | null {
 }
 
 const FIELD =
-  "rounded border border-[#d3d8de] bg-[#f6f7f9] px-2 py-1 text-xs text-[#1c2127] focus:border-[#2d72d2] focus:outline-none";
-const LABEL = "mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-[#8f99a8]";
+  "rounded border border-line bg-canvas px-2 py-1 text-xs text-ink focus:border-brand focus:outline-none";
+const LABEL = "mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-ink-faint";
 const BTN_PRIMARY =
-  "flex items-center gap-1 rounded bg-[#2d72d2] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[#215db0] disabled:bg-[#c5cbd3]";
+  "flex items-center gap-1 rounded bg-brand px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-deep disabled:bg-ink-ghost";
 const BTN_SECONDARY =
-  "flex items-center gap-1 rounded border border-[#d3d8de] bg-white px-2.5 py-1.5 text-xs text-[#404854] hover:border-[#2d72d2]";
+  "flex items-center gap-1 rounded border border-line bg-surface px-2.5 py-1.5 text-xs text-ink-body hover:border-brand";
 
 export default function LabView() {
   const { hasKey, selectedEnv } = useStudio();
@@ -202,8 +202,8 @@ export default function LabView() {
 
   if (!hasKey) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-white">
-        <p className="max-w-sm text-center text-sm text-gray-500">
+      <div className="flex flex-1 items-center justify-center bg-surface">
+        <p className="max-w-sm text-center text-sm text-ink-muted">
           Sign in and create an API key to use the simulation lab.
         </p>
       </div>
@@ -211,24 +211,24 @@ export default function LabView() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#f6f7f9]">
+    <div className="flex min-h-0 flex-1 flex-col bg-canvas">
       {/* Top bar */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-[#d3d8de] bg-white px-4 py-2">
-        <span className="flex h-6 w-6 items-center justify-center rounded bg-[#f2ebfb] text-[#6b3fa0]">
+      <div className="flex shrink-0 items-center gap-3 border-b border-line bg-surface px-4 py-2">
+        <span className="flex h-6 w-6 items-center justify-center rounded bg-scenario-soft text-scenario">
           <Brain className="h-3.5 w-3.5" />
         </span>
-        <span className="text-[13px] font-semibold text-[#1c2127]">Simulation studio</span>
-        <span className="hidden rounded border border-[#d3d8de] px-2 py-0.5 text-[11px] text-[#404854] sm:inline">
+        <span className="text-[13px] font-semibold text-ink">Simulation studio</span>
+        <span className="hidden rounded border border-line px-2 py-0.5 text-[11px] text-ink-body sm:inline">
           {env ?? "no environment"}
         </span>
         <span className="flex-1" />
-        <span className="text-[10.5px] text-[#8f99a8]">
+        <span className="text-[10.5px] text-ink-faint">
           causality engine · watching {contextSignals.length} signals
         </span>
       </div>
 
       {/* Context bar: entity + fluxes */}
-      <div className="flex shrink-0 flex-wrap items-end gap-3 border-b border-[#d3d8de] bg-white px-4 py-2">
+      <div className="flex shrink-0 flex-wrap items-end gap-3 border-b border-line bg-surface px-4 py-2">
         <label className="block">
           <span className={LABEL}>Entity</span>
           <select
@@ -244,14 +244,14 @@ export default function LabView() {
             ))}
           </select>
         </label>
-        <ArrowRight className="mb-1.5 h-3.5 w-3.5 text-[#8f99a8]" />
+        <ArrowRight className="mb-1.5 h-3.5 w-3.5 text-ink-faint" />
         <div className="min-w-0">
           <span className={LABEL}>
             Data fluxes · {fluxes.size} selected
           </span>
           <div className="flex flex-wrap gap-1.5">
             {channels.length === 0 ? (
-              <span className="text-[11px] text-[#8f99a8]">
+              <span className="text-[11px] text-ink-faint">
                 no data channels yet — create them in Ontology Parser
               </span>
             ) : (
@@ -272,8 +272,8 @@ export default function LabView() {
                     className={cn(
                       "flex items-center gap-1 rounded px-2 py-0.5 text-[11px]",
                       on
-                        ? "bg-[#e7f2fd] font-medium text-[#215db0]"
-                        : "border border-dashed border-[#c5cbd3] text-[#8f99a8] hover:text-[#404854]",
+                        ? "bg-brand-soft font-medium text-brand-deep"
+                        : "border border-dashed border-line-strong text-ink-faint hover:text-ink-body",
                     )}
                   >
                     {on ? <Check className="h-2.5 w-2.5" /> : <Plus className="h-2.5 w-2.5" />}
@@ -287,7 +287,7 @@ export default function LabView() {
       </div>
 
       {/* Tabs */}
-      <div className="flex shrink-0 gap-1 border-b border-[#d3d8de] bg-white px-4 py-1.5">
+      <div className="flex shrink-0 gap-1 border-b border-line bg-surface px-4 py-1.5">
         {(
           [
             // Two groups, in order. The first three fit a model to a table:
@@ -313,8 +313,8 @@ export default function LabView() {
             className={cn(
               "flex items-center gap-1.5 rounded px-3 py-1 text-xs",
               tab === key
-                ? "bg-[#e7f2fd] font-medium text-[#215db0]"
-                : "text-[#5f6b7c] hover:bg-[#f6f7f9]",
+                ? "bg-brand-soft font-medium text-brand-deep"
+                : "text-ink-muted hover:bg-surface-hover",
             )}
           >
             <Icon className="h-3.5 w-3.5" />
@@ -324,7 +324,7 @@ export default function LabView() {
       </div>
 
       {error ? (
-        <div className="flex items-center gap-2 border-b border-rose-200 bg-rose-50 px-4 py-1.5 text-[11px] text-rose-700">
+        <div className="flex items-center gap-2 border-b border-danger-line bg-danger-soft px-4 py-1.5 text-[11px] text-danger-ink">
           <span className="min-w-0 flex-1 truncate">{error}</span>
           <button type="button" onClick={() => setError(null)} aria-label="Dismiss error">
             <X className="h-3 w-3" />
@@ -414,7 +414,7 @@ function CausalityTab({
           {scanning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
           Scan for influences
         </button>
-        <span className="pb-1.5 text-[11px] text-[#8f99a8]">
+        <span className="pb-1.5 text-[11px] text-ink-faint">
           {scanInfo ??
             (edges.length > 0
               ? `${edges.length} saved influences · last scan ${new Date(edges[0].computedAt).toLocaleString()}`
@@ -424,44 +424,44 @@ function CausalityTab({
 
       {edges.length > 0 ? <InfluenceGraph edges={edges.slice(0, 12)} labelOf={labelOf} /> : null}
 
-      <div className="overflow-hidden rounded-md border border-[#d3d8de] bg-white">
+      <div className="overflow-hidden rounded-md border border-line bg-surface">
         <table className="w-full border-collapse text-left text-xs">
           <thead>
-            <tr className="text-[10px] uppercase tracking-wide text-[#8f99a8]">
-              <th className="border-b border-[#d3d8de] px-3 py-2 font-medium">Influence</th>
-              <th className="border-b border-[#d3d8de] px-3 py-2 font-medium">Lag</th>
-              <th className="border-b border-[#d3d8de] px-3 py-2 font-medium">Strength</th>
-              <th className="border-b border-[#d3d8de] px-3 py-2 font-medium">Confidence</th>
-              <th className="border-b border-[#d3d8de] px-3 py-2 font-medium">Samples</th>
+            <tr className="text-[10px] uppercase tracking-wide text-ink-faint">
+              <th className="border-b border-line px-3 py-2 font-medium">Influence</th>
+              <th className="border-b border-line px-3 py-2 font-medium">Lag</th>
+              <th className="border-b border-line px-3 py-2 font-medium">Strength</th>
+              <th className="border-b border-line px-3 py-2 font-medium">Confidence</th>
+              <th className="border-b border-line px-3 py-2 font-medium">Samples</th>
             </tr>
           </thead>
           <tbody>
             {edges.map((e) => (
-              <tr key={`${e.fromSignal}->${e.toSignal}`} className="text-[#404854]">
-                <td className="border-b border-[#e5e8eb] px-3 py-1.5 font-medium text-[#1c2127]">
-                  {labelOf(e.fromSignal)} <ArrowRight className="inline h-3 w-3 text-[#8f99a8]" />{" "}
+              <tr key={`${e.fromSignal}->${e.toSignal}`} className="text-ink-body">
+                <td className="border-b border-line-soft px-3 py-1.5 font-medium text-ink">
+                  {labelOf(e.fromSignal)} <ArrowRight className="inline h-3 w-3 text-ink-faint" />{" "}
                   {labelOf(e.toSignal)}
                 </td>
-                <td className="border-b border-[#e5e8eb] px-3 py-1.5">+{e.lagHours} h</td>
+                <td className="border-b border-line-soft px-3 py-1.5">+{e.lagHours} h</td>
                 <td
                   className={cn(
-                    "border-b border-[#e5e8eb] px-3 py-1.5 font-medium",
-                    e.strength >= 0.7 ? "text-rose-600" : "text-[#404854]",
+                    "border-b border-line-soft px-3 py-1.5 font-medium",
+                    e.strength >= 0.7 ? "text-danger" : "text-ink-body",
                   )}
                 >
                   {e.strength.toFixed(2)}
                 </td>
-                <td className="border-b border-[#e5e8eb] px-3 py-1.5">
+                <td className="border-b border-line-soft px-3 py-1.5">
                   {Math.round(e.confidence * 100)}%
                 </td>
-                <td className="border-b border-[#e5e8eb] px-3 py-1.5 text-[#8f99a8]">
+                <td className="border-b border-line-soft px-3 py-1.5 text-ink-faint">
                   {e.sampleCount}
                 </td>
               </tr>
             ))}
             {edges.length === 0 ? (
               <tr>
-                <td className="px-3 py-2 text-[#8f99a8]" colSpan={5}>
+                <td className="px-3 py-2 text-ink-faint" colSpan={5}>
                   Influences discovered by the scan are saved here automatically. They require
                   signals with real variation — feed data through your channels first.
                 </td>
@@ -502,7 +502,7 @@ function InfluenceGraph({
   }, [nodes]);
 
   return (
-    <div className="rounded-md border border-[#d3d8de] bg-white p-3">
+    <div className="rounded-md border border-line bg-surface p-3">
       <svg viewBox="0 0 640 180" className="w-full" role="img" aria-label="Influence graph">
         <defs>
           <marker
@@ -514,7 +514,7 @@ function InfluenceGraph({
             markerHeight="5"
             orient="auto-start-reverse"
           >
-            <path d="M0,0 L10,5 L0,10 z" fill="#8f99a8" />
+            <path d="M0,0 L10,5 L0,10 z" fill="#a8a8a8" />
           </marker>
         </defs>
         {edges.map((e, i) => {
@@ -528,7 +528,7 @@ function InfluenceGraph({
               y1={a.y}
               x2={b.x}
               y2={b.y}
-              stroke={e.strength >= 0.7 ? "#d33d3d" : "#2d72d2"}
+              stroke={e.strength >= 0.7 ? "#fa4d56" : "#4589ff"}
               strokeWidth={0.5 + e.strength * 2.5}
               strokeOpacity={0.55}
               markerEnd="url(#lab-arrow)"
@@ -547,8 +547,8 @@ function InfluenceGraph({
                 width={w}
                 height={22}
                 rx={5}
-                fill="#e7f2fd"
-                stroke="#215db0"
+                fill="#16305f"
+                stroke="#78a9ff"
                 strokeWidth="0.75"
               />
               <text
@@ -556,7 +556,7 @@ function InfluenceGraph({
                 y={p.y + 3.5}
                 textAnchor="middle"
                 fontSize="9.5"
-                fill="#215db0"
+                fill="#78a9ff"
               >
                 {label.length > 30 ? `${label.slice(0, 29)}…` : label}
               </text>
@@ -564,7 +564,7 @@ function InfluenceGraph({
           );
         })}
       </svg>
-      <p className="mt-1 text-[10px] text-[#8f99a8]">
+      <p className="mt-1 text-[10px] text-ink-faint">
         edge width = influence strength · red = strong (≥ 0.7) · direction follows time
         precedence
       </p>
@@ -733,7 +733,7 @@ function TrainTab({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="rounded-md border border-[#d3d8de] bg-white p-3">
+      <div className="rounded-md border border-line bg-surface p-3">
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
           <label className="block sm:col-span-2">
             <span className={LABEL}>Model name</span>
@@ -789,8 +789,8 @@ function TrainTab({
               className={cn(
                 "rounded px-2 py-0.5 text-[11px]",
                 mode === m
-                  ? "bg-[#e7f2fd] font-medium text-[#215db0]"
-                  : "border border-[#d3d8de] text-[#8f99a8] hover:text-[#404854]",
+                  ? "bg-brand-soft font-medium text-brand-deep"
+                  : "border border-line text-ink-faint hover:text-ink-body",
               )}
             >
               {label}
@@ -824,7 +824,7 @@ function TrainTab({
         </p>
         <div className="flex flex-wrap gap-1.5">
           {recommended.length === 0 ? (
-            <span className="text-[11px] text-[#8f99a8]">
+            <span className="text-[11px] text-ink-faint">
               no causality edges point at this target yet — run a scan, or add features
               manually below
             </span>
@@ -839,8 +839,8 @@ function TrainTab({
                   className={cn(
                     "flex items-center gap-1 rounded px-2 py-0.5 text-[11px]",
                     on
-                      ? "bg-emerald-50 font-medium text-emerald-700"
-                      : "border border-[#d3d8de] text-[#8f99a8] hover:text-[#404854]",
+                      ? "bg-ok-soft font-medium text-ok-ink"
+                      : "border border-line text-ink-faint hover:text-ink-body",
                   )}
                 >
                   {on ? <Check className="h-2.5 w-2.5" /> : <Plus className="h-2.5 w-2.5" />}
@@ -865,7 +865,7 @@ function TrainTab({
               </option>
             ))}
           </select>
-          <label className="flex items-center gap-1 text-[11px] text-[#8f99a8]">
+          <label className="flex items-center gap-1 text-[11px] text-ink-faint">
             lag
             <input
               type="number"
@@ -895,7 +895,7 @@ function TrainTab({
               {Array.from(selected, ([signal, lag]) => (
                 <span
                   key={signal}
-                  className="flex items-center gap-1 rounded bg-[#e7f2fd] px-2 py-0.5 text-[11px] font-medium text-[#215db0]"
+                  className="flex items-center gap-1 rounded bg-brand-soft px-2 py-0.5 text-[11px] font-medium text-brand-deep"
                 >
                   {labelOf(signal)} · lag {lag}h
                   <button
@@ -930,14 +930,14 @@ function TrainTab({
           className={cn(
             "flex cursor-pointer flex-col items-center gap-1 rounded-md border border-dashed px-4 py-6 text-center transition-colors",
             dragOver
-              ? "border-[#2d72d2] bg-[#e7f2fd]"
-              : "border-[#c5cbd3] bg-[#f6f7f9] hover:border-[#8f99a8]",
+              ? "border-brand bg-brand-soft"
+              : "border-line-strong bg-canvas hover:border-line-strong",
           )}
         >
-          <span className="text-xs font-medium text-[#1c2127]">
+          <span className="text-xs font-medium text-ink">
             {csvName || "Drop a CSV here, or click to browse"}
           </span>
-          <span className="text-[10px] text-[#8f99a8]">
+          <span className="text-[10px] text-ink-faint">
             header row = column names · rows ordered oldest → newest · numeric columns become
             signals
           </span>
@@ -978,7 +978,7 @@ function TrainTab({
                   ))}
                 </select>
               </label>
-              <span className="pb-1 text-[11px] text-[#8f99a8]">
+              <span className="pb-1 text-[11px] text-ink-faint">
                 {csvCols[csvTarget]?.length.toLocaleString() ?? 0} rows ·{" "}
                 {Object.keys(csvCols).length} numeric columns
               </span>
@@ -1004,8 +1004,8 @@ function TrainTab({
                       className={cn(
                         "flex items-center gap-1 rounded px-2 py-0.5 text-[11px]",
                         on
-                          ? "bg-emerald-50 font-medium text-emerald-700"
-                          : "border border-[#d3d8de] text-[#8f99a8] hover:text-[#404854]",
+                          ? "bg-ok-soft font-medium text-ok-ink"
+                          : "border border-line text-ink-faint hover:text-ink-body",
                       )}
                     >
                       {on ? <Check className="h-2.5 w-2.5" /> : <Plus className="h-2.5 w-2.5" />}
@@ -1020,7 +1020,7 @@ function TrainTab({
         )}
 
         <div className="mt-3 flex items-center gap-2">
-          <span className="text-[10.5px] text-[#8f99a8]">
+          <span className="text-[10.5px] text-ink-faint">
             one-step ridge ARX · backtested on the most recent 20% of the window
           </span>
           <span className="ml-auto" />
@@ -1036,7 +1036,7 @@ function TrainTab({
         </div>
 
         {lastTrained ? (
-          <div className="mt-3 flex flex-wrap gap-2 border-t border-[#e5e8eb] pt-2">
+          <div className="mt-3 flex flex-wrap gap-2 border-t border-line-soft pt-2">
             <MetricPill label="Model" value={`${lastTrained.name} ${lastTrained.version}`} />
             <MetricPill label="Backtest MAE" value={lastTrained.metrics.mae.toFixed(3)} />
             <MetricPill
@@ -1055,53 +1055,53 @@ function TrainTab({
       </div>
 
       {/* Saved models */}
-      <div className="overflow-hidden rounded-md border border-[#d3d8de] bg-white">
-        <div className="flex items-center gap-2 border-b border-[#d3d8de] px-3 py-2">
-          <span className="text-xs font-semibold text-[#1c2127]">Saved models</span>
-          <span className="rounded bg-[#eef1f4] px-1.5 text-[10px] text-[#5f6b7c]">
+      <div className="overflow-hidden rounded-md border border-line bg-surface">
+        <div className="flex items-center gap-2 border-b border-line px-3 py-2">
+          <span className="text-xs font-semibold text-ink">Saved models</span>
+          <span className="rounded bg-canvas-raised px-1.5 text-[10px] text-ink-muted">
             {models.length}
           </span>
         </div>
         <table className="w-full border-collapse text-left text-xs">
           <thead>
-            <tr className="text-[10px] uppercase tracking-wide text-[#8f99a8]">
-              <th className="border-b border-[#d3d8de] px-3 py-1.5 font-medium">Name</th>
-              <th className="border-b border-[#d3d8de] px-3 py-1.5 font-medium">Target</th>
-              <th className="border-b border-[#d3d8de] px-3 py-1.5 font-medium">Features</th>
-              <th className="border-b border-[#d3d8de] px-3 py-1.5 font-medium">MAE</th>
-              <th className="border-b border-[#d3d8de] px-3 py-1.5 font-medium">vs baseline</th>
-              <th className="border-b border-[#d3d8de] px-3 py-1.5 font-medium"></th>
+            <tr className="text-[10px] uppercase tracking-wide text-ink-faint">
+              <th className="border-b border-line px-3 py-1.5 font-medium">Name</th>
+              <th className="border-b border-line px-3 py-1.5 font-medium">Target</th>
+              <th className="border-b border-line px-3 py-1.5 font-medium">Features</th>
+              <th className="border-b border-line px-3 py-1.5 font-medium">MAE</th>
+              <th className="border-b border-line px-3 py-1.5 font-medium">vs baseline</th>
+              <th className="border-b border-line px-3 py-1.5 font-medium"></th>
             </tr>
           </thead>
           <tbody>
             {models.map((m) => (
-              <tr key={m.id} className="text-[#404854]">
-                <td className="border-b border-[#e5e8eb] px-3 py-1.5 font-medium text-[#1c2127]">
+              <tr key={m.id} className="text-ink-body">
+                <td className="border-b border-line-soft px-3 py-1.5 font-medium text-ink">
                   {m.name}{" "}
-                  <span className="font-normal text-[#8f99a8]">
+                  <span className="font-normal text-ink-faint">
                     {m.version}
                     {m.isActive ? " · active" : ""}
                   </span>
                 </td>
-                <td className="border-b border-[#e5e8eb] px-3 py-1.5">
+                <td className="border-b border-line-soft px-3 py-1.5">
                   {labelOf(m.targetSignal)}
                 </td>
-                <td className="border-b border-[#e5e8eb] px-3 py-1.5 text-[#8f99a8]">
+                <td className="border-b border-line-soft px-3 py-1.5 text-ink-faint">
                   {m.features.length}
                 </td>
-                <td className="border-b border-[#e5e8eb] px-3 py-1.5">
+                <td className="border-b border-line-soft px-3 py-1.5">
                   {m.metrics.mae.toFixed(3)}
                 </td>
                 <td
                   className={cn(
-                    "border-b border-[#e5e8eb] px-3 py-1.5 font-medium",
-                    m.metrics.improvement > 0 ? "text-emerald-700" : "text-amber-700",
+                    "border-b border-line-soft px-3 py-1.5 font-medium",
+                    m.metrics.improvement > 0 ? "text-ok-ink" : "text-warn-ink",
                   )}
                 >
                   {m.metrics.improvement >= 0 ? "−" : "+"}
                   {Math.abs(Math.round(m.metrics.improvement * 100))}%
                 </td>
-                <td className="border-b border-[#e5e8eb] px-3 py-1.5 text-right">
+                <td className="border-b border-line-soft px-3 py-1.5 text-right">
                   <button
                     type="button"
                     onClick={async () => {
@@ -1114,7 +1114,7 @@ function TrainTab({
                         onError((err as Error).message);
                       }
                     }}
-                    className="text-[#8f99a8] hover:text-rose-600"
+                    className="text-ink-faint hover:text-danger"
                     aria-label={`Delete model ${m.name}`}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -1124,7 +1124,7 @@ function TrainTab({
             ))}
             {models.length === 0 ? (
               <tr>
-                <td className="px-3 py-2 text-[#8f99a8]" colSpan={6}>
+                <td className="px-3 py-2 text-ink-faint" colSpan={6}>
                   No models yet — name one above and train it.
                 </td>
               </tr>
@@ -1148,10 +1148,10 @@ function MetricPill({
   bad?: boolean;
 }) {
   return (
-    <span className="rounded bg-[#f6f7f9] px-2 py-1 text-[11px] text-[#404854]">
-      <span className="text-[#8f99a8]">{label}: </span>
+    <span className="rounded bg-canvas px-2 py-1 text-[11px] text-ink-body">
+      <span className="text-ink-faint">{label}: </span>
       <span
-        className={cn("font-medium", good ? "text-emerald-700" : bad ? "text-rose-700" : "")}
+        className={cn("font-medium", good ? "text-ok-ink" : bad ? "text-danger-ink" : "")}
       >
         {value}
       </span>
@@ -1231,7 +1231,7 @@ function CompareTab({
 
   if (models.length === 0) {
     return (
-      <p className="max-w-md text-sm text-[#5f6b7c]">
+      <p className="max-w-md text-sm text-ink-muted">
         Train and save a model first — the comparison runs a saved model against reality and
         an optional injected event.
       </p>
@@ -1240,7 +1240,7 @@ function CompareTab({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="rounded-md border border-[#d3d8de] bg-white p-3">
+      <div className="rounded-md border border-line bg-surface p-3">
         <div className="flex flex-wrap items-end gap-2">
           <label className="block">
             <span className={LABEL}>Model</span>
@@ -1262,8 +1262,8 @@ function CompareTab({
             className={cn(
               "mb-0.5 flex items-center gap-1 rounded px-2 py-1 text-[11px]",
               withEvent
-                ? "bg-rose-50 font-medium text-rose-700"
-                : "border border-dashed border-[#c5cbd3] text-[#8f99a8]",
+                ? "bg-danger-soft font-medium text-danger-ink"
+                : "border border-dashed border-line-strong text-ink-faint",
             )}
           >
             <Zap className="h-3 w-3" />
@@ -1332,18 +1332,18 @@ function CompareTab({
       </div>
 
       {result ? (
-        <div className="rounded-md border border-[#d3d8de] bg-white p-3">
+        <div className="rounded-md border border-line bg-surface p-3">
           <CompareChart result={result} />
-          <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-[#5f6b7c]">
+          <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-ink-muted">
             <span className="flex items-center gap-1.5">
-              <span className="h-[3px] w-3 rounded bg-[#1c2127]" /> reality (observed)
+              <span className="h-[3px] w-3 rounded bg-ink" /> reality (observed)
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="h-[3px] w-3 rounded bg-[#2d72d2]" /> prediction
+              <span className="h-[3px] w-3 rounded bg-brand" /> prediction
             </span>
             {result.simulated ? (
               <span className="flex items-center gap-1.5">
-                <span className="h-[3px] w-3 rounded bg-[#d33d3d]" /> simulation (event injected)
+                <span className="h-[3px] w-3 rounded bg-danger" /> simulation (event injected)
               </span>
             ) : null}
           </div>
@@ -1372,7 +1372,7 @@ function CompareTab({
           </div>
         </div>
       ) : (
-        <p className="flex items-center gap-1.5 text-[11px] text-[#8f99a8]">
+        <p className="flex items-center gap-1.5 text-[11px] text-ink-faint">
           <AlertTriangle className="h-3 w-3" />
           Run the model to chart prediction against reality — left of “now” shows how the
           model would have predicted the recent past.
@@ -1419,12 +1419,12 @@ function CompareChart({ result }: { result: ForecastResult }) {
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Reality versus prediction versus simulation chart">
-      <line x1={left} y1={top} x2={left} y2={bottom} stroke="#c5cbd3" strokeWidth="1" />
-      <line x1={left} y1={bottom} x2={W - 8} y2={bottom} stroke="#c5cbd3" strokeWidth="1" />
-      <text x={left - 6} y={top + 8} textAnchor="end" fontSize="9" fill="#8f99a8">
+      <line x1={left} y1={top} x2={left} y2={bottom} stroke="#6f6f6f" strokeWidth="1" />
+      <line x1={left} y1={bottom} x2={W - 8} y2={bottom} stroke="#6f6f6f" strokeWidth="1" />
+      <text x={left - 6} y={top + 8} textAnchor="end" fontSize="9" fill="#a8a8a8">
         {hi.toFixed(0)}
       </text>
-      <text x={left - 6} y={bottom} textAnchor="end" fontSize="9" fill="#8f99a8">
+      <text x={left - 6} y={bottom} textAnchor="end" fontSize="9" fill="#a8a8a8">
         {lo.toFixed(0)}
       </text>
       <line
@@ -1432,24 +1432,24 @@ function CompareChart({ result }: { result: ForecastResult }) {
         y1={top}
         x2={nowX}
         y2={bottom}
-        stroke="#8f99a8"
+        stroke="#a8a8a8"
         strokeWidth="1"
         strokeDasharray="3 3"
       />
-      <text x={nowX} y={H - 8} textAnchor="middle" fontSize="9" fill="#8f99a8">
+      <text x={nowX} y={H - 8} textAnchor="middle" fontSize="9" fill="#a8a8a8">
         now
       </text>
-      <text x={left} y={H - 8} fontSize="9" fill="#8f99a8">
+      <text x={left} y={H - 8} fontSize="9" fill="#a8a8a8">
         −{pastShown} h
       </text>
-      <text x={W - 8} y={H - 8} textAnchor="end" fontSize="9" fill="#8f99a8">
+      <text x={W - 8} y={H - 8} textAnchor="end" fontSize="9" fill="#a8a8a8">
         +{forecast.length} h
       </text>
-      <polyline points={line(backtest, 0)} fill="none" stroke="#2d72d2" strokeWidth="1.2" strokeDasharray="5 3" strokeOpacity="0.8" />
-      <polyline points={line(observed, 0)} fill="none" stroke="#1c2127" strokeWidth="1.8" />
-      <polyline points={line(forecast, pastShown)} fill="none" stroke="#2d72d2" strokeWidth="1.6" />
+      <polyline points={line(backtest, 0)} fill="none" stroke="#4589ff" strokeWidth="1.2" strokeDasharray="5 3" strokeOpacity="0.8" />
+      <polyline points={line(observed, 0)} fill="none" stroke="#f4f4f4" strokeWidth="1.8" />
+      <polyline points={line(forecast, pastShown)} fill="none" stroke="#4589ff" strokeWidth="1.6" />
       {simulated ? (
-        <polyline points={line(simulated, pastShown)} fill="none" stroke="#d33d3d" strokeWidth="1.6" />
+        <polyline points={line(simulated, pastShown)} fill="none" stroke="#fa4d56" strokeWidth="1.6" />
       ) : null}
     </svg>
   );

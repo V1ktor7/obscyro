@@ -107,32 +107,37 @@ const LANE_INK: Record<Lane | "Look", string> = {
   Measures: "text-scenario",
   Resources: "text-brand-deep",
 };
-const LANE_BG: Record<Lane, string> = { Conditions: "bg-ink-muted", Events: "bg-danger-ink", Measures: "bg-scenario", Resources: "bg-brand" };
+// A fill and the text that reads on it: a bright fill takes dark text, a deep one white.
+const LANE_BG: Record<Lane, string> = { Conditions: "bg-line-strong text-ink", Events: "bg-danger text-inverse", Measures: "bg-scenario text-white", Resources: "bg-brand text-white" };
 
+// The ramps are drawn on a dark basemap: the low end stays close to the
+// ground and each step up is brighter, so what stands out is what is high.
+// Pressure keeps its hues (green, yellow, orange, red, then magenta past
+// double the capacity); the two others are one hue each.
 const OCC_STEPS: [number, string, string][] = [
-  [0.9, "#dcefe5", "under 90 %"],
-  [1.1, "#f6e4b8", "90–109 %"],
-  [1.5, "#f2b867", "110–149 %"],
-  [2, "#e07a3f", "150–199 %"],
-  [Infinity, "#a82255", "200 % and over"],
+  [0.9, "#1f4d36", "under 90 %"],
+  [1.1, "#a2780d", "90–109 %"],
+  [1.5, "#eb6200", "110–149 %"],
+  [2, "#fa4d56", "150–199 %"],
+  [Infinity, "#ee5396", "200 % and over"],
 ];
 const SICK_STEPS: [number, string, string][] = [
-  [0.5, "#f2f5fa", "under 0.5"],
-  [2, "#dce7f6", "0.5–2"],
-  [5, "#b9cfee", "2–5"],
-  [10, "#87ade0", "5–10"],
-  [20, "#5585cc", "10–20"],
-  [40, "#2d5fae", "20–40"],
-  [Infinity, "#1b3f7a", "40 and over"],
+  [0.5, "#1b2434", "under 0.5"],
+  [2, "#1c3052", "0.5–2"],
+  [5, "#1f4379", "2–5"],
+  [10, "#235aa6", "5–10"],
+  [20, "#2f74d6", "10–20"],
+  [40, "#5c9bff", "20–40"],
+  [Infinity, "#a6c8ff", "40 and over"],
 ];
 const DENSITY_STEPS: [number, string, string][] = [
-  [500, "#eef1f4", "under 500"],
-  [2000, "#dde3ea", "500–2,000"],
-  [5000, "#c5cfdb", "2,000–5,000"],
-  [9000, "#a3b2c4", "5,000–9,000"],
-  [Infinity, "#56677e", "9,000 and over"],
+  [500, "#333333", "under 500"],
+  [2000, "#474747", "500–2,000"],
+  [5000, "#636363", "2,000–5,000"],
+  [9000, "#8d8d8d", "5,000–9,000"],
+  [Infinity, "#c6c6c6", "9,000 and over"],
 ];
-const NO_DATA = "#e5e8eb";
+const NO_DATA = "#262626";
 
 function ramp(v: number, steps: [number, string, string][]): string {
   if (!Number.isFinite(v)) return NO_DATA;
@@ -147,7 +152,7 @@ const fmt = (n: number) => Math.round(n).toLocaleString("en-CA");
 const GUIDE_KEY = "obs_scenarios_guide_seen";
 
 const FIELD =
-  "rounded border border-line bg-white px-2 py-1 text-[12px] text-ink focus:border-brand focus:outline-none";
+  "rounded border border-line bg-surface px-2 py-1 text-[12px] text-ink focus:border-brand focus:outline-none";
 const LABEL = "text-[10px] font-semibold uppercase tracking-wide text-ink-faint";
 
 function nonce(): string {
@@ -758,7 +763,7 @@ export default function HexTwinView() {
 
   if (!hasKey || !env) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-white">
+      <div className="flex flex-1 items-center justify-center bg-surface">
         <p className="text-sm text-ink-muted">Sign in and pick an environment to build a scenario.</p>
       </div>
     );
@@ -773,10 +778,10 @@ export default function HexTwinView() {
   if (loadError || !ctx || !grid) {
     return (
       <div className="flex flex-1 items-center justify-center bg-canvas p-6">
-        <div className="max-w-lg rounded-lg border border-line bg-white p-5 text-sm text-ink-body">
+        <div className="max-w-lg rounded-lg border border-line bg-surface p-5 text-sm text-ink-body">
           <p className="font-semibold text-ink">The twin could not be read for the map.</p>
           <p className="mt-1">{loadError ?? "No export came back."}</p>
-          <button type="button" onClick={() => void loadTwin()} className="mt-3 rounded border border-line px-3 py-1.5 text-[12px] hover:bg-canvas-raised">
+          <button type="button" onClick={() => void loadTwin()} className="mt-3 rounded border border-line px-3 py-1.5 text-[12px] hover:bg-surface-hover">
             Try again
           </button>
         </div>
@@ -837,7 +842,8 @@ export default function HexTwinView() {
       name: f.name,
       lat: f.lat,
       lon: f.lon,
-      colour: plainSites ? "#1c2127" : Number.isFinite(occ) ? ramp(pressureAt(i), OCC_STEPS) : "#ffffff",
+      // A site with no occupancy is drawn hollow: the ground's colour inside its ring.
+      colour: plainSites ? "#f4f4f4" : Number.isFinite(occ) ? ramp(pressureAt(i), OCC_STEPS) : "#161616",
       label: plainSites ? null : `${pct(occ)}${queue > 0 ? ` · ${people(queue)} waiting` : ""}${boosted ? " +" : ""}`,
     };
   });
@@ -977,7 +983,7 @@ export default function HexTwinView() {
               ))}
             </select>
             {scenario ? (
-              <button type="button" onClick={() => setRenaming(scenario.name)} className="rounded px-2 py-1 text-[12px] text-ink-muted hover:bg-canvas-raised">
+              <button type="button" onClick={() => setRenaming(scenario.name)} className="rounded px-2 py-1 text-[12px] text-ink-muted hover:bg-surface-hover">
                 Rename
               </button>
             ) : null}
@@ -991,7 +997,7 @@ export default function HexTwinView() {
                   })
                   .catch((err) => setMessage(engineMessage(err)))
               }
-              className="rounded border border-line px-2 py-1 text-[12px] hover:bg-canvas-raised"
+              className="rounded border border-line px-2 py-1 text-[12px] hover:bg-surface-hover"
             >
               New scenario
             </button>
@@ -1002,7 +1008,7 @@ export default function HexTwinView() {
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="flex items-center gap-1 rounded border border-line bg-white px-2.5 py-1.5 text-[12px] font-semibold text-ink hover:bg-canvas-raised"
+            className="flex items-center gap-1 rounded border border-line bg-surface px-2.5 py-1.5 text-[12px] font-semibold text-ink hover:bg-surface-hover"
           >
             <Plus className="h-3.5 w-3.5" aria-hidden="true" /> Add data
           </button>
@@ -1040,7 +1046,7 @@ export default function HexTwinView() {
                 onClick={() => setTool(t.key)}
                 className={cn(
                   "rounded-md border px-2.5 py-1.5 text-[12px] font-semibold",
-                  tool === t.key ? "border-ink bg-ink text-white" : cn("border-line bg-white hover:bg-canvas-raised", LANE_INK[t.lane]),
+                  tool === t.key ? "border-ink bg-ink text-inverse" : cn("border-line bg-surface hover:bg-surface-hover", LANE_INK[t.lane]),
                 )}
               >
                 {t.label}
@@ -1141,7 +1147,7 @@ export default function HexTwinView() {
         {islandNow.length ? (
           <div className="mx-auto flex shrink-0 flex-wrap gap-1.5">
             {islandNow.map((s) => (
-              <span key={s.id} className="rounded bg-[#a82255] px-2 py-0.5 text-[11.5px] font-bold text-white shadow-sm">
+              <span key={s.id} className="rounded bg-danger px-2 py-0.5 text-[11.5px] font-bold text-inverse shadow-sm">
                 Heat wave · day {d - s.start + 1} of {s.days}
               </span>
             ))}
@@ -1201,7 +1207,7 @@ export default function HexTwinView() {
                 onClick={() => setLens(key)}
                 className={cn(
                   "flex flex-col gap-0.5 rounded-md border px-2.5 py-2 text-left",
-                  lens === key ? "border-brand bg-brand-soft" : "border-line bg-white hover:bg-canvas-raised",
+                  lens === key ? "border-brand bg-brand-soft" : "border-line bg-surface hover:bg-surface-hover",
                 )}
               >
                 <span className="text-[12.5px] font-semibold text-ink">{name}</span>
@@ -1223,7 +1229,7 @@ export default function HexTwinView() {
                       onClick={() => setLens(key)}
                       className={cn(
                         "flex flex-col gap-0.5 rounded-md border px-2.5 py-2 text-left",
-                        lens === key ? "border-brand bg-brand-soft" : "border-line bg-white hover:bg-canvas-raised",
+                        lens === key ? "border-brand bg-brand-soft" : "border-line bg-surface hover:bg-surface-hover",
                       )}
                     >
                       <span className="text-[12.5px] font-semibold text-ink">{m.label}</span>
@@ -1249,7 +1255,7 @@ export default function HexTwinView() {
                   onClick={() => setLens(key)}
                   className={cn(
                     "flex flex-col gap-0.5 rounded-md border px-2.5 py-2 text-left",
-                    lens === key ? "border-[#0f6b6b] bg-[#e6f4f4]" : "border-line bg-white hover:bg-canvas-raised",
+                    lens === key ? "border-teal bg-teal-soft" : "border-line bg-surface hover:bg-surface-hover",
                   )}
                 >
                   <span className="text-[12.5px] font-semibold text-ink">{l.label}</span>
@@ -1265,7 +1271,7 @@ export default function HexTwinView() {
             <button
               type="button"
               onClick={() => setAdding(true)}
-              className="mt-1 flex items-center justify-center gap-1 rounded-md border border-dashed border-[#8fa8d6] bg-[#f4f8fd] px-2.5 py-2 text-[12.5px] font-semibold text-brand-deep hover:bg-brand-soft"
+              className="mt-1 flex items-center justify-center gap-1 rounded-md border border-dashed border-brand-line bg-canvas-raised px-2.5 py-2 text-[12.5px] font-semibold text-brand-deep hover:bg-brand-soft"
             >
               <Plus className="h-3.5 w-3.5" aria-hidden="true" /> Add data as a layer
             </button>
@@ -1318,7 +1324,7 @@ export default function HexTwinView() {
             <div aria-live="polite" className={cn(OVERLAY_BAR, "grid w-[280px] shrink-0 grid-cols-2 gap-x-4 gap-y-0.5 px-3 py-2 text-[12px]")}>
               <span className="col-span-2 flex items-center justify-between gap-2 font-semibold text-ink">
                 {popName(inspected.population)}
-                <button type="button" onClick={() => setCell(null)} aria-label="Close" className="rounded p-0.5 text-ink-muted hover:bg-canvas-raised">
+                <button type="button" onClick={() => setCell(null)} aria-label="Close" className="rounded p-0.5 text-ink-muted hover:bg-surface-hover">
                   <X className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
               </span>
@@ -1461,7 +1467,7 @@ export default function HexTwinView() {
               const shift = (by: number) =>
                 void replace(s, { ...s, start: Math.max(0, Math.min(horizon - 1, s.start + by)), ...(s.kind === "capacity" ? { days: Math.max(1, horizon - Math.max(0, s.start + by)) } : {}) });
               return (
-                <div key={s.id} className={cn("rounded-md border", open ? "border-brand bg-white" : "border-line-soft bg-canvas-raised")}>
+                <div key={s.id} className={cn("rounded-md border", open ? "border-brand bg-surface" : "border-line-soft bg-canvas-raised")}>
                   <button type="button" aria-expanded={open} onClick={() => setSelected(open ? null : s.id)} className="grid w-full grid-cols-[10px_minmax(0,1fr)] gap-2 px-2.5 py-2 text-left">
                     <span className={cn("mt-1 h-2.5 w-2.5 rounded-sm", LANE_BG[laneOf(s)])} />
                     <span className="flex min-w-0 flex-col">
@@ -1476,14 +1482,14 @@ export default function HexTwinView() {
                       <div className="flex flex-wrap gap-1">
                         {isCondition(s) ? null : (
                           <>
-                            <button type="button" disabled={busy} onClick={() => shift(-1)} className="rounded border border-line bg-white px-2 py-1 text-[11.5px] disabled:opacity-50">− 1 day</button>
-                            <button type="button" disabled={busy} onClick={() => shift(1)} className="rounded border border-line bg-white px-2 py-1 text-[11.5px] disabled:opacity-50">+ 1 day</button>
+                            <button type="button" disabled={busy} onClick={() => shift(-1)} className="rounded border border-line bg-surface px-2 py-1 text-[11.5px] disabled:opacity-50">− 1 day</button>
+                            <button type="button" disabled={busy} onClick={() => shift(1)} className="rounded border border-line bg-surface px-2 py-1 text-[11.5px] disabled:opacity-50">+ 1 day</button>
                           </>
                         )}
                         {resizable ? (
                           <>
-                            <button type="button" disabled={busy || s.days <= 1} onClick={() => void replace(s, { ...s, days: s.days - 1 })} className="rounded border border-line bg-white px-2 py-1 text-[11.5px] disabled:opacity-50">Shorter</button>
-                            <button type="button" disabled={busy} onClick={() => void replace(s, { ...s, days: Math.min(horizon - s.start, s.days + 1) })} className="rounded border border-line bg-white px-2 py-1 text-[11.5px] disabled:opacity-50">Longer</button>
+                            <button type="button" disabled={busy || s.days <= 1} onClick={() => void replace(s, { ...s, days: s.days - 1 })} className="rounded border border-line bg-surface px-2 py-1 text-[11.5px] disabled:opacity-50">Shorter</button>
+                            <button type="button" disabled={busy} onClick={() => void replace(s, { ...s, days: Math.min(horizon - s.start, s.days + 1) })} className="rounded border border-line bg-surface px-2 py-1 text-[11.5px] disabled:opacity-50">Longer</button>
                           </>
                         ) : null}
                         <button type="button" disabled={busy} onClick={() => void remove(s)} className="rounded border border-danger/30 bg-danger-soft px-2 py-1 text-[11.5px] text-danger-ink disabled:opacity-50">Remove</button>
@@ -1513,7 +1519,7 @@ export default function HexTwinView() {
             type="button"
             aria-expanded={timelineOpen}
             onClick={() => setTimelineOpen((o) => !o)}
-            className="ml-auto rounded border border-line px-2 py-1 text-[11.5px] text-ink-body hover:bg-canvas-raised"
+            className="ml-auto rounded border border-line px-2 py-1 text-[11.5px] text-ink-body hover:bg-surface-hover"
           >
             {timelineOpen ? "Hide lanes and curve" : "Show lanes and curve"}
           </button>
@@ -1544,7 +1550,7 @@ export default function HexTwinView() {
                       onClick={() => setSelected(s.id)}
                       title={describeStamp(s, ctx).title}
                       className={cn(
-                        "absolute bottom-0.5 top-0.5 min-w-[10px] overflow-hidden text-ellipsis whitespace-nowrap rounded px-1.5 text-left text-[11px] font-bold text-white",
+                        "absolute bottom-0.5 top-0.5 min-w-[10px] overflow-hidden text-ellipsis whitespace-nowrap rounded px-1.5 text-left text-[11px] font-bold",
                         LANE_BG[ln],
                         s.id === selected && "ring-2 ring-ink",
                       )}
@@ -1560,18 +1566,18 @@ export default function HexTwinView() {
           <span className="text-[10.5px] font-bold uppercase tracking-wide text-ink-muted">{activity}</span>
           <div className="relative">
             <svg viewBox={`0 0 ${CW} ${CH}`} preserveAspectRatio="none" className="block h-[150px] w-full" role="img" aria-label={`Occupancy of ${activity} at ${curveName}, by day`}>
-              <rect width={CW} height={CH} fill="#f6f7f9" />
-              <line x1={0} x2={CW} y1={yOf(1)} y2={yOf(1)} stroke="#a82255" strokeDasharray="6 4" vectorEffect="non-scaling-stroke" />
+              <rect width={CW} height={CH} fill="#161616" />
+              <line x1={0} x2={CW} y1={yOf(1)} y2={yOf(1)} stroke="#fa4d56" strokeDasharray="6 4" vectorEffect="non-scaling-stroke" />
               {run ? (
                 <>
-                  <polyline points={line(curveEvents)} fill="none" stroke="#8f99a8" strokeWidth={2.5} vectorEffect="non-scaling-stroke" />
-                  <polyline points={line(curveFull)} fill="none" stroke="#2d72d2" strokeWidth={2.5} vectorEffect="non-scaling-stroke" />
+                  <polyline points={line(curveEvents)} fill="none" stroke="#a8a8a8" strokeWidth={2.5} vectorEffect="non-scaling-stroke" />
+                  <polyline points={line(curveFull)} fill="none" stroke="#4589ff" strokeWidth={2.5} vectorEffect="non-scaling-stroke" />
                 </>
               ) : null}
-              <line x1={((d + 0.5) / horizon) * CW} x2={((d + 0.5) / horizon) * CW} y1={0} y2={CH} stroke="#1c2127" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+              <line x1={((d + 0.5) / horizon) * CW} x2={((d + 0.5) / horizon) * CW} y1={0} y2={CH} stroke="#f4f4f4" strokeWidth={2} vectorEffect="non-scaling-stroke" />
             </svg>
-            <span className="absolute left-1 rounded bg-white/90 px-1 text-[10px] text-danger-ink" style={{ top: `${(yOf(1) / CH) * 150 - 14}px` }}>100 % full</span>
-            <span className="absolute right-1 top-0 rounded bg-white/90 px-1 text-[10px] text-ink-muted">{Math.round(chartTop * 100)} %</span>
+            <span className="absolute left-1 rounded bg-surface/90 px-1 text-[10px] text-danger-ink" style={{ top: `${(yOf(1) / CH) * 150 - 14}px` }}>100 % full</span>
+            <span className="absolute right-1 top-0 rounded bg-surface/90 px-1 text-[10px] text-ink-muted">{Math.round(chartTop * 100)} %</span>
             {!run ? (
               <span className="absolute inset-0 flex items-center justify-center text-[12px] text-ink-muted">Run to see occupancy over time.</span>
             ) : null}
@@ -1589,7 +1595,7 @@ export default function HexTwinView() {
             <span className="ml-auto flex items-center gap-2 font-semibold text-ink">
               {focused === null ? "Every site together" : curveName}
               {focused !== null ? (
-                <button type="button" onClick={() => setFocus(null)} className="rounded border border-line px-1.5 py-0.5 text-[11px] font-normal text-ink-body hover:bg-canvas-raised">
+                <button type="button" onClick={() => setFocus(null)} className="rounded border border-line px-1.5 py-0.5 text-[11px] font-normal text-ink-body hover:bg-surface-hover">
                   Back to every site
                 </button>
               ) : null}
