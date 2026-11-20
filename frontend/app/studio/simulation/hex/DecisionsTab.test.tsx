@@ -76,6 +76,15 @@ const tab = (scenario: { id: string; name: string } | null = { id: "sc1", name: 
   render(<DecisionsTab env="mtl" scenario={scenario} refresh={refresh} />);
 
 describe("the decisions tab", () => {
+  it("names the signal a decision was taken on, when a prepared response was engaged", async () => {
+    api.listDecisions.mockResolvedValue({
+      decisions: [decision({ signal: { id: "s1", title: "Urgence — Hôpital A at 132 %" }, preparedResponseId: "r1" })],
+    });
+    tab();
+    const card = (await screen.findByText("Open 80 beds at Lakeshore from day 5")).closest("li")!;
+    expect(within(card).getByText(/Dominique Roy · .*2026.* · Omicron · engaged on the signal “Urgence — Hôpital A at 132 %”/)).toBeTruthy();
+  });
+
   it("says how a decision comes to be, when there is none", async () => {
     api.listDecisions.mockResolvedValue({ decisions: [] });
     tab();
@@ -92,6 +101,8 @@ describe("the decisions tab", () => {
     const card = screen.getByText("Open 80 beds at Lakeshore from day 5").closest("li")!;
     expect(within(card).getByText(/Dominique Roy · .*2026.* · Omicron/)).toBeTruthy();
     expect(within(card).getByText("Nobody should wait at Lakeshore.")).toBeTruthy();
+    // Recorded from the Options tab: it was taken on no signal, and says nothing about one.
+    expect(within(card).queryByText(/engaged on the signal/)).toBeNull();
 
     // What was expected with the option is on the card, with its gap from the same run without it.
     const figure = (term: string) => within(card).getAllByText(term).map((dt) => dt.nextElementSibling?.textContent);

@@ -3,7 +3,7 @@
 title: "The decision loop"
 description: "Obscyro does not decide. It helps a person decide, by showing what is measured, what has been tried and what each option would change."
 source: "docs/decision-loop.md"
-translatedFrom: "b75788aa25b1b24f"
+translatedFrom: "21109664ffd8e3c8"
 ---
 
 Obscyro does not decide. It helps a person decide, by showing what is measured, what has been tried and what each option would change, leaving nothing to chance.
@@ -63,7 +63,7 @@ Putting the analyst into service ([issue 5](https://github.com/V1ktor7/obscyro/i
 4. Live: from the alert to the decision in one click. Six issues, in this order.
    1. The alert reaches every page, with a link to its unit: [issue 12](https://github.com/V1ktor7/obscyro/issues/12). **Done.** Next: keep the Response board readable when alerts close by themselves ([issue 18](https://github.com/V1ktor7/obscyro/issues/18)), give each alert the age of its own value ([issue 19](https://github.com/V1ktor7/obscyro/issues/19)).
    2. A situation card opens from an alert, with the analyst inside: [issue 13](https://github.com/V1ktor7/obscyro/issues/13). Delivered; what remains is to hear the analyst answer about live reading with the real model. Next: say that a unit can hold its capacity through its sub-units ([issue 21](https://github.com/V1ktor7/obscyro/issues/21)).
-   3. Responses prepared per kind of signal, engaged with one click: [issue 14](https://github.com/V1ktor7/obscyro/issues/14). Delivered for tested options; what remains is to be able to keep a response of the Events page.
+   3. Responses prepared per kind of signal, engaged with one click: [issue 14](https://github.com/V1ktor7/obscyro/issues/14). **Done.** Next: also keep a response of the Events page ([issue 22](https://github.com/V1ktor7/obscyro/issues/22)).
    4. The prepared responses retested on the state of the moment, as soon as an alert opens: [issue 15](https://github.com/V1ktor7/obscyro/issues/15).
    5. The two option engines brought together, recorded responses and stamps: [issue 16](https://github.com/V1ktor7/obscyro/issues/16).
    6. The follow-up of a decision attached to its signal: [issue 17](https://github.com/V1ktor7/obscyro/issues/17).
