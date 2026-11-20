@@ -48,6 +48,10 @@ L'onglet Event finder utilise la recherche web de l'API Claude. Elle n'a pas de 
 | `POST /v1/ontology/:env/decisions` | Enregistre une décision à partir d'une option testée |
 | `GET /v1/ontology/:env/decisions` | Les décisions du projet, les plus récentes d'abord (`scenarioId` pour un seul scénario) |
 | `GET /v1/ontology/:env/decisions/:id/follow-up` | Les arrivées attendues par une décision à côté de la série observée, avec l'écart |
+| `POST /v1/ontology/:env/prepared-responses` | Garde une option testée comme réponse préparée pour un type de signal |
+| `GET /v1/ontology/:env/prepared-responses` | Les réponses préparées du projet, dans l'ordre où elles ont été gardées (`signalTypeId` pour un seul type de signal) |
+| `DELETE /v1/ontology/:env/prepared-responses/:id` | Retire une réponse préparée : elle n'est plus proposée, sans être effacée |
+| `POST /v1/ontology/:env/signals/:id/engage` | Engage une réponse préparée sur un signal : enregistre la décision, l'inscrit au journal du signal, et fait avancer le signal d'une étape |
 | `POST /v1/ontology/:env/health-events` | Accepte un candidat : il entre au calendrier |
 | `GET /v1/ontology/:env/health-events` | Le calendrier du projet, du plus ancien au plus récent (`from`, `to` pour une période) |
 | `DELETE /v1/ontology/:env/health-events/:id` | Retire un événement du calendrier |
@@ -60,6 +64,8 @@ Corps de la question : `question`, `scenarioId` (ou `null`), `looking` (`reality
 Corps d'un objectif : `objective`, `scenarioId` (obligatoire : une option s'ajoute à un scénario), `horizon` et `activity` (ceux de la page, pour que le test réponde à ce que Run montrerait), `run`.
 
 Corps d'une décision : `exchangeId` et `step`, rien d'autre. Les chiffres sont recopiés par le serveur depuis son journal.
+
+Corps d'une réponse préparée : `exchangeId`, `step`, `signalTypeId`, et au besoin `label` (son étiquette) et `approver` (qui peut l'approuver, en mots). Aucun chiffre : le serveur les recopie de son journal, comme pour une décision. Corps d'un engagement : `responseId`, et `note` au besoin.
 
 Corps d'une recherche d'événements : `request`, et `scenarioId` (ou `null`), qui ne sert qu'à dire au journal d'où la demande a été faite. Ni le run ni rien du jumeau n'en fait partie.
 
@@ -189,6 +195,18 @@ Une décision ne se modifie pas : la revoir, c'est en enregistrer une autre.
 
 Le suivi (« Compare with observed ») existe quand une série observée est liée au scénario, par le réglage « Reality check » du panneau Result. Il pose les arrivées que le run testé attendait à côté de celles qui ont été comptées, et donne l'écart : totaux sur les jours que les deux rapportent, écart moyen par jour, décalage des pics. Il ne conclut pas. Et il ne compare que des arrivées : le jumeau ne garde aucun historique des files ni de l'occupation, donc la file attendue n'a rien d'observé en face, ce que l'écran dit.
 
+### Réponses préparées, et « Engage »
+
+Dans l'urgence on ne bâtit pas un scénario : on applique ce qui a été préparé. Le travail se fait donc en deux temps.
+
+**En temps calme.** Sous chaque option testée, « Keep as a prepared response for… » la garde pour un type de signal. On choisit le type, et au besoin qui peut l'approuver, en mots (un rôle). Rien d'autre ne part : le serveur recopie les chiffres du test depuis son journal, avec sa date et une empreinte des choix du scénario sur lequel il a tourné. Une réponse préparée est donc toujours une option que le moteur a réellement testée. Le bouton refuse quand le scénario a changé depuis les tests : les chiffres seraient ceux d'un autre scénario.
+
+**En direct.** La fiche de situation d'un signal montre les réponses préparées pour son type, dans l'ordre où elles ont été gardées, sans classement. Chacune dit : ce qu'elle change ; le run avec elle à côté du même run sans elle ; sur quoi ce run repose, compté par niveau de preuve ; ce que son test ne dit pas ; et ce que ce test vaut aujourd'hui. Trois choses se savent sans rien relancer, et chacune s'écrit au-dessus du bouton, avant le clic : le scénario du test n'existe plus, ses choix ont changé depuis, ou le test a plus de trente jours. Aucune ne dit que la réponse est mauvaise ; elles disent de quoi les chiffres sont les chiffres.
+
+« Engage » fait trois écritures d'un clic : une décision, rattachée au signal, avec les chiffres du test comme ce qu'on en attend ; une ligne au journal du signal, qui nomme la réponse et la personne ; et le passage du signal à l'étape suivante. Si cette étape exige une approbation, c'est la personne qui engage qui est inscrite comme l'ayant donnée. Tout refus arrive avant la première écriture : signal fermé, signal à sa dernière étape, réponse préparée pour un autre type de signal. Rien n'est déclenché dans un autre système : Obscyro enregistre et suit, et l'écran le dit.
+
+La décision se relit à trois endroits : sur la fiche, parmi les décisions déjà prises sur ce type de signal ; dans le journal du signal, page Response ; et dans l'onglet Decisions, où elle porte le nom du signal.
+
 ## La règle des chiffres
 
 1. Chaque paragraphe cite les étapes sur lesquelles il repose.
@@ -252,7 +270,8 @@ Sous les chiffres, trois lignes repliées, qui s'ouvrent d'un clic : « Why this
 - les chiffres en direct de l'unité, tels que sa page les montre, avec l'âge de la lecture et sa raison quand il n'est pas exact, puis ce qui est sous l'unité par type ;
 - les autres alertes ouvertes de l'unité ;
 - le signal, et le chemin de son workflow avec l'étape où il se trouve ;
-- les décisions déjà enregistrées pour ce type de signal : aucune ne peut encore y être rattachée, et la fiche le dit ;
+- les réponses préparées pour le type du signal, avec les chiffres de leur dernier test et ce qu'il vaut aujourd'hui, et le bouton « Engage » (voir « Réponses préparées ») ;
+- les décisions déjà prises sur des signaux de ce type, avec ce qu'on en attendait ;
 - l'analyste, avec une question déjà écrite d'après l'unité et l'alerte. Elle n'est pas envoyée : la poser est un clic de la personne ;
 - ce que la fiche ne peut pas dire.
 
@@ -342,6 +361,9 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 - Le nom d'un choix (`choice-a`) vaut pour un échange. Une question suivante relit la recette et peut lui donner un autre nom.
 - Un objectif prend un peu moins de trois minutes sur le jumeau de Montréal. Une passe du moteur y prend une trentaine de secondes ; le premier test en lance deux (le scénario tel quel, puis l'option) après avoir lu le jumeau et calculé la propagation, les suivants une seule. C'est le moteur qui fixe la durée : pour aller plus vite il faut accélérer le moteur, pas l'analyste.
 - Le suivi d'une décision ne compare que des arrivées (voir « Les décisions »).
+- Une réponse préparée se garde depuis une option testée dans l'onglet Options. Une réponse écrite sur la page Events ne peut pas encore l'être : elle n'a pas de test journalisé dont recopier les chiffres.
+- Ce qu'on sait d'un test gardé se limite à sa date et au scénario sur lequel il a tourné. L'empreinte du scénario est prise au moment où la réponse est gardée ; que le jumeau lui-même ait changé depuis (des lits en plus ou en moins) ne se voit pas. Retester une réponse sur l'état du moment n'existe pas encore.
+- Engager fait trois écritures à la suite, pas une seule opération : si la dernière échoue, la décision et sa ligne au journal existent, et le signal n'a pas avancé.
 - Une décision enregistrée ne se supprime pas à l'écran.
 
 ## Fichiers
@@ -352,6 +374,7 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 | Lecture du direct, `list_alerts`, `unit_now` | `backend/src/services/live-reading.ts` |
 | Fiche de situation | `backend/src/services/situation.ts`, `backend/src/routes/situation.ts`, `frontend/app/studio/situation/SituationView.tsx`, `situation-api.ts` |
 | L'analyste dans le cadre du Studio | `frontend/app/studio/AnalystDock.tsx` |
+| Réponses préparées, « Engage » | `backend/src/services/prepared-responses.ts`, `backend/src/routes/prepared-responses.ts`, `frontend/app/studio/simulation/hex/KeepPrepared.tsx`, `frontend/app/studio/situation/PreparedResponses.tsx`, `prepared-api.ts` |
 | Outils de lecture, résumé du run | `backend/src/services/analyst-tools.ts` |
 | Outil `test_option`, clôture d'un objectif, `give_options` | `backend/src/services/analyst-options.ts` |
 | Clôture d'une recherche d'événements, `give_events` | `backend/src/services/analyst-events.ts` |

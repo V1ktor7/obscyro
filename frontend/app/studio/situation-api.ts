@@ -1,6 +1,8 @@
 import { apiFetch } from "@/lib/auth";
 import type { TwinAlertSeverity } from "@/lib/platform-api";
 
+import type { PreparedResponseCard } from "./prepared-api";
+
 /**
  * The situation card, as the server reads it.
  *
@@ -61,6 +63,7 @@ export interface SituationSignal {
   closedAt: string | null;
   unitId: string | null;
   alertId: string | null;
+  typeId: string;
   type: string;
   domain: string;
   stage: string;
@@ -71,13 +74,30 @@ export interface SituationSignal {
   path: { name: string; current: boolean; needsApproval: boolean }[];
 }
 
+/** A decision already taken on a signal of this kind. */
+export interface DecisionOnCard {
+  id: string;
+  label: string;
+  decidedBy: string | null;
+  decidedAt: string;
+  signalTitle: string | null;
+  onThisSignal: boolean;
+  /** Patient-days of waiting in its test, with it and without. */
+  waitingWith: number;
+  waitingWithout: number;
+}
+
 export interface SituationCard {
   /** The server's clock when this was read. */
   at: string;
   unit: UnitReading | null;
   alert: { state: "open"; reading: AlertReading } | { state: "not_open" } | null;
   signal: SituationSignal | null;
-  decisions: { items: never[]; note: string };
+  /** The responses prepared for the signal's kind, in the order they were kept; null when the card names no signal. */
+  responses: PreparedResponseCard[] | null;
+  /** Whether a response can be engaged on this signal now, and why not. */
+  engage: { possible: boolean; why: string | null };
+  decisions: { items: DecisionOnCard[]; note: string };
   /** A question for the analyst, written by the program. */
   question: string;
   checked: { at: string | null; says: string };

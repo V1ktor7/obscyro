@@ -3,7 +3,7 @@
 title: "The decision loop"
 description: "Obscyro does not decide. It helps a person decide, by showing what is measured, what has been tried and what each option would change."
 source: "docs/decision-loop.md"
-translatedFrom: "84a53113ea9111bc"
+translatedFrom: "b75788aa25b1b24f"
 ---
 
 Obscyro does not decide. It helps a person decide, by showing what is measured, what has been tried and what each option would change, leaving nothing to chance.
@@ -48,8 +48,8 @@ The model orchestrates and explains. Facts come from tools; arithmetic, from a c
 | 3. Precedents | **Delivered**: Event finder tab. Online search in the sources the project authorises, candidates with a link and a quoted passage, accepted or rejected by a person, a calendar on the timeline that the analyst reads (`list_events`). An event is a dated marker: it is tied to no territory and does not enter the engine | [The analyst](/docs/product/analyst), [Algorithms](/docs/product/algorithms), A10 |
 | 4. Measured effects | To do. The measuring pieces exist (lags, replication across episodes) without being connected | [Algorithms](/docs/product/algorithms), C3 |
 | 5. Tested options | **Delivered**: Options tab. Up to three options per objective, each run through the engine on the server, with the same figures as the page (held by a test). Options made of capacity and measures only; an option can replace or remove a choice the scenario already holds | [The analyst](/docs/product/analyst), [Algorithms](/docs/product/algorithms), A4 and A8 |
-| 6. Recommendation | **Delivered**: the scenario as it is beside each option, levels of evidence assigned by the program, the mechanism in one sentence, trade-offs left to the person, no ranking. The option enters the scenario on a click | [The analyst](/docs/product/analyst), [Algorithms](/docs/product/algorithms), A8 |
-| 7. Follow-up | **Partly delivered**: the decision is recorded with the figures of the tested run, and its expected arrivals are compared with the observed series linked to the scenario. Only arrivals can be compared: the twin has no history of queues or of occupancy | [The analyst](/docs/product/analyst), [Algorithms](/docs/product/algorithms), A6 and A9 |
+| 6. Recommendation | **Delivered**: the scenario as it is beside each option, levels of evidence assigned by the program, the mechanism in one sentence, trade-offs left to the person, no ranking. The option enters the scenario on a click. A tested option can be kept as a prepared response for a kind of signal; the situation card of a signal of that kind shows it with the figures of its test and what it is worth today, and one click engages it | [The analyst](/docs/product/analyst), [Algorithms](/docs/product/algorithms), A8 |
+| 7. Follow-up | **Partly delivered**: the decision is recorded with the figures of the tested run, and can be taken on a signal, which it moves one stage forward; and its expected arrivals are compared with the observed series linked to the scenario. Only arrivals can be compared: the twin has no history of queues or of occupancy | [The analyst](/docs/product/analyst), [Algorithms](/docs/product/algorithms), A6 and A9 |
 
 Putting the analyst into service ([issue 5](https://github.com/V1ktor7/obscyro/issues/5)) is done: key set, end-to-end test, reference questions, the page's guide, two engine defects fixed.
 
@@ -63,7 +63,7 @@ Putting the analyst into service ([issue 5](https://github.com/V1ktor7/obscyro/i
 4. Live: from the alert to the decision in one click. Six issues, in this order.
    1. The alert reaches every page, with a link to its unit: [issue 12](https://github.com/V1ktor7/obscyro/issues/12). **Done.** Next: keep the Response board readable when alerts close by themselves ([issue 18](https://github.com/V1ktor7/obscyro/issues/18)), give each alert the age of its own value ([issue 19](https://github.com/V1ktor7/obscyro/issues/19)).
    2. A situation card opens from an alert, with the analyst inside: [issue 13](https://github.com/V1ktor7/obscyro/issues/13). Delivered; what remains is to hear the analyst answer about live reading with the real model. Next: say that a unit can hold its capacity through its sub-units ([issue 21](https://github.com/V1ktor7/obscyro/issues/21)).
-   3. Responses prepared per type of signal, committed with one click: [issue 14](https://github.com/V1ktor7/obscyro/issues/14).
+   3. Responses prepared per kind of signal, engaged with one click: [issue 14](https://github.com/V1ktor7/obscyro/issues/14). Delivered for tested options; what remains is to be able to keep a response of the Events page.
    4. The prepared responses retested on the state of the moment, as soon as an alert opens: [issue 15](https://github.com/V1ktor7/obscyro/issues/15).
    5. The two option engines brought together, recorded responses and stamps: [issue 16](https://github.com/V1ktor7/obscyro/issues/16).
    6. The follow-up of a decision attached to its signal: [issue 17](https://github.com/V1ktor7/obscyro/issues/17).

@@ -356,6 +356,9 @@ export interface Decision {
   note: string | null;
   decidedBy: string | null;
   decidedAt: string;
+  /** The signal it was taken on, when a prepared response was engaged. Absent or null for one recorded from the Options tab. */
+  signal?: { id: string; title: string } | null;
+  preparedResponseId?: string | null;
 }
 
 /**

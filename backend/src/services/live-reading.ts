@@ -52,6 +52,8 @@ export interface LiveSignal {
   unitId: string | null;
   /** The alert that raised it, when one did. */
   alertId: string | null;
+  /** Its kind, by id and by name: prepared responses are kept per kind. */
+  typeId: string;
   type: string;
   domain: string;
   stage: string;
@@ -170,6 +172,7 @@ interface SignalRow {
   subject_id: string | null;
   origin_kind: string;
   origin_id: string | null;
+  signal_type_id: string;
   type_name: string;
   domain: string;
   stage_name: string;
@@ -181,7 +184,7 @@ interface SignalRow {
 
 const SIGNAL_SELECT = `
   SELECT s.id, s.title, s.severity, s.detected_at, s.closed_at, s.subject_id, s.origin_kind, s.origin_id,
-         t.name AS type_name, t.domain, ws.name AS stage_name, ws.requires_approval, ws.is_terminal,
+         s.signal_type_id, t.name AS type_name, t.domain, ws.name AS stage_name, ws.requires_approval, ws.is_terminal,
          (SELECT count(*)::int FROM app.workflow_stage x WHERE x.workflow_id = ws.workflow_id AND x.seq <= ws.seq) AS stage_no,
          (SELECT count(*)::int FROM app.workflow_stage x WHERE x.workflow_id = ws.workflow_id) AS stages
     FROM app.signal s
@@ -197,6 +200,7 @@ export function signalFrom(r: SignalRow): LiveSignal {
     closedAt: r.closed_at ? r.closed_at.toISOString() : null,
     unitId: r.subject_id,
     alertId: r.origin_kind === "twin_alert" ? r.origin_id : null,
+    typeId: r.signal_type_id,
     type: r.type_name,
     domain: r.domain,
     stage: r.stage_name,

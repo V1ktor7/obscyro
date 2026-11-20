@@ -122,6 +122,7 @@ const SIGNAL: LiveSignal = {
   closedAt: null,
   unitId: "W2",
   alertId: "a1",
+  typeId: "kind-1",
   type: "Capacity breach",
   domain: "Capacity",
   stage: "Triage",
@@ -354,7 +355,10 @@ test("the card says what it cannot say", () => {
   assert.equal(card.alert, null);
   assert.equal(card.signal, null);
   assert.deepEqual(card.decisions.items, []);
-  assert.match(card.decisions.note, /nothing attaches it to a kind of signal/);
+  // No signal on this card: nothing to tell the kind by, and nothing to engage on.
+  assert.match(card.decisions.note, /This card names no signal/);
+  assert.equal(card.responses, null);
+  assert.deepEqual(card.engage, { possible: false, why: "This card names no signal: a response is engaged on a signal." });
   assert.match(card.limits.join(" "), /keeps no history/);
   assert.match(card.limits.join(" "), /no staff and no stocks/);
 });

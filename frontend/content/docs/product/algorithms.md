@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "677cdacb5b69588e"
+translatedFrom: "c89cb0c059db7da9"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -390,8 +390,39 @@ flowchart TD
 - A day the series does not report is not compared. A series that reports nothing does not give a gap of zero, it gives no gap.
 - The follow-up does not conclude. It gives the gap; saying whether the decision held belongs to the person.
 
-**Code.** `backend/src/services/decisions.ts` (`decisionFromExchange`, `followUp`, `realityOf`), `backend/src/routes/decisions.ts`, migrations `060_analyst_exchange_kind.sql` and `061_decision.sql`; `frontend/app/studio/simulation/hex/DecisionsTab.tsx`.
-**Tests.** `decisions.unit.test.ts`, `analyst-options.unit.test.ts` (from a tested option to a decision), `routes/decisions.unit.test.ts`, `DecisionsTab.test.tsx`.
+**Prepared response and engagement.** A decision can also be taken on a signal, by engaging a response prepared in calm time.
+
+```mermaid
+flowchart TD
+    A["Click Keep as a prepared response for…<br/>under a tested option"] --> B{"Has the scenario changed<br/>since the tests?"}
+    B -->|"yes"| B1["Button refused: the figures would be<br/>those of another scenario"]
+    B -->|"no"| C["The browser sends: the exchange, the step of the test,<br/>the kind of signal, who can approve"]
+    C --> D{"Step = a successful test of an options exchange,<br/>and a kind of signal of this organisation?"}
+    D -->|"no"| E["Refusal: only a tested option can be kept"]
+    D -->|"yes"| F["Row of app.prepared_response: figures copied from the journal,<br/>date of the test, mark of the scenario's choices"]
+    F --> G["Situation card of a signal of that kind:<br/>responses in the order they were kept"]
+    G --> H{"Does the test still speak of the present?"}
+    H -->|"scenario gone, scenario changed,<br/>or a test more than 30 days old"| I["The reason is written above the button"]
+    H -->|"nothing known against it"| J["No warning"]
+    I --> K["Click Engage"]
+    J --> K
+    K --> L{"A signal of this project, open,<br/>with a stage ahead of it,<br/>and a response prepared for its kind?"}
+    L -->|"no"| M["Refusal, before any write"]
+    L -->|"yes"| N["1. Decision: app.decision, tied to the signal<br/>and to the response, the test's figures as expected"]
+    N --> O["2. Signal's trail: option_taken,<br/>the response, the person"]
+    O --> P["3. The signal moves one stage forward;<br/>if the stage requires an approval,<br/>the person engaging is the one approving"]
+```
+
+- **Only a tested option can be kept.** Like a decision, a prepared response is copied by the server from the journalled exchange. No figure comes from the browser: an untested response cannot pass for a tested one.
+- **A test carries its date and its state.** `tested_at` is the date of the exchange. `scenario_mark` is a mark of the scenario's choices when the response is kept: it depends neither on the order of the choices nor on the rows that hold them, and changes as soon as a choice is added, removed or modified.
+- **What the test is worth is said before the click.** Three things can be known without running anything again: the scenario no longer exists, its choices have changed, the test is more than thirty days old (`OLD_AFTER_DAYS`). Each is written in one sentence. None says the response is bad.
+- **Nothing is ranked.** The responses are listed in the order they were kept.
+- **Every refusal comes before the first write.** A signal's trail cannot be rewritten: an engagement that cannot go through is refused before it leaves a line there (`stageAhead`).
+- **Retiring is not erasing.** A retired response is no longer offered; the decisions that engaged it still read.
+- **Nothing is triggered elsewhere.** Engaging records and follows. The screen says so.
+
+**Code.** `backend/src/services/decisions.ts` (`decisionFromExchange`, `followUp`, `realityOf`, `listDecisionsForSignalType`), `prepared-responses.ts` (`scenarioMark`, `standingOf`, `onCard`), `signals.ts` (`stageAhead`, `recordOptionTaken`, `moveSignal`), `backend/src/routes/decisions.ts`, `routes/prepared-responses.ts`, migrations `060_analyst_exchange_kind.sql`, `061_decision.sql` and `065_prepared_response.sql`; `frontend/app/studio/simulation/hex/DecisionsTab.tsx`, `KeepPrepared.tsx`, `frontend/app/studio/situation/PreparedResponses.tsx`.
+**Tests.** `decisions.unit.test.ts`, `prepared-responses.unit.test.ts`, `analyst-options.unit.test.ts` (from a tested option to a decision), `routes/decisions.unit.test.ts`, `DecisionsTab.test.tsx`, `KeepPrepared.test.tsx`, `PreparedResponses.test.tsx`.
 
 ## A10. Online search and calendar of events
 
@@ -819,7 +850,7 @@ flowchart TD
     F --> H["Bridge launched at once, one pass at a time"]
     G --> H
     H --> I["Signal created, titled once"]
-    I --> J["Workflow: steps, approval if needed"]
+    I --> J["Workflow: steps, approval if needed.<br/>An engaged prepared response moves it forward (A9)"]
     F --> K["Alert feed: GET /alerts/feed<br/>open alerts, unit named, ages, signal, last evaluation"]
     I --> K
     K --> L["The Studio's shell: read every 3 s,<br/>a single read for all the pages"]
@@ -934,6 +965,7 @@ flowchart TD
     O -->|"yes, in this project"| P["Its kind, its stage and the path of its workflow,<br/>even if its alert has cleared"]
     O -->|"yes, elsewhere"| Q["Refusal: signal not found"]
     K --> R["A question already written by the program,<br/>from the unit and the alert"]
+    O -->|"yes, in this project"| S["Responses prepared for its kind, and what their test is worth;<br/>decisions already taken on this kind of signal (A9)"]
 ```
 
 **Rules.**
@@ -945,7 +977,8 @@ flowchart TD
 - **Reality only.** No scenario raises an alert, and a live figure read through a “what if” would speak of a world that does not exist.
 - **No history.** The reading is that of now; it says so, to the analyst and on the card.
 - **The card does not wait for the model.** `GET /situation` calls no model and writes nothing. The question for the analyst is written by the program; asking it is the person's move.
-- **A signal is looked up in its project.** A signal of another project is not found, whoever the caller is. Decisions are not yet attached to a kind of signal: the card says so instead of listing any.
+- **A signal is looked up in its project.** A signal of another project is not found, whoever the caller is.
+- **A signal brings what was prepared for its kind.** The prepared responses, with the figures of their test and what it is worth today, and the decisions already taken on signals of that kind (A9). A card with no signal shows none: nothing there says which kind it is. The card also says whether a response can be engaged now, and why not.
 - **On screen.** The card (`/studio/situation`) reads itself again every thirty seconds; only the most recent reading is shown, and a reading that fails leaves the last one on screen, said to be no longer up to date. The shell's “Analyst” button and the card send the page and the selection with the question, as ids (A1).
 - A unit and an aggregate value, never a person.
 

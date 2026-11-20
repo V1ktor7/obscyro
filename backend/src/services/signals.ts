@@ -655,6 +655,44 @@ export async function stagesForSignal(db: DbClient, signalId: string): Promise<W
 export type MoveDirection = "forward" | "back";
 
 /**
+ * The stage a signal would enter if it moved forward, or the reason it cannot.
+ *
+ * Asked before anything is written by a caller that writes more than the move
+ * (engaging a prepared response records a decision first): the trail is
+ * append-only, so a refusal has to come before the first line, not after it.
+ */
+export async function stageAhead(db: DbClient, signalId: string): Promise<{ signal: Signal; next: WorkflowStage }> {
+  const signal = await getSignal(db, signalId);
+  if (signal.closedAt) {
+    throw Conflict("SIGNAL_CLOSED", "This signal is closed. Reopen it before moving it.");
+  }
+  const stages = await stagesForSignal(db, signalId);
+  const idx = stages.findIndex((s) => s.id === signal.stageId);
+  if (idx < 0) throw BadRequest("STAGE_MISSING", "This signal's stage is not on its workflow.");
+  const next = stages[idx + 1];
+  if (!next) throw BadRequest("NO_SUCH_STAGE", "This signal is already at the last stage.");
+  return { signal, next };
+}
+
+/**
+ * Write on a signal's trail that an option was taken: who, which response, and
+ * the decision that records what was expected of it.
+ */
+export async function recordOptionTaken(
+  db: DbClient,
+  signalId: string,
+  opts: { actorUserId: string; fromStageId: string; note: string; payload: Record<string, unknown> },
+): Promise<void> {
+  await appendEvent(db, signalId, {
+    kind: "option_taken",
+    fromStageId: opts.fromStageId,
+    actorUserId: opts.actorUserId,
+    note: opts.note,
+    payload: opts.payload,
+  });
+}
+
+/**
  * Move a signal one stage.
  *
  * A stage marked requiresApproval cannot be entered without someone named

@@ -175,6 +175,9 @@ export interface Decision extends DecisionDraft {
   /** Who recorded it, by name; null when the account is gone. */
   decidedBy: string | null;
   decidedAt: string;
+  /** The signal it was taken on, when a prepared response was engaged; null for a decision recorded from the Options tab. */
+  signal: { id: string; title: string } | null;
+  preparedResponseId: string | null;
 }
 
 interface DecisionDbRow {
@@ -192,13 +195,18 @@ interface DecisionDbRow {
   note: string | null;
   decided_by_name: string | null;
   decided_at: Date;
+  signal_id: string | null;
+  signal_title: string | null;
+  prepared_response_id: string | null;
 }
 
 const SELECT = `
   SELECT d.id, d.project_id, d.scenario_id, d.scenario_name, d.exchange_id, d.option_step, d.objective,
-         d.option_label, d.option_stamps, d.expected, d.source_steps, d.note, u.name AS decided_by_name, d.decided_at
+         d.option_label, d.option_stamps, d.expected, d.source_steps, d.note, u.name AS decided_by_name, d.decided_at,
+         d.signal_id, sg.title AS signal_title, d.prepared_response_id
     FROM app.decision d
-    LEFT JOIN app.users u ON u.id = d.decided_by`;
+    LEFT JOIN app.users u ON u.id = d.decided_by
+    LEFT JOIN app.signal sg ON sg.id = d.signal_id`;
 
 function outDecision(r: DecisionDbRow): Decision {
   return {
@@ -216,6 +224,8 @@ function outDecision(r: DecisionDbRow): Decision {
     note: r.note,
     decidedBy: r.decided_by_name,
     decidedAt: r.decided_at.toISOString(),
+    signal: r.signal_id ? { id: r.signal_id, title: r.signal_title ?? "a signal since deleted" } : null,
+    preparedResponseId: r.prepared_response_id,
   };
 }
 
@@ -224,27 +234,40 @@ export async function exchangeForDecision(
   db: DbClient,
   projectId: string,
   exchangeId: string,
-): Promise<JournalledExchange & { scenarioId: string | null }> {
-  const { rows } = await db.query<{ kind: string; status: string; question: string; answer: unknown; steps: unknown; scenario_id: string | null }>(
-    `SELECT kind, status, question, answer, steps, scenario_id FROM app.analyst_exchange WHERE id = $1 AND project_id = $2`,
+): Promise<JournalledExchange & { scenarioId: string | null; askedAt: Date }> {
+  const { rows } = await db.query<{ kind: string; status: string; question: string; answer: unknown; steps: unknown; scenario_id: string | null; created_at: Date }>(
+    `SELECT kind, status, question, answer, steps, scenario_id, created_at FROM app.analyst_exchange WHERE id = $1 AND project_id = $2`,
     [exchangeId, projectId],
   );
   const r = rows[0];
   if (!r) {
     throw NotFound("EXCHANGE_NOT_FOUND", "That test is not in this project's journal. Test the options again, then record the decision.");
   }
-  return { kind: r.kind, status: r.status, question: r.question, answer: r.answer, steps: r.steps, scenarioId: r.scenario_id };
+  // When it was journalled is when the engine ran its tests: a prepared response dates its test from it.
+  return { kind: r.kind, status: r.status, question: r.question, answer: r.answer, steps: r.steps, scenarioId: r.scenario_id, askedAt: r.created_at };
 }
 
 export async function insertDecision(
   db: DbClient,
-  row: { projectId: string; scenarioId: string | null; scenarioName: string; exchangeId: string; userId: string; note: string | null; draft: DecisionDraft },
+  row: {
+    projectId: string;
+    scenarioId: string | null;
+    scenarioName: string;
+    /** Null when the journalled exchange is gone: the figures were copied when the response was kept. */
+    exchangeId: string | null;
+    userId: string;
+    note: string | null;
+    draft: DecisionDraft;
+    /** Set when a prepared response is engaged on a signal. */
+    signalId?: string | null;
+    preparedResponseId?: string | null;
+  },
 ): Promise<Decision> {
   const { rows } = await db.query<{ id: string }>(
     `INSERT INTO app.decision
             (project_id, scenario_id, scenario_name, exchange_id, option_step, objective, option_label,
-             option_stamps, expected, source_steps, note, decided_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11, $12)
+             option_stamps, expected, source_steps, note, decided_by, signal_id, prepared_response_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11, $12, $13, $14)
      RETURNING id`,
     [
       row.projectId,
@@ -259,9 +282,20 @@ export async function insertDecision(
       JSON.stringify(row.draft.sourceSteps),
       row.note,
       row.userId,
+      row.signalId ?? null,
+      row.preparedResponseId ?? null,
     ],
   );
   return getDecision(db, row.projectId, rows[0]!.id);
+}
+
+/** The decisions taken on signals of one kind, most recent first: what was engaged the last times this happened. */
+export async function listDecisionsForSignalType(db: DbClient, projectId: string, signalTypeId: string, limit = 20): Promise<Decision[]> {
+  const { rows } = await db.query<DecisionDbRow>(
+    `${SELECT} WHERE d.project_id = $1 AND sg.signal_type_id = $2 ORDER BY d.decided_at DESC LIMIT $3`,
+    [projectId, signalTypeId, limit],
+  );
+  return rows.map(outDecision);
 }
 
 export async function listDecisions(db: DbClient, projectId: string, scenarioId: string | null, limit = 100): Promise<Decision[]> {

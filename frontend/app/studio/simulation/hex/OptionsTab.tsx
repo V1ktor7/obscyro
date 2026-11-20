@@ -44,6 +44,7 @@ import {
   type RunDigest,
 } from "../../analyst-api";
 import { Elapsed, LABEL, OptionChanges, STRUCK, Text, Trace } from "./analyst-parts";
+import KeepPrepared from "./KeepPrepared";
 import { BasisList, EvidenceMeter, Figures, Fold, Outcome, waitingScale } from "./option-cards";
 import { takesOut } from "./option-write";
 
@@ -484,6 +485,8 @@ export default function OptionsTab({
                         </p>
                       ) : null}
                       {isRecorded ? <p className="text-[11px] text-ink-muted">Kept under Decisions, with these figures as what is expected.</p> : null}
+                      {/* The calm-time half of the live loop: this test, kept for the day a signal of some kind is raised. */}
+                      <KeepPrepared env={env} exchangeId={exchangeId} step={o.step} label={o.label} current={!moved} disabled={acting !== null} />
                     </div>
                   </section>
                 );

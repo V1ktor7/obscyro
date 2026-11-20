@@ -726,12 +726,12 @@ function Detail({
         ) : null}
       </div>
 
-      {/* options — honestly empty */}
+      {/* options: prepared in calm time, shown and engaged on the situation card */}
       <div className="border-b border-line-soft px-3 py-2.5">
         <p className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">Options</p>
         <p className="mt-1 text-[10.5px] leading-snug text-ink-faint">
-          No response rules are implemented. The table exists, but the engine computes no
-          candidates yet — better to say so than to invent options.
+          The responses prepared for this kind of signal are on its situation card, with the figures of their last
+          test, and are engaged there. Nothing is computed here: a response is a tested option somebody kept.
         </p>
       </div>
 

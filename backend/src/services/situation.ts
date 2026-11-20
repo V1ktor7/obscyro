@@ -1,4 +1,6 @@
+import type { Decision } from "./decisions.js";
 import { alertNow, lastChecked, unitNow, type LiveReading, type LiveSignal } from "./live-reading.js";
+import type { ResponseOnCard } from "./prepared-responses.js";
 
 /**
  * The situation card: what a person needs in front of them when an alert or a
@@ -25,6 +27,39 @@ export interface SituationAsk {
   signalId: string | null;
 }
 
+/** A decision already taken on a signal of this kind: what was engaged the last times this happened. */
+export interface DecisionOnCard {
+  id: string;
+  label: string;
+  decidedBy: string | null;
+  decidedAt: string;
+  /** The signal it was taken on, and whether that is the one on this card. */
+  signalTitle: string | null;
+  onThisSignal: boolean;
+  /** What was expected of it: patient-days of waiting in its test, with it and without. */
+  waitingWith: number;
+  waitingWithout: number;
+}
+
+export function decisionOnCard(d: Decision, signalId: string): DecisionOnCard {
+  return {
+    id: d.id,
+    label: d.optionLabel,
+    decidedBy: d.decidedBy,
+    decidedAt: d.decidedAt,
+    signalTitle: d.signal?.title ?? null,
+    onThisSignal: d.signal?.id === signalId,
+    waitingWith: d.expected.withOption.waitingDays,
+    waitingWithout: d.expected.asItIs.waitingDays,
+  };
+}
+
+/** What was prepared and decided for the kind of signal a card is about. Read by the route, since it is not part of the live reading. */
+export interface PreparedForKind {
+  responses: ResponseOnCard[];
+  decisions: DecisionOnCard[];
+}
+
 /** A stage of the signal's workflow, in order. */
 export interface PathStage {
   name: string;
@@ -43,8 +78,16 @@ export interface SituationCard {
    */
   alert: { state: "open"; reading: ReturnType<typeof alertNow> } | { state: "not_open" } | null;
   signal: (LiveSignal & { path: PathStage[] }) | null;
-  /** Decisions recorded against this kind of signal. None can be, yet: the note says why. */
-  decisions: { items: never[]; note: string };
+  /**
+   * The responses prepared for this kind of signal, in the order they were
+   * kept, never ranked. Null when the card names no signal: a response is
+   * prepared for a kind of signal, and there is none to tell the kind.
+   */
+  responses: ResponseOnCard[] | null;
+  /** Whether a response can be engaged now, and why not when it cannot. */
+  engage: { possible: boolean; why: string | null };
+  /** Decisions already taken on signals of this kind, most recent first. */
+  decisions: { items: DecisionOnCard[]; note: string };
   /** A question for the analyst, written by the program from what the card shows. */
   question: string;
   checked: ReturnType<typeof lastChecked>;
@@ -61,6 +104,14 @@ export function preparedQuestion(unitName: string | null, alertOpen: boolean): s
     : `What do the live figures of ${unitName} show right now, and how old are they?`;
 }
 
+/** Whether a prepared response can be engaged on this signal now. Said on the card, so the button never refuses in silence. */
+export function engageNow(signal: LiveSignal | null): { possible: boolean; why: string | null } {
+  if (!signal) return { possible: false, why: "This card names no signal: a response is engaged on a signal." };
+  if (signal.closedAt) return { possible: false, why: "This signal is closed. Reopen it before engaging a response." };
+  if (signal.stageNo >= signal.stages) return { possible: false, why: "This signal is already at the last stage of its workflow." };
+  return { possible: true, why: null };
+}
+
 /**
  * The card, from one live reading.
  *
@@ -73,6 +124,7 @@ export function situationOf(
   ask: SituationAsk,
   signal: LiveSignal | null = null,
   stages: { name: string; requiresApproval: boolean }[] = [],
+  prepared: PreparedForKind | null = null,
 ): SituationCard {
   const alertId = ask.alertId ?? signal?.alertId ?? null;
   const listed = alertId ? (live.feed.alerts.find((a) => a.id === alertId) ?? null) : null;
@@ -89,11 +141,15 @@ export function situationOf(
           path: stages.map((s, i) => ({ name: s.name, current: i + 1 === signal.stageNo, needsApproval: s.requiresApproval })),
         }
       : null,
+    responses: signal ? (prepared?.responses ?? []) : null,
+    engage: engageNow(signal),
     decisions: {
-      items: [],
-      note:
-        "No decision can be listed here yet: a decision is recorded from a tested option of a scenario, and nothing attaches it to a kind of signal. " +
-        "Recorded decisions are in the Scenarios page, Analyst panel, Decisions tab.",
+      items: signal ? (prepared?.decisions ?? []) : [],
+      note: !signal
+        ? "This card names no signal, so there is no kind of signal to list decisions for."
+        : (prepared?.decisions.length ?? 0) > 0
+          ? "Taken on signals of this kind by engaging a prepared response. Each is in the Decisions tab with what was expected of it."
+          : "No decision has been taken on a signal of this kind yet. One is recorded when a prepared response is engaged.",
     },
     question: preparedQuestion(unit?.name ?? null, listed !== null),
     checked: lastChecked(live),

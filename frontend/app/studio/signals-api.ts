@@ -138,6 +138,12 @@ export async function getCommandBoard(
   return apiFetch(`/v1/ontology/${enc(env)}/command-board${q ? `?${q}` : ""}`);
 }
 
+/** The kinds of signal this project's organisation defined. */
+export async function listSignalTypes(env: string): Promise<SignalType[]> {
+  const res = await apiFetch<{ signalTypes: SignalType[] }>(`/v1/ontology/${enc(env)}/signal-types`);
+  return res.signalTypes;
+}
+
 export async function seedSignalConfig(
   env: string,
 ): Promise<{ workflows: number; signalTypes: number; note: string }> {

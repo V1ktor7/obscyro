@@ -3,7 +3,7 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "f02539b0e2e9aff7"
+translatedFrom: "65f3696e441871d3"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
@@ -54,6 +54,10 @@ The Event finder tab uses the web search of the Claude API. It has no variable o
 | `POST /v1/ontology/:env/decisions` | Records a decision from a tested option |
 | `GET /v1/ontology/:env/decisions` | The project's decisions, most recent first (`scenarioId` for a single scenario) |
 | `GET /v1/ontology/:env/decisions/:id/follow-up` | The arrivals a decision expected beside the observed series, with the gap |
+| `POST /v1/ontology/:env/prepared-responses` | Keeps a tested option as a prepared response for a kind of signal |
+| `GET /v1/ontology/:env/prepared-responses` | The project's prepared responses, in the order they were kept (`signalTypeId` for a single kind of signal) |
+| `DELETE /v1/ontology/:env/prepared-responses/:id` | Retires a prepared response: it is no longer offered, without being erased |
+| `POST /v1/ontology/:env/signals/:id/engage` | Engages a prepared response on a signal: records the decision, writes it on the signal's trail, and moves the signal one stage forward |
 | `POST /v1/ontology/:env/health-events` | Accepts a candidate: it enters the calendar |
 | `GET /v1/ontology/:env/health-events` | The project's calendar, oldest to most recent (`from`, `to` for a period) |
 | `DELETE /v1/ontology/:env/health-events/:id` | Removes an event from the calendar |
@@ -66,6 +70,8 @@ Body of a question: `question`, `scenarioId` (or `null`), `looking` (`reality` o
 Body of an objective: `objective`, `scenarioId` (required: an option is added to a scenario), `horizon` and `activity` (the page's own, so that the test answers what Run would show), `run`.
 
 Body of a decision: `exchangeId` and `step`, nothing else. The figures are copied by the server from its journal.
+
+Body of a prepared response: `exchangeId`, `step`, `signalTypeId`, and if needed `label` (what it is called) and `approver` (who can approve it, in words). No figure: the server copies them from its journal, as for a decision. Body of an engagement: `responseId`, and `note` if needed.
 
 Body of an event search: `request`, and `scenarioId` (or `null`), which only tells the journal where the request was made from. Neither the run nor anything from the twin is part of it.
 
@@ -195,6 +201,18 @@ A decision cannot be edited: revising it means recording another one.
 
 The follow-up (“Compare with observed”) exists when an observed series is linked to the scenario, through the “Reality check” setting of the Result panel. It sets the arrivals the tested run expected beside those that were counted, and gives the gap: totals over the days both report, average gap per day, offset of the peaks. It does not conclude. And it compares arrivals only: the twin keeps no history of queues or of occupancy, so the expected queue has nothing observed to face it, which the screen says.
 
+### Prepared responses, and “Engage”
+
+In an emergency nobody builds a scenario: what was prepared is applied. So the work is done in two stages.
+
+**In calm time.** Under each tested option, “Keep as a prepared response for…” keeps it for a kind of signal. You choose the kind, and if needed who can approve it, in words (a role). Nothing else is sent: the server copies the figures of the test from its journal, with its date and a mark of the choices of the scenario it ran on. A prepared response is therefore always an option the engine really tested. The button refuses when the scenario has changed since the tests: the figures would be those of another scenario.
+
+**Live.** The situation card of a signal shows the responses prepared for its kind, in the order they were kept, with no ranking. Each says: what it changes; the run with it beside the same run without it; what that run rests on, counted by level of evidence; what its test does not say; and what that test is worth today. Three things can be known without running anything again, and each is written above the button, before the click: the scenario of the test no longer exists, its choices have changed since, or the test is more than thirty days old. None says the response is bad; they say what the figures are figures of.
+
+“Engage” makes three writes in one click: a decision, tied to the signal, with the figures of the test as what is expected of it; a line on the signal's trail, naming the response and the person; and the move of the signal to its next stage. If that stage requires an approval, the person engaging is the one recorded as having given it. Every refusal comes before the first write: a closed signal, a signal at its last stage, a response prepared for another kind of signal. Nothing is triggered in any other system: Obscyro records and follows, and the screen says so.
+
+The decision reads back in three places: on the card, among the decisions already taken on this kind of signal; in the signal's trail, on the Response page; and in the Decisions tab, where it carries the name of the signal.
+
 ## The rule of numbers
 
 1. Each paragraph cites the steps it rests on.
@@ -258,7 +276,8 @@ Under the figures, three folded lines, which open on a click: “Why this option
 - the unit's live figures, as its page shows them, with the age of the reading and its reason when it is not exact, then what stands under the unit by type;
 - the unit's other open alerts;
 - the signal, and the path of its workflow with the stage it stands at;
-- the decisions already recorded for this kind of signal: none can be attached to one yet, and the card says so;
+- the responses prepared for the signal's kind, with the figures of their last test and what it is worth today, and the “Engage” button (see “Prepared responses”);
+- the decisions already taken on signals of this kind, with what was expected of them;
 - the analyst, with a question already written from the unit and the alert. It is not sent: asking it is the person's click;
 - what the card cannot say.
 
@@ -348,6 +367,9 @@ What is not judged: the quality of the writing. That still takes a person, who r
 - The name of a choice (`choice-a`) holds for one exchange. A later question reads the recipe again and may give it another name.
 - An objective takes a little under three minutes on the Montréal twin. One pass of the engine takes about thirty seconds there; the first test launches two (the scenario as it is, then the option) after reading the twin and computing the spread, the following ones a single pass. It is the engine that sets the duration: to go faster the engine has to be made faster, not the analyst.
 - The follow-up of a decision compares arrivals only (see “The decisions”).
+- A prepared response is kept from an option tested in the Options tab. A response written on the Events page cannot be kept yet: it has no journalled test to copy figures from.
+- What is known of a kept test is limited to its date and the scenario it ran on. The scenario's mark is taken when the response is kept; that the twin itself has changed since (beds added or removed) does not show. Testing a response again on the state of the moment does not exist yet.
+- Engaging makes three writes in a row, not a single operation: if the last one fails, the decision and its line on the trail exist, and the signal has not moved.
 - A recorded decision cannot be deleted on screen.
 
 ## Files
@@ -358,6 +380,7 @@ What is not judged: the quality of the writing. That still takes a person, who r
 | Live reading, `list_alerts`, `unit_now` | `backend/src/services/live-reading.ts` |
 | Situation card | `backend/src/services/situation.ts`, `backend/src/routes/situation.ts`, `frontend/app/studio/situation/SituationView.tsx`, `situation-api.ts` |
 | The analyst in the Studio's shell | `frontend/app/studio/AnalystDock.tsx` |
+| Prepared responses, “Engage” | `backend/src/services/prepared-responses.ts`, `backend/src/routes/prepared-responses.ts`, `frontend/app/studio/simulation/hex/KeepPrepared.tsx`, `frontend/app/studio/situation/PreparedResponses.tsx`, `prepared-api.ts` |
 | Reading tools, digest of the run | `backend/src/services/analyst-tools.ts` |
 | The `test_option` tool, closing of an objective, `give_options` | `backend/src/services/analyst-options.ts` |
 | Closing of an event search, `give_events` | `backend/src/services/analyst-events.ts` |

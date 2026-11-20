@@ -5,11 +5,13 @@ import { z } from "zod";
 import { config } from "../lib/config.js";
 import type { DbClient } from "../lib/db.js";
 import { AppError, BadRequest, NotFound } from "../lib/errors.js";
+import { listDecisionsForSignalType } from "../services/decisions.js";
 import { readLive, signalsById } from "../services/live-reading.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
 import { resolveEnvironment } from "../services/ontology.js";
+import { listPreparedResponses, onCard, scenarioOf, scenariosNow } from "../services/prepared-responses.js";
 import { stagesForSignal } from "../services/signals.js";
-import { situationOf } from "../services/situation.js";
+import { decisionOnCard, situationOf, type PreparedForKind } from "../services/situation.js";
 
 const errorEnvelope = z.object({
   error: z.object({ code: z.string(), message: z.string(), details: z.unknown().optional() }),
@@ -36,7 +38,10 @@ const situationRoutes: FastifyPluginAsync = async (fastify) => {
           "the unit's live figures as its page shows them, each with its age (or the reason it has none), the alert it was " +
           "opened from, where the signal stands in its workflow, and a question already written for the analyst. Name at " +
           "least one of `unit`, `alert`, `signal`; an alert or a signal brings its unit. The figures are the ones the " +
-          "analyst's `unit_now` and `list_alerts` give, from the same reading. Reality only; nothing is written.",
+          "analyst's `unit_now` and `list_alerts` give, from the same reading. When a signal is named, the card also " +
+          "carries the responses prepared for its kind, each with the figures of its test and what that test is " +
+          "worth now, whether one can be engaged, and the decisions already taken on signals of that kind. " +
+          "Reality only; nothing is written.",
         tags: ["twin"],
         params: z.object({ env: z.string().min(1) }),
         querystring: z.object({
@@ -62,8 +67,22 @@ const situationRoutes: FastifyPluginAsync = async (fastify) => {
       if (unit && !live.units.some((u) => u.id === unit)) throw NotFound("UNIT_NOT_FOUND", "That unit is not in this project.");
       const stages = found ? await stagesForSignal(req.db, found.id) : [];
 
+      let prepared: PreparedForKind | null = null;
+      if (found) {
+        const [kept, decided] = await Promise.all([
+          listPreparedResponses(req.db, env.id, found.typeId),
+          listDecisionsForSignalType(req.db, env.id, found.typeId),
+        ]);
+        const scenarios = await scenariosNow(req.db, env.id, kept);
+        const at = new Date(live.at);
+        prepared = {
+          responses: kept.map((r) => onCard(r, scenarioOf(scenarios, r), at)),
+          decisions: decided.map((d) => decisionOnCard(d, found.id)),
+        };
+      }
+
       return {
-        ...situationOf(live, { unitId: unit ?? null, alertId: alert ?? null, signalId: signal ?? null }, found, stages),
+        ...situationOf(live, { unitId: unit ?? null, alertId: alert ?? null, signalId: signal ?? null }, found, stages, prepared),
         // Whether the question can be asked at all: the card is whole either way.
         analyst: { configured: Boolean(config.anthropicApiKey) },
       };

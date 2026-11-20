@@ -28,6 +28,7 @@ import { useStudio } from "../StudioShell";
 import { ALERT_PARAM, SIGNAL_PARAM, UNIT_PARAM, signalHref, unitHref } from "../alert-feed-state";
 import { AskTab } from "../simulation/hex/AnalystPanel";
 import { getSituation, printed, type AlertReading, type SituationCard, type ValueAge } from "../situation-api";
+import PreparedResponses from "./PreparedResponses";
 
 /** The card reads itself again this often: a figure left on screen grows old without saying so. */
 export const REREAD_MS = 30_000;
@@ -286,9 +287,36 @@ export default function SituationView() {
               </section>
             ) : null}
 
-            <section aria-label="Decisions" className={cn(CARD, "flex flex-col gap-1 p-3")}>
-              <p className={LABEL}>Decisions already recorded for this kind of signal</p>
-              <p className="text-[12px] text-ink-body">{card.decisions.note}</p>
+            {sig && card.responses ? (
+              <PreparedResponses
+                env={selectedEnv}
+                signalId={sig.id}
+                kind={sig.type}
+                responses={card.responses}
+                engage={card.engage}
+                onEngaged={() => void read()}
+              />
+            ) : null}
+
+            <section aria-label="Decisions" className={cn(CARD, "flex flex-col gap-1.5 p-3")}>
+              <p className={LABEL}>Decisions already taken on this kind of signal</p>
+              {card.decisions.items.length ? (
+                <ul className="flex flex-col gap-1">
+                  {card.decisions.items.map((d) => (
+                    <li key={d.id} className="text-[12px] text-ink-body">
+                      <span className="font-semibold text-ink">{d.label}</span>
+                      {" · "}
+                      {d.decidedBy ?? "Someone"}, {new Date(d.decidedAt).toLocaleDateString("en-CA", { year: "numeric", month: "short", day: "numeric" })}
+                      {d.onThisSignal ? " · on this signal" : d.signalTitle ? ` · on “${d.signalTitle}”` : ""}
+                      <span className="text-ink-muted">
+                        {" · "}expected {Math.round(d.waitingWith).toLocaleString("en-CA")} patient-days waiting, against{" "}
+                        {Math.round(d.waitingWithout).toLocaleString("en-CA")} without it
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              <p className="text-[11.5px] text-ink-muted">{card.decisions.note}</p>
             </section>
 
             <section aria-label="Ask the analyst" className={cn(CARD, "flex flex-col")}>

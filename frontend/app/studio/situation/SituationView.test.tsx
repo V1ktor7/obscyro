@@ -73,6 +73,7 @@ const card = (over: Partial<SituationCard> = {}): SituationCard => ({
     closedAt: null,
     unitId: "u1",
     alertId: "a1",
+    typeId: "kind-1",
     type: "Capacity breach",
     domain: "Capacity",
     stage: "Triage",
@@ -86,7 +87,9 @@ const card = (over: Partial<SituationCard> = {}): SituationCard => ({
       { name: "Closed", current: false, needsApproval: false },
     ],
   },
-  decisions: { items: [], note: "No decision can be listed here yet: nothing attaches a decision to a kind of signal." },
+  responses: [],
+  engage: { possible: true, why: null },
+  decisions: { items: [], note: "No decision has been taken on a signal of this kind yet. One is recorded when a prepared response is engaged." },
   question: "What is open at Urgence — Hôpital A right now, how old are its figures, and what else is open around it?",
   checked: { at: "2026-11-20T14:59:56.000Z", says: "thresholds last checked 4 s ago" },
   alertRules: 3,
@@ -143,7 +146,7 @@ describe("the situation card", () => {
     expect(steps[0]!.getAttribute("aria-current")).toBe("step");
     expect(steps[1]!.getAttribute("aria-current")).toBeNull();
 
-    expect(within(screen.getByRole("region", { name: "Decisions" })).getByText(/nothing attaches a decision to a kind of signal/)).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Decisions" })).getByText(/No decision has been taken on a signal of this kind yet/)).toBeTruthy();
     expect(within(screen.getByRole("region", { name: "What this card cannot say" })).getByText(/keeps no history/)).toBeTruthy();
   });
 

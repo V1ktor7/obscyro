@@ -139,6 +139,7 @@ function DecisionCard({ env, d, here }: { env: string; d: Decision; here: boolea
         <span className="text-[12.5px] font-semibold leading-snug text-ink">{d.optionLabel}</span>
         <span className="text-[11px] text-ink-muted">
           {d.decidedBy ?? "Someone"} · {day(d.decidedAt)} · {d.scenarioName}
+          {d.signal ? ` · engaged on the signal “${d.signal.title}”` : ""}
         </span>
         <p className="text-[12px] text-ink-body">
           <span className="text-ink-muted">Objective: </span>

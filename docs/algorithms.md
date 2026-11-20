@@ -384,8 +384,39 @@ flowchart TD
 - Un jour que la série ne rapporte pas n'est pas comparé. Une série qui ne rapporte rien ne donne pas un écart nul, elle ne donne pas d'écart.
 - Le suivi ne conclut pas. Il donne l'écart ; dire si la décision a tenu revient à la personne.
 
-**Code.** `backend/src/services/decisions.ts` (`decisionFromExchange`, `followUp`, `realityOf`), `backend/src/routes/decisions.ts`, migrations `060_analyst_exchange_kind.sql` et `061_decision.sql` ; `frontend/app/studio/simulation/hex/DecisionsTab.tsx`.
-**Tests.** `decisions.unit.test.ts`, `analyst-options.unit.test.ts` (d'une option testée à une décision), `routes/decisions.unit.test.ts`, `DecisionsTab.test.tsx`.
+**Réponse préparée et engagement.** Une décision peut aussi être prise sur un signal, en engageant une réponse préparée à froid.
+
+```mermaid
+flowchart TD
+    A["Clic Keep as a prepared response for…<br/>sous une option testée"] --> B{"Le scénario a-t-il changé<br/>depuis les tests ?"}
+    B -->|"oui"| B1["Bouton refusé : les chiffres seraient<br/>ceux d'un autre scénario"]
+    B -->|"non"| C["Le navigateur envoie : l'échange, l'étape du test,<br/>le type de signal, qui peut approuver"]
+    C --> D{"Étape = test réussi d'un échange d'options,<br/>et type de signal de cette organisation ?"}
+    D -->|"non"| E["Refus : seule une option testée se garde"]
+    D -->|"oui"| F["Ligne de app.prepared_response : chiffres recopiés du journal,<br/>date du test, empreinte des choix du scénario"]
+    F --> G["Fiche de situation d'un signal de ce type :<br/>réponses dans l'ordre où elles ont été gardées"]
+    G --> H{"Le test parle-t-il encore du présent ?"}
+    H -->|"scénario disparu, scénario changé,<br/>ou test de plus de 30 jours"| I["La raison est écrite au-dessus du bouton"]
+    H -->|"rien de connu contre lui"| J["Aucun avertissement"]
+    I --> K["Clic Engage"]
+    J --> K
+    K --> L{"Signal de ce projet, ouvert,<br/>avec une étape devant lui,<br/>et réponse préparée pour son type ?"}
+    L -->|"non"| M["Refus, avant toute écriture"]
+    L -->|"oui"| N["1. Décision : app.decision, rattachée au signal<br/>et à la réponse, chiffres du test comme attendu"]
+    N --> O["2. Journal du signal : option_taken,<br/>la réponse, la personne"]
+    O --> P["3. Le signal avance d'une étape ;<br/>si l'étape exige une approbation,<br/>la personne qui engage est celle qui approuve"]
+```
+
+- **Seule une option testée se garde.** Comme une décision, une réponse préparée est recopiée par le serveur depuis l'échange journalisé. Aucun chiffre ne vient du navigateur : une réponse non testée ne peut pas passer pour testée.
+- **Un test porte sa date et son état.** `tested_at` est la date de l'échange. `scenario_mark` est une empreinte des choix du scénario quand la réponse est gardée : elle ne dépend ni de l'ordre des choix ni des lignes qui les portent, et change dès qu'un choix est ajouté, retiré ou modifié.
+- **Ce que le test vaut se dit avant le clic.** Trois choses se savent sans rien relancer : le scénario n'existe plus, ses choix ont changé, le test a plus de trente jours (`OLD_AFTER_DAYS`). Chacune s'écrit en une phrase. Aucune ne dit que la réponse est mauvaise.
+- **Rien n'est classé.** Les réponses sont listées dans l'ordre où elles ont été gardées.
+- **Tout refus précède la première écriture.** Le journal d'un signal ne se réécrit pas : un engagement qui ne peut pas aboutir est refusé avant d'y laisser une ligne (`stageAhead`).
+- **Retirer n'est pas effacer.** Une réponse retirée n'est plus proposée ; les décisions qui l'ont engagée restent lisibles.
+- **Rien n'est déclenché ailleurs.** Engager enregistre et suit. L'écran le dit.
+
+**Code.** `backend/src/services/decisions.ts` (`decisionFromExchange`, `followUp`, `realityOf`, `listDecisionsForSignalType`), `prepared-responses.ts` (`scenarioMark`, `standingOf`, `onCard`), `signals.ts` (`stageAhead`, `recordOptionTaken`, `moveSignal`), `backend/src/routes/decisions.ts`, `routes/prepared-responses.ts`, migrations `060_analyst_exchange_kind.sql`, `061_decision.sql` et `065_prepared_response.sql` ; `frontend/app/studio/simulation/hex/DecisionsTab.tsx`, `KeepPrepared.tsx`, `frontend/app/studio/situation/PreparedResponses.tsx`.
+**Tests.** `decisions.unit.test.ts`, `prepared-responses.unit.test.ts`, `analyst-options.unit.test.ts` (d'une option testée à une décision), `routes/decisions.unit.test.ts`, `DecisionsTab.test.tsx`, `KeepPrepared.test.tsx`, `PreparedResponses.test.tsx`.
 
 ## A10. Recherche en ligne et calendrier d'événements
 
@@ -813,7 +844,7 @@ flowchart TD
     F --> H["Pont lancé tout de suite, une passe à la fois"]
     G --> H
     H --> I["Signal créé, titré une fois"]
-    I --> J["Workflow : étapes, approbation au besoin"]
+    I --> J["Workflow : étapes, approbation au besoin.<br/>Une réponse préparée engagée le fait avancer (A9)"]
     F --> K["Fil d'alertes : GET /alerts/feed<br/>alertes ouvertes, unité nommée, âges, signal, dernière évaluation"]
     I --> K
     K --> L["Cadre du studio : lu toutes les 3 s,<br/>une seule lecture pour toutes les pages"]
@@ -928,6 +959,7 @@ flowchart TD
     O -->|"oui, dans ce projet"| P["Son type, son étape et le chemin de son workflow,<br/>même si son alerte est retombée"]
     O -->|"oui, ailleurs"| Q["Refus : signal introuvable"]
     K --> R["Question déjà écrite par le programme,<br/>d'après l'unité et l'alerte"]
+    O -->|"oui, dans ce projet"| S["Réponses préparées pour son type, et ce que leur test vaut ;<br/>décisions déjà prises sur ce type de signal (A9)"]
 ```
 
 **Règles.**
@@ -939,7 +971,8 @@ flowchart TD
 - **Réalité seulement.** Aucun scénario ne lève d'alerte, et un chiffre en direct lu à travers un « et si » parlerait d'un monde qui n'existe pas.
 - **Pas d'historique.** La lecture est celle de maintenant ; elle le dit, à l'analyste et sur la fiche.
 - **La fiche n'attend pas le modèle.** `GET /situation` n'appelle aucun modèle et n'écrit rien. La question à l'analyste est écrite par le programme ; la poser est un geste de la personne.
-- **Un signal se cherche dans son projet.** Un signal d'un autre projet est introuvable, qui que soit l'appelant. Les décisions ne sont pas encore rattachées à un type de signal : la fiche le dit au lieu d'en lister.
+- **Un signal se cherche dans son projet.** Un signal d'un autre projet est introuvable, qui que soit l'appelant.
+- **Un signal apporte ce qui a été préparé pour son type.** Les réponses préparées, avec les chiffres de leur test et ce qu'il vaut aujourd'hui, et les décisions déjà prises sur des signaux de ce type (A9). Une fiche sans signal n'en montre pas : rien n'y dit de quel type il s'agit. La fiche dit aussi si une réponse peut être engagée maintenant, et pourquoi non.
 - **À l'écran.** La fiche (`/studio/situation`) se relit toutes les trente secondes ; seule la lecture la plus récente s'affiche, et une lecture qui échoue laisse la dernière à l'écran, dite comme n'étant plus à jour. Le bouton « Analyst » du cadre et la fiche envoient avec la question la page et la sélection, par identifiants (A1).
 - Une unité et une valeur agrégée, jamais une personne.
 
