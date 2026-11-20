@@ -30,7 +30,7 @@ Il lit le jumeau à travers l'API Claude. Il lui faut la variable `ANTHROPIC_API
 
 Ce que les outils lisent du jumeau (des comptes et des capacités, jamais une personne) est envoyé à l'API Claude pour rédiger la réponse. Le panneau le dit en pied.
 
-L'onglet Event finder utilise la recherche web de l'API Claude. Elle n'a pas de variable à elle : elle marche avec la même clé, à deux conditions qui se règlent dans la console Claude et non dans le produit. La recherche web doit être permise pour l'organisation (elle l'est par défaut ; coupée, la demande échoue avec une erreur du modèle), et les domaines du projet ne doivent pas sortir d'une liste que l'organisation aurait restreinte. Elle est facturée en plus des jetons : 10 $ US pour 1 000 recherches au tarif lu le 2026-11-17, huit recherches au plus par demande.
+L'onglet Event finder utilise la recherche web de l'API Claude. Elle n'a pas de variable à elle : elle marche avec la même clé, à deux conditions qui se règlent dans la console Claude et non dans le produit. La recherche web doit être permise pour l'organisation (elle l'est par défaut ; coupée, la demande échoue avec une erreur du modèle), et les domaines du projet ne doivent pas sortir d'une liste que l'organisation aurait restreinte. Elle est facturée en plus des jetons : 10 $ US pour 1 000 recherches au tarif lu le 2026-11-17 et relu le 2026-11-20, huit recherches au plus par demande.
 
 État au 2026-11-17 : en service en production, vérifié avec le vrai modèle. Le premier test a trouvé deux défauts, corrigés le jour même (une interversion de deux sites et un chiffre arrondi deux fois, voir « La règle des chiffres »), puis les questions de référence ont toutes passé deux fois de suite (voir plus bas).
 
@@ -162,8 +162,47 @@ Rien du jumeau ne part dans une recherche. Dans cet échange le modèle n'a aucu
 - Deux candidats sont arrivés sans date de début, parce que leur passage ne la donnait pas : l'écran demande de la lire dans la source.
 - Reject n'a déclenché aucun appel au serveur.
 - Dans l'onglet Ask, `list_events` a répondu que le calendrier est vide et a renvoyé vers Event finder ; une question de référence sur le jumeau a redonné ses chiffres connus.
-- **Pas encore exercé en production : Accept, le couloir Context, et une réponse qui cite un événement.** Ils sont couverts par les tests. Accepter écrit dans le calendrier du projet de démonstration : ce clic revient à une personne.
-- Coût observé de cette demande : 32 étapes, 5 recherches, environ 319 000 jetons lus et écrits, la plupart étant le contenu des pages que la recherche renvoie au modèle.
+- Accept, le couloir Context et une réponse qui cite un événement ont été exercés en production le 2026-11-20 : le couvre-feu et la fermeture des écoles, acceptés d'un clic, apparaissent sur la frise du scénario, et l'analyste les cite avec leur lien quand on lui demande ce qui se passait au pic des admissions.
+- Coût observé de cette demande ce jour-là : 32 étapes, 5 recherches, environ 319 000 jetons lus et écrits. Il a été réduit depuis : voir ci-dessous.
+
+### Ce que coûte une recherche
+
+Mesuré en production le 2026-11-20, sur la même demande de référence, avec le modèle `claude-opus-5-5`. Le journal garde les jetons de chaque requête par prix (`usage.byRequest`), ce qui a permis de voir où ils allaient. Prix lus le même jour sur la page de tarification de l'API : 4 $ par million de jetons lus, 5 $ écrits au cache, 0,20 $ relus du cache, 20 $ écrits par le modèle, et 10 $ pour 1 000 recherches.
+
+| | Avant | Après |
+|---|---|---|
+| Requêtes au modèle | 3 | 2 |
+| Recherches lancées | 5 | 6 |
+| Jetons écrits au cache | 155 661 | 99 413 |
+| Jetons relus du cache | 131 228 | 4 806 |
+| Jetons lus au plein tarif | 14 | 10 |
+| Jetons écrits par le modèle | 9 633 | 7 421 |
+| **Total des jetons** | **296 536** | **111 650** |
+| **Prix de la demande** | **1,05 $** | **0,71 $** |
+| Candidats rendus, rien de retiré | 12 | 12 |
+| Durée | 87 s | 68 s |
+
+Le total a baissé de 62 %, le prix de 33 %. Les deux chiffres ne bougent pas ensemble, et c'est le constat qui compte : **ce qui coûte, c'est d'écrire les pages une fois, pas de les relire.** Une recherche renvoie dix pages, environ 14 800 jetons, soit à peu près 8 cents (7 cents de jetons, 1 cent de recherche). Relire ces pages depuis le cache est vingt-cinq fois moins cher que de les écrire.
+
+Où allaient les jetons, et ce qui a été changé :
+
+| Constat | Changement | Effet mesuré |
+|---|---|---|
+| La livraison des candidats, puis sa correction quand un brouillon était renvoyé, repartaient avec toutes les pages : 162 706 jetons d'entrée, plus de la moitié de la demande. Et la deuxième requête ne relisait rien du cache de la première : ses 76 421 jetons étaient réécrits, pour 38 cents | La livraison se fait dans une conversation neuve, qui ne contient que la demande, les recherches faites et les passages relevés. Les pages ne repartent plus | La livraison passe de 162 706 jetons d'entrée à 5 967. La demande passe de 1,05 $ à 0,70 $ |
+| Chaque recherche lancée seule fait relire tout ce que les précédentes ont renvoyé : 128 315 jetons relus pour six recherches | Les consignes demandent de prévoir les recherches et de les lancer ensemble, dans la même étape | La relecture passe de 128 315 jetons à 4 806. Le prix ne bouge presque pas (2,5 cents) : ces jetons-là étaient déjà au tarif du cache |
+
+Ce qui n'a pas été retenu, et pourquoi :
+
+- **Le filtrage des résultats par l'API** (la recherche lancée depuis son bac à code, qui ne garde que les extraits utiles). La documentation de l'API le dit : les recherches lancées ainsi ne comptent pas dans le plafond d'un échange à plusieurs requêtes, et ce mode n'est pas admissible aux engagements de non-conservation des données. Le plafond de huit recherches doit tenir, donc la recherche reste appelée directement.
+- **Couper le cache pour cet échange.** Les pages ne sont plus relues par une autre requête, et les écrire au cache coûte un quart de plus que de les lire simplement : environ 9 cents par demande. Mais si le modèle lance une recherche après les autres, tout ce qui précède est relu, et sans cache cette relecture coûterait vingt fois plus. Le cache reste, comme une assurance.
+- **Baisser le plafond de huit recherches.** Le modèle en a lancé cinq ou six sur la demande de référence. Le plafond est une limite, pas une cible.
+
+Ce que ces mesures ne disent pas :
+
+- **Une demande par état, pas une moyenne.** Le nombre de recherches change d'une fois à l'autre (cinq, puis six), et le prix avec lui.
+- **Lancer les recherches ensemble est une consigne, pas une garantie.** Si le modèle cherche en plusieurs temps, la relecture revient : la mesure intermédiaire, six recherches lancées en plusieurs étapes, a coûté 230 735 jetons pour le même prix, 0,70 $.
+- **Pourquoi la deuxième requête ne relisait pas le cache n'a pas été établi.** L'explication la plus probable est dans la documentation de l'API : un point de cache ne cherche une entrée que sur les vingt blocs qui le précèdent, et la première réponse en contient plusieurs dizaines après la dernière page (une phrase citée par bloc). La question ne se pose plus, puisque les pages ne repartent plus.
+- **Les dates tiennent aux passages, et les passages changent d'une fois à l'autre.** Sur les trois demandes, le couvre-feu est revenu une fois sans sa date de fin, une fois sans sa date de début, une fois avec les deux ; les écoles deux fois avec leurs deux dates. C'était déjà vrai avant ces changements : une date n'est gardée que si un passage l'énonce, et c'est la personne qui la complète sinon.
 
 ## Les décisions
 
@@ -304,7 +343,7 @@ Quatre réponses ont été relues par une personne et comparées au panneau Resu
 - Le titre, le lieu et la porte d'un candidat ne se corrigent pas à l'écran : seules les dates le peuvent. Un candidat mal titré se refuse.
 - Un événement n'a qu'un lieu écrit en mots. Il n'est relié à aucun territoire du jumeau, et le moteur ne le reçoit pas : c'est un repère pour lire un run, pas une entrée du run.
 - Les événements validés sont ceux du projet, pas d'un scénario : tous les scénarios du projet voient le même calendrier.
-- Une recherche coûte cher en jetons : chaque recherche renvoie jusqu'à dix pages au modèle, et elles sont relues à la requête suivante. Environ 300 000 jetons pour cinq recherches, en plus du prix des recherches : [issue 11](https://github.com/V1ktor7/obscyro/issues/11).
+- Une recherche d'événements coûte environ 70 cents, mesuré le 2026-11-20 : chaque recherche lancée renvoie dix pages, près de 15 000 jetons, et aucun réglage de l'API ne permet d'en demander moins sans renoncer au plafond de recherches. Le détail est dans « Ce que coûte une recherche ».
 - Le jumeau ne contient ni personnel, ni stocks, ni historique : l'analyste le dit, il ne le comble pas.
 - Le run à l'écran n'est pas gardé au rechargement de la page ; il faut relancer Run. Les options testées non plus : ce qui reste, ce sont les décisions enregistrées et le journal.
 - Une option est faite de capacité et de mesures. Un transfert de patients, du personnel, un stock, un lien nouveau entre un site et un territoire ne se testent pas : le moteur ou le jumeau ne les portent pas. L'analyste les range dans les limites.
