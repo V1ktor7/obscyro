@@ -23,7 +23,7 @@
  */
 
 import { AlertTriangle, Loader2, MapPin, Send, ShieldCheck } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { ApiError } from "@/lib/auth";
 import { cn } from "@/lib/cn";
@@ -36,6 +36,7 @@ import {
   type AnalystEvent,
   type AnalystResult,
   type AnalystStep,
+  type AskFocus,
   type HealthEvent,
   type ProposedOption,
   type RunDigest,
@@ -206,13 +207,25 @@ export default function AnalystPanel({
   );
 }
 
-function AskTab({
+/**
+ * Ask a question, read the answer and what it rests on.
+ *
+ * On the scenario map it is the first tab of the Analyst panel. It is also the
+ * whole of the analyst everywhere else in the Studio (`AnalystDock`, the
+ * situation card): there `live` is set, no scenario or run is on screen, and
+ * `focus` says what the person has in front of them.
+ */
+export function AskTab({
   env,
   scenario,
   run,
   siteName,
   onFocusSite,
   onOff,
+  live = false,
+  focus = null,
+  prepared = "",
+  hints,
 }: {
   env: string;
   scenario: { id: string; name: string } | null;
@@ -221,9 +234,18 @@ function AskTab({
   onFocusSite: (id: string) => void;
   /** The server said the analyst is switched off. */
   onOff: () => void;
+  /** Asked from a live page: about the network now, not about a scenario or a run. */
+  live?: boolean;
+  /** What the person has in front of them, by id. */
+  focus?: AskFocus | null;
+  /** A question already written, put in the box for the person to send or change. */
+  prepared?: string;
+  /** Questions offered before the first one is asked, in place of the scenario map's. */
+  hints?: string[];
 }) {
+  const fieldId = useId();
   const [looking, setLooking] = useState<Looking>(scenario ? "scenario" : "reality");
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(prepared);
   const [asked, setAsked] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [steps, setSteps] = useState<AnalystStep[]>([]);
@@ -239,6 +261,13 @@ function AskTab({
   }, [scenario?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => () => abort.current?.abort(), []);
+
+  // A prepared question follows what it was written about, until the person has asked or typed their own.
+  const lastPrepared = useRef(prepared);
+  useEffect(() => {
+    setDraft((d) => (d === lastPrepared.current ? prepared : d));
+    lastPrepared.current = prepared;
+  }, [prepared]);
 
   const asking = status !== null;
 
@@ -267,7 +296,12 @@ function AskTab({
       }
     };
     try {
-      await askAnalyst(env, { question: q, scenarioId: scenario?.id ?? null, looking: scenario ? looking : "reality", run }, onEvent, controller.signal);
+      await askAnalyst(
+        env,
+        { question: q, scenarioId: scenario?.id ?? null, looking: scenario ? looking : "reality", run, ...(focus ? { focus } : {}) },
+        onEvent,
+        controller.signal,
+      );
     } catch (err) {
       if ((err as Error).name === "AbortError") return;
       if (err instanceof ApiError && err.code === "ANALYST_NOT_CONFIGURED") onOff();
@@ -295,7 +329,7 @@ function AskTab({
   const answer = result?.answer ?? null;
   const removed = result ? result.struck.reduce((n, f) => n + f.figures.length, 0) : 0;
   const stepById = new Map(steps.map((s) => [s.id, s]));
-  const focus = (answer?.focusSites ?? []).map((id) => ({ id, name: siteName(id) })).filter((s): s is { id: string; name: string } => s.name !== null);
+  const onMap = (answer?.focusSites ?? []).map((id) => ({ id, name: siteName(id) })).filter((s): s is { id: string; name: string } => s.name !== null);
 
   return (
     <div className="flex flex-col">
@@ -324,10 +358,16 @@ function AskTab({
           </div>
         ) : null}
         <p className="text-[11.5px] text-ink-muted">
-          {scenario && looking === "scenario" ? `The twin with “${scenario.name}” applied` : "The twin as it stands today"}
-          {run
-            ? ` · the run on screen (${run.horizon} days, ${run.activity}${run.stale ? ", out of date" : ""})`
-            : " · no run on screen: press Run to ask about results"}
+          {live ? (
+            "The network as it stands now: what is open, and a unit's live figures, each with its age."
+          ) : (
+            <>
+              {scenario && looking === "scenario" ? `The twin with “${scenario.name}” applied` : "The twin as it stands today"}
+              {run
+                ? ` · the run on screen (${run.horizon} days, ${run.activity}${run.stale ? ", out of date" : ""})`
+                : " · no run on screen: press Run to ask about results"}
+            </>
+          )}
         </p>
 
         <form
@@ -337,9 +377,9 @@ function AskTab({
             void ask(draft);
           }}
         >
-          <label htmlFor="analyst-question" className="sr-only">Question for the analyst</label>
+          <label htmlFor={fieldId} className="sr-only">Question for the analyst</label>
           <textarea
-            id="analyst-question"
+            id={fieldId}
             rows={2}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -349,7 +389,7 @@ function AskTab({
                 void ask(draft);
               }
             }}
-            placeholder="Ask about the sites, the catchments, the scenario or the run…"
+            placeholder={live ? "Ask what is open now, or about a unit's live figures…" : "Ask about the sites, the catchments, the scenario or the run…"}
             className="min-w-0 flex-1 resize-none rounded border border-line bg-surface px-2 py-1.5 text-[12.5px] text-ink focus:border-brand focus:outline-none"
           />
           {asking ? (
@@ -369,7 +409,7 @@ function AskTab({
 
         {!asked ? (
           <div className="flex flex-wrap gap-1.5">
-            {suggestions(Boolean(scenario), Boolean(run), scenario ? looking : "reality").map((s) => (
+            {(hints ?? suggestions(Boolean(scenario), Boolean(run), scenario ? looking : "reality")).map((s) => (
               <button
                 key={s}
                 type="button"
@@ -488,11 +528,11 @@ function AskTab({
                 </div>
               ) : null}
 
-              {focus.length ? (
+              {onMap.length ? (
                 <div className="flex flex-col gap-1">
                   <span className={LABEL}>On the map</span>
                   <div className="flex flex-wrap gap-1.5">
-                    {focus.map((s) => (
+                    {onMap.map((s) => (
                       <button
                         key={s.id}
                         type="button"

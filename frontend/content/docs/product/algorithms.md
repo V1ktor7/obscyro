@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "55634e9e3f22492e"
+translatedFrom: "677cdacb5b69588e"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -117,7 +117,7 @@ sequenceDiagram
 - If the person leaves, nothing more is asked of the model.
 - The identifier of the exchange is chosen before starting and leaves with the last line of the stream: it is what a decision will name (A9).
 
-**Code.** `backend/src/services/analyst.ts` (`converse`, `Closing`, `askClosing`), `analyst-web.ts` (`WebReader`), `backend/src/routes/analyst.ts`, `backend/src/lib/ndjson.ts`, `frontend/app/studio/simulation/hex/AnalystPanel.tsx`.
+**Code.** `backend/src/services/analyst.ts` (`converse`, `Closing`, `askClosing`), `analyst-web.ts` (`WebReader`), `backend/src/routes/analyst.ts`, `backend/src/lib/ndjson.ts`, `frontend/app/studio/simulation/hex/AnalystPanel.tsx`, `frontend/app/studio/AnalystDock.tsx`.
 **Tests.** `analyst.unit.test.ts`, `analyst-options.unit.test.ts`, `analyst-events.unit.test.ts`, `analyst-web.unit.test.ts`, `routes/analyst.unit.test.ts`, `lib/ndjson.unit.test.ts`, `AnalystPanel.test.tsx`.
 
 ## A2. Number verifier
@@ -825,7 +825,7 @@ flowchart TD
     K --> L["The Studio's shell: read every 3 s,<br/>a single read for all the pages"]
     L --> M["Badge: how many are open, and whether the list is up to date"]
     L --> N{"Alert absent from the previous read,<br/>and opened since?"}
-    N -->|"yes"| O["Banner on every page, two minutes:<br/>Open unit, Signal"]
+    N -->|"yes"| O["Banner on every page, two minutes:<br/>Situation, Open unit, Signal"]
     N -->|"no, or first read"| M
     L --> P["Pages of the twin: the same alerts on the map, the tree, the unit sheet"]
     L --> Q["Response: the board refreshes when the signals change"]
@@ -847,7 +847,7 @@ flowchart TD
 - **A screen that comes back announces what it missed.** Computer asleep, tab frozen by the browser, network cut: at its first read, the screen announces what opened while it was not reading, and says its delay (“on this screen 26 min after it opened”). The counter going from 44 to 45 without saying which one is the silence this banner has to prevent. The announcement lasts two minutes, or until it is closed; closing it does not touch the alert.
 - **Silence is not calm.** With no successful read for fifteen seconds, the badge says the list is no longer up to date and for how long; the last list read stays displayed, marked as old. The list also says when the thresholds were last checked.
 - **Ages are counted on the server's clock**, not on the machine's: a computer set five minutes off does not age an alert by five minutes.
-- **One click.** From an alert: its unit (`/studio/live?unit=…`, the sheet opens by itself) and its signal (`/studio/response?signal=…`). From a signal: its unit. The link carries the project.
+- **One click.** From an alert: its situation card (`/studio/situation?alert=…&unit=…&signal=…`, D9), its unit (`/studio/live?unit=…`, the sheet opens by itself) and its signal (`/studio/response?signal=…`). From a signal: its situation card and its unit. The link carries the project, and an alert's link carries its unit too: the card knows what to read once the alert has cleared.
 - **A link finds its signal, whatever its age.** The Response board lists only the 500 most recent signals. An emergency department above its threshold for weeks has an alert still open, and a signal far older than that. So the board asks the API for the signal the link names (`?signal=` on `GET /command-board`): it is added to the list, at the top, closed or not, looked for in this project and this scope only. If it is not there, the screen says so instead of showing a board where nothing opens.
 - **The board says what it leaves out.** The API returns the number of signals among which the list is chosen (`total`); the header writes “Showing 500 of 2,752 open signals” rather than “500 open signals”.
 - An alert is a unit and an aggregated value, never a person.
@@ -946,7 +946,8 @@ flowchart TD
 - **No history.** The reading is that of now; it says so, to the analyst and on the card.
 - **The card does not wait for the model.** `GET /situation` calls no model and writes nothing. The question for the analyst is written by the program; asking it is the person's move.
 - **A signal is looked up in its project.** A signal of another project is not found, whoever the caller is. Decisions are not yet attached to a kind of signal: the card says so instead of listing any.
+- **On screen.** The card (`/studio/situation`) reads itself again every thirty seconds; only the most recent reading is shown, and a reading that fails leaves the last one on screen, said to be no longer up to date. The shell's “Analyst” button and the card send the page and the selection with the question, as ids (A1).
 - A unit and an aggregate value, never a person.
 
-**Code.** `backend/src/services/live-reading.ts` (`readLive`, `unitNow`, `alertsNow`, `alertNow`, `ageOfValue`, `shown`), `situation.ts` (`situationOf`, `preparedQuestion`), `backend/src/routes/situation.ts`, the tools `list_alerts` and `unit_now` in `analyst-tools.ts`.
-**Tests.** `live-reading.unit.test.ts`, `twin-figures.unit.test.ts`, `routes/situation.unit.test.ts`.
+**Code.** `backend/src/services/live-reading.ts` (`readLive`, `unitNow`, `alertsNow`, `alertNow`, `ageOfValue`, `shown`), `situation.ts` (`situationOf`, `preparedQuestion`), `backend/src/routes/situation.ts`, the tools `list_alerts` and `unit_now` in `analyst-tools.ts`; `frontend/app/studio/situation/SituationView.tsx`, `situation-api.ts`, `AnalystDock.tsx`, `alert-feed-state.ts` (`situationHref`).
+**Tests.** `live-reading.unit.test.ts`, `twin-figures.unit.test.ts`, `routes/situation.unit.test.ts`; `situation/SituationView.test.tsx`, `AnalystDock.test.tsx`, `AlertBanner.test.tsx`.

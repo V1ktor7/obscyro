@@ -143,9 +143,20 @@ export function parseLines<E = AnalystEvent>(buffer: string): { events: E[]; rem
  * refuses the question before starting (not signed in, analyst not switched
  * on); a failure after that arrives as a `failed` event.
  */
+/**
+ * What the person has in front of them when they ask from another page than
+ * the scenario map. Ids only: the server looks the names up itself.
+ */
+export interface AskFocus {
+  /** The Studio page, as its address names it ("live", "response", "situation"). */
+  page?: string;
+  unitId?: string;
+  signalId?: string;
+}
+
 export async function askAnalyst(
   env: string,
-  body: { question: string; scenarioId: string | null; looking: "reality" | "scenario"; run: RunDigest | null },
+  body: { question: string; scenarioId: string | null; looking: "reality" | "scenario"; run: RunDigest | null; focus?: AskFocus | null },
   onEvent: (e: AnalystEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {

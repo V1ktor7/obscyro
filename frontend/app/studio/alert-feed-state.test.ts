@@ -14,6 +14,7 @@ import {
   feedStatus,
   freshAlerts,
   signalHref,
+  situationHref,
   unitHref,
   valueAge,
 } from "./alert-feed-state";
@@ -205,6 +206,10 @@ describe("where an alert leads", () => {
     expect(unitHref("u-1", "mtl")).toBe("/studio/live?env=mtl&unit=u-1");
     expect(signalHref("s-1", "mtl")).toBe("/studio/response?env=mtl&signal=s-1");
     expect(unitHref("u-1", null)).toBe("/studio/live?unit=u-1");
+    // A situation card is named by whatever it was opened from; the project travels with it.
+    expect(situationHref({ alert: "a-1", unit: "u-1", signal: "s-1" }, "mtl")).toBe("/studio/situation?env=mtl&alert=a-1&unit=u-1&signal=s-1");
+    expect(situationHref({ unit: "u-1" }, null)).toBe("/studio/situation?unit=u-1");
+    expect(situationHref({ signal: "s-1", unit: null }, "mtl")).toBe("/studio/situation?env=mtl&signal=s-1");
   });
 });
 

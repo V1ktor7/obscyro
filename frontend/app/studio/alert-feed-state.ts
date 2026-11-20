@@ -169,6 +169,25 @@ export const unitHref = (unitId: string, env: string | null): string => link("/s
 /** Where an alert's signal opens: the response board, on that signal. */
 export const signalHref = (signalId: string, env: string | null): string => link("/studio/response", env, SIGNAL_PARAM, signalId);
 
+/** The address parameter that names the alert a situation card was opened from. */
+export const ALERT_PARAM = "alert";
+
+/**
+ * Where an alert, a unit or a signal opens as a situation card: the unit's live
+ * figures with their age, the alert, the signal's stage, and the analyst.
+ *
+ * An alert's link carries its unit too, so the card still knows which unit to
+ * read once the alert has cleared.
+ */
+export function situationHref(of: { unit?: string | null; alert?: string | null; signal?: string | null }, env: string | null): string {
+  const q = new URLSearchParams();
+  if (env) q.set("env", env);
+  if (of.alert) q.set(ALERT_PARAM, of.alert);
+  if (of.unit) q.set(UNIT_PARAM, of.unit);
+  if (of.signal) q.set(SIGNAL_PARAM, of.signal);
+  return `/studio/situation?${q.toString()}`;
+}
+
 /**
  * The feed's alerts in the shape the twin pages already draw.
  *

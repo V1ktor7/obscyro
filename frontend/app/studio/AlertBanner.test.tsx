@@ -83,6 +83,8 @@ describe("the standing summary of open alerts", () => {
     // Open for four minutes, on a value that is thirty-seven minutes old: two different facts.
     expect(within(rows[0]!).getByText("opened 4 min ago · value read 37 min ago")).toBeTruthy();
     expect(within(rows[0]!).getByRole("link", { name: "Open unit" }).getAttribute("href")).toBe("/studio/live?env=mtl&unit=u1");
+    // The card first: it carries the alert, its unit and its signal, so it still reads the unit once the alert has cleared.
+    expect(within(rows[0]!).getByRole("link", { name: "Situation" }).getAttribute("href")).toBe("/studio/situation?env=mtl&alert=a1&unit=u1&signal=s1");
     expect(within(rows[0]!).getByRole("link", { name: "Signal" }).getAttribute("href")).toBe("/studio/response?env=mtl&signal=s1");
 
     // A source that publishes no time: the age is unknown, and said so. No signal: no link to one.

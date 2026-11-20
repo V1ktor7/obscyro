@@ -1,0 +1,159 @@
+"use client";
+
+/**
+ * The analyst, from every page of the Studio.
+ *
+ * It used to exist only on the scenario map. An alert arrives on the Units
+ * page or the Response board, and asking about it meant changing page and
+ * finding the context again by hand. The dock is in the shell, so the question
+ * is one click away wherever the alert is read, and it goes with what the
+ * person has in front of them: the page, and the unit or the signal they have
+ * selected (`useAnalystFocus`).
+ *
+ * Two pages do without it, because they already hold the analyst where the
+ * work is: the scenario map, whose panel also has the scenario, the run and
+ * the options; and the situation card, where it sits under the figures.
+ *
+ * It only reads. What it is told about the page is ids: the server looks the
+ * names up itself.
+ */
+
+import { MessageSquareText, X } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+
+import { cn } from "@/lib/cn";
+
+import { AskTab } from "./simulation/hex/AnalystPanel";
+
+/** What a page says the person has selected. */
+export interface PageFocus {
+  unitId?: string;
+  signalId?: string;
+}
+
+const FocusContext = createContext<{ focus: PageFocus; setFocus: (f: PageFocus) => void } | null>(null);
+
+export function AnalystFocusProvider({ children }: { children: ReactNode }) {
+  const [focus, setFocusState] = useState<PageFocus>({});
+  const setFocus = useCallback((f: PageFocus) => {
+    // The same selection again is not a change: a page re-rendering must not re-render the shell.
+    setFocusState((cur) => (cur.unitId === f.unitId && cur.signalId === f.signalId ? cur : f));
+  }, []);
+  const value = useMemo(() => ({ focus, setFocus }), [focus, setFocus]);
+  return <FocusContext.Provider value={value}>{children}</FocusContext.Provider>;
+}
+
+/**
+ * A page tells the analyst what the person has selected. Forgotten when the
+ * page leaves, so a question asked elsewhere does not carry a unit nobody is
+ * looking at any more.
+ */
+export function useAnalystFocus(focus: PageFocus): void {
+  const setFocus = useContext(FocusContext)?.setFocus;
+  const { unitId, signalId } = focus;
+  useEffect(() => {
+    if (!setFocus) return;
+    setFocus({ unitId, signalId });
+    return () => setFocus({});
+  }, [setFocus, unitId, signalId]);
+}
+
+/** The pages that hold the analyst themselves. */
+const OWN_ANALYST = new Set(["simulation", "situation"]);
+
+/** The Studio page an address is on: "/studio/live" is "live". */
+export function pageOf(pathname: string): string {
+  return pathname.split("/")[2] ?? "";
+}
+
+export function AnalystDock({ env }: { env: string | null }) {
+  const page = pageOf(usePathname() ?? "");
+  const focus = useContext(FocusContext)?.focus ?? {};
+  const [open, setOpen] = useState(false);
+  // Built the first time it is opened and kept after, so an answer is still there when the panel is reopened.
+  const [built, setBuilt] = useState(false);
+  const [off, setOff] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  if (!env || !/^[a-z][a-z-]{0,30}$/.test(page) || OWN_ANALYST.has(page)) return null;
+
+  const carried = [focus.unitId ? "the unit you selected" : "", focus.signalId ? "the signal you opened" : ""].filter(Boolean);
+  const hints = [
+    "What is open right now, and where?",
+    ...(focus.unitId ? ["What do this unit's live figures show, and how old are they?"] : []),
+    ...(focus.signalId ? ["Where does this signal stand, and what is open at its unit?"] : []),
+  ];
+
+  return (
+    <div className="pointer-events-none fixed bottom-8 right-4 z-40 flex flex-col items-end gap-2">
+      {built ? (
+        <div
+          role="dialog"
+          aria-label="Analyst"
+          hidden={!open}
+          className="pointer-events-auto flex max-h-[72vh] w-[430px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-md border border-line bg-surface shadow-lg"
+        >
+          <div className="flex items-start gap-2 border-b border-line-soft px-3 py-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-[12.5px] font-semibold text-ink">Analyst</p>
+              <p className="text-[11px] text-ink-muted">
+                Asked from this page{carried.length ? `, with ${carried.join(" and ")}` : ""}. It reads the network as it stands now.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label="Close the analyst"
+              className="rounded p-0.5 text-ink-faint hover:bg-surface-hover hover:text-ink-body"
+            >
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="min-h-0 overflow-y-auto">
+            {off ? (
+              <p className="p-3 text-[12px] text-ink-body">
+                The analyst is not switched on for this server. An administrator has to set its key on the API service.
+              </p>
+            ) : (
+              <AskTab
+                env={env}
+                scenario={null}
+                run={null}
+                live
+                siteName={() => null}
+                onFocusSite={() => {}}
+                onOff={() => setOff(true)}
+                focus={{ page, ...focus }}
+                hints={hints}
+              />
+            )}
+          </div>
+        </div>
+      ) : null}
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        onClick={() => {
+          setBuilt(true);
+          setOpen((o) => !o);
+        }}
+        className={cn(
+          "pointer-events-auto flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12px] font-semibold shadow-sm",
+          open ? "border-brand bg-brand-soft text-brand-deep" : "border-line bg-surface text-ink hover:border-brand hover:bg-brand-soft",
+        )}
+      >
+        <MessageSquareText className="h-3.5 w-3.5" aria-hidden="true" /> Analyst
+      </button>
+    </div>
+  );
+}

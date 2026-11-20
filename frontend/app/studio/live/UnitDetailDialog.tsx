@@ -1,6 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
@@ -28,6 +29,7 @@ export default function UnitDetailDialog({
   nodeName,
   detail,
   loading,
+  situationHref,
   onAck,
   onClose,
 }: {
@@ -35,6 +37,8 @@ export default function UnitDetailDialog({
   nodeName?: string;
   detail: TwinUnitDetail | null;
   loading: boolean;
+  /** Where this unit's situation card opens: its figures with their age, its alerts, the analyst. */
+  situationHref?: string;
   onAck: (alertId: string) => void;
   onClose: () => void;
 }) {
@@ -54,6 +58,14 @@ export default function UnitDetailDialog({
             <p className="truncate text-xs font-medium text-ink">{nodeName ?? "Unit"}</p>
             <p className="text-[9.5px] text-ink-faint">{unitId.slice(0, 12)}…</p>
           </div>
+          {situationHref ? (
+            <Link
+              href={situationHref}
+              className="rounded border border-line bg-surface px-2 py-0.5 text-[11px] font-semibold text-ink hover:border-brand hover:bg-brand-soft"
+            >
+              Situation
+            </Link>
+          ) : null}
           <button
             type="button"
             onClick={onClose}

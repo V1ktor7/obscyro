@@ -2,6 +2,8 @@
 
 L'analyste est le panneau repliable « Analyst » de la page Scenarios. On lui pose une question sur le jumeau, le scénario ouvert ou le run à l'écran ; il répond en ne s'appuyant que sur ce que des outils de lecture lui ont renvoyé, et montre tout ce qu'il a lu.
 
+Il est aussi à un clic sur les autres pages du Studio, par le bouton « Analyst » en bas à droite, et dans la fiche de situation qui s'ouvre depuis une alerte. Là il répond sur le réseau tel qu'il est maintenant : ce qui est ouvert, et les chiffres en direct d'une unité, chacun avec son âge.
+
 Le panneau a quatre onglets, qui couvrent cinq étapes de la [boucle d'aide à la décision](decision-loop.md) :
 
 | Onglet | Étape de la boucle | Ce qu'on y fait |
@@ -240,6 +242,22 @@ Sous les chiffres, trois lignes repliées, qui s'ouvrent d'un clic : « Why this
 - les sites dont parle la réponse, qui pointent la carte dessus ;
 - les questions à poser ensuite.
 
+**Ailleurs que sur la carte des scénarios** (`AnalystDock.tsx`). Le cadre du Studio porte un bouton « Analyst », en bas à droite de chaque page. Il ouvre l'onglet Ask seul, sur le réseau tel qu'il est maintenant. La question part avec ce que la personne a sous les yeux : la page, et l'unité sélectionnée sur Units ou le signal ouvert sur Response. Les questions suggérées suivent : « What is open right now, and where? », plus une sur l'unité ou le signal quand il y en a un. Le panneau garde ce qui a été demandé quand on le ferme et le rouvre. Deux pages n'ont pas ce bouton, parce qu'elles tiennent déjà l'analyste là où se fait le travail : Scenarios, dont le panneau a aussi le scénario, le run et les options, et la fiche de situation.
+
+**La fiche de situation** (`situation/SituationView.tsx`, à l'adresse `/studio/situation`). Elle s'ouvre par « Situation » : sur une alerte, dans la liste en haut à droite et dans le bandeau ; sur un signal, dans Response ; sur une unité, dans sa fiche de la page Units. De haut en bas :
+
+- l'unité, et où elle se trouve dans l'arbre ;
+- l'heure de la lecture, quand les seuils ont été vérifiés, et combien de règles d'alerte le projet a (sans aucune règle, la fiche dit que rien ne peut s'ouvrir) ;
+- l'alerte d'où la fiche a été ouverte, avec sa valeur, depuis quand elle est ouverte et l'âge de la valeur ; ou la mention qu'elle n'est plus ouverte ;
+- les chiffres en direct de l'unité, tels que sa page les montre, avec l'âge de la lecture et sa raison quand il n'est pas exact, puis ce qui est sous l'unité par type ;
+- les autres alertes ouvertes de l'unité ;
+- le signal, et le chemin de son workflow avec l'étape où il se trouve ;
+- les décisions déjà enregistrées pour ce type de signal : aucune ne peut encore y être rattachée, et la fiche le dit ;
+- l'analyste, avec une question déjà écrite d'après l'unité et l'alerte. Elle n'est pas envoyée : la poser est un clic de la personne ;
+- ce que la fiche ne peut pas dire.
+
+La fiche se relit toutes les trente secondes. Si une lecture échoue, la dernière reste à l'écran, dite comme n'étant plus à jour. Tout ce qui est au-dessus de l'analyste se lit sans lui : quand il est éteint, la fiche est entière et le dit.
+
 La maquette d'origine est `design/scenario-analyst.html`. Elle montre aussi un onglet qui n'est pas encore construit : « What it can use ».
 
 ## Ajouter un outil
@@ -331,7 +349,8 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 |---|---|
 | Boucle, clôture d'une question, `give_answer` | `backend/src/services/analyst.ts` |
 | Lecture du direct, `list_alerts`, `unit_now` | `backend/src/services/live-reading.ts` |
-| Fiche de situation | `backend/src/services/situation.ts`, `backend/src/routes/situation.ts` |
+| Fiche de situation | `backend/src/services/situation.ts`, `backend/src/routes/situation.ts`, `frontend/app/studio/situation/SituationView.tsx`, `situation-api.ts` |
+| L'analyste dans le cadre du Studio | `frontend/app/studio/AnalystDock.tsx` |
 | Outils de lecture, résumé du run | `backend/src/services/analyst-tools.ts` |
 | Outil `test_option`, clôture d'un objectif, `give_options` | `backend/src/services/analyst-options.ts` |
 | Clôture d'une recherche d'événements, `give_events` | `backend/src/services/analyst-events.ts` |

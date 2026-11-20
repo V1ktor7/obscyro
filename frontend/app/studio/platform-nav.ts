@@ -285,6 +285,8 @@ export function sectionForPath(pathname: string): NavSection | null {
     "/studio/events": "twin",
     "/studio/profiles": "twin",
     "/studio/simulation": "twin",
+    // Reached from an alert or a signal, never from the rail: it has no entry of its own.
+    "/studio/situation": "twin",
     "/studio/flux": "health",
     "/studio/govern": "govern",
     "/studio/admin": "admin",

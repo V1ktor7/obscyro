@@ -111,7 +111,7 @@ sequenceDiagram
 - Si la personne part, plus rien n'est demandé au modèle.
 - L'identifiant de l'échange est choisi avant de commencer et part avec la dernière ligne du flux : c'est lui qu'une décision nommera (A9).
 
-**Code.** `backend/src/services/analyst.ts` (`converse`, `Closing`, `askClosing`), `analyst-web.ts` (`WebReader`), `backend/src/routes/analyst.ts`, `backend/src/lib/ndjson.ts`, `frontend/app/studio/simulation/hex/AnalystPanel.tsx`.
+**Code.** `backend/src/services/analyst.ts` (`converse`, `Closing`, `askClosing`), `analyst-web.ts` (`WebReader`), `backend/src/routes/analyst.ts`, `backend/src/lib/ndjson.ts`, `frontend/app/studio/simulation/hex/AnalystPanel.tsx`, `frontend/app/studio/AnalystDock.tsx`.
 **Tests.** `analyst.unit.test.ts`, `analyst-options.unit.test.ts`, `analyst-events.unit.test.ts`, `analyst-web.unit.test.ts`, `routes/analyst.unit.test.ts`, `lib/ndjson.unit.test.ts`, `AnalystPanel.test.tsx`.
 
 ## A2. Vérificateur de chiffres
@@ -819,7 +819,7 @@ flowchart TD
     K --> L["Cadre du studio : lu toutes les 3 s,<br/>une seule lecture pour toutes les pages"]
     L --> M["Pastille : combien sont ouvertes, et si la liste est à jour"]
     L --> N{"Alerte absente de la lecture précédente,<br/>et ouverte depuis ?"}
-    N -->|"oui"| O["Bandeau sur toutes les pages, deux minutes :<br/>Open unit, Signal"]
+    N -->|"oui"| O["Bandeau sur toutes les pages, deux minutes :<br/>Situation, Open unit, Signal"]
     N -->|"non, ou première lecture"| M
     L --> P["Pages du jumeau : mêmes alertes sur la carte, l'arbre, la fiche d'unité"]
     L --> Q["Response : le tableau se relit quand les signaux changent"]
@@ -841,7 +841,7 @@ flowchart TD
 - **Un écran qui revient annonce ce qu'il a manqué.** Ordinateur en veille, onglet gelé par le navigateur, réseau coupé : à sa première lecture, l'écran annonce ce qui s'est ouvert pendant qu'il ne lisait pas, et dit son retard (« on this screen 26 min after it opened »). Le compteur qui passe de 44 à 45 sans dire laquelle est le silence que ce bandeau doit empêcher. L'annonce dure deux minutes, ou jusqu'à ce qu'on la ferme ; la fermer ne touche pas à l'alerte.
 - **Le silence n'est pas le calme.** Sans lecture réussie depuis quinze secondes, la pastille dit que la liste n'est plus à jour et depuis combien de temps ; la dernière liste lue reste affichée, marquée comme ancienne. La liste dit aussi quand les seuils ont été vérifiés pour la dernière fois.
 - **Les âges se comptent sur l'horloge du serveur**, pas sur celle du poste : un ordinateur réglé cinq minutes de travers ne vieillit pas une alerte de cinq minutes.
-- **Un clic.** Depuis une alerte : son unité (`/studio/live?unit=…`, la fiche s'ouvre seule) et son signal (`/studio/response?signal=…`). Depuis un signal : son unité. Le lien porte le projet.
+- **Un clic.** Depuis une alerte : sa fiche de situation (`/studio/situation?alert=…&unit=…&signal=…`, D9), son unité (`/studio/live?unit=…`, la fiche s'ouvre seule) et son signal (`/studio/response?signal=…`). Depuis un signal : sa fiche de situation et son unité. Le lien porte le projet, et celui d'une alerte porte aussi son unité : la fiche sait quoi lire une fois l'alerte retombée.
 - **Un lien trouve son signal, quel que soit son âge.** Le tableau Response ne liste que les 500 signaux les plus récents. Une urgence au-dessus de son seuil depuis des semaines a une alerte encore ouverte, et un signal bien plus vieux que cela. Le tableau demande donc à l'API le signal que le lien nomme (`?signal=` sur `GET /command-board`) : il est ajouté à la liste, en tête, fermé ou non, cherché dans ce projet et ce périmètre seulement. S'il n'y est pas, l'écran le dit au lieu de montrer un tableau où rien ne s'ouvre.
 - **Le tableau dit ce qu'il laisse de côté.** L'API rend le nombre de signaux parmi lesquels la liste est choisie (`total`) ; l'en-tête écrit « Showing 500 of 2,752 open signals » plutôt que « 500 open signals ».
 - Une alerte est une unité et une valeur agrégée, jamais une personne.
@@ -940,7 +940,8 @@ flowchart TD
 - **Pas d'historique.** La lecture est celle de maintenant ; elle le dit, à l'analyste et sur la fiche.
 - **La fiche n'attend pas le modèle.** `GET /situation` n'appelle aucun modèle et n'écrit rien. La question à l'analyste est écrite par le programme ; la poser est un geste de la personne.
 - **Un signal se cherche dans son projet.** Un signal d'un autre projet est introuvable, qui que soit l'appelant. Les décisions ne sont pas encore rattachées à un type de signal : la fiche le dit au lieu d'en lister.
+- **À l'écran.** La fiche (`/studio/situation`) se relit toutes les trente secondes ; seule la lecture la plus récente s'affiche, et une lecture qui échoue laisse la dernière à l'écran, dite comme n'étant plus à jour. Le bouton « Analyst » du cadre et la fiche envoient avec la question la page et la sélection, par identifiants (A1).
 - Une unité et une valeur agrégée, jamais une personne.
 
-**Code.** `backend/src/services/live-reading.ts` (`readLive`, `unitNow`, `alertsNow`, `alertNow`, `ageOfValue`, `shown`), `situation.ts` (`situationOf`, `preparedQuestion`), `backend/src/routes/situation.ts`, outils `list_alerts` et `unit_now` dans `analyst-tools.ts`.
-**Tests.** `live-reading.unit.test.ts`, `twin-figures.unit.test.ts`, `routes/situation.unit.test.ts`.
+**Code.** `backend/src/services/live-reading.ts` (`readLive`, `unitNow`, `alertsNow`, `alertNow`, `ageOfValue`, `shown`), `situation.ts` (`situationOf`, `preparedQuestion`), `backend/src/routes/situation.ts`, outils `list_alerts` et `unit_now` dans `analyst-tools.ts` ; `frontend/app/studio/situation/SituationView.tsx`, `situation-api.ts`, `AnalystDock.tsx`, `alert-feed-state.ts` (`situationHref`).
+**Tests.** `live-reading.unit.test.ts`, `twin-figures.unit.test.ts`, `routes/situation.unit.test.ts` ; `situation/SituationView.test.tsx`, `AnalystDock.test.tsx`, `AlertBanner.test.tsx`.

@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "970a82e5f116eece"
+translatedFrom: "a6e3d4d9716de4b3"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -15,6 +15,8 @@ An entry is written the day the change ships, in the same commit as the code. Si
 
 ## 20 November 2026
 
+- **New feature · Studio.** A situation card opens in one click from an alert, a signal or a unit: the unit's live figures with their age, the alert, the stage of the signal, and a question already written for the analyst. It reads in full even when the analyst is switched off.
+- **New feature · Analyst.** The analyst can be reached from every page of the Studio, through the “Analyst” button at the bottom right. The question goes with what you are looking at: the page, and the unit or the signal selected.
 - **New feature · Analyst.** The analyst reads what is happening now. You can ask it what is open and where: it returns the alerts, the value of each and its age, and the stage of its signal. You can ask it for the live figures of a unit: it gives the ones its page shows.
 - **Change · Analyst.** When the analyst's Claude account has no credit left, the screen says so, and says that an administrator has to add some. Before, it suggested trying again, which could change nothing.
 - **Change · Site.** The “Core API” section is removed from the site's documentation: nine pages, one per endpoint of the terminology API. The endpoints still exist; their reference is the one the API serves itself, at `/documentation`.

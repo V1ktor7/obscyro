@@ -3,10 +3,12 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "0b2acefbfa37d63d"
+translatedFrom: "641eea6a72f47b8c"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
+
+It is also one click away on the other pages of the Studio, through the “Analyst” button at the bottom right, and in the situation card that opens from an alert. There it answers about the network as it stands now: what is open, and the live figures of a unit, each with its age.
 
 The panel has four tabs, which cover five steps of the [decision loop](/docs/product/decision-loop):
 
@@ -246,6 +248,22 @@ Under the figures, three folded lines, which open on a click: “Why this option
 - the sites the answer talks about, which point the map at them;
 - the questions to ask next.
 
+**Elsewhere than on the scenario map** (`AnalystDock.tsx`). The Studio's shell carries an “Analyst” button, at the bottom right of every page. It opens the Ask tab alone, on the network as it stands now. The question goes with what the person has in front of them: the page, and the unit selected on Units or the signal open on Response. The suggested questions follow: “What is open right now, and where?”, plus one about the unit or the signal when there is one. The panel keeps what was asked when it is closed and opened again. Two pages do not have this button, because they already hold the analyst where the work is done: Scenarios, whose panel also has the scenario, the run and the options, and the situation card.
+
+**The situation card** (`situation/SituationView.tsx`, at the address `/studio/situation`). It opens with “Situation”: on an alert, in the list at the top right and in the banner; on a signal, in Response; on a unit, in its sheet on the Units page. From top to bottom:
+
+- the unit, and where it sits in the tree;
+- the time of the reading, when the thresholds were checked, and how many alert rules the project has (with no rule at all, the card says nothing can open);
+- the alert the card was opened from, with its value, since when it has been open and the age of the value; or the mention that it is no longer open;
+- the unit's live figures, as its page shows them, with the age of the reading and its reason when it is not exact, then what stands under the unit by type;
+- the unit's other open alerts;
+- the signal, and the path of its workflow with the stage it stands at;
+- the decisions already recorded for this kind of signal: none can be attached to one yet, and the card says so;
+- the analyst, with a question already written from the unit and the alert. It is not sent: asking it is the person's click;
+- what the card cannot say.
+
+The card reads itself again every thirty seconds. If a reading fails, the last one stays on screen, said to be no longer up to date. Everything above the analyst reads without it: when it is switched off, the card is whole and says so.
+
 The original mock-up is `design/scenario-analyst.html`. It also shows a tab that is not built yet: “What it can use”.
 
 ## Adding a tool
@@ -337,7 +355,8 @@ What is not judged: the quality of the writing. That still takes a person, who r
 |---|---|
 | Loop, closing of a question, `give_answer` | `backend/src/services/analyst.ts` |
 | Live reading, `list_alerts`, `unit_now` | `backend/src/services/live-reading.ts` |
-| Situation card | `backend/src/services/situation.ts`, `backend/src/routes/situation.ts` |
+| Situation card | `backend/src/services/situation.ts`, `backend/src/routes/situation.ts`, `frontend/app/studio/situation/SituationView.tsx`, `situation-api.ts` |
+| The analyst in the Studio's shell | `frontend/app/studio/AnalystDock.tsx` |
 | Reading tools, digest of the run | `backend/src/services/analyst-tools.ts` |
 | The `test_option` tool, closing of an objective, `give_options` | `backend/src/services/analyst-options.ts` |
 | Closing of an event search, `give_events` | `backend/src/services/analyst-events.ts` |

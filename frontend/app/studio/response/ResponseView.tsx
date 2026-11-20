@@ -23,7 +23,8 @@ import {
   type WorkflowStage,
 } from "../signals-api";
 import { useAlertFeed } from "../AlertFeed";
-import { SIGNAL_PARAM, unitHref } from "../alert-feed-state";
+import { useAnalystFocus } from "../AnalystDock";
+import { SIGNAL_PARAM, situationHref, unitHref } from "../alert-feed-state";
 import { useStudio } from "../StudioShell";
 
 // ---------------------------------------------------------------------------
@@ -98,6 +99,8 @@ export default function ResponseView() {
   // for that signal by name: the list stops at the most recent ones, and an
   // alert open for weeks links to a signal far older than that.
   const linkedSignal = useSearchParams().get(SIGNAL_PARAM);
+  // The analyst is told which signal is open: a question asked from here is about it.
+  useAnalystFocus({ signalId: sel ?? undefined });
   const linkedId = linkedSignal && UUID.test(linkedSignal) ? linkedSignal : null;
 
   const load = useCallback(async () => {
@@ -677,15 +680,23 @@ function Detail({
         {signal.detail ? (
           <p className="mt-2 text-[11.5px] leading-relaxed text-ink-body">{signal.detail}</p>
         ) : null}
-        {/* A signal about a unit leads to that unit: its live figures, its open alerts. */}
-        {signal.subjectKind === "object_instance" && signal.subjectId ? (
+        {/* A signal leads to its situation card, and one about a unit to that unit as well. */}
+        <div className="mt-2 flex flex-wrap gap-1.5">
           <Link
-            href={unitHref(signal.subjectId, env)}
-            className="mt-2 inline-flex rounded border border-line bg-surface px-2 py-1 text-[11px] font-semibold text-ink hover:border-brand hover:bg-brand-soft"
+            href={situationHref({ signal: signal.id, unit: signal.subjectKind === "object_instance" ? signal.subjectId : null }, env)}
+            className="inline-flex rounded border border-line bg-surface px-2 py-1 text-[11px] font-semibold text-ink hover:border-brand hover:bg-brand-soft"
           >
-            Open unit
+            Situation
           </Link>
-        ) : null}
+          {signal.subjectKind === "object_instance" && signal.subjectId ? (
+            <Link
+              href={unitHref(signal.subjectId, env)}
+              className="inline-flex rounded border border-line bg-surface px-2 py-1 text-[11px] font-semibold text-ink hover:border-brand hover:bg-brand-soft"
+            >
+              Open unit
+            </Link>
+          ) : null}
+        </div>
       </div>
 
       {/* étapes */}

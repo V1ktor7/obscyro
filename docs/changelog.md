@@ -9,6 +9,8 @@ Une entrée est écrite le jour où le changement est livré, dans le même comm
 
 ## 20 novembre 2026
 
+- **Nouvelle fonction · Studio.** Une fiche de situation s'ouvre d'un clic depuis une alerte, un signal ou une unité : les chiffres en direct de l'unité avec leur âge, l'alerte, l'étape du signal, et une question déjà écrite pour l'analyste. Elle se lit en entier même quand l'analyste est éteint.
+- **Nouvelle fonction · Analyste.** L'analyste est accessible depuis toutes les pages du Studio, par le bouton « Analyst » en bas à droite. La question part avec ce qu'on regarde : la page, et l'unité ou le signal sélectionné.
 - **Nouvelle fonction · Analyste.** L'analyste lit ce qui se passe maintenant. On peut lui demander ce qui est ouvert et où : il rend les alertes, la valeur de chacune et son âge, et l'étape de son signal. On peut lui demander les chiffres en direct d'une unité : il donne ceux que sa page montre.
 - **Modification · Analyste.** Quand le compte Claude de l'analyste n'a plus de crédit, l'écran le dit et précise qu'un administrateur doit en ajouter. Avant, il proposait de réessayer, ce qui ne pouvait rien changer.
 - **Modification · Site.** La section « Core API » est retirée de la documentation du site : neuf pages, une par point d'accès de l'API de terminologie. Les points d'accès existent toujours ; leur référence est celle que l'API sert elle-même, à l'adresse `/documentation`.

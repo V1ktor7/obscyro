@@ -8,7 +8,7 @@
  * The **pill** in the top bar is the standing summary: how many alerts are
  * open, and whether that number can be trusted right now. It opens the list,
  * where each alert says since when it has been open, how old its value is, and
- * leads in one click to its unit and to its signal.
+ * leads in one click to its situation card, to its unit and to its signal.
  *
  * The **strip** under the top bar is the interruption: it appears only for an
  * alert that opened while this screen was being watched, and goes away after
@@ -28,7 +28,7 @@ import { cn } from "@/lib/cn";
 import type { FeedAlert, TwinAlertSeverity } from "@/lib/platform-api";
 
 import { useAlertFeed } from "./AlertFeed";
-import { ago, duration, freshAlerts, signalHref, unitHref, valueAge, type FirstSight } from "./alert-feed-state";
+import { ago, duration, freshAlerts, signalHref, situationHref, unitHref, valueAge, type FirstSight } from "./alert-feed-state";
 
 const TONE: Record<TwinAlertSeverity, { dot: string; chip: string; label: string }> = {
   critical: { dot: "bg-danger", chip: "bg-danger-soft text-danger-ink", label: "Critical" },
@@ -56,6 +56,10 @@ function AlertLinks({ a, env, onGo }: { a: FeedAlert; env: string | null; onGo?:
   const cls = "rounded border border-line bg-surface px-2 py-0.5 text-[11px] font-semibold text-ink hover:border-brand hover:bg-brand-soft";
   return (
     <span className="flex shrink-0 flex-wrap gap-1.5">
+      {/* First, because it is the one that answers "what is going on there": figures, age, signal, analyst. */}
+      <Link href={situationHref({ alert: a.id, unit: a.unitId, signal: a.signalId }, env)} onClick={onGo} className={cls}>
+        Situation
+      </Link>
       <Link href={unitHref(a.unitId, env)} onClick={onGo} className={cls}>
         Open unit
       </Link>

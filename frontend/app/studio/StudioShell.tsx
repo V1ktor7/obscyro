@@ -46,6 +46,7 @@ import {
 
 import { AlertPill, AlertStrip } from "./AlertBanner";
 import { AlertFeedProvider } from "./AlertFeed";
+import { AnalystDock, AnalystFocusProvider } from "./AnalystDock";
 import CommandPalette from "./CommandPalette";
 import PlatformRail, { SectionTabs } from "./PlatformRail";
 
@@ -390,7 +391,11 @@ export default function StudioShell({ children }: { children: ReactNode }) {
             <Suspense fallback={<div className="h-11 shrink-0 border-b border-line bg-canvas" />}>
               <SectionTabs />
             </Suspense>
-            {children}
+            {/* A page says what is selected on it; the analyst below hears it. */}
+            <AnalystFocusProvider>
+              {children}
+              <AnalystDock env={selectedEnv} />
+            </AnalystFocusProvider>
           </div>
         </div>
 

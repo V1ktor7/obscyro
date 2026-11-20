@@ -19,7 +19,8 @@ import {
 } from "@/lib/platform-api";
 
 import { useAlertFeed } from "../AlertFeed";
-import { UNIT_PARAM } from "../alert-feed-state";
+import { useAnalystFocus } from "../AnalystDock";
+import { UNIT_PARAM, situationHref } from "../alert-feed-state";
 import { StatusChip } from "../StatusChip";
 import { useStudio } from "../StudioShell";
 import {
@@ -73,6 +74,8 @@ export default function LiveTwinView() {
   // An alert, or a signal, links here with its unit in the address: open that
   // unit's detail without a click.
   const linkedUnit = useSearchParams().get(UNIT_PARAM);
+  // The analyst is told which unit is selected: a question asked from here is about it.
+  useAnalystFocus({ unitId: selectedUnitId ?? undefined });
   useEffect(() => {
     if (!linkedUnit) return;
     setSelectedUnitId(linkedUnit);
@@ -394,6 +397,7 @@ export default function LiveTwinView() {
           nodeName={snapshot?.nodes.find((n) => n.id === selectedUnitId)?.name}
           detail={unitDetail}
           loading={detailLoading}
+          situationHref={situationHref({ unit: selectedUnitId }, env ?? null)}
           onAck={(id) => void handleAck(id)}
           onClose={() => setShowDetail(false)}
         />
