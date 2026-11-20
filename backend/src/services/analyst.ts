@@ -161,6 +161,19 @@ export interface Closing<D, A, F> {
   nudge: string | ((read: Reading) => string);
   /** How many times prose is answered with `nudge` before giving up. One when absent. */
   proseTurns?: number;
+  /**
+   * For an exchange whose reading is heavy to send twice. After a prose turn,
+   * everything a delivery may rest on, as the one message a new conversation
+   * starts from; null when nothing has been recorded yet, and the conversation
+   * then goes on as it is, with `nudge`.
+   *
+   * A search for events reads some seventy thousand tokens of pages, and all a
+   * candidate may rest on is the few short passages cited from them. Sending
+   * the pages again with the delivery, and a third time when a draft is sent
+   * back, was more than half of what a search cost. Once this is used the
+   * exchange can search no more: the web tool is not offered again.
+   */
+  handoff?(read: Reading): string | null;
   /** Said on screen while the first request runs. */
   firstStatus?: string;
   /** Why there is no answer, for each way the loop can end without one. */
@@ -468,6 +481,8 @@ export async function converse<D, A, F>(
   let servedBy = ANALYST_MODEL;
   let rejected = 0;
   let nudges = 0;
+  // True once the reading was handed over to a new conversation: no search from there on.
+  let delivering = false;
   const reader = new WebReader();
 
   /** A step, numbered, with what a sentence may take from it. */
@@ -510,7 +525,9 @@ export async function converse<D, A, F>(
       system: closing.system,
       tools: [
         ...tools.map((t): Anthropic.Beta.BetaTool => ({ name: t.name, description: t.description, input_schema: t.input_schema })),
-        ...(web ? [webSearchTool(web)] : []),
+        // Gone after a handoff, so the cap on searches holds for the whole
+        // exchange: the API counts searches per conversation, and this is a new one.
+        ...(web && !delivering ? [webSearchTool(web)] : []),
         closing.tool,
       ],
       messages,
@@ -561,7 +578,16 @@ export async function converse<D, A, F>(
       // paragraph by paragraph: ask for the answer in its proper form.
       if (nudges < (closing.proseTurns ?? 1)) {
         nudges += 1;
-        messages.push({ role: "user", content: typeof closing.nudge === "string" ? closing.nudge : closing.nudge(read) });
+        const fresh = closing.handoff?.(read) ?? null;
+        if (fresh !== null) {
+          // What was read stays in the steps and the journal. The model is
+          // sent what a delivery may rest on, and not the pages again.
+          messages.length = 0;
+          messages.push({ role: "user", content: fresh });
+          delivering = true;
+        } else {
+          messages.push({ role: "user", content: typeof closing.nudge === "string" ? closing.nudge : closing.nudge(read) });
+        }
         continue;
       }
       return finish({ status: "incomplete", answer: null, verified: false, struck: [], message: closing.words.noForm });

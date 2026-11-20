@@ -185,17 +185,41 @@ test("the model is handed the search, the delivery and nothing that reads the or
   assert.doesNotMatch(String(first.system), /describe_twin|find_sites|read_run/);
 });
 
-test("after its cited sentences, the model is sent the recorded passages with the ids to cite", async () => {
+test("after its cited sentences, the delivery is asked for with the recorded passages and not the pages again", async () => {
   const model = scripted([researched(CURFEW, SCHOOLS), reply([deliver([curfew()])], "tool_use")]);
   await run(model);
+  const second = model.seen[1]!;
+  // A new conversation: the request, what was searched, and the passages with the ids to cite.
+  assert.equal(second.messages.length, 1);
+  assert.equal(second.messages[0]!.role, "user");
   const sent = lastSent(model, 1);
-  assert.match(sent, /These passages were recorded from your cited sentences/);
-  assert.match(sent, /s2 \| https:\/\/www\.quebec\.ca\/nouvelles\/couvre-feu \| Nouvelles mesures pour freiner la transmission \| "Un couvre-feu/);
+  assert.ok(sent.startsWith(`<context>\nToday is 2026-11-17.`), "the request and its sources open the new conversation");
+  assert.match(sent, /<request>\nWhat measures were in force in Montréal/);
+  assert.match(sent, /The searches for this request have been run, 1 of the 8 allowed[\s\S]*- "mesures sanitaires Québec décembre 2021": 2 pages returned/);
+  assert.match(sent, /They are the only text a candidate may rest on:\ns2 \| https:\/\/www\.quebec\.ca\/nouvelles\/couvre-feu \| Nouvelles mesures pour freiner la transmission \| "Un couvre-feu/);
   assert.match(sent, /s3 \| https:\/\/www\.quebec\.ca\/education\/retour-en-classe/);
-  // The cited turn went back as it was received: the API needs its encrypted parts to carry on.
-  const echoed = JSON.stringify(model.seen[1]!.messages[1]);
-  assert.match(echoed, /"encrypted_content":"enc"/);
-  assert.match(echoed, /"encrypted_index":"idx"/);
+  assert.match(sent, /No further search is possible in this exchange\. Deliver now by calling give_events/);
+  // The pages the search returned are the bulk of what was read. They are not sent, and not billed, a second time.
+  assert.doesNotMatch(JSON.stringify(second.messages), /encrypted_content|encrypted_index|web_search_tool_result/);
+  // And the cap on searches holds for the exchange: the search is no longer offered.
+  assert.deepEqual((second.tools ?? []).map((t) => (t as { name: string }).name), ["give_events"]);
+  // The instructions are the same: only the conversation is new.
+  assert.equal(second.system, model.seen[0]!.system);
+});
+
+test("a draft sent back after the handoff carries the passages, still without the pages", async () => {
+  const model = scripted([
+    researched(CURFEW),
+    reply([deliver([curfew({ start_date: "2021-12-30" })])], "tool_use"),
+    reply([deliver([curfew()])], "tool_use"),
+  ]);
+  const out = await run(model);
+  assert.equal(out.status, "answered");
+  const third = model.seen[2]!;
+  // The new conversation, the refused draft, and why: three messages, none of them a page.
+  assert.deepEqual(third.messages.map((m) => m.role), ["user", "assistant", "user"]);
+  assert.match(lastSent(model, 2), /start_date: "2021-12-30" is not stated[\s\S]*The recorded passages are:\ns2 \| /);
+  assert.doesNotMatch(JSON.stringify(third.messages), /encrypted_content|web_search_tool_result/);
 });
 
 test("prose without a citation records no passage, and the model is told so", async () => {
@@ -205,6 +229,9 @@ test("prose without a citation records no passage, and the model is told so", as
   ]);
   const out = await run(model);
   assert.match(lastSent(model, 1), /No passage was recorded/);
+  // Nothing to hand over yet: the conversation goes on as it is, and the search is still offered.
+  assert.equal(model.seen[1]!.messages.length, 3);
+  assert.equal((model.seen[1]!.tools![0] as { name: string }).name, "web_search");
   assert.equal(out.status, "answered");
   assert.deepEqual(out.answer!.candidates, []);
   assert.deepEqual(out.answer!.notFound, ["No allowed source returned a curfew."]);
@@ -335,17 +362,21 @@ test("a search turn the API paused goes back as it is, with no word of ours adde
 });
 
 test("a delivery made in the same breath as a search waits for the search", async () => {
+  const early = curfew({ passages: ["s2"] });
   const model = scripted([
-    researched(CURFEW),
     // The API hands back our call first and has not run the search yet.
-    reply([search("srv_2", "écoles Québec janvier 2022"), deliver([curfew()])], "tool_use"),
-    reply([results("srv_2", [{ url: SCHOOLS.url, title: SCHOOLS.title }]), deliver([curfew()])], "tool_use", 1),
+    reply([search("srv_1", "couvre-feu Québec décembre 2021"), deliver([early])], "tool_use"),
+    // The search runs on the next request; the model then writes what it found.
+    reply([results("srv_1", [{ url: CURFEW.url, title: CURFEW.title }]), cited("A curfew began on 31 December 2021.", CURFEW)], "end_turn", 1),
+    reply([deliver([curfew()])], "tool_use"),
   ]);
   const out = await run(model);
-  assert.match(lastSent(model, 2), /give_events must be called on its own/);
+  assert.match(lastSent(model, 1), /give_events must be called on its own/);
   assert.equal(out.status, "answered");
-  assert.equal(out.answer!.searches, 2);
-  assert.equal(out.usage.webSearches, 2);
+  assert.equal(out.answer!.searches, 1);
+  assert.equal(out.usage.webSearches, 1);
+  // The delivery itself came after the handoff, in a conversation without the pages.
+  assert.equal(model.seen[2]!.messages.length, 1);
 });
 
 test("a model that keeps writing prose delivers nothing, and nothing is made up", async () => {

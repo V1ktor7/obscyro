@@ -66,7 +66,7 @@ Nothing about the period either, as far as the person is concerned: what you rem
 
 1. Search with web_search. Results come only from the sources this project allows; they are listed in the context. You have at most ${MAX_SEARCHES} searches for the whole request, so plan them: one subject per search, in the language of the source (French for Québec government sites) and in English when that helps.
 2. Then write what you found as plain sentences, one or two per event, each stating the event and its dates the way the source states them. Write them from the search results, so that each sentence carries its citation. This is how a passage gets recorded: an event you wrote no cited sentence about has no passage, and cannot be proposed.
-3. You will then be sent the passages that were recorded, each with an id (s4, s5, …). Deliver the candidates by calling give_events once, on its own.
+3. You will then be sent the passages that were recorded, each with an id (s4, s5, …), and nothing else of the pages: from there on a candidate rests on the passages alone, and no further search is possible. So search for everything the request asks before you write. Deliver the candidates by calling give_events once, on its own.
 
 # A candidate
 
@@ -245,6 +245,32 @@ function afterProse(read: Reading): string {
   );
 }
 
+/**
+ * Everything a delivery may rest on, for a conversation that starts again
+ * without the pages: the searches that were run, and the recorded passages.
+ *
+ * The pages a search returns are by far the bulk of what this exchange reads,
+ * and none of it may reach a candidate except through a cited passage. So once
+ * the passages exist, the delivery is asked for with them alone. Null while no
+ * passage is recorded: the model still needs the pages to write from.
+ */
+function handoff(read: Reading): string | null {
+  const passages = recorded(read);
+  if (passages.length === 0) return null;
+  const searches = read.steps.filter((s) => s.tool === WEB_SEARCH);
+  const ran = searches.map((s) => {
+    const query = (s.input as { query?: unknown } | null)?.query;
+    const pages = s.ok ? ((s.output as { results?: unknown[] } | null)?.results?.length ?? 0) : null;
+    return `- ${typeof query === "string" ? `"${query}"` : "a search"}: ${pages === null ? "failed" : `${pages} page${pages === 1 ? "" : "s"} returned`}`;
+  });
+  return (
+    `The searches for this request have been run, ${searches.length} of the ${MAX_SEARCHES} allowed, and what they returned has been read:\n${ran.join("\n")}\n\n` +
+    "These passages were recorded from the sentences written from those results, each cited to its page. They are the only text a candidate may rest on:\n" +
+    listPassages(passages) +
+    "\n\nNo further search is possible in this exchange. Deliver now by calling give_events, on its own. Each candidate cites the ids of its passages, its quote is copied exactly from one of them, and its dates are the ones those passages state. What was asked for and is in no passage goes in not_found."
+  );
+}
+
 const asWeb = (p: CandidatePassage): WebPassage => ({ url: p.url, title: p.title, cited_text: p.text });
 
 const realDay = (iso: string): boolean => {
@@ -296,15 +322,20 @@ function describeFindings(findings: EventsFinding[], passages: CandidatePassage[
  * allowed sources is dropped.
  */
 export function eventsClosing(input: EventsAsk): Closing<EventsInput, EventsProposal, EventsFinding> {
+  const opening =
+    `<context>\nToday is ${input.today}.\nSources you may search: ${input.domains.join(", ")}.\nSearches allowed: ${MAX_SEARCHES}.\n</context>\n\n` +
+    `<request>\n${input.request}\n</request>`;
   return {
     system: EVENTS_PROMPT,
     tool: GIVE_EVENTS,
-    opening:
-      `<context>\nToday is ${input.today}.\nSources you may search: ${input.domains.join(", ")}.\nSearches allowed: ${MAX_SEARCHES}.\n</context>\n\n` +
-      `<request>\n${input.request}\n</request>`,
+    opening,
     asked: input.request,
     nudge: afterProse,
-    // Prose is expected once, after the searches; a second round covers a search made late.
+    handoff(read) {
+      const carried = handoff(read);
+      return carried === null ? null : `${opening}\n\n${carried}`;
+    },
+    // Prose is expected once, after the searches. A second round is for prose that carried no citation the first time.
     proseTurns: 2,
     firstStatus: "Searching the allowed sources",
     words: {
