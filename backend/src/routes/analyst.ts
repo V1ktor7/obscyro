@@ -140,9 +140,15 @@ async function record(
 }
 
 /** What went wrong with the model, in words a planner can act on. */
-function failureMessage(err: unknown): string {
+export function failureMessage(err: unknown): string {
   if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) {
     return "The analyst's API key was refused. An administrator has to check ANTHROPIC_API_KEY on the server.";
+  }
+  // An account with no credit left is answered as a bad request (400), or as a
+  // billing error (402). Either way "try again" is the one thing that cannot
+  // help, and the generic message below used to say exactly that.
+  if (err instanceof Anthropic.APIError && (err.status === 402 || /credit balance/i.test(err.message))) {
+    return "The analyst's Claude account has no credit left, so it cannot answer. An administrator has to add credit in the Claude Console; trying again will not help until then.";
   }
   if (err instanceof Anthropic.RateLimitError) return "The analyst is being asked too much at once. Try again in a minute.";
   if (err instanceof Anthropic.APIConnectionError) return "The analyst's model could not be reached. Try again.";

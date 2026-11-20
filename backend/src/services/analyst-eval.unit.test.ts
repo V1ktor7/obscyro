@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { QUESTIONS, judge, lastLine, report, runHeadline, type AnswerLike, type Expectation } from "./analyst-eval.js";
+import { QUESTIONS, judge, lastLine, report, runHeadline, statementsOf, type AnswerLike, type Expectation } from "./analyst-eval.js";
 import { numbersIn } from "./analyst-verify.js";
 
 const answer = (over: Partial<AnswerLike> = {}, text = "Lakeshore has 234 beds for about 225,700 residents."): AnswerLike => ({
@@ -119,6 +119,21 @@ test("two catchments compared each keep their own rate", () => {
   assert.deepEqual(judge(q, read("compare_catchments", good)), []);
   const swapped = "Dorval - Lachine - Lasalle has 1.04 acute beds per 1,000 residents. Pierrefonds - Lac Saint-Louis has 1.15.";
   assert.deepEqual(judge(q, read("compare_catchments", swapped)), ["does not give 1.04 for Pierrefonds", "does not give 1.15 for Dorval"]);
+});
+
+test("a colon does not part a name from the figure it introduces", () => {
+  const q = question("two-catchments");
+  // Both written by the real model on the first replay by the script (2026-11-20). Both are right, and both failed.
+  const first =
+    "RLS de Dorval - Lachine - Lasalle has slightly more acute beds per resident: 1.15 per 1,000 residents, against 1.04 per 1,000 for RLS de Pierrefonds - Lac Saint-Louis.";
+  const second = "Dorval - Lachine - Lasalle has slightly more: 1.15 acute beds per 1,000 residents, against 1.04 for Pierrefonds - Lac Saint-Louis.";
+  assert.deepEqual(judge(q, read("compare_catchments", first)), []);
+  assert.deepEqual(judge(q, read("compare_catchments", second)), []);
+  // The same sentence with the two rates swapped still fails.
+  const swapped = "Dorval - Lachine - Lasalle has slightly more: 1.04 acute beds per 1,000 residents, against 1.15 for Pierrefonds - Lac Saint-Louis.";
+  assert.deepEqual(judge(q, read("compare_catchments", swapped)), ["does not give 1.04 for Pierrefonds", "does not give 1.15 for Dorval"]);
+  // A colon inside a time is not the end of anything, and is left alone.
+  assert.deepEqual(statementsOf("Read at 14:37, Lakeshore has 234 beds: all free.").map((c) => c.text.trim()), ["Read at 14:37", "Lakeshore has 234 beds  all free"]);
 });
 
 test("a question asked in French is answered in French, with figures written the French way", () => {

@@ -63,6 +63,16 @@ const fold = (s: string): string =>
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase();
 
+/**
+ * A text cut into statements, to tell which figure is said of which name.
+ *
+ * The verifier's own cut (`clausesOf`), except at a colon. A colon introduces
+ * what its statement goes on to say ("Dorval has slightly more: 1.15 per
+ * 1,000"), so the name before it and the figure after it are said together.
+ * The first replay by the script failed two right answers written that way.
+ */
+export const statementsOf = (text: string) => clausesOf(text.replace(/:(?=\s)/g, " "));
+
 /** What is wrong with an answer; empty when nothing is. */
 export function judge(e: Expectation, r: AnswerLike): string[] {
   const failures: string[] = [];
@@ -109,7 +119,7 @@ export function judge(e: Expectation, r: AnswerLike): string[] {
   }
   for (const [name, figure] of e.pairs ?? []) {
     const token = numbersIn(figure)[0];
-    const together = clausesOf(text).some((c) => {
+    const together = statementsOf(text).some((c) => {
       if (!fold(c.text).includes(fold(name)) || !token) return false;
       const here = new Ledger();
       here.addText(c.text);

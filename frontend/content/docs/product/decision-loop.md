@@ -3,7 +3,7 @@
 title: "The decision loop"
 description: "Obscyro does not decide. It helps a person decide, by showing what is measured, what has been tried and what each option would change."
 source: "docs/decision-loop.md"
-translatedFrom: "991a5f871f5da6f1"
+translatedFrom: "959d3fc79342e910"
 ---
 
 Obscyro does not decide. It helps a person decide, by showing what is measured, what has been tried and what each option would change, leaving nothing to chance.
@@ -75,7 +75,7 @@ What these figures do not say, and has to be read with them:
 
 ## Order of construction
 
-1. Put the analyst into service and make it reliable: [issue 5](https://github.com/V1ktor7/obscyro/issues/5). **Done.** Next: replay the reference questions with a command, without a browser ([issue 10](https://github.com/V1ktor7/obscyro/issues/10)): delivered, the server does the run and the script asks for the key in the terminal; what remains is to launch the replay once against production.
+1. Put the analyst into service and make it reliable: [issue 5](https://github.com/V1ktor7/obscyro/issues/5). **Done.** Next: replay the reference questions with a command, without a browser ([issue 10](https://github.com/V1ktor7/obscyro/issues/10)): delivered, the server does the run and the script asks for the key in the terminal. Launched against production on 2026-11-20: 22 right answers out of the 24 received, then the analyst's Claude account ran out of credit. Six questions remain to be replayed.
 2. Options tested by the engine, recommendation, recorded decision: [issue 6](https://github.com/V1ktor7/obscyro/issues/6). **Done.** Next: the test of an option shortened by one pass, and its duration measured ([issue 8](https://github.com/V1ktor7/obscyro/issues/8), **done**), letting an option replace or remove a choice of the scenario ([issue 9](https://github.com/V1ktor7/obscyro/issues/9), **done**: the “Apply to scenario” click was exercised in production on 2026-11-20, a single stamp in the recipe and Run equal to the test, then the demonstration scenario put back as it was).
 3. Validated online search and the calendar of events: [issue 7](https://github.com/V1ktor7/obscyro/issues/7). **Done.** Next: reduce the token cost of a search ([issue 11](https://github.com/V1ktor7/obscyro/issues/11), **done**: from 296,536 to 111,650 tokens on the reference request, from $1.05 to $0.71).
 4. Live: from the alert to the decision in one click. Six issues, in this order.

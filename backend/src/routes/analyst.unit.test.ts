@@ -4,7 +4,9 @@ import { test } from "node:test";
 import Fastify from "fastify";
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from "fastify-type-provider-zod";
 
-import analystRoutes from "./analyst.js";
+import Anthropic from "@anthropic-ai/sdk";
+
+import analystRoutes, { failureMessage } from "./analyst.js";
 
 /**
  * The routes register and their schemas compile.
@@ -94,4 +96,21 @@ test("a search for events needs a request, and never takes the twin's data from 
   assert.equal((await post({ request: "What measures were in force in Montréal?" })).statusCode, 401);
   assert.equal((await post({ request: "What measures were in force in Montréal?", scenarioId: null, run: { horizon: 60 } })).statusCode, 401);
   await app.close();
+});
+
+test("an account out of credit is said as such, not as something to try again", () => {
+  // What the API answered on 2026-11-20, in the middle of a replay: a 400, with this message.
+  const body = { type: "error", error: { type: "invalid_request_error", message: "Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits." } };
+  const outOfCredit = failureMessage(Anthropic.APIError.generate(400, body, undefined, new Headers()));
+  assert.match(outOfCredit, /no credit left/);
+  assert.match(outOfCredit, /administrator/);
+  assert.doesNotMatch(outOfCredit, /Try again/);
+  // The billing error the API also documents, whatever its message says.
+  assert.match(failureMessage(Anthropic.APIError.generate(402, { type: "error", error: { type: "billing_error", message: "Payment required." } }, undefined, new Headers())), /no credit left/);
+
+  // Any other bad request keeps its own message, and its status.
+  const other = failureMessage(Anthropic.APIError.generate(400, { type: "error", error: { type: "invalid_request_error", message: "messages: too long" } }, undefined, new Headers()));
+  assert.equal(other, "The analyst's model returned an error (400). Try again.");
+  // A refused key is still the key's message.
+  assert.match(failureMessage(Anthropic.APIError.generate(401, { type: "error", error: { type: "authentication_error", message: "invalid x-api-key" } }, undefined, new Headers())), /key was refused/);
 });

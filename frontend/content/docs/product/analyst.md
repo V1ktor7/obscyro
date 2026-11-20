@@ -3,7 +3,7 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "8221351065598114"
+translatedFrom: "dd1a5521090d6aad"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
@@ -33,6 +33,8 @@ The diagrams of the loop, the verifier and the calculator are in [Algorithms](/d
 ## Putting it into service
 
 It reads the twin through the Claude API. It needs the `ANTHROPIC_API_KEY` variable on the API service. Without it the analyst is off, the panel says so, and nothing else in the product depends on it.
+
+It also needs credit on the Claude account of that key. When there is none left, the API refuses every request, and the analyst says so as it is: “The analyst's Claude account has no credit left, so it cannot answer. An administrator has to add credit in the Claude Console; trying again will not help until then.” No answer is made up in its place. What a question costs is measured further down (“Latest replay”, “What a search costs”).
 
 What the tools read from the twin (counts and capacities, never a person) is sent to the Claude API to write the answer. The panel says so at its foot.
 
@@ -75,7 +77,7 @@ Lines of the stream:
 | `status` | What is being done |
 | `step` | A tool call: its number (`s1`, `s2`…), its input, its result or its refusal, and the record the tool kept for the screen if it keeps one |
 | `done` | The answer or the proposal, the figures removed, the steps, the model, the tokens, and `exchangeId`, the identifier of the exchange in the journal |
-| `failed` | The model or the engine could not be reached; replaces `done` |
+| `failed` | The model or the engine could not be reached, or the Claude account has no credit left; replaces `done` |
 | `ping` | Nothing: keeps the connection open |
 
 A request refused before it starts (no session, analyst off, simulation service not configured, invalid body) is an ordinary HTTP error, not a stream.
@@ -296,7 +298,13 @@ npm run eval:analyst -- --times 2 --show
 npm run eval:analyst -- --only three-sites,two-catchments,in-french,run-waiting-by-site
 ```
 
-**The key.** The script acts as a person: it needs an Obscyro API key of a user who can read the environment. It is created on the account's keys page (`/app/keys`) and revoked there afterwards. The script reads it from `OBSCYRO_API_KEY` if the variable exists; otherwise it asks for it in the terminal, typed or pasted without being displayed. That is the way to prefer: the key is then written nowhere, neither in a file nor in the terminal's history. It has no place in the repository, in `backend/.env`, or in a log, and the script never prints it.
+**The key.** The script acts as a person: it needs an Obscyro API key of a user who can read the environment. The browser's key can be read and copied in the Studio, under Admin → API keys; a key can also be created there, or on the account's keys page (`/app/keys`). On that last page, a key just created at once becomes the browser's: revoking it afterwards signs the Studio out. The script reads the key from `OBSCYRO_API_KEY` if the variable exists; otherwise it asks for it in the terminal, typed or pasted without being displayed. That is the way to prefer: the key is then written nowhere, neither in a file nor in the terminal's history. It has no place in the repository, in `backend/.env`, or in a log, and the script never prints it.
+
+When the terminal does not let you paste at the prompt (it happened on 2026-11-20, in an application's terminal; the cause was not looked into), the key can go from the clipboard to the variable without being displayed or entering the history. In Git Bash on Windows, after copying the key:
+
+```bash
+OBSCYRO_API_KEY="$(powershell.exe -NoProfile -Command Get-Clipboard | tr -d '\r\n')" npm run eval:analyst
+```
 
 **The run.** Some questions are about “the run on screen”. The script has no screen: it asks the server to run the reference scenario (`POST /v1/ontology/:env/analyst/run`), that is, the two passes Run does on the page, summarised the way the page summarises them. That digest goes with the questions about the run. Allow about a minute before the first question, and the script writes in one line which run it is (peak, sites with a queue, patient-days of waiting, with and without the choices): that is what makes it possible to tell a wrong answer from a scenario edited since.
 
@@ -317,7 +325,7 @@ npm run eval:analyst -- --only three-sites,two-catchments,in-french,run-waiting-
 | The right tools read | Each expected tool was called and returned something (`a\|b`: one or the other) |
 | The known facts are there | Each expected figure is in the answer, exact or rounded the way the verifier allows |
 | The expected words are there | Ignoring case and accents |
-| Each name keeps its figure | A name and its figure are in the same clause (`pairs`): that is what catches two right figures each written beside the wrong site |
+| Each name keeps its figure | A name and its figure are in the same clause (`pairs`): that is what catches two right figures each written beside the wrong site. A colon does not end the clause: “Dorval has slightly more: 1.15 per 1,000” does say 1.15 of Dorval (`statementsOf`) |
 
 What is not judged: the quality of the writing. That still takes a person, who reads the answers with `--show`.
 
@@ -328,7 +336,25 @@ What is not judged: the quality of the writing. That still takes a person, who r
 
 ### Latest replay
 
-2026-11-17, in production, model `claude-opus-5-5`, effort `medium`, scenario “Omicron · Montréal — calibrated on INSPQ” with its run on screen:
+**The replay by the command, 2026-11-20: launched, not finished.** `npm run eval:analyst -- --show` against production, with nothing prepared by hand, model `claude-opus-5-5`, scenario “Omicron · Montréal — calibrated on INSPQ”. The server did the run in 69 seconds and returned the figures of the Result panel (94 % then 93 % at the peak, 8 then 3 sites out of 34 with a queue, 7,316 then 267 patient-days of waiting).
+
+| | |
+|---|---|
+| Answers asked for | 34: 17 questions, twice each |
+| Answers received | 24. The analyst's Claude account ran out of credit during the 25th, and the last ten requests were refused by the API |
+| Passed | 22 of the 24 received: eleven questions, twice in a row each, two of them about the run (`run-summary`, `run-where`) |
+| Figures removed | none |
+| Failed wrongly | 2: `two-catchments`, twice. Both answers were right (1.15 for Dorval, 1.04 for Pierrefonds), written “Dorval … has slightly more: 1.15 …”; the judge cut the clause at the colon. It is fixed, and both sentences are in its tests |
+| Unanswered | 10: `run-order`, `run-sites`, `run-waiting-by-site`, `run-share`, `not-a-forecast`, twice each |
+| Median duration of an answer | 13.6 s over the 24 received. The slowest: 37.8 s (`run-where`, 7 steps) |
+| Tokens | 598,896 for the 24 answers, in 68 requests to the model: from 13,942 to 65,230 per answer |
+| Price | $1.53 for the 24 answers, from the tokens kept in the journal and the prices read that day: 6 cents for the median answer, from 1.5 to 17 cents |
+
+**Six questions remain to be replayed** once the Claude account has credit: `npm run eval:analyst -- --only two-catchments,run-order,run-sites,run-waiting-by-site,run-share,not-a-forecast`. Twelve answers, in the order of one to two dollars at the price measured above: ten are about the run, and those are the dearest.
+
+This replay also showed a wrong message: for want of credit, the analyst answered “The analyst's model returned an error (400). Try again.” Trying again could do nothing. It now says the account has no credit left and that an administrator adds some (see “Putting it into service”).
+
+**The latest complete replay** is that of 2026-11-17, in production, model `claude-opus-5-5`, effort `medium`, scenario “Omicron · Montréal — calibrated on INSPQ” with its run on screen:
 
 | | |
 |---|---|
@@ -343,7 +369,7 @@ The effort stays at `medium`: at that duration there is nothing to gain by lower
 
 That replay was launched from the page, in the browser, with the same judging code (`judge`, `QUESTIONS`) as the script, and the digest of the run came from the page itself. It covered the thirteen questions of the time.
 
-Since 2026-11-20, the script no longer needs anything prepared by hand: the server does the run, and the key is given in the terminal. The run done by the server was verified in production that day: in 64 seconds, it returns the figures of the Result panel (94 % and 93 % at the peak, 8 then 3 sites out of 34 with a queue, 7,316 then 267 patient-days of waiting) and the order of the queues the questions expect. **What remains is to launch it once against production, two passes, and to replace this table with its result**: a person holds the key, not a tool.
+Since 2026-11-20, the script no longer needs anything prepared by hand: the server does the run, and the key is given in the terminal. The run done by the server was verified in production that day: in 64 seconds, it returns the figures of the Result panel (94 % and 93 % at the peak, 8 then 3 sites out of 34 with a queue, 7,316 then 267 patient-days of waiting) and the order of the queues the questions expect. The replay by the command was launched the same day; its result, incomplete, is at the head of this section.
 
 Four answers were read back by a person and compared with the Result panel: the order of the queues, the summary of the choices, the case with no run, and the question the tool cannot answer.
 
