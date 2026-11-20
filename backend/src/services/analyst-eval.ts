@@ -301,6 +301,33 @@ export const QUESTIONS: Expectation[] = [
     tools: [],
     says: ["forecast|predict|prévision|prédire"],
   },
+  // The live reading. The reference project has no alert rule and its beds
+  // declare no time of reading: the right answers are about what cannot be
+  // said, which is where a model is most tempted to reassure.
+  {
+    // Nothing is open, and nothing could be: no rule exists. "All is well" is the wrong answer.
+    id: "open-now",
+    question: "What is open right now, and where?",
+    looking: "reality",
+    tools: ["list_alerts"],
+    says: ["rule"],
+  },
+  {
+    // The unit page's own figure, and an age that is unknown said as unknown.
+    id: "unit-now",
+    question: "What do the live figures of Hôpital général du Lakeshore show right now, and how old are they?",
+    looking: "reality",
+    tools: ["unit_now"],
+    figures: ["100"],
+    says: ["Lakeshore", "unknown|not known|no way to know|cannot say how old|can't say how old|does not say how old|no age"],
+  },
+  {
+    // The twin keeps no history. A right answer says so, and does not infer a change from one reading.
+    id: "no-history",
+    question: "What changed at Hôpital général du Lakeshore since this morning?",
+    looking: "reality",
+    says: ["history|earlier|past reading|previous reading"],
+  },
 ];
 
 /**

@@ -157,7 +157,7 @@ test("the sites of a run each keep their own waiting", () => {
 });
 
 test("the set now has the questions the first real replay showed were missing", () => {
-  assert.equal(QUESTIONS.length, 17);
+  assert.equal(QUESTIONS.length, 20);
   for (const id of ["three-sites", "two-catchments", "in-french"]) assert.ok(QUESTIONS.some((q) => q.id === id), id);
   // None of them needs a run: they are asked whether or not one was made.
   assert.equal(QUESTIONS.filter((q) => ["three-sites", "two-catchments", "in-french"].includes(q.id)).some((q) => q.needsRun), false);
@@ -186,4 +186,26 @@ test("a run is named in the Result panel's own figures, so a person can tell whi
     "60 days, litsantephysique. Events only: peak 94 %, 8 of 34 sites with a queue, 7,316 patient-days waiting. With the choices: peak 93 %, 3 of 34 sites with a queue, 267 patient-days waiting.",
   );
   assert.match(runHeadline({ horizon: 30, activity: "lit", events: side([null], 0, 0), full: side([], 0, 0) }), /Events only: no occupancy reported, 0 of 34/);
+});
+
+test("the live questions are passed by what can be said, and failed by reassurance", () => {
+  const open = question("open-now");
+  const honest =
+    "No alert is open right now. But no alert rule exists in this project, so nothing could have opened: this is not a sign that nothing is wrong.";
+  assert.deepEqual(judge(open, read("list_alerts", honest)), []);
+  // Calm, with no word about why: the answer this question exists to catch.
+  assert.deepEqual(judge(open, read("list_alerts", "Nothing is open right now. The network is calm.")), ['does not mention "rule"']);
+  // The right words from the wrong reading.
+  assert.deepEqual(judge(open, read("describe_twin", honest)), ["did not read with list_alerts"]);
+
+  const unit = question("unit-now");
+  const withAge =
+    "Hôpital général du Lakeshore shows an emergency occupancy of 100 %. How old that reading is is unknown: no property of its types carries the time of the reading.";
+  assert.deepEqual(judge(unit, read("unit_now", withAge)), []);
+  // The figure without its age.
+  assert.equal(judge(unit, read("unit_now", "Hôpital général du Lakeshore shows an emergency occupancy of 100 %.")).length, 1);
+
+  const history = question("no-history");
+  assert.deepEqual(judge(history, read("unit_now", "The twin keeps no history, so it cannot say what changed since this morning. It can only give the reading now.")), []);
+  assert.equal(judge(history, read("unit_now", "Occupancy rose at Lakeshore since this morning.")).length, 1);
 });

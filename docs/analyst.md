@@ -272,7 +272,7 @@ La maquette d'origine est `design/scenario-analyst.html`. Elle montre aussi un o
 
 ## Les questions de référence
 
-L'analyste est un modèle de langage : « ça a marché quand j'ai essayé » n'est pas un test. La même question peut être bien répondue un jour et mal le lendemain, après un changement de ses consignes ou de la description d'un outil. Dix-sept questions de référence, sur le jumeau de Montréal et le scénario Omicron calé sur l'INSPQ, disent ce qu'une bonne réponse doit contenir.
+L'analyste est un modèle de langage : « ça a marché quand j'ai essayé » n'est pas un test. La même question peut être bien répondue un jour et mal le lendemain, après un changement de ses consignes ou de la description d'un outil. Vingt questions de référence, sur le jumeau de Montréal et le scénario Omicron calé sur l'INSPQ, disent ce qu'une bonne réponse doit contenir.
 
 ```bash
 # backend/ — à la main, jamais dans la suite de tests : appelle la vraie API
@@ -314,6 +314,7 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 
 - Chaque question est rejouée deux fois par défaut : un jeu qui passe une fois n'a pas montré qu'il passe.
 - Quatre questions couvrent ce qui s'est montré fragile avec le vrai modèle : trois sites cités avec un chiffre chacun (`three-sites`), les sites d'un run avec leur attente (`run-waiting-by-site`), deux territoires comparés (`two-catchments`), une question posée en français (`in-french`).
+- Trois questions portent sur le direct, là où un modèle est le plus tenté de rassurer. `open-now` : rien n'est ouvert, mais le projet de référence n'a aucune règle d'alerte, et une bonne réponse le dit au lieu de conclure que tout va bien. `unit-now` : le chiffre de la page de l'unité, avec un âge inconnu dit comme inconnu. `no-history` : « qu'est-ce qui a changé depuis ce matin » n'a pas de réponse, et une bonne réponse le dit sans déduire un changement d'une seule lecture.
 - Le script sort en erreur dès qu'une question échoue : il peut servir de garde avant de changer les consignes ou un outil.
 - Les faits attendus sont dans le code (`QUESTIONS`). Quand le jumeau ou le scénario change, c'est la question qu'on corrige.
 

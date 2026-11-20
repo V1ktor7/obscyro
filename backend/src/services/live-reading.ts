@@ -285,8 +285,16 @@ export function alertNow(a: FeedAlert, live: Pick<LiveReading, "at" | "measures"
   };
 }
 
-/** When the thresholds were last checked, in words: "nothing is open" means little if nobody looked. */
-export function lastChecked(live: Pick<LiveReading, "at" | "feed">): { at: string | null; says: string } {
+/**
+ * When the thresholds were last checked, in words: "nothing is open" means
+ * little if nobody looked.
+ *
+ * The evaluator's pulse is the server's, not the project's. In a project with
+ * no rule it would say "checked 5 s ago" about thresholds that do not exist,
+ * so that case is said first.
+ */
+export function lastChecked(live: Pick<LiveReading, "at" | "feed" | "rules">): { at: string | null; says: string } {
+  if (live.rules === 0) return { at: null, says: "no alert rule exists in this project, so nothing can open" };
   const at = live.feed.evaluation.lastAt;
   const s = secondsBetween(at, live.at);
   if (at === null || s === null) return { at: null, says: "the thresholds have not been checked since the server started" };

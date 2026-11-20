@@ -250,10 +250,13 @@ test("nothing open is not said as nothing wrong", async () => {
   const noRule = alertsNow(live({ feed: quiet, rules: 0, signals: [], openSignalsByStage: [] }));
   assert.deepEqual(noRule.open_alerts, { total: 0, critical: 0, warn: 0, info: 0 });
   assert.match(noRule.how_to_read.join(" "), /No alert rule exists in this project/);
-  assert.equal(noRule.checked.says, "the thresholds have not been checked since the server started");
+  // The evaluator ran four seconds ago, for other projects: here there is no threshold it could have checked.
+  assert.equal(noRule.checked.says, "no alert rule exists in this project, so nothing can open");
+  assert.equal(alertsNow(live({ rules: 0 })).checked.says, "no alert rule exists in this project, so nothing can open");
   // Rules exist and none fired: what was seen when last checked, not a guarantee.
   const calm = alertsNow(live({ feed: quiet, rules: 3, signals: [], openSignalsByStage: [] }));
   assert.match(calm.how_to_read.join(" "), /No alert is open\. That is what the rules saw/);
+  assert.equal(calm.checked.says, "the thresholds have not been checked since the server started");
   assert.doesNotMatch(calm.how_to_read.join(" "), /No alert rule exists/);
 });
 

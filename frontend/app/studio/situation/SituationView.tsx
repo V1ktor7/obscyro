@@ -178,10 +178,8 @@ export default function SituationView() {
           <>
             <p className="text-[11px] text-ink-muted">
               Read at {new Date(card.at).toLocaleTimeString("en-CA", { hour12: false })} on the server&apos;s clock, and again every{" "}
-              {REREAD_MS / 1000} s · {card.checked.says} ·{" "}
-              {card.alertRules === 0
-                ? "no alert rule exists in this project, so nothing can open"
-                : `${card.alertRules} alert rule${card.alertRules === 1 ? "" : "s"} in this project`}
+              {REREAD_MS / 1000} s · {card.checked.says}
+              {card.alertRules > 0 ? ` · ${card.alertRules} alert rule${card.alertRules === 1 ? "" : "s"} in this project` : ""}
             </p>
 
             {opened ? (

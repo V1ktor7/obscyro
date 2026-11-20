@@ -3,7 +3,7 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "641eea6a72f47b8c"
+translatedFrom: "f02539b0e2e9aff7"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
@@ -278,7 +278,7 @@ The original mock-up is `design/scenario-analyst.html`. It also shows a tab that
 
 ## The reference questions
 
-The analyst is a language model: “it worked when I tried” is not a test. The same question can be answered well one day and badly the next, after a change to its instructions or to the description of a tool. Seventeen reference questions, on the Montréal twin and the Omicron scenario fitted to INSPQ data, say what a good answer must contain.
+The analyst is a language model: “it worked when I tried” is not a test. The same question can be answered well one day and badly the next, after a change to its instructions or to the description of a tool. Twenty reference questions, on the Montréal twin and the Omicron scenario fitted to INSPQ data, say what a good answer must contain.
 
 ```bash
 # backend/ — by hand, never in the test suite: it calls the real API
@@ -320,6 +320,7 @@ What is not judged: the quality of the writing. That still takes a person, who r
 
 - Each question is replayed twice by default: a set that passes once has not shown that it passes.
 - Four questions cover what proved fragile with the real model: three sites cited with one figure each (`three-sites`), the sites of a run with their waiting (`run-waiting-by-site`), two territories compared (`two-catchments`), a question asked in French (`in-french`).
+- Three questions are about live reading, where a model is most tempted to reassure. `open-now`: nothing is open, but the reference project has no alert rule, and a good answer says so instead of concluding that all is well. `unit-now`: the figure of the unit's page, with an unknown age said as unknown. `no-history`: “what changed since this morning” has no answer, and a good answer says so without inferring a change from a single reading.
 - The script exits with an error as soon as a question fails: it can serve as a guard before changing the instructions or a tool.
 - The expected facts are in the code (`QUESTIONS`). When the twin or the scenario changes, it is the question that gets corrected.
 
