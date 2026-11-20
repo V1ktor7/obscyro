@@ -188,13 +188,14 @@ flowchart TD
     SP --> EV
     EV --> W{"Qui lance le run ?"}
     W -->|"la page, bouton Run"| EP["Événement stocké sous un nom fixe,<br/>par trois routes de l'API"]
-    W -->|"le serveur, pour l'analyste"| ES["Événement envoyé au moteur, rien n'est stocké"]
+    W -->|"le serveur : une option testée,<br/>ou POST /analyst/run"| ES["Événement envoyé au moteur, rien n'est stocké"]
     EP --> RUN["Simulation du réseau, sans réponse,<br/>à travers le scénario"]
     ES --> RUN
     RUN --> G["Par jour et par site : occupation, file,<br/>capacité. Par jour : arrivées, non servis"]
     G --> D["Résumé du run : les deux passes, les sites où l'on attend"]
     D --> R["Page : panneau Result, liste Where it breaks,<br/>comparaison à la réalité, résumé pour l'analyste"]
     D --> O["Serveur : résultat d'une option testée (A8)"]
+    D --> O2["Serveur : résumé rendu par POST /analyst/run,<br/>pour une question sur le run posée sans écran"]
 ```
 
 **Règles.**
@@ -218,13 +219,13 @@ flowchart LR
     Q -->|"non d'un côté"| KO["Ce côté a changé seul : son test échoue"]
 ```
 
-L'enregistrement contient deux runs : le scénario tel quel, et le scénario avec les tampons de l'option. Le second est ce qui garantit qu'ajouter une option testée au scénario puis lancer Run redonne les chiffres du test. Il se régénère à la main quand le moteur ou la traduction change (`cd backend && npx tsx scripts/make-scenario-run-fixture.ts`, avec Python et les dépendances du service de simulation), puis on relance les deux suites.
+L'enregistrement contient trois runs : le scénario tel quel, le scénario avec les tampons d'une option, et le scénario où une option a remplacé un choix (l'ancien tampon retiré, le nouveau écrit). Les deux derniers sont ce qui garantit qu'appliquer une option testée au scénario puis lancer Run redonne les chiffres du test. Il se régénère à la main quand le moteur ou la traduction change (`cd backend && npx tsx scripts/make-scenario-run-fixture.ts`, avec Python et les dépendances du service de simulation), puis on relance les deux suites.
 
-Sur le serveur, le run existe en deux formes. `ScenarioRunner.digest` fait les deux passes, comme la page : c'est lui que le test de parité rejoue. `ScenarioRunner.full` ne fait que la passe « avec les choix » : c'est ce que lit une option testée (A8), parce que le tableau des options compare le scénario avec ses choix au scénario avec l'option en plus, et que la passe « événements seuls » n'y montre rien. Les deux formes passent par le même résumé d'une passe (`passFigures`), donc une colonne du tableau ne peut pas différer de ce que Run affiche pour la même passe ; un test le vérifie sur l'enregistrement.
+Sur le serveur, le run existe en deux formes. `ScenarioRunner.digest` fait les deux passes, comme la page : c'est lui que le test de parité rejoue, et c'est lui que `serverRun` appelle pour la route `POST /v1/ontology/:env/analyst/run`. Cette route rend le résumé qu'une personne aurait à l'écran après Run, pour qu'une question sur le run puisse être posée par un script, sans navigateur ([analyst.md](analyst.md), les questions de référence). Elle n'appelle aucun modèle, n'écrit rien, et refuse une activité qu'aucun site n'offre avant de solliciter le moteur. `ScenarioRunner.full` ne fait que la passe « avec les choix » : c'est ce que lit une option testée (A8), parce que le tableau des options compare le scénario avec ses choix au scénario avec l'option en plus, et que la passe « événements seuls » n'y montre rien. Les deux formes passent par le même résumé d'une passe (`passFigures`), donc une colonne du tableau ne peut pas différer de ce que Run affiche pour la même passe ; un test le vérifie sur l'enregistrement.
 
 Tester plusieurs options ne refait pas tout : une propagation est gardée d'après ce qu'on lui a demandé, donc une option qui n'ajoute que des lits ne réintègre pas l'épidémie. Chaque appel au moteur est chronométré (`timings`), pour que la durée d'un test soit une mesure et pas une impression.
 
-**Code.** Page : `frontend/app/studio/simulation/hex/engine.ts` (`runScenario`), `stamps.ts` (`engineInput`), `run-digest.ts`. Serveur : `backend/src/services/scenario-run.ts` (`ScenarioRunner`), `scenario-stamps.ts` (`engineInput`, `twinContext`), `scenario-run-recording.ts`. Enregistrement : `backend/scripts/make-scenario-run-fixture.ts`, `simulation-service/scripts/engine_once.py`.
+**Code.** Page : `frontend/app/studio/simulation/hex/engine.ts` (`runScenario`), `stamps.ts` (`engineInput`), `run-digest.ts`. Serveur : `backend/src/services/scenario-run.ts` (`ScenarioRunner`, `serverRun`), `scenario-stamps.ts` (`engineInput`, `twinContext`), `scenario-run-recording.ts`, route `POST /v1/ontology/:env/analyst/run` dans `backend/src/routes/analyst.ts`. Enregistrement : `backend/scripts/make-scenario-run-fixture.ts`, `simulation-service/scripts/engine_once.py`.
 **Tests.** `hex.test.ts`, `HexTwinView.test.tsx`, `run-parity.test.ts` (page) ; `scenario-run.unit.test.ts` (serveur).
 
 ## A5. Où ça casse

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { QUESTIONS, judge, report, type AnswerLike, type Expectation } from "./analyst-eval.js";
+import { QUESTIONS, judge, lastLine, report, runHeadline, type AnswerLike, type Expectation } from "./analyst-eval.js";
 import { numbersIn } from "./analyst-verify.js";
 
 const answer = (over: Partial<AnswerLike> = {}, text = "Lakeshore has 234 beds for about 225,700 residents."): AnswerLike => ({
@@ -91,4 +91,72 @@ test("the report counts what ran, and names what is wrong", () => {
   assert.match(out, /FAIL {2}a #2 +20\.0 s +9,500 +4 +does not give 234/);
   assert.match(out, /SKIP {2}b .*no run supplied/);
   assert.match(out, /1 of 2 passed, 1 skipped\. Median time 12\.3 s\./);
+});
+
+// --- the questions added after the first real replay --------------------------
+
+const question = (id: string): Expectation => {
+  const q = QUESTIONS.find((x) => x.id === id);
+  assert.ok(q, `no question "${id}"`);
+  return q;
+};
+const read = (tool: string, text: string) => answer({ steps: [{ tool, ok: true }] }, text);
+
+test("three sites each keep their own figure, and a swap between two of them fails", () => {
+  const q = question("three-sites");
+  assert.deepEqual(judge(q, read("find_sites", "Hôpital général du Lakeshore has 234 acute beds. Hôpital de LaSalle has 110. Hôpital de Lachine has 56.")), []);
+  // Every figure is there; two are beside the wrong hospital.
+  assert.deepEqual(judge(q, read("find_sites", "Hôpital général du Lakeshore has 234 acute beds. Hôpital de LaSalle has 56. Hôpital de Lachine has 110.")), [
+    "does not give 110 for LaSalle",
+    "does not give 56 for Lachine",
+  ]);
+  assert.deepEqual(judge(q, read("describe_twin", "Lakeshore has 234 beds. LaSalle has 110. Lachine has 56.")), ["did not read with get_site or find_sites"]);
+});
+
+test("two catchments compared each keep their own rate", () => {
+  const q = question("two-catchments");
+  const good = "Dorval - Lachine - Lasalle has 1.15 acute beds per 1,000 residents. Pierrefonds - Lac Saint-Louis has 1.04, the lower of the two.";
+  assert.deepEqual(judge(q, read("compare_catchments", good)), []);
+  const swapped = "Dorval - Lachine - Lasalle has 1.04 acute beds per 1,000 residents. Pierrefonds - Lac Saint-Louis has 1.15.";
+  assert.deepEqual(judge(q, read("compare_catchments", swapped)), ["does not give 1.04 for Pierrefonds", "does not give 1.15 for Dorval"]);
+});
+
+test("a question asked in French is answered in French, with figures written the French way", () => {
+  const q = question("in-french");
+  // A no-break space in the thousands, as French writes them.
+  const fr = "L'Hôpital général du Lakeshore a 234 lits de soins aigus. Il dessert le RLS de Pierrefonds - Lac Saint-Louis, soit 225\u00a0710 résidents.";
+  assert.deepEqual(judge(q, read("get_site", fr)), []);
+  // The right facts in the wrong language.
+  assert.deepEqual(judge(q, read("get_site", "Lakeshore has 234 acute beds and serves 225,710 residents.")), ['does not mention "lits"']);
+});
+
+test("the set now has the questions the first real replay showed were missing", () => {
+  for (const id of ["three-sites", "two-catchments", "in-french"]) assert.ok(QUESTIONS.some((q) => q.id === id), id);
+  // None of them needs a run: they are asked whether or not one was made.
+  assert.equal(QUESTIONS.filter((q) => ["three-sites", "two-catchments", "in-french"].includes(q.id)).some((q) => q.needsRun), false);
+});
+
+// --- what the script reads from the API -----------------------------------------
+
+test("a stream's last word is its done line, whatever came before", () => {
+  const text = ['{"type":"status","message":"Reading the twin"}', '{"type":"ping"}', "", '{"type":"done","run":{"horizon":60}}', ""].join("\n");
+  assert.deepEqual(lastLine<{ run: { horizon: number } }>(text), { done: { type: "done", run: { horizon: 60 } } as never, failed: null });
+});
+
+test("a stream that failed, or stopped short, says so instead of handing back nothing", () => {
+  assert.deepEqual(lastLine('{"type":"status","message":"Reading the twin"}\n{"type":"failed","message":"The simulation service could not be reached."}\n'), {
+    done: null,
+    failed: "The simulation service could not be reached.",
+  });
+  assert.deepEqual(lastLine('{"type":"status","message":"Reading the twin"}\n{"type":"pi'), { done: null, failed: "the stream ended without an answer" });
+  assert.deepEqual(lastLine(""), { done: null, failed: "the stream ended without an answer" });
+});
+
+test("a run is named in the Result panel's own figures, so a person can tell which run was asked about", () => {
+  const side = (island: (number | null)[], sitesWithQueue: number, waitingDays: number) => ({ island, sitesWithQueue, sitesWithActivity: 34, waitingDays });
+  assert.equal(
+    runHeadline({ horizon: 60, activity: "litsantephysique", events: side([0.8, 0.941, null], 8, 7316.4), full: side([0.8, 0.93, 0.9], 3, 267.2) }),
+    "60 days, litsantephysique. Events only: peak 94 %, 8 of 34 sites with a queue, 7,316 patient-days waiting. With the choices: peak 93 %, 3 of 34 sites with a queue, 267 patient-days waiting.",
+  );
+  assert.match(runHeadline({ horizon: 30, activity: "lit", events: side([null], 0, 0), full: side([], 0, 0) }), /Events only: no occupancy reported, 0 of 34/);
 });

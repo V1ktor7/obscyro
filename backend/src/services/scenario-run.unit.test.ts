@@ -5,7 +5,7 @@ import { test } from "node:test";
 import type { RunDigest } from "./analyst-tools.js";
 import { runDigestSchema } from "./analyst-tools.js";
 import type { ScenarioOverride } from "./scenario-overrides.js";
-import { ScenarioRunner, capacityGrid, islandSeries, occupancyGrid, type ScenarioWorld } from "./scenario-run.js";
+import { capacityGrid, islandSeries, occupancyGrid, ScenarioRunner, type ScenarioWorld, serverRun } from "./scenario-run.js";
 import { replayEngine, type RecordedCall } from "./scenario-run-recording.js";
 import { basisOfStamp, engineInput, stampsOf, twinContext, type Stamp } from "./scenario-stamps.js";
 import type { SimExport } from "./twin-export.js";
@@ -246,4 +246,25 @@ test("each stamp carries its level of evidence, assigned from what it is", () =>
   assert.match(of("seed")[0]!.element, /300 sick in Ouest-de-l'Île on day 2/);
   // Nothing in a scenario is a measurement: that level is for what the twin holds.
   assert.ok(basis.every((b) => b.evidence !== "measured"));
+});
+
+test("the run made by the server for a script is the run the page has on screen", async () => {
+  // What `POST /analyst/run` returns: the summary a person's Run would send the analyst.
+  const engine = replayEngine(fixture.asItIs.calls);
+  const digest = await serverRun(engine, world, fixture.asItIs.overrides, now);
+  assert.deepEqual(digest, fixture.asItIs.digest);
+  assert.deepEqual(runDigestSchema.parse(digest), digest);
+  // The page's four calls, in its order: nothing a person's Run does is skipped.
+  assert.deepEqual(engine.asked, requests(fixture.asItIs.calls));
+  // Up to date by construction: it was run on the scenario as it is now.
+  assert.equal(digest.stale, false);
+});
+
+test("an activity no site provides is refused before the engine is asked", async () => {
+  const engine = replayEngine(fixture.asItIs.calls);
+  await assert.rejects(
+    serverRun(engine, { ...world, activity: "bloc" }, fixture.asItIs.overrides, now),
+    (e: Error & { code?: string }) => e.code === "ACTIVITY_NOT_PROVIDED" && /No site on the map provides "bloc"[\s\S]*civiere, lit/.test(e.message),
+  );
+  assert.deepEqual(engine.asked, []);
 });

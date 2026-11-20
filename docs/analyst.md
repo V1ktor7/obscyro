@@ -42,6 +42,7 @@ L'onglet Event finder utilise la recherche web de l'API Claude. Elle n'a pas de 
 | `POST /v1/ontology/:env/analyst/ask` | Un flux, une ligne JSON par événement : une question et sa réponse |
 | `POST /v1/ontology/:env/analyst/options` | Le même flux : un objectif et les options testées |
 | `POST /v1/ontology/:env/analyst/events` | Le même flux : une demande et les événements candidats trouvés en ligne |
+| `POST /v1/ontology/:env/analyst/run` | Un flux plus court : le scénario tourné par le serveur comme le fait Run, et son résumé, dans la forme que `ask` et `options` acceptent comme `run`. N'appelle aucun modèle et n'écrit rien |
 | `POST /v1/ontology/:env/decisions` | Enregistre une décision à partir d'une option testée |
 | `GET /v1/ontology/:env/decisions` | Les décisions du projet, les plus récentes d'abord (`scenarioId` pour un seul scénario) |
 | `GET /v1/ontology/:env/decisions/:id/follow-up` | Les arrivées attendues par une décision à côté de la série observée, avec l'écart |
@@ -229,13 +230,28 @@ La maquette d'origine est `design/scenario-analyst.html`. Elle montre aussi un o
 
 ## Les questions de référence
 
-L'analyste est un modèle de langage : « ça a marché quand j'ai essayé » n'est pas un test. La même question peut être bien répondue un jour et mal le lendemain, après un changement de ses consignes ou de la description d'un outil. Douze questions de référence, sur le jumeau de Montréal et le scénario Omicron calé sur l'INSPQ, disent ce qu'une bonne réponse doit contenir.
+L'analyste est un modèle de langage : « ça a marché quand j'ai essayé » n'est pas un test. La même question peut être bien répondue un jour et mal le lendemain, après un changement de ses consignes ou de la description d'un outil. Seize questions de référence, sur le jumeau de Montréal et le scénario Omicron calé sur l'INSPQ, disent ce qu'une bonne réponse doit contenir.
 
 ```bash
 # backend/ — à la main, jamais dans la suite de tests : appelle la vraie API
-OBSCYRO_API_KEY=... npm run eval:analyst
-OBSCYRO_API_KEY=... npm run eval:analyst -- --run run.json --times 2 --show
+npm run eval:analyst
+npm run eval:analyst -- --times 2 --show
+npm run eval:analyst -- --only three-sites,two-catchments,in-french
 ```
+
+**La clé.** Le script agit comme une personne : il lui faut une clé d'API Obscyro d'un utilisateur qui peut lire l'environnement. Elle se crée sur la page des clés du compte (`/app/keys`) et s'y révoque ensuite. Le script la lit dans `OBSCYRO_API_KEY` si la variable existe ; sinon il la demande au terminal, tapée ou collée sans s'afficher. C'est la façon à préférer : la clé n'est alors écrite nulle part, ni dans un fichier, ni dans l'historique du terminal. Elle n'a sa place ni dans le dépôt, ni dans `backend/.env`, ni dans un journal, et le script ne l'imprime jamais.
+
+**Le run.** Certaines questions portent sur « le run à l'écran ». Le script n'a pas d'écran : il demande au serveur de faire tourner le scénario de référence (`POST /v1/ontology/:env/analyst/run`), c'est-à-dire les deux passes que fait Run sur la page, résumées comme la page les résume. Ce résumé part avec les questions sur le run. Il faut compter environ une minute avant la première question, et le script écrit en une ligne de quel run il s'agit (pic, sites avec une file, jours-patients d'attente, avec et sans les choix) : c'est ce qui permet de distinguer une réponse fausse d'un scénario modifié depuis.
+
+| Option | Ce qu'elle fait |
+|---|---|
+| `--horizon`, `--activity` | Les jours du run et l'activité qu'il lit. Par défaut 60 jours et `litsantephysique`, comme la page |
+| `--save-run fichier.json` | Garde le run fait par le serveur |
+| `--run fichier.json` | Rejoue un run gardé, sans en refaire un |
+| `--no-run` | Ne fait aucun run : les questions sur le run sont sautées, et le rapport le dit |
+| `--only id,id` | Seulement ces questions |
+| `--times n` | Chaque question n fois. Par défaut 2 |
+| `--show` | Imprime chaque réponse, pour qu'une personne la lise |
 
 | Ce qui est jugé | Comment |
 |---|---|
@@ -244,11 +260,12 @@ OBSCYRO_API_KEY=... npm run eval:analyst -- --run run.json --times 2 --show
 | Les bons outils ont lu | Chaque outil attendu a été appelé et a renvoyé quelque chose (`a\|b` : l'un ou l'autre) |
 | Les faits connus y sont | Chaque chiffre attendu est dans la réponse, exact ou arrondi comme le vérificateur l'admet |
 | Les mots attendus y sont | Sans tenir compte de la casse ni des accents |
+| Chaque nom garde son chiffre | Un nom et son chiffre sont dans la même proposition (`pairs`) : c'est ce qui attrape deux chiffres justes écrits chacun à côté du mauvais site |
 
 Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une personne, qui lit les réponses avec `--show`.
 
 - Chaque question est rejouée deux fois par défaut : un jeu qui passe une fois n'a pas montré qu'il passe.
-- Les questions sur un run demandent le résumé du run dans un fichier (`--run`), tel que la page l'envoie à l'analyste. Sans lui, elles sont sautées et le rapport le dit.
+- Trois questions ont été ajoutées après le premier rejeu réel, pour ce qu'il avait montré de fragile : trois sites cités avec un chiffre chacun (`three-sites`), deux territoires comparés (`two-catchments`), une question posée en français (`in-french`).
 - Le script sort en erreur dès qu'une question échoue : il peut servir de garde avant de changer les consignes ou un outil.
 - Les faits attendus sont dans le code (`QUESTIONS`). Quand le jumeau ou le scénario change, c'est la question qu'on corrige.
 
@@ -267,11 +284,13 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 
 L'effort reste à `medium` : à cette durée il n'y a rien à gagner à le baisser, et le rejeu passe sans rien retirer.
 
-Ce rejeu a été lancé depuis la page, dans le navigateur, avec le même code de jugement (`judge`, `QUESTIONS`) que le script, parce que le script demande une clé d'API Obscyro dans son environnement. Le résumé du run venait de la page elle-même. Le script `npm run eval:analyst` n'a donc pas encore tourné tel quel contre la production.
+Ce rejeu a été lancé depuis la page, dans le navigateur, avec le même code de jugement (`judge`, `QUESTIONS`) que le script, et le résumé du run venait de la page elle-même. Il portait sur les treize questions d'alors.
+
+Depuis le 2026-11-20, le script n'a plus besoin de rien de préparé à la main : le serveur fait le run, et la clé se donne au terminal. **Il reste à le lancer une fois contre la production, deux passes, et à remplacer ce tableau par son résultat** : c'est une personne qui détient la clé, pas un outil.
 
 Quatre réponses ont été relues par une personne et comparées au panneau Result : l'ordre des files, le résumé des choix, le cas sans run, et la question à laquelle l'outil ne peut pas répondre.
 
-**Code.** `backend/src/services/analyst-eval.ts` (les questions et le jugement), `backend/scripts/analyst-eval.ts` (le rejeu). **Tests.** `analyst-eval.unit.test.ts`.
+**Code.** `backend/src/services/analyst-eval.ts` (les questions, le jugement, la lecture d'un flux), `backend/scripts/analyst-eval.ts` (le rejeu), `serverRun` dans `backend/src/services/scenario-run.ts` et la route `POST /v1/ontology/:env/analyst/run` dans `backend/src/routes/analyst.ts` (le run fait par le serveur). **Tests.** `analyst-eval.unit.test.ts`, `scenario-run.unit.test.ts`, `routes/analyst.unit.test.ts`.
 
 ## Limites connues
 

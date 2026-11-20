@@ -68,6 +68,21 @@ test("an objective needs a scenario, a horizon and an activity before anything i
   await app.close();
 });
 
+test("a run on the server needs a scenario, a horizon and an activity, and a key like any other route", async () => {
+  const app = await server();
+  assert.ok(app.hasRoute({ method: "POST", url: "/v1/ontology/:env/analyst/run" }));
+  const post = (payload: object) => app.inject({ method: "POST", url: "/v1/ontology/mtl/analyst/run", payload });
+  const whole = { scenarioId: "0d0f1a52-6b1e-4a53-9d0b-2f3f6c1a7e10", horizon: 60, activity: "lit" };
+
+  assert.equal((await post({ horizon: 60, activity: "lit" })).statusCode, 400);
+  assert.equal((await post({ ...whole, scenarioId: "calibrated" })).statusCode, 400);
+  assert.equal((await post({ ...whole, horizon: 0 })).statusCode, 400);
+  assert.equal((await post({ ...whole, activity: "" })).statusCode, 400);
+  // Well formed: it stops at the door, for want of a key. It calls no model, but it reads a project.
+  assert.equal((await post(whole)).statusCode, 401);
+  await app.close();
+});
+
 test("a search for events needs a request, and never takes the twin's data from the caller", async () => {
   const app = await server();
   assert.ok(app.hasRoute({ method: "POST", url: "/v1/ontology/:env/analyst/events" }));

@@ -1,8 +1,11 @@
+import { BadRequest } from "../lib/errors.js";
 import type { RunDigest } from "./analyst-tools.js";
 import { proxyToSimService } from "./ml-simulation.js";
+import type { ScenarioOverride } from "./scenario-overrides.js";
 import {
   engineInput,
   shiftEffects,
+  stampsOf,
   twinContext,
   type SimEffect,
   type Stamp,
@@ -587,4 +590,34 @@ export class ScenarioRunner {
   static withOption(scenario: Stamp[], option: Stamp[], retired: ReadonlySet<string> = new Set()): Stamp[] {
     return [...scenario.filter((s) => !retired.has(s.id)), ...option].sort((a, b) => a.start - b.start);
   }
+}
+
+/**
+ * The run a person would have on screen after pressing Run, made here: both
+ * passes of the scenario as it stands, summarised the way the page summarises
+ * its own run.
+ *
+ * It exists so that a question about "the run on screen" can be asked with no
+ * screen: the reference questions are replayed by a script, and until this a
+ * person had to press Run in a browser and copy the summary into a file. The
+ * agreement with the page is not this function's to prove: it is the parity
+ * recording's (`scenario-run.unit.test.ts`, `run-parity.test.ts`).
+ *
+ * Nothing is stored. An activity no site provides is refused before the
+ * engine is asked: a run with nothing to read looks like a calm network.
+ */
+export async function serverRun(
+  engine: ScenarioEngine,
+  world: ScenarioWorld,
+  overrides: ScenarioOverride[],
+  now: () => Date = () => new Date(),
+): Promise<RunDigest> {
+  const runner = new ScenarioRunner(engine, world, now);
+  if (!runner.ctx.activities.includes(world.activity)) {
+    throw BadRequest(
+      "ACTIVITY_NOT_PROVIDED",
+      `No site on the map provides "${world.activity}", so there is nothing to read a run on. The activities are: ${runner.ctx.activities.join(", ") || "none"}.`,
+    );
+  }
+  return runner.digest(stampsOf(overrides));
 }

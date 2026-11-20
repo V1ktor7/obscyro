@@ -13,7 +13,7 @@ import { ANALYST_MODEL, anthropicModel, ask, converse, type LoopEvent, type Loop
 import { eventSearch, eventsClosing } from "../services/analyst-events.js";
 import { OPTION_TOOLS, benchFor, optionsClosing } from "../services/analyst-options.js";
 import { ToolError, runDigestSchema, type AnalystContext, type WorldName } from "../services/analyst-tools.js";
-import { simServiceEngine } from "../services/scenario-run.js";
+import { serverRun, simServiceEngine } from "../services/scenario-run.js";
 import { Ledger } from "../services/analyst-verify.js";
 import { listDatasets, previewRows, type DatasetRow } from "../services/datasets.js";
 import { listHealthEvents, type HealthEvent } from "../services/health-events.js";
@@ -342,6 +342,74 @@ const analystRoutes: FastifyPluginAsync = async (fastify) => {
           result,
           failure,
         }).catch((err) => req.log.error({ err }, "analyst exchange not recorded"));
+      });
+    },
+  );
+
+  app.post(
+    "/ontology/:env/analyst/run",
+    {
+      schema: {
+        summary: "Run a scenario on the server and get the summary the Scenarios page sends the analyst",
+        description:
+          "Runs the scenario as it stands through the simulation engine, the way pressing Run on the Scenarios page " +
+          "does (the events alone, then with the planner's choices), and returns the summary of that run in the form " +
+          "`/analyst/ask` and `/analyst/options` accept as `run`. It is what lets a question about \"the run on " +
+          "screen\" be asked with no screen: the reference questions are replayed by a script " +
+          "(`npm run eval:analyst`), not by a person in a browser. Streams one JSON object per line, because two " +
+          "passes of the engine take about a minute on a large twin: `status` lines while it works, then `done` with " +
+          "`run`, or `failed` with a message. `horizon` and `activity` are the page's own settings: the days the run " +
+          "covers and the activity it reads. Nothing is written, no language model is called, and the analyst does " +
+          "not need to be switched on. A run is the result of a model under the scenario's stated conditions, not a forecast.",
+        tags: ["analyst"],
+        params: z.object({ env: z.string().min(1) }),
+        body: z.object({
+          scenarioId: z.string().uuid(),
+          horizon: z.number().int().min(1).max(365),
+          activity: z.string().trim().min(1).max(120),
+        }),
+        // No response schema: the 200 is a stream of lines, not one document.
+      },
+    },
+    async (req, reply) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      if (!config.simServiceUrl) {
+        throw BadRequest("SIM_UNAVAILABLE", "A scenario is run by the simulation service, and this server is not connected to one (SIM_SERVICE_URL).");
+      }
+      const s = await getOverlayScenario(req.db, req.body.scenarioId);
+      if (s.projectId !== env.id) throw NotFound("SCENARIO_NOT_FOUND", "That scenario is not in this environment.");
+      const overrides = await listOverrides(req.db, s.id);
+      const { horizon, activity } = req.body;
+
+      type RunLine = { type: "status"; message: string } | { type: "done"; run: unknown } | { type: "failed"; message: string };
+      return streamLines<RunLine>(reply, async (write) => {
+        try {
+          write({ type: "status", message: "Reading the twin" });
+          // As the page does: the map and its context from the twin as it
+          // stands, the engine's input from the twin read through the scenario.
+          const [reality, system] = await Promise.all([
+            buildTwinExport(req.db, env.id, env.slug),
+            buildTwinExport(req.db, env.id, env.slug, { scenarioId: s.id, atOffsetHours: 0 }),
+          ]);
+          write({ type: "status", message: "Running the scenario in the engine" });
+          const run = await serverRun(simServiceEngine, { reality, system, scenario: { id: s.id, name: s.name }, horizon, activity }, overrides);
+          write({ type: "done", run });
+        } catch (err) {
+          req.log.error({ err }, "server run failed");
+          // What the engine or the twin refused is something to read; anything else is ours.
+          const said = err instanceof AppError && ["ACTIVITY_NOT_PROVIDED", "SIM_REFUSED"].includes(err.code) ? err.message : null;
+          write({
+            type: "failed",
+            message:
+              said ??
+              (err instanceof AppError && err.code === "SIM_UNAVAILABLE"
+                ? "The simulation service could not be reached, so the scenario was not run. Try again in a moment."
+                : err instanceof AppError && err.code === "SIM_TIMEOUT"
+                  ? "The engine took too long to run the scenario and was cut off. Try a shorter run."
+                  : "The run stopped on an error of ours. Nothing was made up in its place."),
+          });
+        }
       });
     },
   );

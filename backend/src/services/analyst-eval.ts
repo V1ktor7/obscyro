@@ -157,6 +157,40 @@ export const QUESTIONS: Expectation[] = [
     says: ["Lakeshore"],
   },
   {
+    // Three sites, each with its own figure. What goes wrong here is not a
+    // missing figure but one site's figure written beside another's name.
+    id: "three-sites",
+    question: "How many acute beds do Lakeshore, LaSalle and Lachine each have?",
+    looking: "reality",
+    tools: ["get_site|find_sites"],
+    pairs: [
+      ["Lakeshore", "234"],
+      ["LaSalle", "110"],
+      ["Lachine", "56"],
+    ],
+  },
+  {
+    // Two catchments set side by side: each rate has to stay with its own.
+    id: "two-catchments",
+    question: "Which has more acute beds per 1,000 residents: Pierrefonds - Lac Saint-Louis or Dorval - Lachine - Lasalle? Give both figures.",
+    looking: "reality",
+    tools: ["compare_catchments"],
+    pairs: [
+      ["Pierrefonds", "1.04"],
+      ["Dorval", "1.15"],
+    ],
+  },
+  {
+    // Asked in French: answered in French, with the same facts as "lakeshore-beds".
+    id: "in-french",
+    question: "Combien de lits de soins aigus l'Hôpital général du Lakeshore a-t-il, et combien de résidents dessert-il ?",
+    looking: "reality",
+    tools: ["get_site|find_sites|compare_catchments"],
+    figures: ["234", "225,710"],
+    // "lits" is the word an answer in English would not have.
+    says: ["Lakeshore", "lits"],
+  },
+  {
     id: "scenario-assumptions",
     question: "What does this scenario assume before anything happens?",
     looking: "scenario",
@@ -243,6 +277,53 @@ export const QUESTIONS: Expectation[] = [
     says: ["forecast|predict|prévision|prédire"],
   },
 ];
+
+/**
+ * The last word of a stream of lines: its `done` line, or why there is none.
+ *
+ * The analyst's answer and the server's run both arrive one JSON object per
+ * line, with pings in between and the result last.
+ */
+export function lastLine<T>(text: string): { done: T | null; failed: string | null } {
+  let done: T | null = null;
+  let failed: string | null = null;
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const e = JSON.parse(line) as { type?: string; message?: string };
+      if (e.type === "done") done = e as unknown as T;
+      if (e.type === "failed") failed = e.message ?? "it failed, without saying why";
+    } catch {
+      // Not one of ours.
+    }
+  }
+  return { done, failed: done ? null : (failed ?? "the stream ended without an answer") };
+}
+
+/** As much of a run's summary as says which run it is. */
+export interface RunLike {
+  horizon: number;
+  activity: string;
+  events: { island: (number | null)[]; sitesWithQueue: number; sitesWithActivity: number; waitingDays: number };
+  full: { island: (number | null)[]; sitesWithQueue: number; sitesWithActivity: number; waitingDays: number };
+}
+
+/**
+ * A run in one line, in the figures the Result panel shows for it.
+ *
+ * The expected facts of the questions about a run are those of one run of one
+ * scenario. Printed before the questions, this line is how a person tells an
+ * answer that is wrong from a scenario that was edited since.
+ */
+export function runHeadline(run: RunLike): string {
+  const peak = (xs: (number | null)[]) => {
+    const top = Math.max(-1, ...xs.filter((x): x is number => x !== null));
+    return top < 0 ? "no occupancy reported" : `peak ${Math.round(top * 100)} %`;
+  };
+  const side = (v: RunLike["events"]) =>
+    `${peak(v.island)}, ${v.sitesWithQueue} of ${v.sitesWithActivity} sites with a queue, ${Math.round(v.waitingDays).toLocaleString("en-CA")} patient-days waiting`;
+  return `${run.horizon} days, ${run.activity}. Events only: ${side(run.events)}. With the choices: ${side(run.full)}.`;
+}
 
 export interface Outcome {
   id: string;
