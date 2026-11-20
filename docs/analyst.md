@@ -28,7 +28,7 @@ Les schémas de la boucle, du vérificateur et de la calculatrice sont dans [alg
 
 Il lit le jumeau à travers l'API Claude. Il lui faut la variable `ANTHROPIC_API_KEY` sur le service de l'API. Sans elle il est éteint, le panneau le dit, et rien d'autre dans le produit n'en dépend.
 
-Il lui faut aussi du crédit sur le compte Claude de cette clé. Quand il n'y en a plus, l'API refuse chaque demande, et l'analyste le dit tel quel : « The analyst's Claude account has no credit left, so it cannot answer. An administrator has to add credit in the Claude Console; trying again will not help until then. » Aucune réponse n'est inventée à la place. Ce que coûte une question est mesuré plus bas (« Dernier rejeu », « Ce que coûte une recherche »).
+Il lui faut aussi du crédit sur le compte Claude de cette clé. Quand il n'y en a plus, l'API refuse chaque demande, et l'analyste le dit tel quel : « The analyst's Claude account has no credit left, so it cannot answer. An administrator has to add credit in the Claude Console; trying again will not help until then. » Aucune réponse n'est inventée à la place.
 
 Ce que les outils lisent du jumeau (des comptes et des capacités, jamais une personne) est envoyé à l'API Claude pour rédiger la réponse. Le panneau le dit en pied.
 
@@ -294,7 +294,7 @@ npm run eval:analyst -- --only three-sites,two-catchments,in-french,run-waiting-
 
 **La clé.** Le script agit comme une personne : il lui faut une clé d'API Obscyro d'un utilisateur qui peut lire l'environnement. Celle du navigateur se lit et se copie dans le Studio, sous Admin → API keys ; on peut aussi en créer une là, ou sur la page des clés du compte (`/app/keys`). Sur cette dernière, une clé créée devient aussitôt celle du navigateur : la révoquer ensuite déconnecte le Studio. Le script lit la clé dans `OBSCYRO_API_KEY` si la variable existe ; sinon il la demande au terminal, tapée ou collée sans s'afficher. C'est la façon à préférer : la clé n'est alors écrite nulle part, ni dans un fichier, ni dans l'historique du terminal. Elle n'a sa place ni dans le dépôt, ni dans `backend/.env`, ni dans un journal, et le script ne l'imprime jamais.
 
-Quand le terminal ne laisse pas coller à l'invite (c'est arrivé le 2026-11-20, dans le terminal d'une application ; la cause n'a pas été cherchée), la clé peut passer du presse-papiers à la variable sans s'afficher ni entrer dans l'historique. Dans Git Bash sous Windows, après avoir copié la clé :
+Quand le terminal ne laisse pas coller à l'invite, la clé peut passer du presse-papiers à la variable sans s'afficher ni entrer dans l'historique. Dans Git Bash sous Windows, après avoir copié la clé :
 
 ```bash
 OBSCYRO_API_KEY="$(powershell.exe -NoProfile -Command Get-Clipboard | tr -d '\r\n')" npm run eval:analyst
@@ -330,25 +330,7 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 
 ### Dernier rejeu
 
-**Le rejeu par la commande, 2026-11-20 : lancé, pas terminé.** `npm run eval:analyst -- --show` contre la production, sans rien de préparé à la main, modèle `claude-opus-5-5`, scénario « Omicron · Montréal — calibrated on INSPQ ». Le serveur a fait le run en 69 secondes et rendu les chiffres du panneau Result (94 % puis 93 % au pic, 8 puis 3 sites sur 34 avec une file, 7 316 puis 267 jours-patients d'attente).
-
-| | |
-|---|---|
-| Réponses demandées | 34 : 17 questions, 2 fois chacune |
-| Réponses reçues | 24. Le compte Claude de l'analyste est tombé à court de crédit pendant la 25ᵉ, et les dix dernières demandes ont été refusées par l'API |
-| Réussies | 22 sur les 24 reçues : onze questions, deux fois de suite chacune, dont deux sur le run (`run-summary`, `run-where`) |
-| Chiffres retirés | aucun |
-| Échouées à tort | 2 : `two-catchments`, deux fois. Les deux réponses étaient justes (1,15 pour Dorval, 1,04 pour Pierrefonds), écrites « Dorval … has slightly more: 1.15 … » ; le juge coupait la proposition au deux-points. Il est corrigé, et les deux phrases sont dans ses tests |
-| Sans réponse | 10 : `run-order`, `run-sites`, `run-waiting-by-site`, `run-share`, `not-a-forecast`, deux fois chacune |
-| Durée médiane d'une réponse | 13,6 s sur les 24 reçues. La plus lente : 37,8 s (`run-where`, 7 étapes) |
-| Jetons | 598 896 pour les 24 réponses, en 68 requêtes au modèle : de 13 942 à 65 230 par réponse |
-| Prix | 1,53 $ pour les 24 réponses, d'après les jetons gardés au journal et les prix lus ce jour-là : 6 cents la réponse médiane, de 1,5 à 17 cents |
-
-**Il reste à rejouer six questions** quand le compte Claude aura du crédit : `npm run eval:analyst -- --only two-catchments,run-order,run-sites,run-waiting-by-site,run-share,not-a-forecast`. Douze réponses, soit de l'ordre d'un à deux dollars au prix mesuré ci-dessus : dix portent sur le run, et ce sont les plus chères.
-
-Ce rejeu a aussi montré un message faux : faute de crédit, l'analyste répondait « The analyst's model returned an error (400). Try again. ». Réessayer n'y pouvait rien. Il dit maintenant que le compte n'a plus de crédit et que c'est un administrateur qui en ajoute (voir « Le mettre en service »).
-
-**Le dernier rejeu complet** est celui du 2026-11-17, en production, modèle `claude-opus-5-5`, effort `medium`, scénario « Omicron · Montréal — calibrated on INSPQ » avec son run à l'écran :
+2026-11-17, en production, modèle `claude-opus-5-5`, effort `medium`, scénario « Omicron · Montréal — calibrated on INSPQ » avec son run à l'écran :
 
 | | |
 |---|---|
@@ -363,7 +345,7 @@ L'effort reste à `medium` : à cette durée il n'y a rien à gagner à le baiss
 
 Ce rejeu a été lancé depuis la page, dans le navigateur, avec le même code de jugement (`judge`, `QUESTIONS`) que le script, et le résumé du run venait de la page elle-même. Il portait sur les treize questions d'alors.
 
-Depuis le 2026-11-20, le script n'a plus besoin de rien de préparé à la main : le serveur fait le run, et la clé se donne au terminal. Le run fait par le serveur a été vérifié en production ce jour-là : en 64 secondes, il rend les chiffres du panneau Result (94 % et 93 % au pic, 8 puis 3 sites sur 34 avec une file, 7 316 puis 267 jours-patients d'attente) et l'ordre des files que les questions attendent. Le rejeu par la commande a été lancé le même jour ; son résultat, incomplet, est en tête de cette section.
+Depuis le 2026-11-20, le script n'a plus besoin de rien de préparé à la main : le serveur fait le run, et la clé se donne au terminal. Le run fait par le serveur a été vérifié en production ce jour-là : en 64 secondes, il rend les chiffres du panneau Result (94 % et 93 % au pic, 8 puis 3 sites sur 34 avec une file, 7 316 puis 267 jours-patients d'attente) et l'ordre des files que les questions attendent.
 
 Quatre réponses ont été relues par une personne et comparées au panneau Result : l'ordre des files, le résumé des choix, le cas sans run, et la question à laquelle l'outil ne peut pas répondre.
 
