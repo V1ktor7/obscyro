@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "9ee2dbac13f5b891"
+translatedFrom: "f718ae171d20af4c"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -15,6 +15,7 @@ An entry is written the day the change ships, in the same commit as the code. Si
 
 ## 21 November 2026
 
+- **Change · Studio.** On the Network page, a click on a line of the explorer opens the site where the unit stands, and the map moves to it. Before, the line lit up and nothing else happened. A line that has no site of its own, an establishment for instance, frames the map on the sites of what it contains, and the explorer writes why no panel opened. The other way round, a site chosen on the map lights its unit in the explorer, which opens the branch and scrolls to it.
 - **Change · Analyst.** In the Options tab, the cards follow the order in which the options were tested, even when the model lists them in another order.
 - **Change · Analyst.** The analyst's Claude model is set by a variable of the API service (`ANALYST_MODEL`): Opus 5.5 as before when it is empty, or Sonnet 5.5 or Haiku 5.5, which cost less per question. An unknown value switches the analyst off, and the panel says why.
 - **Change · Studio.** The twin arrives continuously again on the Units page, in the site view of the Network page, and in “Live metrics”. The browser was refusing this stream: the page showed “Live stream” for half a minute without receiving anything, then read the twin again every five seconds. The chip now writes “Connecting” until the stream has delivered something, and “Live stream” only after.

@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "320b179249a9798c"
+translatedFrom: "8ff63a2cf9ff2a7d"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -49,6 +49,7 @@ Every algorithm of the product has its section here: what it is for, its diagram
 | [D7](#d7-freshness-of-a-value) | Freshness of a value | `backend/src/services/observed-at.ts` |
 | [D8](#d8-zone-correspondence) | Zone correspondence | `backend/src/services/zone-correspondence.ts` |
 | [D9](#d9-live-reading-and-situation-card) | Live reading and situation card | `backend/src/services/live-reading.ts`, `situation.ts` |
+| [D10](#d10-sites-and-units-on-the-network-map) | Sites and units on the network map | `frontend/app/studio/command/units-tree.ts` |
 
 ---
 
@@ -1084,3 +1085,29 @@ flowchart TD
 
 **Code.** `backend/src/services/live-reading.ts` (`readLive`, `unitNow`, `alertsNow`, `alertNow`, `ageOfValue`, `shown`), `situation.ts` (`situationOf`, `preparedQuestion`), `backend/src/routes/situation.ts`, the tools `list_alerts` and `unit_now` in `analyst-tools.ts`; `frontend/app/studio/situation/SituationView.tsx`, `situation-api.ts`, `AnalystDock.tsx`, `alert-feed-state.ts` (`situationHref`).
 **Tests.** `live-reading.unit.test.ts`, `twin-figures.unit.test.ts`, `routes/situation.unit.test.ts`; `situation/SituationView.test.tsx`, `AnalystDock.test.tsx`, `AlertBanner.test.tsx`.
+
+## D10. Sites and units on the network map
+
+**Purpose.** Make the network map answer the explorer set beside it, when the two do not show the same objects: the map draws sites, the explorer lists units, and a site does not carry a unit's identifier.
+
+```mermaid
+flowchart TD
+    C["Click on a line of the explorer:<br/>a unit, or a heading of a grouping"] --> A{"Does a site count this unit?<br/>the site is the unit, or names it among its units"}
+    A -->|"yes"| S["That site's panel opens,<br/>the map moves to it"]
+    A -->|"no"| B{"Does a site count a unit above it?<br/>the nearest first"}
+    B -->|"yes"| S2["That site's panel opens.<br/>The explorer says the unit has no place of its own"]
+    B -->|"no"| D{"Do sites count units under it?"}
+    D -->|"yes"| F["No panel. The map frames those sites,<br/>and the explorer says how many"]
+    D -->|"no"| N["No panel.<br/>The explorer says the unit is not on the map"]
+    M["Click on a site of the map"] --> L["The explorer lights the unit that site counts,<br/>opens the branch that hides it and scrolls to it"]
+```
+
+**Rules.**
+- **The link is the list of units each site says it counts** (`contributingUnits`). A site names only the topmost unit standing on it: a ward inside a hospital is on the hospital's site without being named there. Hence the climb to the unit above.
+- **Three gestures go through this link.** Hiding a branch of the explorer hides a site when all its units are hidden, and leaves it while a single one stays visible. A site's alerts are the ones raised on its units. A click on a line opens the site that counts the unit. Comparing a site's identifier with a unit's finds nothing: that is the mistake each of the three has known.
+- **A click is never left without a result.** When no panel opens, the explorer writes why: the unit has no place of its own and the map shows the sites of what is under it, or no site counts it.
+- **A unit counted by several sites** opens the first, and the explorer says how many sites count it.
+- **A site nothing stands for in the explorer**, a sensor for instance, lights no line there, and the explorer cannot hide it.
+- **The line lit from the map is shown once**: the branch that hides it opens and the list scrolls to it. Folding it again afterwards is the person's choice, and a new reading of the twin does not reopen it.
+
+**Code.** `frontend/app/studio/command/units-tree.ts` (`isSiteHidden`, `alertsForSite`, `pickFromExplorer`, `lineOfSite`, `lineAndBelow`, `unitsAbove`), `NetworkTwinView.tsx` (`pickLine`), `frontend/app/studio/TreeExplorer.tsx` (`pathTo`). **Tests.** `units-tree.test.ts`, `TreeExplorer.test.tsx`.

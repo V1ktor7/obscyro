@@ -23,7 +23,7 @@
  * same behaviour everywhere.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Eye, EyeOff } from "lucide-react";
 
@@ -97,9 +97,26 @@ export function matchingIds(items: TreeItem[], query: string): Set<string> {
   return keep;
 }
 
+/**
+ * The lines to open so that one line is on screen: its ancestors, outermost
+ * first. Empty for a root, null for an id the tree does not hold.
+ */
+export function pathTo(items: readonly TreeItem[], id: string): string[] | null {
+  for (const item of items) {
+    if (item.id === id) return [];
+    const deeper = item.children ? pathTo(item.children, id) : null;
+    if (deeper) return [item.id, ...deeper];
+  }
+  return null;
+}
+
 export interface TreeExplorerProps {
   items: TreeItem[];
-  /** The inspected node — one at a time, like a cursor. */
+  /**
+   * The inspected node — one at a time, like a cursor. It can be set from
+   * outside the panel, by a click on the map for instance: the branches that
+   * hide its line are opened and the line is scrolled to, once.
+   */
   selectedId?: string | null;
   onSelect?: (id: string) => void;
   /**
@@ -138,6 +155,35 @@ export default function TreeExplorer({
 
   const total = useMemo(() => items.reduce((n, i) => n + subtreeIds(i).length, 0), [items]);
 
+  // A line lit inside a folded branch is a selection nobody sees. Open what
+  // hides it, once per selection: folding the branch again afterwards is the
+  // reader's call, and must not be undone at the next redraw.
+  const revealed = useRef<string | null>(null);
+  const toScroll = useRef<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!selectedId) {
+      revealed.current = null;
+      return;
+    }
+    if (revealed.current === selectedId) return;
+    const path = pathTo(items, selectedId);
+    if (!path) return;
+    revealed.current = selectedId;
+    toScroll.current = selectedId;
+    if (path.some((id) => !open.has(id))) setOpen(new Set([...Array.from(open), ...path]));
+  }, [selectedId, items, open]);
+
+  // The line exists only once its branch has been drawn open, so the scroll
+  // waits for it. `nearest` leaves a line that is already on screen where it is.
+  useEffect(() => {
+    if (!toScroll.current) return;
+    const line = listRef.current?.querySelector<HTMLElement>('[data-selected="true"]');
+    if (!line) return;
+    line.scrollIntoView?.({ block: "nearest" });
+    toScroll.current = null;
+  });
+
   return (
     // No width, no border of its own: a component that sizes itself cannot be
     // put inside a panel, which is exactly what was asked of this one.
@@ -155,7 +201,7 @@ export default function TreeExplorer({
         </p>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto py-1">
+      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto py-1">
         {items.length === 0 ? (
           <p className="px-3 py-2 text-[11px] leading-snug text-ink-faint">{emptyLabel}</p>
         ) : (
@@ -232,6 +278,7 @@ function Row({
   return (
     <>
       <div
+        data-selected={selected ? "true" : undefined}
         className={`group flex items-center gap-1 px-1 py-0.5 ${
           selected ? "bg-brand-soft" : "hover:bg-surface-hover"
         } ${allHidden ? "opacity-45" : ""}`}

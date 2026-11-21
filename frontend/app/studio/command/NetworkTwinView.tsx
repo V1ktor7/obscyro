@@ -84,7 +84,16 @@ import ReplayPanel from "./ReplayPanel";
 import SpreadPanel from "./SpreadPanel";
 
 import CoverageDialog from "./CoverageDialog";
-import { alertsForSite, capacityOf, isSiteHidden } from "./units-tree";
+import {
+  alertsForSite,
+  capacityOf,
+  isSiteHidden,
+  lineAndBelow,
+  lineOfSite,
+  pickFromExplorer,
+  unitsAbove,
+  type ExplorerPick,
+} from "./units-tree";
 import {
   bandColour,
   bandFor,
@@ -310,7 +319,10 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   const alertFeed = useAlertFeed();
   const alerts: TwinAlert[] = useMemo(() => asTwinAlerts(alertFeed.feed), [alertFeed.feed]);
   const [feedEvents, setFeedEvents] = useState<{ id: string; receivedAt: string }[]>([]);
+  // Always a site, never a unit: the two do not share identifiers. A line of the
+  // explorer is a unit, and what its click selected is kept beside it in `picked`.
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [picked, setPicked] = useState<ExplorerPick | null>(null);
   // The map is why this screen exists; on a laptop the panel costs it a fifth
   // of its width, so it folds away.
   // Folded on arrival, like every panel over a map: the first thing seen is the map.
@@ -1343,12 +1355,10 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     map.flyTo({ center: map.getCenter(), zoom: GLOBE_ZOOM, pitch: 0, bearing: 0, duration: 1400 });
   }
 
-  function fitNetwork() {
+  /** Bring a set of sites into view. */
+  function fitSites(ids: string[]) {
     const map = mapRef.current;
-    const pts = (network?.sites ?? [])
-      .filter((s) => !isSiteHidden(s, hiddenIds))
-      .map((s) => positions.get(s.id))
-      .filter((p): p is [number, number] => !!p);
+    const pts = ids.map((id) => positions.get(id)).filter((p): p is [number, number] => !!p);
     if (!map || pts.length === 0) return;
     const lons = pts.map((p) => p[0]);
     const lats = pts.map((p) => p[1]);
@@ -1359,6 +1369,37 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
       ],
       { padding: 120, maxZoom: 11, duration: 1400 },
     );
+  }
+
+  function fitNetwork() {
+    fitSites((network?.sites ?? []).filter((s) => !isSiteHidden(s, hiddenIds)).map((s) => s.id));
+  }
+
+  /**
+   * A click on a line of the explorer.
+   *
+   * The line is a unit and the panel opens on a site: `pickFromExplorer` finds
+   * the site that counts the unit. A line with no site of its own, an
+   * establishment for instance, brings the sites under it into view instead,
+   * and the explorer says why no panel opened.
+   */
+  function pickLine(id: string) {
+    const line = lineAndBelow(tree, id);
+    if (!line || !network) return;
+    const pick = pickFromExplorer(
+      { id, label: line.label },
+      { above: unitsAbove(treeSnap?.nodes ?? [], id), under: line.under },
+      network.sites,
+    );
+    setPicked(pick);
+    setSelectedId(pick.siteId);
+    if (pick.siteId) {
+      const pos = positions.get(pick.siteId);
+      const map = mapRef.current;
+      if (pos && map) map.flyTo({ center: pos, zoom: Math.max(map.getZoom(), 11) });
+    } else {
+      fitSites(pick.fit);
+    }
   }
 
   function toggleStyle() {
@@ -1444,6 +1485,12 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   // --- derived -------------------------------------------------------------------
 
   const selected = network?.sites.find((s) => s.id === selectedId) ?? null;
+  // What the explorer lights. A pick stands while the selection is the one it
+  // made: a click on the map, or closing the panel, ends it, and the line lit
+  // is then the unit the selected site counts.
+  const activePick = picked && picked.siteId === selectedId ? picked : null;
+  const unitLines = useMemo(() => new Set((treeSnap?.nodes ?? []).map((n) => n.id)), [treeSnap]);
+  const explorerLine = activePick ? activePick.line : selected ? lineOfSite(selected, unitLines) : null;
   const selectedShape = useMemo(
     () => shapes.find((s) => s.instanceId === selectedId) ?? null,
     [shapes, selectedId],
@@ -1978,10 +2025,19 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                 {AXES.find((a) => a.id === axis)?.hint}
               </p>
             </div>
+            {/* A line that has no site of its own opens no panel: say where it is instead. */}
+            {activePick?.note ? (
+              <p
+                role="status"
+                className="shrink-0 border-b border-line bg-canvas-raised px-2 py-1.5 text-[10.5px] leading-snug text-ink-body"
+              >
+                {activePick.note}
+              </p>
+            ) : null}
             <TreeExplorer
               items={tree}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
+              selectedId={explorerLine}
+              onSelect={pickLine}
               hidden={hiddenIds}
               onToggleHidden={(ids, hide) =>
                 setHiddenIds((cur) => {

@@ -7,9 +7,9 @@
  */
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import TreeExplorer, { matchingIds, subtreeIds, type TreeItem } from "./TreeExplorer";
+import TreeExplorer, { matchingIds, pathTo, subtreeIds, type TreeItem } from "./TreeExplorer";
 
 afterEach(cleanup);
 
@@ -64,6 +64,76 @@ describe("expanding", () => {
   it("gives a leaf no chevron to click", () => {
     panel();
     expect(screen.queryByRole("button", { name: /Expand Centre universitaire/ })).toBeNull();
+  });
+});
+
+/**
+ * A line can be selected from outside the panel: a site clicked on the map
+ * lights the unit standing on it. Lit inside a folded branch, it would be a
+ * selection nobody sees.
+ */
+describe("a line selected from outside the panel", () => {
+  const scrolled: string[] = [];
+  const realScroll = Element.prototype.scrollIntoView;
+  beforeEach(() => {
+    scrolled.length = 0;
+    // jsdom has no layout, so no scrollIntoView of its own.
+    Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
+      scrolled.push(this.textContent ?? "");
+    };
+  });
+  afterEach(() => {
+    Element.prototype.scrollIntoView = realScroll;
+  });
+
+  const tree = (selectedId: string | null, items = TREE) => (
+    <TreeExplorer items={items} selectedId={selectedId} onSelect={() => {}} />
+  );
+
+  it("opens the branch that hides it, and scrolls to it", () => {
+    render(tree("notre-dame"));
+    expect(screen.getByText("HÔPITAL NOTRE-DAME")).toBeTruthy();
+    expect(scrolled).toHaveLength(1);
+    expect(scrolled[0]).toContain("HÔPITAL NOTRE-DAME");
+  });
+
+  it("follows the selection when it changes", () => {
+    const { rerender } = render(tree(null));
+    expect(screen.queryByText("HÔTEL-DIEU")).toBeNull();
+    rerender(tree("hotel-dieu"));
+    expect(screen.getByText("HÔTEL-DIEU")).toBeTruthy();
+    expect(scrolled).toHaveLength(1);
+    expect(scrolled[0]).toContain("HÔTEL-DIEU");
+  });
+
+  it("does it once: the reader can fold the branch again, and a redraw does not reopen it", () => {
+    const { rerender } = render(tree("notre-dame"));
+    fireEvent.click(screen.getByRole("button", { name: /Collapse Santé Québec Centre-Sud/ }));
+    expect(screen.queryByText("HÔPITAL NOTRE-DAME")).toBeNull();
+
+    // The twin is read again: same selection, a new list.
+    rerender(tree("notre-dame", [...TREE]));
+    expect(screen.queryByText("HÔPITAL NOTRE-DAME")).toBeNull();
+    expect(scrolled).toHaveLength(1);
+  });
+
+  it("waits for a line the tree does not hold yet", () => {
+    const { rerender } = render(tree("notre-dame", []));
+    expect(scrolled).toHaveLength(0);
+    rerender(tree("notre-dame"));
+    expect(screen.getByText("HÔPITAL NOTRE-DAME")).toBeTruthy();
+    expect(scrolled).toHaveLength(1);
+  });
+});
+
+describe("pathTo", () => {
+  it("names the lines to open, outermost first", () => {
+    expect(pathTo(TREE, "notre-dame")).toEqual(["ciusss"]);
+    expect(pathTo(TREE, "ciusss")).toEqual([]);
+  });
+
+  it("knows no way to a line the tree does not hold", () => {
+    expect(pathTo(TREE, "elsewhere")).toBeNull();
   });
 });
 

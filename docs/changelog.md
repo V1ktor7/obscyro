@@ -9,6 +9,7 @@ Une entrée est écrite le jour où le changement est livré, dans le même comm
 
 ## 21 novembre 2026
 
+- **Modification · Studio.** Sur la page Network, un clic sur une ligne de l'explorateur ouvre le site où l'unité se trouve, et la carte s'y déplace. Avant, la ligne s'allumait et rien d'autre ne se passait. Une ligne qui n'a pas de site à elle, un établissement par exemple, cadre la carte sur les sites de ce qu'elle contient, et l'explorateur écrit pourquoi aucun panneau ne s'est ouvert. Dans l'autre sens, un site choisi sur la carte allume son unité dans l'explorateur, qui ouvre la branche et défile jusqu'à elle.
 - **Modification · Analyste.** Dans l'onglet Options, les cartes suivent l'ordre où les options ont été testées, même quand le modèle les liste dans un autre ordre.
 - **Modification · Analyste.** Le modèle Claude de l'analyste se règle par une variable du service de l'API (`ANALYST_MODEL`) : Opus 5.5 comme avant quand elle est vide, ou Sonnet 5.5 ou Haiku 5.5, qui coûtent moins par question. Une valeur inconnue éteint l'analyste, et le panneau dit pourquoi.
 - **Modification · Studio.** Le jumeau arrive de nouveau en continu sur la page Units, dans la vue d'un site de la page Network, et dans « Live metrics ». Le navigateur refusait ce flux : la page affichait « Live stream » pendant une demi-minute sans rien recevoir, puis relisait le jumeau toutes les cinq secondes. La pastille écrit maintenant « Connecting » tant que le flux n'a rien livré, et « Live stream » seulement après.

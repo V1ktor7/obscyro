@@ -43,6 +43,7 @@ Chaque algorithme du produit a ici sa section : à quoi il sert, son schéma, se
 | [D7](#d7-fraîcheur-dune-valeur) | Fraîcheur d'une valeur | `backend/src/services/observed-at.ts` |
 | [D8](#d8-correspondance-de-zones) | Correspondance de zones | `backend/src/services/zone-correspondence.ts` |
 | [D9](#d9-lecture-du-direct-et-fiche-de-situation) | Lecture du direct et fiche de situation | `backend/src/services/live-reading.ts`, `situation.ts` |
+| [D10](#d10-sites-et-unités-sur-la-carte-du-réseau) | Sites et unités sur la carte du réseau | `frontend/app/studio/command/units-tree.ts` |
 
 ---
 
@@ -1078,3 +1079,29 @@ flowchart TD
 
 **Code.** `backend/src/services/live-reading.ts` (`readLive`, `unitNow`, `alertsNow`, `alertNow`, `ageOfValue`, `shown`), `situation.ts` (`situationOf`, `preparedQuestion`), `backend/src/routes/situation.ts`, outils `list_alerts` et `unit_now` dans `analyst-tools.ts` ; `frontend/app/studio/situation/SituationView.tsx`, `situation-api.ts`, `AnalystDock.tsx`, `alert-feed-state.ts` (`situationHref`).
 **Tests.** `live-reading.unit.test.ts`, `twin-figures.unit.test.ts`, `routes/situation.unit.test.ts` ; `situation/SituationView.test.tsx`, `AnalystDock.test.tsx`, `AlertBanner.test.tsx`.
+
+## D10. Sites et unités sur la carte du réseau
+
+**But.** Faire répondre la carte du réseau à l'explorateur posé à côté d'elle, alors que les deux ne montrent pas les mêmes objets : la carte dessine des sites, l'explorateur liste des unités, et un site ne porte pas l'identifiant d'une unité.
+
+```mermaid
+flowchart TD
+    C["Clic sur une ligne de l'explorateur :<br/>une unité, ou un en-tête de regroupement"] --> A{"Un site compte cette unité ?<br/>le site est l'unité, ou la nomme parmi ses unités"}
+    A -->|"oui"| S["Le panneau de ce site s'ouvre,<br/>la carte s'y déplace"]
+    A -->|"non"| B{"Un site compte une unité au-dessus d'elle ?<br/>la plus proche d'abord"}
+    B -->|"oui"| S2["Le panneau de ce site s'ouvre.<br/>L'explorateur dit que l'unité n'a pas de place à elle"]
+    B -->|"non"| D{"Des sites comptent des unités sous elle ?"}
+    D -->|"oui"| F["Aucun panneau. La carte cadre ces sites,<br/>et l'explorateur dit combien"]
+    D -->|"non"| N["Aucun panneau.<br/>L'explorateur dit que l'unité n'est pas sur la carte"]
+    M["Clic sur un site de la carte"] --> L["L'explorateur allume l'unité que ce site compte,<br/>ouvre la branche qui la cache et défile jusqu'à elle"]
+```
+
+**Règles.**
+- **Le lien est la liste des unités que chaque site dit compter** (`contributingUnits`). Un site n'y nomme que l'unité la plus haute qui s'y trouve : un service dans un hôpital est sur le site de l'hôpital sans y être nommé. D'où la remontée vers l'unité du dessus.
+- **Trois gestes passent par ce lien.** Masquer une branche de l'explorateur masque un site quand toutes ses unités sont masquées, et le laisse tant qu'une seule reste visible. Les alertes d'un site sont celles levées sur ses unités. Un clic sur une ligne ouvre le site qui compte l'unité. Comparer l'identifiant d'un site à celui d'une unité ne trouve rien : c'est l'erreur que chacun des trois a connue.
+- **Un clic ne reste jamais sans suite.** Quand aucun panneau ne s'ouvre, l'explorateur écrit pourquoi : l'unité n'a pas de place à elle et la carte montre les sites de ce qui est sous elle, ou aucun site ne la compte.
+- **Une unité comptée par plusieurs sites** ouvre le premier, et l'explorateur dit combien de sites la comptent.
+- **Un site que rien ne représente dans l'explorateur**, un capteur par exemple, n'y allume aucune ligne, et l'explorateur ne peut pas le masquer.
+- **La ligne allumée depuis la carte est montrée une fois** : la branche qui la cache s'ouvre et la liste défile jusqu'à elle. La replier ensuite est le choix de la personne, et une relecture du jumeau ne la rouvre pas.
+
+**Code.** `frontend/app/studio/command/units-tree.ts` (`isSiteHidden`, `alertsForSite`, `pickFromExplorer`, `lineOfSite`, `lineAndBelow`, `unitsAbove`), `NetworkTwinView.tsx` (`pickLine`), `frontend/app/studio/TreeExplorer.tsx` (`pathTo`). **Tests.** `units-tree.test.ts`, `TreeExplorer.test.tsx`.
