@@ -3,7 +3,7 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "58144dce84a0fe04"
+translatedFrom: "ef767f5cbe816924"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
@@ -211,7 +211,7 @@ In an emergency nobody builds a scenario: what was prepared is applied. So the w
 
 **The retest.** As soon as a signal opens, the server runs every response prepared for its kind through the engine again, on the network as it is: the twin read at that instant, and the scenario with its choices of today. Nobody asks for it, and no language model takes part. The card first shows the last test known, with its date, and says that a test is waiting its turn or running. When it finishes, its two runs take the place of those of the kept test, and the line above says when it ran (“Tested on the current state 40 s ago”); what the kept test gave stays written below, in one line. Meanwhile the card reads itself again every five seconds instead of thirty: the result arrives without a click.
 
-The cost is bounded. One run at a time per project. No new run while the state has not changed: the card then says that the state was found unchanged, and when. And a limit of three minutes, after which the test is abandoned. A test that is queued, running, abandoned or failed is never shown as a result: the card says what became of it and why, and keeps the figures of the last test known. An unreachable engine blocks neither the card nor “Engage”. After fifteen minutes, a retest is no longer called a test “of the current state”: the card writes how old it is, and flags it before the click. The retest starts when a signal opens, not for as long as the card stays open. The detail: [Algorithms](/docs/product/algorithms), A11.
+A retest takes about one minute on the Montréal twin. The cost is bounded. One run at a time per project. No new run while the state has not changed: the card then says that the state was found unchanged, and when. And a limit of three minutes, after which the test is abandoned. A test that is queued, running, abandoned or failed is never shown as a result: the card says what became of it and why, and keeps the figures of the last test known. An unreachable engine blocks neither the card nor “Engage”. After fifteen minutes, a retest is no longer called a test “of the current state”: the card writes how old it is, and flags it before the click. The retest starts when a signal opens, not for as long as the card stays open. The detail: [Algorithms](/docs/product/algorithms), A11.
 
 “Engage” makes three writes in one click: a decision, tied to the signal, with the figures of the kept test as what is expected of it and, when the card showed a retest, its figures beside them with their date; a line on the signal's trail, naming the response and the person; and the move of the signal to its next stage. If that stage requires an approval, the person engaging is the one recorded as having given it. Every refusal comes before the first write: a closed signal, a signal at its last stage, a response prepared for another kind of signal. Nothing is triggered in any other system: Obscyro records and follows, and the screen says so.
 

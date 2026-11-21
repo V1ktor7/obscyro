@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "e397356b0157ff2a"
+translatedFrom: "fcff23cd3400c419"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -538,8 +538,8 @@ flowchart TD
 - **“The current state” has a duration.** A retest is called “on the current state” for fifteen minutes (`CURRENT_FOR_MS`) after its run, or after the last time the state was found unchanged. After that the card writes how old it is (“Tested on the network as it was 3 h ago”) and flags it before the click.
 - **The card states the conditions of the run.** Under the figures of a retest, it writes that the starting state is the twin read when the test ran, hence measured, and that the response, the events and the choices of the scenario are assumptions. A run remains the result of a model under those conditions, not a forecast.
 - **The decision keeps what the card showed**: the kept test's figures as expected, and those of the retest beside them, with their date (A9).
-- **What the time is made of.** A reading of the twin, then calls to the engine: for the first response of a batch, the spread, the scenario as it is and the scenario with the response; for the next ones, one pass. Each retest keeps those durations (`timing`): a measure, not a result.
-- **What the retest does not do.** It starts when a signal opens, not for as long as the card stays open: the card of a signal opened hours ago shows a retest from hours ago, and says so. And it keeps only the figures of the two runs: the sites and the day-by-day arrivals of a decision stay those of the kept test.
+- **Duration.** On the Montréal twin, the first response of a batch is retested in one minute: two seconds to read the twin, then two passes of the engine of twenty-nine seconds each, the scenario as it is then the scenario with the response; the spread takes less than a second. Each further response of the batch adds one pass. Each retest keeps what its time was made of (`timing`): a measure, not a result.
+- **What the retest does not do.** It starts when a signal opens, not for as long as the card stays open: the card of a signal opened hours ago shows a retest from hours ago, and says so ([issue 26](https://github.com/V1ktor7/obscyro/issues/26)). And it keeps only the figures of the two runs: the sites and the day-by-day arrivals of a decision stay those of the kept test.
 - Units and aggregated values, never a person.
 
 **Code.** `backend/src/services/response-retest.ts` (`stateMark`, `retiredNow`, `retestOne`, `Retests`, `sqlStore`, `liveTest`, `expectedOnEngage`, `startRetests`, `requestRetests`), `alert-bridge.ts` and `backend/src/routes/signals.ts` (the request), `backend/src/index.ts` (start-up), `prepared-responses.ts` (`onCard`), `backend/src/routes/situation.ts`, migration `066_prepared_response_test.sql`; `frontend/app/studio/situation/PreparedResponses.tsx`, `SituationView.tsx`, `prepared-api.ts`.
