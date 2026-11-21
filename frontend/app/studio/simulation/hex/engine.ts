@@ -2,10 +2,13 @@
  * Run: the stamps, through the real engine, twice.
  *
  * Once with only what happens to the city (outbreaks, heat) and once with what
- * the planner chose as well (measures, capacity). Each goes the platform's own
- * way: the declared spreading model writes demand, that demand plus the other
- * effects is stored as an event, and the event is run against the twin with the
- * do-nothing response so the only difference between the two is the stamps.
+ * the planner chose as well (measures, capacity, a recorded response). Each
+ * goes the platform's own way: the declared spreading model writes demand, that
+ * demand plus the other effects is stored as an event, and the event is run
+ * against the twin. The first run follows the do-nothing response; the second
+ * follows the recorded response the scenario holds, when it holds one, and the
+ * do-nothing response otherwise. The only difference between the two is the
+ * stamps.
  *
  * The two stored events are rewritten on every run under fixed names, so the
  * events library gains two entries per scenario, not two per click.
@@ -249,9 +252,12 @@ export async function runScenario(args: {
       prior?.id,
     );
     onProgress?.(`Running the network (${EVENT_NAME[variant]})`);
+    const followed = input.response;
     const run = await runSimulation(env, {
       eventId: event.id,
-      policies: ["null"],
+      // The do-nothing response, unless the stamps of this run hold a recorded one.
+      policies: !followed ? ["null"] : "builtIn" in followed ? [followed.builtIn] : [],
+      ...(followed && !("builtIn" in followed) ? { customPolicies: [followed] } : {}),
       populationSizes,
       routeCapacity: 20,
       censusAcuity,

@@ -3,7 +3,7 @@
 title: "The Scenarios page"
 description: "The map is the page. Everything else floats over it in panels that fold away."
 source: "docs/scenarios-page.md"
-translatedFrom: "944d8e4dbc2ed17d"
+translatedFrom: "f021fba7d1ccd873"
 ---
 
 The map is the page. Everything else floats over it in panels that fold away (`OverlayPanel`, `frontend/app/studio/map-overlay.tsx`): never a side panel, and on arrival everything is folded except the guide on a first visit.
@@ -42,7 +42,7 @@ flowchart TD
 | Layers | Left | What the map colours: occupancy, sick people, residents, added layers |
 | Analyst | Left | Four tabs: questions and their answers (Ask), the search for events in official sources (Event finder), the options tested by the engine (Options), the recorded decisions and their follow-up (Decisions): [The analyst](/docs/product/analyst) |
 | Result | Right | The peak in both passes, where it breaks, the comparison with reality |
-| Recipe | Right | The scenario's stamps, and what the engine receives for each |
+| Recipe | Right | The scenario's stamps, and what the engine receives for each. A recorded response is a stamp like the others there, filed with the measures: it enters through “Add to scenario” on an option of the analyst, and no tool of the bar places one by hand. A response of the library or a transfer can be moved from one day to another; a response the engine writes itself holds for the whole run |
 | Timeline | Bottom | The day shown, the Context lane (the validated events, placed from the date of day 0; they are not stamps, the engine does not receive them), the stamp lanes, the occupancy curve |
 
 What a run does, and how its results are read: [Algorithms](/docs/product/algorithms), sections A4 to A7.

@@ -7,6 +7,7 @@ import {
   shiftEffects,
   stampsOf,
   twinContext,
+  type ResponseRule,
   type SimEffect,
   type Stamp,
   type TwinContext,
@@ -50,8 +51,10 @@ export interface ComparePayload {
   system: SimExport;
   template: null;
   event: { id: string; name: string; description: string; horizon: number; effects: SimEffect[] };
+  /** A response the engine writes itself, by name; `null` is "nobody responds". */
   policies: string[];
-  custom_policies: never[];
+  /** A recorded response the scenario holds, sent whole. One at most, and then `policies` is empty. */
+  custom_policies: { id: string; name: string; rules: ResponseRule[] }[];
   seed: null;
   population_sizes: Record<string, number>;
   route_capacity: number;
@@ -88,6 +91,12 @@ export interface VariantResult {
   unmet: Record<string, number[]>;
   /** Capacity-weighted occupancy over every facility that has the activity. */
   island: number[];
+  /**
+   * What the response's actions cost at each step, as the engine counted it:
+   * each action's declared cost, each time it fired. Zeros when the run
+   * follows no response, or one whose rules declare no cost.
+   */
+  cost: number[];
   notes: string[];
 }
 
@@ -112,7 +121,7 @@ export function occupancyGrid(
   const [cPolicy, cStep, cFac, cAct, cOcc] = ["policy", "step", "facility_id", "activity", column].map(col);
   if ([cPolicy, cStep, cFac, cAct, cOcc].some((c) => c === undefined || c < 0)) return grid;
   const where = new Map(facilityIds.map((id, i) => [id, i]));
-  // One response was run; the first one named is the do-nothing run asked for.
+  // One response was run, the do-nothing one or the one the scenario holds: the first one named is it.
   const policy = dataset.rows[0]?.[cPolicy!];
   for (const row of dataset.rows) {
     if (row[cPolicy!] !== policy || row[cAct!] !== activity) continue;
@@ -170,6 +179,23 @@ export function stepsBySeverity(
     const step = Number(row[cStep]);
     if (!(step >= 0 && step < horizon)) continue;
     for (const c of cols) out[c.acuity]![step] = Number(row[c.i]) || 0;
+  }
+  return out;
+}
+
+/** The `cost` column of the `steps` table, per step: what the response run spent that day. */
+export function costByStep(dataset: SimDataset | undefined, horizon: number): number[] {
+  const out = new Array<number>(horizon).fill(0);
+  if (!dataset) return out;
+  const cPolicy = dataset.columns.indexOf("policy");
+  const cStep = dataset.columns.indexOf("step");
+  const cCost = dataset.columns.indexOf("cost");
+  if (cPolicy < 0 || cStep < 0 || cCost < 0) return out;
+  const policy = dataset.rows[0]?.[cPolicy];
+  for (const row of dataset.rows) {
+    if (row[cPolicy] !== policy) continue;
+    const step = Number(row[cStep]);
+    if (step >= 0 && step < horizon) out[step] = Number(row[cCost]) || 0;
   }
   return out;
 }
@@ -371,6 +397,13 @@ export interface PassDigest {
   ranAt: string;
   /** Exactly what `runDigest` gives as `full` for the same stamps. */
   figures: RunDigest["full"];
+  /**
+   * What the recorded response of this pass cost over the run, as the engine
+   * counted it. Zero when the pass follows none, or one that declares no cost:
+   * whether that zero means anything is for whoever placed the response to say
+   * (`analyst-options.ts`, `costOf`).
+   */
+  cost: number;
   /** Every site that provides the activity, with its own queue in this pass. */
   sites: { id: string; name: string; capacity: number; break: RunDigest["sites"][number]["full"] }[];
 }
@@ -380,6 +413,10 @@ export function passDigest(v: VariantResult, ctx: DigestContext, activity: strin
   return {
     ranAt,
     figures: passFigures(v, breaks, ctx, activity),
+    cost: num(
+      v.cost.reduce((a, b) => a + b, 0),
+      2,
+    ),
     sites: breaks.map((b) => ({ id: b.id, name: b.name, capacity: b.capacity, break: breakOf(b) })),
   };
 }
@@ -430,8 +467,8 @@ const EVENT_NAME: Record<Variant, string> = {
   full: "with your measures",
 };
 
-/** What the page sends for a route whose flow the twin does not hold. */
-const ROUTE_CAPACITY = 20;
+/** What the page sends for a route whose flow the twin does not hold: patients a day, on every route. */
+export const ROUTE_CAPACITY = 20;
 
 /** One call to the engine and how long it took: a propagation, or a pass of the network. */
 export interface EngineTiming {
@@ -516,8 +553,9 @@ export class ScenarioRunner {
         horizon,
         effects,
       },
-      policies: ["null"],
-      custom_policies: [],
+      // The do-nothing response, unless the stamps of this pass hold a recorded one.
+      policies: !input.response ? ["null"] : "builtIn" in input.response ? [input.response.builtIn] : [],
+      custom_policies: input.response && !("builtIn" in input.response) ? [input.response] : [],
       seed: null,
       population_sizes: populationSizes,
       route_capacity: ROUTE_CAPACITY,
@@ -538,6 +576,7 @@ export class ScenarioRunner {
       arrivals: stepsBySeverity(steps, horizon, "arrived_"),
       unmet: stepsBySeverity(steps, horizon, "unmet_"),
       island: islandSeries(grid, capacity),
+      cost: costByStep(steps, horizon),
       notes: input.notes,
     };
   }

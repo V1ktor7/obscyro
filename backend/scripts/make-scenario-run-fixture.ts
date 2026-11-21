@@ -1,12 +1,16 @@
 /**
  * Writes `src/services/scenario-run-parity.fixture.json`.
  *
- * The fixture is a small twin, a scenario, two options, and what the real
+ * The fixture is a small twin, a scenario, five options, and what the real
  * engine answered when the scenario was run as it is and with each of them:
- * one that adds a stamp, one that replaces a choice the scenario holds. The
- * server's test and the page's test both replay it: each must send the engine
- * the recorded requests and read the recorded figures out of its answers. That
- * is how "the server and the page give the same figures" is held.
+ * one that adds a stamp, one that replaces a choice the scenario holds, one
+ * that places a recorded response written by the organisation (a transfer of
+ * patients, from a given day, at a declared cost), one that places a response
+ * the engine writes itself, and one that places the transfer the analyst's
+ * own test writes. The server's test and the page's test both replay it: each
+ * must send the engine the recorded requests and read the recorded figures out
+ * of its answers. That is how "the server and the page give the same figures"
+ * is held.
  *
  * Run by hand, when the engine or the translation of stamps changes:
  *
@@ -23,6 +27,7 @@ import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { transferRule } from "../src/services/analyst-responses.js";
 import type { ScenarioOverride } from "../src/services/scenario-overrides.js";
 import { ScenarioRunner, type ScenarioEngine } from "../src/services/scenario-run.js";
 import { recordingEngine } from "../src/services/scenario-run-recording.js";
@@ -116,8 +121,16 @@ function twin(): SimExport {
       // Its only site has no bed: its patients wait where no site's list shows them.
       { id: "pop:far", name: "Pointe", size: 8_000, served_by: ["site:clinic"], couples: { ecole: 1, menage: 1 } },
     ],
-    edges: [],
+    // Roads a patient can be sent down. Nobody takes one unless a response says so:
+    // with the do-nothing response these change nothing.
+    edges: [
+      { source: "site:lake", target: "site:north", kind: "transfer", capacity: 0, via: "transfert_vers" },
+      { source: "site:north", target: "site:lake", kind: "transfer", capacity: 0, via: "transfert_vers" },
+      { source: "site:north", target: "site:east", kind: "transfer", capacity: 0, via: "transfert_vers" },
+      { source: "site:east", target: "site:north", kind: "transfer", capacity: 0, via: "transfert_vers" },
+    ],
     gaps: [],
+    structure: [],
   } as unknown as SimExport;
 }
 
@@ -190,6 +203,74 @@ const REPLACEMENT = {
   overrides: [stamp("33333333-0000-4000-8000-000000000001", { kind: "capacity", facility: "site:north", activity: "lit", amount: 3 }, 6, HORIZON - 6)],
 };
 
+/**
+ * An option that places a recorded response, as the organisation's library
+ * holds one: when somebody waits at Lakeshore and Nord has a free bed, send up
+ * to four of them there, at a declared cost each time. Placed on day 12, so
+ * its rule, written to fire at every step, is made to start that day.
+ */
+const RESPONSE = {
+  label: "Send Lakeshore's queue to Nord from day 12",
+  overrides: [
+    stamp(
+      "44444444-0000-4000-8000-000000000001",
+      {
+        kind: "response",
+        name: "Send Lakeshore's queue to Nord",
+        source: "stored",
+        ref: "44444444-0000-4000-8000-0000000000aa",
+        rules: [
+          {
+            id: "lake-to-north",
+            trigger: { when: "every_tick", start: 0, end: null },
+            condition: {
+              all_of: [
+                { compare: { left: { fn: "backlog", facility: "site:lake" }, op: ">", right: 0.5 } },
+                { compare: { left: { fn: "available", facility: "site:north", activity: "lit" }, op: ">", right: 0 } },
+              ],
+            },
+            action: { kind: "transfer", source: "site:lake", target: "site:north", amount: 4, friction: { delay: 0, cost: 500, effectiveness: 1 } },
+            priority: 10,
+          },
+        ],
+      },
+      12,
+      HORIZON - 12,
+    ),
+  ],
+};
+
+/** An option that places a response the engine writes itself from the network: no rules travel, only its name. */
+const BUILT_IN = {
+  label: "Transfer when full",
+  overrides: [
+    stamp("55555555-0000-4000-8000-000000000001", { kind: "response", name: "Transfer when full", source: "built-in", ref: "load-balance", rules: [] }, 0, HORIZON),
+  ],
+};
+
+/**
+ * A transfer as the analyst's test writes one (`transferRule`): up to four of
+ * the patients waiting for a bed at Lakeshore sent to Nord each day from day
+ * 12, when Nord has a bed free. It declares no cost, so none is counted.
+ */
+const TRANSFER = {
+  label: "Send up to 4 waiting patients a day from Lakeshore to Nord from day 12",
+  overrides: [
+    stamp(
+      "66666666-0000-4000-8000-000000000001",
+      {
+        kind: "response",
+        name: "Transfer from Lakeshore to Nord",
+        source: "written",
+        ref: "",
+        rules: [transferRule({ id: "transfer-1", source: "site:lake", target: "site:north", activity: ACTIVITY, acuity: "hospitalisation", perDay: 4, fromDay: 12 })],
+      },
+      12,
+      HORIZON - 12,
+    ),
+  ],
+};
+
 // --- the real engine --------------------------------------------------------
 
 function engineOnce<T>(route: string, body: unknown): T {
@@ -227,6 +308,20 @@ async function main() {
   const replaced = [...OVERRIDES.filter((o) => !REPLACEMENT.retired.includes(o.id)), ...REPLACEMENT.overrides];
   const replacementDigest = await new ScenarioRunner(withReplacement, world, now).digest(stampsOf(replaced));
 
+  // A recorded response placed in the scenario: the full run follows it, the events-only run does not.
+  const recordResponse = async (option: { label: string; overrides: ScenarioOverride[] }) => {
+    const rec = recordingEngine(engine);
+    const overrides = [...OVERRIDES, ...option.overrides];
+    const runner = new ScenarioRunner(rec, world, now);
+    const digest = await runner.digest(stampsOf(overrides));
+    // The pass an option's column is read from, for what the response cost: the same request, so nothing more is recorded.
+    const cost = (await new ScenarioRunner(recordingEngine(engine), world, now).full(stampsOf(overrides))).cost;
+    return { label: option.label, added: option.overrides, overrides, calls: rec.calls, digest, cost };
+  };
+  const withResponse = await recordResponse(RESPONSE);
+  const withBuiltIn = await recordResponse(BUILT_IN);
+  const withTransfer = await recordResponse(TRANSFER);
+
   const fixture = {
     about:
       "A recording of the real engine, replayed by backend/src/services/scenario-run.unit.test.ts and by " +
@@ -246,6 +341,9 @@ async function main() {
       calls: withReplacement.calls,
       digest: replacementDigest,
     },
+    withResponse,
+    withBuiltIn,
+    withTransfer,
   };
   writeFileSync(OUT, `${JSON.stringify(fixture)}\n`);
 
@@ -260,7 +358,12 @@ async function main() {
   console.log("as it is   ", line(asItIs));
   console.log("with option", line(optionDigest));
   console.log("replacement", line(replacementDigest));
-  console.log(`${base.calls.length} + ${withOption.calls.length} + ${withReplacement.calls.length} engine calls recorded -> ${path.relative(process.cwd(), OUT)}`);
+  console.log("response   ", line(withResponse.digest), "cost", withResponse.cost);
+  console.log("built-in   ", line(withBuiltIn.digest), "cost", withBuiltIn.cost);
+  console.log("transfer   ", line(withTransfer.digest), "cost", withTransfer.cost);
+  console.log(
+    `${base.calls.length} + ${withOption.calls.length} + ${withReplacement.calls.length} + ${withResponse.calls.length} + ${withBuiltIn.calls.length} + ${withTransfer.calls.length} engine calls recorded -> ${path.relative(process.cwd(), OUT)}`,
+  );
 }
 
 main().catch((err) => {

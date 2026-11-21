@@ -251,6 +251,21 @@ export interface OptionChange {
   was: string | null;
 }
 
+/**
+ * What a run cost, as far as anything says. The engine counts the cost a rule
+ * of a recorded response declares for its action, each time the action fires.
+ * Capacity and measures carry no price in the twin, and a response whose rules
+ * declare none is unpriced, not free.
+ */
+export interface OptionCost {
+  /** What the engine counted over the run; null when nothing in the run declares a cost. */
+  counted: number | null;
+  /** True when that figure is the whole cost of what the option changes: only then can two options be weighed. */
+  complete: boolean;
+  /** The same, as a sentence written by the server. */
+  says: string;
+}
+
 export interface ProposedOption {
   /** The step that tested it: what a decision is recorded against. */
   step: string;
@@ -262,6 +277,8 @@ export interface ProposedOption {
   /** What it adds, replaces and removes, in the order asked. */
   changes?: OptionChange[];
   figures: OptionFigures;
+  /** What its run cost. Absent from an exchange journalled before an option could contain a recorded response. */
+  cost?: OptionCost;
   sites: { id: string; name: string; capacity: number; asItIs: RunDigestSiteBreak; withOption: RunDigestSiteBreak }[];
   basis: Basis[];
   arrivals: Record<string, number[]>;
@@ -276,6 +293,8 @@ export interface OptionsProposal {
   activity: string;
   /** The scenario as it stands; null when nothing could be tested. */
   asItIs: OptionFigures | null;
+  /** What the scenario as it stands cost in its run. */
+  asItIsCost?: OptionCost | null;
   options: ProposedOption[];
   /** What every column shares. */
   basis: Basis[];
@@ -340,6 +359,8 @@ export interface DecisionExpected {
   mechanism: string;
   notTested: string[];
   notes: string[];
+  /** What the engine counted as the cost of the tested run. Absent from older decisions. */
+  cost?: OptionCost;
   /**
    * The same two runs made again on the network as it was when the signal
    * opened: what the situation card showed when a prepared response was

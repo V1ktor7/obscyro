@@ -21,7 +21,7 @@ import { cn } from "@/lib/cn";
 
 import { fetchFollowUp, listDecisions, type Decision, type FollowUp } from "../../analyst-api";
 import { LABEL, OptionChanges, Text } from "./analyst-parts";
-import { BasisList, EvidenceMeter, Figures, Fold, waitingScale, waitingText } from "./option-cards";
+import { BasisList, CostLine, EvidenceMeter, Figures, Fold, placesResponse, waitingScale, waitingText } from "./option-cards";
 import { people } from "./results";
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -153,6 +153,7 @@ function DecisionCard({ env, d, here }: { env: string; d: Decision; here: boolea
           From the run that tested the option (step {d.optionStep}): the result of a model under the scenario’s conditions, not a forecast.
           The tick on the bar is the same run without it.
         </p>
+        {d.expected.cost && (d.expected.cost.counted !== null || placesResponse({ stamps: d.optionStamps })) ? <CostLine cost={d.expected.cost} /> : null}
         {d.expected.retested ? (
           <p className="text-[11px] text-ink-muted">
             Tested again when the signal opened, on the network as it was on {day(d.expected.retested.testedAt)}:{" "}

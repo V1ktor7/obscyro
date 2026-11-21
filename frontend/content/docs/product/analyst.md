@@ -3,7 +3,7 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "ef767f5cbe816924"
+translatedFrom: "d3451ed4d78fda15"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
@@ -91,7 +91,7 @@ A request refused before it starts (no session, analyst off, simulation service 
 
 ## The tools
 
-None of them writes. Thirteen read; a fourteenth, `test_option`, runs the engine, and exists only in the Options tab. Two worlds: `reality`, the twin as it is; `scenario`, the same twin read through the open scenario.
+None of them writes. Thirteen read. Two more exist only in the Options tab: `list_responses`, which reads what an option can contain as a recorded response, and `test_option`, which runs the engine. Two worlds: `reality`, the twin as it is; `scenario`, the same twin read through the open scenario.
 
 The Event finder tab is apart: it has none of these tools. It has only the API's web search (`web_search`), which runs at Anthropic and not with us, and its delivery tool. That is what guarantees a search can take nothing from the twin with it.
 
@@ -101,7 +101,7 @@ The Event finder tab is apart: it has none of these tools. It has only the API's
 | `find_sites` | The sites, filtered by name, activity or territory, largest first |
 | `get_site` | One site: place, units per activity, patients present, territories served, what the scenario changes there |
 | `compare_catchments` | For an activity: each territory, its residents, its sites, its units per 1,000 residents |
-| `scenario_recipe` | The scenario: starting conditions, events, choices, modified links, comparison series |
+| `scenario_recipe` | The scenario: starting conditions, events, choices (measures, capacity, a recorded response the run follows), modified links, comparison series |
 | `read_run` | The run on screen: digest of both passes, sites where people wait, one site day by day, the network day by day |
 | `list_datasets` | The project's datasets and their columns |
 | `preview_dataset` | The first rows of a dataset and the values of its category columns |
@@ -110,7 +110,8 @@ The Event finder tab is apart: it has none of these tools. It has only the API's
 | `list_alerts` | What is open now: the alerts, worst first, each with its unit, its measure and its value, since when it has been open, the age of the value, and the signal it raised with its stage. Also says how many alert rules exist and when the thresholds were last checked. For the whole project or for one unit |
 | `unit_now` | The live figures of a unit, as its page shows them: each measure the organisation defined, what stands under the unit by type, the age of the reading (or that it is unknown, and why), its open alerts |
 | `calculate` | A calculation, on numbers already read or given in the question |
-| `test_option` | Options tab only. Adds an option to the open scenario, for the time of a run on the server, and returns the scenario as it is beside the scenario with the option |
+| `list_responses` | Options tab only. The recorded responses an option can contain: those of the organisation's library (Events page) and those the engine writes itself, each under a name, with what its rules do and whether they declare a cost. With `routes_from`, the sites to which the patients waiting at a site can be transferred |
+| `test_option` | Options tab only. Adds an option to the open scenario, for the time of a run on the server, and returns the scenario as it is beside the scenario with the option, with what the engine counted as cost when a recorded response is in one of the two runs |
 
 A tool that cannot answer (unknown name, two sites for one name, no run on screen, a table that holds several series, an option that cannot be tested) says so with a reasoned refusal that the model reads. It never guesses.
 
@@ -128,10 +129,26 @@ An option is a label and one to four changes:
 |---|---|
 | Capacity: units of an activity, at a site, from a given day (negative: units closed) | The site already offers that activity; you cannot close more than it has |
 | Measure: contact layers multiplied, in some territories, for a number of days | The twin declares those layers |
+| Transfer: patients waiting at one site, sent to another, so many a day, from a given day | The twin holds a transfer route between the two sites, the destination offers the activity, and no more than twenty patients a day are asked for |
+| Recorded response: a response of the organisation's library, or one of those the engine writes itself | It is named by the name `list_responses` gives it. A response of the engine holds for the whole run |
 | Replace a choice of the scenario: the same capacity or the same measure, with other units, another day, another duration | The choice is named the way `scenario_recipe` names it; it is a capacity replaced by a capacity, or a measure by a measure |
 | Remove a choice of the scenario | The choice is named |
 
-“40 beds instead of the scenario's 60” is therefore a single stamp at +40: the test runs without the 60 and with the 40, and that is what the recipe holds once the option is applied. Only choices (measures, capacity) can be replaced or removed. Starting conditions and events are what happens: an option does not undo them.
+“40 beds instead of the scenario's 60” is therefore a single stamp at +40: the test runs without the 60 and with the 40, and that is what the recipe holds once the option is applied. Only choices (measures, capacity, a recorded response) can be replaced or removed. Starting conditions and events are what happens: an option does not undo them.
+
+A transfer and a recorded response are of another kind than the first two: they are not things placed on a given day, but rules the engine evaluates at every step of the run. A transfer of four patients a day from Lakeshore to Nord sends nobody as long as nobody waits at Lakeshore, nor when Nord is full. A run follows one response at a time: so an option holds either a recorded response, or transfers, which make one between them; and if the scenario already follows one, the option has to remove it to test another in its place.
+
+### Two ways of asking “what if”, a single run
+
+The product had two paths that did not know each other. Now that a recorded response can be a stamp of the scenario, the second can run what the first writes, through the same run as its other stamps, on the page as on the server.
+
+| | Events page and replay of the units page | Scenarios page and analyst |
+|---|---|---|
+| What is varied | A response: rules the engine evaluates at every step, on a given event | Stamps: what happens on a given day (outbreak, heat wave, measure, capacity, starting conditions), and a recorded response |
+| What this path can do and the other cannot | Write and edit a response: its conditions, its delay, its effectiveness, its cost. Compare several responses on one event and rank them on counts (deaths, care not delivered, cost), over several seeds. Vary the strength of a response (half, double). Branch: “what if we had acted on that day” | Spread an epidemic from the model the twin declares. Set starting conditions. Replace or remove a choice. Have the analyst propose and test options, with their levels of evidence. Record a decision and follow it. Keep a prepared response, retested when a signal opens |
+| What it still cannot do | Start from a scenario made of stamps. Record a decision. Keep a prepared response ([issue 22](https://github.com/V1ktor7/obscyro/issues/22)) | Follow more than one response in a run. Write or edit the rules of a response, apart from the transfer between two sites. Make a response the engine writes itself start on a given day. Give a price to a capacity or a measure ([issue 20](https://github.com/V1ktor7/obscyro/issues/20)). Run several seeds |
+
+What the two have in common: the engine, the shape of a response (rules, with delay, effectiveness and cost), and the marking of a dominated option, made by the same function.
 
 What comes from the model and what does not:
 
@@ -141,11 +158,13 @@ What comes from the model and what does not:
 | The gap between an option and the scenario as it is (“−7,049 vs as it is”) | The program: the subtraction of the two figures shown, rounded, so it can be redone in your head |
 | The count “2 measured · 1 published · 3 assumption” of a card | The program: it counts the items of the list per level. The three levels are never added together |
 | The level of evidence of each item: Measured, Published, Assumption | The program, from where the item comes from (twin, scenario, option, a rule of the engine) |
-| The stamps that “Add to scenario” adds | The test: they are the ones the engine received |
+| The stamps that “Add to scenario” adds | The test: they are the ones the engine received. A recorded response is one of them, with its rules |
+| “Cost counted: 7,500 $” on a card, or the sentence that says why nothing is counted | The engine: the cost each rule of the response declares, each time it fired in this run. A capacity and a measure have no price: the card then says that the count is not the whole cost, or that there is none |
+| “Dominated”, with the name of another option | The program, from the two runs: the other costs as much or less and leaves as much or less waiting. Only between options whose cost is whole |
 | “What it does to the scenario”: what the option adds, replaces and removes, when it does more than add | The program, from the stamps. The button then reads “Apply to scenario” |
 | The mechanism in one sentence, what the test does not say, the reading, the trade-offs, the limits | The model, every figure checked by the verifier |
 
-What the tab does not do, by construction: rank the options (they stay in the order of the tests, and no card is marked as the best), list one that was not tested, hide one that was, write to the scenario. Trade-offs of values are presented apart, under “Yours to weigh”.
+What the tab does not do, by construction: rank the options (they stay in the order of the tests, and no card is marked as the best), list one that was not tested, hide one that was, write to the scenario. Trade-offs of values are presented apart, under “Yours to weigh”. One thing only is said of an option against another: that it is dominated, when the other costs as much or less and leaves as much or less waiting. That stays true whatever value one gives a patient-day of waiting, so it is not a trade-off; between two options neither of which dominates the other, the tab says nothing.
 
 Cost and duration are bounded: three tests at most per objective, and the scenario as it is runs only once for the three, in a single pass of the engine. Three options make four passes. During a test, the tab says how long it has been running.
 
@@ -196,6 +215,8 @@ What is not done, and why:
 ## The decisions
 
 “Record decision” keeps the option retained with what is expected of it. The browser sends only the identifier of the exchange and the step of the test; the server copies everything else from its journal: the objective, the stamps, the figures of the tested run with and without the option, the arrivals day by day, the levels of evidence, the source steps. So only an option the engine tested can be recorded.
+
+A decision can bear on a recorded response or on a transfer: it keeps its rules, as the engine received them, and what the run counted as cost. The Decisions tab writes it under the expected figures.
 
 A decision cannot be edited: revising it means recording another one.
 
@@ -364,7 +385,12 @@ What is not judged: the quality of the writing. That still takes a person, who r
 - The age of a live figure is that of the reading of the whole unit, the oldest of its sources when it has several.
 - The open signals `list_alerts` counts include those whose alert has cleared: they can be far more numerous than the open alerts.
 - The run on screen is not kept when the page is reloaded; Run has to be launched again. Nor are the tested options: what remains are the recorded decisions and the journal.
-- An option is made of capacity and measures. A transfer of patients, staff, a stock, a new link between a site and a territory cannot be tested: the engine or the twin does not carry them. The analyst files them under the limits.
+- An option is made of capacity, measures, transfers of patients or a recorded response. Staff, a stock, a new link between a site and a territory cannot be tested: the engine or the twin does not carry them. The analyst files them under the limits.
+- A run follows a single recorded response. Two responses cannot be tested together, and a response the engine writes itself cannot start on a given day.
+- A transfer can only be tested between two sites the twin links by a transfer route. The twin holds the flow of no route: the run gives each twenty patients a day, and that is an assumption.
+- The two responses the engine writes itself watch a single activity, the first of the twin in alphabetical order among those that are space, whatever activity the run reads. `list_responses` says which.
+- A cost exists only where a rule declares one. A capacity, a measure and a transfer written by the analyst have no price: no option that contains one can be called dominated or dominating.
+- With a response that adds or moves units during the run, the island's occupancy is weighted by the usual capacity: the engine does not return the capacity of each day. The run says so.
 - An option is tested on the scenario as it is at the time of the test. Adding one option then another gives a scenario no test covered: the screen warns, and the objective has to be stated again.
 - An option can replace or remove a choice of the scenario, but not a starting condition or an event. Replacing a capacity by a measure is done in two changes of the same option: remove one, add the other.
 - Applying an option that removes a choice is done in two writes, the new stamp then the removal of the old one, and not in a single operation. If the second fails, the recipe keeps both stamps: the screen shows it, and the removal is done by hand. If the stamp to remove is no longer there at the time of the click, nothing is written.
@@ -387,6 +413,7 @@ What is not judged: the quality of the writing. That still takes a person, who r
 | Prepared responses, retest, “Engage” | `backend/src/services/prepared-responses.ts`, `backend/src/services/response-retest.ts`, `backend/src/routes/prepared-responses.ts`, `frontend/app/studio/simulation/hex/KeepPrepared.tsx`, `frontend/app/studio/situation/PreparedResponses.tsx`, `prepared-api.ts` |
 | Reading tools, digest of the run | `backend/src/services/analyst-tools.ts` |
 | The `test_option` tool, closing of an objective, `give_options` | `backend/src/services/analyst-options.ts` |
+| The `list_responses` tool, recorded responses, the rule of a transfer | `backend/src/services/analyst-responses.ts` |
 | Closing of an event search, `give_events` | `backend/src/services/analyst-events.ts` |
 | Reading the web search: queries, pages, passages, dates, quotations | `backend/src/services/analyst-web.ts` |
 | A project's authorised sources | `backend/src/services/web-sources.ts` |

@@ -413,3 +413,69 @@ describe("the options tab", () => {
     await waitFor(() => expect(off).toHaveBeenCalled());
   });
 });
+
+describe("options that contain a recorded response", () => {
+  const transferStamp = { body: { kind: "response", name: "Transfer when full", source: "built-in", ref: "load-balance", rules: [] }, start: 0, days: 60 };
+  const priced = (step: string, label: string, waitingDays: number, counted: number): ProposedOption =>
+    option({
+      step,
+      label,
+      stamps: [{ ...transferStamp, body: { ...transferStamp.body, name: label } }],
+      changes: [{ does: "adds", now: `recorded response ${label}, whole run`, was: null }],
+      figures: figures({ sitesWithQueue: 2, waitingDays }),
+      cost: { counted, complete: true, says: `The engine counted ${counted.toLocaleString("en-CA")} $ for “${label}”: each of its actions at the cost its rule declares, each time it fired.` },
+    });
+  const beds = option({
+    step: "s4",
+    label: "Open 40 beds at Lakeshore from day 10",
+    cost: { counted: null, complete: false, says: "No cost is counted for this run: capacity and measures carry no price in the twin." },
+  });
+  const answer = proposal({
+    asItIsCost: { counted: null, complete: false, says: "No cost is counted for this run: capacity and measures carry no price in the twin." },
+    options: [priced("s2", "Transfer when full", 3200, 42000), priced("s3", "Surge what is short, then transfer", 4100, 650000), beds],
+  });
+
+  it("puts what each run cost on its card, and marks the option another beats on both counts", async () => {
+    await tested([{ type: "done", result: result({ answer }), exchangeId: "ex-1" }]);
+
+    const a = await screen.findByRole("region", { name: "Option A: Transfer when full" });
+    expect(within(a).getByText(/^Cost counted: 42,000 \$\./)).toBeTruthy();
+    expect(within(a).queryByRole("note")).toBeNull();
+
+    // It costs more and leaves more waiting than A: whatever a patient-day is worth, it is not the one to prefer.
+    const b = screen.getByRole("region", { name: "Option B: Surge what is short, then transfer" });
+    expect(within(b).getByText(/^Cost counted: 650,000 \$\./)).toBeTruthy();
+    expect(within(b).getByRole("note").textContent).toBe(
+      "Dominated. By these runs, “Transfer when full” costs no more and leaves no more waiting. Whatever a patient-day of waiting is worth, this option is not the one to prefer on these two counts.",
+    );
+
+    // Beds carry no price: the card says so in place of a figure, and it is not weighed against the others.
+    const c = screen.getByRole("region", { name: "Option C: Open 40 beds at Lakeshore from day 10" });
+    expect(within(c).getByText("No cost is counted for this run: capacity and measures carry no price in the twin.")).toBeTruthy();
+    expect(within(c).queryByRole("note")).toBeNull();
+
+    // Still in the order tested, and the screen says which options could be weighed at all.
+    expect(screen.getAllByRole("region", { name: /^Option [ABC]:/ }).map((r) => r.getAttribute("aria-label")![7])).toEqual(["A", "B", "C"]);
+    expect(screen.getByText(/nothing here ranks them\. An option is marked as dominated only when another costs no more and leaves no more waiting.* 2 of 3 options here have a whole cost counted by the engine/)).toBeTruthy();
+  });
+
+  it("says nothing of cost when no run on screen has one, as before", async () => {
+    await tested();
+    await screen.findByRole("region", { name: "Option A: Open 40 beds at Lakeshore from day 10" });
+    expect(screen.queryByText(/Cost counted/)).toBeNull();
+    expect(screen.queryByText(/No cost is counted/)).toBeNull();
+    expect(screen.queryByText(/marked as dominated/)).toBeNull();
+  });
+
+  it("says that a response nobody priced is unpriced, on its own card", async () => {
+    const written = option({
+      label: "Send Lakeshore's waiting patients to Nord",
+      stamps: [{ body: { kind: "response", name: "Transfer from Lakeshore to Nord", source: "written", ref: "", rules: [] }, start: 12, days: 48 }],
+      cost: { counted: null, complete: false, says: "No cost is counted for this run: the rules of “Transfer from Lakeshore to Nord” declare none. That is unpriced, not free." },
+    });
+    await tested([{ type: "done", result: result({ answer: proposal({ options: [written] }) }), exchangeId: "ex-1" }]);
+    const a = await screen.findByRole("region", { name: "Option A: Send Lakeshore's waiting patients to Nord" });
+    expect(within(a).getByText(/That is unpriced, not free\.$/)).toBeTruthy();
+    expect(screen.queryByRole("note")).toBeNull();
+  });
+});

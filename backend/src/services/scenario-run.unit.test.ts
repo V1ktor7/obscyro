@@ -7,7 +7,7 @@ import { runDigestSchema } from "./analyst-tools.js";
 import type { ScenarioOverride } from "./scenario-overrides.js";
 import { capacityGrid, islandSeries, occupancyGrid, ScenarioRunner, type ScenarioWorld, serverRun } from "./scenario-run.js";
 import { replayEngine, type RecordedCall } from "./scenario-run-recording.js";
-import { basisOfStamp, engineInput, stampsOf, twinContext, type Stamp } from "./scenario-stamps.js";
+import { basisOfStamp, choiceLine, engineInput, isChoice, PLACED_RESPONSE, rulesFromStep, stampsOf, twinContext, type ChoiceStamp, type Stamp } from "./scenario-stamps.js";
 import type { SimExport } from "./twin-export.js";
 
 /**
@@ -37,6 +37,10 @@ const fixture = JSON.parse(readFileSync(new URL("./scenario-run-parity.fixture.j
   asItIs: Recorded;
   withOption: Recorded & { label: string; added: ScenarioOverride[] };
   withReplacement: Recorded & { label: string; retired: string[]; added: ScenarioOverride[] };
+  /** A recorded response the organisation wrote, placed on a day: a transfer of patients. */
+  withResponse: Recorded & { label: string; added: ScenarioOverride[]; cost: number };
+  /** A response the engine writes itself from the network. */
+  withBuiltIn: Recorded & { label: string; added: ScenarioOverride[]; cost: number };
 };
 
 const world: ScenarioWorld = {
@@ -267,4 +271,135 @@ test("an activity no site provides is refused before the engine is asked", async
     (e: Error & { code?: string }) => e.code === "ACTIVITY_NOT_PROVIDED" && /No site on the map provides "bloc"[\s\S]*civiere, lit/.test(e.message),
   );
   assert.deepEqual(engine.asked, []);
+});
+
+// --- a recorded response, placed in the scenario ----------------------------
+
+test("a recorded response is run by the same run as the stamps, and gives the figures Run gives once it is in the scenario", async () => {
+  const scenario = stampsOf(fixture.asItIs.overrides);
+  const added = stampsOf(fixture.withResponse.added);
+  const onThePage = stampsOf(fixture.withResponse.overrides);
+  assert.deepEqual(ScenarioRunner.withOption(scenario, added), onThePage);
+
+  const engine = replayEngine([...fixture.asItIs.calls, ...fixture.withResponse.calls]);
+  const runner = new ScenarioRunner(engine, world, now);
+  await runner.digest(scenario);
+  const before = engine.asked.length;
+  const digest = await runner.digest(onThePage);
+  assert.deepEqual(digest, fixture.withResponse.digest);
+  // One more pass, as for any option: the events-only run never follows a response.
+  assert.deepEqual(engine.asked.slice(before), requests(fixture.withResponse.calls).slice(-1));
+
+  // What the engine was sent: the response's own rules, in place of the do-nothing
+  // response, made to start on the day it was placed. Nothing else in the request differs.
+  const sent = engine.asked.at(-1)!.request as { policies: string[]; customPolicies?: { id: string; name: string; rules: Record<string, any>[] }[] };
+  assert.deepEqual(sent.policies, []);
+  assert.deepEqual(
+    sent.customPolicies!.map((p) => [p.id, p.name, p.rules.map((r) => [r.id, r.trigger, r.action.kind])]),
+    [[PLACED_RESPONSE, "Send Lakeshore's queue to Nord", [["lake-to-north", { when: "from_tick", start: 12, end: null }, "transfer"]]]],
+  );
+  const asItIs = engine.asked[3]!.request as Record<string, unknown>;
+  assert.deepEqual({ ...sent, policies: ["null"], customPolicies: undefined }, { ...asItIs, customPolicies: undefined });
+
+  // The recording says something: patients sent from Lakeshore to Nord wait less, and the queue is still Lakeshore's.
+  assert.equal(fixture.asItIs.digest.full.waitingDays, 76.48);
+  assert.equal(digest.full.waitingDays, 11.2);
+  assert.equal(digest.full.sitesWithQueue, 1);
+  // The events-only half is the scenario's own: a response is a choice.
+  assert.deepEqual(digest.events, fixture.asItIs.digest.events);
+
+  // A fresh server, as the page after the click: the page's four calls, the same figures.
+  const fresh = replayEngine(fixture.withResponse.calls);
+  assert.deepEqual(await new ScenarioRunner(fresh, world, now).digest(onThePage), fixture.withResponse.digest);
+  assert.deepEqual(fresh.asked, requests(fixture.withResponse.calls));
+});
+
+test("what a response cost is read from the run: each action's declared cost, each time it fired", async () => {
+  const pass = async (recorded: Recorded) => new ScenarioRunner(replayEngine(recorded.calls), world, now).full(stampsOf(recorded.overrides));
+
+  const transfer = await pass(fixture.withResponse);
+  assert.deepEqual(transfer.figures, fixture.withResponse.digest.full);
+  // Five hundred a transfer, fifteen times.
+  assert.equal(transfer.cost, 7500);
+  assert.equal(transfer.cost, fixture.withResponse.cost);
+
+  // Nothing is spent where nobody responds, nor where a response's rules never fire.
+  assert.equal((await pass(fixture.asItIs)).cost, 0);
+  assert.equal((await pass(fixture.withOption)).cost, 0);
+  assert.equal((await pass(fixture.withBuiltIn)).cost, 0);
+});
+
+test("a response the engine writes itself goes by its name, and the run reads its rows", async () => {
+  const engine = replayEngine(fixture.withBuiltIn.calls);
+  const digest = await new ScenarioRunner(engine, world, now).digest(stampsOf(fixture.withBuiltIn.overrides));
+  assert.deepEqual(engine.asked, requests(fixture.withBuiltIn.calls));
+  assert.deepEqual(digest, fixture.withBuiltIn.digest);
+
+  const sent = engine.asked.at(-1)!.request as { policies: string[]; customPolicies?: unknown };
+  assert.deepEqual(sent.policies, ["load-balance"]);
+  assert.equal(sent.customPolicies, undefined);
+  // On this network the engine's transfer watches stretchers, the first space activity by name, and no
+  // destination has one free: its rules never fire, and the run says what it found, the scenario's own figures.
+  assert.deepEqual(digest.full, fixture.asItIs.digest.full);
+});
+
+const RESPONSE = stampsOf(fixture.withResponse.added)[0] as Stamp & { kind: "response" };
+const BUILT_IN = stampsOf(fixture.withBuiltIn.added)[0] as Stamp & { kind: "response" };
+
+test("a recorded response is a choice: in the full run only, one at a time, and said when it cannot be followed as placed", () => {
+  assert.equal(isChoice(RESPONSE), true);
+  assert.equal(engineInput([RESPONSE], ctx, "events", 30).response, null);
+  assert.deepEqual(engineInput([], ctx, "full", 30).response, null);
+
+  const stored = engineInput([RESPONSE], ctx, "full", 30);
+  assert.equal("builtIn" in stored.response!, false);
+  assert.deepEqual(stored.notes, []);
+  assert.deepEqual(engineInput([BUILT_IN], ctx, "full", 30).response, { builtIn: "load-balance" });
+
+  // Two in one recipe: the first by day is run, and the note names the other.
+  const both = engineInput([BUILT_IN, RESPONSE], ctx, "full", 30);
+  assert.deepEqual(both.response, { builtIn: "load-balance" });
+  assert.deepEqual(both.notes, ['The engine follows one recorded response in a run: "Transfer when full" is run, "Send Lakeshore\'s queue to Nord" is not.']);
+
+  // The engine writes a built-in's rules itself: it cannot be made to wait for a day.
+  const late = engineInput([{ ...BUILT_IN, start: 9 }], ctx, "full", 30);
+  assert.deepEqual(late.notes, ['"Transfer when full" is written by the engine from the network, so it cannot wait for day 9: its rules apply from day 0.']);
+
+  // A response that adds units: the page cannot count them day by day, and says so.
+  const surge = engineInput([{ ...BUILT_IN, name: "Surge what is short, then transfer", ref: "surge-and-balance" }], ctx, "full", 30);
+  assert.match(surge.notes[0]!, /adds or moves units during the run\. The engine does not report the units a site holds each day/);
+});
+
+test("a response's rules are made to start on the day it is placed, and a rule that starts later keeps its own day", () => {
+  const rules = [
+    { id: "a", trigger: { when: "every_tick", start: 0, end: null } },
+    { id: "b", trigger: { when: "from_tick", start: 20, end: null } },
+    { id: "c", trigger: { when: "between", start: 2, end: 15 } },
+    { id: "d", trigger: { when: "between", start: 2, end: 8 } },
+    { id: "e" },
+  ];
+  assert.deepEqual(
+    rulesFromStep(rules, 12).map((r) => r.trigger),
+    [
+      { when: "from_tick", start: 12, end: null },
+      { when: "from_tick", start: 20, end: null },
+      { when: "between", start: 12, end: 15 },
+      // A window that would end before it starts is kept open rather than left never to fire.
+      { when: "from_tick", start: 12, end: null },
+      { when: "from_tick", start: 12, end: null },
+    ],
+  );
+});
+
+test("a recorded response reads as a line, and what it rests on is an assumption", () => {
+  assert.equal(choiceLine(RESPONSE as ChoiceStamp, ctx), "recorded response Send Lakeshore's queue to Nord, from day 12");
+  assert.equal(choiceLine(BUILT_IN as ChoiceStamp, ctx), "recorded response Transfer when full, whole run");
+  assert.deepEqual(basisOfStamp(RESPONSE, ctx, "option"), [
+    {
+      element:
+        "The recorded response Send Lakeshore's queue to Nord, from day 12: its rules fire when their conditions hold, with the delay, the effectiveness and the cost each declares",
+      evidence: "assumption",
+      from: "option",
+    },
+  ]);
 });

@@ -936,6 +936,10 @@ export default function HexTwinView() {
         null,
         2,
       );
+    if (s.kind === "response") {
+      const followed = engineInput([s], ctx!, "full", horizon).response;
+      return JSON.stringify(followed && "builtIn" in followed ? { policies: [followed.builtIn] } : { customPolicies: followed ? [followed] : [] }, null, 2);
+    }
     return JSON.stringify(engineInput([s], ctx!, "full", horizon).effects[0] ?? {}, null, 2);
   }
 
@@ -1464,8 +1468,12 @@ export default function HexTwinView() {
               const ds = describeStamp(s, ctx);
               const open = s.id === selected;
               const resizable = s.kind === "heat" || s.kind === "measure";
+              // Capacity and a recorded response run from their day to the end of the run.
+              const toEnd = s.kind === "capacity" || s.kind === "response";
+              // A response the engine writes itself applies for the whole run: there is no day to move it to.
+              const fixed = isCondition(s) || (s.kind === "response" && s.source === "built-in");
               const shift = (by: number) =>
-                void replace(s, { ...s, start: Math.max(0, Math.min(horizon - 1, s.start + by)), ...(s.kind === "capacity" ? { days: Math.max(1, horizon - Math.max(0, s.start + by)) } : {}) });
+                void replace(s, { ...s, start: Math.max(0, Math.min(horizon - 1, s.start + by)), ...(toEnd ? { days: Math.max(1, horizon - Math.max(0, s.start + by)) } : {}) });
               return (
                 <div key={s.id} className={cn("rounded-md border", open ? "border-brand bg-surface" : "border-line-soft bg-canvas-raised")}>
                   <button type="button" aria-expanded={open} onClick={() => setSelected(open ? null : s.id)} className="grid w-full grid-cols-[10px_minmax(0,1fr)] gap-2 px-2.5 py-2 text-left">
@@ -1480,7 +1488,7 @@ export default function HexTwinView() {
                   {open ? (
                     <div className="flex flex-col gap-2 px-2.5 pb-2.5">
                       <div className="flex flex-wrap gap-1">
-                        {isCondition(s) ? null : (
+                        {fixed ? null : (
                           <>
                             <button type="button" disabled={busy} onClick={() => shift(-1)} className="rounded border border-line bg-surface px-2 py-1 text-[11.5px] disabled:opacity-50">− 1 day</button>
                             <button type="button" disabled={busy} onClick={() => shift(1)} className="rounded border border-line bg-surface px-2 py-1 text-[11.5px] disabled:opacity-50">+ 1 day</button>
@@ -1556,7 +1564,7 @@ export default function HexTwinView() {
                       )}
                       style={{ left: `${(s.start / horizon) * 100}%`, width: `${Math.max((s.days / horizon) * 100, 1.5)}%` }}
                     >
-                      {s.kind === "seed" ? "Outbreak" : s.kind === "heat" ? "Heat" : s.kind === "measure" ? s.label : s.kind === "capacity" ? `${s.amount > 0 ? "+" : ""}${s.amount}` : ""}
+                      {s.kind === "seed" ? "Outbreak" : s.kind === "heat" ? "Heat" : s.kind === "measure" ? s.label : s.kind === "capacity" ? `${s.amount > 0 ? "+" : ""}${s.amount}` : s.kind === "response" ? s.name : ""}
                     </button>
                   ))}
                 <div className="pointer-events-none absolute -bottom-1 -top-1 w-0.5 bg-ink" style={{ left: `${((d + 0.5) / horizon) * 100}%` }} />

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import type { DbClient } from "../lib/db.js";
 import { BadRequest, NotFound } from "../lib/errors.js";
-import type { OptionChange, OptionFigures, OptionStamp, ProposedOption, RetiredChoice } from "./analyst-options.js";
+import type { OptionChange, OptionCost, OptionFigures, OptionStamp, ProposedOption, RetiredChoice } from "./analyst-options.js";
 import { alignSeries, compareSeries, type Fit } from "./observed-series.js";
 import type { ScenarioOverride } from "./scenario-overrides.js";
 import type { Basis } from "./scenario-stamps.js";
@@ -49,6 +49,12 @@ export interface DecisionExpected {
   mechanism: string;
   notTested: string[];
   notes: string[];
+  /**
+   * What the engine counted as the cost of the tested run, and whether that is
+   * the whole cost of the option. Absent from decisions recorded before an
+   * option could contain a recorded response: nothing was counted then.
+   */
+  cost?: OptionCost;
   /**
    * The same two runs made again on the network as it was when the signal
    * opened: what the card showed when a prepared response was engaged.
@@ -120,6 +126,8 @@ const journalledProposal = z.object({
       notes: z.array(z.string()),
       mechanism: z.string(),
       notTested: z.array(z.string()),
+      // Absent from exchanges journalled before an option could contain a recorded response.
+      cost: z.object({ counted: z.number().nullable(), complete: z.boolean(), says: z.string() }).optional(),
     }),
   ),
 });
@@ -165,6 +173,7 @@ export function decisionFromExchange(exchange: JournalledExchange, step: string)
       mechanism: option.mechanism,
       notTested: option.notTested,
       notes: option.notes,
+      ...(option.cost ? { cost: option.cost } : {}),
     },
     sourceSteps: steps.data.filter((s) => cited.has(s.id)).map((s) => ({ id: s.id, tool: s.tool, input: s.input, output: s.output })),
   };

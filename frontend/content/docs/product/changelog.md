@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "d57dc1ef74d1b83f"
+translatedFrom: "5c1de9fbacfb2b2e"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -15,6 +15,8 @@ An entry is written the day the change ships, in the same commit as the code. Si
 
 ## 21 November 2026
 
+- **New feature · Analyst.** An option can contain a transfer of patients between two sites, or a recorded response: those of the Events page and those the engine writes itself. It is tested by the same run as capacity and measures. “Add to scenario” writes it into the recipe as a stamp, and Run then gives the figures of the test again.
+- **New feature · Analyst.** In the Options tab, what the engine counted as cost is written on each card, and an option that costs as much or more than another for as much or more waiting is marked “Dominated”. Nothing else is ranked. A capacity and a measure have no price: the card says so in place of a figure.
 - **Change · Studio.** The Units page is redone. The units are no longer a column of cards in no order: they are a list ranked on the measure chosen, the units in alert first. The counters at the top (“In alert”, “Reporting, no alert”, “No value”) are also the filters. The units that report nothing for the measure are folded away, and are never read as a zero. You find a unit by its name, without the accents, and you sort from highest to lowest, the reverse, or by name. A name reads in full. The unit's sheet stays beside the list instead of opening in a window: you compare by clicking from one line to the next. Detail: [the Units page](/docs/product/units-page).
 - **New feature · Studio.** A “Tiles” view on the Units page: one square per unit that has a value, coloured by its distance from the alert threshold, to see the whole network at a glance.
 - **New feature · Studio.** On the Units page, a twin that has a hierarchy unfolds: a click on a unit shows what it contains, and a folded unit says how many units under it are in alert.

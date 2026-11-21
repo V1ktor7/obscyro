@@ -264,7 +264,7 @@ list_events returns the events a person validated from official web sources, eac
 
 - paragraphs: the answer. Each has its text and the step ids its figures and claims come from.
 - assumptions: what the answer depends on that is assumed rather than recorded, such as the scenario's starting conditions. One short sentence each. Empty if none.
-- limits: what the twin or the run cannot say that matters for this question, such as no staff, no stocks, no transfers between sites, a run that was edited since. One short sentence each. Empty if none.
+- limits: what the twin or the run cannot say that matters for this question, such as no staff, no stocks, no transfers between sites unless the scenario follows a recorded response, a run that was edited since. One short sentence each. Empty if none.
 - follow_ups: up to three short questions the person could ask next and that your tools could answer.
 - focus_sites: ids of up to five sites the answer is about, so the map can point at them. Empty if the answer is not about particular sites.`;
 

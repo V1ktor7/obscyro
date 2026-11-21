@@ -131,6 +131,11 @@ export interface AnalystContext {
    * feed. Reality only, read once per question.
    */
   live(): Promise<LiveReading>;
+  /**
+   * The responses recorded in the organisation's library (Events page). Absent
+   * where nothing tests an option: only a test reads them.
+   */
+  responses?(): Promise<import("./analyst-responses.js").StoredResponse[]>;
   /** The question and everything read so far: what `calculate` may build on. */
   known: Ledger;
   /**
@@ -407,6 +412,20 @@ function recipe(scenario: AnalystScenario, ex: SimExport): Record<string, unknow
             from_day,
           });
           break;
+        case "response": {
+          // Rules the run follows at every step, where the other choices are placed on a day.
+          const rules = Array.isArray(v.rules) ? (v.rules as { action?: { kind?: unknown } }[]) : [];
+          choices.push({
+            ref: refs.get(o.id) ?? null,
+            what: "recorded response",
+            name: v.name,
+            from: v.source === "built-in" ? "the engine" : v.source === "stored" ? "the organisation's library" : "written for an option",
+            ...(v.source === "built-in"
+              ? { applies: "whole run" }
+              : { from_day, rules: rules.length, kinds_of_action: [...new Set(rules.map((r) => String(r.action?.kind ?? "?")))] }),
+          });
+          break;
+        }
         default:
           other += 1;
       }
@@ -733,7 +752,7 @@ const compareCatchments: AnalystTool = {
 const scenarioRecipe: AnalystTool = {
   name: "scenario_recipe",
   description:
-    "What the open scenario contains, in order: its starting conditions (usual occupancy, prior immunity, transmissibility), its events (outbreaks, heat), the planner's choices (measures, added capacity), any edit to which sites serve which catchment, and the observed series it is compared with.",
+    "What the open scenario contains, in order: its starting conditions (usual occupancy, prior immunity, transmissibility), its events (outbreaks, heat), the planner's choices (measures, added capacity, a recorded response the run follows), any edit to which sites serve which catchment, and the observed series it is compared with.",
   input_schema: obj({}, []),
   parse: z.object({}),
   async run(ctx) {

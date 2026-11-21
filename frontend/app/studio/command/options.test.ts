@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { candidatesFrom, frontier, halfAndDouble, rankOptions, type ResultRow } from "./options";
+import { candidatesFrom, dominatedBy, frontier, halfAndDouble, rankOptions, type ResultRow } from "./options";
 
 const RESPONSES = [
   {
@@ -157,5 +157,22 @@ describe("ranking them", () => {
       row("opt1", "B", 50, 1000),
     ];
     expect(rankOptions(twins).every((o) => !o.dominated)).toBe(true);
+  });
+});
+
+describe("the marking of dominated options, as both screens make it", () => {
+  const weighed = (id: string, achieved: number, cost: number) => ({ id, label: id.toUpperCase(), achieved, cost });
+
+  it("marks what costs more and achieves less, and names what beats it", () => {
+    const out = dominatedBy([weighed("a", 65, 7500), weighed("b", 40, 9000), weighed("c", 80, 30000)]);
+    // B costs more than A and avoids less: no price of a patient-day makes it the answer.
+    expect(Array.from(out)).toEqual([["b", "A"]]);
+  });
+
+  it("leaves a trade-off standing, and two equal options are a duplicate, not a loser", () => {
+    expect(dominatedBy([weighed("cheap", 40, 500), weighed("dear", 80, 30000)]).size).toBe(0);
+    expect(dominatedBy([weighed("x", 40, 500), weighed("y", 40, 500)]).size).toBe(0);
+    // Same effect for less money is enough.
+    expect(Array.from(dominatedBy([weighed("x", 40, 500), weighed("y", 40, 900)]))).toEqual([["y", "X"]]);
   });
 });

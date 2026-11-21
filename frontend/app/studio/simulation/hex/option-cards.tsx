@@ -19,7 +19,8 @@ import { useState, type ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
 
-import type { Basis, Evidence, OptionFigures } from "../../analyst-api";
+import type { Basis, Evidence, OptionCost, OptionFigures, OptionStamp } from "../../analyst-api";
+import { dominatedBy } from "../../command/options";
 import { EvidenceBadge } from "./analyst-parts";
 import { people } from "./results";
 
@@ -37,6 +38,45 @@ export const waitingText = (f: OptionFigures): string => (f.sitesWithQueue ? peo
  */
 export function waitingGap(of: OptionFigures, against: OptionFigures): number {
   return Math.round(waitingOf(of)) - Math.round(waitingOf(against));
+}
+
+/** Whether an option places a recorded response: its card then says what the run cost, or why nothing was counted. */
+export const placesResponse = (o: { stamps: OptionStamp[] }): boolean => o.stamps.some((s) => s.body.kind === "response");
+
+/**
+ * Which tested options another one dominates, by their own runs.
+ *
+ * Only an option whose whole cost the engine counted can be weighed: one made
+ * of a priced recorded response and nothing else. Capacity and measures carry
+ * no price, so an option that changes any is neither dominated nor
+ * dominating: saying so would rest on a cost nobody gave. What an option
+ * achieves is the waiting it avoids against the scenario as it is, people
+ * waiting where no site serves them included.
+ */
+export function weighOptions(
+  asItIs: OptionFigures,
+  options: { step: string; label: string; figures: OptionFigures; cost?: OptionCost }[],
+): { dominated: Map<string, string>; weighed: number } {
+  const waiting = (f: OptionFigures) => waitingOf(f) + (f.strandedWaitingDays ?? 0);
+  const whole = options.filter((o) => o.cost?.complete && o.cost.counted !== null);
+  return {
+    dominated: dominatedBy(whole.map((o) => ({ id: o.step, label: o.label, achieved: waiting(asItIs) - waiting(o.figures), cost: o.cost!.counted! }))),
+    weighed: whole.length,
+  };
+}
+
+/** What a run cost, on its card: the count when there is one, and the sentence that says what it is a count of. */
+export function CostLine({ cost }: { cost: OptionCost }) {
+  return (
+    <p className="text-[11px] leading-snug text-ink-muted">
+      {cost.counted !== null ? (
+        <span className="font-semibold text-ink-body">
+          Cost counted: {Math.round(cost.counted).toLocaleString("en-CA")} ${cost.complete ? "" : " (not the whole cost)"}.{" "}
+        </span>
+      ) : null}
+      {cost.says}
+    </p>
+  );
 }
 
 /** The longest wait among the runs shown together: what every bar is drawn against. */

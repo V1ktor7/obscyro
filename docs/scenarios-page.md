@@ -36,7 +36,7 @@ flowchart TD
 | Layers | À gauche | Ce que la carte colore : occupation, malades, résidents, couches ajoutées |
 | Analyst | À gauche | Quatre onglets : les questions et leurs réponses (Ask), la recherche d'événements dans des sources officielles (Event finder), les options testées par le moteur (Options), les décisions enregistrées et leur suivi (Decisions) : [analyst.md](analyst.md) |
 | Result | À droite | Le pic dans les deux passes, où ça casse, la comparaison à la réalité |
-| Recipe | À droite | Les tampons du scénario, et ce que le moteur reçoit pour chacun |
+| Recipe | À droite | Les tampons du scénario, et ce que le moteur reçoit pour chacun. Une réponse enregistrée y est un tampon comme les autres, rangé avec les mesures : elle y entre par « Add to scenario » sur une option de l'analyste, aucun outil de la barre ne la pose à la main. Une réponse de la bibliothèque ou un transfert se déplace d'un jour à l'autre ; une réponse que le moteur écrit lui-même vaut pour tout le run |
 | Frise | En bas | Le jour affiché, le couloir Context (les événements validés, placés d'après la date du jour 0 ; ce ne sont pas des tampons, le moteur ne les reçoit pas), les couloirs de tampons, la courbe d'occupation |
 
 Ce que fait un run, et comment se lisent ses résultats : [algorithms.md](algorithms.md), sections A4 à A7.

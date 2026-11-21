@@ -20,7 +20,12 @@
  *   to the scenario until one of them is pressed.
  *
  * Options are shown in the order they were tested. Nothing ranks them: no card
- * is marked as the best one.
+ * is marked as the best one. One thing is said, because it holds whatever a
+ * person thinks a patient-day of waiting is worth: an option is marked as
+ * dominated when another costs no more and leaves no more waiting, by their
+ * own runs. That is the marking of the replay of the units page
+ * (`command/options.ts`), and it is made only between options whose whole cost
+ * the engine counted. What a run cost sits on its card.
  *
  * A card is read at a glance and explained on a click: what the option does and
  * why, what its run rests on, and what the test does not say are folded under
@@ -45,7 +50,7 @@ import {
 } from "../../analyst-api";
 import { Elapsed, LABEL, OptionChanges, STRUCK, Text, Trace } from "./analyst-parts";
 import KeepPrepared from "./KeepPrepared";
-import { BasisList, EvidenceMeter, Figures, Fold, Outcome, waitingScale } from "./option-cards";
+import { BasisList, CostLine, EvidenceMeter, Figures, Fold, Outcome, placesResponse, waitingScale, weighOptions } from "./option-cards";
 import { takesOut } from "./option-write";
 
 const LETTERS = ["A", "B", "C"];
@@ -263,6 +268,10 @@ export default function OptionsTab({
   const showStranded = proposal?.asItIs?.strandedWaitingDays != null;
   // One scale for every bar, so the cards can be compared with each other.
   const scale = proposal ? waitingScale([...(proposal.asItIs ? [proposal.asItIs] : []), ...proposal.options.map((o) => o.figures)]) : 1;
+  // Dominated options, by the runs: the one comparison of cost and effect that needs no exchange rate.
+  const weighing = proposal?.asItIs ? weighOptions(proposal.asItIs, proposal.options) : { dominated: new Map<string, string>(), weighed: 0 };
+  // Once any run on screen has a counted cost, every card says its own, or why it has none.
+  const anyCost = Boolean(proposal && (proposal.asItIsCost?.counted != null || proposal.options.some((o) => o.cost?.counted != null)));
 
   function cite(id: string) {
     setTraceOpen(true);
@@ -394,6 +403,7 @@ export default function OptionsTab({
                       <span className="ml-auto"><Outcome figures={proposal.asItIs} /></span>
                     </div>
                     <Figures figures={proposal.asItIs} scale={scale} stranded={showStranded} />
+                    {proposal.asItIsCost && proposal.asItIsCost.counted !== null ? <CostLine cost={proposal.asItIsCost} /> : null}
                   </section>
                 </div>
               ) : null}
@@ -404,6 +414,7 @@ export default function OptionsTab({
                 // "Add" would be the wrong word for an option that takes a choice out.
                 const edits = takesOut(o);
                 const unsaid = o.notTested.length + o.notes.length;
+                const beatenBy = weighing.dominated.get(o.step);
                 return (
                   <section key={o.step} aria-label={`Option ${LETTERS[i]}: ${o.label}`} className="flex flex-col border border-line bg-canvas-raised">
                     <div className="flex flex-col gap-2.5 p-3">
@@ -413,6 +424,16 @@ export default function OptionsTab({
                         <span className="ml-auto"><Outcome figures={o.figures} /></span>
                       </div>
                       <Figures figures={o.figures} against={proposal.asItIs} scale={scale} stranded={showStranded} />
+                      {o.cost && (anyCost || placesResponse(o)) ? <CostLine cost={o.cost} /> : null}
+                      {beatenBy !== undefined ? (
+                        <p role="note" className="flex items-start gap-1.5 bg-warn-soft px-2 py-1.5 text-[11.5px] text-warn-ink">
+                          <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                          <span>
+                            <span className="font-semibold">Dominated.</span> By these runs, “{beatenBy}” costs no more and leaves no more waiting.
+                            Whatever a patient-day of waiting is worth, this option is not the one to prefer on these two counts.
+                          </span>
+                        </p>
+                      ) : null}
                     </div>
 
                     <Fold
@@ -498,6 +519,9 @@ export default function OptionsTab({
                   changes applied: stamps added and, where its card says so, a choice of the scenario replaced or removed.
                   Every bar is drawn on the same scale, and the tick on it marks the scenario as it is. In the order
                   tested; nothing here ranks them.
+                  {weighing.weighed > 0
+                    ? ` An option is marked as dominated only when another costs no more and leaves no more waiting, which holds whatever a patient-day is worth. ${weighing.weighed} of ${proposal.options.length} option${proposal.options.length === 1 ? "" : "s"} here ${weighing.weighed === 1 ? "has" : "have"} a whole cost counted by the engine and can be weighed that way; capacity and measures carry no price.`
+                    : ""}
                 </p>
               ) : null}
 

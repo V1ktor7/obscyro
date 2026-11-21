@@ -8,6 +8,8 @@ import { islandSeries, occupancyGrid, sickSeries } from "./engine";
 import {
   describe as describeStamp,
   engineInput,
+  isChoice,
+  laneOf,
   measurePresets,
   shiftEffects,
   stampFromOverride,
@@ -256,5 +258,45 @@ describe("reading a run back", () => {
       5,
     );
     expect(s["pop:w"]).toEqual([0, 0, 0, 10, 0]);
+  });
+});
+
+describe("a recorded response as a stamp", () => {
+  const ctx = { ...twinContext(EXPORT) };
+  const rule = { id: "send", trigger: { when: "every_tick", start: 0, end: null }, action: { kind: "transfer", source: "f:west", target: "f:east", amount: 4 } };
+  const stored = stamp({ id: "r1", kind: "response", name: "Send West's queue to East", source: "stored", ref: "lib-1", rules: [rule], start: 12, days: 48 });
+  const builtIn = stamp({ id: "r2", kind: "response", name: "Transfer when full", source: "built-in", ref: "load-balance", rules: [], start: 0, days: 60 });
+
+  it("is a choice of the planner, shown with the measures, and says where its rules come from", () => {
+    expect([isChoice(stored), laneOf(stored)]).toEqual([true, "Measures"]);
+    expect(describeStamp(stored, ctx)).toMatchObject({ title: "Response: Send West's queue to East", when: "from day 12", tier: "Decision" });
+    expect(describeStamp(stored, ctx).why).toMatch(/recorded in the organisation's library/);
+    expect(describeStamp(builtIn, ctx)).toMatchObject({ title: "Response: Transfer when full", when: "whole run" });
+    expect(describeStamp(builtIn, ctx).why).toMatch(/the engine writes itself from the network/);
+    const written = { ...stored, source: "written", ref: "" } as Stamp;
+    expect(describeStamp(written, ctx).why).toMatch(/written for an option the analyst tested/);
+  });
+
+  it("is followed by the full run only, with its rules made to start on its day", () => {
+    expect(engineInput([stored], ctx, "events", 60).response).toBeNull();
+    expect(engineInput([stored], ctx, "full", 60).response).toEqual({
+      id: "placed-response",
+      name: "Send West's queue to East",
+      rules: [{ ...rule, trigger: { when: "from_tick", start: 12, end: null } }],
+    });
+    expect(engineInput([builtIn], ctx, "full", 60).response).toEqual({ builtIn: "load-balance" });
+  });
+
+  it("says, never solves silently, what the engine cannot follow as placed", () => {
+    expect(engineInput([builtIn, stored], ctx, "full", 60).notes).toEqual([
+      'The engine follows one recorded response in a run: "Transfer when full" is run, "Send West\'s queue to East" is not.',
+    ]);
+    expect(engineInput([{ ...builtIn, start: 9 }], ctx, "full", 60).notes[0]).toMatch(/cannot wait for day 9: its rules apply from day 0/);
+  });
+
+  it("travels through an override whole, rules included", () => {
+    const o = stampToOverride(stored, "Response", "abc");
+    const back = stampFromOverride({ ...(o as unknown as ScenarioOverride), id: "ov-9", seq: 1, scenarioId: "x", targetId: null });
+    expect(back).toEqual({ ...stored, id: "ov-9" });
   });
 });

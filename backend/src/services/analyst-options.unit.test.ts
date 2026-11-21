@@ -10,6 +10,8 @@ import {
   MAX_OPTIONS,
   OPTION_TOOLS,
   benchFor,
+  costOf,
+  figuresOf,
   optionsClosing,
   testOption,
   type OptionsFinding,
@@ -17,10 +19,12 @@ import {
   type TestedOption,
 } from "./analyst-options.js";
 import { Recorded, ToolError, summariseVariant, type AnalystContext, type RunDigest } from "./analyst-tools.js";
+import { declaresCost, listedResponses, transferRule, type StoredResponse } from "./analyst-responses.js";
 import { Ledger, STRUCK } from "./analyst-verify.js";
 import { decisionFromExchange } from "./decisions.js";
 import type { ScenarioOverride } from "./scenario-overrides.js";
 import type { ScenarioEngine } from "./scenario-run.js";
+import { stampsOf } from "./scenario-stamps.js";
 import { replayEngine, type RecordedCall } from "./scenario-run-recording.js";
 import type { SimExport } from "./twin-export.js";
 
@@ -49,6 +53,12 @@ const fixture = JSON.parse(readFileSync(new URL("./scenario-run-parity.fixture.j
   asItIs: Recording;
   withOption: Recording & { added: ScenarioOverride[] };
   withReplacement: Recording & { retired: string[]; added: ScenarioOverride[] };
+  /** A response of the organisation's library, placed on day 12: a transfer, at a declared cost. */
+  withResponse: Recording & { added: ScenarioOverride[]; cost: number };
+  /** A response the engine writes itself. */
+  withBuiltIn: Recording & { added: ScenarioOverride[]; cost: number };
+  /** The transfer the analyst's own test writes. */
+  withTransfer: Recording & { added: ScenarioOverride[]; cost: number };
 };
 
 /** The id the recording gave the option's effect, once its stamp was an override. */
@@ -704,4 +714,292 @@ test("a replacement travels whole: from the test to the options, and from there 
   assert.deepEqual(draft.expected.changes, o.changes);
   assert.deepEqual(draft.expected.retires!.map((r) => [r.id, r.text, r.replacedBy]), [[NORD, "+5 lit at Nord from day 8", 0]]);
   assert.ok(draft.expected.basis.some((b) => b.element === "Takes out of the scenario: +5 lit at Nord from day 8"));
+});
+
+// --- recorded responses: the other way of asking "what if" -------------------
+
+/** Every run of the recording, so a test can take any of its options. */
+function everything(): ScenarioEngine & { compares: number } {
+  const replay = replayEngine([
+    ...fixture.asItIs.calls,
+    ...fixture.withOption.calls,
+    ...fixture.withResponse.calls,
+    ...fixture.withBuiltIn.calls,
+    ...fixture.withTransfer.calls,
+  ]);
+  const engine = {
+    compares: 0,
+    spread: (p: Parameters<ScenarioEngine["spread"]>[0]) => replay.spread(p),
+    compare: (p: Parameters<ScenarioEngine["compare"]>[0]) => {
+      engine.compares += 1;
+      return replay.compare(p);
+    },
+  };
+  return engine;
+}
+
+/** A stamp as an option records it: what it is, without the row that holds it. */
+function kept(o: ScenarioOverride) {
+  const { key: _key, value } = o.payload as { key: string; value: Record<string, unknown> };
+  return { body: value, start: o.effectiveOffsetHours / 24, days: o.durationHours! / 24 };
+}
+
+const STORED = (fixture.withResponse.added[0]!.payload as { value: { name: string; ref: string; rules: Record<string, unknown>[] } }).value;
+/** The organisation's library, as the Events page wrote it. */
+const LIBRARY: StoredResponse[] = [{ id: STORED.ref, name: STORED.name, description: "Send the patients waiting at Lakeshore to Nord when Nord has a bed.", rules: STORED.rules }];
+
+function withLibrary(overrides = fixture.asItIs.overrides, engine: ScenarioEngine = everything()): AnalystContext {
+  const ctx = context(engine, overrides);
+  ctx.responses = async () => LIBRARY;
+  return ctx;
+}
+
+const TRANSFER = { label: "Send Lakeshore's waiting patients to Nord", changes: [{ kind: "transfer", from: "Lakeshore", to: "Nord", patients_per_day: 4, from_day: 12 }] };
+
+test("the analyst tests a transfer of patients between two sites, and the table has the engine's figures", async () => {
+  const engine = everything();
+  const out = (await run(withLibrary(undefined, engine), TRANSFER)) as Recorded;
+  const result = out.result as Record<string, any>;
+
+  // The two columns of the table, read from the run as any other option's.
+  assert.deepEqual(result.scenario_as_it_is, summariseVariant(fixture.asItIs.digest.full));
+  assert.deepEqual(result.with_this_option, {
+    ...summariseVariant(fixture.withTransfer.digest.full),
+    // Nobody priced a transfer, and the result says so in place of a figure.
+    cost: "No cost is counted for this run: the rules of “Transfer from Lakeshore to Nord” declare none. That is unpriced, not free.",
+  });
+  assert.equal(result.scenario_as_it_is.patient_days_waiting, 76);
+  assert.equal(result.with_this_option.patient_days_waiting, 11);
+  assert.deepEqual(result.changes, [
+    {
+      does: "adds",
+      what: "recorded response",
+      name: "Transfer from Lakeshore to Nord",
+      from: "written for this option",
+      from_day: 12,
+      its_rules: [{ does: "sends waiting patients from one site to another, along a transfer route", rules: 1, routes: ["Lakeshore to Nord"], patients_per_step_at_most: [4] }],
+    },
+  ]);
+  // The transfer is in the run now, and the note that said nobody is transferred says when somebody is.
+  assert.match(result.how_to_read, /nobody is transferred between sites unless a recorded response in the run does it/);
+
+  // What it rests on: the route is the twin's, what it carries is the run's own assumption.
+  const rests = result.rests_on as { element: string; evidence: string }[];
+  assert.deepEqual(
+    rests.filter((b) => /route/.test(b.element)).map((b) => [b.element, b.evidence]),
+    [
+      ["The twin holds a transfer route from Lakeshore to Nord", "measured"],
+      ["A route carries at most 20 patients a day: the twin holds no flow for its routes, so the run gives each the same", "assumption"],
+    ],
+  );
+
+  // What "Add to scenario" will write is the stamp the recording ran: the page's Run then gives these figures.
+  const record = out.record as TestedOption;
+  assert.deepEqual(JSON.parse(JSON.stringify(record.stamps)), [kept(fixture.withTransfer.added[0]!)]);
+  assert.deepEqual(record.changes, [{ does: "adds", now: "recorded response Transfer from Lakeshore to Nord, from day 12", was: null }]);
+  assert.deepEqual(record.withOption, figuresOf(fixture.withTransfer.digest.full));
+  assert.deepEqual([record.cost.counted, record.cost.complete], [null, false]);
+  // The same run as a stamp's: the scenario as it is, and one pass with the option.
+  assert.equal(engine.compares, 2);
+});
+
+test("a response of the organisation's library is tested by the same run, from the day asked, and its cost is the engine's count", async () => {
+  const out = (await run(withLibrary(), { label: "Send Lakeshore's queue to Nord from day 12", changes: [{ kind: "response", response: "response-a", from_day: 12 }] })) as Recorded;
+  const result = out.result as Record<string, any>;
+  const says = "The engine counted 7,500 $ for “Send Lakeshore's queue to Nord”: each of its actions at the cost its rule declares, each time it fired.";
+
+  assert.deepEqual(result.with_this_option, { ...summariseVariant(fixture.withResponse.digest.full), cost_counted_by_the_engine: 7500, cost_how_to_read: says });
+  assert.equal(result.changes[0].from, "the organisation's library");
+  const record = out.record as TestedOption;
+  assert.deepEqual(JSON.parse(JSON.stringify(record.stamps)), [kept(fixture.withResponse.added[0]!)]);
+  // Made of a priced response and nothing else: its cost is whole, and can be set against another's.
+  assert.deepEqual(record.cost, { counted: 7500, complete: true, says });
+  assert.deepEqual([record.asItIsCost.counted, record.asItIsCost.complete], [null, false]);
+
+  // By its name too, and with beds beside it the count is no longer the option's whole cost.
+  const both = (await run(withLibrary(undefined, { ...blank, compare: async () => ({ datasets: [] }) }), {
+    label: "The transfer, and 6 beds at Lakeshore",
+    changes: [
+      { kind: "response", response: "Send Lakeshore's queue to Nord", from_day: 12 },
+      { kind: "capacity", site: "Lakeshore", units: 6, from_day: 5 },
+    ],
+  })) as Recorded;
+  const cost = (both.record as TestedOption).cost;
+  assert.deepEqual([cost.counted, cost.complete], [0, false]);
+  assert.match(cost.says, /carry no price, so this is not the whole cost of the option\.$/);
+});
+
+test("a response the engine writes itself is tested by its name, for the whole run", async () => {
+  const out = (await run(withLibrary(), { label: "Transfer when full", changes: [{ kind: "response", response: "transfer-when-full" }] })) as Recorded;
+  const result = out.result as Record<string, any>;
+  assert.deepEqual(result.changes, [{ does: "adds", what: "recorded response", name: "Transfer when full", from: "the engine", applies: "whole run" }]);
+  // Its rules never fired on this network: the scenario's own figures, and a count of nothing spent.
+  assert.equal(result.with_this_option.patient_days_waiting, result.scenario_as_it_is.patient_days_waiting);
+  assert.equal(result.with_this_option.cost_counted_by_the_engine, 0);
+  assert.deepEqual(JSON.parse(JSON.stringify((out.record as TestedOption).stamps)), [kept(fixture.withBuiltIn.added[0]!)]);
+
+  await assert.rejects(run(withLibrary(), { label: "Later", changes: [{ kind: "response", response: "transfer-when-full", from_day: 9 }] }), (err: unknown) => {
+    assert.ok(err instanceof ToolError);
+    assert.match(err.message, /written by the engine from the network and applies for the whole run: it cannot start on day 9/);
+    return true;
+  });
+});
+
+test("a transfer or a response that cannot be run is refused before the engine, and the refusal says what can be asked", async () => {
+  const engine = everything();
+  const refused = async (changes: unknown[], says: RegExp) => {
+    await assert.rejects(run(withLibrary(undefined, engine), { label: "An option", changes }), (err: unknown) => {
+      assert.ok(err instanceof ToolError, String(err));
+      assert.match(err.message, says);
+      return true;
+    });
+  };
+  // No road: the twin holds none from Lakeshore to Est, and says where Lakeshore's patients can go.
+  await refused(
+    [{ kind: "transfer", from: "Lakeshore", to: "Est", patients_per_day: 4, from_day: 12 }],
+    /The twin holds no transfer route from Lakeshore to Est, so a run cannot send anyone that way\. From Lakeshore, waiting patients can be sent to: Nord\./,
+  );
+  await refused([{ kind: "transfer", from: "Clinique Pointe", to: "Est", patients_per_day: 2, from_day: 3 }], /It holds no route out of Clinique Pointe at all\./);
+  await refused([{ kind: "transfer", from: "Nord", to: "Nord", patients_per_day: 2, from_day: 3 }], /both ends are Nord/);
+  // More than a road carries in this run.
+  await refused([{ kind: "transfer", from: "Lakeshore", to: "Nord", patients_per_day: 40, from_day: 12 }], /A route carries at most 20 patients a day in a run/);
+  await refused([{ kind: "transfer", from: "Lakeshore", to: "Nord", patients_per_day: 4, from_day: 30 }], /after the last day of the run/);
+  // One response to a run.
+  await refused(
+    [
+      { kind: "response", response: "response-a" },
+      { kind: "transfer", from: "Lakeshore", to: "Nord", patients_per_day: 4, from_day: 12 },
+    ],
+    /A run follows one recorded response, so an option holds one/,
+  );
+  await refused([{ kind: "response", response: "evacuate-everything" }], /No recorded response is called "evacuate-everything"\. The ones that can be tested are: response-a \(Send Lakeshore's queue to Nord\); transfer-when-full \(Transfer when full\); surge-then-transfer/);
+  assert.equal(engine.compares, 0);
+});
+
+test("a scenario that already follows a response: an option takes it out to test another in its place", async () => {
+  // The scenario of the person who added the library's transfer: it is a choice, and has a name to be called by.
+  const overrides = fixture.withResponse.overrides;
+  await assert.rejects(run(withLibrary(overrides), { label: "Transfer when full", changes: [{ kind: "response", response: "transfer-when-full" }] }), (err: unknown) => {
+    assert.ok(err instanceof ToolError);
+    assert.match(err.message, /The scenario already follows a recorded response \(choice-c: recorded response Send Lakeshore's queue to Nord, from day 12\), and a run follows one at a time\./);
+    return true;
+  });
+
+  const out = (await run(withLibrary(overrides), {
+    label: "The engine's transfer instead of ours",
+    changes: [
+      { kind: "remove", ref: "choice-c" },
+      { kind: "response", response: "transfer-when-full" },
+    ],
+  })) as Recorded;
+  const result = out.result as Record<string, any>;
+  // The scenario as it is follows the library's transfer, and its column says what that cost.
+  assert.equal(result.scenario_as_it_is.patient_days_waiting, 11);
+  assert.equal(result.scenario_as_it_is.cost_counted_by_the_engine, 7500);
+  assert.deepEqual(result.with_this_option, {
+    ...summariseVariant(fixture.withBuiltIn.digest.full),
+    cost_counted_by_the_engine: 0,
+    cost_how_to_read: "The engine counted 0 $ for “Transfer when full”: each of its actions at the cost its rule declares, each time it fired.",
+  });
+  assert.deepEqual(result.changes.map((c: any) => [c.does, c.name]), [
+    ["removes", "Send Lakeshore's queue to Nord"],
+    ["adds", "Transfer when full"],
+  ]);
+  const record = out.record as TestedOption;
+  assert.deepEqual(record.retires.map((r) => [r.text, r.replacedBy]), [["recorded response Send Lakeshore's queue to Nord, from day 12", null]]);
+  assert.deepEqual(record.cost.complete, true);
+});
+
+test("the analyst reads what can be tested: the library, the engine's own responses, and where a site's patients can be sent", async () => {
+  const tool = OPTION_TOOLS.find((t) => t.name === "list_responses")!;
+  const out = (await tool.run(withLibrary(), tool.parse.parse({ routes_from: "Lakeshore" }))) as Record<string, any>;
+
+  assert.deepEqual(
+    out.recorded_responses.map((r: any) => [r.ref, r.name, r.from, r.declares_a_cost, r.can_start_on_a_day]),
+    [
+      ["response-a", "Send Lakeshore's queue to Nord", "the organisation's library", true, true],
+      ["transfer-when-full", "Transfer when full", "the engine", true, false],
+      ["surge-then-transfer", "Surge what is short, then transfer", "the engine", true, false],
+    ],
+  );
+  assert.deepEqual(out.recorded_responses[0].what_its_rules_do, [
+    { does: "sends waiting patients from one site to another, along a transfer route", rules: 1, routes: ["Lakeshore to Nord"], patients_per_step_at_most: [4] },
+  ]);
+  // The engine's own transfer watches the first space activity by name, here stretchers, not the beds the run reads: it is said.
+  assert.match(out.recorded_responses[1].what_it_does, /nearly full on civiere .* a free unit of civiere/);
+  assert.equal(out.transfer_routes_in_the_twin, 4);
+  assert.deepEqual(out.routes_from, { site: "Lakeshore", site_id: "site:lake", units_of_lit: 20, can_send_to: [{ site: "Nord", site_id: "site:north", units_of_lit: 40 }] });
+  assert.match(out.how_to_read, /A response that declares no cost is not free/);
+
+  // No ref is a row's id: a model copies letters, and the checker of figures finds no digits to look for.
+  const refs = listedResponses(LIBRARY, fixture.twin).map((r) => r.ref);
+  assert.ok(refs.every((r) => /^[a-z-]+$/.test(r)));
+  // A transfer written for an option prices nothing.
+  assert.equal(declaresCost([transferRule({ id: "t", source: "a", target: "b", activity: "lit", acuity: null, perDay: 2, fromDay: 0 })]), false);
+  assert.equal(declaresCost(LIBRARY[0]!.rules), true);
+});
+
+test("a cost is whole only for an option made of a priced response and nothing else", () => {
+  const stamps = (os: ScenarioOverride[]) => stampsOf(os);
+  // Stamps alone: nothing is counted, and that is said rather than shown as zero.
+  assert.deepEqual(costOf(stamps(fixture.withOption.overrides), 1, 0), { counted: null, complete: false, says: "No cost is counted for this run: capacity and measures carry no price in the twin." });
+  // An unpriced response: not free.
+  const unpriced = costOf(stamps(fixture.withTransfer.overrides), 0, 0);
+  assert.deepEqual([unpriced.counted, unpriced.complete], [null, false]);
+  assert.match(unpriced.says, /unpriced, not free/);
+  // A priced one, alone and then with a bed beside it.
+  assert.deepEqual([costOf(stamps(fixture.withResponse.overrides), 0, 7500).complete, costOf(stamps(fixture.withResponse.overrides), 1, 7500).complete], [true, false]);
+  // A response the engine writes declares its costs: nothing spent is a count, not an absence.
+  assert.deepEqual([costOf(stamps(fixture.withBuiltIn.overrides), 0, 0).counted, costOf(stamps(fixture.withBuiltIn.overrides), 0, 0).complete], [0, true]);
+});
+
+test("a recorded response travels whole: the recipe names it, the options carry its cost, and a decision keeps both", async () => {
+  const { model, out } = await propose(
+    [
+      reply([use("scenario_recipe", {})]),
+      reply([use("list_responses", { routes_from: "Lakeshore" })]),
+      reply([use("test_option", { label: "Send Lakeshore's queue to Nord from day 12", changes: [{ kind: "response", response: "response-a", from_day: 12 }] })]),
+      reply([
+        give({
+          options: [{ step: "s3", mechanism: "Lakeshore's waiting patients are sent to Nord, which has free beds, so fewer of them wait.", not_tested: ["Whether Nord can staff the beds the transferred patients take."] }],
+          reading: [{ text: "With the transfer from day 12, patient-days waiting go from 76 to 11, and the engine counted 7,500 for it.", sources: ["s3"] }],
+          human_choices: [],
+          limits: ["The twin holds no staff."],
+        }),
+      ]),
+    ],
+    withLibrary(),
+  );
+  assert.equal(out.status, "answered");
+  // The figures of the sentence are the test's own, the cost included.
+  assert.equal(out.verified, true);
+  // The model was handed the library before it tested anything.
+  assert.match(sentBack(model, 2)[0]!.text, /"ref":"response-a","name":"Send Lakeshore's queue to Nord"/);
+
+  const p = out.answer!;
+  assert.deepEqual(p.asItIsCost, { counted: null, complete: false, says: "No cost is counted for this run: capacity and measures carry no price in the twin." });
+  const o = p.options[0]!;
+  assert.deepEqual([o.cost.counted, o.cost.complete], [7500, true]);
+  assert.deepEqual(o.changes, [{ does: "adds", now: "recorded response Send Lakeshore's queue to Nord, from day 12", was: null }]);
+
+  // A decision can bear on a recorded response: its rules, its figures and what it cost are copied from the journal.
+  const journalled = JSON.parse(JSON.stringify({ kind: "options", status: out.status, question: OBJECTIVE.objective, answer: out.answer, steps: out.steps }));
+  const draft = decisionFromExchange(journalled, "s3");
+  assert.deepEqual(draft.optionStamps, [kept(fixture.withResponse.added[0]!)]);
+  assert.deepEqual(draft.expected.cost, o.cost);
+  assert.equal(draft.expected.withOption.waitingDays, 11.2);
+  assert.ok(draft.expected.basis.some((b) => /^The recorded response Send Lakeshore's queue to Nord, from day 12: its rules fire/.test(b.element) && b.evidence === "assumption"));
+
+  // And the recipe of a scenario that holds one calls it by a name an option can remove it by.
+  const recipe = OPTION_TOOLS.find((t) => t.name === "scenario_recipe")!;
+  const read = (await recipe.run(withLibrary(fixture.withResponse.overrides), {})) as { choices: Record<string, unknown>[] };
+  assert.deepEqual(read.choices.at(-1), {
+    ref: "choice-c",
+    what: "recorded response",
+    name: "Send Lakeshore's queue to Nord",
+    from: "the organisation's library",
+    from_day: 12,
+    rules: 1,
+    kinds_of_action: ["transfer"],
+  });
 });

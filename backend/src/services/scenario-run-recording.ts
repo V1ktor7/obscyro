@@ -39,8 +39,10 @@ export interface RecordedSimulate {
     routeCapacity: number;
     censusAcuity: string | null;
     baselineOccupancy: Record<string, number>;
-    /** The responses run: the do-nothing one alone, so only the stamps differ between runs. */
+    /** The response run, by name: the do-nothing one, or one the engine writes itself. Empty when rules are sent. */
     policies: string[];
+    /** A recorded response the scenario holds, as its rules were sent. Absent when the run follows none. */
+    customPolicies?: { id: string; name: string; rules: Record<string, unknown>[] }[];
     /** The tables asked back. */
     collect: string[];
   };
@@ -72,6 +74,8 @@ export function simulateRequestOf(p: ComparePayload): RecordedSimulate["request"
     censusAcuity: p.census_acuity,
     baselineOccupancy: p.baseline_occupancy,
     policies: p.policies,
+    // Only when there is one: a run that follows none is recorded as it always was.
+    ...(p.custom_policies.length ? { customPolicies: p.custom_policies } : {}),
     collect: p.collect,
   };
 }

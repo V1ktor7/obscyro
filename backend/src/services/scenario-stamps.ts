@@ -167,7 +167,21 @@ export type StampBody =
   /** Share of every catchment that cannot catch it when the run starts. */
   | { kind: "immunity"; share: number }
   /** Every contact layer scaled for the whole run. */
-  | { kind: "variant"; factor: number };
+  | { kind: "variant"; factor: number }
+  /**
+   * A recorded response the run follows: rules the engine evaluates at every
+   * step, where every other stamp is something that simply happens. `stored`
+   * is one the organisation wrote in its library; its rules travel here as
+   * they were when it was placed, so the scenario does not change under a
+   * person because somebody edited the library. `built-in` is one the engine
+   * writes itself from the network, named by `ref`; it carries no rules.
+   * `written` is one the analyst's test wrote from what it was asked (a
+   * transfer between two sites): rules, and no library entry behind them.
+   */
+  | { kind: "response"; name: string; source: "stored" | "built-in" | "written"; ref: string; rules: ResponseRule[] };
+
+/** A rule of a recorded response, as the engine reads it. Nothing on this side knows what one means. */
+export type ResponseRule = Record<string, unknown>;
 
 export type Stamp = StampBody & {
   /** The override's id once saved; a temporary id before. */
@@ -180,7 +194,7 @@ export type Stamp = StampBody & {
 
 /** What the planner decided, as opposed to what happens to the city. */
 export function isChoice(s: Pick<Stamp, "kind">): boolean {
-  return s.kind === "measure" || s.kind === "capacity";
+  return s.kind === "measure" || s.kind === "capacity" || s.kind === "response";
 }
 
 export const STAMP_PREFIX = "stamp:";
@@ -204,7 +218,7 @@ function letters(i: number): string {
   return s;
 }
 
-export type ChoiceStamp = Stamp & { kind: "measure" | "capacity" };
+export type ChoiceStamp = Stamp & { kind: "measure" | "capacity" | "response" };
 
 /**
  * What each choice of a scenario is called while one exchange lasts: the
@@ -257,14 +271,62 @@ export interface SpreadInput {
   horizon: number;
 }
 
+/** The id the engine reports a placed response's rows under. A run follows one response, so one id is enough. */
+export const PLACED_RESPONSE = "placed-response";
+
+/** The response a run follows: one the engine writes itself, by name, or rules sent whole. */
+export type EngineResponse = { builtIn: string } | { id: string; name: string; rules: ResponseRule[] };
+
 export interface EngineInput {
   spread: SpreadInput | null;
   /** Effects that do not come from the spreading model. */
   effects: SimEffect[];
   /** Usual occupancy by activity, as a share: where the network starts, in both runs. */
   occupancy: Record<string, number>;
+  /**
+   * The recorded response this run follows; null when nobody responds. A
+   * response is a choice, so the events-only run never has one.
+   */
+  response: EngineResponse | null;
   /** Said on screen, never solved silently. */
   notes: string[];
+}
+
+/**
+ * The same rules, made to start on the day the response is placed.
+ *
+ * A stored response carries its own timing, written before anyone knew which
+ * day would matter. A rule that already starts later keeps its own start: its
+ * author said "not before", and placing the response earlier does not
+ * contradict that. A window that would now end before it starts is kept open,
+ * the reading closest to what was written.
+ *
+ * The page does the same with `rulesFromStep` of `command/branch.ts`, the
+ * function the replay of the units page branches with; the parity recording
+ * holds the two together.
+ */
+export function rulesFromStep(rules: readonly ResponseRule[], fromStep: number): ResponseRule[] {
+  return rules.map((rule) => {
+    const t = (rule.trigger ?? {}) as { when?: string; start?: number; end?: number | null };
+    const start = Math.max(fromStep, Number(t.start ?? 0));
+    const end = t.end === null || t.end === undefined ? null : Number(t.end);
+    const keptEnd = end !== null && end < start ? null : end;
+    return {
+      ...rule,
+      trigger: {
+        ...t,
+        when: t.when === "between" && keptEnd !== null ? "between" : "from_tick",
+        start,
+        end: t.when === "between" && keptEnd !== null ? keptEnd : null,
+      },
+    };
+  });
+}
+
+/** Whether a response adds or moves units during the run: what the page cannot then count day by day. */
+function changesCapacity(s: Stamp & { kind: "response" }): boolean {
+  if (s.source === "built-in") return s.ref === "surge-and-balance";
+  return s.rules.some((r) => ["surge_resource", "reallocate"].includes(String((r.action as { kind?: unknown } | undefined)?.kind)));
 }
 
 /**
@@ -384,7 +446,27 @@ export function engineInput(
       });
     }
   }
-  return { spread, effects, occupancy, notes };
+
+  // A recorded response is the planner's choice, like a measure: only the full run follows one.
+  let response: EngineResponse | null = null;
+  const placed = stamps.filter((s): s is Stamp & { kind: "response" } => s.kind === "response");
+  if (variant === "full" && placed.length > 0) {
+    const first = placed[0]!;
+    const rest = placed.slice(1).map((s) => `"${s.name}"`);
+    if (rest.length) notes.push(`The engine follows one recorded response in a run: "${first.name}" is run, ${rest.join(", ")} ${rest.length > 1 ? "are" : "is"} not.`);
+    if (first.source === "built-in") {
+      if (first.start > 0)
+        notes.push(`"${first.name}" is written by the engine from the network, so it cannot wait for day ${first.start}: its rules apply from day 0.`);
+      response = { builtIn: first.ref };
+    } else {
+      response = { id: PLACED_RESPONSE, name: first.name, rules: rulesFromStep(first.rules, first.start) };
+    }
+    if (changesCapacity(first))
+      notes.push(
+        `"${first.name}" adds or moves units during the run. The engine does not report the units a site holds each day, so occupancy across all sites is weighted by the usual capacity.`,
+      );
+  }
+  return { spread, effects, occupancy, response, notes };
 }
 
 /** Moves a spread run's effects to the day it actually started. */
@@ -428,6 +510,9 @@ const share = (x: number) => `${Math.round(x * 1000) / 10} %`;
  * without a sentence of the model's.
  */
 export function choiceLine(s: ChoiceStamp, ctx: Pick<TwinContext, "populations" | "facilities">): string {
+  if (s.kind === "response") {
+    return `recorded response ${s.name}, ${s.source === "built-in" ? "whole run" : `from day ${s.start}`}`;
+  }
   if (s.kind === "capacity") {
     const f = ctx.facilities.find((x) => x.id === s.facility)?.name ?? s.facility;
     return `${s.amount > 0 ? "+" : ""}${s.amount} ${s.activity} at ${f} from day ${s.start}`;
@@ -478,5 +563,14 @@ export function basisOfStamp(
       return [{ element: `${share(s.share)} of every catchment already immune at the start`, evidence: "assumption", from }];
     case "variant":
       return [{ element: `Variant: contact passes it on ×${Math.round(s.factor * 100) / 100}`, evidence: "assumption", from }];
+    case "response":
+      // Rules somebody wrote: when each fires, how much it moves and how well it is obeyed are theirs.
+      return [
+        {
+          element: `The ${choiceLine(s, ctx)}: its rules fire when their conditions hold, with the delay, the effectiveness and the cost each declares`,
+          evidence: "assumption",
+          from,
+        },
+      ];
   }
 }

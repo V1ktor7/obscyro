@@ -12,11 +12,13 @@ import { streamLines } from "../lib/ndjson.js";
 import { ANALYST_MODEL, anthropicModel, ask, converse, type AskFocus, type LoopEvent, type LoopResult } from "../services/analyst.js";
 import { eventSearch, eventsClosing } from "../services/analyst-events.js";
 import { OPTION_TOOLS, benchFor, optionsClosing } from "../services/analyst-options.js";
+import type { StoredResponse } from "../services/analyst-responses.js";
 import { ToolError, runDigestSchema, type AnalystContext, type WorldName } from "../services/analyst-tools.js";
 import { serverRun, simServiceEngine } from "../services/scenario-run.js";
 import { Ledger } from "../services/analyst-verify.js";
 import { listDatasets, previewRows, type DatasetRow } from "../services/datasets.js";
 import { listHealthEvents, type HealthEvent } from "../services/health-events.js";
+import { listSimPolicies } from "../services/sim-policies.js";
 import { readLive, signalsById, type LiveReading } from "../services/live-reading.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
 import { resolveEnvironment, type EnvironmentRow } from "../services/ontology.js";
@@ -58,6 +60,7 @@ function contextFor(
   let datasets: Promise<DatasetRow[]> | null = null;
   let events: Promise<HealthEvent[]> | null = null;
   let live: Promise<LiveReading> | null = null;
+  let responses: Promise<StoredResponse[]> | null = null;
   const rows = new Map<string, Promise<Record<string, unknown>[]>>();
   return {
     environment: env.slug,
@@ -94,6 +97,11 @@ function contextFor(
     live() {
       live ??= readLive(db, env);
       return live;
+    },
+    responses() {
+      // The library of the Events page, as much of each response as a run needs.
+      responses ??= listSimPolicies(db, env.id).then((rows) => rows.map((r) => ({ id: r.id, name: r.name, description: r.description, rules: r.rules })));
+      return responses;
     },
   };
 }
@@ -318,6 +326,11 @@ const analystRoutes: FastifyPluginAsync = async (fastify) => {
           "or capacity, never a starting condition or an event): each option carries `changes`, what it adds, " +
           "replaces and removes in the program's own words, and `retires`, the stamps of the scenario it takes out, " +
           "by id. That is what the page deletes when the person applies the option; `stamps` is what it writes. " +
+          "An option may also contain a recorded response (one of the organisation's library, or one the engine " +
+          "writes itself) or transfers of waiting patients between two sites the twin links by a route: rules the " +
+          "engine evaluates at every step, written as a `response` stamp and tested by the same run. Each option " +
+          "then carries `cost`: what the engine counted (the cost each rule declares, each time it fired), whether " +
+          "that is the whole cost of the option, and a sentence saying so; capacity and measures carry no price. " +
           "The figures of the comparison come from the runs, never from the model's text, and the model's " +
           "text is checked against the steps like any answer. Nothing is written: the scenario is unchanged until " +
           "the person adds an option themselves. A run is the result of a model under stated conditions, not a forecast.",

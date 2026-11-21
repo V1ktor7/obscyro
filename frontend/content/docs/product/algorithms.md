@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "e1db55ee80bc24f2"
+translatedFrom: "53ebd84577cf976d"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -184,7 +184,7 @@ flowchart TD
 flowchart TD
     S["The scenario's stamps"] --> C["Starting conditions: usual occupancy,<br/>prior immunity, transmissibility"]
     S --> E["Events: outbreaks, heat wave"]
-    S --> K["Choices: measures, added capacity"]
+    S --> K["Choices: measures, added capacity,<br/>recorded response"]
     C --> V1["Pass 1: events only"]
     E --> V1
     C --> V2["Pass 2: with the choices"]
@@ -199,7 +199,7 @@ flowchart TD
     EV --> W{"Who launches the run?"}
     W -->|"the page, Run button"| EP["Event stored under a fixed name,<br/>through three routes of the API"]
     W -->|"the server: a tested option,<br/>the retest of a prepared response,<br/>or POST /analyst/run"| ES["Event sent to the engine, nothing is stored"]
-    EP --> RUN["Simulation of the network, with no response,<br/>through the scenario"]
+    EP --> RUN["Simulation of the network through the scenario:<br/>with no response, or following the recorded response<br/>the pass holds"]
     ES --> RUN
     RUN --> G["Per day and per site: occupancy, queue,<br/>capacity. Per day: arrivals, unserved"]
     G --> D["Digest of the run: both passes, the sites where people wait"]
@@ -216,8 +216,13 @@ flowchart TD
 - On the page, the two stored events are rewritten at each run under a fixed name. On the server, nothing is stored: a tested option is not an event of the library, and the analyst writes nothing.
 - The island's occupancy is weighted by the capacity of each site, added capacity included from the day it opens.
 - Both sides read the twin the same way: the context (sites, territories, declared model) comes from the twin as it is, and the engine receives the twin read through the scenario.
+- **A recorded response is a stamp like the others** (`response`). Every other stamp is something that happens on a given day; this one carries rules the engine evaluates at every step (B4). It is a choice: only the pass “with the choices” follows it, in place of the “do nothing” response; the “events only” pass never responds. Three origins: the organisation's library (Events page), whose rules travel in the stamp as they were when it was placed; a response the engine writes itself from the network, which goes by its name; and a transfer written by the test of an option of the analyst (A8).
+- **The day of a response.** The rules of a response placed on day 12 do not apply before day 12: each rule is shifted, and a rule its author already made start later keeps its own day (`rulesFromStep`, the function the replay of the units page branches with). A response the engine writes itself holds for the whole run: the engine writes its rules, and they cannot be shifted.
+- **One response per run.** The engine follows one at a time. If the recipe holds two, the first by day is followed, and the Result panel names the one that is not.
+- **What a response cost.** The server reads from the table of steps what the engine counted: the cost each rule declares for its action, each time the action fired (`PassDigest.cost`). Zero when the pass follows no response, or one none of whose rules declares a cost; what that zero means is settled in A8.
+- **A limit that is said.** A response that adds or moves units during the run changes the capacity of the sites, and the engine does not return the capacity of each day. The island's occupancy is then weighted by the usual capacity, and the run says so in its notes.
 
-**The same scenario gives the same figures on the page and on the server.** The translation of the stamps and the reading of the tables exist in two copies, one per side. What holds them together is a recording of the real engine, `backend/src/services/scenario-run-parity.fixture.json`: a small twin, a scenario, an option, what each run asks of the engine, what the engine answers, and the digest that comes out. The server's test and the page's test both replay it, each with its own code. Each must send the engine the recorded requests and find the recorded figures: changing one side alone makes the other fail.
+**The same scenario gives the same figures on the page and on the server.** The translation of the stamps and the reading of the tables exist in two copies, one per side. What holds them together is a recording of the real engine, `backend/src/services/scenario-run-parity.fixture.json`: a small twin, a scenario, options, what each run asks of the engine (the effects, and the response followed when there is one), what the engine answers, and the digest that comes out. The server's test and the page's test both replay it, each with its own code. Each must send the engine the recorded requests and find the recorded figures: changing one side alone makes the other fail.
 
 ```mermaid
 flowchart LR
@@ -230,13 +235,13 @@ flowchart LR
     Q -->|"no on one side"| KO["That side changed alone: its test fails"]
 ```
 
-The recording holds three runs: the scenario as it is, the scenario with the stamps of an option, and the scenario where an option replaced a choice (the old stamp removed, the new one written). The last two are what guarantees that applying a tested option to the scenario and then launching Run gives the figures of the test again. It is regenerated by hand when the engine or the translation changes (`cd backend && npx tsx scripts/make-scenario-run-fixture.ts`, with Python and the dependencies of the simulation service), then both suites are run again.
+The recording holds six runs: the scenario as it is; the scenario with the stamps of an option; the scenario where an option replaced a choice (the old stamp removed, the new one written); and three runs with a recorded response: a response of the library (a transfer of patients, placed on a given day, at a declared cost), a response the engine writes itself, and the transfer as the analyst's test writes it. All but the first are what guarantees that applying a tested option to the scenario and then launching Run gives the figures of the test again, a recorded response included. It is regenerated by hand when the engine or the translation changes (`cd backend && npx tsx scripts/make-scenario-run-fixture.ts`, with Python and the dependencies of the simulation service), then both suites are run again.
 
 On the server, the run exists in two forms. `ScenarioRunner.digest` does both passes, like the page: it is the one the parity test replays, and the one `serverRun` calls for the route `POST /v1/ontology/:env/analyst/run`. That route returns the digest a person would have on screen after Run, so that a question about the run can be asked by a script, without a browser ([The analyst](/docs/product/analyst), the reference questions). It calls no model, writes nothing, and refuses an activity no site offers before calling on the engine. `ScenarioRunner.full` does only the “with the choices” pass: that is what a tested option reads (A8), because the options' table compares the scenario with its choices to the scenario with the option added, and the “events only” pass shows nothing there. The retest of a prepared response (A11) reads the same pass, for the same reason. Both forms go through the same digest of a pass (`passFigures`), so a column of the table cannot differ from what Run displays for the same pass; a test checks it on the recording.
 
 Testing several options does not redo everything: a spread is kept according to what was asked of it, so an option that only adds beds does not reintegrate the epidemic. Each call to the engine is timed (`timings`), so that the duration of a test is a measurement and not an impression.
 
-**Code.** Page: `frontend/app/studio/simulation/hex/engine.ts` (`runScenario`), `stamps.ts` (`engineInput`), `run-digest.ts`. Server: `backend/src/services/scenario-run.ts` (`ScenarioRunner`, `serverRun`), `scenario-stamps.ts` (`engineInput`, `twinContext`), `scenario-run-recording.ts`, route `POST /v1/ontology/:env/analyst/run` in `backend/src/routes/analyst.ts`. Recording: `backend/scripts/make-scenario-run-fixture.ts`, `simulation-service/scripts/engine_once.py`.
+**Code.** Page: `frontend/app/studio/simulation/hex/engine.ts` (`runScenario`), `stamps.ts` (`engineInput`), `run-digest.ts`, `frontend/app/studio/command/branch.ts` (`rulesFromStep`). Server: `backend/src/services/scenario-run.ts` (`ScenarioRunner`, `serverRun`, `costByStep`), `scenario-stamps.ts` (`engineInput`, `rulesFromStep`, `twinContext`), `scenario-run-recording.ts`, route `POST /v1/ontology/:env/analyst/run` in `backend/src/routes/analyst.ts`. Recording: `backend/scripts/make-scenario-run-fixture.ts`, `simulation-service/scripts/engine_once.py`.
 **Tests.** `hex.test.ts`, `HexTwinView.test.tsx`, `run-parity.test.ts` (page); `scenario-run.unit.test.ts` (server).
 
 ## A5. Where it breaks
@@ -310,8 +315,10 @@ flowchart TD
 flowchart TD
     A["The person's objective,<br/>open scenario, the page's horizon and activity"] --> B["The analyst reads: run on screen, site, territories, recipe"]
     B --> B2["scenario_recipe: each choice of the scenario<br/>carries a name (choice-a, choice-b…)"]
-    B2 --> C["test_option: a label and 1 to 4 changes.<br/>Add a capacity or a measure,<br/>replace a named choice, or remove it"]
-    C --> D{"Testable?<br/>known site that offers the activity, declared layer,<br/>day within the run, not already tested, fewer than 3 tests"}
+    B --> B3["list_responses: the recorded responses<br/>(library, engine), each under a name,<br/>and where a site's patients can be sent"]
+    B2 --> C["test_option: a label and 1 to 4 changes.<br/>Add a capacity, a measure, a transfer<br/>or a recorded response;<br/>replace a named choice, or remove it"]
+    B3 --> C
+    C --> D{"Testable?<br/>known site that offers the activity, declared layer,<br/>transfer route in the twin, a single response,<br/>day within the run, not already tested, fewer than 3 tests"}
     D -->|"no"| E["Reasoned refusal, read by the model.<br/>Does not count as a test"]
     E --> B
     D -->|"yes"| D2{"Does the change name<br/>a choice of the scenario?"}
@@ -324,7 +331,7 @@ flowchart TD
     F --> H["One pass of the scenario, the removed stamps taken out,<br/>those of the option added (A4)"]
     G --> I["Result for the model: both runs in digest,<br/>the sites where people wait, what the option rests on"]
     H --> I
-    H --> J["Record for the screen: whole figures, stamps written,<br/>choices removed, what is added, replaced, removed,<br/>arrivals per day, levels of evidence"]
+    H --> J["Record for the screen: whole figures, stamps written,<br/>choices removed, what is added, replaced, removed,<br/>arrivals per day, levels of evidence,<br/>cost counted by the engine"]
     I --> K{"Another option to test?"}
     K -->|"yes"| C
     K -->|"no"| L["give_options: one mechanism per option,<br/>what the test does not say, reading, trade-offs, limits"]
@@ -334,6 +341,9 @@ flowchart TD
     M -->|"yes"| O["Number verifier on every sentence (A2)"]
     O --> P["Proposal: table drawn from the records,<br/>in the order of the tests, with no ranking"]
     J --> P
+    P --> P2{"Two options whose cost is whole,<br/>and one costs as much or more<br/>for as much or more waiting?"}
+    P2 -->|"yes"| P3["That one is marked Dominated,<br/>with the name of the option that dominates it"]
+    P2 -->|"no"| P4["No mark"]
     P --> Q{"Add to scenario / Apply to scenario:<br/>a human click. Does the option remove a choice?"}
     Q -->|"no"| Q1["The stamps are written"]
     Q -->|"yes"| Q2["The recipe is read again"]
@@ -348,20 +358,26 @@ flowchart TD
 - The passes follow one another; they do not run at the same time. The simulation service is a single process: measured locally, launching two passes together gains only 18 % over launching them one after the other, for twice the memory.
 - Each test keeps in its record what its duration was made of: reading the twin (on the first test only), then each call to the engine. That record goes to the journal, not to the model.
 - A capacity is tested at a site that already offers the activity; negative, it closes units, never more than the site has. A measure is tested on a contact layer the twin declares.
+- **A recorded response in an option.** The `response` change names a response by the name `list_responses` gives it: `response-a`, `response-b`… for those of the organisation's library, sorted by name; `transfer-when-full` and `surge-then-transfer` for the two the engine writes itself. As for a choice, never a UUID. A response of the library can start on a given day; a response of the engine holds for the whole run, and giving it a day is refused. It becomes a `response` stamp of the option, tested by the same run as the other stamps (A4).
+- **A transfer of patients.** The `transfer` change names two sites, a number of patients per day and a day. The program writes its rule (`transferRule`): when somebody waits at the first site for the activity the run reads, and the second has a free unit of it, up to that number of patients are sent there. The condition on the destination is not one precaution more: without it patients are sent to wait behind those of a full hospital. Several transfers of one option make a single response, one rule each. Refused, with what can be asked instead: two sites between which the twin holds no transfer route (the refusal lists where the patients of the first can go), a destination that does not offer the activity, more patients a day than a route carries.
+- **What a route carries.** The twin holds the flow of no route. So the run gives each the same: twenty patients a day (`ROUTE_CAPACITY`), on the page as on the server. It is an assumption of the engine, and it appears as such among what the option rests on; that the route exists is a measure of the twin.
+- **One response per run, hence per option.** An option holds either one `response` change or `transfer` changes. If the scenario already follows a response, the test is refused until the option removes it (`remove`, by its choice name): testing another in its place is then a single test.
+- **The cost is what the engine counted, and nothing else** (`costOf`). The engine counts one thing: the cost a rule of a response declares for its action, each time it fires. A capacity and a measure have no price in the twin, and a response none of whose rules declares a cost is unpriced, not free: the card writes that in place of a figure. The cost of an option is called **whole** only when it is made of a response with a declared price and of nothing else; with a capacity beside it, the count is shown and said to be incomplete. The transfer the program writes declares no cost: nobody gave one, and inventing one would put on screen a figure no tool returned.
+- **A dominated option is marked, from the runs.** Between two options whose cost is whole, the one that costs as much or more and leaves as much or more waiting (strictly worse on one of the two) carries “Dominated” and the name of the other. It is the only comparison of cost and effect that needs no exchange rate between a dollar and a patient-day: whatever value one gives them, that option is not the one to prefer on these two counts. The waiting counted includes that of the territories no site serves, so that a queue moved out of sight does not pass for a queue avoided. The marking is made by the function of the replay of the units page (`dominatedBy`, `frontend/app/studio/command/options.ts`): both screens make it the same way. An option with a capacity or a measure is neither dominated nor dominating: it would take a price nobody gave.
 - **Replacing or removing a choice.** A change can take the place of a choice the scenario already holds (`replaces`), or remove it (`remove`). “40 beds instead of 60” is then a single stamp at +40, and not a −20 stacked on a +60: the test runs on the scenario without the old stamp and with the new one, and that is what the recipe will hold. A replacement says only what differs (the units, the day, the duration); the rest is kept from the choice replaced.
 - **A choice is designated by a name, not by its identifier.** `scenario_recipe` gives each choice a name made of letters (`choice-a`, `choice-b`…), valid for the time of the exchange. A stamp's identifier is a UUID: thirty-six characters to copy without a mistake, and full of digits the verifier would then find “in a step”. The record of the test, for its part, keeps the stamp's identifier: that is what the page removes.
 - **Only a choice can be replaced.** A starting condition says where the run begins, an event says what happens: an option that removed one would test another scenario while calling it a response. Neither has a name, and designating them is refused, with the list of what can be. Also refused: replacing a capacity by a measure (one is removed and the other added, in the same option), naming the same choice twice, replacing a choice by itself.
 - **What is removed is said.** The record lists what the option adds, replaces and removes, in sentences written by the program from the stamps; the option's card shows them as they are, and “Takes out of the scenario: …” appears among what the option rests on, at the **assumption** level. A recorded decision keeps them.
 - A refusal by the engine (a scenario with no event, for example) is read by the model. An engine that cannot be reached is a failure: the exchange stops and says so, with no invented option.
-- The level of evidence of each item is assigned by the program, from where it comes from: **measured** for what the twin holds (units of a site, residents of a territory), **published** for the rate of a heat wave, **assumption** for the scenario's conditions, the choices, the option itself and the engine's routing rule. The model chooses none of them.
+- The level of evidence of each item is assigned by the program, from where it comes from: **measured** for what the twin holds (units of a site, residents of a territory), **published** for the rate of a heat wave, **assumption** for the scenario's conditions, the choices, the option itself (the rules of a response included: when they fire, their delay, their effectiveness, their cost are what their author wrote), the engine's routing rule and the flow of a route. The model chooses none of them.
 - The mechanism of an option is checked against the result of its own test; the reading, against the steps it cites; the rest, against everything that was read. A figure of the objective belongs to the person and can be repeated.
 - The mechanism and the reading get both checks of the verifier (A2), like the paragraphs of an answer: a figure nobody returned, and a figure that exists but is written beside the wrong site or the wrong territory.
-- The table follows the order of the tests. Nothing ranks the options: saying which ones reach the objective according to the runs is a reading, choosing between them belongs to the person. Trade-offs of values are presented apart, as such.
+- The table follows the order of the tests. Nothing ranks the options: saying which ones reach the objective according to the runs is a reading, choosing between them belongs to the person. Trade-offs of values are presented apart, as such. “Dominated” is not a ranking: the mark says nothing of two options neither of which dominates the other, and choosing between those stays with the person.
 - The analyst writes nothing. An option enters the scenario on the “Add to scenario” click, written like a stamp placed on the map; Run then gives the figures of the test again (A4). When the option removes a choice, the button reads “Apply to scenario”: the recipe is read again, and if a stamp to remove is no longer there (someone edited it since the test), nothing is written and the screen says so. Otherwise the new stamp is written then the old one removed, as the recipe does when a stamp is edited by hand: a stop half-way leaves one stamp too many, which can be seen, rather than one too few. The parity fixture covers a replacement: the figures of the test and those of Run after the click are the same. If the scenario is no longer the one that was tested, the screen says which of three cases it is: one option added from the tab (Run must give its column again, the other columns no longer describe this scenario), several options added together (no test covered them together), or an edit made elsewhere (every column is out of date).
 - A run is not a forecast: the table carries it in its title.
 
-**Code.** `backend/src/services/analyst-options.ts` (`testOption`, `choiceNamed`, `stampOf`, `benchFor`, `optionsClosing`), `scenario-stamps.ts` (`basisOfStamp`, `choiceRefs`, `choiceLine`), `scenario-run.ts` (`ScenarioRunner.withOption`), `analyst-tools.ts` (`scenario_recipe`), route `POST /v1/ontology/:env/analyst/options` in `backend/src/routes/analyst.ts`; `frontend/app/studio/simulation/hex/OptionsTab.tsx`, `analyst-parts.tsx` (`OptionChanges`), `option-write.ts` (`writeOption`), `addOption` in `HexTwinView.tsx`.
-**Tests.** `analyst-options.unit.test.ts`, `scenario-run.unit.test.ts` (parity, including the replacement), `analyst-tools.unit.test.ts`, `routes/analyst.unit.test.ts`, `OptionsTab.test.tsx`, `option-write.test.ts`, `run-parity.test.ts`, `DecisionsTab.test.tsx`, `HexTwinView.test.tsx`. The fixture `scenario-run-parity.fixture.json` is written by `backend/scripts/make-scenario-run-fixture.ts`.
+**Code.** `backend/src/services/analyst-options.ts` (`testOption`, `choiceNamed`, `stampOf`, `responseStamp`, `transfersStamp`, `costOf`, `benchFor`, `optionsClosing`), `analyst-responses.ts` (`listResponses`, `listedResponses`, `transferRule`, `transferRoutes`, `whatRulesDo`, `declaresCost`), `scenario-stamps.ts` (`basisOfStamp`, `choiceRefs`, `choiceLine`), `scenario-run.ts` (`ScenarioRunner.withOption`, `ROUTE_CAPACITY`), `analyst-tools.ts` (`scenario_recipe`), route `POST /v1/ontology/:env/analyst/options` in `backend/src/routes/analyst.ts`; `frontend/app/studio/simulation/hex/OptionsTab.tsx`, `option-cards.tsx` (`weighOptions`, `CostLine`), `analyst-parts.tsx` (`OptionChanges`), `option-write.ts` (`writeOption`), `addOption` in `HexTwinView.tsx`, `frontend/app/studio/command/options.ts` (`dominatedBy`).
+**Tests.** `analyst-options.unit.test.ts`, `scenario-run.unit.test.ts` (parity, including the replacement and the recorded responses), `option-cards.test.tsx`, `command/options.test.ts`, `analyst-tools.unit.test.ts`, `routes/analyst.unit.test.ts`, `OptionsTab.test.tsx`, `option-write.test.ts`, `run-parity.test.ts`, `DecisionsTab.test.tsx`, `HexTwinView.test.tsx`. The fixture `scenario-run-parity.fixture.json` is written by `backend/scripts/make-scenario-run-fixture.ts`.
 
 ## A9. Recorded decision and follow-up
 
@@ -646,6 +662,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
+    A0["Where the response comes from: the organisation's library,<br/>a response the engine writes from the network,<br/>or the stamp of a scenario (A4)"] --> A
     A["Policy: rules ordered by priority"] --> B["At each step: condition evaluated<br/>on the state of the moment"]
     B --> C{"Condition true?"}
     C -->|"yes"| D["Action: transfer, reinforcement, reassignment<br/>or modified demand, with delay, cost and effectiveness"]
@@ -668,8 +685,10 @@ flowchart TD
 - It is an order of priorities, not a price: a weighted sum would require an exchange rate between a life, care not delivered and a dollar, and there is no honest one. The order remains a judgement, and the screen says so.
 - The screen names the count that decided the first place. When nothing separates the first two responses, neither is marked as best.
 - Comparing on a single seed would amount to optimising the seed.
+- **A response is run from two places.** The Events page and the replay of the units page compare several responses on one event and rank them, as above. The Scenarios page follows one, placed as a stamp of the recipe, in the pass “with the choices” of its run (A4); that is how the analyst tests a transfer of patients (A8). What each path can do that the other cannot: [The analyst](/docs/product/analyst), “Two ways of asking ‘what if’”.
+- **A dominated option is marked the same way on both sides**: costing as much or more to obtain as much or less, strictly worse on one of the two (`dominatedBy`). The replay of the units page counts every cost the engine returns; the Options tab weighs only the options whose cost is whole (A8).
 
-**Code.** `simulation-service/app/events/policy.py`, `scoring.py`, `harness.py` (`rank`, `decided_by`), `api.py` (`RANK_BY`), `frontend/app/studio/events/ranking.ts`, `backend/src/services/sim-policies.ts`. **Tests.** `tests/test_events_ranking.py`, `ranking.test.ts`.
+**Code.** `simulation-service/app/events/policy.py`, `scoring.py`, `harness.py` (`rank`, `decided_by`), `api.py` (`RANK_BY`), `frontend/app/studio/events/ranking.ts`, `frontend/app/studio/command/options.ts` (`rankOptions`, `dominatedBy`), `backend/src/services/sim-policies.ts`. **Tests.** `tests/test_events_ranking.py`, `ranking.test.ts`, `command/options.test.ts`.
 
 ## B5. Overlay scenario
 

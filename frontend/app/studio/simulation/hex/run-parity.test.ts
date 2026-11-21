@@ -62,6 +62,10 @@ const fixture = JSON.parse(
   asItIs: Recorded;
   withOption: Recorded;
   withReplacement: Recorded & { retired: string[]; added: ScenarioOverride[] };
+  /** A recorded response the organisation wrote, placed on a day: a transfer of patients. */
+  withResponse: Recorded & { added: ScenarioOverride[] };
+  /** A response the engine writes itself from the network. */
+  withBuiltIn: Recorded & { added: ScenarioOverride[] };
 };
 
 const ctx = twinContext(fixture.twin);
@@ -106,6 +110,7 @@ function replay(recorded: RecordedCall[]) {
       body: {
         eventId: string;
         policies: string[];
+        customPolicies?: Record<string, unknown>[];
         populationSizes: Record<string, number>;
         routeCapacity: number;
         censusAcuity?: string;
@@ -125,6 +130,8 @@ function replay(recorded: RecordedCall[]) {
         // Absent and empty mean the same to the route, which fills in an empty object.
         baselineOccupancy: body.baselineOccupancy ?? {},
         policies: body.policies,
+        // Recorded only when the run follows a response the scenario holds, as the server records it.
+        ...(body.customPolicies?.length ? { customPolicies: body.customPolicies } : {}),
         collect: body.collect,
       });
       return { event: { id: body.eventId, name: "" }, rows: [], facilities: 0, horizon: event.horizon, activities: [], weights: {}, datasets };
@@ -181,5 +188,40 @@ describe("a scenario run on the page and on the server", () => {
     expect(asked).toEqual(requests(fixture.withReplacement.calls));
     expect(digest).toEqual(fixture.withReplacement.digest);
     expect(digest.full.island).not.toEqual(fixture.asItIs.digest.full.island);
+  });
+});
+
+describe("a recorded response placed in the scenario", () => {
+  it("is run by the page as the server ran it: the same rules, made to start on its day, and the same figures", async () => {
+    const { added, overrides } = fixture.withResponse;
+    expect(overrides).toEqual([...fixture.asItIs.overrides, ...added]);
+    const placed = stampsOf(overrides).filter((s) => s.kind === "response");
+    expect(placed.map((s) => [s.start, s.kind === "response" ? s.name : null])).toEqual([[12, "Send Lakeshore's queue to Nord"]]);
+
+    const asked = replay(fixture.withResponse.calls);
+    const digest = await pageDigest(overrides);
+    expect(asked).toEqual(requests(fixture.withResponse.calls));
+    expect(digest).toEqual(fixture.withResponse.digest);
+
+    // The events-only run follows nobody; the full run follows the response, in place of the do-nothing one.
+    const runs = api.runSimulation.mock.calls.map(([, body]) => body as { policies: string[]; customPolicies?: { id: string; rules: { trigger: unknown }[] }[] });
+    expect(runs.map((r) => r.policies)).toEqual([["null"], []]);
+    expect(runs[0]!.customPolicies).toBeUndefined();
+    expect(runs[1]!.customPolicies!.map((p) => [p.id, p.rules.map((r) => r.trigger)])).toEqual([["placed-response", [{ when: "from_tick", start: 12, end: null }]]]);
+
+    // Patients sent from Lakeshore to Nord wait less than in the scenario as it is.
+    expect(fixture.asItIs.digest.full.waitingDays).toBe(76.48);
+    expect(digest.full.waitingDays).toBe(11.2);
+    expect(digest.events).toEqual(fixture.asItIs.digest.events);
+  });
+
+  it("goes by its name when the engine writes its rules itself", async () => {
+    const asked = replay(fixture.withBuiltIn.calls);
+    const digest = await pageDigest(fixture.withBuiltIn.overrides);
+    expect(asked).toEqual(requests(fixture.withBuiltIn.calls));
+    expect(digest).toEqual(fixture.withBuiltIn.digest);
+    const runs = api.runSimulation.mock.calls.map(([, body]) => body as { policies: string[]; customPolicies?: unknown });
+    expect(runs.map((r) => r.policies)).toEqual([["null"], ["load-balance"]]);
+    expect(runs[1]!.customPolicies).toBeUndefined();
   });
 });

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import type { Basis, OptionFigures } from "../../analyst-api";
 
-import { EvidenceMeter, Figures, Fold, Outcome, SiteStrip, evidenceCounts, waitingGap, waitingScale } from "./option-cards";
+import { CostLine, EvidenceMeter, Figures, Fold, Outcome, SiteStrip, evidenceCounts, placesResponse, waitingGap, waitingScale, weighOptions } from "./option-cards";
 
 afterEach(cleanup);
 
@@ -125,5 +125,53 @@ describe("a fold", () => {
       </Fold>,
     );
     expect(screen.getByText("A figure was removed here.")).toBeTruthy();
+  });
+});
+
+describe("what a run cost, and which options can be weighed", () => {
+  const whole = (counted: number) => ({ counted, complete: true, says: `The engine counted ${counted} $.` });
+  const asItIs = figures({ sitesWithQueue: 1, waitingDays: 76 });
+  const opt = (step: string, waitingDays: number, cost?: { counted: number | null; complete: boolean; says: string }) => ({
+    step,
+    label: `Option ${step}`,
+    figures: figures({ sitesWithQueue: waitingDays > 0 ? 1 : 0, waitingDays }),
+    cost,
+  });
+
+  it("marks an option dominated only against another whose whole cost the engine counted", () => {
+    const out = weighOptions(asItIs, [
+      opt("s1", 11, whole(7500)),
+      // Costs more, leaves more waiting: dominated by s1.
+      opt("s2", 40, whole(9000)),
+      // Beds: no price, so it is neither weighed nor allowed to dominate, though it leaves nobody waiting.
+      opt("s3", 0, { counted: null, complete: false, says: "No cost is counted." }),
+      // A priced response with beds beside it: the count is not the option's whole cost.
+      opt("s4", 60, { counted: 100, complete: false, says: "Not the whole cost." }),
+      // Journalled before costs existed.
+      opt("s5", 70),
+    ]);
+    expect(Array.from(out.dominated)).toEqual([["s2", "Option s1"]]);
+    expect(out.weighed).toBe(2);
+  });
+
+  it("counts the waiting of catchments no site serves: a queue moved out of sight is not avoided", () => {
+    const moved = { ...opt("s2", 5, whole(100)), figures: figures({ sitesWithQueue: 1, waitingDays: 5, strandedWaitingDays: 300 }) };
+    const out = weighOptions({ ...asItIs, strandedWaitingDays: 0 }, [opt("s1", 20, whole(100)), moved]);
+    expect(Array.from(out.dominated)).toEqual([["s2", "Option s1"]]);
+  });
+
+  it("writes the count when there is one, and says when it is not the whole cost", () => {
+    const { rerender, container } = render(<CostLine cost={whole(7500)} />);
+    expect(container.textContent).toBe("Cost counted: 7,500 $. The engine counted 7500 $.");
+    rerender(<CostLine cost={{ counted: 100, complete: false, says: "The beds carry no price." }} />);
+    expect(container.textContent).toBe("Cost counted: 100 $ (not the whole cost). The beds carry no price.");
+    // Nothing counted: no figure, only why.
+    rerender(<CostLine cost={{ counted: null, complete: false, says: "No cost is counted for this run." }} />);
+    expect(container.textContent).toBe("No cost is counted for this run.");
+  });
+
+  it("knows an option that places a recorded response", () => {
+    expect(placesResponse({ stamps: [{ body: { kind: "response" }, start: 12, days: 18 }] })).toBe(true);
+    expect(placesResponse({ stamps: [{ body: { kind: "capacity" }, start: 5, days: 25 }] })).toBe(false);
   });
 });

@@ -17,9 +17,10 @@ import {
   type OptionBench,
   type RunDigest,
 } from "./analyst-tools.js";
+import { declaresCost, describeResponse, listResponses, listedResponses, responseNamed, transferRoutes, transferRule } from "./analyst-responses.js";
 import { Ledger, strike, unsourced } from "./analyst-verify.js";
 import type { ScenarioOverride } from "./scenario-overrides.js";
-import { ScenarioRunner, type EngineTiming, type PassDigest, type ScenarioEngine } from "./scenario-run.js";
+import { ROUTE_CAPACITY, ScenarioRunner, type EngineTiming, type PassDigest, type ScenarioEngine } from "./scenario-run.js";
 import {
   basisOfStamp,
   choiceLine,
@@ -39,11 +40,16 @@ import type { SimExport } from "./twin-export.js";
  *
  * A recommendation that rests on no run of the engine is an opinion. Here the
  * analyst may propose something to try — beds at a site from a given day, a
- * measure on a contact layer — and the only way it can say what that would
- * change is to run it: `test_option` applies the option to the open scenario
- * (stamps added, and a choice the scenario already holds replaced or removed),
- * runs the scenario on the server the way the page runs it, and returns the
- * figures beside those of the scenario as it stands.
+ * measure on a contact layer, a recorded response, a transfer of patients
+ * between two sites — and the only way it can say what that would change is to
+ * run it: `test_option` applies the option to the open scenario (stamps added,
+ * and a choice the scenario already holds replaced or removed), runs the
+ * scenario on the server the way the page runs it, and returns the figures
+ * beside those of the scenario as it stands.
+ *
+ * A recorded response is a stamp like the others (`response`), so the same
+ * run tests it: there is one way of asking "what if", not two
+ * (`analyst-responses.ts`).
  *
  * Three things are kept out of the model's hands on purpose:
  *
@@ -72,6 +78,10 @@ export interface OpenBench {
   choices: Map<string, ChoiceStamp>;
   /** What every run of this scenario rests on, each with its level of evidence. */
   basis: Basis[];
+  /** The twin as the engine is sent it: what a recorded response is read against. */
+  system: SimExport;
+  /** The twin's transfer routes: where a transfer of patients can be tested. */
+  routes: { source: string; target: string }[];
   /** The scenario as it stands, choices included: one pass, run once and kept for every option. */
   asItIs(): Promise<PassDigest>;
 }
@@ -120,6 +130,8 @@ export function benchFor(args: {
           stamps,
           choices,
           basis: scenarioBasis(stamps, runner.ctx, args.activity),
+          system,
+          routes: transferRoutes(system, runner.ctx),
           asItIs: () => {
             if (!asItIs) {
               // One pass, not the page's two: the column an option is set
@@ -210,6 +222,47 @@ export interface OptionChange {
   was: string | null;
 }
 
+/**
+ * What a run cost, as far as anything says.
+ *
+ * The engine counts one thing: the cost a rule of a recorded response declares
+ * for its action, each time the action fires. Capacity and measures carry no
+ * price in the twin, and a response whose rules declare none is unpriced, not
+ * free. So a cost is `complete` only for an option made of a priced response
+ * and nothing else, and only complete costs can be set against one another.
+ */
+export interface OptionCost {
+  /** What the engine counted over the run; null when nothing in the run declares a cost. */
+  counted: number | null;
+  /** True when that figure is the whole cost of what the option changes. */
+  complete: boolean;
+  /** The same, as a sentence written by the program. */
+  says: string;
+}
+
+const money = (n: number) => `${Math.round(n).toLocaleString("en-CA")} $`;
+
+/** The recorded response a set of stamps makes a run follow: the first by day, as the run picks it. */
+const followedIn = (stamps: readonly Stamp[]) => stamps.find((s): s is Stamp & { kind: "response" } => s.kind === "response") ?? null;
+
+/**
+ * The cost of one run.
+ *
+ * `unpriced` counts what the option changes that carries no price: capacity
+ * or a measure it adds, replaces or removes.
+ */
+export function costOf(stamps: readonly Stamp[], unpriced: number, counted: number): OptionCost {
+  const followed = followedIn(stamps);
+  if (!followed) return { counted: null, complete: false, says: "No cost is counted for this run: capacity and measures carry no price in the twin." };
+  if (followed.source !== "built-in" && !declaresCost(followed.rules)) {
+    return { counted: null, complete: false, says: `No cost is counted for this run: the rules of “${followed.name}” declare none. That is unpriced, not free.` };
+  }
+  const base = `The engine counted ${money(counted)} for “${followed.name}”: each of its actions at the cost its rule declares, each time it fired.`;
+  return unpriced > 0
+    ? { counted, complete: false, says: `${base} The capacity or measures this option also changes carry no price, so this is not the whole cost of the option.` }
+    : { counted, complete: true, says: base };
+}
+
 export interface TestedOption {
   label: string;
   /** The stamps the option writes: what it adds, and what it puts in place of a choice. */
@@ -223,6 +276,9 @@ export interface TestedOption {
   ranAt: string;
   asItIs: OptionFigures;
   withOption: OptionFigures;
+  /** What each of the two runs cost, as far as anything says. */
+  asItIsCost: OptionCost;
+  cost: OptionCost;
   /** Sites where somebody waits in either run. */
   sites: { id: string; name: string; capacity: number; asItIs: SiteBreakDigest; withOption: SiteBreakDigest }[];
   /** What this option rests on, each with its level of evidence. */
@@ -291,6 +347,24 @@ function measuredFor(stamps: Stamp[], ctx: TwinContext): Basis[] {
         out.push({ element: `${p.name} has ${people(p.size)} residents`, evidence: "measured", from: "twin" });
       }
     }
+    if (s.kind === "response") {
+      const name = (id: unknown) => ctx.facilities.find((x) => x.id === id)?.name ?? String(id);
+      const transfers = s.rules.map((r) => (r.action ?? {}) as { kind?: string; source?: string; target?: string }).filter((a) => a.kind === "transfer");
+      // The first few: a response written from the network can hold a rule for every route.
+      for (const a of transfers.slice(0, 6)) {
+        const key = `route\u0000${a.source}\u0000${a.target}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({ element: `The twin holds a transfer route from ${name(a.source)} to ${name(a.target)}`, evidence: "measured", from: "twin" });
+      }
+      if (transfers.length || s.source === "built-in") {
+        out.push({
+          element: `A route carries at most ${ROUTE_CAPACITY} patients a day: the twin holds no flow for its routes, so the run gives each the same`,
+          evidence: "assumption",
+          from: "engine",
+        });
+      }
+    }
   }
   return out;
 }
@@ -305,7 +379,7 @@ export function scenarioBasis(stamps: Stamp[], ctx: TwinContext, activity: strin
     { element: `${sized.length} catchments, ${people(sized.reduce((n, p) => n + p.size, 0))} residents`, evidence: "measured", from: "twin" },
     ...stamps.flatMap((s) => basisOfStamp(s, ctx, "scenario")),
     {
-      element: "A catchment's patients go only to the sites that list it, in proportion to their units; nobody is transferred between sites",
+      element: "A catchment's patients go only to the sites that list it, in proportion to their units; nobody is transferred between sites unless a recorded response does it",
       evidence: "assumption",
       from: "engine",
     },
@@ -339,9 +413,21 @@ const change = z.discriminatedUnion("kind", [
     days: z.number().int().min(1).optional(),
   }),
   z.object({ kind: z.literal("remove"), ref: choiceRef }),
+  // A recorded response, by the ref list_responses gives it.
+  z.object({ kind: z.literal("response"), response: z.string().trim().min(1).max(200), from_day: z.number().int().min(0).optional() }),
+  // Waiting patients sent from one site to another, along a route the twin holds.
+  z.object({
+    kind: z.literal("transfer"),
+    from: z.string().min(1).max(300),
+    to: z.string().min(1).max(300),
+    patients_per_day: z.number().int().min(1),
+    from_day: z.number().int().min(0),
+  }),
 ]);
 type Change = z.infer<typeof change>;
-type Placed = Exclude<Change, { kind: "remove" }>;
+/** A change written as a stamp of its own: capacity, or a measure. */
+type Placed = Extract<Change, { kind: "capacity" | "measure" }>;
+type ResponseStamp = Stamp & { kind: "response" };
 
 /** A field a plain addition must give, and a replacement may leave to the choice it replaces. */
 function missing(field: string, kind: string): never {
@@ -375,11 +461,77 @@ function choiceNamed(open: OpenBench, named: string, kind: Change["kind"]): Choi
     );
   }
   if (kind !== "remove" && hit.kind !== kind) {
+    const is = hit.kind === "capacity" ? "capacity" : hit.kind === "measure" ? "a measure" : "a recorded response";
     throw new ToolError(
-      `${named} is ${hit.kind === "capacity" ? "capacity" : "a measure"} (${choiceLine(hit, ctx)}): it is replaced by a change of the same kind. To put ${kind === "capacity" ? "capacity" : "a measure"} in its place, remove it and add the new change, in the same option.`,
+      `${named} is ${is} (${choiceLine(hit, ctx)}): ${hit.kind === "response" ? "it is not replaced by capacity or a measure" : "it is replaced by a change of the same kind"}. To put ${kind === "capacity" ? "capacity" : "a measure"} in its place, remove it and add the new change, in the same option.`,
     );
   }
   return hit;
+}
+
+/** The stamp a `response` change places: a recorded response, as the library or the engine holds it. */
+async function responseStamp(c: Extract<Change, { kind: "response" }>, ctx: AnalystContext, open: OpenBench, bench: OptionBench, id: string): Promise<ResponseStamp> {
+  const { horizon } = bench;
+  const r = responseNamed(listedResponses((await ctx.responses?.()) ?? [], open.system), c.response);
+  if (r.source === "built-in") {
+    if (c.from_day) {
+      throw new ToolError(`“${r.name}” is written by the engine from the network and applies for the whole run: it cannot start on day ${c.from_day}. Leave from_day out.`);
+    }
+    return { id, kind: "response", name: r.name, source: "built-in", ref: r.stampRef, rules: [], start: 0, days: horizon };
+  }
+  if (r.rules.length === 0) throw new ToolError(`“${r.name}” holds no rule, so testing it would test nothing.`);
+  const from = c.from_day ?? 0;
+  if (from >= horizon) {
+    throw new ToolError(`from_day ${from} is after the last day of the run: options are tested over ${horizon} days, numbered 0 to ${horizon - 1}.`);
+  }
+  return { id, kind: "response", name: r.name, source: "stored", ref: r.stampRef, rules: r.rules, start: from, days: Math.max(1, horizon - from) };
+}
+
+/**
+ * The stamp the `transfer` changes of one option place: one response, a rule
+ * per transfer. Every refusal says what can be asked instead.
+ */
+function transfersStamp(asked: Extract<Change, { kind: "transfer" }>[], open: OpenBench, bench: OptionBench, id: string): ResponseStamp {
+  const ctx = open.runner.ctx;
+  const { horizon, activity } = bench;
+  // The severity that occupies what the run reads: those are the patients its queue counts.
+  const acuity = ctx.care.find((x) => x.activity === activity)?.acuity ?? null;
+  const seen = new Set<string>();
+  const lines: string[] = [];
+  const rules = asked.map((c, k) => {
+    const source = pick(ctx.facilities, c.from, "site");
+    const target = pick(ctx.facilities, c.to, "site");
+    if (source.id === target.id) throw new ToolError(`A transfer goes from one site to another: both ends are ${source.name}.`);
+    if (!open.routes.some((r) => r.source === source.id && r.target === target.id)) {
+      const out = open.routes.filter((r) => r.source === source.id).map((r) => ctx.facilities.find((f) => f.id === r.target)?.name ?? r.target);
+      throw new ToolError(
+        `The twin holds no transfer route from ${source.name} to ${target.name}, so a run cannot send anyone that way. ` +
+          (out.length
+            ? `From ${source.name}, waiting patients can be sent to: ${out.slice(0, 12).join("; ")}${out.length > 12 ? "; …" : ""}.`
+            : `It holds no route out of ${source.name} at all.`) +
+          " list_responses with routes_from lists them with their units.",
+      );
+    }
+    if ((target.capacity[activity] ?? 0) <= 0) {
+      throw new ToolError(`${target.name} does not provide ${activity}, so nobody waiting for it can be served there. Send them to a site that does.`);
+    }
+    if (c.patients_per_day > ROUTE_CAPACITY) {
+      throw new ToolError(
+        `A route carries at most ${ROUTE_CAPACITY} patients a day in a run: the twin holds no flow for its routes, so the run gives each the same. Ask for ${ROUTE_CAPACITY} or fewer.`,
+      );
+    }
+    if (c.from_day >= horizon) {
+      throw new ToolError(`from_day ${c.from_day} is after the last day of the run: options are tested over ${horizon} days, numbered 0 to ${horizon - 1}.`);
+    }
+    const key = `${source.id}\u0000${target.id}`;
+    if (seen.has(key)) throw new ToolError(`The route from ${source.name} to ${target.name} is named twice in this option. Give it once.`);
+    seen.add(key);
+    lines.push(`${source.name} to ${target.name}`);
+    return transferRule({ id: `transfer-${k + 1}`, source: source.id, target: target.id, activity, acuity, perDay: c.patients_per_day, fromDay: c.from_day });
+  });
+  const start = Math.min(...asked.map((c) => c.from_day));
+  const name = `Transfer from ${lines.join(", and from ")}`;
+  return { id, kind: "response", name: name.length > 160 ? `${name.slice(0, 157)}…` : name, source: "written", ref: "", rules, start, days: Math.max(1, horizon - start) };
 }
 
 function requireActivityOf(ctx: TwinContext, asked: string): string {
@@ -463,6 +615,7 @@ const sameChoice = (a: Stamp, b: Stamp) => JSON.stringify(bodyOf(a)) === JSON.st
 
 /** A stamp, as a line the model and a person can both read. */
 function describeChange(s: Stamp, ctx: TwinContext): Record<string, unknown> {
+  if (s.kind === "response") return describeResponse(s, ctx);
   if (s.kind === "capacity") {
     return {
       what: "capacity",
@@ -494,7 +647,8 @@ const bodyOf = (s: Stamp): OptionStamp => {
 export const testOption: AnalystTool = {
   name: "test_option",
   description:
-    "Run one option through the simulation engine and read what it changes. An option is a label and one to four changes to the open scenario. A change adds something: capacity (units of an activity added at a site from a day; negative closes units) or a measure (contact layers scaled in some catchments for some days). " +
+    "Run one option through the simulation engine and read what it changes. An option is a label and one to four changes to the open scenario. A change adds something: capacity (units of an activity added at a site from a day; negative closes units), a measure (contact layers scaled in some catchments for some days), " +
+    "a transfer (waiting patients sent from one site to another, each day, along a route the twin holds: list_responses with routes_from says which), or a recorded response (rules the engine follows at every step, named by the ref list_responses gives). A run follows one recorded response: an option holds either one 'response' change or 'transfer' changes, which together make one. " +
     "Or it acts on a choice the scenario already contains, named by the ref scenario_recipe gives it: 'replaces' puts this change in its place (say only what differs: other units, another day, another duration), and kind 'remove' takes it out. To test fewer units or another date than a choice of the scenario, replace that choice; do not stack a second change on top of it. " +
     "Returns the scenario as it is and the scenario with this option, side by side: peak occupancy, sites where somebody waits, patient-days waiting, first day somebody waits, and each site with a queue. " +
     `At most ${MAX_OPTIONS} options can be tested for one objective, and each takes the engine some seconds, so read first and test what the reading points to. Nothing is written: the scenario is unchanged until the person adds the option themselves.`,
@@ -508,7 +662,15 @@ export const testOption: AnalystTool = {
         items: {
           type: "object",
           properties: {
-            kind: { type: "string", enum: ["capacity", "measure", "remove"], description: "capacity or measure: something placed. remove: a choice of the scenario taken out, named by ref." },
+            kind: {
+              type: "string",
+              enum: ["capacity", "measure", "transfer", "response", "remove"],
+              description: "capacity, measure, transfer or response: something placed. remove: a choice of the scenario taken out, named by ref.",
+            },
+            response: { type: "string", description: "response: the ref of a recorded response, as list_responses gives it." },
+            from: { type: "string", description: "transfer: the id or name of the site whose waiting patients are sent away." },
+            to: { type: "string", description: "transfer: the id or name of the site they are sent to. A transfer route must go from the first to this one, and it must provide the activity." },
+            patients_per_day: { type: "integer", description: "transfer: how many waiting patients at most are sent each day. They are sent only when somebody waits at the source and the destination has a free unit." },
             replaces: {
               type: "string",
               description:
@@ -530,7 +692,7 @@ export const testOption: AnalystTool = {
               },
             },
             catchments: { type: "array", items: { type: "string" }, description: "measure: ids or names of the catchments it covers. Empty or absent: every catchment." },
-            from_day: { type: "integer", description: "First day it applies, counted from day 0 of the run." },
+            from_day: { type: "integer", description: "First day it applies, counted from day 0 of the run. A response the engine writes itself applies for the whole run: leave it out." },
             days: { type: "integer", description: "measure: how many days it lasts." },
           },
           required: ["kind"],
@@ -562,7 +724,12 @@ export const testOption: AnalystTool = {
     const option: ChoiceStamp[] = [];
     const retired: { old: ChoiceStamp; replacedBy: number | null }[] = [];
     const moves: { does: OptionChange["does"]; now: ChoiceStamp | null; was: ChoiceStamp | null }[] = [];
+    const transfers: Extract<Change, { kind: "transfer" }>[] = [];
+    const recorded: Extract<Change, { kind: "response" }>[] = [];
     input.changes.forEach((c, i) => {
+      // A recorded response is one stamp for the option, written once the other changes are read.
+      if (c.kind === "transfer") return void transfers.push(c);
+      if (c.kind === "response") return void recorded.push(c);
       const named = c.kind === "remove" ? c.ref : c.replaces;
       const old = named === undefined ? null : choiceNamed(open, named, c.kind);
       if (old && retired.some((r) => r.old.id === old.id)) {
@@ -581,6 +748,24 @@ export const testOption: AnalystTool = {
       moves.push({ does: old ? "replaces" : "adds", now: stamp, was: old });
       option.push(stamp);
     });
+    if (recorded.length + (transfers.length ? 1 : 0) > 1) {
+      throw new ToolError(
+        "A run follows one recorded response, so an option holds one: either a single 'response' change, or 'transfer' changes, which together make one response. Test the other as another option.",
+      );
+    }
+    if (recorded.length || transfers.length) {
+      const id = `option-${bench.tested.length + 1}-response`;
+      const placed = recorded.length ? await responseStamp(recorded[0]!, ctx, open, bench, id) : transfersStamp(transfers, open, bench, id);
+      const held = open.stamps.find((s): s is ResponseStamp => s.kind === "response" && !retired.some((r) => r.old.id === s.id));
+      if (held) {
+        const ref = [...open.choices].find(([, s]) => s.id === held.id)?.[0] ?? held.id;
+        throw new ToolError(
+          `The scenario already follows a recorded response (${ref}: ${choiceLine(held, runner.ctx)}), and a run follows one at a time. Take it out in the same option, with a change of kind "remove" and its ref, to test this one in its place.`,
+        );
+      }
+      moves.push({ does: "adds", now: placed, was: null });
+      option.push(placed);
+    }
     const key = JSON.stringify({ writes: option.map(bodyOf), retires: retired.map((r) => [r.old.id, r.replacedBy]) });
     if (bench.tested.includes(key)) throw new ToolError("This option was already tested for this objective: its result is in an earlier step. Test something different, or deliver.");
 
@@ -605,6 +790,13 @@ export const testOption: AnalystTool = {
       ...measuredFor([...option, ...retired.map((r) => r.old)], runner.ctx),
     ];
     const notes = [...new Set(tested.figures.notes)];
+    // What each run cost, as far as anything says. Capacity or a measure the option touches carries no price.
+    const unpriced = option.filter((s) => s.kind !== "response").length + retired.filter((r) => r.old.kind !== "response").length;
+    const asItIsCost = costOf(open.stamps, 0, asItIs.cost);
+    const cost = costOf(applied, unpriced, tested.cost);
+    // Said only when a recorded response is in one of the two runs: without one, nothing is counted and nothing is new to read.
+    const costLine = (c: OptionCost, stamps: readonly Stamp[]) =>
+      followedIn(stamps) ? (c.counted === null ? { cost: c.says } : { cost_counted_by_the_engine: c.counted, cost_how_to_read: c.says }) : {};
 
     const record: TestedOption = {
       label: input.label,
@@ -620,6 +812,8 @@ export const testOption: AnalystTool = {
       ranAt: tested.ranAt,
       asItIs: figuresOf(asItIs.figures),
       withOption: figuresOf(tested.figures),
+      asItIsCost,
+      cost,
       sites: waits.map((s) => ({ id: s.id, name: s.name, capacity: s.capacity, asItIs: was(s.id), withOption: s.break })),
       basis,
       arrivals: tested.figures.arrivals,
@@ -637,8 +831,8 @@ export const testOption: AnalystTool = {
               : { does: "removes", ...describeChange(m.was!, runner.ctx) },
         ),
         tested_over: { days: bench.horizon, activity: bench.activity },
-        scenario_as_it_is: summariseVariant(asItIs.figures),
-        with_this_option: summariseVariant(tested.figures),
+        scenario_as_it_is: { ...summariseVariant(asItIs.figures), ...costLine(asItIsCost, open.stamps) },
+        with_this_option: { ...summariseVariant(tested.figures), ...costLine(cost, applied) },
         sites_where_somebody_waits_in_either: waits.map((s) => ({
           id: s.id,
           name: s.name,
@@ -651,7 +845,7 @@ export const testOption: AnalystTool = {
           "Both columns are runs of the engine under the scenario's stated conditions, not forecasts. 'scenario_as_it_is' holds the choices the scenario already contains; " +
           "'with_this_option' applies this option's changes to them: what it adds, and what it replaces or removes among those choices. " +
           "Occupancy stops at 100 %; the queue is what says somebody was turned away. " +
-          "The run knows nothing of staff, stocks or transfers between sites.",
+          "The run knows nothing of staff or stocks, and nobody is transferred between sites unless a recorded response in the run does it.",
       },
       record,
     );
@@ -659,7 +853,7 @@ export const testOption: AnalystTool = {
 };
 
 /** What the analyst can call when options can be tested. */
-export const OPTION_TOOLS: AnalystTool[] = [...READ_TOOLS, testOption];
+export const OPTION_TOOLS: AnalystTool[] = [...READ_TOOLS, listResponses, testOption];
 
 // ---------------------------------------------------------------------------
 // What the model is told.
@@ -687,10 +881,11 @@ The comparison table the person sees is built from the test results themselves, 
 # How to work
 
 1. Understand the situation before proposing anything. If a run is on screen, read it (read_run: summary, then sites). Look at where the queue is and why: the site, the catchments whose patients go there, what the scenario already contains (scenario_recipe, get_site, compare_catchments). If you do not know the names this twin uses, call describe_twin first.
-2. Choose options that act on the mechanism you read. Capacity where the queue is, or at another site the same catchment's patients can go to; earlier or later; more or fewer units. A measure on a contact layer only if the scenario contains an outbreak and the twin declares that layer. Make the options genuinely different from each other unless the objective is about size or timing. Respect any limit the person stated (a number of beds, a date).
+2. Choose options that act on the mechanism you read. Capacity where the queue is, or at another site the same catchment's patients can go to; earlier or later; more or fewer units. A measure on a contact layer only if the scenario contains an outbreak and the twin declares that layer. A transfer of waiting patients from the site where the queue is to a site with free units, when the twin holds a route between them: read list_responses (with routes_from, the site) before testing one. A response recorded in the organisation's library or written by the engine, when list_responses shows one that acts on the mechanism. Make the options genuinely different from each other unless the objective is about size or timing. Respect any limit the person stated (a number of beds, a date).
    When the option is a choice the scenario already contains, done differently (fewer or more units, another day, another duration), replace that choice: read its ref in scenario_recipe and give it as "replaces", with only what differs. When the option is the scenario without one of its choices, remove it by its ref. Never shrink or move a choice by stacking a second change on top of it: the scenario would hold two stamps where the person means one. Starting conditions and events have no ref and cannot be replaced or removed.
 3. Test each option with test_option. At most three tests. If a test is refused, read why: a refused test does not count and tells you what to change.
-4. An option you did not test is not an option. An idea the engine cannot test (staff, stocks, transferring patients between sites: the twin holds none of them) belongs in limits, not in options.
+4. An option you did not test is not an option. An idea the engine cannot test (staff, stocks: the twin holds neither) belongs in limits, not in options.
+   A cost appears in a test only when a recorded response's rules declare one: it is what the engine counted, not what the option costs when it also changes capacity or measures, which carry no price. Never give a cost the test did not return, and never say an option is free.
 5. When the tests are done, call give_options once, on its own, with nothing else in that turn.
 
 Most objectives take two to five reads and two or three tests. Do not call a tool twice with the same input.
@@ -707,7 +902,7 @@ Most objectives take two to five reads and two or three tests. Do not call a too
 
 # What you do not do
 
-- You do not recommend, rank by preference, or call an option "the best". You may say which tested options meet the stated objective according to the runs, because that is reading a result. Choosing between them is the person's.
+- You do not recommend, rank by preference, or call an option "the best". You may say which tested options meet the stated objective according to the runs, because that is reading a result. Choosing between them is the person's. The screen itself marks an option that costs no less and leaves no less waiting than another; you do not need to.
 - You do not present a run as a prediction. It is what the model gives under the scenario's stated conditions.
 - You do not claim anything was changed. test_option writes nothing, whether it adds, replaces or removes: the scenario is as the person left it.
 - You follow the system, not people. The twin holds counts and capacities, never a person's record.
@@ -785,6 +980,8 @@ export interface ProposedOption {
   /** What it adds, replaces and removes, as the screen says it. */
   changes: OptionChange[];
   figures: OptionFigures;
+  /** What its run cost, as far as anything says: what "dominated" is read from, with the figures. */
+  cost: OptionCost;
   sites: TestedOption["sites"];
   basis: Basis[];
   arrivals: Record<string, number[]>;
@@ -799,6 +996,8 @@ export interface OptionsProposal {
   activity: string;
   /** The scenario as it stands: the column every option is read against. Null when nothing was tested. */
   asItIs: OptionFigures | null;
+  /** What the scenario as it stands cost in its run. Null when nothing was tested. */
+  asItIsCost: OptionCost | null;
   options: ProposedOption[];
   /** What every column shares: the scenario's conditions, events and choices, and the network. */
   basis: Basis[];
@@ -975,6 +1174,7 @@ export function optionsClosing(ctx: AnalystContext, input: OptionsAsk): Closing<
           horizon: bench.horizon,
           activity: bench.activity,
           asItIs: first ? first.asItIs : null,
+          asItIsCost: first ? first.asItIsCost : null,
           options: options.map((o) => {
             const r = records.get(o.step)!;
             return {
@@ -984,6 +1184,7 @@ export function optionsClosing(ctx: AnalystContext, input: OptionsAsk): Closing<
               retires: r.retires,
               changes: r.changes,
               figures: r.withOption,
+              cost: r.cost,
               sites: r.sites,
               basis: r.basis,
               arrivals: r.arrivals,

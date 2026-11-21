@@ -85,7 +85,7 @@ Une demande refusée avant de commencer (pas de session, analyste éteint, servi
 
 ## Les outils
 
-Aucun n'écrit. Treize lisent ; un quatorzième, `test_option`, fait tourner le moteur, et n'existe que dans l'onglet Options. Deux mondes : `reality`, le jumeau tel qu'il est ; `scenario`, le même jumeau lu à travers le scénario ouvert.
+Aucun n'écrit. Treize lisent. Deux autres n'existent que dans l'onglet Options : `list_responses`, qui lit ce qu'une option peut contenir comme réponse enregistrée, et `test_option`, qui fait tourner le moteur. Deux mondes : `reality`, le jumeau tel qu'il est ; `scenario`, le même jumeau lu à travers le scénario ouvert.
 
 L'onglet Event finder est à part : il n'a aucun de ces outils. Il n'a que la recherche web de l'API (`web_search`), qui tourne chez Anthropic et non chez nous, et son outil de livraison. C'est ce qui garantit qu'une recherche ne peut rien emporter du jumeau.
 
@@ -95,7 +95,7 @@ L'onglet Event finder est à part : il n'a aucun de ces outils. Il n'a que la re
 | `find_sites` | Les sites, filtrés par nom, activité ou territoire, les plus grands d'abord |
 | `get_site` | Un site : lieu, unités par activité, patients présents, territoires servis, ce que le scénario y change |
 | `compare_catchments` | Pour une activité : chaque territoire, ses résidents, ses sites, ses unités par 1 000 résidents |
-| `scenario_recipe` | Le scénario : conditions de départ, événements, choix, liens modifiés, série de comparaison |
+| `scenario_recipe` | Le scénario : conditions de départ, événements, choix (mesures, capacité, réponse enregistrée que le run suit), liens modifiés, série de comparaison |
 | `read_run` | Le run à l'écran : résumé des deux passes, sites où l'on attend, un site jour par jour, le réseau jour par jour |
 | `list_datasets` | Les jeux de données du projet et leurs colonnes |
 | `preview_dataset` | Les premières lignes d'un jeu et les valeurs de ses colonnes de catégorie |
@@ -104,7 +104,8 @@ L'onglet Event finder est à part : il n'a aucun de ces outils. Il n'a que la re
 | `list_alerts` | Ce qui est ouvert maintenant : les alertes, la pire d'abord, chacune avec son unité, sa mesure et sa valeur, depuis quand elle est ouverte, l'âge de la valeur, et le signal qu'elle a levé avec son étape. Dit aussi combien de règles d'alerte existent et quand les seuils ont été vérifiés. Pour tout le projet ou pour une unité |
 | `unit_now` | Les chiffres en direct d'une unité, tels que sa page les montre : chaque mesure définie par l'organisation, ce qui est sous l'unité par type, l'âge de la lecture (ou qu'il est inconnu, et pourquoi), ses alertes ouvertes |
 | `calculate` | Un calcul, sur des nombres déjà lus ou donnés dans la question |
-| `test_option` | Onglet Options seulement. Ajoute une option au scénario ouvert, le temps d'un run sur le serveur, et rend le scénario tel quel à côté du scénario avec l'option |
+| `list_responses` | Onglet Options seulement. Les réponses enregistrées qu'une option peut contenir : celles de la bibliothèque de l'organisation (page Events) et celles que le moteur écrit lui-même, chacune sous un nom, avec ce que font ses règles et si elles déclarent un coût. Avec `routes_from`, les sites vers lesquels les patients qui attendent à un site peuvent être transférés |
+| `test_option` | Onglet Options seulement. Ajoute une option au scénario ouvert, le temps d'un run sur le serveur, et rend le scénario tel quel à côté du scénario avec l'option, avec ce que le moteur a compté comme coût quand une réponse enregistrée est dans l'un des deux runs |
 
 Un outil qui ne peut pas répondre (nom inconnu, deux sites pour un nom, pas de run à l'écran, table qui contient plusieurs séries, option qu'on ne peut pas tester) le dit par un refus motivé que le modèle lit. Il ne devine jamais.
 
@@ -122,10 +123,26 @@ Une option est une étiquette et un à quatre changements :
 |---|---|
 | Capacité : des unités d'une activité, à un site, à partir d'un jour (négatif : des unités fermées) | Le site offre déjà cette activité ; on ne ferme pas plus qu'il n'a |
 | Mesure : des couches de contact multipliées, dans certains territoires, pendant des jours | Le jumeau déclare ces couches |
+| Transfert : des patients qui attendent à un site, envoyés à un autre, tant par jour, à partir d'un jour | Le jumeau contient une route de transfert entre les deux sites, le site d'arrivée offre l'activité, et on ne demande pas plus de vingt patients par jour |
+| Réponse enregistrée : une réponse de la bibliothèque de l'organisation, ou une de celles que le moteur écrit lui-même | Elle est désignée par le nom que lui donne `list_responses`. Une réponse du moteur vaut pour tout le run |
 | Remplacer un choix du scénario : la même capacité ou la même mesure, avec d'autres unités, un autre jour, une autre durée | Le choix est désigné par le nom que lui donne `scenario_recipe` ; c'est une capacité remplacée par une capacité, ou une mesure par une mesure |
 | Retirer un choix du scénario | Le choix est désigné par son nom |
 
-« 40 lits au lieu des 60 du scénario » est donc un seul tampon à +40 : le test tourne sans les 60 et avec les 40, et c'est ce que la recette contient une fois l'option appliquée. Seuls les choix (mesures, capacité) se remplacent ou se retirent. Les conditions de départ et les événements sont ce qui arrive : une option ne les défait pas.
+« 40 lits au lieu des 60 du scénario » est donc un seul tampon à +40 : le test tourne sans les 60 et avec les 40, et c'est ce que la recette contient une fois l'option appliquée. Seuls les choix (mesures, capacité, réponse enregistrée) se remplacent ou se retirent. Les conditions de départ et les événements sont ce qui arrive : une option ne les défait pas.
+
+Un transfert et une réponse enregistrée sont d'une autre nature que les deux premiers : ce ne sont pas des choses posées un jour donné, mais des règles que le moteur évalue à chaque pas du run. Un transfert de quatre patients par jour de Lakeshore vers Nord n'envoie personne tant que personne n'attend à Lakeshore, ni quand Nord est plein. Un run suit une réponse à la fois : une option contient donc soit une réponse enregistrée, soit des transferts, qui en font une à eux tous ; et si le scénario en suit déjà une, l'option doit la retirer pour en tester une autre à sa place.
+
+### Deux façons de demander « et si », un seul run
+
+Le produit avait deux chemins qui ne se connaissaient pas. Depuis qu'une réponse enregistrée peut être un tampon du scénario, le second sait lancer ce que le premier écrit, par le même run que ses autres tampons, sur la page comme sur le serveur.
+
+| | Page Events et rejeu de la page des unités | Page Scenarios et analyste |
+|---|---|---|
+| Ce qu'on fait varier | Une réponse : des règles que le moteur évalue à chaque pas, sur un événement donné | Des tampons : ce qui arrive un jour donné (éclosion, canicule, mesure, capacité, conditions de départ), et une réponse enregistrée |
+| Ce que ce chemin sait faire et que l'autre ne sait pas | Écrire et modifier une réponse : ses conditions, son délai, son efficacité, son coût. Comparer plusieurs réponses sur un même événement et les classer sur des comptes (morts, soins non rendus, coût), sur plusieurs graines. Faire varier la force d'une réponse (la moitié, le double). Bifurquer : « et si on avait agi ce jour-là » | Propager une épidémie d'après le modèle que le jumeau déclare. Poser des conditions de départ. Remplacer ou retirer un choix. Faire proposer et tester des options par l'analyste, avec leurs niveaux de preuve. Enregistrer une décision et la suivre. Garder une réponse préparée, retestée quand un signal s'ouvre |
+| Ce qu'il ne sait toujours pas | Partir d'un scénario fait de tampons. Enregistrer une décision. Garder une réponse préparée ([issue 22](https://github.com/V1ktor7/obscyro/issues/22)) | Suivre plus d'une réponse dans un run. Écrire ou modifier les règles d'une réponse, hors le transfert entre deux sites. Faire commencer un jour donné une réponse que le moteur écrit lui-même. Donner un prix à une capacité ou à une mesure ([issue 20](https://github.com/V1ktor7/obscyro/issues/20)). Lancer plusieurs graines |
+
+Ce qui est commun aux deux : le moteur, la forme d'une réponse (des règles, avec délai, efficacité et coût), et le marquage d'une option dominée, fait par la même fonction.
 
 Ce qui vient du modèle et ce qui n'en vient pas :
 
@@ -135,11 +152,13 @@ Ce qui vient du modèle et ce qui n'en vient pas :
 | L'écart d'une option avec le scénario tel quel (« −7,049 vs as it is ») | Le programme : la soustraction des deux chiffres affichés, arrondis, pour qu'on puisse la refaire de tête |
 | Le décompte « 2 measured · 1 published · 3 assumption » d'une carte | Le programme : il compte les éléments de la liste par niveau. Les trois niveaux ne sont jamais additionnés |
 | Le niveau de preuve de chaque élément : Measured, Published, Assumption | Le programme, d'après d'où vient l'élément (jumeau, scénario, option, règle du moteur) |
-| Les tampons qu'ajoute « Add to scenario » | Le test : ce sont ceux que le moteur a reçus |
+| Les tampons qu'ajoute « Add to scenario » | Le test : ce sont ceux que le moteur a reçus. Une réponse enregistrée en est un, avec ses règles |
+| « Cost counted : 7,500 $ » sur une carte, ou la phrase qui dit pourquoi rien n'est compté | Le moteur : le coût que chaque règle de la réponse déclare, chaque fois qu'elle s'est déclenchée dans ce run. Une capacité et une mesure n'ont pas de prix : la carte dit alors que le compte n'est pas le coût entier, ou qu'il n'y en a pas |
+| « Dominated », avec le nom d'une autre option | Le programme, d'après les deux runs : l'autre coûte autant ou moins et laisse autant ou moins d'attente. Seulement entre options dont le coût est entier |
 | « What it does to the scenario » : ce que l'option ajoute, remplace et retire, quand elle ne fait pas qu'ajouter | Le programme, à partir des tampons. Le bouton dit alors « Apply to scenario » |
 | Le mécanisme en une phrase, ce que le test ne dit pas, la lecture, les arbitrages, les limites | Le modèle, chaque chiffre contrôlé par le vérificateur |
 
-Ce que l'onglet ne fait pas, par construction : classer les options (elles restent dans l'ordre des tests, et aucune carte n'est marquée comme la meilleure), en lister une qui n'a pas été testée, en cacher une qui l'a été, écrire dans le scénario. Les arbitrages de valeur sont présentés à part, sous « Yours to weigh ».
+Ce que l'onglet ne fait pas, par construction : classer les options (elles restent dans l'ordre des tests, et aucune carte n'est marquée comme la meilleure), en lister une qui n'a pas été testée, en cacher une qui l'a été, écrire dans le scénario. Les arbitrages de valeur sont présentés à part, sous « Yours to weigh ». Une seule chose est dite d'une option par rapport à une autre : qu'elle est dominée, quand l'autre coûte autant ou moins et laisse autant ou moins d'attente. Cela reste vrai quelle que soit la valeur qu'on donne à un jour-patient d'attente, donc ce n'est pas un arbitrage ; entre deux options dont aucune ne domine l'autre, l'onglet ne dit rien.
 
 Coût et durée sont bornés : trois tests au plus par objectif, et le scénario tel quel n'est lancé qu'une fois pour les trois, en une seule passe du moteur. Trois options font quatre passes. Pendant un test, l'onglet dit depuis combien de temps il tourne.
 
@@ -190,6 +209,8 @@ Ce qui n'est pas fait, et pourquoi :
 ## Les décisions
 
 « Record decision » garde l'option retenue avec ce qu'on en attend. Le navigateur n'envoie que l'identifiant de l'échange et l'étape du test ; le serveur recopie tout le reste depuis son journal : l'objectif, les tampons, les chiffres du run testé avec et sans l'option, les arrivées jour par jour, les niveaux de preuve, les étapes sources. On ne peut donc enregistrer qu'une option que le moteur a testée.
+
+Une décision peut porter sur une réponse enregistrée ou sur un transfert : elle en garde les règles, telles que le moteur les a reçues, et ce que le run a compté comme coût. L'onglet Decisions l'écrit sous les chiffres attendus.
 
 Une décision ne se modifie pas : la revoir, c'est en enregistrer une autre.
 
@@ -358,7 +379,12 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 - L'âge d'un chiffre en direct est celui de la lecture de l'unité entière, le plus vieux de ses sources quand elle en a plusieurs.
 - Les signaux ouverts que `list_alerts` compte comprennent ceux dont l'alerte est retombée : ils peuvent être bien plus nombreux que les alertes ouvertes.
 - Le run à l'écran n'est pas gardé au rechargement de la page ; il faut relancer Run. Les options testées non plus : ce qui reste, ce sont les décisions enregistrées et le journal.
-- Une option est faite de capacité et de mesures. Un transfert de patients, du personnel, un stock, un lien nouveau entre un site et un territoire ne se testent pas : le moteur ou le jumeau ne les portent pas. L'analyste les range dans les limites.
+- Une option est faite de capacité, de mesures, de transferts de patients ou d'une réponse enregistrée. Du personnel, un stock, un lien nouveau entre un site et un territoire ne se testent pas : le moteur ou le jumeau ne les portent pas. L'analyste les range dans les limites.
+- Un run suit une seule réponse enregistrée. Deux réponses ne se testent pas ensemble, et une réponse que le moteur écrit lui-même ne peut pas commencer un jour donné.
+- Un transfert ne se teste qu'entre deux sites que le jumeau relie par une route de transfert. Le jumeau ne contient le débit d'aucune route : le run donne à chacune vingt patients par jour, et c'est une hypothèse.
+- Les deux réponses que le moteur écrit lui-même surveillent une seule activité, la première du jumeau par ordre alphabétique parmi celles qui sont de l'espace, quelle que soit l'activité que le run lit. `list_responses` dit laquelle.
+- Un coût n'existe que là où une règle en déclare un. Une capacité, une mesure et un transfert écrit par l'analyste n'ont pas de prix : aucune option qui en contient ne peut être dite dominée ou dominante.
+- Avec une réponse qui ajoute ou déplace des unités pendant le run, l'occupation de l'île est pondérée par la capacité habituelle : le moteur ne rend pas la capacité de chaque jour. Le run le dit.
 - Une option est testée sur le scénario tel qu'il est au moment du test. Ajouter une option puis une autre donne un scénario qu'aucun test n'a couvert : l'écran prévient, et il faut redire l'objectif.
 - Une option peut remplacer ou retirer un choix du scénario, mais pas une condition de départ ni un événement. Remplacer une capacité par une mesure se fait en deux changements de la même option : retirer l'une, ajouter l'autre.
 - Appliquer une option qui retire un choix se fait en deux écritures, le nouveau tampon puis le retrait de l'ancien, et non en une seule opération. Si la seconde échoue, la recette garde les deux tampons : l'écran le montre, et le retrait se fait à la main. Si le tampon à retirer n'est plus là au moment du clic, rien n'est écrit.
@@ -381,6 +407,7 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 | Réponses préparées, retest, « Engage » | `backend/src/services/prepared-responses.ts`, `backend/src/services/response-retest.ts`, `backend/src/routes/prepared-responses.ts`, `frontend/app/studio/simulation/hex/KeepPrepared.tsx`, `frontend/app/studio/situation/PreparedResponses.tsx`, `prepared-api.ts` |
 | Outils de lecture, résumé du run | `backend/src/services/analyst-tools.ts` |
 | Outil `test_option`, clôture d'un objectif, `give_options` | `backend/src/services/analyst-options.ts` |
+| Outil `list_responses`, réponses enregistrées, règle d'un transfert | `backend/src/services/analyst-responses.ts` |
 | Clôture d'une recherche d'événements, `give_events` | `backend/src/services/analyst-events.ts` |
 | Lecture de la recherche web : requêtes, pages, passages, dates, citations | `backend/src/services/analyst-web.ts` |
 | Sources autorisées d'un projet | `backend/src/services/web-sources.ts` |

@@ -231,3 +231,33 @@ describe("a decision engaged from a situation card whose response had been teste
     expect(screen.queryByText(/Tested again when the signal opened/)).toBeNull();
   });
 });
+
+describe("a decision that bears on a recorded response", () => {
+  it("keeps what the engine counted as its cost, beside what was expected of it", async () => {
+    api.listDecisions.mockResolvedValue({
+      decisions: [
+        decision({
+          optionLabel: "Transfer when full",
+          optionStamps: [{ body: { kind: "response", name: "Transfer when full", source: "built-in", ref: "load-balance", rules: [] }, start: 0, days: 60 }],
+          expected: {
+            ...decision().expected,
+            changes: [{ does: "adds", now: "recorded response Transfer when full, whole run", was: null }],
+            cost: { counted: 42000, complete: true, says: "The engine counted 42,000 $ for “Transfer when full”: each of its actions at the cost its rule declares, each time it fired." },
+          },
+        }),
+      ],
+    });
+    tab();
+    const said = await screen.findByText(/^Cost counted: 42,000 \$\./);
+    expect(said.parentElement!.textContent).toContain("each of its actions at the cost its rule declares, each time it fired.");
+    // An option that only adds says so by its name: the card is titled by the response it placed.
+    expect(screen.getByText("Transfer when full")).toBeTruthy();
+  });
+
+  it("says nothing of cost for a decision on beds, as every older decision", async () => {
+    api.listDecisions.mockResolvedValue({ decisions: [decision()] });
+    tab();
+    await screen.findByText("Open 80 beds at Lakeshore from day 5");
+    expect(screen.queryByText(/Cost counted/)).toBeNull();
+  });
+});

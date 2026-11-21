@@ -132,6 +132,40 @@ export interface RankedOption {
 
 const BASELINE = "null";
 
+/** What domination is read from: what an option achieves, and what it costs. */
+export interface Weighed {
+  id: string;
+  label: string;
+  /** What it achieves, more being better: patient-days of waiting avoided. */
+  achieved: number;
+  cost: number;
+}
+
+/**
+ * Which options another one dominates, and by which: id to the label of the
+ * option that dominates it.
+ *
+ * Strictly better on one axis and no worse on the other. Equal on both is not
+ * domination: two identical options are a duplicate, not a loser. It is the
+ * one statement about cost and effect that needs no exchange rate between
+ * them, and both screens that list options make it with this function: the
+ * replay of the units page, and the Options tab of the analyst.
+ */
+export function dominatedBy(options: readonly Weighed[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const a of options) {
+    for (const b of options) {
+      if (a === b) continue;
+      const better = (b.achieved > a.achieved && b.cost <= a.cost) || (b.achieved >= a.achieved && b.cost < a.cost);
+      if (better) {
+        out.set(a.id, b.label);
+        break;
+      }
+    }
+  }
+  return out;
+}
+
 /**
  * Options against doing nothing, best first, with the dominated ones marked.
  *
@@ -163,19 +197,12 @@ export function rankOptions(rows: readonly ResultRow[]): RankedOption[] {
       };
     });
 
-  for (const a of options) {
-    for (const b of options) {
-      if (a === b) continue;
-      // Strictly better on one axis and no worse on the other. Equal on both is
-      // not domination: two identical options are a duplicate, not a loser.
-      const better =
-        (b.avoidedWaiting > a.avoidedWaiting && b.cost <= a.cost) ||
-        (b.avoidedWaiting >= a.avoidedWaiting && b.cost < a.cost);
-      if (better) {
-        a.dominated = true;
-        a.dominatedBy = b.label;
-        break;
-      }
+  const beaten = dominatedBy(options.map((o) => ({ id: o.id, label: o.label, achieved: o.avoidedWaiting, cost: o.cost })));
+  for (const o of options) {
+    const by = beaten.get(o.id);
+    if (by !== undefined) {
+      o.dominated = true;
+      o.dominatedBy = by;
     }
   }
 
