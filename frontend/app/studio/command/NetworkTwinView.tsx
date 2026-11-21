@@ -473,6 +473,9 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
       return;
     }
     if (!drawing) {
+      // A site chosen on the map ends whatever the explorer had picked: its
+      // line and its note must not come back when this site's panel closes.
+      setPicked(null);
       setSelectedId(siteId);
       return;
     }
@@ -2244,7 +2247,10 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               <span className="text-[13px] font-semibold text-ink">{selected.name}</span>
               <button
                 type="button"
-                onClick={() => setSelectedId(null)}
+                onClick={() => {
+                  setPicked(null);
+                  setSelectedId(null);
+                }}
                 className="ml-auto text-ink-faint hover:text-ink"
                 aria-label="Close inspector"
               >
