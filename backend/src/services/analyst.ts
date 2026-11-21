@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 
+import { config } from "../lib/config.js";
 import { READ_TOOLS, Recorded, ToolError, type AnalystContext, type AnalystTool } from "./analyst-tools.js";
 import { Ledger, checkAnswer, type AnswerDraft, type Finding } from "./analyst-verify.js";
 import { WEB_PASSAGE, WebReader, passageLedger, passageOf, webSearchTool, type WebSearch } from "./analyst-web.js";
@@ -35,7 +36,11 @@ import { WEB_PASSAGE, WebReader, passageLedger, passageOf, webSearchTool, type W
  * are read off each response and recorded as steps like any other reading.
  */
 
-export const ANALYST_MODEL = "claude-opus-5-5";
+/**
+ * The model every exchange is asked of: the one `ANALYST_MODEL` names on the
+ * server, `claude-opus-5-5` when it names none (`lib/config.ts`).
+ */
+export const ANALYST_MODEL: string = config.analystModel.model;
 
 /** Requests to the model for one question. A question that needs more is asking too much at once. */
 const MAX_REQUESTS = 16;
@@ -545,8 +550,9 @@ export async function converse<D, A, F>(
     const res = await model.create({
       model: ANALYST_MODEL,
       max_tokens: 16000,
-      // Thinking is always on for this model; effort is the control. Medium is
-      // its default, set here so a change of default cannot change the product.
+      // Every model the analyst can run on thinks by default and takes an
+      // effort. Medium is asked of all of them, by name: neither a change of
+      // model nor a change of a model's own default can then change the product.
       output_config: { effort: "medium" },
       // A safeguard that misfires on a question about an epidemic should not
       // take the analyst down: a declined request is retried on the model

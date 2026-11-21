@@ -168,6 +168,26 @@ describe("the analyst panel", () => {
     await screen.findByText("The analyst is not switched on for this server.");
   });
 
+  it("says in the server's words that it is off because of the model it was told to run on", async () => {
+    const why =
+      'The analyst is switched off on this server: ANALYST_MODEL is set to "claude-sonet-5-5", which is not a model it can run on. ' +
+      "An administrator has to set it to one of claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5, or leave it unset.";
+    api.fetchAnalyst.mockResolvedValue({ configured: false, model: "claude-opus-5-5", models: ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"], reason: "unknown_model", why });
+    panel();
+    await screen.findByText("The analyst is not switched on for this server.");
+    expect(screen.getByText(`${why} Then reload this page.`)).toBeTruthy();
+    // The key is not what is missing, so the panel does not send anyone to look for it.
+    expect(screen.queryByText("ANTHROPIC_API_KEY")).toBeNull();
+    expect(screen.queryByLabelText("Question for the analyst")).toBeNull();
+  });
+
+  it("keeps the explanation about the key when the key is what is missing", async () => {
+    api.fetchAnalyst.mockResolvedValue({ configured: false, model: "claude-opus-5-5", reason: "no_key", why: "The analyst is not switched on for this server: it needs a Claude API key (ANTHROPIC_API_KEY)." });
+    panel();
+    await screen.findByText("The analyst is not switched on for this server.");
+    expect(screen.getByText("ANTHROPIC_API_KEY")).toBeTruthy();
+  });
+
   it("without a scenario there is one world and no toggle", async () => {
     answering([{ type: "done", result: result() }]);
     panel({ scenario: null });

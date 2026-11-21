@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 
-import { config } from "../lib/config.js";
+import { analystOffBecause, config } from "../lib/config.js";
 import type { DbClient } from "../lib/db.js";
 import { AppError, BadRequest, NotFound } from "../lib/errors.js";
 import { listDecisionsForSignalType } from "../services/decisions.js";
@@ -88,7 +88,7 @@ const situationRoutes: FastifyPluginAsync = async (fastify) => {
       return {
         ...situationOf(live, { unitId: unit ?? null, alertId: alert ?? null, signalId: signal ?? null }, found, stages, prepared),
         // Whether the question can be asked at all: the card is whole either way.
-        analyst: { configured: Boolean(config.anthropicApiKey) },
+        analyst: { configured: analystOffBecause(config) === null },
       };
     },
   );

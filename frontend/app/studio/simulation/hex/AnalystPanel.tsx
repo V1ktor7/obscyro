@@ -104,6 +104,8 @@ export default function AnalystPanel({
   onEventAccepted?: (event: HealthEvent) => void;
 }) {
   const [configured, setConfigured] = useState<boolean | null>(null);
+  // The server's own sentence when the analyst is off for a reason other than a missing key.
+  const [offWhy, setOffWhy] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("ask");
   // A tab is built the first time it is opened and kept after, so what was
   // asked or tested in it is still there on the way back.
@@ -113,7 +115,11 @@ export default function AnalystPanel({
   useEffect(() => {
     let live = true;
     fetchAnalyst(env)
-      .then((s) => live && setConfigured(s.configured))
+      .then((s) => {
+        if (!live) return;
+        setConfigured(s.configured);
+        setOffWhy(s.reason === "unknown_model" ? (s.why ?? null) : null);
+      })
       // Not knowing is not the same as off: let the question be asked and the
       // server say what is wrong.
       .catch(() => live && setConfigured(true));
@@ -130,11 +136,16 @@ export default function AnalystPanel({
   const off = (
     <div className="flex flex-col gap-2 p-3">
       <p className="text-[12.5px] font-semibold text-ink">The analyst is not switched on for this server.</p>
-      <p className="text-[12px] text-ink-body">
-        It answers questions about the twin by reading it through the Claude API, and the API service has no key for
-        it yet. An administrator has to set <code className="rounded bg-canvas px-1 font-mono text-[11px]">ANTHROPIC_API_KEY</code>{" "}
-        on the API service, then reload this page.
-      </p>
+      {offWhy ? (
+        // The key is there; the model it was told to run on is not one it can. Said in the server's words.
+        <p className="text-[12px] text-ink-body">{offWhy} Then reload this page.</p>
+      ) : (
+        <p className="text-[12px] text-ink-body">
+          It answers questions about the twin by reading it through the Claude API, and the API service has no key for
+          it yet. An administrator has to set <code className="rounded bg-canvas px-1 font-mono text-[11px]">ANTHROPIC_API_KEY</code>{" "}
+          on the API service, then reload this page.
+        </p>
+      )}
     </div>
   );
 

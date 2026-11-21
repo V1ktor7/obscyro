@@ -19,6 +19,7 @@
 | `PUBLIC_API_URL` | `https://your-api.up.railway.app` (used in webhook URLs) |
 | `CORS_ORIGINS` | `https://obscyro.vercel.app,https://obscyro.com` |
 | `ANTHROPIC_API_KEY` | Claude API key (optional). The analyst on the Scenarios page reads the twin through it. Unset: the analyst is off and says so; nothing else depends on it. The Event finder tab searches the web through the same key: it needs no variable of its own, but web search must be allowed for the organisation in the Claude Console (it is by default), and it is billed per search on top of tokens. See `docs/analyst.md` |
+| `ANALYST_MODEL` | Optional. The Claude model the analyst runs on: `claude-opus-5-5` (the default when unset), `claude-sonnet-5-5` or `claude-haiku-5-5`, which cost less per question. Any other value switches the analyst off, and it says which value it was given: it never falls back on another model. Only the default has answered the reference questions, so replay them after a change. Read at start-up: restart the service after changing it. See `docs/analyst.md` |
 
 ### Optional feature tunables (safe defaults; override only to tune)
 

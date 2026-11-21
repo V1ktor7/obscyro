@@ -5,7 +5,7 @@ import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 
-import { config } from "../lib/config.js";
+import { ANALYST_MODELS, analystOffBecause, config } from "../lib/config.js";
 import type { DbClient } from "../lib/db.js";
 import { AppError, BadRequest, NotFound } from "../lib/errors.js";
 import { streamLines } from "../lib/ndjson.js";
@@ -186,23 +186,43 @@ const withExchange =
 
 const analystRoutes: FastifyPluginAsync = async (fastify) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
+  // Why the analyst cannot be asked on this server, if it cannot: no key, or a model it cannot run on.
+  const off = analystOffBecause(config);
   // One client for the process: it holds the connection pool and the retries.
-  const client = config.anthropicApiKey ? new Anthropic({ apiKey: config.anthropicApiKey }) : null;
+  const client = off === null ? new Anthropic({ apiKey: config.anthropicApiKey }) : null;
+  if (off?.reason === "unknown_model") fastify.log.warn({ asked: config.analystModel.refused }, off.says);
+  const notConfigured = () => new AppError("ANALYST_NOT_CONFIGURED", off?.says ?? "The analyst is not switched on for this server.", 503);
 
   app.get(
     "/ontology/:env/analyst",
     {
       schema: {
-        summary: "Whether the analyst can be asked",
+        summary: "Whether the analyst can be asked, and on which model",
+        description:
+          "`configured` says whether a question can be asked on this server. `model` is the Claude model every " +
+          "exchange is asked of: the one the `ANALYST_MODEL` variable of the API service names, among `models`, " +
+          "and the first of them when the variable is unset. When the analyst is off, `reason` names the setting " +
+          "at fault and `why` says it in words an administrator can act on: `no_key` (`ANTHROPIC_API_KEY` is " +
+          "missing), or `unknown_model` (`ANALYST_MODEL` is set to a value that is not one of `models`). In that " +
+          "second case the analyst does not fall back on another model: it stays off.",
         tags: ["analyst"],
         params: z.object({ env: z.string().min(1) }),
-        response: { 200: z.object({ configured: z.boolean(), model: z.string() }), 404: errorEnvelope },
+        response: {
+          200: z.object({
+            configured: z.boolean(),
+            model: z.string(),
+            models: z.array(z.string()),
+            reason: z.enum(["no_key", "unknown_model"]).nullable(),
+            why: z.string().nullable(),
+          }),
+          404: errorEnvelope,
+        },
       },
     },
     async (req) => {
       const userId = await requireUserId(req);
       await resolveEnvironment(req.db, userId, req.params.env);
-      return { configured: client !== null, model: ANALYST_MODEL };
+      return { configured: client !== null, model: ANALYST_MODEL, models: [...ANALYST_MODELS], reason: off?.reason ?? null, why: off?.says ?? null };
     },
   );
 
@@ -247,13 +267,7 @@ const analystRoutes: FastifyPluginAsync = async (fastify) => {
     async (req, reply) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
-      if (!client) {
-        throw new AppError(
-          "ANALYST_NOT_CONFIGURED",
-          "The analyst is not switched on for this server: it needs a Claude API key (ANTHROPIC_API_KEY).",
-          503,
-        );
-      }
+      if (!client) throw notConfigured();
 
       let scenario: AnalystContext["scenario"] = null;
       if (req.body.scenarioId) {
@@ -352,13 +366,7 @@ const analystRoutes: FastifyPluginAsync = async (fastify) => {
     async (req, reply) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
-      if (!client) {
-        throw new AppError(
-          "ANALYST_NOT_CONFIGURED",
-          "The analyst is not switched on for this server: it needs a Claude API key (ANTHROPIC_API_KEY).",
-          503,
-        );
-      }
+      if (!client) throw notConfigured();
       if (!config.simServiceUrl) {
         throw BadRequest("SIM_UNAVAILABLE", "Options are tested by the simulation service, and this server is not connected to one (SIM_SERVICE_URL).");
       }
@@ -500,13 +508,7 @@ const analystRoutes: FastifyPluginAsync = async (fastify) => {
     async (req, reply) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
-      if (!client) {
-        throw new AppError(
-          "ANALYST_NOT_CONFIGURED",
-          "The analyst is not switched on for this server: it needs a Claude API key (ANTHROPIC_API_KEY).",
-          503,
-        );
-      }
+      if (!client) throw notConfigured();
       const { domains } = await getWebSources(req.db, env.id);
       if (domains.length === 0) {
         throw BadRequest("NO_WEB_SOURCES", "This project allows no web source, so there is nowhere to search. Add at least one under Sources.");

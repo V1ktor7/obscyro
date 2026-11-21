@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "53ebd84577cf976d"
+translatedFrom: "39e23454f25b6ba1"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -105,7 +105,7 @@ sequenceDiagram
 ```
 
 **Rules.**
-- Model `claude-opus-5-5`, effort `medium`, free choice of tool. A request refused by a safeguard is replayed on the fallback model the API provides (`fallbacks: "default"`).
+- Model: the one named by the `ANALYST_MODEL` variable of the service, among `claude-opus-5-5` (taken when it is empty), `claude-sonnet-5-5` and `claude-haiku-5-5`. A value outside that list switches the analyst off, which says so, instead of making it fall back on another model. Effort `medium`, free choice of tool. A request refused by a safeguard is replayed on the fallback model the API provides (`fallbacks: "default"`).
 - At most 16 requests to the model per exchange, and 2 drafts sent back for untraceable figures.
 - Delivery goes through the closing's tool, alone in its turn. An answer in prose is asked for again once, then abandoned. Twice when the exchange searches online: there, prose is a step, since it is where the cited passages come from (A10).
 - Online search is not run by the loop but by the API, inside a request. The loop reads in each response what the API searched, the pages returned and the passages cited, and makes numbered steps of them like the others. A returned page carries no citable figure; only a passage does.

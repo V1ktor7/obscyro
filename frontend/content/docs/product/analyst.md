@@ -3,7 +3,7 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "d3451ed4d78fda15"
+translatedFrom: "51805469e6ed353a"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
@@ -37,6 +37,18 @@ The diagrams of the loop, the verifier and the calculator are in [Algorithms](/d
 It reads the twin through the Claude API. It needs the `ANTHROPIC_API_KEY` variable on the API service. Without it the analyst is off, the panel says so, and nothing else in the product depends on it.
 
 It also needs credit on the Claude account of that key. When there is none left, the API refuses every request, and the analyst says so as it is: “The analyst's Claude account has no credit left, so it cannot answer. An administrator has to add credit in the Claude Console; trying again will not help until then.” No answer is made up in its place.
+
+**The model.** The analyst runs on the Claude model named by the `ANALYST_MODEL` variable of the API service, read when the service starts. Three values are accepted:
+
+| Value | Price published by Anthropic per million tokens, input and output, read on 2026-11-21 |
+|---|---|
+| `claude-opus-5-5`, also taken when the variable is empty | $4 and $20 |
+| `claude-sonnet-5-5` | $2 and $10 |
+| `claude-haiku-5-5` | $0.10 and $0.50 when the request is 100,000 tokens or fewer; $0.50 and $2.50 above that |
+
+Any other value switches the analyst off, and the panel says which one it was given. It does not fall back on another model: a slip in the name of a cheaper model must not be billed at the price of the dearest one without anyone knowing. The model that answered is written under each answer (“Written by…”) and kept in the journal.
+
+Only `claude-opus-5-5` has answered the reference questions. The other two accept the same request according to Anthropic's documentation, but what their answers are worth is only known by replaying those questions: changing model means replaying them. The effort asked for is `medium` for all three.
 
 What the tools read from the twin (counts and capacities, never a person) is sent to the Claude API to write the answer. The panel says so at its foot.
 
@@ -381,6 +393,7 @@ What is not judged: the quality of the writing. That still takes a person, who r
 - An event has only a place written in words. It is tied to no territory of the twin, and the engine does not receive it: it is a marker for reading a run, not an input of the run.
 - The validated events are the project's, not a scenario's: every scenario of the project sees the same calendar.
 - An event search costs about 70 cents: each search launched returns ten pages, close to 15,000 tokens, and no setting of the API lets you ask for fewer without giving up the cap on searches. See “What a search costs”.
+- The reference questions have only been replayed on `claude-opus-5-5`. On another model (`ANALYST_MODEL`), nothing says yet that the answers stay right.
 - The twin holds no staff, no stocks and no history: the analyst says so, it does not fill the gap. So it cannot say what was open earlier, or what changed since this morning.
 - The age of a live figure is that of the reading of the whole unit, the oldest of its sources when it has several.
 - The open signals `list_alerts` counts include those whose alert has cleared: they can be far more numerous than the open alerts.

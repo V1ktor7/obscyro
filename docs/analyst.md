@@ -32,6 +32,18 @@ Il lit le jumeau à travers l'API Claude. Il lui faut la variable `ANTHROPIC_API
 
 Il lui faut aussi du crédit sur le compte Claude de cette clé. Quand il n'y en a plus, l'API refuse chaque demande, et l'analyste le dit tel quel : « The analyst's Claude account has no credit left, so it cannot answer. An administrator has to add credit in the Claude Console; trying again will not help until then. » Aucune réponse n'est inventée à la place.
 
+**Le modèle.** L'analyste tourne sur le modèle Claude que nomme la variable `ANALYST_MODEL` du service de l'API, lue au démarrage du service. Trois valeurs sont acceptées :
+
+| Valeur | Tarif publié par Anthropic par million de jetons, en entrée et en sortie, lu le 2026-11-21 |
+|---|---|
+| `claude-opus-5-5`, pris aussi quand la variable est vide | 4 $ et 20 $ |
+| `claude-sonnet-5-5` | 2 $ et 10 $ |
+| `claude-haiku-5-5` | 0,10 $ et 0,50 $ quand la demande fait 100 000 jetons ou moins ; 0,50 $ et 2,50 $ au-delà |
+
+Toute autre valeur éteint l'analyste, et le panneau dit laquelle il a reçue. Il ne retombe pas sur un autre modèle : une faute de frappe dans le nom d'un modèle moins cher ne doit pas être facturée au prix du plus cher sans que personne le sache. Le modèle qui a répondu est écrit sous chaque réponse (« Written by… ») et gardé dans le journal.
+
+Seul `claude-opus-5-5` a répondu aux questions de référence. Les deux autres acceptent la même demande d'après la documentation d'Anthropic, mais ce que valent leurs réponses ne se sait qu'en rejouant ces questions : changer de modèle, c'est les rejouer. L'effort demandé est `medium` pour les trois.
+
 Ce que les outils lisent du jumeau (des comptes et des capacités, jamais une personne) est envoyé à l'API Claude pour rédiger la réponse. Le panneau le dit en pied.
 
 L'onglet Event finder utilise la recherche web de l'API Claude. Elle n'a pas de variable à elle : elle marche avec la même clé, à deux conditions qui se règlent dans la console Claude et non dans le produit. La recherche web doit être permise pour l'organisation (elle l'est par défaut ; coupée, la demande échoue avec une erreur du modèle), et les domaines du projet ne doivent pas sortir d'une liste que l'organisation aurait restreinte. Elle est facturée en plus des jetons : 10 $ US pour 1 000 recherches au tarif lu le 2026-11-17 et relu le 2026-11-20, huit recherches au plus par demande.
@@ -375,6 +387,7 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 - Un événement n'a qu'un lieu écrit en mots. Il n'est relié à aucun territoire du jumeau, et le moteur ne le reçoit pas : c'est un repère pour lire un run, pas une entrée du run.
 - Les événements validés sont ceux du projet, pas d'un scénario : tous les scénarios du projet voient le même calendrier.
 - Une recherche d'événements coûte environ 70 cents : chaque recherche lancée renvoie dix pages, près de 15 000 jetons, et aucun réglage de l'API ne permet d'en demander moins sans renoncer au plafond de recherches. Voir « Ce que coûte une recherche ».
+- Les questions de référence n'ont été rejouées que sur `claude-opus-5-5`. Sur un autre modèle (`ANALYST_MODEL`), rien ne dit encore que les réponses restent justes.
 - Le jumeau ne contient ni personnel, ni stocks, ni historique : l'analyste le dit, il ne le comble pas. Il ne peut donc pas dire ce qui était ouvert plus tôt, ni ce qui a changé depuis ce matin.
 - L'âge d'un chiffre en direct est celui de la lecture de l'unité entière, le plus vieux de ses sources quand elle en a plusieurs.
 - Les signaux ouverts que `list_alerts` compte comprennent ceux dont l'alerte est retombée : ils peuvent être bien plus nombreux que les alertes ouvertes.

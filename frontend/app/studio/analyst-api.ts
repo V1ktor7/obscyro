@@ -116,7 +116,20 @@ export interface RunDigest {
   stranded: { names: string[]; residents: number } | null;
 }
 
-export async function fetchAnalyst(env: string): Promise<{ configured: boolean; model: string }> {
+/**
+ * Whether the analyst can be asked on this server, and on which model. When it
+ * cannot, `reason` names the setting at fault and `why` says it in the
+ * server's own words. Both are absent from an older server.
+ */
+export interface AnalystStatus {
+  configured: boolean;
+  model: string;
+  models?: string[];
+  reason?: "no_key" | "unknown_model" | null;
+  why?: string | null;
+}
+
+export async function fetchAnalyst(env: string): Promise<AnalystStatus> {
   return apiFetch(`/v1/ontology/${enc(env)}/analyst`);
 }
 

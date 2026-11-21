@@ -99,7 +99,7 @@ sequenceDiagram
 ```
 
 **Règles.**
-- Modèle `claude-opus-5-5`, effort `medium`, choix d'outil libre. Une demande refusée par un garde-fou est rejouée sur le modèle de repli prévu par l'API (`fallbacks: "default"`).
+- Modèle : celui que nomme la variable `ANALYST_MODEL` du service, parmi `claude-opus-5-5` (pris quand elle est vide), `claude-sonnet-5-5` et `claude-haiku-5-5`. Une valeur hors de cette liste éteint l'analyste, qui le dit, au lieu de le faire retomber sur un autre modèle. Effort `medium`, choix d'outil libre. Une demande refusée par un garde-fou est rejouée sur le modèle de repli prévu par l'API (`fallbacks: "default"`).
 - Au plus 16 requêtes au modèle par échange, et 2 brouillons renvoyés pour chiffres introuvables.
 - La livraison passe par l'outil de la clôture, seul dans son tour. Une réponse en prose est redemandée une fois, puis abandonnée. Deux fois quand l'échange cherche en ligne : la prose y est une étape, c'est d'elle que viennent les passages cités (A10).
 - La recherche en ligne n'est pas exécutée par la boucle mais par l'API, à l'intérieur d'une requête. La boucle lit dans chaque réponse ce que l'API a cherché, les pages rendues et les passages cités, et en fait des étapes numérotées comme les autres. Une page rendue ne porte aucun chiffre citable ; seul un passage en porte.
