@@ -32,16 +32,33 @@ export interface PageFocus {
   signalId?: string;
 }
 
-const FocusContext = createContext<{ focus: PageFocus; setFocus: (f: PageFocus) => void } | null>(null);
+const FocusContext = createContext<{
+  focus: PageFocus;
+  setFocus: (f: PageFocus) => void;
+  /** How many times a page has asked for the analyst. */
+  asked: number;
+  ask: () => void;
+} | null>(null);
 
 export function AnalystFocusProvider({ children }: { children: ReactNode }) {
   const [focus, setFocusState] = useState<PageFocus>({});
+  const [asked, setAsked] = useState(0);
   const setFocus = useCallback((f: PageFocus) => {
     // The same selection again is not a change: a page re-rendering must not re-render the shell.
     setFocusState((cur) => (cur.unitId === f.unitId && cur.signalId === f.signalId ? cur : f));
   }, []);
-  const value = useMemo(() => ({ focus, setFocus }), [focus, setFocus]);
+  const ask = useCallback(() => setAsked((n) => n + 1), []);
+  const value = useMemo(() => ({ focus, setFocus, asked, ask }), [focus, setFocus, asked, ask]);
   return <FocusContext.Provider value={value}>{children}</FocusContext.Provider>;
+}
+
+/**
+ * A page opens the analyst itself: the "Ask the analyst" of a unit's sheet.
+ * The question still goes with what the page has selected. Null outside the
+ * shell, where there is no analyst to open.
+ */
+export function useOpenAnalyst(): (() => void) | null {
+  return useContext(FocusContext)?.ask ?? null;
 }
 
 /**
@@ -69,11 +86,20 @@ export function pageOf(pathname: string): string {
 
 export function AnalystDock({ env }: { env: string | null }) {
   const page = pageOf(usePathname() ?? "");
-  const focus = useContext(FocusContext)?.focus ?? {};
+  const shared = useContext(FocusContext);
+  const focus = shared?.focus ?? {};
+  const asked = shared?.asked ?? 0;
   const [open, setOpen] = useState(false);
   // Built the first time it is opened and kept after, so an answer is still there when the panel is reopened.
   const [built, setBuilt] = useState(false);
   const [off, setOff] = useState(false);
+
+  // A page asked for it: open, as the button below would.
+  useEffect(() => {
+    if (asked === 0) return;
+    setBuilt(true);
+    setOpen(true);
+  }, [asked]);
 
   useEffect(() => {
     if (!open) return;

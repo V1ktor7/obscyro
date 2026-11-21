@@ -18,6 +18,7 @@ export const DOC_NAV: DocSection[] = [
     items: [
       { title: "The decision loop", slug: ["product", "decision-loop"] },
       { title: "The Scenarios page", slug: ["product", "scenarios-page"] },
+      { title: "The Units page", slug: ["product", "units-page"] },
       { title: "The analyst", slug: ["product", "analyst"] },
       { title: "Algorithms", slug: ["product", "algorithms"] },
       { title: "Changelog", slug: ["product", "changelog"] },

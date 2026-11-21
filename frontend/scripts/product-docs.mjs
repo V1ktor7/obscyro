@@ -34,7 +34,7 @@ export const SOURCE_DIR = path.resolve(HERE, "..", "..", "docs");
 export const OUT_DIR = path.resolve(HERE, "..", "content", "docs", "product");
 
 /** The pages the site publishes, in the order it lists them. */
-export const PRODUCT_DOCS = ["decision-loop", "scenarios-page", "analyst", "algorithms", "changelog"];
+export const PRODUCT_DOCS = ["decision-loop", "scenarios-page", "units-page", "analyst", "algorithms", "changelog"];
 
 /** What a page says, reduced to sixteen characters. Line endings do not count: git may rewrite them. */
 export function fingerprint(text) {

@@ -70,6 +70,7 @@ Elles ne se négocient pas, et elles s'appliquent à tout ce qui touche à la bo
 | Un algorithme (ajouté, modifié, supprimé) | Sa section **et son schéma** dans [docs/algorithms.md](docs/algorithms.md), et la table en tête du fichier |
 | L'analyste (outil, prompt, vérificateur, écran) | [docs/analyst.md](docs/analyst.md), et les schémas A1 à A3 |
 | La page Scenarios (un panneau, le guide) | [docs/scenarios-page.md](docs/scenarios-page.md) |
+| La page Units (la liste, les tuiles, la fiche d'une unité) | [docs/units-page.md](docs/units-page.md) |
 | Une étape de la boucle de décision | La table d'état de [docs/decision-loop.md](docs/decision-loop.md) |
 | Le moteur d'événements | `simulation-service/app/events/README.md`, et les schémas de la partie B |
 | Une route de l'API | Son `summary` et sa `description` dans le schéma de la route, et le document qui en parle |
@@ -77,7 +78,7 @@ Elles ne se négocient pas, et elles s'appliquent à tout ce qui touche à la bo
 | Le thème du Studio (un rôle de couleur, une rampe de carte, la navigation) | [design/PALETTE.md](design/PALETTE.md) |
 | Une migration | L'en-tête du fichier SQL |
 | Une fonction ajoutée ou modifiée, que quelqu'un qui utilise le produit peut voir | Une entrée datée en tête de [docs/changelog.md](docs/changelog.md), marquée **Nouvelle fonction** ou **Modification** |
-| Une page de `docs/` que le site publie (`decision-loop`, `scenarios-page`, `analyst`, `algorithms`, `changelog`) | Sa traduction anglaise dans `frontend/content/docs/product/`, dans le même commit, puis `npm run docs:stamp` dans `frontend/`. Un test du frontend échoue tant que la page anglaise n'a pas suivi sa source ; `npm run docs:check` dit lesquelles sont en retard |
+| Une page de `docs/` que le site publie (`decision-loop`, `scenarios-page`, `units-page`, `analyst`, `algorithms`, `changelog`) | Sa traduction anglaise dans `frontend/content/docs/product/`, dans le même commit, puis `npm run docs:stamp` dans `frontend/`. Un test du frontend échoue tant que la page anglaise n'a pas suivi sa source ; `npm run docs:check` dit lesquelles sont en retard |
 | Une suppression | On retire la section et le schéma. Pas de documentation orpheline |
 
 Les schémas sont en Mermaid, pour qu'ils s'affichent sur GitHub et se relisent dans un diff. Un schéma se dessine d'après le code qu'on vient de lire, jamais de mémoire : un schéma faux est pire qu'un schéma absent. Chaque section d'algorithme nomme ses fichiers et ses tests, pour qu'on puisse vérifier.

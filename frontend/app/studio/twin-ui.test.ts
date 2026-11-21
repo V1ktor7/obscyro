@@ -5,6 +5,7 @@ import {
   formatTwinMetric,
   kindIconName,
   severityDotClass,
+  twinMetricNumber,
 } from "./twin-ui";
 
 describe("twin-ui", () => {
@@ -52,6 +53,26 @@ describe("twin-ui", () => {
   it("kindIconName maps kinds", () => {
     expect(kindIconName("ward")).toBe("BedDouble");
     expect(kindIconName("lab")).toBe("FlaskConical");
+  });
+
+  it("twinMetricNumber reads the number an alert rule would threshold", () => {
+    // A measure the organisation defined wins over a built-in of the same name.
+    expect(twinMetricNumber(metrics, "occupancy")).toBe(75.5);
+    expect(twinMetricNumber(metrics, "occupancyPct")).toBe(75.5);
+    expect(twinMetricNumber(metrics, "linkedInstanceCount")).toBe(13);
+    expect(twinMetricNumber(metrics, "freshnessSeconds")).toBe(125);
+    expect(twinMetricNumber(metrics, "count:Patient")).toBe(3);
+    expect(twinMetricNumber(metrics, "mean:spo2")).toBe(94.2);
+    expect(twinMetricNumber(metrics, "spo2")).toBe(94.2);
+  });
+
+  it("twinMetricNumber keeps a missing value missing", () => {
+    // Not a zero: a unit that reports nothing for a measure is not at 0.
+    expect(twinMetricNumber(metrics, "wastewater")).toBeNull();
+    expect(twinMetricNumber({ ...metrics, values: { occupancy: null } }, "occupancy")).toBeNull();
+    expect(twinMetricNumber(undefined, "occupancy")).toBeNull();
+    // A count of a type nothing is linked to is a true zero.
+    expect(twinMetricNumber(metrics, "count:Ventilator")).toBe(0);
   });
 });
 

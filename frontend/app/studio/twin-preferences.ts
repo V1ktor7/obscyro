@@ -46,12 +46,3 @@ export function saveTwinPreferences(
     /* ignore */
   }
 }
-
-export const KIND_FILTER_OPTIONS = [
-  { value: null, label: "All kinds" },
-  { value: "org", label: "Org" },
-  { value: "hospital", label: "Hospital" },
-  { value: "department", label: "Department" },
-  { value: "ward", label: "Ward" },
-  { value: "lab", label: "Lab" },
-] as const;

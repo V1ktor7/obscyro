@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "2e9f28d9e415e3f5"
+translatedFrom: "d57dc1ef74d1b83f"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -15,6 +15,10 @@ An entry is written the day the change ships, in the same commit as the code. Si
 
 ## 21 November 2026
 
+- **Change · Studio.** The Units page is redone. The units are no longer a column of cards in no order: they are a list ranked on the measure chosen, the units in alert first. The counters at the top (“In alert”, “Reporting, no alert”, “No value”) are also the filters. The units that report nothing for the measure are folded away, and are never read as a zero. You find a unit by its name, without the accents, and you sort from highest to lowest, the reverse, or by name. A name reads in full. The unit's sheet stays beside the list instead of opening in a window: you compare by clicking from one line to the next. Detail: [the Units page](/docs/product/units-page).
+- **New feature · Studio.** A “Tiles” view on the Units page: one square per unit that has a value, coloured by its distance from the alert threshold, to see the whole network at a glance.
+- **New feature · Studio.** On the Units page, a twin that has a hierarchy unfolds: a click on a unit shows what it contains, and a folded unit says how many units under it are in alert.
+- **Change · Studio.** On the Units page, “Measures” and “Alert thresholds” are buttons with their name, in place of two icons. “Seed demo” is now offered only on a project with no unit. “Ask the analyst”, in a unit's sheet, opens the analyst with that unit.
 - **Change · Alerts.** The Response board shows first what needs somebody. The signals raised by an alert that cleared on its own, and that nobody has touched, are set apart in an “Alert cleared” tab, always counted next to the “Active” tab. A signal somebody has taken up stays on the board, marked “alert cleared” once its alert has cleared.
 - **New feature · Alerts.** The signals set apart close in one go, by domain, with a required reason. Each signal's log keeps who closed them and why, and they are recorded as cleared on their own: neither resolved, nor false positives.
 - **Change · Alerts.** An acknowledgement holds for as long as the condition holds. Before, an acknowledged alert was reopened five seconds later, with a new signal and a new banner. If the rule fires at a higher severity, it is a new alert.

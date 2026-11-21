@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "27b7f6ab0b4c7217"
+translatedFrom: "e1db55ee80bc24f2"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -928,7 +928,7 @@ flowchart TD
     L --> N{"Alert absent from the previous read,<br/>and opened since?"}
     N -->|"yes"| O["Banner on every page, two minutes:<br/>Situation, Open unit, Signal"]
     N -->|"no, or first read"| M
-    L --> P["Pages of the twin: the same alerts on the map, the tree, the unit sheet"]
+    L --> P["Pages of the twin: the same alerts on the map, the list of units, the unit sheet"]
     L --> Q["Response: the board refreshes when the signals change"]
     Q --> V{"Signal raised by a resolved alert,<br/>and that nobody has touched?"}
     V -->|"no"| W["Active view, the one on arrival:<br/>the card says if its alert is acknowledged or has cleared"]
@@ -966,7 +966,7 @@ flowchart TD
 
 **Delay.** From the moment a piece of data is written here to the moment the alert is on screen: at most five seconds of waiting by the evaluator, the duration of an evaluation, then at most three seconds of reading. That is a little over nine seconds at worst.
 
-**Code.** `backend/src/services/twin-alert-scheduler.ts` (`nextEvaluationDelay`, `evaluationPulse`), `alert-bridge.ts`, `response-retest.ts` (`requestRetests`), `alert-feed.ts`, `signals.ts` (`listSignals`, `countSignals`, `countOpenSignals`, `countOpenByType`, `domainCounters`, `closeClearedSignals`), `twin.ts` (`evaluateAlerts`, `ackAlert`, `readsReality`), `twin-alert-scheduler.ts` (`alertsOnFile`, `resolveAlerts`), routes `GET /v1/ontology/:env/alerts/feed` and `PATCH /v1/ontology/:env/twin/alerts/:id` in `backend/src/routes/twin.ts`, `GET /v1/ontology/:env/command-board` and `POST /v1/ontology/:env/signals/close-cleared` in `backend/src/routes/signals.ts`, migrations `063_twin_alert_times.sql` and `064_twin_alert_observed_basis.sql`; `frontend/app/studio/AlertFeed.tsx`, `alert-feed-state.ts`, `AlertBanner.tsx`, `StudioShell.tsx`, `signals-api.ts`, `response/ResponseView.tsx`, `live/LiveTwinView.tsx`.
+**Code.** `backend/src/services/twin-alert-scheduler.ts` (`nextEvaluationDelay`, `evaluationPulse`), `alert-bridge.ts`, `response-retest.ts` (`requestRetests`), `alert-feed.ts`, `signals.ts` (`listSignals`, `countSignals`, `countOpenSignals`, `countOpenByType`, `domainCounters`, `closeClearedSignals`), `twin.ts` (`evaluateAlerts`, `ackAlert`, `readsReality`), `twin-alert-scheduler.ts` (`alertsOnFile`, `resolveAlerts`), routes `GET /v1/ontology/:env/alerts/feed` and `PATCH /v1/ontology/:env/twin/alerts/:id` in `backend/src/routes/twin.ts`, `GET /v1/ontology/:env/command-board` and `POST /v1/ontology/:env/signals/close-cleared` in `backend/src/routes/signals.ts`, migrations `063_twin_alert_times.sql` and `064_twin_alert_observed_basis.sql`; `frontend/app/studio/AlertFeed.tsx`, `alert-feed-state.ts`, `AlertBanner.tsx`, `StudioShell.tsx`, `signals-api.ts`, `response/ResponseView.tsx`, `live/UnitsView.tsx`.
 **Tests.** `twin-alert-scheduler.unit.test.ts`, `twin-alert-ack.unit.test.ts`, `alert-bridge.unit.test.ts`, `alert-feed.unit.test.ts`, `signals.unit.test.ts`; `alert-feed-state.test.ts`, `AlertBanner.test.tsx`, `response/ResponseView.test.tsx`, `platform-nav.test.ts`.
 
 ## D6. Twin metrics

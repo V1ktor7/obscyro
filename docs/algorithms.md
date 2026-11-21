@@ -178,7 +178,7 @@ flowchart TD
 flowchart TD
     S["Tampons du scénario"] --> C["Conditions de départ : occupation habituelle,<br/>immunité préalable, transmissibilité"]
     S --> E["Événements : éclosions, canicule"]
-    S --> K["Choix : mesures, capacité ajoutée"]
+    S --> K["Choix : mesures, capacité ajoutée,<br/>réponse enregistrée"]
     C --> V1["Passe 1 : événements seuls"]
     E --> V1
     C --> V2["Passe 2 : avec les choix"]
@@ -193,7 +193,7 @@ flowchart TD
     EV --> W{"Qui lance le run ?"}
     W -->|"la page, bouton Run"| EP["Événement stocké sous un nom fixe,<br/>par trois routes de l'API"]
     W -->|"le serveur : une option testée,<br/>le retest d'une réponse préparée,<br/>ou POST /analyst/run"| ES["Événement envoyé au moteur, rien n'est stocké"]
-    EP --> RUN["Simulation du réseau, sans réponse,<br/>à travers le scénario"]
+    EP --> RUN["Simulation du réseau à travers le scénario :<br/>sans réponse, ou en suivant la réponse enregistrée<br/>que la passe contient"]
     ES --> RUN
     RUN --> G["Par jour et par site : occupation, file,<br/>capacité. Par jour : arrivées, non servis"]
     G --> D["Résumé du run : les deux passes, les sites où l'on attend"]
@@ -210,8 +210,13 @@ flowchart TD
 - Sur la page, les deux événements stockés sont réécrits à chaque run sous un nom fixe. Sur le serveur, rien n'est stocké : une option testée n'est pas un événement de la bibliothèque, et l'analyste n'écrit rien.
 - L'occupation de l'île est pondérée par la capacité de chaque site, capacité ajoutée comprise à partir du jour où elle ouvre.
 - Les deux côtés lisent le jumeau de la même façon : le contexte (sites, territoires, modèle déclaré) vient du jumeau tel qu'il est, et le moteur reçoit le jumeau lu à travers le scénario.
+- **Une réponse enregistrée est un tampon comme les autres** (`response`). Tout autre tampon est quelque chose qui arrive un jour donné ; celui-ci porte des règles que le moteur évalue à chaque pas (B4). C'est un choix : seule la passe « avec les choix » la suit, à la place de la réponse « ne rien faire » ; la passe « événements seuls » ne répond jamais. Trois provenances : la bibliothèque de l'organisation (page Events), dont les règles voyagent dans le tampon telles qu'elles étaient quand on l'a posé ; une réponse que le moteur écrit lui-même d'après le réseau, qui part sous son nom ; et un transfert écrit par le test d'une option de l'analyste (A8).
+- **Le jour d'une réponse.** Les règles d'une réponse posée au jour 12 ne s'appliquent pas avant le jour 12 : chaque règle est décalée, et une règle que son auteur faisait déjà commencer plus tard garde son propre jour (`rulesFromStep`, la fonction avec laquelle le rejeu de la page des unités bifurque). Une réponse que le moteur écrit lui-même vaut pour tout le run : le moteur écrit ses règles, on ne peut pas les décaler.
+- **Une réponse par run.** Le moteur en suit une à la fois. Si la recette en contient deux, la première par le jour est suivie, et le panneau Result nomme celle qui ne l'est pas.
+- **Ce qu'une réponse a coûté.** Le serveur lit dans la table des pas ce que le moteur a compté : le coût que chaque règle déclare pour son action, chaque fois que l'action s'est déclenchée (`PassDigest.cost`). Zéro quand la passe ne suit aucune réponse, ou une réponse dont aucune règle ne déclare de coût ; ce que ce zéro veut dire se décide en A8.
+- **Une limite dite.** Une réponse qui ajoute ou déplace des unités pendant le run change la capacité des sites, et le moteur ne rend pas la capacité de chaque jour. L'occupation de l'île est alors pondérée par la capacité habituelle, et le run le dit dans ses notes.
 
-**Le même scénario donne les mêmes chiffres sur la page et sur le serveur.** La traduction des tampons et la lecture des tables existent en deux exemplaires, un par côté. Ce qui les tient ensemble est un enregistrement du vrai moteur, `backend/src/services/scenario-run-parity.fixture.json` : un petit jumeau, un scénario, une option, ce que chaque run demande au moteur, ce que le moteur répond, et le résumé qui en sort. Le test du serveur et celui de la page le rejouent tous les deux, chacun avec son propre code. Chacun doit envoyer au moteur les demandes enregistrées et retrouver les chiffres enregistrés : changer un côté seul fait échouer l'autre.
+**Le même scénario donne les mêmes chiffres sur la page et sur le serveur.** La traduction des tampons et la lecture des tables existent en deux exemplaires, un par côté. Ce qui les tient ensemble est un enregistrement du vrai moteur, `backend/src/services/scenario-run-parity.fixture.json` : un petit jumeau, un scénario, des options, ce que chaque run demande au moteur (les effets, et la réponse suivie quand il y en a une), ce que le moteur répond, et le résumé qui en sort. Le test du serveur et celui de la page le rejouent tous les deux, chacun avec son propre code. Chacun doit envoyer au moteur les demandes enregistrées et retrouver les chiffres enregistrés : changer un côté seul fait échouer l'autre.
 
 ```mermaid
 flowchart LR
@@ -224,13 +229,13 @@ flowchart LR
     Q -->|"non d'un côté"| KO["Ce côté a changé seul : son test échoue"]
 ```
 
-L'enregistrement contient trois runs : le scénario tel quel, le scénario avec les tampons d'une option, et le scénario où une option a remplacé un choix (l'ancien tampon retiré, le nouveau écrit). Les deux derniers sont ce qui garantit qu'appliquer une option testée au scénario puis lancer Run redonne les chiffres du test. Il se régénère à la main quand le moteur ou la traduction change (`cd backend && npx tsx scripts/make-scenario-run-fixture.ts`, avec Python et les dépendances du service de simulation), puis on relance les deux suites.
+L'enregistrement contient six runs : le scénario tel quel ; le scénario avec les tampons d'une option ; le scénario où une option a remplacé un choix (l'ancien tampon retiré, le nouveau écrit) ; et trois runs avec une réponse enregistrée : une réponse de la bibliothèque (un transfert de patients, posé un jour donné, à un coût déclaré), une réponse que le moteur écrit lui-même, et le transfert tel que le test de l'analyste l'écrit. Tous sauf le premier sont ce qui garantit qu'appliquer une option testée au scénario puis lancer Run redonne les chiffres du test, réponse enregistrée comprise. Il se régénère à la main quand le moteur ou la traduction change (`cd backend && npx tsx scripts/make-scenario-run-fixture.ts`, avec Python et les dépendances du service de simulation), puis on relance les deux suites.
 
 Sur le serveur, le run existe en deux formes. `ScenarioRunner.digest` fait les deux passes, comme la page : c'est lui que le test de parité rejoue, et c'est lui que `serverRun` appelle pour la route `POST /v1/ontology/:env/analyst/run`. Cette route rend le résumé qu'une personne aurait à l'écran après Run, pour qu'une question sur le run puisse être posée par un script, sans navigateur ([analyst.md](analyst.md), les questions de référence). Elle n'appelle aucun modèle, n'écrit rien, et refuse une activité qu'aucun site n'offre avant de solliciter le moteur. `ScenarioRunner.full` ne fait que la passe « avec les choix » : c'est ce que lit une option testée (A8), parce que le tableau des options compare le scénario avec ses choix au scénario avec l'option en plus, et que la passe « événements seuls » n'y montre rien. Le retest d'une réponse préparée (A11) lit la même passe, pour la même raison. Les deux formes passent par le même résumé d'une passe (`passFigures`), donc une colonne du tableau ne peut pas différer de ce que Run affiche pour la même passe ; un test le vérifie sur l'enregistrement.
 
 Tester plusieurs options ne refait pas tout : une propagation est gardée d'après ce qu'on lui a demandé, donc une option qui n'ajoute que des lits ne réintègre pas l'épidémie. Chaque appel au moteur est chronométré (`timings`), pour que la durée d'un test soit une mesure et pas une impression.
 
-**Code.** Page : `frontend/app/studio/simulation/hex/engine.ts` (`runScenario`), `stamps.ts` (`engineInput`), `run-digest.ts`. Serveur : `backend/src/services/scenario-run.ts` (`ScenarioRunner`, `serverRun`), `scenario-stamps.ts` (`engineInput`, `twinContext`), `scenario-run-recording.ts`, route `POST /v1/ontology/:env/analyst/run` dans `backend/src/routes/analyst.ts`. Enregistrement : `backend/scripts/make-scenario-run-fixture.ts`, `simulation-service/scripts/engine_once.py`.
+**Code.** Page : `frontend/app/studio/simulation/hex/engine.ts` (`runScenario`), `stamps.ts` (`engineInput`), `run-digest.ts`, `frontend/app/studio/command/branch.ts` (`rulesFromStep`). Serveur : `backend/src/services/scenario-run.ts` (`ScenarioRunner`, `serverRun`, `costByStep`), `scenario-stamps.ts` (`engineInput`, `rulesFromStep`, `twinContext`), `scenario-run-recording.ts`, route `POST /v1/ontology/:env/analyst/run` dans `backend/src/routes/analyst.ts`. Enregistrement : `backend/scripts/make-scenario-run-fixture.ts`, `simulation-service/scripts/engine_once.py`.
 **Tests.** `hex.test.ts`, `HexTwinView.test.tsx`, `run-parity.test.ts` (page) ; `scenario-run.unit.test.ts` (serveur).
 
 ## A5. Où ça casse
@@ -304,8 +309,10 @@ flowchart TD
 flowchart TD
     A["Objectif de la personne,<br/>scénario ouvert, horizon et activité de la page"] --> B["L'analyste lit : run à l'écran, site, territoires, recette"]
     B --> B2["scenario_recipe : chaque choix du scénario<br/>porte un nom (choice-a, choice-b…)"]
-    B2 --> C["test_option : une étiquette et 1 à 4 changements.<br/>Ajouter une capacité ou une mesure,<br/>remplacer un choix nommé, ou le retirer"]
-    C --> D{"Testable ?<br/>site connu qui offre l'activité, couche déclarée,<br/>jour dans le run, pas déjà testée, moins de 3 tests"}
+    B --> B3["list_responses : les réponses enregistrées<br/>(bibliothèque, moteur), chacune sous un nom,<br/>et où les patients d'un site peuvent être envoyés"]
+    B2 --> C["test_option : une étiquette et 1 à 4 changements.<br/>Ajouter une capacité, une mesure, un transfert<br/>ou une réponse enregistrée ;<br/>remplacer un choix nommé, ou le retirer"]
+    B3 --> C
+    C --> D{"Testable ?<br/>site connu qui offre l'activité, couche déclarée,<br/>route de transfert dans le jumeau, une seule réponse,<br/>jour dans le run, pas déjà testée, moins de 3 tests"}
     D -->|"non"| E["Refus motivé, lu par le modèle.<br/>Ne compte pas comme un test"]
     E --> B
     D -->|"oui"| D2{"Le changement nomme-t-il<br/>un choix du scénario ?"}
@@ -318,7 +325,7 @@ flowchart TD
     F --> H["Une passe du scénario, les tampons retirés en moins,<br/>ceux de l'option en plus (A4)"]
     G --> I["Résultat pour le modèle : les deux runs en résumé,<br/>les sites où l'on attend, sur quoi l'option repose"]
     H --> I
-    H --> J["Relevé pour l'écran : chiffres entiers, tampons écrits,<br/>choix retirés, ce qui est ajouté, remplacé, retiré,<br/>arrivées par jour, niveaux de preuve"]
+    H --> J["Relevé pour l'écran : chiffres entiers, tampons écrits,<br/>choix retirés, ce qui est ajouté, remplacé, retiré,<br/>arrivées par jour, niveaux de preuve,<br/>coût compté par le moteur"]
     I --> K{"Autre option à tester ?"}
     K -->|"oui"| C
     K -->|"non"| L["give_options : un mécanisme par option,<br/>ce que le test ne dit pas, lecture, arbitrages, limites"]
@@ -328,6 +335,9 @@ flowchart TD
     M -->|"oui"| O["Vérificateur de chiffres sur chaque phrase (A2)"]
     O --> P["Proposition : tableau tiré des relevés,<br/>dans l'ordre des tests, sans classement"]
     J --> P
+    P --> P2{"Deux options dont le coût est entier,<br/>et l'une coûte autant ou plus<br/>pour autant ou plus d'attente ?"}
+    P2 -->|"oui"| P3["Celle-là est marquée Dominated,<br/>avec le nom de l'option qui la domine"]
+    P2 -->|"non"| P4["Aucune marque"]
     P --> Q{"Add to scenario / Apply to scenario :<br/>clic humain. L'option retire-t-elle un choix ?"}
     Q -->|"non"| Q1["Les tampons sont écrits"]
     Q -->|"oui"| Q2["La recette est relue"]
@@ -342,20 +352,26 @@ flowchart TD
 - Les passes se suivent, elles ne tournent pas en même temps. Le service de simulation est un seul processus : mesuré en local, lancer deux passes ensemble ne gagne que 18 % sur les lancer l'une après l'autre, pour deux fois la mémoire.
 - Chaque test garde dans son relevé de quoi sa durée était faite : la lecture du jumeau (au premier test seulement), puis chaque appel au moteur. Ce relevé va au journal, pas au modèle.
 - Une capacité se teste à un site qui offre déjà l'activité ; négative, elle ferme des unités, jamais plus que le site n'en a. Une mesure se teste sur une couche de contact que le jumeau déclare.
+- **Une réponse enregistrée dans une option.** Le changement `response` nomme une réponse par le nom que `list_responses` lui donne : `response-a`, `response-b`… pour celles de la bibliothèque de l'organisation, rangées par nom ; `transfer-when-full` et `surge-then-transfer` pour les deux que le moteur écrit lui-même. Comme pour un choix, jamais un UUID. Une réponse de la bibliothèque peut commencer un jour donné ; une réponse du moteur vaut pour tout le run, et lui donner un jour est refusé. Elle devient un tampon `response` de l'option, testé par le même run que les autres tampons (A4).
+- **Un transfert de patients.** Le changement `transfer` nomme deux sites, un nombre de patients par jour et un jour. Le programme en écrit la règle (`transferRule`) : quand quelqu'un attend au premier site pour l'activité que le run lit, et que le second en a une unité libre, jusqu'à ce nombre de patients y sont envoyés. La condition sur le site d'arrivée n'est pas une précaution de plus : sans elle on envoie des patients attendre derrière ceux d'un hôpital plein. Plusieurs transferts d'une option font une seule réponse, une règle chacun. Sont refusés, avec ce qui peut être demandé à la place : deux sites entre lesquels le jumeau ne contient aucune route de transfert (le refus liste où les patients du premier peuvent aller), un site d'arrivée qui n'offre pas l'activité, plus de patients par jour qu'une route n'en porte.
+- **Ce qu'une route porte.** Le jumeau ne contient le débit d'aucune route. Le run donne donc à chacune le même : vingt patients par jour (`ROUTE_CAPACITY`), sur la page comme sur le serveur. C'est une hypothèse du moteur, et elle figure comme telle parmi ce sur quoi l'option repose ; que la route existe est, elle, une mesure du jumeau.
+- **Une réponse par run, donc par option.** Une option contient soit un changement `response`, soit des changements `transfer`. Si le scénario suit déjà une réponse, le test est refusé tant que l'option ne la retire pas (`remove`, par son nom de choix) : la tester à sa place est alors un seul test.
+- **Le coût est ce que le moteur a compté, et rien d'autre** (`costOf`). Le moteur compte une chose : le coût que la règle d'une réponse déclare pour son action, chaque fois qu'elle se déclenche. Une capacité et une mesure n'ont aucun prix dans le jumeau, et une réponse dont aucune règle ne déclare de coût est sans prix, pas gratuite : la carte l'écrit à la place d'un chiffre. Le coût d'une option est dit **entier** seulement quand elle est faite d'une réponse à prix déclaré et de rien d'autre ; avec une capacité à côté, le compte est montré et dit incomplet. Le transfert écrit par le programme ne déclare aucun coût : personne n'en a donné, et en inventer un mettrait à l'écran un chiffre qu'aucun outil n'a rendu.
+- **Une option dominée est marquée, d'après les runs.** Entre deux options au coût entier, celle qui coûte autant ou plus et laisse autant ou plus d'attente (strictement pire sur l'un des deux) porte « Dominated » et le nom de l'autre. C'est la seule comparaison de coût et d'effet qui ne demande aucun taux de change entre un dollar et un jour-patient : quelle que soit la valeur qu'on leur donne, cette option n'est pas celle à préférer sur ces deux comptes. L'attente comptée comprend celle des territoires qu'aucun site ne sert, pour qu'une file déplacée hors de vue ne passe pas pour une file évitée. Le marquage est fait par la fonction du rejeu de la page des unités (`dominatedBy`, `frontend/app/studio/command/options.ts`) : les deux écrans le font de la même façon. Une option à capacité ou à mesure n'est ni dominée ni dominante : il faudrait un prix que personne n'a donné.
 - **Remplacer ou retirer un choix.** Un changement peut prendre la place d'un choix que le scénario contient déjà (`replaces`), ou le retirer (`remove`). « 40 lits au lieu de 60 » est alors un seul tampon à +40, et non un −20 empilé sur un +60 : le test tourne sur le scénario sans l'ancien tampon et avec le nouveau, et c'est ce que la recette contiendra. Un remplacement ne dit que ce qui diffère (les unités, le jour, la durée) ; le reste est gardé du choix remplacé.
 - **Un choix se désigne par un nom, pas par son identifiant.** `scenario_recipe` donne à chaque choix un nom fait de lettres (`choice-a`, `choice-b`…), valable le temps de l'échange. L'identifiant d'un tampon est un UUID : trente-six caractères à recopier sans faute, et pleins de chiffres que le vérificateur trouverait ensuite « dans une étape ». Le relevé du test, lui, garde l'identifiant du tampon : c'est ce que la page retire.
 - **Seul un choix se remplace.** Une condition de départ dit où le run commence, un événement dit ce qui arrive : une option qui en retirerait un testerait un autre scénario en l'appelant une réponse. Ni l'un ni l'autre n'a de nom, et les désigner est refusé, avec la liste de ce qui peut l'être. Sont refusés aussi : remplacer une capacité par une mesure (on retire l'une et on ajoute l'autre, dans la même option), nommer deux fois le même choix, remplacer un choix par lui-même.
 - **Ce qui est retiré se dit.** Le relevé liste ce que l'option ajoute, remplace et retire, en phrases écrites par le programme à partir des tampons ; la carte de l'option les montre telles quelles, et « Takes out of the scenario : … » figure parmi ce sur quoi l'option repose, au niveau **hypothèse**. Une décision enregistrée les garde.
 - Un refus du moteur (un scénario sans événement, par exemple) est lu par le modèle. Un moteur injoignable est une panne : l'échange s'arrête et le dit, sans option inventée.
-- Le niveau de preuve de chaque élément est attribué par le programme, d'après d'où il vient : **mesuré** pour ce que le jumeau contient (unités d'un site, résidents d'un territoire), **publié** pour le taux d'une canicule, **hypothèse** pour les conditions du scénario, les choix, l'option elle-même et la règle de routage du moteur. Le modèle n'en choisit aucun.
+- Le niveau de preuve de chaque élément est attribué par le programme, d'après d'où il vient : **mesuré** pour ce que le jumeau contient (unités d'un site, résidents d'un territoire), **publié** pour le taux d'une canicule, **hypothèse** pour les conditions du scénario, les choix, l'option elle-même (les règles d'une réponse comprises : quand elles se déclenchent, leur délai, leur efficacité, leur coût sont ce que leur auteur a écrit), la règle de routage du moteur et le débit d'une route. Le modèle n'en choisit aucun.
 - Le mécanisme d'une option est contrôlé contre le résultat de son propre test ; la lecture, contre les étapes qu'elle cite ; le reste, contre tout ce qui a été lu. Un chiffre de l'objectif appartient à la personne et peut être repris.
 - Le mécanisme et la lecture reçoivent les deux contrôles du vérificateur (A2), comme les paragraphes d'une réponse : un chiffre que personne n'a renvoyé, et un chiffre qui existe mais qui est écrit à côté du mauvais site ou du mauvais territoire.
-- Le tableau suit l'ordre des tests. Rien ne classe les options : dire lesquelles atteignent l'objectif d'après les runs est une lecture, choisir entre elles revient à la personne. Les arbitrages de valeur sont présentés à part, comme tels.
+- Le tableau suit l'ordre des tests. Rien ne classe les options : dire lesquelles atteignent l'objectif d'après les runs est une lecture, choisir entre elles revient à la personne. Les arbitrages de valeur sont présentés à part, comme tels. « Dominated » n'est pas un classement : la marque ne dit rien de deux options dont aucune ne domine l'autre, et choisir entre celles-là reste à la personne.
 - L'analyste n'écrit rien. Une option entre dans le scénario au clic « Add to scenario », écrite comme un tampon posé sur la carte ; Run redonne alors les chiffres du test (A4). Quand l'option retire un choix, le bouton dit « Apply to scenario » : la recette est relue, et si un tampon à retirer n'y est plus (quelqu'un l'a modifié depuis le test), rien n'est écrit et l'écran le dit. Sinon le nouveau tampon est écrit puis l'ancien retiré, comme le fait la recette quand on modifie un tampon à la main : un arrêt à mi-chemin laisse un tampon de trop, qui se voit, plutôt qu'un de moins. Le jeu d'essai de parité couvre un remplacement : les chiffres du test et ceux de Run après le clic sont les mêmes. Si le scénario n'est plus celui qui a été testé, l'écran dit lequel des trois cas c'est : une option ajoutée depuis l'onglet (Run doit redonner sa colonne, les autres colonnes ne décrivent plus ce scénario), plusieurs options ajoutées ensemble (aucun test ne les a couvertes ensemble), ou une modification faite ailleurs (toutes les colonnes sont dépassées).
 - Un run n'est pas une prévision : le tableau le porte dans son titre.
 
-**Code.** `backend/src/services/analyst-options.ts` (`testOption`, `choiceNamed`, `stampOf`, `benchFor`, `optionsClosing`), `scenario-stamps.ts` (`basisOfStamp`, `choiceRefs`, `choiceLine`), `scenario-run.ts` (`ScenarioRunner.withOption`), `analyst-tools.ts` (`scenario_recipe`), route `POST /v1/ontology/:env/analyst/options` dans `backend/src/routes/analyst.ts` ; `frontend/app/studio/simulation/hex/OptionsTab.tsx`, `analyst-parts.tsx` (`OptionChanges`), `option-write.ts` (`writeOption`), `addOption` dans `HexTwinView.tsx`.
-**Tests.** `analyst-options.unit.test.ts`, `scenario-run.unit.test.ts` (parité, dont le remplacement), `analyst-tools.unit.test.ts`, `routes/analyst.unit.test.ts`, `OptionsTab.test.tsx`, `option-write.test.ts`, `run-parity.test.ts`, `DecisionsTab.test.tsx`, `HexTwinView.test.tsx`. Le jeu d'essai `scenario-run-parity.fixture.json` est écrit par `backend/scripts/make-scenario-run-fixture.ts`.
+**Code.** `backend/src/services/analyst-options.ts` (`testOption`, `choiceNamed`, `stampOf`, `responseStamp`, `transfersStamp`, `costOf`, `benchFor`, `optionsClosing`), `analyst-responses.ts` (`listResponses`, `listedResponses`, `transferRule`, `transferRoutes`, `whatRulesDo`, `declaresCost`), `scenario-stamps.ts` (`basisOfStamp`, `choiceRefs`, `choiceLine`), `scenario-run.ts` (`ScenarioRunner.withOption`, `ROUTE_CAPACITY`), `analyst-tools.ts` (`scenario_recipe`), route `POST /v1/ontology/:env/analyst/options` dans `backend/src/routes/analyst.ts` ; `frontend/app/studio/simulation/hex/OptionsTab.tsx`, `option-cards.tsx` (`weighOptions`, `CostLine`), `analyst-parts.tsx` (`OptionChanges`), `option-write.ts` (`writeOption`), `addOption` dans `HexTwinView.tsx`, `frontend/app/studio/command/options.ts` (`dominatedBy`).
+**Tests.** `analyst-options.unit.test.ts`, `scenario-run.unit.test.ts` (parité, dont le remplacement et les réponses enregistrées), `option-cards.test.tsx`, `command/options.test.ts`, `analyst-tools.unit.test.ts`, `routes/analyst.unit.test.ts`, `OptionsTab.test.tsx`, `option-write.test.ts`, `run-parity.test.ts`, `DecisionsTab.test.tsx`, `HexTwinView.test.tsx`. Le jeu d'essai `scenario-run-parity.fixture.json` est écrit par `backend/scripts/make-scenario-run-fixture.ts`.
 
 ## A9. Décision enregistrée et suivi
 
@@ -640,6 +656,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
+    A0["D'où vient la réponse : la bibliothèque de l'organisation,<br/>une réponse que le moteur écrit d'après le réseau,<br/>ou le tampon d'un scénario (A4)"] --> A
     A["Politique : règles ordonnées par priorité"] --> B["À chaque pas : condition évaluée<br/>sur l'état du moment"]
     B --> C{"Condition vraie ?"}
     C -->|"oui"| D["Action : transfert, renfort, réaffectation<br/>ou demande modifiée, avec délai, coût et efficacité"]
@@ -662,8 +679,10 @@ flowchart TD
 - C'est un ordre de priorités, pas un prix : une somme pondérée demanderait un taux de change entre une vie, un soin non rendu et un dollar, et il n'y en a pas d'honnête. L'ordre reste un jugement, et l'écran le dit.
 - L'écran nomme le compte qui a décidé de la première place. Quand rien ne sépare les deux premières réponses, aucune n'est marquée meilleure.
 - Comparer sur une seule graine reviendrait à optimiser la graine.
+- **Une réponse se lance de deux endroits.** La page Events et le rejeu de la page des unités comparent plusieurs réponses sur un même événement et les classent, comme ci-dessus. La page Scenarios en suit une, posée comme un tampon de la recette, dans la passe « avec les choix » de son run (A4) ; c'est par là que l'analyste teste un transfert de patients (A8). Ce que chaque chemin sait faire et que l'autre ne sait pas : [analyst.md](analyst.md), « Deux façons de demander “et si” ».
+- **Une option dominée se marque de la même façon des deux côtés** : coûter autant ou plus pour obtenir autant ou moins, strictement pire sur l'un des deux (`dominatedBy`). Le rejeu de la page des unités compte tout coût que le moteur rend ; l'onglet Options ne pèse que les options dont le coût est entier (A8).
 
-**Code.** `simulation-service/app/events/policy.py`, `scoring.py`, `harness.py` (`rank`, `decided_by`), `api.py` (`RANK_BY`), `frontend/app/studio/events/ranking.ts`, `backend/src/services/sim-policies.ts`. **Tests.** `tests/test_events_ranking.py`, `ranking.test.ts`.
+**Code.** `simulation-service/app/events/policy.py`, `scoring.py`, `harness.py` (`rank`, `decided_by`), `api.py` (`RANK_BY`), `frontend/app/studio/events/ranking.ts`, `frontend/app/studio/command/options.ts` (`rankOptions`, `dominatedBy`), `backend/src/services/sim-policies.ts`. **Tests.** `tests/test_events_ranking.py`, `ranking.test.ts`, `command/options.test.ts`.
 
 ## B5. Scénario en surcouche
 
@@ -922,7 +941,7 @@ flowchart TD
     L --> N{"Alerte absente de la lecture précédente,<br/>et ouverte depuis ?"}
     N -->|"oui"| O["Bandeau sur toutes les pages, deux minutes :<br/>Situation, Open unit, Signal"]
     N -->|"non, ou première lecture"| M
-    L --> P["Pages du jumeau : mêmes alertes sur la carte, l'arbre, la fiche d'unité"]
+    L --> P["Pages du jumeau : mêmes alertes sur la carte, la liste des unités, la fiche d'unité"]
     L --> Q["Response : le tableau se relit quand les signaux changent"]
     Q --> V{"Signal levé par une alerte résolue,<br/>et que personne n'a touché ?"}
     V -->|"non"| W["Vue Active, celle de l'arrivée :<br/>la carte dit si son alerte est accusée ou retombée"]
@@ -960,7 +979,7 @@ flowchart TD
 
 **Délai.** Du moment où une donnée est écrite ici au moment où l'alerte est à l'écran : au plus cinq secondes d'attente de l'évaluateur, la durée d'une évaluation, puis au plus trois secondes de lecture. Soit un peu plus de neuf secondes au pire.
 
-**Code.** `backend/src/services/twin-alert-scheduler.ts` (`nextEvaluationDelay`, `evaluationPulse`), `alert-bridge.ts`, `response-retest.ts` (`requestRetests`), `alert-feed.ts`, `signals.ts` (`listSignals`, `countSignals`, `countOpenSignals`, `countOpenByType`, `domainCounters`, `closeClearedSignals`), `twin.ts` (`evaluateAlerts`, `ackAlert`, `readsReality`), `twin-alert-scheduler.ts` (`alertsOnFile`, `resolveAlerts`), routes `GET /v1/ontology/:env/alerts/feed` et `PATCH /v1/ontology/:env/twin/alerts/:id` dans `backend/src/routes/twin.ts`, `GET /v1/ontology/:env/command-board` et `POST /v1/ontology/:env/signals/close-cleared` dans `backend/src/routes/signals.ts`, migrations `063_twin_alert_times.sql` et `064_twin_alert_observed_basis.sql` ; `frontend/app/studio/AlertFeed.tsx`, `alert-feed-state.ts`, `AlertBanner.tsx`, `StudioShell.tsx`, `signals-api.ts`, `response/ResponseView.tsx`, `live/LiveTwinView.tsx`.
+**Code.** `backend/src/services/twin-alert-scheduler.ts` (`nextEvaluationDelay`, `evaluationPulse`), `alert-bridge.ts`, `response-retest.ts` (`requestRetests`), `alert-feed.ts`, `signals.ts` (`listSignals`, `countSignals`, `countOpenSignals`, `countOpenByType`, `domainCounters`, `closeClearedSignals`), `twin.ts` (`evaluateAlerts`, `ackAlert`, `readsReality`), `twin-alert-scheduler.ts` (`alertsOnFile`, `resolveAlerts`), routes `GET /v1/ontology/:env/alerts/feed` et `PATCH /v1/ontology/:env/twin/alerts/:id` dans `backend/src/routes/twin.ts`, `GET /v1/ontology/:env/command-board` et `POST /v1/ontology/:env/signals/close-cleared` dans `backend/src/routes/signals.ts`, migrations `063_twin_alert_times.sql` et `064_twin_alert_observed_basis.sql` ; `frontend/app/studio/AlertFeed.tsx`, `alert-feed-state.ts`, `AlertBanner.tsx`, `StudioShell.tsx`, `signals-api.ts`, `response/ResponseView.tsx`, `live/UnitsView.tsx`.
 **Tests.** `twin-alert-scheduler.unit.test.ts`, `twin-alert-ack.unit.test.ts`, `alert-bridge.unit.test.ts`, `alert-feed.unit.test.ts`, `signals.unit.test.ts` ; `alert-feed-state.test.ts`, `AlertBanner.test.tsx`, `response/ResponseView.test.tsx`, `platform-nav.test.ts`.
 
 ## D6. Métriques du jumeau

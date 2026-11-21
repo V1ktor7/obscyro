@@ -5,10 +5,11 @@
 | [decision-loop.md](decision-loop.md) | La boucle d'aide à la décision : ses sept étapes, ses règles, où elle en est, ce qui vient ensuite |
 | [analyst.md](analyst.md) | L'analyste de la page Scenarios : ses quatre onglets (questions, recherche d'événements en ligne, options testées, décisions), ses outils, la règle des chiffres, ses routes, comment lui ajouter un outil |
 | [scenarios-page.md](scenarios-page.md) | La page Scenarios : ses panneaux et le guide en trois étapes |
+| [units-page.md](units-page.md) | La page Units : la liste classée des unités, ses trois états, la hiérarchie, les tuiles et la fiche d'une unité |
 | [algorithms.md](algorithms.md) | Tous les algorithmes du produit, chacun avec son schéma, ses règles, ses fichiers et ses tests |
 | [changelog.md](changelog.md) | Le journal des changements : chaque nouvelle fonction et chaque modification, datée |
 
-Ces cinq pages sont aussi publiées sur le site, sous `/docs/product`, en anglais. La page d'ici, en français, reste l'originale ; sa traduction est dans `frontend/content/docs/product/`. Quand une page d'ici change, on met sa traduction à jour dans le même commit, puis on lance `npm run docs:stamp` dans `frontend/` : la page anglaise garde l'empreinte de la page française qu'elle traduit, et un test du frontend échoue tant que les deux ne concordent pas (`frontend/scripts/product-docs.mjs`).
+Ces six pages sont aussi publiées sur le site, sous `/docs/product`, en anglais. La page d'ici, en français, reste l'originale ; sa traduction est dans `frontend/content/docs/product/`. Quand une page d'ici change, on met sa traduction à jour dans le même commit, puis on lance `npm run docs:stamp` dans `frontend/` : la page anglaise garde l'empreinte de la page française qu'elle traduit, et un test du frontend échoue tant que les deux ne concordent pas (`frontend/scripts/product-docs.mjs`).
 
 Ailleurs dans le dépôt :
 

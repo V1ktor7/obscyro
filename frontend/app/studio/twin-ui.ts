@@ -108,6 +108,25 @@ export function formatTwinMetric(
   return direct != null ? direct.toFixed(1) : EMPTY;
 }
 
+/**
+ * The number behind a measure, or null when the unit carries none.
+ *
+ * The same reading the alert rules make on the server (`metricValue` in
+ * `backend/src/services/twin.ts`): a list that ranks units on a measure and a
+ * rule that thresholds it have to be looking at the same number.
+ */
+export function twinMetricNumber(metrics: TwinUnitMetrics | undefined, key: string): number | null {
+  if (!metrics) return null;
+  const finite = (v: number | null | undefined) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  if (metrics.values && key in metrics.values) return finite(metrics.values[key]);
+  if (key === "occupancyPct") return finite(metrics.occupancyPct);
+  if (key === "linkedInstanceCount") return finite(metrics.linkedInstanceCount);
+  if (key === "freshnessSeconds") return finite(metrics.freshnessSeconds);
+  if (key.startsWith("count:")) return finite(metrics.instanceCountByType[key.slice("count:".length)] ?? 0);
+  if (key.startsWith("mean:")) return finite(metrics.numericMeans[key.slice("mean:".length)]);
+  return finite(metrics.numericMeans[key]);
+}
+
 export function formatFreshness(seconds: number | null): string {
   if (seconds == null) return EMPTY;
   if (seconds < 0) return "ahead of us";

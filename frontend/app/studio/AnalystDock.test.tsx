@@ -9,7 +9,7 @@ vi.mock("./analyst-api", async (orig) => ({ ...(await orig<typeof import("./anal
 const where = vi.hoisted(() => ({ path: "/studio/live" }));
 vi.mock("next/navigation", () => ({ usePathname: () => where.path }));
 
-import { AnalystDock, AnalystFocusProvider, pageOf, useAnalystFocus, type PageFocus } from "./AnalystDock";
+import { AnalystDock, AnalystFocusProvider, pageOf, useAnalystFocus, useOpenAnalyst, type PageFocus } from "./AnalystDock";
 
 afterEach(() => {
   cleanup();
@@ -95,6 +95,43 @@ describe("the analyst in the shell", () => {
     where.path = "/studio/response";
     render(shell({}, null));
     expect(screen.queryByRole("button", { name: "Analyst" })).toBeNull();
+  });
+
+  it("opens when a page asks for it, with what that page has selected", () => {
+    function Sheet() {
+      useAnalystFocus({ unitId: "11111111-1111-4111-8111-111111111111" });
+      const ask = useOpenAnalyst();
+      return ask ? (
+        <button type="button" onClick={ask}>
+          Ask the analyst
+        </button>
+      ) : null;
+    }
+    render(
+      <AnalystFocusProvider>
+        <Sheet />
+        <AnalystDock env="mtl" />
+      </AnalystFocusProvider>,
+    );
+
+    expect(screen.queryByRole("dialog", { name: "Analyst" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Ask the analyst" }));
+    const panel = screen.getByRole("dialog", { name: "Analyst" });
+    expect(within(panel).getByText(/Asked from this page, with the unit you selected/)).toBeTruthy();
+
+    // Closed, then asked for again: it opens again.
+    fireEvent.click(screen.getByRole("button", { name: "Close the analyst" }));
+    expect(screen.queryByRole("dialog", { name: "Analyst" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Ask the analyst" }));
+    expect(screen.getByRole("dialog", { name: "Analyst" })).toBeTruthy();
+  });
+
+  it("gives a page nothing to open outside the shell", () => {
+    function Sheet() {
+      return <p>{useOpenAnalyst() ? "can ask" : "no analyst here"}</p>;
+    }
+    render(<Sheet />);
+    expect(screen.getByText("no analyst here")).toBeTruthy();
   });
 
   it("names a page by its address", () => {
