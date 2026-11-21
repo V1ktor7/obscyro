@@ -174,7 +174,10 @@ export default function PreparedResponses({
             {r.mechanism ? <p className="text-[11.5px] text-ink-body">{r.mechanism}</p> : null}
 
             <p className="text-[11px] text-ink-muted">
-              Its run rests on {r.evidence.measured} measured, {r.evidence.published} published and {r.evidence.assumption} assumed
+              {retest
+                ? "This test starts from the twin as it was read when the test ran, which is measured. The response, and the events and choices of the scenario, are assumptions. The test it was kept from rested"
+                : "Its run rests"}{" "}
+              on {r.evidence.measured} measured, {r.evidence.published} published and {r.evidence.assumption} assumed
               {r.evidence.assumption === 1 ? " element" : " elements"}. A run is the result of a model under the conditions of its test, not a
               forecast.
             </p>

@@ -133,6 +133,12 @@ describe("the prepared responses on a situation card", () => {
     // What the kept test gave stays readable beside it, said as such.
     expect(within(card).getByText("In the test it was kept from: 267 patient-days waiting with it, 7,316 without.")).toBeTruthy();
     expect(within(card).getByText("Run on “Omicron — calibrated” · 60 days · litsantephysique · first tested 80 d ago · kept by A planner")).toBeTruthy();
+    // The conditions of the run are stated, and what is measured stays apart from what is assumed.
+    expect(
+      within(card).getByText(
+        /^This test starts from the twin as it was read when the test ran, which is measured\. The response, and the events and choices of the scenario, are assumptions\. The test it was kept from rested on 1 measured, 1 published and 2 assumed elements\. A run is the result of a model under the conditions of its test, not a forecast\.$/,
+      ),
+    ).toBeTruthy();
     expect(within(card).queryByRole("note")).toBeNull();
   });
 
