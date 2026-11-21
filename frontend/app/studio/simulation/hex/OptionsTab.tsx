@@ -116,7 +116,11 @@ export default function OptionsTab({
   // The scenario as this tab left it after adding an option: the one change
   // since the tests that is not somebody editing the recipe elsewhere.
   const [ownKey, setOwnKey] = useState<string | null>(null);
-  const adding = useRef(false);
+  // The scenario as it was when this tab began writing an option into it. The
+  // next scenario that differs is the one that write left. "A write is in
+  // flight" would not tell: the page reads the recipe back before the write
+  // settles, and React shows it only after.
+  const [writingFrom, setWritingFrom] = useState<string | null>(null);
   const [added, setAdded] = useState<string[]>([]);
   const [recorded, setRecorded] = useState<string[]>([]);
   const [acting, setActing] = useState<string | null>(null);
@@ -125,9 +129,15 @@ export default function OptionsTab({
 
   useEffect(() => () => abort.current?.abort(), []);
 
+  // The recipe changed after this tab wrote an option into it. Settled while
+  // rendering, so the warning meant for an edit made elsewhere is never shown
+  // for the tab's own write, not even for one frame.
+  if (writingFrom !== null && scenarioKey !== writingFrom) {
+    setOwnKey(scenarioKey);
+    setWritingFrom(null);
+  }
+
   useEffect(() => {
-    // The recipe changed while this tab was writing an option into it.
-    if (adding.current) setOwnKey(scenarioKey);
     // Back to the scenario that was tested: what was added has been taken out again.
     if (testedKey !== null && scenarioKey === testedKey) {
       setAdded([]);
@@ -147,6 +157,7 @@ export default function OptionsTab({
     setError(null);
     setAdded([]);
     setOwnKey(null);
+    setWritingFrom(null);
     setRecorded([]);
     setActionError(null);
   }, [scenario?.id]);
@@ -169,6 +180,7 @@ export default function OptionsTab({
     setTraceOpen(true);
     setAdded([]);
     setOwnKey(null);
+    setWritingFrom(null);
     setRecorded([]);
     setActionError(null);
     setTestedKey(scenarioKey);
@@ -212,16 +224,16 @@ export default function OptionsTab({
   async function add(o: ProposedOption) {
     setActing(`add:${o.step}`);
     setActionError(null);
-    adding.current = true;
+    setWritingFrom(scenarioKey);
     try {
       await onAdd(o);
       setAdded((a) => [...a, o.step]);
     } catch (err) {
       // Part of it may have been written: the scenario is then one no test covered.
+      setWritingFrom(null);
       setOwnKey(null);
       setActionError(`“${o.label}” was not ${takesOut(o) ? "applied" : "added"}: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
-      adding.current = false;
       setActing(null);
     }
   }

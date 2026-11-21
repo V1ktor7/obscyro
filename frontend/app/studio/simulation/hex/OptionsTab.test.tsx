@@ -344,6 +344,43 @@ describe("the options tab", () => {
     expect(screen.queryByText(/is now in the scenario/)).toBeNull();
   });
 
+  it("still knows the option it added when the recipe read back is shown after the write has settled", async () => {
+    // What the page does in a browser: the write settles first, and React shows
+    // the recipe it read back afterwards. The tab took that for an edit made elsewhere.
+    const view = await tested();
+    const shows = (key: string) =>
+      view.rerender(
+        <OptionsTab env="mtl" scenario={{ id: "sc1", name: "Omicron" }} run={null} horizon={60} activity="lit" scenarioKey={key} siteName={() => null} onFocusSite={focus} onAdd={add} onRecorded={recorded} onOff={off} />,
+      );
+    add.mockResolvedValueOnce(undefined);
+    const a = await screen.findByRole("region", { name: /^Option A/ });
+    fireEvent.click(within(a).getByRole("button", { name: "Add to scenario" }));
+    await within(a).findByRole("button", { name: "Added to the scenario" });
+
+    shows("k1+a");
+    expect(screen.getByText(/“Open 40 beds at Lakeshore from day 10” is now in the scenario: Run should give the figures of its card/)).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+
+    // The next change is not this tab's: somebody edited the recipe.
+    shows("k1+a+elsewhere");
+    expect(screen.getByRole("alert").textContent).toMatch(/The scenario was edited since these options were tested/);
+    expect(screen.queryByText(/is now in the scenario/)).toBeNull();
+  });
+
+  it("does not take a write that failed for an option it added", async () => {
+    const view = await tested();
+    add.mockRejectedValueOnce(new Error("the scenario could not be written."));
+    const a = await screen.findByRole("region", { name: /^Option A/ });
+    fireEvent.click(within(a).getByRole("button", { name: "Add to scenario" }));
+    await screen.findByText(/was not added: the scenario could not be written/);
+    // Part of it was written all the same: no test covered the scenario that leaves.
+    view.rerender(
+      <OptionsTab env="mtl" scenario={{ id: "sc1", name: "Omicron" }} run={null} horizon={60} activity="lit" scenarioKey="k1+half" siteName={() => null} onFocusSite={focus} onAdd={add} onRecorded={recorded} onOff={off} />,
+    );
+    expect(screen.getByText(/The scenario was edited since these options were tested/)).toBeTruthy();
+    expect(screen.queryByText(/is now in the scenario/)).toBeNull();
+  });
+
   it("records a decision by naming the exchange and the step, and sends no figure", async () => {
     api.recordDecision.mockResolvedValue({ id: "d1" });
     await tested();

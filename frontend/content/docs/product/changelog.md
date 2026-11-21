@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "f718ae171d20af4c"
+translatedFrom: "e64405ced4d2c5f0"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -15,6 +15,7 @@ An entry is written the day the change ships, in the same commit as the code. Si
 
 ## 21 November 2026
 
+- **Change · Analyst.** In the Options tab, after “Add to scenario”, the banner says the option is in the scenario and that Run should give the figures of its card. It was showing instead the warning meant for an edit made elsewhere.
 - **Change · Studio.** On the Network page, a click on a line of the explorer opens the site where the unit stands, and the map moves to it. Before, the line lit up and nothing else happened. A line that has no site of its own, an establishment for instance, frames the map on the sites of what it contains, and the explorer writes why no panel opened. The other way round, a site chosen on the map lights its unit in the explorer, which opens the branch and scrolls to it.
 - **Change · Analyst.** In the Options tab, the cards follow the order in which the options were tested, even when the model lists them in another order.
 - **Change · Analyst.** The analyst's Claude model is set by a variable of the API service (`ANALYST_MODEL`): Opus 5.5 as before when it is empty, or Sonnet 5.5 or Haiku 5.5, which cost less per question. An unknown value switches the analyst off, and the panel says why.
