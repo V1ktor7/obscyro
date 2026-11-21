@@ -90,6 +90,10 @@ const liveRoutes: FastifyPluginAsync = async (fastify) => {
     {
       schema: {
         summary: "SSE stream of live metrics (recomputed every ~5s)",
+        description:
+          "Server-Sent Events: the metrics at once, then again on each recompute, with `: ping` comments " +
+          "in between so a proxy keeps the connection. Sent with the API's CORS headers, so a page on an " +
+          "allowed origin can read it. An error before the stream starts is an ordinary JSON error.",
         tags: ["live-analysis"],
         params: z.object({ env: z.string().min(1) }),
         querystring: z.object({ where: z.string().optional() }),
@@ -100,7 +104,7 @@ const liveRoutes: FastifyPluginAsync = async (fastify) => {
       const env = await resolveEnvironment(req.db, userId, req.params.env);
       const wherePairs = parseWhere(req.query.where);
 
-      startSseStream(req, reply, {
+      return startSseStream(req, reply, {
         name: "metrics",
         intervalMs: config.metricsSseIntervalMs,
         produce: () => computeMetrics(req.db, env.id, wherePairs),

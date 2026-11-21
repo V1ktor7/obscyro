@@ -64,7 +64,7 @@ De haut en bas : le nom, où l'unité se situe par rapport à son seuil, sa vale
 ## Les autres commandes
 
 - **Measures** : définir ce que le jumeau mesure. **Alert thresholds** : régler les seuils qui lèvent une alerte ; la liste reprend ses couleurs à la fermeture. **Live metrics** : les comptes du projet en direct.
-- La pastille dit si la liste suit le jumeau en continu (« Live stream ») ou si elle est relue toutes les cinq secondes (« Polling »).
+- La pastille dit comment la liste se tient à jour. « Connecting » : le flux est demandé, rien n'est encore arrivé par lui. « Live stream » : le flux a livré une lecture, et la liste suit le jumeau en continu. « Polling » : le flux a échoué six fois de suite, et la liste est relue toutes les cinq secondes. La page n'écrit « Live stream » qu'après une première donnée reçue par le flux, jamais à la simple demande.
 - « Seed demo » n'est proposé que sur un projet sans unité.
 
 ## Limites

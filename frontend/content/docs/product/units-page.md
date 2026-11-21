@@ -3,7 +3,7 @@
 title: "The Units page"
 description: "Every unit of the twin, live, ranked on one measure: the ones in alert first, and the sheet of the unit you pick beside the list."
 source: "docs/units-page.md"
-translatedFrom: "66eef0364ba914fa"
+translatedFrom: "f596f8896d0e65bd"
 ---
 
 Every unit of the twin, live, ranked on one measure. The page answers one question: which unit to read first. The ones in alert come first, the ones that report nothing for the measure chosen are folded away, and the sheet of the unit you pick stays beside the list.
@@ -70,7 +70,7 @@ From top to bottom: the name, where the unit stands against its threshold, its v
 ## The other controls
 
 - **Measures**: define what the twin measures. **Alert thresholds**: set the thresholds that raise an alert; the list takes its colours again when the editor closes. **Live metrics**: the project's counts, live.
-- The chip says whether the list follows the twin continuously (“Live stream”) or is read again every five seconds (“Polling”).
+- The chip says how the list keeps up to date. “Connecting”: the stream has been asked for, nothing has arrived through it yet. “Live stream”: the stream has delivered a reading, and the list follows the twin continuously. “Polling”: the stream failed six times in a row, and the list is read again every five seconds. The page writes “Live stream” only after a first piece of data received through the stream, never on the mere request.
 - “Seed demo” is offered only on a project with no unit.
 
 ## Limits

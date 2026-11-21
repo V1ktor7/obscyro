@@ -194,11 +194,14 @@ export default function CommandView() {
       }, 5000);
     };
 
-    setStreamMode("stream");
+    // Said to be live once the stream has delivered something, not when it was asked for.
+    setStreamMode("idle");
     const stop = subscribeTwinStream(
       env,
       (snap) => {
-        if (!stopped) applySnapshot(snap);
+        if (stopped) return;
+        setStreamMode("stream");
+        applySnapshot(snap);
       },
       startPoll,
       scenarioId ? { scenarioId } : undefined,

@@ -862,6 +862,10 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
     {
       schema: {
         summary: "SSE stream of twin tree rollups and alerts (~5s)",
+        description:
+          "Server-Sent Events: the tree at once, then again on each recompute, with `: ping` comments " +
+          "in between so a proxy keeps the connection. Sent with the API's CORS headers, so a page on an " +
+          "allowed origin can read it. An error before the stream starts is an ordinary JSON error.",
         tags: ["twin"],
         params: z.object({ env: z.string().min(1) }),
         // With a scenario the stream shows the world under that scenario's
@@ -879,7 +883,7 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
         ? { scenarioId: req.query.scenarioId, atOffsetHours: req.query.atOffsetHours ?? 0 }
         : undefined;
 
-      startSseStream(req, reply, {
+      return startSseStream(req, reply, {
         name: "twin",
         intervalMs: config.twinSseIntervalMs,
         produce: () => getTwinTreeSnapshot(req.db, env.id, lens),

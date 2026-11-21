@@ -56,12 +56,17 @@ export default function LiveMetricsPanel({ env, hasKey }: LiveMetricsPanelProps)
       }, 5000);
     };
 
-    setMode("stream");
+    // Said to be live once the stream has delivered something, not when it was asked for.
+    setMode("idle");
     setError(null);
     const stopStream = subscribeMetricsStream(
       env,
       where,
-      (m) => { if (!stopped) setMetrics(m); },
+      (m) => {
+        if (stopped) return;
+        setMode("stream");
+        setMetrics(m);
+      },
       startPoll,
     );
 

@@ -156,8 +156,18 @@ export default function UnitsView() {
       }, 5000);
     };
 
-    setStreamMode("stream");
-    const stop = subscribeTwinStream(env, (snap) => { if (!stopped) setSnapshot(snap); }, startPoll);
+    // "Live stream" is said once the stream has delivered something, not when it was asked for: a stream
+    // the browser refuses used to read as live for half a minute while nothing arrived.
+    setStreamMode("idle");
+    const stop = subscribeTwinStream(
+      env,
+      (snap) => {
+        if (stopped) return;
+        setStreamMode("stream");
+        setSnapshot(snap);
+      },
+      startPoll,
+    );
 
     return () => {
       stopped = true;

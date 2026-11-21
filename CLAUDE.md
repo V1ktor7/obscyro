@@ -114,5 +114,5 @@ Les prochaines étapes sont des issues du dépôt. Chacune se suffit à elle-mê
 - **Moteur.** L'occupation plafonne à 100 % : le débordement se lit dans la file (`waiting`), pas dans l'occupation. Les patients ne vont qu'aux sites liés à leur territoire, au prorata de la capacité, et personne n'est transféré sans politique.
 - **Jumeau.** Les lectures de l'ontologie ont un plafond (`ROLLUP_INSTANCE_CAP`). Une lecture qui l'atteint le signale ; ne jamais remettre une limite en dur plus basse.
 - **Deux organisations.** Un type d'objet se résout par organisation : deux projets de deux organisations ne voient rien l'un de l'autre.
-- **Flux.** Une réponse en flux passe par `streamLines` (`backend/src/lib/ndjson.ts`), qui garde les en-têtes CORS. Prendre la main sur le socket les perd.
+- **Flux.** Une réponse en flux passe par Fastify, qui garde les en-têtes CORS : `streamLines` (`backend/src/lib/ndjson.ts`) pour un travail qui se termine, `startSseStream` (`backend/src/lib/sse.ts`) pour un flux recalculé en continu. Prendre la main sur le socket (`reply.hijack()`) les perd : le navigateur refuse alors le flux, et la page retombe en relecture périodique sans le dire.
 - **Poste Windows.** Dans Git Bash, un heredoc perd la moitié des barres obliques inverses. Écrire les fichiers avec l'outil d'écriture, pas par heredoc.
