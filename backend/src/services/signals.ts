@@ -49,6 +49,15 @@ export interface SignalType {
   alertMetric: string | null;
 }
 
+/**
+ * What became of the alert a signal came from.
+ *
+ *   holds         the alert is open: the condition still fires
+ *   acknowledged  somebody acknowledged the alert, and the condition still fires
+ *   cleared       the evaluator saw the condition stop firing
+ */
+export type AlertState = "holds" | "acknowledged" | "cleared";
+
 export interface Signal {
   id: string;
   projectId: string;
@@ -66,6 +75,8 @@ export interface Signal {
   closedAt: string | null;
   closedReason: string | null;
   detectedAt: string;
+  /** Null for a signal no alert raised, and for one whose alert is no longer on file. */
+  alert: AlertState | null;
 }
 
 export interface SignalEvent {
@@ -344,11 +355,49 @@ export async function renameSignalDomain(
 
 // --- signals ------------------------------------------------------------------
 
-const S_SELECT = `
-  SELECT id, project_id, signal_type_id, stage_id, subject_kind, subject_id, title,
+/**
+ * The status of the alert a signal came from, read with the signal.
+ *
+ * `signal` is the table itself: every statement below reads `app.signal`
+ * without an alias, so this fragment and {@link SET_APART} can name it.
+ */
+const ALERT_STATUS = `(SELECT a.status FROM app.twin_alert a
+          WHERE signal.origin_kind = 'twin_alert' AND a.id = signal.origin_id)`;
+
+const S_COLUMNS = `id, project_id, signal_type_id, stage_id, subject_kind, subject_id, title,
          detail, severity, properties, scenario_id, origin_kind, dedupe_key,
-         closed_at, closed_reason, detected_at
+         closed_at, closed_reason, detected_at, ${ALERT_STATUS} AS alert_status`;
+
+const S_SELECT = `
+  SELECT ${S_COLUMNS}
     FROM app.signal`;
+
+/**
+ * A signal the board sets apart: an alert raised it, that alert has cleared,
+ * and nobody has acted on it.
+ *
+ * Both halves matter. An alert that cleared on its own is not a problem
+ * somebody fixed, so its signal is never closed for the person: it is put
+ * aside, counted, and a person closes it. And a signal somebody has taken up
+ * (moved, decided on, annotated) stays on the board they left it on, even
+ * after its alert clears: that is work in progress, not noise.
+ *
+ * "Acted on" is read from the trail: any line a person wrote, or any line
+ * that is not the detection or a note. The bridge's own note that the alert
+ * cleared is a system note, and does not count.
+ */
+const SET_APART = `(signal.origin_kind = 'twin_alert'
+     AND EXISTS (SELECT 1 FROM app.twin_alert a
+                  WHERE a.id = signal.origin_id AND a.status = 'resolved')
+     AND NOT EXISTS (SELECT 1 FROM app.signal_event e
+                      WHERE e.signal_id = signal.id
+                        AND (e.actor_user_id IS NOT NULL OR e.kind NOT IN ('detected', 'noted'))))`;
+
+const ALERT_STATE: Record<string, AlertState> = {
+  open: "holds",
+  ack: "acknowledged",
+  resolved: "cleared",
+};
 
 interface SignalDbRow {
   id: string;
@@ -367,6 +416,7 @@ interface SignalDbRow {
   closed_at: Date | null;
   closed_reason: string | null;
   detected_at: Date;
+  alert_status?: string | null;
 }
 
 function outSignal(r: SignalDbRow): Signal {
@@ -387,15 +437,28 @@ function outSignal(r: SignalDbRow): Signal {
     closedAt: r.closed_at ? r.closed_at.toISOString() : null,
     closedReason: r.closed_reason,
     detectedAt: r.detected_at.toISOString(),
+    alert: (r.alert_status && ALERT_STATE[r.alert_status]) || null,
   };
 }
 
 /** A board lists the most recent signals only. What it leaves out is counted, never hidden. */
 export const SIGNAL_LIST_LIMIT = 500;
 
+/**
+ * Which pile of signals a list is about.
+ *
+ *   active   what the board shows on arrival: everything it does not set apart
+ *   cleared  what it sets apart: raised by an alert that has since cleared, and
+ *            that nobody has acted on
+ *
+ * Left out, a list is about both.
+ */
+export type SignalView = "active" | "cleared";
+
 export interface SignalListOptions {
   includeClosed?: boolean;
   scenarioId?: string | null;
+  view?: SignalView;
   /**
    * One signal to list whatever its age, and whether or not it is closed: the
    * one a link names. A unit over its threshold for weeks has a signal older
@@ -417,6 +480,12 @@ function signalScope(projectId: string, opts?: SignalListOptions): { where: stri
   return { where, params };
 }
 
+function viewClause(view: SignalView | undefined): string {
+  if (view === "cleared") return ` AND ${SET_APART}`;
+  if (view === "active") return ` AND NOT ${SET_APART}`;
+  return "";
+}
+
 export async function listSignals(
   db: DbClient,
   projectId: string,
@@ -425,13 +494,14 @@ export async function listSignals(
   const { where, params } = signalScope(projectId, opts);
   const open = opts?.includeClosed ? "" : ` AND closed_at IS NULL`;
   const { rows } = await db.query<SignalDbRow>(
-    `${S_SELECT} WHERE ${where}${open} ORDER BY detected_at DESC LIMIT ${SIGNAL_LIST_LIMIT}`,
+    `${S_SELECT} WHERE ${where}${open}${viewClause(opts?.view)} ORDER BY detected_at DESC LIMIT ${SIGNAL_LIST_LIMIT}`,
     params,
   );
   const listed = rows.map(outSignal);
   if (opts?.also && !listed.some((s) => s.id === opts.also)) {
     // Same project, same scenario scope: a link cannot pull in a signal the
-    // list itself would never have held.
+    // list itself would never have held. The view is not part of that scope:
+    // a link to a signal the board has set apart still opens it.
     const { rows: one } = await db.query<SignalDbRow>(
       `${S_SELECT} WHERE ${where} AND id = $${params.length + 1}`,
       [...params, opts.also],
@@ -450,10 +520,90 @@ export async function countSignals(
   const { where, params } = signalScope(projectId, opts);
   const open = opts?.includeClosed ? "" : ` AND closed_at IS NULL`;
   const { rows } = await db.query<{ n: number }>(
-    `SELECT count(*)::int AS n FROM app.signal WHERE ${where}${open}`,
+    `SELECT count(*)::int AS n FROM app.signal WHERE ${where}${open}${viewClause(opts?.view)}`,
     params,
   );
   return rows[0]?.n ?? 0;
+}
+
+export interface OpenSignalCounts {
+  /** Every open signal of the project, reality or one scenario. */
+  open: number;
+  /** Those the board shows on arrival. */
+  active: number;
+  /** Those it sets apart: their alert cleared and nobody acted on them. */
+  cleared: number;
+}
+
+/**
+ * The open signals, counted whole: what the board shows on arrival and what it
+ * sets apart. A board that puts 2,800 signals aside has to say so in a figure.
+ */
+export async function countOpenSignals(
+  db: DbClient,
+  projectId: string,
+  opts?: Pick<SignalListOptions, "scenarioId">,
+): Promise<OpenSignalCounts> {
+  const { where, params } = signalScope(projectId, opts);
+  const { rows } = await db.query<{ open: number; cleared: number }>(
+    `SELECT count(*)::int AS open, (count(*) FILTER (WHERE ${SET_APART}))::int AS cleared
+       FROM app.signal WHERE ${where} AND closed_at IS NULL`,
+    params,
+  );
+  const open = rows[0]?.open ?? 0;
+  const cleared = rows[0]?.cleared ?? 0;
+  return { open, active: open - cleared, cleared };
+}
+
+/**
+ * Open signals by type, counted in the database over all of them.
+ *
+ * The board's counters by domain were counted on the list, which stops at
+ * {@link SIGNAL_LIST_LIMIT}: past that many signals they were wrong, and said
+ * 500 where there were 2,852.
+ */
+export async function countOpenByType(
+  db: DbClient,
+  projectId: string,
+  opts?: Pick<SignalListOptions, "scenarioId" | "view">,
+): Promise<{ signalTypeId: string; open: number; critical: number }[]> {
+  const { where, params } = signalScope(projectId, opts);
+  const { rows } = await db.query<{ signal_type_id: string; open: number; critical: number }>(
+    `SELECT signal_type_id, count(*)::int AS open,
+            (count(*) FILTER (WHERE severity = 'critical'))::int AS critical
+       FROM app.signal WHERE ${where} AND closed_at IS NULL${viewClause(opts?.view)}
+      GROUP BY signal_type_id`,
+    params,
+  );
+  return rows.map((r) => ({ signalTypeId: r.signal_type_id, open: r.open, critical: r.critical }));
+}
+
+/**
+ * The board's counters by domain, from the counts by signal type.
+ *
+ * A domain is the string its signal types share, so the database counts by
+ * type and the sum is made here. Every domain is listed, with zeros: a domain
+ * with nothing open is still a place a signal can be raised in.
+ */
+export function domainCounters(
+  signalTypes: { id: string; domain: string }[],
+  byType: { signalTypeId: string; open: number; critical: number }[],
+): { domain: string; open: number; critical: number }[] {
+  const domainOf = new Map(signalTypes.map((t) => [t.id, t.domain]));
+  const byDomain = new Map<string, { open: number; critical: number }>();
+  for (const t of signalTypes) {
+    if (!byDomain.has(t.domain)) byDomain.set(t.domain, { open: 0, critical: 0 });
+  }
+  for (const c of byType) {
+    const domain = domainOf.get(c.signalTypeId);
+    if (domain === undefined) continue;
+    const d = byDomain.get(domain)!;
+    d.open += c.open;
+    d.critical += c.critical;
+  }
+  return Array.from(byDomain, ([domain, v]) => ({ domain, ...v })).sort(
+    (a, b) => b.critical - a.critical || b.open - a.open || a.domain.localeCompare(b.domain),
+  );
 }
 
 export async function getSignal(db: DbClient, id: string): Promise<Signal> {
@@ -532,9 +682,7 @@ export async function raiseSignal(
             (project_id, signal_type_id, stage_id, subject_kind, subject_id, title, detail,
              severity, properties, scenario_id, origin_kind, origin_id, dedupe_key)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13)
-     RETURNING id, project_id, signal_type_id, stage_id, subject_kind, subject_id, title,
-               detail, severity, properties, scenario_id, origin_kind, dedupe_key,
-               closed_at, closed_reason, detected_at`,
+     RETURNING ${S_COLUMNS}`,
     [
       input.projectId,
       input.signalTypeId,
@@ -791,4 +939,91 @@ export async function dismissSignal(
     note: opts.reason.trim(),
   });
   return getSignal(db, signalId);
+}
+
+/** How a signal closed in a batch says it closed: neither resolved, nor a false positive. */
+export const CLEARED_CLOSE_PREFIX = "alert cleared: ";
+
+/**
+ * Close, in one go, the signals the board has set apart.
+ *
+ * A third way to close, kept distinct from the two others on purpose. A
+ * signal that reached its last stage was handled; a dismissed one should never
+ * have fired; these were real, cleared on their own, and nobody had to act.
+ * Mixing them would make all three rates unknowable.
+ *
+ * A person does this, with a reason, and each signal's own trail keeps who and
+ * why: the batch is one click, not one anonymous sweep.
+ *
+ * One statement, so it closes all of them or none. A signal somebody takes up
+ * between the count on screen and the click is no longer set apart, and stays
+ * open.
+ */
+export async function closeClearedSignals(
+  db: DbClient,
+  projectId: string,
+  opts: {
+    actorUserId: string;
+    reason: string;
+    scenarioId?: string | null;
+    /** Only the signals of these types: the domain on screen. Left out, every type. */
+    signalTypeIds?: string[];
+  },
+): Promise<number> {
+  const reason = opts.reason?.trim();
+  if (!reason) {
+    throw BadRequest("REASON_REQUIRED", "Closing these signals needs a reason: it is what each signal's log keeps.");
+  }
+  if (!opts.actorUserId) {
+    throw BadRequest("ACTOR_REQUIRED", "Signals are closed by a person, and the log names them.");
+  }
+  if (opts.signalTypeIds && opts.signalTypeIds.length === 0) return 0;
+
+  const { where, params } = signalScope(projectId, { scenarioId: opts.scenarioId });
+  let types = "";
+  if (opts.signalTypeIds) {
+    params.push(opts.signalTypeIds);
+    types = ` AND signal_type_id = ANY($${params.length}::uuid[])`;
+  }
+  const at = params.length;
+  params.push(
+    `${CLEARED_CLOSE_PREFIX}${reason}`,
+    opts.actorUserId,
+    reason,
+    JSON.stringify({ reason: "alert_cleared", batch: true }),
+  );
+
+  try {
+    const { rows } = await db.query<{ n: number }>(
+      `WITH target AS (
+         SELECT id, stage_id FROM app.signal
+          WHERE ${where} AND closed_at IS NULL AND ${SET_APART}${types}
+            FOR UPDATE
+       ), shut AS (
+         UPDATE app.signal s
+            SET closed_at = NOW(), closed_reason = $${at + 1}, updated_at = NOW()
+           FROM target t
+          WHERE s.id = t.id
+         RETURNING s.id, t.stage_id
+       ), trail AS (
+         INSERT INTO app.signal_event (signal_id, seq, kind, from_stage_id, actor_user_id, note, payload)
+         SELECT shut.id,
+                COALESCE((SELECT MAX(e.seq) FROM app.signal_event e WHERE e.signal_id = shut.id), 0) + 1,
+                'closed', shut.stage_id, $${at + 2}, $${at + 3}, $${at + 4}::jsonb
+           FROM shut
+         RETURNING signal_id
+       )
+       SELECT count(*)::int AS n FROM trail`,
+      params,
+    );
+    return rows[0]?.n ?? 0;
+  } catch (err: unknown) {
+    // Another line was written on one of these trails at the same instant.
+    // Nothing was closed: a signal is never closed without its line.
+    if ((err as { code?: string }).code !== "23505") throw err;
+    throw Conflict(
+      "SIGNALS_CHANGED",
+      "One of these signals changed while they were being closed. Nothing was closed: try again.",
+    );
+  }
 }

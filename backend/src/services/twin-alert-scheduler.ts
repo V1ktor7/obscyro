@@ -116,7 +116,7 @@ export interface OpenAlertRef {
 }
 
 /**
- * Which open alerts have demonstrably stopped firing.
+ * Which alerts on file, open or acknowledged, have demonstrably stopped firing.
  *
  * Three outcomes, and the third is the one worth being careful about:
  *
@@ -196,37 +196,50 @@ export async function evaluateProject(db: DbClient, projectId: string): Promise<
   const firing = await evaluateAlerts(db, projectId, metricsByUnit, unitKinds, unitNames, rules);
   const opened = firing.filter((a) => a.isNew).length;
 
-  const { rows: open } = await db.query<{
+  const stillFiring = new Set(firing.map((a) => a.id));
+  const { resolve, unreadable } = alertsToResolve(
+    (await alertsOnFile(db, projectId)).filter((a) => !stillFiring.has(a.id)),
+    rules,
+    metricsByUnit,
+    unitKinds,
+  );
+  await resolveAlerts(db, resolve);
+
+  return { projectId, opened, resolved: resolve.length, unreadable: unreadable.length };
+}
+
+/**
+ * The alerts that still stand for a condition: the open ones, and the ones
+ * somebody acknowledged.
+ *
+ * An acknowledgement says "seen", not "over". The alert still stands for a
+ * condition that holds, and it is the evaluator that says when it stops. Read
+ * without them, an acknowledged alert never resolved, and its signal could
+ * never be told its alert had cleared.
+ */
+export async function alertsOnFile(db: DbClient, projectId: string): Promise<OpenAlertRef[]> {
+  const { rows } = await db.query<{
     id: string;
     unit_instance_id: string;
     rule_id: string | null;
   }>(
     `SELECT id, unit_instance_id, rule_id
        FROM app.twin_alert
-      WHERE project_id = $1 AND status = 'open'`,
+      WHERE project_id = $1 AND status IN ('open', 'ack')`,
     [projectId],
   );
+  return rows.map((r) => ({ id: r.id, unitInstanceId: r.unit_instance_id, ruleId: r.rule_id }));
+}
 
-  const stillFiring = new Set(firing.map((a) => a.id));
-  const { resolve, unreadable } = alertsToResolve(
-    open
-      .filter((r) => !stillFiring.has(r.id))
-      .map((r) => ({ id: r.id, unitInstanceId: r.unit_instance_id, ruleId: r.rule_id })),
-    rules,
-    metricsByUnit,
-    unitKinds,
+/** Mark as resolved the alerts whose condition demonstrably stopped, open or acknowledged. */
+export async function resolveAlerts(db: DbClient, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  await db.query(
+    `UPDATE app.twin_alert
+        SET status = 'resolved', resolved_at = NOW()
+      WHERE id = ANY($1::uuid[]) AND status IN ('open', 'ack')`,
+    [ids],
   );
-
-  if (resolve.length > 0) {
-    await db.query(
-      `UPDATE app.twin_alert
-          SET status = 'resolved', resolved_at = NOW()
-        WHERE id = ANY($1::uuid[]) AND status = 'open'`,
-      [resolve],
-    );
-  }
-
-  return { projectId, opened, resolved: resolve.length, unreadable: unreadable.length };
 }
 
 export async function runTwinAlertEvaluation(db: DbClient): Promise<EvalResult[]> {

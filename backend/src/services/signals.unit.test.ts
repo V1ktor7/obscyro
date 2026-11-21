@@ -2,7 +2,18 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { DbClient } from "../lib/db.js";
-import { countSignals, createWorkflow, dismissSignal, listSignals, moveSignal, SIGNAL_LIST_LIMIT } from "./signals.js";
+import {
+  closeClearedSignals,
+  countOpenByType,
+  countOpenSignals,
+  countSignals,
+  createWorkflow,
+  dismissSignal,
+  domainCounters,
+  listSignals,
+  moveSignal,
+  SIGNAL_LIST_LIMIT,
+} from "./signals.js";
 
 // ---------------------------------------------------------------------------
 // The engine's guarantees, pinned without a database.
@@ -243,4 +254,178 @@ test("the count is what the list chooses from, before its limit", async () => {
   const all = recordingDb([[{ n: 3000 }]]);
   assert.equal(await countSignals(all, "p1", { scenarioId: null, includeClosed: true }), 3000);
   assert.doesNotMatch(all.sent[0]!.sql, /closed_at/);
+});
+
+// --- what became of the alert ---------------------------------------------------
+
+test("a signal says what became of the alert that raised it", async () => {
+  const row = (id: string, alert_status: string | null | undefined) => ({ ...OPEN_SIGNAL[0]!, id, origin_kind: "twin_alert", alert_status });
+  const db = recordingDb([[row("a", "open"), row("b", "ack"), row("c", "resolved"), row("d", null), row("e", undefined)]]);
+  const listed = await listSignals(db, "p1", { scenarioId: null });
+  assert.deepEqual(
+    listed.map((s) => [s.id, s.alert]),
+    [
+      ["a", "holds"],
+      ["b", "acknowledged"],
+      ["c", "cleared"],
+      // No alert raised it, or its alert is no longer on file: nothing is claimed.
+      ["d", null],
+      ["e", null],
+    ],
+  );
+  // Read with the signal, from the alert its origin names.
+  assert.match(db.sent[0]!.sql, /\(SELECT a\.status FROM app\.twin_alert a WHERE signal\.origin_kind = 'twin_alert' AND a\.id = signal\.origin_id\) AS alert_status/);
+});
+
+// --- the two piles ----------------------------------------------------------------
+
+/** What the board sets apart: an alert raised it, the alert cleared, and nobody acted on it. */
+const SET_APART =
+  /\(signal\.origin_kind = 'twin_alert' AND EXISTS \(SELECT 1 FROM app\.twin_alert a WHERE a\.id = signal\.origin_id AND a\.status = 'resolved'\) AND NOT EXISTS \(SELECT 1 FROM app\.signal_event e WHERE e\.signal_id = signal\.id AND \(e\.actor_user_id IS NOT NULL OR e\.kind NOT IN \('detected', 'noted'\)\)\)\)/;
+
+test("the cleared view is the signals whose alert cleared and that nobody acted on", async () => {
+  const db = recordingDb([[]]);
+  await listSignals(db, "p1", { scenarioId: null, view: "cleared" });
+  const sql = db.sent[0]!.sql;
+  assert.match(sql, SET_APART);
+  assert.match(sql, /closed_at IS NULL AND \(signal\.origin_kind/);
+  // Only a resolved alert has cleared: an acknowledged one still fires.
+  assert.doesNotMatch(sql, /status <> 'open'/);
+  assert.match(sql, /ORDER BY detected_at DESC LIMIT 500$/);
+});
+
+test("the active view is everything else: nothing is in both piles, nothing in neither", async () => {
+  const db = recordingDb([[]]);
+  await listSignals(db, "p1", { scenarioId: null, view: "active" });
+  assert.match(db.sent[0]!.sql, SET_APART);
+  assert.match(db.sent[0]!.sql, /closed_at IS NULL AND NOT \(signal\.origin_kind/);
+});
+
+test("a signal a link names is found whatever pile it is in", async () => {
+  const db = recordingDb([OPEN_SIGNAL, [OLD_SIGNAL]]);
+  const listed = await listSignals(db, "p1", { scenarioId: null, view: "active", also: "sig-old" });
+  assert.deepEqual(listed.map((s) => s.id), ["sig-old", "sig-1"]);
+  // The second read is the project and the scenario only: no view.
+  assert.match(db.sent[1]!.sql, /WHERE project_id = \$1 AND scenario_id IS NULL AND id = \$2$/);
+});
+
+test("the count follows the view the list is about", async () => {
+  const db = recordingDb([[{ n: 2810 }]]);
+  assert.equal(await countSignals(db, "p1", { scenarioId: null, view: "cleared" }), 2810);
+  assert.match(db.sent[0]!.sql, /closed_at IS NULL AND \(signal\.origin_kind/);
+});
+
+test("what is set apart is counted, with what is shown and the whole", async () => {
+  const db = recordingDb([[{ open: 2852, cleared: 2810 }]]);
+  assert.deepEqual(await countOpenSignals(db, "p1", { scenarioId: null }), { open: 2852, active: 42, cleared: 2810 });
+  const sql = db.sent[0]!.sql;
+  assert.match(sql, /^SELECT count\(\*\)::int AS open, \(count\(\*\) FILTER \(WHERE \(signal\.origin_kind/);
+  assert.match(sql, /FROM app\.signal WHERE project_id = \$1 AND scenario_id IS NULL AND closed_at IS NULL$/);
+  // An empty project counts zeros, not nothing.
+  assert.deepEqual(await countOpenSignals(recordingDb([[]]), "p1"), { open: 0, active: 0, cleared: 0 });
+});
+
+// --- counters by domain -------------------------------------------------------------
+
+test("open signals are counted by type in the database, over all of them", async () => {
+  const db = recordingDb([[{ signal_type_id: "t1", open: 2800, critical: 2790 }]]);
+  const counted = await countOpenByType(db, "p1", { scenarioId: null, view: "cleared" });
+  assert.deepEqual(counted, [{ signalTypeId: "t1", open: 2800, critical: 2790 }]);
+  const sql = db.sent[0]!.sql;
+  assert.match(sql, /count\(\*\)::int AS open, \(count\(\*\) FILTER \(WHERE severity = 'critical'\)\)::int AS critical/);
+  assert.match(sql, /GROUP BY signal_type_id$/);
+  // No limit: the counters are not counted on the 500 the list holds.
+  assert.doesNotMatch(sql, /LIMIT/);
+});
+
+test("the counters by domain are right past the 500 signals the list holds", () => {
+  const types = [
+    { id: "t1", domain: "Patient flow" },
+    { id: "t2", domain: "Patient flow" },
+    { id: "t3", domain: "Data & systems" },
+    { id: "t4", domain: "Supply" },
+  ];
+  const counters = domainCounters(types, [
+    { signalTypeId: "t1", open: 2800, critical: 2790 },
+    { signalTypeId: "t2", open: 40, critical: 0 },
+    { signalTypeId: "t3", open: 12, critical: 12 },
+    // A type of another organisation's configuration is not placed in any domain.
+    { signalTypeId: "t-gone", open: 9, critical: 9 },
+  ]);
+  assert.deepEqual(counters, [
+    // A domain sums its types, and the worst comes first.
+    { domain: "Patient flow", open: 2840, critical: 2790 },
+    { domain: "Data & systems", open: 12, critical: 12 },
+    // A domain with nothing open is still listed: a signal can be raised in it.
+    { domain: "Supply", open: 0, critical: 0 },
+  ]);
+});
+
+// --- the batch close ------------------------------------------------------------------
+
+test("closing in a batch needs a reason and a person, and asks the database nothing without them", async () => {
+  const db = recordingDb([]);
+  await assert.rejects(() => closeClearedSignals(db, "p1", { actorUserId: "u", reason: "   " }), /needs a reason/);
+  await assert.rejects(() => closeClearedSignals(db, "p1", { actorUserId: "", reason: "retombées seules" }), /closed by a person/);
+  // A domain with no signal type has nothing to close.
+  assert.equal(await closeClearedSignals(db, "p1", { actorUserId: "u", reason: "x", signalTypeIds: [] }), 0);
+  assert.equal(db.sent.length, 0);
+});
+
+test("the batch closes what is set apart, in one statement, with a line on each signal's trail", async () => {
+  const db = recordingDb([[{ n: 2810 }]]);
+  const closed = await closeClearedSignals(db, "p1", {
+    actorUserId: "user-1",
+    reason: "  Cleared on their own over the weekend ",
+    scenarioId: null,
+    signalTypeIds: ["t1", "t2"],
+  });
+  assert.equal(closed, 2810);
+  assert.equal(db.sent.length, 1, "one statement: all of them close, or none does");
+
+  const { sql, params } = db.sent[0]!;
+  // What it closes is exactly what the cleared view shows, in this project, among these types.
+  assert.match(sql, SET_APART);
+  assert.match(sql, /WHERE project_id = \$1 AND scenario_id IS NULL AND closed_at IS NULL AND \(signal\.origin_kind/);
+  assert.match(sql, /AND signal_type_id = ANY\(\$2::uuid\[\]\) FOR UPDATE/);
+  // Each signal gets its own line, numbered after the last one on its trail.
+  assert.match(sql, /INSERT INTO app\.signal_event \(signal_id, seq, kind, from_stage_id, actor_user_id, note, payload\) SELECT shut\.id, COALESCE\(\(SELECT MAX\(e\.seq\) FROM app\.signal_event e WHERE e\.signal_id = shut\.id\), 0\) \+ 1, 'closed', shut\.stage_id, \$4, \$5, \$6::jsonb FROM shut/);
+  // The count returned is the count of lines written: no signal is closed without one.
+  assert.match(sql, /SELECT count\(\*\)::int AS n FROM trail$/);
+  // It does not pretend they reached the last stage.
+  assert.doesNotMatch(sql, /stage_id =/);
+
+  assert.deepEqual(params, [
+    "p1",
+    ["t1", "t2"],
+    // Neither "resolved" nor "false positive: …": a third way to close, told apart.
+    "alert cleared: Cleared on their own over the weekend",
+    "user-1",
+    "Cleared on their own over the weekend",
+    JSON.stringify({ reason: "alert_cleared", batch: true }),
+  ]);
+});
+
+test("without a domain the batch is the whole project, and it stays inside one scenario", async () => {
+  const db = recordingDb([[{ n: 3 }]]);
+  await closeClearedSignals(db, "p1", { actorUserId: "user-1", reason: "x", scenarioId: "sc-1" });
+  const { sql, params } = db.sent[0]!;
+  assert.match(sql, /WHERE project_id = \$1 AND scenario_id = \$2 AND closed_at IS NULL/);
+  assert.doesNotMatch(sql, /signal_type_id = ANY/);
+  assert.deepEqual(params.slice(0, 3), ["p1", "sc-1", "alert cleared: x"]);
+});
+
+test("a trail written at the same instant closes nothing, and says to try again", async () => {
+  const db = {
+    query: async () => {
+      throw Object.assign(new Error("duplicate key value violates unique constraint"), { code: "23505" });
+    },
+  } as unknown as DbClient;
+  await assert.rejects(
+    () => closeClearedSignals(db, "p1", { actorUserId: "user-1", reason: "x" }),
+    /Nothing was closed: try again/,
+  );
+  // Any other failure is not dressed up as that one.
+  const broken = { query: async () => { throw new Error("connection lost"); } } as unknown as DbClient;
+  await assert.rejects(() => closeClearedSignals(broken, "p1", { actorUserId: "user-1", reason: "x" }), /connection lost/);
 });

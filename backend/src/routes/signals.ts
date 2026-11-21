@@ -9,10 +9,14 @@ import { resolveUserIdForApiKey } from "../services/login.js";
 import { resolveEnvironment } from "../services/ontology.js";
 import { requestRetests } from "../services/response-retest.js";
 import {
+  closeClearedSignals,
+  countOpenByType,
+  countOpenSignals,
   countSignals,
   createSignalType,
   createWorkflow,
   dismissSignal,
+  domainCounters,
   getSignal,
   listSignalEvents,
   listSignalTypes,
@@ -92,6 +96,8 @@ const signalOut = z.object({
   closedAt: z.string().nullable(),
   closedReason: z.string().nullable(),
   detectedAt: z.string(),
+  // What became of the alert that raised it; null when no alert did.
+  alert: z.enum(["holds", "acknowledged", "cleared"]).nullable(),
 });
 
 async function requireUserId(req: {
@@ -490,8 +496,15 @@ const signalRoutes: FastifyPluginAsync = async (fastify) => {
         summary: "Everything the command post needs: config plus open signals",
         description:
           "The workflows, the signal types and the open signals of a project, in one call. " +
-          "The list holds the 500 most recent signals; `total` says how many there are, so the " +
-          "board can say what it leaves out. `signal` names one signal to list whatever its age " +
+          "`view` says which pile: `active` (the default) is what the board shows on arrival; " +
+          "`cleared` is what it sets apart, the signals raised by an alert that has since cleared " +
+          "and that nobody has acted on; `all` is both. The reply names the view it answers for. " +
+          "`counts` gives the three figures over every " +
+          "open signal, whatever the view, so what is set apart is always counted. Each signal says " +
+          "what became of its alert (`alert`: holds, acknowledged, cleared, or null when no alert raised it). " +
+          "The list holds the 500 most recent signals of the view; `total` says how many the view has, so the " +
+          "board can say what it leaves out, and the counters by domain are counted over all of them, " +
+          "not over the list. `signal` names one signal to list whatever its age, its view, " +
           "and whether or not it is closed: the one an alert links to. It is looked up in this " +
           "project only, and is simply absent when it is not there.",
         tags: ["signals"],
@@ -500,6 +513,7 @@ const signalRoutes: FastifyPluginAsync = async (fastify) => {
           includeClosed: z.coerce.boolean().default(false),
           scenarioId: z.string().uuid().optional(),
           signal: z.string().uuid().optional(),
+          view: z.enum(["active", "cleared", "all"]).default("active"),
         }),
         response: {
           200: z.object({
@@ -507,6 +521,8 @@ const signalRoutes: FastifyPluginAsync = async (fastify) => {
             workflows: z.array(workflowOut),
             signalTypes: z.array(signalTypeOut),
             total: z.number(),
+            view: z.enum(["active", "cleared", "all"]),
+            counts: z.object({ open: z.number(), active: z.number(), cleared: z.number() }),
             signals: z.array(
               signalOut.extend({
                 domain: z.string(),
@@ -524,15 +540,16 @@ const signalRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
 
-      const scope = {
-        includeClosed: req.query.includeClosed,
-        scenarioId: req.query.scenarioId ?? null,
-      };
-      const [workflows, signalTypes, raw, total] = await Promise.all([
+      const scenarioId = req.query.scenarioId ?? null;
+      const view = req.query.view === "all" ? undefined : req.query.view;
+      const scope = { includeClosed: req.query.includeClosed, scenarioId, view };
+      const [workflows, signalTypes, raw, total, counts, byType] = await Promise.all([
         listWorkflows(req.db, env.organizationId),
         listSignalTypes(req.db, env.organizationId),
         listSignals(req.db, env.id, { ...scope, also: req.query.signal }),
         countSignals(req.db, env.id, scope),
+        countOpenSignals(req.db, env.id, { scenarioId }),
+        countOpenByType(req.db, env.id, { scenarioId, view }),
       ]);
 
       const typeById = new Map(signalTypes.map((t) => [t.id, t]));
@@ -553,27 +570,76 @@ const signalRoutes: FastifyPluginAsync = async (fastify) => {
           };
         });
 
-      const byDomain = new Map<string, { open: number; critical: number }>();
-      for (const t of signalTypes) {
-        if (!byDomain.has(t.domain)) byDomain.set(t.domain, { open: 0, critical: 0 });
-      }
-      for (const s of signals) {
-        if (s.closedAt) continue;
-        const d = byDomain.get(s.domain) ?? { open: 0, critical: 0 };
-        d.open++;
-        if (s.severity === "critical") d.critical++;
-        byDomain.set(s.domain, d);
-      }
-
       return {
-        domains: Array.from(byDomain, ([domain, v]) => ({ domain, ...v })).sort((a, b) =>
-          b.critical - a.critical || b.open - a.open || a.domain.localeCompare(b.domain),
-        ),
+        domains: domainCounters(signalTypes, byType),
         workflows,
         signalTypes,
         total,
+        view: req.query.view,
+        counts,
         signals,
       };
+    },
+  );
+
+  app.post(
+    "/ontology/:env/signals/close-cleared",
+    {
+      schema: {
+        summary: "Close, in one go, the signals whose alert cleared and that nobody acted on",
+        description:
+          "Closes the signals the board sets apart (`view=cleared` on `GET /command-board`): raised by an alert " +
+          "that has since cleared, with no line on their trail but the detection and the system's notes. " +
+          "A person does it and gives a `reason`, which is required: each signal gets its own `closed` line " +
+          "with who and why, and its `closedReason` starts with `alert cleared:`, so it is told apart from a " +
+          "signal that was resolved and from a false positive. `domain` limits the batch to the signal types " +
+          "of one domain. It is one statement: all of them close or none does. A signal somebody took up in " +
+          "the meantime is no longer set apart and stays open. Returns how many were closed.",
+        tags: ["signals"],
+        params: z.object({ env: z.string().min(1) }),
+        body: z.object({
+          reason: z.string().trim().min(1).max(500),
+          domain: z.string().min(1).max(120).optional(),
+          scenarioId: z.string().uuid().nullable().optional(),
+        }),
+        response: {
+          200: z.object({ closed: z.number() }),
+          400: errorEnvelope,
+          404: errorEnvelope,
+          409: errorEnvelope,
+        },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+
+      let signalTypeIds: string[] | undefined;
+      if (req.body.domain !== undefined) {
+        const types = await listSignalTypes(req.db, env.organizationId);
+        signalTypeIds = types.filter((t) => t.domain === req.body.domain).map((t) => t.id);
+        if (signalTypeIds.length === 0) {
+          throw NotFound("DOMAIN_NOT_FOUND", "No signal type uses that domain.");
+        }
+      }
+
+      const closed = await closeClearedSignals(req.db, env.id, {
+        actorUserId: userId,
+        reason: req.body.reason,
+        scenarioId: req.body.scenarioId ?? null,
+        signalTypeIds,
+      });
+      if (closed > 0) {
+        await recordAudit(req.db, {
+          projectId: env.id,
+          actorUserId: userId,
+          action: "signal.close_cleared",
+          resourceType: "project",
+          resourceId: env.id,
+          metadata: { closed, reason: req.body.reason, domain: req.body.domain ?? null },
+        });
+      }
+      return { closed };
     },
   );
 

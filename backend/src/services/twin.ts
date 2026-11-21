@@ -928,6 +928,14 @@ export async function listAlertRules(
   }));
 }
 
+const SEVERITY_RANK: Record<TwinAlertSeverity, number> = { info: 0, warn: 1, critical: 2 };
+
+/**
+ * One evaluation: every rule against every unit's metrics.
+ *
+ * Returns the alerts whose condition fires now: the ones it opened (`isNew`),
+ * the open ones it refreshed, and the acknowledged ones that still hold.
+ */
 export async function evaluateAlerts(
   db: DbClient,
   environmentId: string,
@@ -960,10 +968,18 @@ export async function evaluateAlerts(
       const message = fillTemplate(rule.messageTemplate, ctx);
       const recommendation = fillTemplate(rule.recommendationTemplate, ctx);
 
-      // Idempotent: at most one OPEN alert per (env, unit, rule). The 5s SSE/poll
-      // loop refreshes the existing row instead of inserting a duplicate every
-      // tick. `inserted` (xmax = 0) tells callers which alerts are genuinely new
-      // so the UI can toast only those.
+      // The alert that already holds this unit and this rule, if there is one:
+      // the open one, or one somebody acknowledged. Either way the condition is
+      // known, so the row is refreshed and nothing new is opened.
+      //
+      // An acknowledgement used to hold for five seconds. It moved the alert
+      // out of 'open', the unique index only covers 'open', and the next
+      // evaluation opened a fresh alert for the same unit and the same rule:
+      // a new signal, and a banner announcing as news what somebody had just
+      // said they had seen. It now holds for as long as the condition does.
+      //
+      // Unless it got worse: an acknowledgement covers the severity that was
+      // acknowledged. A rule that now fires at a higher one opens a new alert.
       //
       // `observed_at` follows the value: it is the age of what is shown.
       // `observed_basis` follows it too: it says what that age rests on, so an
@@ -971,6 +987,68 @@ export async function evaluateAlerts(
       // age comes with its reason.
       // `written_at` does not: it is the write the opening followed, and an
       // alert that stays open through ten more syncs was still opened by one.
+      const { rows: held } = await db.query<{
+        id: string;
+        status: TwinAlertStatus;
+        created_at: Date;
+        written_at: Date | null;
+        acked_at: Date | null;
+      }>(
+        `UPDATE app.twin_alert
+            SET severity = $4,
+                metric = $5,
+                value = $6,
+                message = $7,
+                recommendation = $8,
+                observed_at = $9,
+                observed_basis = $10
+          WHERE project_id = $1 AND unit_instance_id = $2 AND rule_id = $3
+            AND (status = 'open'
+                 OR (status = 'ack'
+                     AND (CASE severity WHEN 'critical' THEN 2 WHEN 'warn' THEN 1 ELSE 0 END) >= $11))
+        RETURNING id, status, created_at, written_at, acked_at`,
+        [
+          environmentId,
+          unitId,
+          rule.id,
+          rule.severity,
+          rule.metric,
+          val,
+          message,
+          recommendation,
+          observedAt,
+          metrics.freshnessBasis,
+          SEVERITY_RANK[rule.severity],
+        ],
+      );
+      // An open alert speaks for the pair when both are on file: alerts
+      // acknowledged before acknowledgements held can sit beside a newer one.
+      const holder = held.find((h) => h.status === "open") ?? held[0];
+      if (holder) {
+        created.push({
+          id: holder.id,
+          environmentId,
+          unitInstanceId: unitId,
+          ruleId: rule.id,
+          severity: rule.severity,
+          metric: rule.metric,
+          value: val,
+          message,
+          recommendation,
+          status: holder.status,
+          createdAt: holder.created_at,
+          ackedAt: holder.acked_at,
+          observedAt,
+          writtenAt: holder.written_at,
+          isNew: false,
+        });
+        continue;
+      }
+
+      // Nothing holds it: a new alert. The conflict clause is for two
+      // evaluations opening it at the same instant (the evaluator and a
+      // viewer's read): at most one OPEN alert per (project, unit, rule), and
+      // `inserted` (xmax = 0) says which of the two really opened it.
       const { rows } = await db.query<{
         id: string;
         created_at: Date;
@@ -1084,6 +1162,17 @@ export async function listOpenAlerts(
   }));
 }
 
+/**
+ * Acknowledge an alert: "seen", said by a person.
+ *
+ * The alert leaves the list of open ones and stays on file as acknowledged for
+ * as long as its condition holds: `evaluateAlerts` refreshes it instead of
+ * opening another, and the evaluator resolves it once the condition clears.
+ *
+ * Only an open alert changes state. Acknowledging one that already is, or one
+ * that has cleared in the meantime, changes nothing: turning a resolved alert
+ * back into an acknowledged one would claim its condition still holds.
+ */
 export async function ackAlert(
   db: DbClient,
   environmentId: string,
@@ -1091,10 +1180,15 @@ export async function ackAlert(
 ): Promise<void> {
   const { rowCount } = await db.query(
     `UPDATE app.twin_alert SET status = 'ack', acked_at = NOW()
-      WHERE id = $1 AND project_id = $2`,
+      WHERE id = $1 AND project_id = $2 AND status = 'open'`,
     [alertId, environmentId],
   );
-  if (!rowCount) throw NotFound("ALERT_NOT_FOUND", "Twin alert not found.");
+  if (rowCount) return;
+  const { rows } = await db.query(
+    `SELECT 1 FROM app.twin_alert WHERE id = $1 AND project_id = $2`,
+    [alertId, environmentId],
+  );
+  if (rows.length === 0) throw NotFound("ALERT_NOT_FOUND", "Twin alert not found.");
 }
 
 /**

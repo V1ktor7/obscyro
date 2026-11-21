@@ -7,6 +7,13 @@ Ce qui a changé dans Obscyro, du plus récent au plus ancien. Chaque entrée di
 
 Une entrée est écrite le jour où le changement est livré, dans le même commit que le code. Depuis novembre 2026, chaque changement visible a la sienne. Les mois d'avant sont résumés. Le détail complet, commit par commit, est dans [l'historique du dépôt](https://github.com/V1ktor7/obscyro/commits/main).
 
+## 21 novembre 2026
+
+- **Modification · Alertes.** Le tableau Response montre d'abord ce qui demande quelqu'un. Les signaux levés par une alerte retombée seule, et que personne n'a touchés, sont mis à part dans un onglet « Alert cleared », toujours compté à côté de l'onglet « Active ». Un signal que quelqu'un a pris en main reste sur le tableau, avec la mention « alert cleared » quand son alerte est retombée.
+- **Nouvelle fonction · Alertes.** Les signaux mis à part se ferment en une fois, par domaine, avec un motif obligatoire. Le journal de chaque signal garde qui les a fermés et pourquoi, et ils sont enregistrés comme retombés seuls : ni résolus, ni faux positifs.
+- **Modification · Alertes.** Un accusé de réception tient tant que la condition tient. Avant, une alerte accusée était rouverte cinq secondes plus tard, avec un nouveau signal et un nouveau bandeau. Si la règle se déclenche à une gravité plus haute, c'est une nouvelle alerte.
+- **Modification · Alertes.** Les compteurs par domaine du tableau Response sont justes au-delà de 500 signaux : ils sont comptés sur tous les signaux ouverts, et non plus sur la liste affichée.
+
 ## 20 novembre 2026
 
 - **Nouvelle fonction · Studio.** Les réponses préparées sont retestées sur l'état du moment. Dès qu'un signal s'ouvre, le moteur repasse chaque réponse préparée pour son type sur le réseau tel qu'il est, sans que personne le demande et sans modèle de langage. La fiche de situation montre d'abord le dernier test connu avec sa date, puis le nouveau résultat à sa place, avec l'heure du test (« Tested on the current state 40 s ago »). Un test en cours ou abandonné n'est jamais montré comme un résultat, et un moteur injoignable ne bloque ni la fiche ni « Engage ».

@@ -120,6 +120,10 @@ export async function raiseSignalsForOpenAlerts(
  * Deliberately not an auto-close. A condition that cleared on its own is
  * exactly the case worth distinguishing from one somebody fixed, and closing it
  * silently erases that. The reviewer gets told and decides.
+ *
+ * Only a resolved alert has stopped firing. An acknowledged one was seen by
+ * somebody and its condition still holds: writing "no longer fires" on its
+ * signal would be false.
  */
 export async function noteClearedAlerts(db: DbClient, limit = BATCH): Promise<number> {
   const { rows } = await db.query<{ signal_id: string; next: number }>(
@@ -130,7 +134,7 @@ export async function noteClearedAlerts(db: DbClient, limit = BATCH): Promise<nu
        JOIN app.twin_alert a ON a.id = s.origin_id
       WHERE s.origin_kind = 'twin_alert'
         AND s.closed_at IS NULL
-        AND a.status <> 'open'
+        AND a.status = 'resolved'
         AND NOT EXISTS (
               SELECT 1 FROM app.signal_event e
                WHERE e.signal_id = s.id

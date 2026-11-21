@@ -904,12 +904,15 @@ flowchart TD
     B --> C["Métriques de chaque unité, sans lentille :<br/>la réalité, jamais un scénario"]
     C --> D["Chaque règle évaluée"]
     D --> E{"La condition"}
-    E -->|"tient maintenant, pas avant"| F["Alerte ouverte, avec deux heures :<br/>de quand date la valeur (et sur quoi cet âge repose),<br/>quand la donnée a été écrite ici"]
-    E -->|"tient encore"| F2["Valeur, âge de la valeur et ce sur quoi il repose rafraîchis ;<br/>l'heure d'écriture qui a ouvert l'alerte ne bouge pas"]
-    E -->|"tenait, et ne tient plus de façon démontrée"| G["Alerte résolue"]
+    E -->|"tient, et aucune alerte ne tient déjà<br/>cette unité et cette règle"| F["Alerte ouverte, avec deux heures :<br/>de quand date la valeur (et sur quoi cet âge repose),<br/>quand la donnée a été écrite ici"]
+    E -->|"tient, et une alerte la tient déjà :<br/>ouverte, ou accusée à une gravité au moins égale"| F2["Valeur, âge de la valeur et ce sur quoi il repose rafraîchis ;<br/>l'heure d'écriture qui a ouvert l'alerte ne bouge pas.<br/>Rien de nouveau n'est ouvert"]
+    E -->|"tenait, et ne tient plus de façon démontrée"| G["Alerte résolue, qu'elle soit ouverte ou accusée"]
+    F -->|"une personne accuse réception"| F3["Alerte accusée : elle quitte la liste des ouvertes<br/>et reste au dossier tant que la condition tient"]
+    F3 -->|"évaluation suivante"| D
     F --> H["Pont lancé tout de suite, une passe à la fois"]
     G --> H
-    H --> I["Signal créé, titré une fois"]
+    H -->|"alerte ouverte sans signal"| I["Signal créé, titré une fois"]
+    H -->|"alerte résolue"| I3["Note sur son signal : la condition ne tient plus.<br/>Le signal reste ouvert"]
     I --> I2["Réponses préparées pour ce type :<br/>retest demandé, en arrière-plan (A11)"]
     I --> J["Workflow : étapes, approbation au besoin.<br/>Une réponse préparée engagée le fait avancer (A9)"]
     F --> K["Fil d'alertes : GET /alerts/feed<br/>alertes ouvertes, unité nommée, âges, signal, dernière évaluation"]
@@ -921,7 +924,11 @@ flowchart TD
     N -->|"non, ou première lecture"| M
     L --> P["Pages du jumeau : mêmes alertes sur la carte, l'arbre, la fiche d'unité"]
     L --> Q["Response : le tableau se relit quand les signaux changent"]
-    O -->|"clic sur Signal"| R["Response demande ce signal par son nom :<br/>il est listé même plus vieux que les 500 du tableau"]
+    Q --> V{"Signal levé par une alerte résolue,<br/>et que personne n'a touché ?"}
+    V -->|"non"| W["Vue Active, celle de l'arrivée :<br/>la carte dit si son alerte est accusée ou retombée"]
+    V -->|"oui"| X["Vue Alert cleared : mis à part,<br/>et compté dans l'en-tête"]
+    X -->|"une personne, un domaine, un motif"| Y["Clôture en lot : tous ou aucun,<br/>une ligne au journal de chaque signal, avec qui et pourquoi"]
+    O -->|"clic sur Signal"| R["Response demande ce signal par son nom :<br/>il est listé même plus vieux que les 500 du tableau,<br/>et quelle que soit sa vue"]
     R --> S{"Dans ce projet ?"}
     S -->|"oui"| T["Sa fiche s'ouvre, dans son domaine"]
     S -->|"non"| U["L'écran dit que le lien ne mène à rien"]
@@ -941,14 +948,20 @@ flowchart TD
 - **Le silence n'est pas le calme.** Sans lecture réussie depuis quinze secondes, la pastille dit que la liste n'est plus à jour et depuis combien de temps ; la dernière liste lue reste affichée, marquée comme ancienne. La liste dit aussi quand les seuils ont été vérifiés pour la dernière fois.
 - **Les âges se comptent sur l'horloge du serveur**, pas sur celle du poste : un ordinateur réglé cinq minutes de travers ne vieillit pas une alerte de cinq minutes.
 - **Un clic.** Depuis une alerte : sa fiche de situation (`/studio/situation?alert=…&unit=…&signal=…`, D9), son unité (`/studio/live?unit=…`, la fiche s'ouvre seule) et son signal (`/studio/response?signal=…`). Depuis un signal : sa fiche de situation et son unité. Le lien porte le projet, et celui d'une alerte porte aussi son unité : la fiche sait quoi lire une fois l'alerte retombée.
-- **Un lien trouve son signal, quel que soit son âge.** Le tableau Response ne liste que les 500 signaux les plus récents. Une urgence au-dessus de son seuil depuis des semaines a une alerte encore ouverte, et un signal bien plus vieux que cela. Le tableau demande donc à l'API le signal que le lien nomme (`?signal=` sur `GET /command-board`) : il est ajouté à la liste, en tête, fermé ou non, cherché dans ce projet et ce périmètre seulement. S'il n'y est pas, l'écran le dit au lieu de montrer un tableau où rien ne s'ouvre.
-- **Le tableau dit ce qu'il laisse de côté.** L'API rend le nombre de signaux parmi lesquels la liste est choisie (`total`) ; l'en-tête écrit « Showing 500 of 2,752 open signals » plutôt que « 500 open signals ».
+- **Un lien trouve son signal, quel que soit son âge.** Le tableau Response ne liste que les 500 signaux les plus récents. Une urgence au-dessus de son seuil depuis des semaines a une alerte encore ouverte, et un signal bien plus vieux que cela. Le tableau demande donc à l'API le signal que le lien nomme (`?signal=` sur `GET /command-board`) : il est ajouté à la liste, en tête, fermé ou non, mis à part ou non, cherché dans ce projet et ce périmètre seulement. S'il n'y est pas, l'écran le dit au lieu de montrer un tableau où rien ne s'ouvre.
+- **Un accusé de réception tient tant que la condition tient.** Accuser réception dit « vu », pas « fini ». L'alerte quitte la liste des alertes ouvertes : plus de pastille, plus d'anneau sur la carte, plus d'annonce. Elle reste au dossier comme accusée, et chaque évaluation la rafraîchit au lieu d'en ouvrir une autre : pas de nouvelle alerte, pas de nouveau signal, pas de nouveau bandeau pour cette unité et cette règle. Son signal dit « acknowledged » et ne reçoit pas la note « la condition ne tient plus ». Quand la condition cesse, l'évaluateur résout l'alerte accusée comme une alerte ouverte ; si la condition revient ensuite, c'est un nouvel épisode, donc une nouvelle alerte. Seule une alerte ouverte s'accuse : accuser une alerte déjà retombée ne change rien.
+- **Un cran de gravité de plus est une nouvelle.** Un accusé couvre la gravité qui a été accusée. La gravité est celle de la règle : deux seuils sur la même métrique (un avertissement à 85 %, un critique à 100 %) sont deux règles, donc deux alertes, et accuser la première ne fait pas taire la seconde. Si la règle elle-même passe à une gravité plus haute que celle de l'alerte accusée, une nouvelle alerte s'ouvre. Une gravité abaissée reste couverte.
+- **Le tableau montre d'abord ce qui demande quelqu'un.** Chaque signal dit ce qu'est devenue son alerte (`alert`) : elle tient (`holds`), elle est accusée et tient encore (`acknowledged`), elle est retombée (`cleared`), ou rien pour un signal qu'aucune alerte n'a levé. Response a deux vues. « Active », celle de l'arrivée : tout ce qui n'est pas mis à part. « Alert cleared » : les signaux levés par une alerte résolue et que personne n'a touchés. Un signal que quelqu'un a pris en main (avancé, décidé, annoté) reste dans la vue active même après que son alerte est retombée, avec la mention « alert cleared » sur sa carte : c'est un travail en cours, pas du bruit. « Touché » se lit au journal : une ligne écrite par une personne, ou une ligne qui n'est ni la détection ni une note. La note du pont est une note du système et ne compte pas.
+- **Ce qui est mis à part est compté, jamais caché.** L'API rend trois chiffres sur tous les signaux ouverts, quelle que soit la vue (`counts` : ouverts, actifs, mis à part), et les deux onglets les affichent. `total` est le nombre de signaux de la vue demandée ; quand la liste s'arrête à 500, l'en-tête écrit « Showing 500 of 2,810 signals whose alert has cleared » plutôt que « 500 ».
+- **Les compteurs par domaine se comptent en base**, sur tous les signaux ouverts de la vue et non sur les 500 listés : au-delà de 500 signaux, comptés sur la liste, ils étaient faux.
+- **Clore en lot est une décision, pas un ménage.** Rien ne se ferme seul : une condition retombée n'est pas une condition réglée. Depuis la vue « Alert cleared », une personne ferme en une fois les signaux mis à part du domaine affiché, et doit écrire un motif. C'est une seule requête : tous se ferment ou aucun. Chaque signal reçoit sa propre ligne `closed` au journal, avec qui et pourquoi. Un signal que quelqu'un prend en main entre le compte affiché et le clic n'est plus mis à part et reste ouvert ; l'écran affiche le nombre réellement fermé.
+- **Trois façons de se fermer, jamais confondues.** Arrivé à la dernière étape de son workflow : traité. « Faux positif » : il n'aurait pas dû se lever (`false positive: …`). Clos en lot : réel, retombé seul, sans que personne ait eu à agir (`alert cleared: …`). Les mélanger rendrait les trois taux illisibles.
 - Une alerte est une unité et une valeur agrégée, jamais une personne.
 
 **Délai.** Du moment où une donnée est écrite ici au moment où l'alerte est à l'écran : au plus cinq secondes d'attente de l'évaluateur, la durée d'une évaluation, puis au plus trois secondes de lecture. Soit un peu plus de neuf secondes au pire.
 
-**Code.** `backend/src/services/twin-alert-scheduler.ts` (`nextEvaluationDelay`, `evaluationPulse`), `alert-bridge.ts`, `response-retest.ts` (`requestRetests`), `alert-feed.ts`, `signals.ts` (`listSignals`, `countSignals`), `twin.ts` (`evaluateAlerts`, `readsReality`), routes `GET /v1/ontology/:env/alerts/feed` dans `backend/src/routes/twin.ts` et `GET /v1/ontology/:env/command-board` dans `backend/src/routes/signals.ts`, migrations `063_twin_alert_times.sql` et `064_twin_alert_observed_basis.sql` ; `frontend/app/studio/AlertFeed.tsx`, `alert-feed-state.ts`, `AlertBanner.tsx`, `StudioShell.tsx`, `response/ResponseView.tsx`, `live/LiveTwinView.tsx`.
-**Tests.** `twin-alert-scheduler.unit.test.ts`, `alert-bridge.unit.test.ts`, `alert-feed.unit.test.ts`, `signals.unit.test.ts` ; `alert-feed-state.test.ts`, `AlertBanner.test.tsx`, `response/ResponseView.test.tsx`, `platform-nav.test.ts`.
+**Code.** `backend/src/services/twin-alert-scheduler.ts` (`nextEvaluationDelay`, `evaluationPulse`), `alert-bridge.ts`, `response-retest.ts` (`requestRetests`), `alert-feed.ts`, `signals.ts` (`listSignals`, `countSignals`, `countOpenSignals`, `countOpenByType`, `domainCounters`, `closeClearedSignals`), `twin.ts` (`evaluateAlerts`, `ackAlert`, `readsReality`), `twin-alert-scheduler.ts` (`alertsOnFile`, `resolveAlerts`), routes `GET /v1/ontology/:env/alerts/feed` et `PATCH /v1/ontology/:env/twin/alerts/:id` dans `backend/src/routes/twin.ts`, `GET /v1/ontology/:env/command-board` et `POST /v1/ontology/:env/signals/close-cleared` dans `backend/src/routes/signals.ts`, migrations `063_twin_alert_times.sql` et `064_twin_alert_observed_basis.sql` ; `frontend/app/studio/AlertFeed.tsx`, `alert-feed-state.ts`, `AlertBanner.tsx`, `StudioShell.tsx`, `signals-api.ts`, `response/ResponseView.tsx`, `live/LiveTwinView.tsx`.
+**Tests.** `twin-alert-scheduler.unit.test.ts`, `twin-alert-ack.unit.test.ts`, `alert-bridge.unit.test.ts`, `alert-feed.unit.test.ts`, `signals.unit.test.ts` ; `alert-feed-state.test.ts`, `AlertBanner.test.tsx`, `response/ResponseView.test.tsx`, `platform-nav.test.ts`.
 
 ## D6. Métriques du jumeau
 

@@ -204,6 +204,24 @@ describe("twin integration (test-twin)", () => {
     assert.equal(ackRows[0]?.status, "ack");
     assert.ok(ackRows[0]?.acked_at);
 
+    // The acknowledgement holds for as long as the condition does: the next
+    // evaluations refresh the acknowledged alert and open nothing.
+    for (let i = 0; i < 2; i++) {
+      const held = await evaluateAlerts(db, ctx.environmentId, metricsMap, unitKinds, unitNames, [rule]);
+      assert.equal(held[0]!.id, alerts[0]!.id);
+      assert.equal(held[0]!.status, "ack");
+      assert.equal(held[0]!.isNew, false);
+    }
+    assert.equal((await listOpenAlerts(db, ctx.environmentId, ward)).length, before.length - 1);
+
+    // One notch worse is not what was acknowledged: a new alert opens.
+    const worse = await evaluateAlerts(db, ctx.environmentId, metricsMap, unitKinds, unitNames, [
+      { ...rule, severity: "critical" },
+    ]);
+    assert.equal(worse[0]!.isNew, true);
+    assert.notEqual(worse[0]!.id, alerts[0]!.id);
+    assert.equal(worse[0]!.status, "open");
+
     const { rows: propsAfter } = await db.query<{ properties: Record<string, unknown> }>(
       `SELECT properties FROM app.ontology_object_instances WHERE id = $1`,
       [bed1],

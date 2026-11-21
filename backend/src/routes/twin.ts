@@ -1329,6 +1329,12 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
     {
       schema: {
         summary: "Acknowledge a twin alert",
+        description:
+          "Says an open alert was seen. It leaves the list of open alerts and stays on file as acknowledged for as " +
+          "long as its condition holds: evaluations refresh it instead of opening another, so the same unit and rule " +
+          "raise no new alert, no new signal and no new announcement. A rule that fires at a higher severity than the " +
+          "one acknowledged opens a new alert. When the condition stops, the evaluator resolves the alert. Only an " +
+          "open alert changes state: acknowledging one already acknowledged, or one that has cleared, changes nothing.",
         tags: ["twin"],
         params: z.object({ env: z.string().min(1), id: z.string().uuid() }),
         body: z.object({ status: z.literal("ack") }),

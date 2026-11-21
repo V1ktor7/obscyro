@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "5d0dba7c1939eb4b"
+translatedFrom: "2e9f28d9e415e3f5"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -12,6 +12,13 @@ What changed in Obscyro, from the most recent to the oldest. Each entry says wha
 - **Change**: something it already did, and now does differently, better or faster. A fix is one.
 
 An entry is written the day the change ships, in the same commit as the code. Since November 2026, every visible change has its own. The months before are summarised. The full detail, commit by commit, is in [the repository's history](https://github.com/V1ktor7/obscyro/commits/main).
+
+## 21 November 2026
+
+- **Change · Alerts.** The Response board shows first what needs somebody. The signals raised by an alert that cleared on its own, and that nobody has touched, are set apart in an “Alert cleared” tab, always counted next to the “Active” tab. A signal somebody has taken up stays on the board, marked “alert cleared” once its alert has cleared.
+- **New feature · Alerts.** The signals set apart close in one go, by domain, with a required reason. Each signal's log keeps who closed them and why, and they are recorded as cleared on their own: neither resolved, nor false positives.
+- **Change · Alerts.** An acknowledgement holds for as long as the condition holds. Before, an acknowledged alert was reopened five seconds later, with a new signal and a new banner. If the rule fires at a higher severity, it is a new alert.
+- **Change · Alerts.** The counters by domain of the Response board are right past 500 signals: they are counted over all the open signals, no longer over the list displayed.
 
 ## 20 November 2026
 

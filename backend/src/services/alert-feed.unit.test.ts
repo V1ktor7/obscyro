@@ -140,9 +140,18 @@ const metrics = (over: Partial<UnitMetrics> = {}): UnitMetrics =>
     ...over,
   }) as UnitMetrics;
 
-async function evaluate(m: UnitMetrics, returned: Record<string, unknown> = {}) {
+/**
+ * One evaluation of one unit against one rule. `onFile` is the alert that
+ * already holds the pair, when there is one: it is refreshed and nothing is
+ * opened. Without it, the second statement opens the alert.
+ */
+async function evaluate(m: UnitMetrics, onFile?: Record<string, unknown>) {
   const opened = new Date();
-  const scripted = scriptDb([[{ id: "a1", created_at: opened, written_at: null, inserted: true, ...returned }]]);
+  const scripted = scriptDb(
+    onFile
+      ? [[{ id: "a1", status: "open", created_at: opened, written_at: null, acked_at: null, ...onFile }]]
+      : [[], [{ id: "a1", created_at: opened, written_at: null, inserted: true }]],
+  );
   const before = Date.now();
   const out = await evaluateAlerts(scripted.db, "p1", new Map([["u1", m]]), new Map([["u1", "org"]]), new Map([["u1", "Urgence A"]]), [RULE]);
   return { ...scripted, out, before, after: Date.now() };
@@ -150,9 +159,11 @@ async function evaluate(m: UnitMetrics, returned: Record<string, unknown> = {}) 
 
 test("an alert is opened with the time its value was true and the time its data was written here", async () => {
   const { sql, params, out, before, after } = await evaluate(metrics());
-  assert.match(sql[0]!, /observed_at, written_at, observed_basis\)/);
-  const [observedAt, writtenAt] = [params[0]![8] as Date, params[0]![9] as Date];
-  assert.equal(params[0]![10], "observed");
+  // Nothing held this unit and this rule: the second statement opens the alert.
+  assert.equal(sql.length, 2);
+  assert.match(sql[1]!, /observed_at, written_at, observed_basis\)/);
+  const [observedAt, writtenAt] = [params[1]![8] as Date, params[1]![9] as Date];
+  assert.equal(params[1]![10], "observed");
   // The reading is fifty minutes old; the row was written four seconds ago.
   assert.ok(observedAt.getTime() >= before - 3_000_000 && observedAt.getTime() <= after - 3_000_000);
   assert.ok(writtenAt.getTime() >= before - 4_000 && writtenAt.getTime() <= after - 4_000);
@@ -161,11 +172,13 @@ test("an alert is opened with the time its value was true and the time its data 
 
 test("an alert that stays open follows its value's age, and keeps the write that opened it", async () => {
   const firstWrite = new Date("2026-11-19T14:00:03.000Z");
-  const { sql, out } = await evaluate(metrics(), { inserted: false, written_at: firstWrite });
-  const update = sql[0]!.slice(sql[0]!.indexOf("DO UPDATE"), sql[0]!.indexOf("RETURNING"));
-  assert.match(update, /observed_at = EXCLUDED\.observed_at/);
+  const { sql, params, out } = await evaluate(metrics(), { written_at: firstWrite });
+  assert.equal(sql.length, 1, "the alert on file is refreshed, and nothing is opened");
+  const update = sql[0]!.slice(sql[0]!.indexOf("SET"), sql[0]!.indexOf("WHERE"));
+  assert.match(update, /observed_at = \$9/);
   // What the age rests on follows the age: a source that goes quiet turns an answer into a floor.
-  assert.match(update, /observed_basis = EXCLUDED\.observed_basis/);
+  assert.match(update, /observed_basis = \$10/);
+  assert.equal(params[0]![9], "observed");
   // Ten syncs later the alert was still opened by one write: that time is not overwritten.
   assert.doesNotMatch(update, /written_at/);
   assert.equal(out[0]!.writtenAt, firstWrite);
@@ -174,8 +187,10 @@ test("an alert that stays open follows its value's age, and keeps the write that
 
 test("an age the twin cannot know is kept empty, not replaced by the hour of our download", async () => {
   const { params } = await evaluate(metrics({ freshnessSeconds: null, freshnessBasis: "undeclared", fetchedAgeSeconds: null }));
+  // Neither when the alert on file is refreshed, nor when a new one is opened.
   assert.equal(params[0]![8], null);
-  assert.equal(params[0]![9], null);
+  assert.equal(params[1]![8], null);
+  assert.equal(params[1]![9], null);
 });
 
 test("only a read of reality raises alerts: a scenario or another instant never does", () => {
@@ -190,7 +205,9 @@ test("an age that is only a floor is kept as a floor", async () => {
   // Two sources feed the unit and one published no time: the age is the oldest of
   // the ones that did, which a screen must not print as the answer.
   const { params } = await evaluate(metrics({ freshnessSeconds: 7200, freshnessBasis: "partial" }));
-  assert.equal(params[0]![10], "partial");
+  // On the alert that opens, and on the one already on file when it is refreshed.
+  assert.equal(params[1]![10], "partial");
+  assert.equal(params[0]![9], "partial");
   const feed = feedFrom([row({ observed_basis: "partial" })], [], { open: 0, changed_at: null }, PULSE, NOW);
   assert.equal(feed.alerts[0]!.observedBasis, "partial");
 });

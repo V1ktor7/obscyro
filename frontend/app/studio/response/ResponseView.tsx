@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 
 import {
+  closeClearedSignals,
   createSignalType,
   dismissSignal,
   getCommandBoard,
@@ -15,7 +16,9 @@ import {
   moveSignal,
   renameSignalDomain,
   seedSignalConfig,
+  type AlertState,
   type BoardSignal,
+  type BoardView,
   type CommandBoard,
   type Severity,
   type SignalEvent,
@@ -64,10 +67,32 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * recent signals, and a board that says "500 open signals" when there are
  * 2,752 states a limit as if it were the whole.
  */
-export function shownOfTotal(shown: number, total: number | undefined): string {
-  if (typeof total !== "number" || total <= shown) return `${shown} open signals`;
-  return `Showing ${shown.toLocaleString("en-US")} of ${total.toLocaleString("en-US")} open signals, most recent first`;
+export function shownOfTotal(shown: number, total: number | undefined, view: BoardView = "active"): string {
+  const what = view === "cleared" ? "signals whose alert has cleared" : "open signals";
+  if (typeof total !== "number" || total <= shown) return `${count(shown)} ${what}`;
+  return `Showing ${count(shown)} of ${count(total)} ${what}, most recent first`;
 }
+
+function count(n: number): string {
+  return n.toLocaleString("en-US");
+}
+
+/**
+ * What a signal says about the alert that raised it. Nothing for one whose
+ * alert still fires: that is the ordinary case, and a board that labels every
+ * card labels none.
+ */
+const ALERT_CHIP: Record<AlertState, string | null> = {
+  holds: null,
+  acknowledged: "acknowledged",
+  cleared: "alert cleared",
+};
+
+const ALERT_LINE: Record<AlertState, string> = {
+  holds: "Its alert still holds.",
+  acknowledged: "Its alert was acknowledged, and the condition still holds.",
+  cleared: "Its alert has cleared: the condition no longer fires. Cleared on its own is not the same as fixed.",
+};
 
 function ago(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
@@ -94,6 +119,11 @@ export default function ResponseView() {
   const [error, setError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [creatingDomain, setCreatingDomain] = useState(false);
+  // What the board is asked for. On arrival, what needs somebody: the signals
+  // whose alert cleared before anyone acted on them are set apart, one click away.
+  const [view, setView] = useState<BoardView>("active");
+  const [closingCleared, setClosingCleared] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   // An alert links here with its signal in the address. The board is asked
   // for that signal by name: the list stops at the most recent ones, and an
@@ -103,17 +133,26 @@ export default function ResponseView() {
   useAnalystFocus({ signalId: sel ?? undefined });
   const linkedId = linkedSignal && UUID.test(linkedSignal) ? linkedSignal : null;
 
+  // Two readings can be in flight (a view just changed, the feed just moved):
+  // only the last one asked for is shown.
+  const asked = useRef(0);
   const load = useCallback(async () => {
     if (!selectedEnv) return;
+    const mine = ++asked.current;
     try {
-      const b = await getCommandBoard(selectedEnv, linkedId ? { signal: linkedId } : undefined);
+      const opts = {
+        ...(linkedId ? { signal: linkedId } : {}),
+        ...(view === "cleared" ? { view } : {}),
+      };
+      const b = await getCommandBoard(selectedEnv, Object.keys(opts).length > 0 ? opts : undefined);
+      if (mine !== asked.current) return;
       setBoard(b);
       setError(null);
       setDomain((cur) => (cur && b.domains.some((d) => d.domain === cur) ? cur : b.domains[0]?.domain ?? ""));
     } catch (e) {
-      setError((e as Error).message);
+      if (mine === asked.current) setError((e as Error).message);
     }
-  }, [selectedEnv, linkedId]);
+  }, [selectedEnv, linkedId, view]);
 
   useEffect(() => {
     void load();
@@ -211,6 +250,35 @@ export default function ResponseView() {
     }
   }
 
+  // The view the board on screen answers for. It trails `view` for the time
+  // of one reading, and the batch close is only offered on a count that is
+  // really the count of what it would close.
+  const boardView: BoardView = board?.view === "cleared" ? "cleared" : "active";
+  const setApartHere =
+    view === "cleared" && boardView === "cleared"
+      ? board?.domains.find((d) => d.domain === domain)?.open ?? 0
+      : 0;
+
+  function pickView(next: BoardView) {
+    if (next === view) return;
+    setView(next);
+    setSel(null);
+    setNotice(null);
+  }
+
+  async function closeCleared(reason: string) {
+    if (!selectedEnv || !domain) return;
+    setClosingCleared(false);
+    await act(async () => {
+      const { closed } = await closeClearedSignals(selectedEnv, { reason, domain });
+      setNotice(
+        closed === 1
+          ? `1 signal closed in ${domain}. Its log keeps who closed it and why.`
+          : `${count(closed)} signals closed in ${domain}. Each one's log keeps who closed it and why.`,
+      );
+    }, "closeCleared");
+  }
+
   async function commitRename(from: string, raw: string) {
     const to = raw.trim();
     setRenaming(null);
@@ -254,11 +322,41 @@ export default function ResponseView() {
         <span className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">
           Response
         </span>
+        <div role="tablist" aria-label="Which signals" className="flex overflow-hidden rounded border border-line">
+          {(
+            [
+              ["active", "Active", board?.counts?.active, "Signals that need somebody: their alert still holds, they were raised by hand, or somebody has taken them up."],
+              ["cleared", "Alert cleared", board?.counts?.cleared, "Set apart: raised by an alert that has since cleared on its own, and that nobody has acted on."],
+            ] as const
+          ).map(([key, label, n, title]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={view === key}
+              title={title}
+              onClick={() => pickView(key)}
+              className={cn(
+                "flex items-center gap-1.5 px-2 py-1 text-[11px]",
+                key === "cleared" ? "border-l border-line" : "",
+                view === key ? "bg-brand-soft font-medium text-brand-deep" : "bg-surface text-ink-muted hover:bg-surface-hover",
+              )}
+            >
+              {label}
+              {typeof n === "number" ? <span className="tabular-nums">{count(n)}</span> : null}
+            </button>
+          ))}
+        </div>
         <span className="text-[11px] text-ink-muted">
           {board
-            ? shownOfTotal(board.signals.filter((s) => !s.closedAt).length, board.total)
+            ? shownOfTotal(board.signals.filter((s) => !s.closedAt).length, board.total, boardView)
             : "…"}
         </span>
+        {notice ? (
+          <span role="status" className="text-[11px] text-ok-ink">
+            {notice}
+          </span>
+        ) : null}
         {linkLost ? (
           <span role="status" className="text-[11px] text-warn-ink">
             The signal this link names is not in this project.
@@ -352,6 +450,25 @@ export default function ResponseView() {
 
         {/* tableau */}
         <section className="min-w-0 flex-1 overflow-auto bg-canvas p-3">
+          {view === "cleared" && boardView === "cleared" ? (
+            <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-line bg-surface px-3 py-2">
+              <p className="min-w-0 flex-1 basis-[36ch] text-[11px] leading-snug text-ink-muted">
+                These signals were raised by an alert that has since cleared on its own, and nobody has acted on
+                them. Cleared is not fixed: each one stays open until a person closes it.
+              </p>
+              <button
+                type="button"
+                disabled={busy !== null || setApartHere === 0}
+                onClick={() => setClosingCleared(true)}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded border border-line px-2.5 py-1.5 text-[11px] font-medium text-ink hover:border-brand hover:bg-brand-soft disabled:opacity-40"
+              >
+                {busy === "closeCleared" ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                {setApartHere === 0
+                  ? "Nothing to close in this domain"
+                  : `Close the ${count(setApartHere)} in ${domain}…`}
+              </button>
+            </div>
+          ) : null}
           {workflowsHere.length > 1 ? (
             <div className="mb-2 flex items-center gap-1.5">
               <span className="text-[10px] uppercase tracking-wide text-ink-faint">Flux</span>
@@ -443,6 +560,15 @@ export default function ResponseView() {
         ) : null}
       </div>
 
+      {closingCleared && setApartHere > 0 ? (
+        <CloseClearedDialog
+          count={setApartHere}
+          domain={domain}
+          onCancel={() => setClosingCleared(false)}
+          onConfirm={(reason) => void closeCleared(reason)}
+        />
+      ) : null}
+
       {creatingDomain && board ? (
         <NewDomainDialog
           workflows={board.workflows}
@@ -457,6 +583,78 @@ export default function ResponseView() {
           }}
         />
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Closing many signals at once is one decision, taken by a person, with a
+ * reason. The dialog says what the click does to each of them before it is
+ * made: how they will be recorded, and that the log names who.
+ */
+function CloseClearedDialog({
+  count: n,
+  domain,
+  onCancel,
+  onConfirm,
+}: {
+  count: number;
+  domain: string;
+  onCancel: () => void;
+  onConfirm: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState("");
+  const ready = reason.trim() !== "";
+  const what = n === 1 ? "1 signal" : `${count(n)} signals`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 pt-[12vh]">
+      <div role="dialog" aria-modal="true" aria-label={`Close ${what}`} className="w-[400px] rounded-md border border-line bg-surface shadow-lg">
+        <div className="border-b border-line-soft px-4 py-2.5">
+          <p className="text-xs font-medium text-ink">
+            Close {what} in {domain}
+          </p>
+          <p className="mt-1 text-[10.5px] leading-snug text-ink-faint">
+            Each was raised by an alert that has since cleared, and nobody has acted on it. They are recorded as
+            cleared on their own: not as resolved, and not as false positives. A signal somebody takes up before
+            you confirm stays open.
+          </p>
+        </div>
+        <div className="px-4 py-3">
+          <label className="block">
+            <span className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">Reason</span>
+            <textarea
+              autoFocus
+              rows={3}
+              maxLength={500}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Why none of them needed a response"
+              className="mt-1 w-full resize-none rounded border border-line bg-surface px-2 py-1.5 text-[11.5px] text-ink focus:border-brand focus:outline-none"
+            />
+          </label>
+          <p className="mt-1 text-[10.5px] leading-snug text-ink-faint">
+            Kept in the log of each signal, with your name.
+          </p>
+        </div>
+        <div className="flex justify-end gap-2 border-t border-line-soft px-4 py-2.5">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded border border-line px-3 py-1.5 text-[11px] text-ink-body"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!ready}
+            onClick={() => onConfirm(reason.trim())}
+            className="rounded border border-brand-deep bg-brand px-3 py-1.5 text-[11px] font-medium text-white disabled:opacity-40"
+          >
+            Close {what}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -620,6 +818,9 @@ function Card({
         {s.severity === "critical" ? (
           <span className={cn("rounded px-1 font-semibold", sv.chip)}>{sv.label}</span>
         ) : null}
+        {s.alert && ALERT_CHIP[s.alert] ? (
+          <span className="rounded bg-canvas-raised px-1 font-medium text-ink-muted">{ALERT_CHIP[s.alert]}</span>
+        ) : null}
       </div>
     </button>
   );
@@ -677,6 +878,9 @@ function Detail({
           détecté il y a {ago(signal.detectedAt)}
           {signal.closedAt ? ` · clos — ${signal.closedReason ?? ""}` : ""}
         </p>
+        {signal.alert && !signal.closedAt ? (
+          <p className="mt-1 text-[10.5px] leading-snug text-ink-muted">{ALERT_LINE[signal.alert]}</p>
+        ) : null}
         {signal.detail ? (
           <p className="mt-2 text-[11.5px] leading-relaxed text-ink-body">{signal.detail}</p>
         ) : null}

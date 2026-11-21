@@ -216,7 +216,9 @@ test("only open signals are considered for the cleared note", async () => {
   const { db, sql } = scriptDb();
   await noteClearedAlerts(db);
   assert.match(sql[0]!, /s\.closed_at IS NULL/);
-  assert.match(sql[0]!, /a\.status <> 'open'/);
+  // An acknowledged alert was seen and still fires: only a resolved one has cleared.
+  assert.match(sql[0]!, /a\.status = 'resolved'/);
+  assert.doesNotMatch(sql[0]!, /a\.status <> 'open'/);
 });
 
 // --- one pass at a time --------------------------------------------------------

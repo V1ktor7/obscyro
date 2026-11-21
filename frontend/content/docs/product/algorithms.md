@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "fcff23cd3400c419"
+translatedFrom: "27b7f6ab0b4c7217"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -910,12 +910,15 @@ flowchart TD
     B --> C["Metrics of each unit, with no lens:<br/>reality, never a scenario"]
     C --> D["Each rule evaluated"]
     D --> E{"The condition"}
-    E -->|"holds now, not before"| F["Alert opened, with two times:<br/>how old the value is (and what that age rests on),<br/>when the data was written here"]
-    E -->|"still holds"| F2["Value, age of the value and what it rests on refreshed;<br/>the write time that opened the alert does not move"]
-    E -->|"held, and demonstrably no longer holds"| G["Alert resolved"]
+    E -->|"holds, and no alert already holds<br/>this unit and this rule"| F["Alert opened, with two times:<br/>how old the value is (and what that age rests on),<br/>when the data was written here"]
+    E -->|"holds, and an alert already holds it:<br/>open, or acknowledged at a severity at least as high"| F2["Value, age of the value and what it rests on refreshed;<br/>the write time that opened the alert does not move.<br/>Nothing new is opened"]
+    E -->|"held, and demonstrably no longer holds"| G["Alert resolved, whether open or acknowledged"]
+    F -->|"a person acknowledges it"| F3["Alert acknowledged: it leaves the list of open ones<br/>and stays on file for as long as the condition holds"]
+    F3 -->|"next evaluation"| D
     F --> H["Bridge launched at once, one pass at a time"]
     G --> H
-    H --> I["Signal created, titled once"]
+    H -->|"open alert with no signal"| I["Signal created, titled once"]
+    H -->|"resolved alert"| I3["Note on its signal: the condition no longer holds.<br/>The signal stays open"]
     I --> I2["Responses prepared for this kind:<br/>retest requested, in the background (A11)"]
     I --> J["Workflow: steps, approval if needed.<br/>An engaged prepared response moves it forward (A9)"]
     F --> K["Alert feed: GET /alerts/feed<br/>open alerts, unit named, ages, signal, last evaluation"]
@@ -927,7 +930,11 @@ flowchart TD
     N -->|"no, or first read"| M
     L --> P["Pages of the twin: the same alerts on the map, the tree, the unit sheet"]
     L --> Q["Response: the board refreshes when the signals change"]
-    O -->|"click on Signal"| R["Response asks for that signal by its name:<br/>it is listed even if older than the board's 500"]
+    Q --> V{"Signal raised by a resolved alert,<br/>and that nobody has touched?"}
+    V -->|"no"| W["Active view, the one on arrival:<br/>the card says if its alert is acknowledged or has cleared"]
+    V -->|"yes"| X["Alert cleared view: set apart,<br/>and counted in the header"]
+    X -->|"a person, a domain, a reason"| Y["Batch close: all or none,<br/>one line in each signal's log, with who and why"]
+    O -->|"click on Signal"| R["Response asks for that signal by its name:<br/>it is listed even if older than the board's 500,<br/>and whatever its view"]
     R --> S{"In this project?"}
     S -->|"yes"| T["Its sheet opens, in its domain"]
     S -->|"no"| U["The screen says the link leads nowhere"]
@@ -947,14 +954,20 @@ flowchart TD
 - **Silence is not calm.** With no successful read for fifteen seconds, the badge says the list is no longer up to date and for how long; the last list read stays displayed, marked as old. The list also says when the thresholds were last checked.
 - **Ages are counted on the server's clock**, not on the machine's: a computer set five minutes off does not age an alert by five minutes.
 - **One click.** From an alert: its situation card (`/studio/situation?alert=…&unit=…&signal=…`, D9), its unit (`/studio/live?unit=…`, the sheet opens by itself) and its signal (`/studio/response?signal=…`). From a signal: its situation card and its unit. The link carries the project, and an alert's link carries its unit too: the card knows what to read once the alert has cleared.
-- **A link finds its signal, whatever its age.** The Response board lists only the 500 most recent signals. An emergency department above its threshold for weeks has an alert still open, and a signal far older than that. So the board asks the API for the signal the link names (`?signal=` on `GET /command-board`): it is added to the list, at the top, closed or not, looked for in this project and this scope only. If it is not there, the screen says so instead of showing a board where nothing opens.
-- **The board says what it leaves out.** The API returns the number of signals among which the list is chosen (`total`); the header writes “Showing 500 of 2,752 open signals” rather than “500 open signals”.
+- **A link finds its signal, whatever its age.** The Response board lists only the 500 most recent signals. An emergency department above its threshold for weeks has an alert still open, and a signal far older than that. So the board asks the API for the signal the link names (`?signal=` on `GET /command-board`): it is added to the list, at the top, closed or not, set apart or not, looked for in this project and this scope only. If it is not there, the screen says so instead of showing a board where nothing opens.
+- **An acknowledgement holds for as long as the condition holds.** Acknowledging says “seen”, not “over”. The alert leaves the list of open alerts: no badge, no ring on the map, no announcement. It stays on file as acknowledged, and each evaluation refreshes it instead of opening another: no new alert, no new signal, no new banner for that unit and that rule. Its signal says “acknowledged” and does not get the note “the condition no longer holds”. When the condition stops, the evaluator resolves the acknowledged alert like an open one; if the condition comes back afterwards, it is a new episode, so a new alert. Only an open alert can be acknowledged: acknowledging one that has already cleared changes nothing.
+- **One notch of severity more is news.** An acknowledgement covers the severity that was acknowledged. The severity is the rule's: two thresholds on the same metric (a warning at 85%, a critical at 100%) are two rules, so two alerts, and acknowledging the first does not silence the second. If the rule itself moves to a severity higher than that of the acknowledged alert, a new alert opens. A lowered severity stays covered.
+- **The board shows first what needs somebody.** Each signal says what became of its alert (`alert`): it holds (`holds`), it is acknowledged and still holds (`acknowledged`), it has cleared (`cleared`), or nothing for a signal no alert raised. Response has two views. “Active”, the one on arrival: everything that is not set apart. “Alert cleared”: the signals raised by a resolved alert and that nobody has touched. A signal somebody has taken up (moved forward, decided on, annotated) stays in the active view even after its alert has cleared, with “alert cleared” on its card: it is work in progress, not noise. “Touched” is read from the log: a line written by a person, or a line that is neither the detection nor a note. The bridge's note is a system note and does not count.
+- **What is set apart is counted, never hidden.** The API returns three figures over all the open signals, whatever the view (`counts`: open, active, set apart), and the two tabs display them. `total` is the number of signals of the view asked for; when the list stops at 500, the header writes “Showing 500 of 2,810 signals whose alert has cleared” rather than “500”.
+- **The counters by domain are counted in the database**, over all the open signals of the view and not over the 500 listed: past 500 signals, counted on the list, they were wrong.
+- **Closing in a batch is a decision, not housekeeping.** Nothing closes by itself: a condition that cleared is not a condition that was fixed. From the “Alert cleared” view, a person closes in one go the signals set apart in the domain on screen, and has to write a reason. It is a single statement: all of them close or none does. Each signal gets its own `closed` line in its log, with who and why. A signal somebody takes up between the count on screen and the click is no longer set apart and stays open; the screen displays the number actually closed.
+- **Three ways to close, never mixed.** Reached the last step of its workflow: handled. “False positive”: it should not have been raised (`false positive: …`). Closed in a batch: real, cleared on its own, without anyone having to act (`alert cleared: …`). Mixing them would make all three rates unreadable.
 - An alert is a unit and an aggregated value, never a person.
 
 **Delay.** From the moment a piece of data is written here to the moment the alert is on screen: at most five seconds of waiting by the evaluator, the duration of an evaluation, then at most three seconds of reading. That is a little over nine seconds at worst.
 
-**Code.** `backend/src/services/twin-alert-scheduler.ts` (`nextEvaluationDelay`, `evaluationPulse`), `alert-bridge.ts`, `response-retest.ts` (`requestRetests`), `alert-feed.ts`, `signals.ts` (`listSignals`, `countSignals`), `twin.ts` (`evaluateAlerts`, `readsReality`), routes `GET /v1/ontology/:env/alerts/feed` in `backend/src/routes/twin.ts` and `GET /v1/ontology/:env/command-board` in `backend/src/routes/signals.ts`, migrations `063_twin_alert_times.sql` and `064_twin_alert_observed_basis.sql`; `frontend/app/studio/AlertFeed.tsx`, `alert-feed-state.ts`, `AlertBanner.tsx`, `StudioShell.tsx`, `response/ResponseView.tsx`, `live/LiveTwinView.tsx`.
-**Tests.** `twin-alert-scheduler.unit.test.ts`, `alert-bridge.unit.test.ts`, `alert-feed.unit.test.ts`, `signals.unit.test.ts`; `alert-feed-state.test.ts`, `AlertBanner.test.tsx`, `response/ResponseView.test.tsx`, `platform-nav.test.ts`.
+**Code.** `backend/src/services/twin-alert-scheduler.ts` (`nextEvaluationDelay`, `evaluationPulse`), `alert-bridge.ts`, `response-retest.ts` (`requestRetests`), `alert-feed.ts`, `signals.ts` (`listSignals`, `countSignals`, `countOpenSignals`, `countOpenByType`, `domainCounters`, `closeClearedSignals`), `twin.ts` (`evaluateAlerts`, `ackAlert`, `readsReality`), `twin-alert-scheduler.ts` (`alertsOnFile`, `resolveAlerts`), routes `GET /v1/ontology/:env/alerts/feed` and `PATCH /v1/ontology/:env/twin/alerts/:id` in `backend/src/routes/twin.ts`, `GET /v1/ontology/:env/command-board` and `POST /v1/ontology/:env/signals/close-cleared` in `backend/src/routes/signals.ts`, migrations `063_twin_alert_times.sql` and `064_twin_alert_observed_basis.sql`; `frontend/app/studio/AlertFeed.tsx`, `alert-feed-state.ts`, `AlertBanner.tsx`, `StudioShell.tsx`, `signals-api.ts`, `response/ResponseView.tsx`, `live/LiveTwinView.tsx`.
+**Tests.** `twin-alert-scheduler.unit.test.ts`, `twin-alert-ack.unit.test.ts`, `alert-bridge.unit.test.ts`, `alert-feed.unit.test.ts`, `signals.unit.test.ts`; `alert-feed-state.test.ts`, `AlertBanner.test.tsx`, `response/ResponseView.test.tsx`, `platform-nav.test.ts`.
 
 ## D6. Twin metrics
 

@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AlertFeed } from "@/lib/platform-api";
 
 import type { BoardSignal, CommandBoard } from "../signals-api";
 
-const api = vi.hoisted(() => ({ getCommandBoard: vi.fn(), getSignalDetail: vi.fn() }));
+const api = vi.hoisted(() => ({ getCommandBoard: vi.fn(), getSignalDetail: vi.fn(), closeClearedSignals: vi.fn() }));
 const nav = vi.hoisted(() => ({ search: "" }));
 vi.mock("../signals-api", async (orig) => ({ ...(await orig<typeof import("../signals-api")>()), ...api }));
 vi.mock("../StudioShell", () => ({ useStudio: () => ({ selectedEnv: "mtl" }) }));
@@ -45,6 +45,7 @@ const signal = (over: Partial<BoardSignal> = {}): BoardSignal => ({
   closedAt: null,
   closedReason: null,
   detectedAt: "2026-11-19T15:00:04.000Z",
+  alert: "holds",
   domain: "Emergency",
   signalTypeName: "Overcrowding",
   stageKey: "detected",
@@ -67,6 +68,8 @@ const board = (signals: BoardSignal[]): CommandBoard =>
       { id: "t2", organizationId: "o", key: "beds", name: "Beds closed", domain: "Wards", workflowId: "w2", defaultSeverity: "warn", description: null, active: true, alertMetric: null },
     ],
     total: signals.length,
+    view: "active",
+    counts: { open: signals.length, active: signals.length, cleared: 0 },
     signals,
   }) as unknown as CommandBoard;
 
@@ -205,5 +208,127 @@ describe("what the board says it holds", () => {
 
   it("is the plain count when the API does not say the total", () => {
     expect(shownOfTotal(500, undefined)).toBe("500 open signals");
+  });
+});
+
+describe("the board shows first what still needs somebody", () => {
+  /** The project as measured before this was built: 2,852 open signals for 42 alerts still firing. */
+  const arrival = (): CommandBoard => ({
+    ...board([signal()]),
+    total: 42,
+    counts: { open: 2852, active: 42, cleared: 2810 },
+  });
+  const setApart = (): CommandBoard => ({
+    ...board([signal({ id: "s7", title: "Urgence — Hôpital D — 101 %", alert: "cleared" })]),
+    domains: [
+      { domain: "Emergency", open: 2810, critical: 2810 },
+      { domain: "Wards", open: 0, critical: 0 },
+    ],
+    total: 2810,
+    view: "cleared",
+    counts: { open: 2852, active: 42, cleared: 2810 },
+  });
+  const byView = async (_env: string, opts?: { view?: string }) => (opts?.view === "cleared" ? setApart() : arrival());
+
+  it("asks for the active signals on arrival, and counts what it sets apart", async () => {
+    api.getCommandBoard.mockResolvedValue(arrival());
+    render(view(feed(2852, null)));
+    await screen.findByText("Urgence — Hôpital A — 132 %");
+    // No view named: the API answers for what the board shows on arrival.
+    expect(api.getCommandBoard).toHaveBeenCalledWith("mtl", undefined);
+    const active = screen.getByRole("tab", { name: /^Active/ });
+    expect(active.getAttribute("aria-selected")).toBe("true");
+    expect(active.textContent).toBe("Active42");
+    // What is set apart is counted on the same line, never hidden.
+    expect(screen.getByRole("tab", { name: /^Alert cleared/ }).textContent).toBe("Alert cleared2,810");
+    // Nothing is offered to close from here.
+    expect(screen.queryByRole("button", { name: /^Close the/ })).toBeNull();
+  });
+
+  it("shows the signals whose alert cleared one click away, and says what they are", async () => {
+    api.getCommandBoard.mockImplementation(byView);
+    render(view(feed(2852, null)));
+    await screen.findByText("Urgence — Hôpital A — 132 %");
+
+    fireEvent.click(screen.getByRole("tab", { name: /^Alert cleared/ }));
+    expect(await screen.findByText("Urgence — Hôpital D — 101 %")).toBeTruthy();
+    expect(api.getCommandBoard).toHaveBeenLastCalledWith("mtl", { view: "cleared" });
+    expect(screen.getByText("Showing 1 of 2,810 signals whose alert has cleared, most recent first")).toBeTruthy();
+    // Cleared on its own is not fixed, and the screen says so where the batch is offered.
+    expect(screen.getByText(/Cleared is not fixed: each one stays open until a person closes it\./)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Close the 2,810 in Emergency…" })).toBeTruthy();
+  });
+
+  it("closes them in one go only with a reason, and reports how many closed", async () => {
+    api.getCommandBoard.mockImplementation(byView);
+    api.closeClearedSignals.mockResolvedValue({ closed: 2809 });
+    render(view(feed(2852, null)));
+    await screen.findByText("Urgence — Hôpital A — 132 %");
+    fireEvent.click(screen.getByRole("tab", { name: /^Alert cleared/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Close the 2,810 in Emergency…" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Close 2,810 signals" });
+    // How they will be recorded is said before the click, not after.
+    expect(within(dialog).getByText(/recorded as cleared on their own: not as resolved, and not as false positives/)).toBeTruthy();
+    const confirm = within(dialog).getByRole("button", { name: "Close 2,810 signals" }) as HTMLButtonElement;
+    expect(confirm.disabled).toBe(true);
+    expect(api.closeClearedSignals).not.toHaveBeenCalled();
+
+    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "  Cleared on their own over the weekend " } });
+    expect(confirm.disabled).toBe(false);
+    fireEvent.click(confirm);
+
+    await waitFor(() =>
+      expect(api.closeClearedSignals).toHaveBeenCalledWith("mtl", { reason: "Cleared on their own over the weekend", domain: "Emergency" }),
+    );
+    // The figure on screen is the one the server closed, not the one the button promised.
+    expect(await screen.findByText("2,809 signals closed in Emergency. Each one's log keeps who closed it and why.")).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("backs out of the batch without closing anything", async () => {
+    api.getCommandBoard.mockImplementation(byView);
+    render(view(feed(2852, null)));
+    await screen.findByText("Urgence — Hôpital A — 132 %");
+    fireEvent.click(screen.getByRole("tab", { name: /^Alert cleared/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Close the 2,810 in Emergency…" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(api.closeClearedSignals).not.toHaveBeenCalled();
+  });
+
+  it("marks a card whose alert was acknowledged or has cleared, and leaves the ordinary one plain", async () => {
+    api.getCommandBoard.mockResolvedValue(
+      board([
+        signal(),
+        signal({ id: "s2", title: "Urgence — Hôpital B — 118 %", alert: "acknowledged" }),
+        // Somebody took this one up: it stays on the board after its alert cleared.
+        signal({ id: "s3", title: "Urgence — Hôpital C — 104 %", alert: "cleared" }),
+        signal({ id: "s4", title: "Raised by hand", originKind: "manual", alert: null }),
+      ]),
+    );
+    render(view(feed(4, null)));
+    const chips = (title: string) =>
+      within(screen.getByRole("button", { name: new RegExp(title) }))
+        .queryAllByText(/^(acknowledged|alert cleared)$/)
+        .map((e) => e.textContent);
+    await screen.findByText("Urgence — Hôpital A — 132 %");
+    expect(chips("Hôpital A")).toEqual([]);
+    expect(chips("Hôpital B")).toEqual(["acknowledged"]);
+    expect(chips("Hôpital C")).toEqual(["alert cleared"]);
+    expect(chips("Raised by hand")).toEqual([]);
+  });
+
+  it("says on the signal itself what became of its alert", async () => {
+    nav.search = "signal=s3";
+    api.getCommandBoard.mockResolvedValue(board([signal({ id: "s3", alert: "cleared" })]));
+    render(view(feed(1, null)));
+    expect(await screen.findByText(/Its alert has cleared: the condition no longer fires\./)).toBeTruthy();
+  });
+
+  it("names what it counts in each view", () => {
+    expect(shownOfTotal(42, 42, "active")).toBe("42 open signals");
+    expect(shownOfTotal(500, 2810, "cleared")).toBe("Showing 500 of 2,810 signals whose alert has cleared, most recent first");
+    expect(shownOfTotal(3, 3, "cleared")).toBe("3 signals whose alert has cleared");
   });
 });

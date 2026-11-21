@@ -59,7 +59,23 @@ export interface Signal {
   closedAt: string | null;
   closedReason: string | null;
   detectedAt: string;
+  /** What became of the alert that raised it. Null when no alert did. */
+  alert: AlertState | null;
 }
+
+/**
+ * What became of the alert a signal came from: it still fires (`holds`),
+ * somebody acknowledged it and it still fires (`acknowledged`), or the
+ * condition stopped firing (`cleared`).
+ */
+export type AlertState = "holds" | "acknowledged" | "cleared";
+
+/**
+ * Which pile of signals the board is showing: what needs somebody (`active`),
+ * or what it sets apart, raised by an alert that has since cleared and that
+ * nobody has acted on (`cleared`).
+ */
+export type BoardView = "active" | "cleared";
 
 /** A signal with the bits the board needs, denormalized by the server. */
 export interface BoardSignal extends Signal {
@@ -82,6 +98,7 @@ export interface SignalEvent {
 }
 
 export interface CommandBoard {
+  /** Open signals by domain, in the view shown, counted over all of them and not over the list. */
   domains: { domain: string; open: number; critical: number }[];
   workflows: Workflow[];
   signalTypes: SignalType[];
@@ -90,6 +107,13 @@ export interface CommandBoard {
    * ones only, so a board says "showing 500 of 2,752" rather than "500".
    */
   total: number;
+  /** The view this board answers for. */
+  view?: BoardView | "all";
+  /**
+   * Every open signal, whatever the view: what the board shows on arrival, and
+   * what it sets apart. What is set apart is always counted.
+   */
+  counts?: { open: number; active: number; cleared: number };
   signals: BoardSignal[];
 }
 
@@ -128,14 +152,29 @@ export async function getCommandBoard(
     scenarioId?: string;
     /** A signal to list whatever its age: the one a link names. */
     signal?: string;
+    /** Left out, the board answers for what it shows on arrival: the active signals. */
+    view?: BoardView;
   },
 ): Promise<CommandBoard> {
   const qs = new URLSearchParams();
   if (opts?.includeClosed) qs.set("includeClosed", "true");
   if (opts?.scenarioId) qs.set("scenarioId", opts.scenarioId);
   if (opts?.signal) qs.set("signal", opts.signal);
+  if (opts?.view) qs.set("view", opts.view);
   const q = qs.toString();
   return apiFetch(`/v1/ontology/${enc(env)}/command-board${q ? `?${q}` : ""}`);
+}
+
+/**
+ * Close, in one go, the signals of a domain that the board sets apart: their
+ * alert cleared and nobody acted on them. The reason is required, and each
+ * signal's log keeps it with the name of whoever closed them.
+ */
+export async function closeClearedSignals(
+  env: string,
+  body: { reason: string; domain?: string },
+): Promise<{ closed: number }> {
+  return apiFetch(`/v1/ontology/${enc(env)}/signals/close-cleared`, { method: "POST", body });
 }
 
 /** The kinds of signal this project's organisation defined. */
