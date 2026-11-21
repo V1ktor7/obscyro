@@ -64,9 +64,10 @@ const FIELD =
   "rounded border border-line bg-surface px-2 py-1.5 text-[12.5px] text-ink focus:border-brand focus:outline-none";
 const LABEL = "text-[11px] font-semibold uppercase tracking-wide text-ink-faint";
 const DATASET_CAP = 50_000;
-// The datasets route takes the API's default body (1 MiB). Larger files still
-// become a layer; the raw file is then loaded in Data › Projects & datasets.
-const DATASET_BYTES = 950_000;
+// The datasets route takes a body of up to 16 MiB (FILE_BODY_LIMIT in the
+// API), sent here in one call. Larger files still become a layer; the raw file
+// is then loaded in Data › Projects & datasets, which sends it in parts.
+const DATASET_BYTES = 15_000_000;
 
 function pct(a: number, b: number): string {
   return b > 0 ? `${Math.round((a / b) * 100)} %` : "—";

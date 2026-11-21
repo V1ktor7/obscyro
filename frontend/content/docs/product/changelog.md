@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "e64405ced4d2c5f0"
+translatedFrom: "996b557779991d8e"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -15,6 +15,7 @@ An entry is written the day the change ships, in the same commit as the code. Si
 
 ## 21 November 2026
 
+- **Change · Data.** A wide file loads as a dataset. The API refused a file's rows beyond 1 MiB, and a half-megabyte CSV with about fifty columns, such as a daily public-health series, is already over that once its rows are sent. The limit is 16 MiB for loading rows, as for the map's layers. On the map, “Add data” also keeps the file as a dataset up to that size. The rest of the API keeps 1 MiB.
 - **Change · Analyst.** In the Options tab, after “Add to scenario”, the banner says the option is in the scenario and that Run should give the figures of its card. It was showing instead the warning meant for an edit made elsewhere.
 - **Change · Studio.** On the Network page, a click on a line of the explorer opens the site where the unit stands, and the map moves to it. Before, the line lit up and nothing else happened. A line that has no site of its own, an establishment for instance, frames the map on the sites of what it contains, and the explorer writes why no panel opened. The other way round, a site chosen on the map lights its unit in the explorer, which opens the branch and scrolls to it.
 - **Change · Analyst.** In the Options tab, the cards follow the order in which the options were tested, even when the model lists them in another order.

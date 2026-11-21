@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 
+import { FILE_BODY_LIMIT } from "../lib/body-limit.js";
 import type { DbClient } from "../lib/db.js";
 import { AppError, NotFound } from "../lib/errors.js";
 import { recordAudit } from "../services/audit.js";
@@ -185,8 +186,11 @@ const datasetRoutes: FastifyPluginAsync = async (fastify) => {
   app.post(
     "/datasets/:id/rows",
     {
+      bodyLimit: FILE_BODY_LIMIT,
       schema: {
         summary: "Load rows (table = new version, stream = append)",
+        description:
+          "Takes up to 50,000 rows and a body of up to 16 MiB, against 1 MiB for the rest of the API: a file's rows sent as JSON repeat every column name, so a wide CSV of half a megabyte is already over 1 MiB. A larger file is sent in several calls.",
         tags: ["datasets"],
         params: z.object({ id: z.string().uuid() }),
         body: z.object({

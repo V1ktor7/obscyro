@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 
+import { FILE_BODY_LIMIT } from "../lib/body-limit.js";
 import type { DbClient } from "../lib/db.js";
 import { AppError, NotFound } from "../lib/errors.js";
 import { recordAudit } from "../services/audit.js";
@@ -63,7 +64,7 @@ const layerOut = z.object({
 
 // Fastify's default body limit is 1 MiB; 50,000 rows of a key and a number is
 // about 2 MB, and the distinct values of twelve columns can be more.
-const LAYER_BODY_LIMIT = 16 * 1024 * 1024;
+const LAYER_BODY_LIMIT = FILE_BODY_LIMIT;
 
 const twinLayerRoutes: FastifyPluginAsync = async (fastify) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();

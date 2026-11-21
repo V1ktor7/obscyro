@@ -9,6 +9,7 @@ Une entrée est écrite le jour où le changement est livré, dans le même comm
 
 ## 21 novembre 2026
 
+- **Modification · Données.** Un fichier large se charge comme jeu de données. L'API refusait les lignes d'un fichier au-delà de 1 Mio, et un CSV d'un demi-mégaoctet avec une cinquantaine de colonnes, comme une série quotidienne de santé publique, passe déjà ce seuil une fois ses lignes envoyées. La limite est de 16 Mio pour le chargement des lignes, comme pour les couches de la carte. Sur la carte, « Add data » garde aussi le fichier comme jeu de données jusqu'à cette taille. Le reste de l'API garde 1 Mio.
 - **Modification · Analyste.** Dans l'onglet Options, après « Add to scenario », le bandeau dit que l'option est dans le scénario et que Run doit redonner les chiffres de sa carte. Il affichait à la place l'avertissement prévu pour une modification faite ailleurs.
 - **Modification · Studio.** Sur la page Network, un clic sur une ligne de l'explorateur ouvre le site où l'unité se trouve, et la carte s'y déplace. Avant, la ligne s'allumait et rien d'autre ne se passait. Une ligne qui n'a pas de site à elle, un établissement par exemple, cadre la carte sur les sites de ce qu'elle contient, et l'explorateur écrit pourquoi aucun panneau ne s'est ouvert. Dans l'autre sens, un site choisi sur la carte allume son unité dans l'explorateur, qui ouvre la branche et défile jusqu'à elle.
 - **Modification · Analyste.** Dans l'onglet Options, les cartes suivent l'ordre où les options ont été testées, même quand le modèle les liste dans un autre ordre.
