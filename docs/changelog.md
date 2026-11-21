@@ -9,6 +9,7 @@ Une entrée est écrite le jour où le changement est livré, dans le même comm
 
 ## 21 novembre 2026
 
+- **Modification · Analyste.** Dans l'onglet Options, les cartes suivent l'ordre où les options ont été testées, même quand le modèle les liste dans un autre ordre.
 - **Modification · Analyste.** Le modèle Claude de l'analyste se règle par une variable du service de l'API (`ANALYST_MODEL`) : Opus 5.5 comme avant quand elle est vide, ou Sonnet 5.5 ou Haiku 5.5, qui coûtent moins par question. Une valeur inconnue éteint l'analyste, et le panneau dit pourquoi.
 - **Modification · Studio.** Le jumeau arrive de nouveau en continu sur la page Units, dans la vue d'un site de la page Network, et dans « Live metrics ». Le navigateur refusait ce flux : la page affichait « Live stream » pendant une demi-minute sans rien recevoir, puis relisait le jumeau toutes les cinq secondes. La pastille écrit maintenant « Connecting » tant que le flux n'a rien livré, et « Live stream » seulement après.
 - **Nouvelle fonction · Analyste.** Une option peut contenir un transfert de patients entre deux sites, ou une réponse enregistrée : celles de la page Events et celles que le moteur écrit lui-même. Elle est testée par le même run que la capacité et les mesures. « Add to scenario » l'écrit dans la recette comme un tampon, et Run redonne alors les chiffres du test.

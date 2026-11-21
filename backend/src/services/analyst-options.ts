@@ -1150,16 +1150,21 @@ export function optionsClosing(ctx: AnalystContext, input: OptionsAsk): Closing<
         for (const id of sources) own.absorb(read.ledgers.get(id)!);
         return { text: checked(p.text, own, { where: "reading", option: null, index }, true), sources };
       });
-      const options = data.options.map((o) => {
-        const own = new Ledger();
-        own.absorb(read.question);
-        own.absorb(read.ledgers.get(o.step)!);
-        return {
-          step: o.step,
-          mechanism: checked(o.mechanism, own, { where: "mechanism", option: o.step, index: 0 }, true),
-          notTested: o.not_tested.map((t, index) => checked(t, everything, { where: "not_tested", option: o.step, index })),
-        };
-      });
+      // Shown in the order they were tested, whatever order the model lists them
+      // in: an order the model chose would be a ranking, and nothing here ranks.
+      const order = read.steps.filter(isTest).map((s) => s.id);
+      const options = data.options
+        .map((o) => {
+          const own = new Ledger();
+          own.absorb(read.question);
+          own.absorb(read.ledgers.get(o.step)!);
+          return {
+            step: o.step,
+            mechanism: checked(o.mechanism, own, { where: "mechanism", option: o.step, index: 0 }, true),
+            notTested: o.not_tested.map((t, index) => checked(t, everything, { where: "not_tested", option: o.step, index })),
+          };
+        })
+        .sort((a, b) => order.indexOf(a.step) - order.indexOf(b.step));
       const humanChoices = data.human_choices.map((t, index) => checked(t, everything, { where: "human_choice", option: null, index }));
       const limits = data.limits.map((t, index) => checked(t, everything, { where: "limit", option: null, index }));
 

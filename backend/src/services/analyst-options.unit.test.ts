@@ -1003,3 +1003,36 @@ test("a recorded response travels whole: the recipe names it, the options carry 
     kinds_of_action: ["transfer"],
   });
 });
+
+test("the options are shown in the order they were tested, whatever order the model lists them in", async () => {
+  const LATER = { label: "Open 3 beds at Lakeshore from day 9", changes: [{ kind: "capacity", site: "Lakeshore", units: 3, from_day: 9 }] };
+  const { out } = await propose(
+    [
+      reply([use("test_option", BEDS)]),
+      reply([use("test_option", LATER)]),
+      reply([
+        give({
+          // Listed backwards. An order the model chose would be a ranking, and the screen ranks nothing.
+          options: [
+            { step: "s2", mechanism: "Fewer beds, later, for the same patients.", not_tested: [] },
+            { step: "s1", mechanism: "Beds at Lakeshore are the only ones the west's patients reach.", not_tested: [] },
+          ],
+          reading: [{ text: "Both options were run through the engine.", sources: ["s1", "s2"] }],
+          human_choices: [],
+          limits: [],
+        }),
+      ]),
+    ],
+    context(blank),
+  );
+  assert.equal(out.status, "answered");
+  assert.deepEqual(
+    out.answer!.options.map((o) => [o.step, o.label]),
+    [
+      ["s1", BEDS.label],
+      ["s2", LATER.label],
+    ],
+  );
+  // Each keeps its own sentence: only the order was the program's to set.
+  assert.match(out.answer!.options[0]!.mechanism, /the only ones the west's patients reach/);
+});

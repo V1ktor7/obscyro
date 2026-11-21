@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "39e23454f25b6ba1"
+translatedFrom: "320b179249a9798c"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -372,7 +372,7 @@ flowchart TD
 - The level of evidence of each item is assigned by the program, from where it comes from: **measured** for what the twin holds (units of a site, residents of a territory), **published** for the rate of a heat wave, **assumption** for the scenario's conditions, the choices, the option itself (the rules of a response included: when they fire, their delay, their effectiveness, their cost are what their author wrote), the engine's routing rule and the flow of a route. The model chooses none of them.
 - The mechanism of an option is checked against the result of its own test; the reading, against the steps it cites; the rest, against everything that was read. A figure of the objective belongs to the person and can be repeated.
 - The mechanism and the reading get both checks of the verifier (A2), like the paragraphs of an answer: a figure nobody returned, and a figure that exists but is written beside the wrong site or the wrong territory.
-- The table follows the order of the tests. Nothing ranks the options: saying which ones reach the objective according to the runs is a reading, choosing between them belongs to the person. Trade-offs of values are presented apart, as such. “Dominated” is not a ranking: the mark says nothing of two options neither of which dominates the other, and choosing between those stays with the person.
+- The table follows the order of the tests, whatever order the model lists the options in: an order it chose would be a ranking. Nothing ranks the options: saying which ones reach the objective according to the runs is a reading, choosing between them belongs to the person. Trade-offs of values are presented apart, as such. “Dominated” is not a ranking: the mark says nothing of two options neither of which dominates the other, and choosing between those stays with the person.
 - The analyst writes nothing. An option enters the scenario on the “Add to scenario” click, written like a stamp placed on the map; Run then gives the figures of the test again (A4). When the option removes a choice, the button reads “Apply to scenario”: the recipe is read again, and if a stamp to remove is no longer there (someone edited it since the test), nothing is written and the screen says so. Otherwise the new stamp is written then the old one removed, as the recipe does when a stamp is edited by hand: a stop half-way leaves one stamp too many, which can be seen, rather than one too few. The parity fixture covers a replacement: the figures of the test and those of Run after the click are the same. If the scenario is no longer the one that was tested, the screen says which of three cases it is: one option added from the tab (Run must give its column again, the other columns no longer describe this scenario), several options added together (no test covered them together), or an edit made elsewhere (every column is out of date).
 - A run is not a forecast: the table carries it in its title.
 

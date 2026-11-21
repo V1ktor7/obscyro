@@ -387,7 +387,7 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 - Un événement n'a qu'un lieu écrit en mots. Il n'est relié à aucun territoire du jumeau, et le moteur ne le reçoit pas : c'est un repère pour lire un run, pas une entrée du run.
 - Les événements validés sont ceux du projet, pas d'un scénario : tous les scénarios du projet voient le même calendrier.
 - Une recherche d'événements coûte environ 70 cents : chaque recherche lancée renvoie dix pages, près de 15 000 jetons, et aucun réglage de l'API ne permet d'en demander moins sans renoncer au plafond de recherches. Voir « Ce que coûte une recherche ».
-- Les questions de référence ne jugent que l'onglet Ask. Sur `claude-haiku-5-5`, l'onglet Options et la recherche d'événements n'ont pas été essayés ; `claude-sonnet-5-5` n'a été essayé nulle part.
+- Les questions de référence ne jugent que l'onglet Ask. Sur `claude-haiku-5-5`, l'onglet Options a été essayé sur un seul objectif (trois options testées, dont un transfert de patients et deux réponses enregistrées), et la recherche d'événements ne l'a pas été ; `claude-sonnet-5-5` n'a été essayé nulle part.
 - Le jumeau ne contient ni personnel, ni stocks, ni historique : l'analyste le dit, il ne le comble pas. Il ne peut donc pas dire ce qui était ouvert plus tôt, ni ce qui a changé depuis ce matin.
 - L'âge d'un chiffre en direct est celui de la lecture de l'unité entière, le plus vieux de ses sources quand elle en a plusieurs.
 - Les signaux ouverts que `list_alerts` compte comprennent ceux dont l'alerte est retombée : ils peuvent être bien plus nombreux que les alertes ouvertes.

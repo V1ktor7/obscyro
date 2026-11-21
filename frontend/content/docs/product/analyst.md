@@ -3,7 +3,7 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "cec8b3d87f1d1c94"
+translatedFrom: "8125528073803094"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
@@ -393,7 +393,7 @@ What is not judged: the quality of the writing. That still takes a person, who r
 - An event has only a place written in words. It is tied to no territory of the twin, and the engine does not receive it: it is a marker for reading a run, not an input of the run.
 - The validated events are the project's, not a scenario's: every scenario of the project sees the same calendar.
 - An event search costs about 70 cents: each search launched returns ten pages, close to 15,000 tokens, and no setting of the API lets you ask for fewer without giving up the cap on searches. See “What a search costs”.
-- The reference questions judge the Ask tab only. On `claude-haiku-5-5`, the Options tab and the search for events have not been tried; `claude-sonnet-5-5` has not been tried anywhere.
+- The reference questions judge the Ask tab only. On `claude-haiku-5-5`, the Options tab has been tried on a single objective (three options tested, among them a transfer of patients and two recorded responses), and the search for events has not; `claude-sonnet-5-5` has not been tried anywhere.
 - The twin holds no staff, no stocks and no history: the analyst says so, it does not fill the gap. So it cannot say what was open earlier, or what changed since this morning.
 - The age of a live figure is that of the reading of the whole unit, the oldest of its sources when it has several.
 - The open signals `list_alerts` counts include those whose alert has cleared: they can be far more numerous than the open alerts.
