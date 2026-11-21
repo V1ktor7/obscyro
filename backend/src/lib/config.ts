@@ -32,8 +32,9 @@ function boolEnv(name: string, fallback: boolean): boolean {
  * A list, not any id: the analyst's request is written for these (an effort,
  * a fallback on refusal, the web search tool, strict tools), and a model that
  * takes another request would fail on every question. Anthropic's
- * documentation says all three accept it; only the first has answered the
- * reference questions, so changing model is a change to replay them for.
+ * documentation says all three accept it. The whole set of reference questions
+ * has passed on the last one; the middle one has never been replayed, so
+ * choosing it is a change to replay them for (`docs/analyst.md`).
  */
 export const ANALYST_MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"] as const;
 export type AnalystModelId = (typeof ANALYST_MODELS)[number];

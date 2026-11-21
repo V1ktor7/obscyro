@@ -3,7 +3,7 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "51805469e6ed353a"
+translatedFrom: "cec8b3d87f1d1c94"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
@@ -48,7 +48,7 @@ It also needs credit on the Claude account of that key. When there is none left,
 
 Any other value switches the analyst off, and the panel says which one it was given. It does not fall back on another model: a slip in the name of a cheaper model must not be billed at the price of the dearest one without anyone knowing. The model that answered is written under each answer (“Written by…”) and kept in the journal.
 
-Only `claude-opus-5-5` has answered the reference questions. The other two accept the same request according to Anthropic's documentation, but what their answers are worth is only known by replaying those questions: changing model means replaying them. The effort asked for is `medium` for all three.
+What a model is worth is known by replaying the reference questions. The whole set, twenty questions, passed twice in a row on `claude-haiku-5-5`, with no figure removed. On `claude-opus-5-5`, the first thirteen questions passed twice in a row; the whole set was not replayed to the end there. `claude-sonnet-5-5` has never been replayed: according to Anthropic's documentation it accepts the same request, but nothing says what its answers are worth. The reference questions are questions of the Ask tab: they say nothing of the Options tab or of the search for events. The effort asked for is `medium` for all three.
 
 What the tools read from the twin (counts and capacities, never a person) is sent to the Claude API to write the answer. The panel says so at its foot.
 
@@ -393,7 +393,7 @@ What is not judged: the quality of the writing. That still takes a person, who r
 - An event has only a place written in words. It is tied to no territory of the twin, and the engine does not receive it: it is a marker for reading a run, not an input of the run.
 - The validated events are the project's, not a scenario's: every scenario of the project sees the same calendar.
 - An event search costs about 70 cents: each search launched returns ten pages, close to 15,000 tokens, and no setting of the API lets you ask for fewer without giving up the cap on searches. See “What a search costs”.
-- The reference questions have only been replayed on `claude-opus-5-5`. On another model (`ANALYST_MODEL`), nothing says yet that the answers stay right.
+- The reference questions judge the Ask tab only. On `claude-haiku-5-5`, the Options tab and the search for events have not been tried; `claude-sonnet-5-5` has not been tried anywhere.
 - The twin holds no staff, no stocks and no history: the analyst says so, it does not fill the gap. So it cannot say what was open earlier, or what changed since this morning.
 - The age of a live figure is that of the reading of the whole unit, the oldest of its sources when it has several.
 - The open signals `list_alerts` counts include those whose alert has cleared: they can be far more numerous than the open alerts.

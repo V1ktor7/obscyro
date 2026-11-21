@@ -42,7 +42,7 @@ Il lui faut aussi du crédit sur le compte Claude de cette clé. Quand il n'y en
 
 Toute autre valeur éteint l'analyste, et le panneau dit laquelle il a reçue. Il ne retombe pas sur un autre modèle : une faute de frappe dans le nom d'un modèle moins cher ne doit pas être facturée au prix du plus cher sans que personne le sache. Le modèle qui a répondu est écrit sous chaque réponse (« Written by… ») et gardé dans le journal.
 
-Seul `claude-opus-5-5` a répondu aux questions de référence. Les deux autres acceptent la même demande d'après la documentation d'Anthropic, mais ce que valent leurs réponses ne se sait qu'en rejouant ces questions : changer de modèle, c'est les rejouer. L'effort demandé est `medium` pour les trois.
+Ce que vaut un modèle se sait en rejouant les questions de référence. Le jeu complet, vingt questions, est passé deux fois de suite sur `claude-haiku-5-5`, sans chiffre retiré. Sur `claude-opus-5-5`, les treize premières questions sont passées deux fois de suite ; le jeu complet n'y a pas été rejoué jusqu'au bout. `claude-sonnet-5-5` n'a jamais été rejoué : d'après la documentation d'Anthropic il accepte la même demande, mais rien ne dit ce que valent ses réponses. Les questions de référence sont des questions de l'onglet Ask : elles ne disent rien de l'onglet Options ni de la recherche d'événements. L'effort demandé est `medium` pour les trois.
 
 Ce que les outils lisent du jumeau (des comptes et des capacités, jamais une personne) est envoyé à l'API Claude pour rédiger la réponse. Le panneau le dit en pied.
 
@@ -387,7 +387,7 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 - Un événement n'a qu'un lieu écrit en mots. Il n'est relié à aucun territoire du jumeau, et le moteur ne le reçoit pas : c'est un repère pour lire un run, pas une entrée du run.
 - Les événements validés sont ceux du projet, pas d'un scénario : tous les scénarios du projet voient le même calendrier.
 - Une recherche d'événements coûte environ 70 cents : chaque recherche lancée renvoie dix pages, près de 15 000 jetons, et aucun réglage de l'API ne permet d'en demander moins sans renoncer au plafond de recherches. Voir « Ce que coûte une recherche ».
-- Les questions de référence n'ont été rejouées que sur `claude-opus-5-5`. Sur un autre modèle (`ANALYST_MODEL`), rien ne dit encore que les réponses restent justes.
+- Les questions de référence ne jugent que l'onglet Ask. Sur `claude-haiku-5-5`, l'onglet Options et la recherche d'événements n'ont pas été essayés ; `claude-sonnet-5-5` n'a été essayé nulle part.
 - Le jumeau ne contient ni personnel, ni stocks, ni historique : l'analyste le dit, il ne le comble pas. Il ne peut donc pas dire ce qui était ouvert plus tôt, ni ce qui a changé depuis ce matin.
 - L'âge d'un chiffre en direct est celui de la lecture de l'unité entière, le plus vieux de ses sources quand elle en a plusieurs.
 - Les signaux ouverts que `list_alerts` compte comprennent ceux dont l'alerte est retombée : ils peuvent être bien plus nombreux que les alertes ouvertes.
