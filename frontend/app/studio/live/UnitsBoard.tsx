@@ -138,6 +138,8 @@ export default function UnitsBoard({
 
   // An alert or a signal links here with its unit: unfold what hides its line, once.
   const revealed = useRef<string | null>(null);
+  const [toShow, setToShow] = useState<string | null>(null);
+  const tries = useRef(0);
   useEffect(() => {
     if (!revealId || revealed.current === revealId) return;
     const row = rows.find((r) => r.id === revealId);
@@ -153,11 +155,19 @@ export default function UnitsBoard({
     } else if (row.status === "silent") {
       setSilentOpen(true);
     }
-    const timer = setTimeout(() => {
-      document.getElementById(rowDomId(revealId))?.scrollIntoView?.({ block: "center" });
-    }, 0);
-    return () => clearTimeout(timer);
+    tries.current = 0;
+    setToShow(revealId);
   }, [revealId, rows, tree]);
+
+  // Its line exists only once the unfolding above has been drawn, so the scroll waits for it: after each
+  // drawing, until the line is there. It gives up after a few, for a unit the filter or the view leaves out.
+  useEffect(() => {
+    if (!toShow) return;
+    const line = document.getElementById(rowDomId(toShow));
+    if (line) line.scrollIntoView?.({ block: "center" });
+    tries.current += 1;
+    if (line || tries.current >= 8) setToShow(null);
+  });
 
   const pick = (row: UnitRow, foldable: boolean) => {
     if (foldable) {

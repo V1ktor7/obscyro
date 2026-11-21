@@ -1,12 +1,21 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TwinAlertSeverity, TwinUnitNode } from "@/lib/platform-api";
 
 import UnitsBoard, { type UnitsBoardProps } from "./UnitsBoard";
 import type { Measure, RuleLike } from "./units-list";
+
+/** The lines the page scrolled to. jsdom has no layout, so it has no scrollIntoView of its own. */
+let shown: string[] = [];
+beforeEach(() => {
+  shown = [];
+  Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
+    shown.push(this.id);
+  };
+});
 
 afterEach(cleanup);
 
@@ -205,9 +214,21 @@ describe("the Units page", () => {
     expect(lines()).toEqual([]);
   });
 
-  it("unfolds the group that hides a unit a link names", () => {
-    board({ revealId: "legare", selectedId: "legare" });
+  it("unfolds the group that hides a unit a link names, and brings its line on screen", () => {
+    const { props, rerender } = board({ revealId: "legare", selectedId: "legare" });
     expect(lines()).toContain("legare");
+    // The line did not exist before the group was unfolded: the scroll has to wait for it.
+    expect(shown).toEqual(["unit-row-legare"]);
+
+    // Once, not at every new reading of the twin.
+    rerender(<UnitsBoard {...props} nodes={[...FLAT]} />);
+    expect(shown).toEqual(["unit-row-legare"]);
+  });
+
+  it("stops looking for the line of a unit this project does not have", () => {
+    const { props, rerender } = board({ revealId: "nowhere", selectedId: "nowhere" });
+    for (let i = 0; i < 12; i += 1) rerender(<UnitsBoard {...props} nodes={[...FLAT]} />);
+    expect(shown).toEqual([]);
   });
 });
 
@@ -276,8 +297,9 @@ describe("a twin with a hierarchy", () => {
     expect(lines()).toEqual(["s2"]);
   });
 
-  it("opens the branch that leads to a unit a link names", () => {
+  it("opens the branch that leads to a unit a link names, and brings its line on screen", () => {
     board({ nodes: TREE, revealId: "s1", selectedId: "s1" });
     expect(lines()).toEqual(["e2", "e1", "s2", "s1"]);
+    expect(shown).toEqual(["unit-row-s1"]);
   });
 });

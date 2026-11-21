@@ -99,7 +99,8 @@ export default function UnitSheet({
   const basis = detail?.metrics.freshnessBasis;
 
   return (
-    <div className="flex flex-col gap-[18px] px-5 py-[18px] text-[13px] text-ink-muted">
+    // The room at the bottom keeps the last lines clear of the analyst's button, which floats over this corner.
+    <div className="flex flex-col gap-[18px] px-5 pb-16 pt-[18px] text-[13px] text-ink-muted">
       <Block>
         <h2 className="m-0 text-[15px] font-semibold leading-snug text-ink [text-wrap:balance]">{unit.name}</h2>
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-ink-faint">
