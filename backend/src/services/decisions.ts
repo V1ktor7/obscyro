@@ -49,6 +49,15 @@ export interface DecisionExpected {
   mechanism: string;
   notTested: string[];
   notes: string[];
+  /**
+   * The same two runs made again on the network as it was when the signal
+   * opened: what the card showed when a prepared response was engaged.
+   * `current` says whether the card still called it a test of the current
+   * state at that moment. Absent when no such test had given figures.
+   * `asItIs` and `withOption` above stay those of the test the response was
+   * kept from: the sites and the arrivals go with them.
+   */
+  retested?: { testedAt: string; current: boolean; asItIs: OptionFigures; withOption: OptionFigures };
 }
 
 export interface SourceStep {

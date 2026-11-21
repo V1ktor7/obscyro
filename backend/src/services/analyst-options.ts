@@ -238,7 +238,8 @@ export interface TestedOption {
   timing: { twinMs: number; engine: EngineTiming[]; totalMs: number };
 }
 
-function figuresOf(v: RunDigest["events"]): OptionFigures {
+/** One pass of the engine as a column of the comparison. A retest of a prepared response reads its two runs through this too. */
+export function figuresOf(v: RunDigest["events"]): OptionFigures {
   let peakOccupancy: number | null = null;
   let peakDay: number | null = null;
   v.island.forEach((x, t) => {

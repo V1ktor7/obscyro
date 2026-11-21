@@ -25,6 +25,31 @@ export interface TestStanding {
   reasons: string[];
 }
 
+/**
+ * What the engine made of a response on the network as it is. The server tests
+ * every response of a kind again when a signal of that kind opens, without a
+ * language model and without anyone asking.
+ */
+export interface LiveTest {
+  /**
+   * `tested`: a retest gave figures, and they are what the card shows.
+   * `testing`: one is waiting or running; the card shows the last test it knows meanwhile.
+   * `none`: no retest ever gave figures; the card shows the test kept in calm time.
+   */
+  state: "tested" | "testing" | "none";
+  /** One line, written by the server: what was tested and when, or why nothing was. */
+  says: string;
+  /** The two runs of the latest retest that finished. A run that is waiting, abandoned or failed is never here. */
+  figures: { asItIs: OptionFigures; withOption: OptionFigures } | null;
+  testedAt: string | null;
+  /** Whether those figures can still be called figures of the current state. */
+  current: boolean;
+  /** How long that retest took, in seconds. */
+  seconds: number | null;
+  /** Why the latest attempt gave nothing, when it is more recent than any result. */
+  problem: string | null;
+}
+
 export interface PreparedResponseCard {
   id: string;
   label: string;
@@ -44,6 +69,7 @@ export interface PreparedResponseCard {
   notTested: string[];
   scenarioName: string;
   standing: TestStanding;
+  live: LiveTest;
   keptBy: string | null;
   keptAt: string;
 }

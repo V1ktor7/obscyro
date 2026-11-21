@@ -9,6 +9,7 @@ import preparedRoutes from "../routes/prepared-responses.js";
 import type { Decision, DecisionExpected } from "./decisions.js";
 import type { LiveSignal } from "./live-reading.js";
 import { OLD_AFTER_DAYS, onCard, scenarioMark, scenarioOf, standingOf, type PreparedResponse } from "./prepared-responses.js";
+import { liveTest } from "./response-retest.js";
 import { decisionOnCard, engageNow } from "./situation.js";
 
 // ---------------------------------------------------------------------------
@@ -127,7 +128,7 @@ test("a test on a scenario that changed, or is gone, or an old test, says so bef
 });
 
 test("on the card a response shows its test as the run gave it, and what the run rests on", () => {
-  const card = onCard(response(), { exists: true, mark: "aaaa" }, NOW);
+  const card = onCard(response(), { exists: true, mark: "aaaa" }, NOW, liveTest([], NOW));
   assert.equal(card.label, "Open 60 beds at Lakeshore");
   assert.equal(card.approver, "Director of nursing");
   assert.deepEqual(card.changes, ["Adds +60 litsantephysique at Lakeshore from day 10"]);
@@ -157,11 +158,12 @@ test("a replacement and a removal are said as such, and an older record falls ba
     }),
     { exists: true, mark: "aaaa" },
     NOW,
+    liveTest([], NOW),
   );
   assert.deepEqual(replaced.changes, ["Replaces +60 at Lakeshore from day 10 with +30 at Lakeshore from day 10", "Removes Schools closed, days 8 to 17"]);
   // Recorded before an option said what it does: its own basis is all there is.
   const { changes: _changes, ...older } = EXPECTED;
-  assert.deepEqual(onCard(response({ expected: older }), { exists: true, mark: "aaaa" }, NOW).changes, [
+  assert.deepEqual(onCard(response({ expected: older }), { exists: true, mark: "aaaa" }, NOW, liveTest([], NOW)).changes, [
     "+60 litsantephysique at Lakeshore from day 10, open and staffed",
   ]);
 });

@@ -19,6 +19,7 @@ Chaque algorithme du produit a ici sa section : à quoi il sert, son schéma, se
 | [A8](#a8-options-testées-par-le-moteur) | Options testées par le moteur | `backend/src/services/analyst-options.ts` |
 | [A9](#a9-décision-enregistrée-et-suivi) | Décision enregistrée et suivi | `backend/src/services/decisions.ts` |
 | [A10](#a10-recherche-en-ligne-et-calendrier-dévénements) | Recherche en ligne validée et calendrier d'événements | `backend/src/services/analyst-events.ts` |
+| [A11](#a11-retest-dune-réponse-préparée) | Retest d'une réponse préparée, à l'ouverture d'un signal | `backend/src/services/response-retest.ts` |
 | **B** | **Jumeau et moteur de simulation** | |
 | [B1](#b1-export-du-jumeau) | Export du jumeau vers le moteur | `backend/src/services/twin-export.ts` |
 | [B2](#b2-un-pas-du-moteur-dévénements) | Un pas du moteur d'événements | `simulation-service/app/events/dynamics.py` |
@@ -191,13 +192,14 @@ flowchart TD
     SP --> EV
     EV --> W{"Qui lance le run ?"}
     W -->|"la page, bouton Run"| EP["Événement stocké sous un nom fixe,<br/>par trois routes de l'API"]
-    W -->|"le serveur : une option testée,<br/>ou POST /analyst/run"| ES["Événement envoyé au moteur, rien n'est stocké"]
+    W -->|"le serveur : une option testée,<br/>le retest d'une réponse préparée,<br/>ou POST /analyst/run"| ES["Événement envoyé au moteur, rien n'est stocké"]
     EP --> RUN["Simulation du réseau, sans réponse,<br/>à travers le scénario"]
     ES --> RUN
     RUN --> G["Par jour et par site : occupation, file,<br/>capacité. Par jour : arrivées, non servis"]
     G --> D["Résumé du run : les deux passes, les sites où l'on attend"]
     D --> R["Page : panneau Result, liste Where it breaks,<br/>comparaison à la réalité, résumé pour l'analyste"]
     D --> O["Serveur : résultat d'une option testée (A8)"]
+    D --> O3["Serveur : retest d'une réponse préparée (A11)"]
     D --> O2["Serveur : résumé rendu par POST /analyst/run,<br/>pour une question sur le run posée sans écran"]
 ```
 
@@ -224,7 +226,7 @@ flowchart LR
 
 L'enregistrement contient trois runs : le scénario tel quel, le scénario avec les tampons d'une option, et le scénario où une option a remplacé un choix (l'ancien tampon retiré, le nouveau écrit). Les deux derniers sont ce qui garantit qu'appliquer une option testée au scénario puis lancer Run redonne les chiffres du test. Il se régénère à la main quand le moteur ou la traduction change (`cd backend && npx tsx scripts/make-scenario-run-fixture.ts`, avec Python et les dépendances du service de simulation), puis on relance les deux suites.
 
-Sur le serveur, le run existe en deux formes. `ScenarioRunner.digest` fait les deux passes, comme la page : c'est lui que le test de parité rejoue, et c'est lui que `serverRun` appelle pour la route `POST /v1/ontology/:env/analyst/run`. Cette route rend le résumé qu'une personne aurait à l'écran après Run, pour qu'une question sur le run puisse être posée par un script, sans navigateur ([analyst.md](analyst.md), les questions de référence). Elle n'appelle aucun modèle, n'écrit rien, et refuse une activité qu'aucun site n'offre avant de solliciter le moteur. `ScenarioRunner.full` ne fait que la passe « avec les choix » : c'est ce que lit une option testée (A8), parce que le tableau des options compare le scénario avec ses choix au scénario avec l'option en plus, et que la passe « événements seuls » n'y montre rien. Les deux formes passent par le même résumé d'une passe (`passFigures`), donc une colonne du tableau ne peut pas différer de ce que Run affiche pour la même passe ; un test le vérifie sur l'enregistrement.
+Sur le serveur, le run existe en deux formes. `ScenarioRunner.digest` fait les deux passes, comme la page : c'est lui que le test de parité rejoue, et c'est lui que `serverRun` appelle pour la route `POST /v1/ontology/:env/analyst/run`. Cette route rend le résumé qu'une personne aurait à l'écran après Run, pour qu'une question sur le run puisse être posée par un script, sans navigateur ([analyst.md](analyst.md), les questions de référence). Elle n'appelle aucun modèle, n'écrit rien, et refuse une activité qu'aucun site n'offre avant de solliciter le moteur. `ScenarioRunner.full` ne fait que la passe « avec les choix » : c'est ce que lit une option testée (A8), parce que le tableau des options compare le scénario avec ses choix au scénario avec l'option en plus, et que la passe « événements seuls » n'y montre rien. Le retest d'une réponse préparée (A11) lit la même passe, pour la même raison. Les deux formes passent par le même résumé d'une passe (`passFigures`), donc une colonne du tableau ne peut pas différer de ce que Run affiche pour la même passe ; un test le vérifie sur l'enregistrement.
 
 Tester plusieurs options ne refait pas tout : une propagation est gardée d'après ce qu'on lui a demandé, donc une option qui n'ajoute que des lits ne réintègre pas l'épidémie. Chaque appel au moteur est chronométré (`timings`), pour que la durée d'un test soit une mesure et pas une impression.
 
@@ -395,27 +397,31 @@ flowchart TD
     D -->|"non"| E["Refus : seule une option testée se garde"]
     D -->|"oui"| F["Ligne de app.prepared_response : chiffres recopiés du journal,<br/>date du test, empreinte des choix du scénario"]
     F --> G["Fiche de situation d'un signal de ce type :<br/>réponses dans l'ordre où elles ont été gardées"]
-    G --> H{"Le test parle-t-il encore du présent ?"}
+    G --> G2{"Le retest fait à l'ouverture du signal<br/>a-t-il donné des chiffres ? (A11)"}
+    G2 -->|"oui"| G3["Ses chiffres sont ceux de la fiche, avec leur date ;<br/>ceux du test gardé restent écrits dessous"]
+    G3 --> K
+    G2 -->|"non, ou pas encore"| H{"Le test gardé parle-t-il encore du présent ?"}
     H -->|"scénario disparu, scénario changé,<br/>ou test de plus de 30 jours"| I["La raison est écrite au-dessus du bouton"]
     H -->|"rien de connu contre lui"| J["Aucun avertissement"]
     I --> K["Clic Engage"]
     J --> K
     K --> L{"Signal de ce projet, ouvert,<br/>avec une étape devant lui,<br/>et réponse préparée pour son type ?"}
     L -->|"non"| M["Refus, avant toute écriture"]
-    L -->|"oui"| N["1. Décision : app.decision, rattachée au signal<br/>et à la réponse, chiffres du test comme attendu"]
+    L -->|"oui"| N["1. Décision : app.decision, rattachée au signal<br/>et à la réponse, chiffres du test gardé comme attendu ;<br/>ceux du retest que la fiche montrait, à côté"]
     N --> O["2. Journal du signal : option_taken,<br/>la réponse, la personne"]
     O --> P["3. Le signal avance d'une étape ;<br/>si l'étape exige une approbation,<br/>la personne qui engage est celle qui approuve"]
 ```
 
 - **Seule une option testée se garde.** Comme une décision, une réponse préparée est recopiée par le serveur depuis l'échange journalisé. Aucun chiffre ne vient du navigateur : une réponse non testée ne peut pas passer pour testée.
 - **Un test porte sa date et son état.** `tested_at` est la date de l'échange. `scenario_mark` est une empreinte des choix du scénario quand la réponse est gardée : elle ne dépend ni de l'ordre des choix ni des lignes qui les portent, et change dès qu'un choix est ajouté, retiré ou modifié.
-- **Ce que le test vaut se dit avant le clic.** Trois choses se savent sans rien relancer : le scénario n'existe plus, ses choix ont changé, le test a plus de trente jours (`OLD_AFTER_DAYS`). Chacune s'écrit en une phrase. Aucune ne dit que la réponse est mauvaise.
+- **Ce que le test vaut se dit avant le clic.** Trois choses se savent sans rien relancer : le scénario n'existe plus, ses choix ont changé, le test a plus de trente jours (`OLD_AFTER_DAYS`). Chacune s'écrit en une phrase. Aucune ne dit que la réponse est mauvaise. Ces trois phrases parlent du test gardé : quand le retest fait à l'ouverture du signal a donné des chiffres (A11), ce sont eux que la fiche montre, et c'est leur date qui est dite.
+- **La décision garde les deux tests.** `expected` reste celui du test gardé, avec ses sites et ses arrivées. Quand la fiche montrait un retest, `expected.retested` porte ses deux runs et leur date, et l'onglet Decisions l'écrit sous les chiffres attendus.
 - **Rien n'est classé.** Les réponses sont listées dans l'ordre où elles ont été gardées.
 - **Tout refus précède la première écriture.** Le journal d'un signal ne se réécrit pas : un engagement qui ne peut pas aboutir est refusé avant d'y laisser une ligne (`stageAhead`).
 - **Retirer n'est pas effacer.** Une réponse retirée n'est plus proposée ; les décisions qui l'ont engagée restent lisibles.
 - **Rien n'est déclenché ailleurs.** Engager enregistre et suit. L'écran le dit.
 
-**Code.** `backend/src/services/decisions.ts` (`decisionFromExchange`, `followUp`, `realityOf`, `listDecisionsForSignalType`), `prepared-responses.ts` (`scenarioMark`, `standingOf`, `onCard`), `signals.ts` (`stageAhead`, `recordOptionTaken`, `moveSignal`), `backend/src/routes/decisions.ts`, `routes/prepared-responses.ts`, migrations `060_analyst_exchange_kind.sql`, `061_decision.sql` et `065_prepared_response.sql` ; `frontend/app/studio/simulation/hex/DecisionsTab.tsx`, `KeepPrepared.tsx`, `frontend/app/studio/situation/PreparedResponses.tsx`.
+**Code.** `backend/src/services/decisions.ts` (`decisionFromExchange`, `followUp`, `realityOf`, `listDecisionsForSignalType`), `prepared-responses.ts` (`scenarioMark`, `standingOf`, `onCard`), `response-retest.ts` (`expectedOnEngage`), `signals.ts` (`stageAhead`, `recordOptionTaken`, `moveSignal`), `backend/src/routes/decisions.ts`, `routes/prepared-responses.ts`, migrations `060_analyst_exchange_kind.sql`, `061_decision.sql` et `065_prepared_response.sql` ; `frontend/app/studio/simulation/hex/DecisionsTab.tsx`, `KeepPrepared.tsx`, `frontend/app/studio/situation/PreparedResponses.tsx`.
 **Tests.** `decisions.unit.test.ts`, `prepared-responses.unit.test.ts`, `analyst-options.unit.test.ts` (d'une option testée à une décision), `routes/decisions.unit.test.ts`, `DecisionsTab.test.tsx`, `KeepPrepared.test.tsx`, `PreparedResponses.test.tsx`.
 
 ## A10. Recherche en ligne et calendrier d'événements
@@ -475,6 +481,62 @@ flowchart TD
 ---
 
 # B. Jumeau et moteur de simulation
+
+## A11. Retest d'une réponse préparée
+
+**But.** Dire ce qu'une réponse préparée donnerait sur le réseau tel qu'il est maintenant, sans que personne le demande. Le test gardé à froid dit ce qu'elle donnait le jour où on l'a gardée. Quand un signal s'ouvre, le serveur repasse donc dans le moteur chaque réponse préparée pour son type, pendant que la personne lit la fiche. Aucun modèle de langage n'intervient.
+
+```mermaid
+flowchart TD
+    A["Un signal vient d'être créé :<br/>par le pont des alertes (D5), ou à la main"] --> B{"Une demande pour ce type de signal<br/>attend-elle déjà son tour dans ce projet ?"}
+    B -->|"oui"| B1["Rien de plus : le lot en attente<br/>testera les mêmes réponses"]
+    B -->|"non"| C["File du projet : un lot à la fois"]
+    C --> D["Réponses préparées pour ce type"]
+    D --> E{"Déjà en file ou en cours,<br/>ou testée depuis moins d'une minute ?"}
+    E -->|"oui"| E1["Laissée telle quelle"]
+    E -->|"non"| F["Ligne de app.prepared_response_test : queued"]
+    F --> G{"Le scénario du test existe encore,<br/>dans ce projet ?"}
+    G -->|"non"| G1["abandoned, avec la raison"]
+    G -->|"oui"| H["Lecture : le jumeau tel qu'il est,<br/>le jumeau à travers le scénario,<br/>les choix du scénario aujourd'hui"]
+    H --> I["Empreinte de l'état (stateMark)"]
+    I --> J{"Même empreinte que le dernier<br/>retest terminé de cette réponse ?"}
+    J -->|"oui"| J1["unchanged : aucun run,<br/>la ligne nomme ce retest"]
+    J -->|"non"| K["running"]
+    K --> L{"Les choix que la réponse remplace ou retire<br/>sont-ils encore dans le scénario ?"}
+    L -->|"non"| L1["abandoned, avec la raison,<br/>avant tout appel au moteur"]
+    L -->|"oui"| M["Passe du scénario tel quel :<br/>une fois pour tout le lot"]
+    M --> N["Passe du scénario avec la réponse"]
+    N --> O{"Le moteur a-t-il répondu<br/>dans le délai ?"}
+    O -->|"oui"| P["done : les deux runs,<br/>et de quoi la durée était faite"]
+    O -->|"délai dépassé"| Q["abandoned, avec la raison ;<br/>les suivantes du lot ne sont pas essayées"]
+    O -->|"moteur injoignable"| R["failed, avec la raison ;<br/>les suivantes du lot ne sont pas essayées"]
+    P --> S["Fiche de situation (D9) : les chiffres du retest<br/>prennent la place de ceux du test gardé"]
+    J1 --> S
+    G1 --> T["Fiche : la raison est écrite ;<br/>les chiffres restent ceux du dernier test connu"]
+    L1 --> T
+    Q --> T
+    R --> T
+```
+
+**Règles.**
+- **Le déclencheur est l'ouverture d'un signal**, par le pont des alertes ou à la main. La demande part après la création du signal et personne ne l'attend : lever un signal, lire sa fiche et engager une réponse ne dépendent pas du moteur. Un moteur injoignable laisse la fiche entière et « Engage » utilisable.
+- **Aucun modèle de langage.** Un retest est fait de passes du moteur et de rien d'autre.
+- **Le scénario tel qu'il est maintenant.** Le retest tourne sur les choix que le scénario contient aujourd'hui et sur le jumeau lu à l'instant, avec l'horizon et l'activité du test d'origine. Les choix que la réponse remplace ou retire se retrouvent par leur contenu, pas par la ligne qui les portait : un choix supprimé puis réécrit est le même choix. S'il n'est plus dans le scénario, le retest est abandonné et le dit, plutôt que de tourner sur autre chose.
+- **Les mêmes chiffres que Run.** Les passes sont celles d'une option testée (`ScenarioRunner.full`, A4). Un test rejoue l'enregistrement de parité et retrouve les chiffres de la page.
+- **Un run à la fois par projet.** Les lots d'un projet se suivent. Des signaux d'un même type qui s'ouvrent ensemble ne demandent qu'un lot.
+- **Pas de run quand rien n'a changé.** L'empreinte de l'état (`stateMark`) couvre ce que le moteur reçoit : les sites et ce qu'ils portent, les territoires, les routes, le modèle déclaré, les choix du scénario, l'horizon et l'activité. L'heure de la lecture n'en fait pas partie. Avec la même empreinte que le dernier retest terminé, la ligne est `unchanged`, nomme ce retest, et le moteur n'est pas sollicité.
+- **Une réponse testée depuis moins d'une minute est laissée telle quelle** (`MIN_GAP_MS`), comme une réponse déjà en file ou en cours.
+- **Le scénario tel quel ne passe qu'une fois par lot.** Trois réponses font quatre passes, pas six.
+- **Un délai.** Passé trois minutes (`RETEST_TIMEOUT_MS`), le retest est abandonné et le dit. Quand le moteur ne répond pas, les réponses suivantes du lot ne sont pas essayées : chacune n'attendrait que le même silence.
+- **Jamais un run inachevé comme résultat.** En file, en cours, abandonné ou raté : la fiche dit où il en est et pourquoi, et ses chiffres restent ceux du dernier test connu. La file vit dans la mémoire du serveur : au démarrage, une ligne restée en file ou en cours est close comme abandonnée.
+- **« L'état du moment » a une durée.** Un retest est dit « on the current state » pendant quinze minutes (`CURRENT_FOR_MS`) après son run, ou après la dernière fois où l'état a été retrouvé identique. Ensuite la fiche écrit de quand il date (« Tested on the network as it was 3 h ago ») et le signale avant le clic.
+- **La décision garde ce que la fiche montrait** : les chiffres du test gardé comme attendu, et ceux du retest à côté, avec leur date (A9).
+- **De quoi la durée est faite.** Une lecture du jumeau, puis des appels au moteur : pour la première réponse d'un lot, la propagation, le scénario tel quel et le scénario avec la réponse ; pour les suivantes, une passe. Chaque retest garde ces durées (`timing`) : c'est une mesure, pas un résultat.
+- **Ce que le retest ne fait pas.** Il part à l'ouverture d'un signal, pas tant que la fiche reste ouverte : la fiche d'un signal ouvert depuis des heures montre un retest d'il y a des heures, et le dit. Et il ne retient que les chiffres des deux runs : les sites et les arrivées jour par jour d'une décision restent ceux du test gardé.
+- Des unités et des valeurs agrégées, jamais une personne.
+
+**Code.** `backend/src/services/response-retest.ts` (`stateMark`, `retiredNow`, `retestOne`, `Retests`, `sqlStore`, `liveTest`, `expectedOnEngage`, `startRetests`, `requestRetests`), `alert-bridge.ts` et `backend/src/routes/signals.ts` (la demande), `backend/src/index.ts` (le démarrage), `prepared-responses.ts` (`onCard`), `backend/src/routes/situation.ts`, migration `066_prepared_response_test.sql` ; `frontend/app/studio/situation/PreparedResponses.tsx`, `SituationView.tsx`, `prepared-api.ts`.
+**Tests.** `response-retest.unit.test.ts`, `alert-bridge.unit.test.ts` ; `PreparedResponses.test.tsx`, `SituationView.test.tsx`, `DecisionsTab.test.tsx`.
 
 ## B1. Export du jumeau
 
@@ -847,6 +909,7 @@ flowchart TD
     F --> H["Pont lancé tout de suite, une passe à la fois"]
     G --> H
     H --> I["Signal créé, titré une fois"]
+    I --> I2["Réponses préparées pour ce type :<br/>retest demandé, en arrière-plan (A11)"]
     I --> J["Workflow : étapes, approbation au besoin.<br/>Une réponse préparée engagée le fait avancer (A9)"]
     F --> K["Fil d'alertes : GET /alerts/feed<br/>alertes ouvertes, unité nommée, âges, signal, dernière évaluation"]
     I --> K
@@ -870,6 +933,7 @@ flowchart TD
 - **Deux heures de plus que l'ouverture.** `observed_at` : quand la valeur était vraie, d'après l'horodatage que la source publie (D7) ; vide quand la source ne le dit pas. `written_at` : quand la donnée qui a fait franchir le seuil a été écrite ici ; fixée à l'ouverture. `created_at - written_at` est le temps que nous avons mis à voir le dépassement, mesuré sur chaque alerte. Une alerte ouverte trois secondes après son écriture peut porter sur une valeur vieille de cinquante minutes : l'écran dit les deux.
 - **Un âge dit ce qu'il vaut.** `observed_basis` garde ce sur quoi l'âge repose, tel que le jumeau le calcule pour l'unité (D7), et suit la valeur à chaque évaluation. `observed` : l'horodatage de la source, l'écran écrit « value read 37 min ago ». `partial` : une des sources de l'unité n'a publié aucune heure lisible, l'âge est un plancher et l'écran écrit « value read at least 2 h ago ». Les autres (`undeclared`, `unreadable`, `zone-unknown`, `empty`) : pas d'âge, l'écran écrit « age of the value unknown » et donne la raison au survol, dans les mots de la fiche d'unité. Le qualificatif est dans le texte, pas dans une infobulle : un chiffre se répète sans son infobulle.
 - **Le pont suit l'évaluateur.** Une évaluation qui ouvre ou ferme une alerte lance le pont aussitôt ; l'horloge propre du pont (quinze secondes) reste comme filet. Les passes du pont se suivent, jamais deux à la fois : « un signal par alerte » repose sur un `NOT EXISTS` que deux passes simultanées franchiraient toutes les deux.
+- **Un signal qui s'ouvre fait retester ce qui a été préparé pour son type.** Le pont le demande après avoir créé le signal et n'attend pas la réponse : le retest tourne derrière, un run à la fois par projet, sans modèle de langage (A11). Un signal créé à la main le demande aussi.
 - **Une seule lecture pour tout le studio.** Le cadre lit le fil d'alertes toutes les trois secondes et le donne à toutes les pages. Avant, chaque page avait son horloge : dix secondes sur la fiche d'unité, trente sur le globe, une requête par unité sur l'arbre, un bouton sur Response.
 - **Ce qui est une nouvelle.** Une alerte est annoncée quand elle est dans une lecture, n'était pas dans la précédente, et s'est ouverte depuis cette lecture précédente (à deux minutes près, pour une alerte écrite pendant la lecture). La première lecture n'annonce rien : ces alertes étaient ouvertes avant qu'on regarde, et un écran qui crie quarante vieilles alertes à l'arrivée apprend à ne plus le lire. Une alerte déjà ouverte à la lecture précédente, qui n'entre dans la liste que maintenant parce que la liste était pleine, n'est pas une nouvelle.
 - **Un écran qui revient annonce ce qu'il a manqué.** Ordinateur en veille, onglet gelé par le navigateur, réseau coupé : à sa première lecture, l'écran annonce ce qui s'est ouvert pendant qu'il ne lisait pas, et dit son retard (« on this screen 26 min after it opened »). Le compteur qui passe de 44 à 45 sans dire laquelle est le silence que ce bandeau doit empêcher. L'annonce dure deux minutes, ou jusqu'à ce qu'on la ferme ; la fermer ne touche pas à l'alerte.
@@ -882,7 +946,7 @@ flowchart TD
 
 **Délai.** Du moment où une donnée est écrite ici au moment où l'alerte est à l'écran : au plus cinq secondes d'attente de l'évaluateur, la durée d'une évaluation, puis au plus trois secondes de lecture. Soit un peu plus de neuf secondes au pire.
 
-**Code.** `backend/src/services/twin-alert-scheduler.ts` (`nextEvaluationDelay`, `evaluationPulse`), `alert-bridge.ts`, `alert-feed.ts`, `signals.ts` (`listSignals`, `countSignals`), `twin.ts` (`evaluateAlerts`, `readsReality`), routes `GET /v1/ontology/:env/alerts/feed` dans `backend/src/routes/twin.ts` et `GET /v1/ontology/:env/command-board` dans `backend/src/routes/signals.ts`, migrations `063_twin_alert_times.sql` et `064_twin_alert_observed_basis.sql` ; `frontend/app/studio/AlertFeed.tsx`, `alert-feed-state.ts`, `AlertBanner.tsx`, `StudioShell.tsx`, `response/ResponseView.tsx`, `live/LiveTwinView.tsx`.
+**Code.** `backend/src/services/twin-alert-scheduler.ts` (`nextEvaluationDelay`, `evaluationPulse`), `alert-bridge.ts`, `response-retest.ts` (`requestRetests`), `alert-feed.ts`, `signals.ts` (`listSignals`, `countSignals`), `twin.ts` (`evaluateAlerts`, `readsReality`), routes `GET /v1/ontology/:env/alerts/feed` dans `backend/src/routes/twin.ts` et `GET /v1/ontology/:env/command-board` dans `backend/src/routes/signals.ts`, migrations `063_twin_alert_times.sql` et `064_twin_alert_observed_basis.sql` ; `frontend/app/studio/AlertFeed.tsx`, `alert-feed-state.ts`, `AlertBanner.tsx`, `StudioShell.tsx`, `response/ResponseView.tsx`, `live/LiveTwinView.tsx`.
 **Tests.** `twin-alert-scheduler.unit.test.ts`, `alert-bridge.unit.test.ts`, `alert-feed.unit.test.ts`, `signals.unit.test.ts` ; `alert-feed-state.test.ts`, `AlertBanner.test.tsx`, `response/ResponseView.test.tsx`, `platform-nav.test.ts`.
 
 ## D6. Métriques du jumeau
@@ -962,7 +1026,7 @@ flowchart TD
     O -->|"oui, dans ce projet"| P["Son type, son étape et le chemin de son workflow,<br/>même si son alerte est retombée"]
     O -->|"oui, ailleurs"| Q["Refus : signal introuvable"]
     K --> R["Question déjà écrite par le programme,<br/>d'après l'unité et l'alerte"]
-    O -->|"oui, dans ce projet"| S["Réponses préparées pour son type, et ce que leur test vaut ;<br/>décisions déjà prises sur ce type de signal (A9)"]
+    O -->|"oui, dans ce projet"| S["Réponses préparées pour son type, et ce que leur test vaut ;<br/>le retest de chacune sur l'état du moment (A11) ;<br/>décisions déjà prises sur ce type de signal (A9)"]
 ```
 
 **Règles.**
@@ -975,8 +1039,8 @@ flowchart TD
 - **Pas d'historique.** La lecture est celle de maintenant ; elle le dit, à l'analyste et sur la fiche.
 - **La fiche n'attend pas le modèle.** `GET /situation` n'appelle aucun modèle et n'écrit rien. La question à l'analyste est écrite par le programme ; la poser est un geste de la personne.
 - **Un signal se cherche dans son projet.** Un signal d'un autre projet est introuvable, qui que soit l'appelant.
-- **Un signal apporte ce qui a été préparé pour son type.** Les réponses préparées, avec les chiffres de leur test et ce qu'il vaut aujourd'hui, et les décisions déjà prises sur des signaux de ce type (A9). Une fiche sans signal n'en montre pas : rien n'y dit de quel type il s'agit. La fiche dit aussi si une réponse peut être engagée maintenant, et pourquoi non.
-- **À l'écran.** La fiche (`/studio/situation`) se relit toutes les trente secondes ; seule la lecture la plus récente s'affiche, et une lecture qui échoue laisse la dernière à l'écran, dite comme n'étant plus à jour. Le bouton « Analyst » du cadre et la fiche envoient avec la question la page et la sélection, par identifiants (A1).
+- **Un signal apporte ce qui a été préparé pour son type.** Les réponses préparées, avec les chiffres de leur test et ce qu'il vaut aujourd'hui, ce que le moteur en a fait à l'ouverture du signal (le retest, A11), et les décisions déjà prises sur des signaux de ce type (A9). Une fiche sans signal n'en montre pas : rien n'y dit de quel type il s'agit. La fiche dit aussi si une réponse peut être engagée maintenant, et pourquoi non.
+- **À l'écran.** La fiche (`/studio/situation`) se relit toutes les trente secondes, et toutes les cinq secondes tant qu'une réponse préparée est en file ou en cours de retest, pour que le résultat s'affiche sans clic ; seule la lecture la plus récente s'affiche, et une lecture qui échoue laisse la dernière à l'écran, dite comme n'étant plus à jour. Le bouton « Analyst » du cadre et la fiche envoient avec la question la page et la sélection, par identifiants (A1).
 - Une unité et une valeur agrégée, jamais une personne.
 
 **Code.** `backend/src/services/live-reading.ts` (`readLive`, `unitNow`, `alertsNow`, `alertNow`, `ageOfValue`, `shown`), `situation.ts` (`situationOf`, `preparedQuestion`), `backend/src/routes/situation.ts`, outils `list_alerts` et `unit_now` dans `analyst-tools.ts` ; `frontend/app/studio/situation/SituationView.tsx`, `situation-api.ts`, `AnalystDock.tsx`, `alert-feed-state.ts` (`situationHref`).

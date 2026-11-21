@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/lib/auth";
 
+import type { PreparedResponseCard } from "../prepared-api";
 import type { AlertReading, SituationCard, UnitReading } from "../situation-api";
 
 const api = vi.hoisted(() => ({ getSituation: vi.fn() }));
@@ -17,7 +18,7 @@ const where = vi.hoisted(() => ({ search: "" }));
 vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(where.search) }));
 vi.mock("../StudioShell", () => ({ useStudio: () => ({ selectedEnv: "mtl" }) }));
 
-import SituationView from "./SituationView";
+import SituationView, { REREAD_MS, REREAD_TESTING_MS } from "./SituationView";
 
 afterEach(() => {
   cleanup();
@@ -225,5 +226,63 @@ describe("the situation card", () => {
     render(<SituationView />);
     expect(screen.getByText(/A situation card opens from an alert, a signal or a unit/)).toBeTruthy();
     expect(api.getSituation).not.toHaveBeenCalled();
+  });
+});
+
+describe("a card whose prepared response is being tested on the current state", () => {
+  const run = { peakOccupancy: 0.93, peakDay: 36, sitesWithQueue: 3, sitesWithActivity: 34, firstQueueDay: 20, waitingDays: 267, peakWaiting: 12, peakWaitingDay: 38, strandedWaitingDays: null };
+  const prepared = (live: PreparedResponseCard["live"]): PreparedResponseCard => ({
+    id: "r1",
+    label: "Open 60 beds at Lakeshore",
+    approver: null,
+    objective: "Nobody waits at Lakeshore.",
+    changes: [],
+    mechanism: "",
+    horizon: 60,
+    activity: "lit",
+    withIt: run,
+    without: { ...run, waitingDays: 7316, sitesWithQueue: 8 },
+    evidence: { measured: 1, published: 0, assumption: 1 },
+    notTested: [],
+    scenarioName: "Omicron",
+    standing: { testedAt: "2026-11-17T15:00:00.000Z", age: "3 d", stale: false, reasons: [] },
+    live,
+    keptBy: null,
+    keptAt: "2026-11-17T15:10:00.000Z",
+  });
+  const none = { figures: null, testedAt: null, current: false, seconds: null, problem: null };
+
+  it("is read again sooner until the result is there, which then shows without a click", async () => {
+    vi.useFakeTimers();
+    try {
+      api.getSituation
+        .mockResolvedValueOnce(card({ responses: [prepared({ ...none, state: "testing", says: "Being tested on the current state, started 2 s ago. What is shown is the test kept in calm time." })] }))
+        .mockResolvedValue(
+          card({
+            responses: [
+              prepared({ state: "tested", says: "Tested on the current state 3 s ago.", figures: { asItIs: { ...run, waitingDays: 9120 }, withOption: { ...run, waitingDays: 1840 } }, testedAt: "2026-11-20T15:00:02.000Z", current: true, seconds: 61, problem: null }),
+            ],
+          }),
+        );
+      render(<SituationView />);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(api.getSituation).toHaveBeenCalledTimes(1);
+      expect(screen.getByText(/Being tested on the current state, started 2 s ago/)).toBeTruthy();
+      expect(screen.getByText(new RegExp(`again every\\s+${REREAD_TESTING_MS / 1000} s`))).toBeTruthy();
+
+      await vi.advanceTimersByTimeAsync(REREAD_TESTING_MS);
+      expect(api.getSituation).toHaveBeenCalledTimes(2);
+      expect(screen.getByText(/Tested on the current state 3 s ago\. The engine took 61 s\./)).toBeTruthy();
+      expect(screen.getByText(/^1,840 patient-days waiting/)).toBeTruthy();
+
+      // Nothing is being tested any more: the card is back to its usual pace.
+      expect(screen.getByText(new RegExp(`again every\\s+${REREAD_MS / 1000} s`))).toBeTruthy();
+      await vi.advanceTimersByTimeAsync(REREAD_TESTING_MS * 2);
+      expect(api.getSituation).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(REREAD_MS);
+      expect(api.getSituation).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

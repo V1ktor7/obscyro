@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "9448072bdfa21e65"
+translatedFrom: "5d0dba7c1939eb4b"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -15,6 +15,7 @@ An entry is written the day the change ships, in the same commit as the code. Si
 
 ## 20 November 2026
 
+- **New feature · Studio.** Prepared responses are retested on the current state. As soon as a signal opens, the engine runs every response prepared for its kind again on the network as it is, without anyone asking and without a language model. The situation card first shows the last test known with its date, then the new result in its place, with the time of the test (“Tested on the current state 40 s ago”). A test that is running or abandoned is never shown as a result, and an unreachable engine blocks neither the card nor “Engage”.
 - **Change · Analyst.** In its overview of the twin, the analyst no longer says of an institution that it “carries no capacity” when that capacity is in its facilities. It tells two cases apart: a unit whose capacity is in its sub-units, which is the shape of the tree and not a gap, and a unit under which nothing holds any, which is one. For the first, it points to the figure the unit's page shows.
 - **New feature · Studio.** Prepared responses. An option tested in Scenarios can be kept for a kind of signal (“Keep as a prepared response for…”). The situation card of a signal of that kind shows it with the figures of its test, its date, and a warning if the scenario has changed since. One click on “Engage” records the decision on the signal and moves it one stage forward. Nothing is triggered in any other system.
 - **New feature · Studio.** A situation card opens in one click from an alert, a signal or a unit: the unit's live figures with their age, the alert, the stage of the signal, and a question already written for the analyst. It reads in full even when the analyst is switched off.

@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import type { DbClient } from "../lib/db.js";
 import { NotFound } from "../lib/errors.js";
 import type { DecisionDraft, DecisionExpected, SourceStep } from "./decisions.js";
+import type { LiveTest } from "./response-retest.js";
 import { duration } from "./live-reading.js";
 import type { ScenarioOverride } from "./scenario-overrides.js";
 
@@ -152,6 +153,12 @@ export interface ResponseOnCard {
   notTested: string[];
   scenarioName: string;
   standing: TestStanding;
+  /**
+   * What the engine made of it on the network as it is, when a signal of its
+   * kind last opened: figures that take the place of the kept test's on the
+   * card, a test still running, or why there is none (`response-retest.ts`).
+   */
+  live: LiveTest;
   keptBy: string | null;
   keptAt: string;
 }
@@ -165,7 +172,7 @@ function changesOf(expected: DecisionExpected): string[] {
   return expected.basis.filter((b) => b.from === "option").map((b) => b.element);
 }
 
-export function onCard(r: PreparedResponse, scenario: ScenarioNow, now: Date): ResponseOnCard {
+export function onCard(r: PreparedResponse, scenario: ScenarioNow, now: Date, live: LiveTest): ResponseOnCard {
   const count = (level: "measured" | "published" | "assumption") => r.expected.basis.filter((b) => b.evidence === level).length;
   return {
     id: r.id,
@@ -182,6 +189,7 @@ export function onCard(r: PreparedResponse, scenario: ScenarioNow, now: Date): R
     notTested: r.expected.notTested,
     scenarioName: r.scenarioName,
     standing: standingOf(r, scenario, now),
+    live,
     keptBy: r.keptBy,
     keptAt: r.keptAt,
   };

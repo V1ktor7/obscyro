@@ -3,7 +3,7 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "44286b2beac897fd"
+translatedFrom: "58144dce84a0fe04"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
@@ -209,7 +209,11 @@ In an emergency nobody builds a scenario: what was prepared is applied. So the w
 
 **Live.** The situation card of a signal shows the responses prepared for its kind, in the order they were kept, with no ranking. Each says: what it changes; the run with it beside the same run without it; what that run rests on, counted by level of evidence; what its test does not say; and what that test is worth today. Three things can be known without running anything again, and each is written above the button, before the click: the scenario of the test no longer exists, its choices have changed since, or the test is more than thirty days old. None says the response is bad; they say what the figures are figures of.
 
-“Engage” makes three writes in one click: a decision, tied to the signal, with the figures of the test as what is expected of it; a line on the signal's trail, naming the response and the person; and the move of the signal to its next stage. If that stage requires an approval, the person engaging is the one recorded as having given it. Every refusal comes before the first write: a closed signal, a signal at its last stage, a response prepared for another kind of signal. Nothing is triggered in any other system: Obscyro records and follows, and the screen says so.
+**The retest.** As soon as a signal opens, the server runs every response prepared for its kind through the engine again, on the network as it is: the twin read at that instant, and the scenario with its choices of today. Nobody asks for it, and no language model takes part. The card first shows the last test known, with its date, and says that a test is waiting its turn or running. When it finishes, its two runs take the place of those of the kept test, and the line above says when it ran (“Tested on the current state 40 s ago”); what the kept test gave stays written below, in one line. Meanwhile the card reads itself again every five seconds instead of thirty: the result arrives without a click.
+
+The cost is bounded. One run at a time per project. No new run while the state has not changed: the card then says that the state was found unchanged, and when. And a limit of three minutes, after which the test is abandoned. A test that is queued, running, abandoned or failed is never shown as a result: the card says what became of it and why, and keeps the figures of the last test known. An unreachable engine blocks neither the card nor “Engage”. After fifteen minutes, a retest is no longer called a test “of the current state”: the card writes how old it is, and flags it before the click. The retest starts when a signal opens, not for as long as the card stays open. The detail: [Algorithms](/docs/product/algorithms), A11.
+
+“Engage” makes three writes in one click: a decision, tied to the signal, with the figures of the kept test as what is expected of it and, when the card showed a retest, its figures beside them with their date; a line on the signal's trail, naming the response and the person; and the move of the signal to its next stage. If that stage requires an approval, the person engaging is the one recorded as having given it. Every refusal comes before the first write: a closed signal, a signal at its last stage, a response prepared for another kind of signal. Nothing is triggered in any other system: Obscyro records and follows, and the screen says so.
 
 The decision reads back in three places: on the card, among the decisions already taken on this kind of signal; in the signal's trail, on the Response page; and in the Decisions tab, where it carries the name of the signal.
 
@@ -276,12 +280,12 @@ Under the figures, three folded lines, which open on a click: “Why this option
 - the unit's live figures, as its page shows them, with the age of the reading and its reason when it is not exact, then what stands under the unit by type;
 - the unit's other open alerts;
 - the signal, and the path of its workflow with the stage it stands at;
-- the responses prepared for the signal's kind, with the figures of their last test and what it is worth today, and the “Engage” button (see “Prepared responses”);
+- the responses prepared for the signal's kind, with the figures of their last test and what it is worth today, the retest of each on the current state, and the “Engage” button (see “Prepared responses”);
 - the decisions already taken on signals of this kind, with what was expected of them;
 - the analyst, with a question already written from the unit and the alert. It is not sent: asking it is the person's click;
 - what the card cannot say.
 
-The card reads itself again every thirty seconds. If a reading fails, the last one stays on screen, said to be no longer up to date. Everything above the analyst reads without it: when it is switched off, the card is whole and says so.
+The card reads itself again every thirty seconds, and every five seconds while a prepared response is being retested. If a reading fails, the last one stays on screen, said to be no longer up to date. Everything above the analyst reads without it: when it is switched off, the card is whole and says so.
 
 The original mock-up is `design/scenario-analyst.html`. It also shows a tab that is not built yet: “What it can use”.
 
@@ -380,7 +384,7 @@ What is not judged: the quality of the writing. That still takes a person, who r
 | Live reading, `list_alerts`, `unit_now` | `backend/src/services/live-reading.ts` |
 | Situation card | `backend/src/services/situation.ts`, `backend/src/routes/situation.ts`, `frontend/app/studio/situation/SituationView.tsx`, `situation-api.ts` |
 | The analyst in the Studio's shell | `frontend/app/studio/AnalystDock.tsx` |
-| Prepared responses, “Engage” | `backend/src/services/prepared-responses.ts`, `backend/src/routes/prepared-responses.ts`, `frontend/app/studio/simulation/hex/KeepPrepared.tsx`, `frontend/app/studio/situation/PreparedResponses.tsx`, `prepared-api.ts` |
+| Prepared responses, retest, “Engage” | `backend/src/services/prepared-responses.ts`, `backend/src/services/response-retest.ts`, `backend/src/routes/prepared-responses.ts`, `frontend/app/studio/simulation/hex/KeepPrepared.tsx`, `frontend/app/studio/situation/PreparedResponses.tsx`, `prepared-api.ts` |
 | Reading tools, digest of the run | `backend/src/services/analyst-tools.ts` |
 | The `test_option` tool, closing of an objective, `give_options` | `backend/src/services/analyst-options.ts` |
 | Closing of an event search, `give_events` | `backend/src/services/analyst-events.ts` |

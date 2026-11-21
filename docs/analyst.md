@@ -203,7 +203,11 @@ Dans l'urgence on ne bâtit pas un scénario : on applique ce qui a été prépa
 
 **En direct.** La fiche de situation d'un signal montre les réponses préparées pour son type, dans l'ordre où elles ont été gardées, sans classement. Chacune dit : ce qu'elle change ; le run avec elle à côté du même run sans elle ; sur quoi ce run repose, compté par niveau de preuve ; ce que son test ne dit pas ; et ce que ce test vaut aujourd'hui. Trois choses se savent sans rien relancer, et chacune s'écrit au-dessus du bouton, avant le clic : le scénario du test n'existe plus, ses choix ont changé depuis, ou le test a plus de trente jours. Aucune ne dit que la réponse est mauvaise ; elles disent de quoi les chiffres sont les chiffres.
 
-« Engage » fait trois écritures d'un clic : une décision, rattachée au signal, avec les chiffres du test comme ce qu'on en attend ; une ligne au journal du signal, qui nomme la réponse et la personne ; et le passage du signal à l'étape suivante. Si cette étape exige une approbation, c'est la personne qui engage qui est inscrite comme l'ayant donnée. Tout refus arrive avant la première écriture : signal fermé, signal à sa dernière étape, réponse préparée pour un autre type de signal. Rien n'est déclenché dans un autre système : Obscyro enregistre et suit, et l'écran le dit.
+**Le retest.** Dès qu'un signal s'ouvre, le serveur repasse dans le moteur chaque réponse préparée pour son type, sur le réseau tel qu'il est : le jumeau lu à l'instant, et le scénario avec ses choix d'aujourd'hui. Personne ne le demande, et aucun modèle de langage n'intervient. La fiche montre d'abord le dernier test connu, avec sa date, et dit qu'un test attend son tour ou tourne. Quand il finit, ses deux runs prennent la place de ceux du test gardé, et la ligne au-dessus dit quand il a tourné (« Tested on the current state 40 s ago ») ; ce que donnait le test gardé reste écrit dessous, en une ligne. Pendant ce temps la fiche se relit toutes les cinq secondes au lieu de trente : le résultat arrive sans clic.
+
+Le coût est borné. Un run à la fois par projet. Pas de nouveau run tant que l'état n'a pas changé : la fiche dit alors que l'état a été retrouvé identique, et quand. Et un délai de trois minutes, après lequel le test est abandonné. Un test en file, en cours, abandonné ou raté n'est jamais montré comme un résultat : la fiche dit ce qu'il est devenu et pourquoi, et garde les chiffres du dernier test connu. Un moteur injoignable ne bloque ni la fiche ni « Engage ». Après quinze minutes, un retest n'est plus dit « de l'état du moment » : la fiche écrit de quand il date, et le signale avant le clic. Le retest part à l'ouverture d'un signal, pas tant que la fiche reste ouverte. Le détail : [algorithms.md](algorithms.md), A11.
+
+« Engage » fait trois écritures d'un clic : une décision, rattachée au signal, avec les chiffres du test gardé comme ce qu'on en attend et, quand la fiche montrait un retest, ses chiffres à côté avec leur date ; une ligne au journal du signal, qui nomme la réponse et la personne ; et le passage du signal à l'étape suivante. Si cette étape exige une approbation, c'est la personne qui engage qui est inscrite comme l'ayant donnée. Tout refus arrive avant la première écriture : signal fermé, signal à sa dernière étape, réponse préparée pour un autre type de signal. Rien n'est déclenché dans un autre système : Obscyro enregistre et suit, et l'écran le dit.
 
 La décision se relit à trois endroits : sur la fiche, parmi les décisions déjà prises sur ce type de signal ; dans le journal du signal, page Response ; et dans l'onglet Decisions, où elle porte le nom du signal.
 
@@ -270,12 +274,12 @@ Sous les chiffres, trois lignes repliées, qui s'ouvrent d'un clic : « Why this
 - les chiffres en direct de l'unité, tels que sa page les montre, avec l'âge de la lecture et sa raison quand il n'est pas exact, puis ce qui est sous l'unité par type ;
 - les autres alertes ouvertes de l'unité ;
 - le signal, et le chemin de son workflow avec l'étape où il se trouve ;
-- les réponses préparées pour le type du signal, avec les chiffres de leur dernier test et ce qu'il vaut aujourd'hui, et le bouton « Engage » (voir « Réponses préparées ») ;
+- les réponses préparées pour le type du signal, avec les chiffres de leur dernier test et ce qu'il vaut aujourd'hui, le retest de chacune sur l'état du moment, et le bouton « Engage » (voir « Réponses préparées ») ;
 - les décisions déjà prises sur des signaux de ce type, avec ce qu'on en attendait ;
 - l'analyste, avec une question déjà écrite d'après l'unité et l'alerte. Elle n'est pas envoyée : la poser est un clic de la personne ;
 - ce que la fiche ne peut pas dire.
 
-La fiche se relit toutes les trente secondes. Si une lecture échoue, la dernière reste à l'écran, dite comme n'étant plus à jour. Tout ce qui est au-dessus de l'analyste se lit sans lui : quand il est éteint, la fiche est entière et le dit.
+La fiche se relit toutes les trente secondes, et toutes les cinq secondes tant qu'une réponse préparée est en cours de retest. Si une lecture échoue, la dernière reste à l'écran, dite comme n'étant plus à jour. Tout ce qui est au-dessus de l'analyste se lit sans lui : quand il est éteint, la fiche est entière et le dit.
 
 La maquette d'origine est `design/scenario-analyst.html`. Elle montre aussi un onglet qui n'est pas encore construit : « What it can use ».
 
@@ -374,7 +378,7 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 | Lecture du direct, `list_alerts`, `unit_now` | `backend/src/services/live-reading.ts` |
 | Fiche de situation | `backend/src/services/situation.ts`, `backend/src/routes/situation.ts`, `frontend/app/studio/situation/SituationView.tsx`, `situation-api.ts` |
 | L'analyste dans le cadre du Studio | `frontend/app/studio/AnalystDock.tsx` |
-| Réponses préparées, « Engage » | `backend/src/services/prepared-responses.ts`, `backend/src/routes/prepared-responses.ts`, `frontend/app/studio/simulation/hex/KeepPrepared.tsx`, `frontend/app/studio/situation/PreparedResponses.tsx`, `prepared-api.ts` |
+| Réponses préparées, retest, « Engage » | `backend/src/services/prepared-responses.ts`, `backend/src/services/response-retest.ts`, `backend/src/routes/prepared-responses.ts`, `frontend/app/studio/simulation/hex/KeepPrepared.tsx`, `frontend/app/studio/situation/PreparedResponses.tsx`, `prepared-api.ts` |
 | Outils de lecture, résumé du run | `backend/src/services/analyst-tools.ts` |
 | Outil `test_option`, clôture d'un objectif, `give_options` | `backend/src/services/analyst-options.ts` |
 | Clôture d'une recherche d'événements, `give_events` | `backend/src/services/analyst-events.ts` |

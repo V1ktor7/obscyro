@@ -18,6 +18,7 @@ import {
   scenarioOf,
   scenariosNow,
 } from "../services/prepared-responses.js";
+import { expectedOnEngage, liveTest, retestsOf } from "../services/response-retest.js";
 import { getOverlayScenario, listOverrides } from "../services/scenario-overrides.js";
 import { getSignal, listSignalTypes, moveSignal, recordOptionTaken, stageAhead } from "../services/signals.js";
 
@@ -100,7 +101,9 @@ const preparedRoutes: FastifyPluginAsync = async (fastify) => {
         metadata: { signalType: kind.key, label: response.label },
       });
       const now = await scenariosNow(req.db, env.id, [response]);
-      return reply.code(201).send({ ...onCard(response, scenarioOf(now, response), new Date()), signalTypeId: kind.id, signalType: kind.name });
+      const at = new Date();
+      // Just kept: no signal has opened on it yet, so nothing has tested it again.
+      return reply.code(201).send({ ...onCard(response, scenarioOf(now, response), at, liveTest([], at)), signalTypeId: kind.id, signalType: kind.name });
     },
   );
 
@@ -112,8 +115,9 @@ const preparedRoutes: FastifyPluginAsync = async (fastify) => {
         description:
           "Each response says what it changes, the figures of its test with and without it, what that run rests on " +
           "by level of evidence, what the test does not say, and what the test is worth now: its date, and whether " +
-          "the scenario it ran on still exists and still holds the same choices. `signalTypeId` keeps one kind of " +
-          "signal. They are never ranked.",
+          "the scenario it ran on still exists and still holds the same choices. `live` is the test made again on " +
+          "the network as it is when a signal of its kind last opened: its figures, a test still running, or why " +
+          "there is none. `signalTypeId` keeps one kind of signal. They are never ranked.",
         tags: ["decisions"],
         params: z.object({ env: z.string().min(1) }),
         querystring: z.object({ signalTypeId: z.string().uuid().optional() }),
@@ -124,9 +128,15 @@ const preparedRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
       const kept = await listPreparedResponses(req.db, env.id, req.query.signalTypeId ?? null);
-      const now = await scenariosNow(req.db, env.id, kept);
+      const [now, tests] = await Promise.all([scenariosNow(req.db, env.id, kept), retestsOf(req.db, kept.map((r) => r.id))]);
       const at = new Date();
-      return { responses: kept.map((r) => ({ ...onCard(r, scenarioOf(now, r), at), signalTypeId: r.signalTypeId, signalType: r.signalType })) };
+      return {
+        responses: kept.map((r) => ({
+          ...onCard(r, scenarioOf(now, r), at, liveTest(tests.get(r.id) ?? [], at)),
+          signalTypeId: r.signalTypeId,
+          signalType: r.signalType,
+        })),
+      };
     },
   );
 
@@ -164,7 +174,8 @@ const preparedRoutes: FastifyPluginAsync = async (fastify) => {
         summary: "Engage a prepared response on a signal",
         description:
           "One click, three records. A decision is recorded, tied to the signal, with the figures expected of the " +
-          "response (those of its test). The signal's trail says which response was taken and by whom. And the " +
+          "response (those of its test; when the response was tested again on the network as it is, those figures " +
+          "are recorded beside them as `expected.retested`, with their date). The signal's trail says which response was taken and by whom. And the " +
           "signal moves to its next stage; when that stage requires an approval, the person engaging is the one " +
           "named as approving. Refused before anything is written when the signal is closed or at its last stage, " +
           "or when the response was prepared for another kind of signal. Nothing is triggered in any other system: " +
@@ -189,6 +200,10 @@ const preparedRoutes: FastifyPluginAsync = async (fastify) => {
       }
       // Every refusal comes before the first line: the trail cannot be unwritten.
       const { signal, next } = await stageAhead(req.db, found.id);
+      // What the card showed beside the kept test, if the engine had tested the response again.
+      const at = new Date();
+      const live = liveTest((await retestsOf(req.db, [response.id])).get(response.id) ?? [], at);
+      const expected = expectedOnEngage(response.expected, live);
 
       const decision = await insertDecision(req.db, {
         projectId: env.id,
@@ -202,7 +217,7 @@ const preparedRoutes: FastifyPluginAsync = async (fastify) => {
           optionStep: response.optionStep,
           optionLabel: response.label,
           optionStamps: response.optionStamps,
-          expected: response.expected,
+          expected,
           sourceSteps: response.sourceSteps,
         },
         signalId: signal.id,

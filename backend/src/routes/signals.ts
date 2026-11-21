@@ -7,6 +7,7 @@ import { AppError, NotFound } from "../lib/errors.js";
 import { recordAudit } from "../services/audit.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
 import { resolveEnvironment } from "../services/ontology.js";
+import { requestRetests } from "../services/response-retest.js";
 import {
   countSignals,
   createSignalType,
@@ -583,6 +584,11 @@ const signalRoutes: FastifyPluginAsync = async (fastify) => {
     {
       schema: {
         summary: "Raise a signal",
+        description:
+          "Opens a signal by hand, at the first stage of its kind's workflow. With a `dedupeKey`, a signal already open under " +
+          "that key is returned instead of a second one (`created: false`). When the signal is new and its kind has " +
+          "prepared responses, each is tested again in the engine on the network as it is; this happens behind and " +
+          "the reply does not wait for it. The situation card of the signal shows the result when it is there.",
         tags: ["signals"],
         params: z.object({ env: z.string().min(1) }),
         body: z.object({
@@ -623,6 +629,8 @@ const signalRoutes: FastifyPluginAsync = async (fastify) => {
         actorUserId: userId,
       });
       if (result.created) {
+        // The responses prepared for this kind are tested again on the network as it is, behind: the reply does not wait.
+        requestRetests({ id: result.signal.id, projectId: env.id, signalTypeId: result.signal.signalTypeId });
         await recordAudit(req.db, {
           projectId: env.id,
           actorUserId: userId,

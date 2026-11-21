@@ -207,3 +207,27 @@ describe("a decision that replaced or removed a choice of the scenario", () => {
   });
 });
 
+describe("a decision engaged from a situation card whose response had been tested again", () => {
+  it("keeps the kept test as what was expected, and says what the retest on the card gave", async () => {
+    const retested = {
+      testedAt: "2026-11-20T14:59:20.000Z",
+      current: true,
+      asItIs: figures({ sitesWithQueue: 11, waitingDays: 9120 }),
+      withOption: figures({ sitesWithQueue: 5, waitingDays: 1840 }),
+    };
+    api.listDecisions.mockResolvedValue({
+      decisions: [decision({ signal: { id: "s1", title: "Urgence at 132 %" }, expected: { ...decision().expected, retested } })],
+    });
+    tab();
+    const said = await screen.findByText(/Tested again when the signal opened/);
+    expect(said.textContent).toMatch(/on the network as it was on Nov\.? 20, 2026: 1,840 patient-days waiting with it, 9,120 without\./);
+    expect(said.textContent).toContain("That is what the situation card showed when it was engaged.");
+  });
+
+  it("says nothing of a retest when the card showed none", async () => {
+    api.listDecisions.mockResolvedValue({ decisions: [decision({ signal: { id: "s1", title: "Urgence at 132 %" } })] });
+    tab();
+    await screen.findByText("Open 80 beds at Lakeshore from day 5");
+    expect(screen.queryByText(/Tested again when the signal opened/)).toBeNull();
+  });
+});

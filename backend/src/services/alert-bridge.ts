@@ -1,5 +1,6 @@
 import type { DbClient } from "../lib/db.js";
 
+import { requestRetests } from "./response-retest.js";
 import { raiseSignal } from "./signals.js";
 
 // ---------------------------------------------------------------------------
@@ -50,6 +51,8 @@ export function signalTitle(message: string, unitName: string | null): string {
 export async function raiseSignalsForOpenAlerts(
   db: DbClient,
   limit = BATCH,
+  /** What a newly opened signal sets off: the retests of the responses prepared for its kind. */
+  opened: (signal: { id: string; projectId: string; signalTypeId: string }) => void = requestRetests,
 ): Promise<number> {
   const { rows } = await db.query<{
     alert_id: string;
@@ -86,7 +89,7 @@ export async function raiseSignalsForOpenAlerts(
   let raised = 0;
   for (const r of rows) {
     try {
-      await raiseSignal(db, {
+      const { signal, created } = await raiseSignal(db, {
         projectId: r.project_id,
         signalTypeId: r.signal_type_id,
         title: signalTitle(r.message, r.unit_name),
@@ -101,6 +104,8 @@ export async function raiseSignalsForOpenAlerts(
         originId: r.alert_id,
         actorUserId: null,
       });
+      // The responses prepared for this kind are tested again on the network as it is, behind.
+      if (created) opened({ id: signal.id, projectId: signal.projectId, signalTypeId: signal.signalTypeId });
       raised++;
     } catch {
       // One bad alert must not stop the batch — the next tick retries it.

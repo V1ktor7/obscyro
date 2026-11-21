@@ -340,6 +340,12 @@ export interface DecisionExpected {
   mechanism: string;
   notTested: string[];
   notes: string[];
+  /**
+   * The same two runs made again on the network as it was when the signal
+   * opened: what the situation card showed when a prepared response was
+   * engaged. Absent when no such test had given figures.
+   */
+  retested?: { testedAt: string; current: boolean; asItIs: OptionFigures; withOption: OptionFigures };
 }
 
 export interface Decision {

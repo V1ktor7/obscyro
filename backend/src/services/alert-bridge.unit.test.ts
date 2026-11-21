@@ -104,6 +104,30 @@ test("the alert's severity wins over the signal type's default", async () => {
   assert.ok(p.includes("twin_alert"), "the origin is recorded, which is what dedupes it");
 });
 
+test("a signal the bridge opens asks for the responses of its kind to be tested again", async () => {
+  const alert = {
+    alert_id: "a1", project_id: "p1", unit_instance_id: "u1", signal_type_id: "t1",
+    severity: "critical", metric: "occupancy_pct", value: "97",
+    message: "Occupation ≥ 95 %", recommendation: "", unit_name: "HND Emergency",
+  };
+  const stage = [{ id: "st1", workflow_id: "w1", seq: 0, key: "d", name: "D", requires_approval: false, is_terminal: false }];
+  const inserted = [{ id: "sig1", project_id: "p1", signal_type_id: "t1", stage_id: "st1",
+    subject_kind: "object_instance", subject_id: "u1", title: "x", detail: null, severity: "critical",
+    properties: {}, scenario_id: null, origin_kind: "twin_alert", dedupe_key: null,
+    closed_at: null, closed_reason: null, detected_at: new Date(0) }];
+  const { db } = scriptDb([[alert], stage, inserted, [{ next: 1 }], []]);
+
+  const asked: unknown[] = [];
+  assert.equal(await raiseSignalsForOpenAlerts(db, 50, (s) => asked.push(s)), 1);
+  // Named by the signal, its project and its kind: the retest needs nothing else, and no person is in it.
+  assert.deepEqual(asked, [{ id: "sig1", projectId: "p1", signalTypeId: "t1" }]);
+
+  // No alert, no signal, nothing asked of the engine.
+  const none: unknown[] = [];
+  await raiseSignalsForOpenAlerts(scriptDb().db, 50, (s) => none.push(s));
+  assert.deepEqual(none, []);
+});
+
 test("the unit name is folded into the title when there is one", async () => {
   const alert = {
     alert_id: "a1", project_id: "p1", unit_instance_id: "u1", signal_type_id: "t1",

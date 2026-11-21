@@ -32,6 +32,8 @@ import PreparedResponses from "./PreparedResponses";
 
 /** The card reads itself again this often: a figure left on screen grows old without saying so. */
 export const REREAD_MS = 30_000;
+/** While a prepared response is being tested on the current state, the card is read again sooner: that result is what the person is waiting for. */
+export const REREAD_TESTING_MS = 5_000;
 
 const LABEL = "text-[10px] font-semibold uppercase tracking-wide text-ink-faint";
 const CARD = "rounded-md border border-line bg-surface";
@@ -110,9 +112,14 @@ export default function SituationView() {
     setCard(null);
     setError(null);
     void read();
-    const timer = setInterval(() => void read(), REREAD_MS);
-    return () => clearInterval(timer);
   }, [read]);
+
+  const testing = card?.responses?.some((r) => r.live.state === "testing") ?? false;
+  const every = testing ? REREAD_TESTING_MS : REREAD_MS;
+  useEffect(() => {
+    const timer = setInterval(() => void read(), every);
+    return () => clearInterval(timer);
+  }, [read, every]);
 
   if (!selectedEnv) {
     return <p className="p-6 text-[12.5px] text-ink-muted">Choose a project to read a situation.</p>;
@@ -179,7 +186,7 @@ export default function SituationView() {
           <>
             <p className="text-[11px] text-ink-muted">
               Read at {new Date(card.at).toLocaleTimeString("en-CA", { hour12: false })} on the server&apos;s clock, and again every{" "}
-              {REREAD_MS / 1000} s · {card.checked.says}
+              {every / 1000} s · {card.checked.says}
               {card.alertRules > 0 ? ` · ${card.alertRules} alert rule${card.alertRules === 1 ? "" : "s"} in this project` : ""}
             </p>
 

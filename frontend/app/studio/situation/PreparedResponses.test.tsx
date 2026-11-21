@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { OptionFigures } from "../analyst-api";
-import type { PreparedResponseCard } from "../prepared-api";
+import type { LiveTest, PreparedResponseCard } from "../prepared-api";
 
 const api = vi.hoisted(() => ({ engageResponse: vi.fn() }));
 vi.mock("../prepared-api", async (orig) => ({ ...(await orig<typeof import("../prepared-api")>()), ...api }));
@@ -28,6 +28,21 @@ const figures = (waitingDays: number, sitesWithQueue: number): OptionFigures => 
   strandedWaitingDays: null,
 });
 
+/** No signal of this kind has had the response tested again: the card shows the test kept in calm time. */
+const live = (over: Partial<LiveTest> = {}): LiveTest => ({
+  state: "none",
+  says: "Not tested on the current state. What is shown is the test kept in calm time.",
+  figures: null,
+  testedAt: null,
+  current: false,
+  seconds: null,
+  problem: null,
+  ...over,
+});
+
+/** The retest's two runs: the network has filled up since the response was kept. */
+const RETEST = { asItIs: figures(9120, 11), withOption: figures(1840, 5) };
+
 const response = (over: Partial<PreparedResponseCard> = {}): PreparedResponseCard => ({
   id: "r1",
   label: "Open 60 beds at Lakeshore",
@@ -43,6 +58,7 @@ const response = (over: Partial<PreparedResponseCard> = {}): PreparedResponseCar
   notTested: ["Whether 60 beds can be staffed by day 10."],
   scenarioName: "Omicron — calibrated",
   standing: { testedAt: "2026-11-17T15:00:00.000Z", age: "3 d", stale: false, reasons: [] },
+  live: live(),
   keptBy: "A planner",
   keptAt: "2026-11-17T15:10:00.000Z",
   ...over,
@@ -67,6 +83,8 @@ describe("the prepared responses on a situation card", () => {
     expect(within(card).getByText("Whether 60 beds can be staffed by day 10.")).toBeTruthy();
     // A test that still speaks of the present carries no warning.
     expect(within(card).queryByRole("note")).toBeNull();
+    // And the card says which test these figures are: nothing has tested the response on the current state.
+    expect(within(card).getByRole("status").textContent).toBe("Not tested on the current state. What is shown is the test kept in calm time.");
     expect(screen.getByText(/Nothing is triggered in any other system: Obscyro records and follows\. In the order they were kept; nothing here ranks them\./)).toBeTruthy();
   });
 
@@ -87,6 +105,70 @@ describe("the prepared responses on a situation card", () => {
     expect((screen.getByRole("button", { name: "Engage" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it("shows the last test known while the retest runs, then the retest's figures in its place", () => {
+    const KEPT = "267 patient-days waiting · 3 of 34 sites with a queue · peak 93 % on day 36 · first wait on day 20";
+    const running = response({
+      live: live({ state: "testing", says: "Being tested on the current state, started 12 s ago. What is shown is the test kept in calm time." }),
+    });
+    const view = render(section({ responses: [running] }));
+    let card = screen.getByRole("article", { name: "Open 60 beds at Lakeshore" });
+    expect(within(card).getByRole("status").textContent).toBe("Being tested on the current state, started 12 s ago. What is shown is the test kept in calm time.");
+    // A run in progress is not a result: the figures are still the kept test's, with its date.
+    expect(within(card).getByText(KEPT)).toBeTruthy();
+    expect(within(card).getByText(/^Tested 3 d ago on “Omicron — calibrated”/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Engage" }) as HTMLButtonElement).disabled).toBe(false);
+
+    // The retest finished: its two runs take the place of the kept test's.
+    const tested = response({
+      // The kept test is old: that was about figures no longer on the card.
+      standing: { testedAt: "2026-09-01T00:00:00.000Z", age: "80 d", stale: true, reasons: ["The test is 80 d old. The network it ran on may not be the network now."] },
+      live: live({ state: "tested", says: "Tested on the current state 40 s ago.", figures: RETEST, testedAt: "2026-11-20T14:59:20.000Z", current: true, seconds: 61 }),
+    });
+    view.rerender(section({ responses: [tested] }));
+    card = screen.getByRole("article", { name: "Open 60 beds at Lakeshore" });
+    expect(within(card).getByRole("status").textContent).toBe("Tested on the current state 40 s ago. The engine took 61 s.");
+    expect(within(card).getByText("1,840 patient-days waiting · 5 of 34 sites with a queue · peak 93 % on day 36 · first wait on day 20")).toBeTruthy();
+    expect(within(card).getByText("9,120 patient-days waiting · 11 of 34 sites with a queue · peak 93 % on day 36 · first wait on day 20")).toBeTruthy();
+    expect(within(card).queryByText(KEPT)).toBeNull();
+    // What the kept test gave stays readable beside it, said as such.
+    expect(within(card).getByText("In the test it was kept from: 267 patient-days waiting with it, 7,316 without.")).toBeTruthy();
+    expect(within(card).getByText("Run on “Omicron — calibrated” · 60 days · litsantephysique · first tested 80 d ago · kept by A planner")).toBeTruthy();
+    expect(within(card).queryByRole("note")).toBeNull();
+  });
+
+  it("never shows an abandoned retest as a result, and leaves the response engageable", () => {
+    const says =
+      "The test on the current state was abandoned 2 min ago: The engine had not answered after 3 min, so the test was abandoned. What is shown is the test kept in calm time.";
+    render(section({ responses: [response({ live: live({ says, problem: says }) })] }));
+    const card = screen.getByRole("article", { name: "Open 60 beds at Lakeshore" });
+    expect(within(card).getByRole("status").textContent).toBe(says);
+    expect(within(card).getByText("267 patient-days waiting · 3 of 34 sites with a queue · peak 93 % on day 36 · first wait on day 20")).toBeTruthy();
+    expect(within(card).queryByText(/In the test it was kept from/)).toBeNull();
+    expect((screen.getByRole("button", { name: "Engage" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("says before the click that a retest speaks of an earlier state", () => {
+    const earlier = live({ state: "tested", says: "Tested on the network as it was 3 h ago; it has not been tested since.", figures: RETEST, testedAt: "2026-11-20T12:00:00.000Z", current: false, seconds: 58 });
+    render(section({ responses: [response({ live: earlier })] }));
+    expect(screen.getByRole("status").textContent).toBe("Read this before engaging it. Tested on the network as it was 3 h ago; it has not been tested since. The engine took 58 s.");
+    expect((screen.getByRole("button", { name: "Engage" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("says that the decision keeps both tests when a retest was on the card", async () => {
+    api.engageResponse.mockResolvedValue({
+      decision: { id: "d1", expected: { retested: { testedAt: "2026-11-20T14:59:20.000Z", current: true, ...RETEST } } },
+      signal: { id: "s1" },
+      stage: { name: "Évalué", needsApproval: false, closes: false },
+      by: "A planner",
+    });
+    render(section({ responses: [response({ live: live({ state: "tested", says: "Tested on the current state 40 s ago.", figures: RETEST, current: true }) })] }));
+    fireEvent.click(screen.getByRole("button", { name: "Engage" }));
+    const said = await screen.findByText(/Engaged by A planner/);
+    expect(said.textContent).toContain(
+      "The decision is recorded on this signal with the figures of the test it was kept from as what is expected, and those of the test on the current state beside them, and the signal moved to “Évalué”.",
+    );
+  });
+
   it("engages in one click, says what was recorded, and has the card read again", async () => {
     api.engageResponse.mockResolvedValue({ decision: { id: "d1" }, signal: { id: "s1" }, stage: { name: "Évalué", needsApproval: true, closes: false }, by: "A planner" });
     const onEngaged = vi.fn();
@@ -96,7 +178,7 @@ describe("the prepared responses on a situation card", () => {
     await waitFor(() => expect(api.engageResponse).toHaveBeenCalledTimes(1));
     // The signal and the response, by id. No figure is sent: the server holds them.
     expect(api.engageResponse).toHaveBeenCalledWith("mtl", "s1", { responseId: "r1" });
-    const said = await screen.findByText(/Engaged by A planner\. The decision is recorded on this signal/);
+    const said = await screen.findByText(/Engaged by A planner\. The decision is recorded on this signal with these figures as what is expected/);
     expect(said.textContent).toContain("the signal moved to “Évalué”, a stage that needs an approval: A planner is named as approving");
     expect(said.textContent).toContain("Nothing was triggered in any other system.");
     expect(onEngaged).toHaveBeenCalledTimes(1);

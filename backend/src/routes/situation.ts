@@ -10,6 +10,7 @@ import { readLive, signalsById } from "../services/live-reading.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
 import { resolveEnvironment } from "../services/ontology.js";
 import { listPreparedResponses, onCard, scenarioOf, scenariosNow } from "../services/prepared-responses.js";
+import { liveTest, retestsOf } from "../services/response-retest.js";
 import { stagesForSignal } from "../services/signals.js";
 import { decisionOnCard, situationOf, type PreparedForKind } from "../services/situation.js";
 
@@ -40,7 +41,10 @@ const situationRoutes: FastifyPluginAsync = async (fastify) => {
           "least one of `unit`, `alert`, `signal`; an alert or a signal brings its unit. The figures are the ones the " +
           "analyst's `unit_now` and `list_alerts` give, from the same reading. When a signal is named, the card also " +
           "carries the responses prepared for its kind, each with the figures of its test and what that test is " +
-          "worth now, whether one can be engaged, and the decisions already taken on signals of that kind. " +
+          "worth now, whether one can be engaged, and the decisions already taken on signals of that kind. Each " +
+          "response also says what the engine made of it on the network as it is (`live`): when the signal opened, " +
+          "the server tested it again behind, and the card shows that result once it is there, a test still " +
+          "running, or why there is none. An engine that cannot be reached leaves the card whole. " +
           "Reality only; nothing is written.",
         tags: ["twin"],
         params: z.object({ env: z.string().min(1) }),
@@ -73,10 +77,10 @@ const situationRoutes: FastifyPluginAsync = async (fastify) => {
           listPreparedResponses(req.db, env.id, found.typeId),
           listDecisionsForSignalType(req.db, env.id, found.typeId),
         ]);
-        const scenarios = await scenariosNow(req.db, env.id, kept);
+        const [scenarios, tests] = await Promise.all([scenariosNow(req.db, env.id, kept), retestsOf(req.db, kept.map((r) => r.id))]);
         const at = new Date(live.at);
         prepared = {
-          responses: kept.map((r) => onCard(r, scenarioOf(scenarios, r), at)),
+          responses: kept.map((r) => onCard(r, scenarioOf(scenarios, r), at, liveTest(tests.get(r.id) ?? [], at))),
           decisions: decided.map((d) => decisionOnCard(d, found.id)),
         };
       }

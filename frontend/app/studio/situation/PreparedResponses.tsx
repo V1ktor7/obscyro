@@ -9,6 +9,13 @@
  * One click engages one: a decision is recorded on the signal, and the signal
  * moves to its next stage.
  *
+ * When the signal opened, the server ran each response through the engine
+ * again, on the network as it is. The card shows the last test it knows first,
+ * with its date; when that retest finishes, its figures take the place of the
+ * kept test's, and the line above them says when it ran. A retest that is
+ * waiting, running, abandoned or failed is never shown as a result: the line
+ * says where it stands, and the figures stay those of the last test known.
+ *
  * Three things the section never does. It does not rank: the order is the
  * order they were kept in. It does not hide an old or displaced test: the
  * reason is written above the button, before the click. And it does not
@@ -84,6 +91,14 @@ export default function PreparedResponses({
 
       {responses.map((r) => {
         const engaged = done?.id === r.id ? done.result : null;
+        // The figures on the card: those of the retest once one has finished, the kept test's until then.
+        const retest = r.live.figures;
+        const shown = retest ? { withIt: retest.withOption, without: retest.asItIs } : { withIt: r.withIt, without: r.without };
+        // What to know before the click: about the retest when its figures are shown, about the kept test otherwise.
+        const caution = retest ? !r.live.current : r.standing.stale;
+        const recorded = engaged?.decision.expected?.retested
+          ? "with the figures of the test it was kept from as what is expected, and those of the test on the current state beside them"
+          : "with these figures as what is expected";
         return (
           <article key={r.id} aria-label={r.label} className="flex flex-col gap-1.5 rounded-md border border-line bg-canvas-raised p-2.5">
             <div className="flex flex-wrap items-start gap-2">
@@ -92,11 +107,34 @@ export default function PreparedResponses({
             </div>
 
             <p className="text-[11.5px] text-ink-muted">
-              Tested {r.standing.age} ago on “{r.scenarioName}” · {r.horizon} days · {r.activity}
+              {retest ? "Run" : `Tested ${r.standing.age} ago`} on “{r.scenarioName}” · {r.horizon} days · {r.activity}
+              {retest ? ` · first tested ${r.standing.age} ago` : ""}
               {r.keptBy ? ` · kept by ${r.keptBy}` : ""}
             </p>
 
-            {r.standing.stale ? (
+            <p
+              role="status"
+              aria-label={`Test of “${r.label}” on the current state`}
+              className={cn(
+                "flex items-start gap-1.5 rounded px-2 py-1.5 text-[11.5px]",
+                r.live.state === "testing" ? "bg-canvas text-ink-body" : retest && r.live.current ? "bg-ok-soft text-ok-ink" : retest || r.live.problem ? "bg-warn-soft text-warn-ink" : "bg-canvas text-ink-muted",
+              )}
+            >
+              {r.live.state === "testing" ? (
+                <Loader2 className="mt-px h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
+              ) : retest && r.live.current ? (
+                <Check className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              ) : retest || r.live.problem ? (
+                <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              ) : null}
+              <span>
+                {retest && !r.live.current && r.live.state === "tested" ? <span className="font-semibold">Read this before engaging it. </span> : null}
+                {r.live.says}
+                {retest && r.live.state === "tested" && !r.live.problem && r.live.seconds !== null ? ` The engine took ${r.live.seconds} s.` : ""}
+              </span>
+            </p>
+
+            {!retest && r.standing.stale ? (
               <div role="note" className="flex items-start gap-1.5 rounded bg-warn-soft px-2 py-1.5 text-[11.5px] text-warn-ink">
                 <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 <div>
@@ -112,10 +150,15 @@ export default function PreparedResponses({
 
             <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[11.5px]">
               <dt className="font-semibold text-ink">With it</dt>
-              <dd className="text-ink-body">{runLine(r.withIt)}</dd>
+              <dd className="text-ink-body">{runLine(shown.withIt)}</dd>
               <dt className="text-ink-muted">Without it</dt>
-              <dd className="text-ink-muted">{runLine(r.without)}</dd>
+              <dd className="text-ink-muted">{runLine(shown.without)}</dd>
             </dl>
+            {retest ? (
+              <p className="text-[11px] text-ink-faint">
+                In the test it was kept from: {whole(r.withIt.waitingDays)} patient-days waiting with it, {whole(r.without.waitingDays)} without.
+              </p>
+            ) : null}
 
             {r.changes.length ? (
               <div>
@@ -151,8 +194,8 @@ export default function PreparedResponses({
               <p className="flex items-start gap-1.5 rounded bg-ok-soft px-2 py-1.5 text-[11.5px] text-ok-ink">
                 <Check className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 <span>
-                  Engaged{engaged.by ? ` by ${engaged.by}` : ""}. The decision is recorded on this signal with these figures as what is
-                  expected, and the signal moved to “{engaged.stage.name}”
+                  Engaged{engaged.by ? ` by ${engaged.by}` : ""}. The decision is recorded on this signal {recorded}, and the signal moved
+                  to “{engaged.stage.name}”
                   {engaged.stage.needsApproval ? `, a stage that needs an approval: ${engaged.by ?? "the person engaging"} is named as approving` : ""}
                   {engaged.stage.closes ? ", which closes it" : ""}. Nothing was triggered in any other system.
                 </span>
@@ -166,7 +209,7 @@ export default function PreparedResponses({
                   title={engage.why ?? undefined}
                   className={cn(
                     "flex h-7 items-center gap-1 px-3 text-[12px] font-semibold text-white disabled:opacity-60",
-                    r.standing.stale ? "bg-warn" : "bg-brand hover:bg-brand-deep",
+                    caution ? "bg-warn" : "bg-brand hover:bg-brand-deep",
                   )}
                 >
                   {busy === r.id ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : null} Engage
