@@ -7,6 +7,12 @@ Ce qui a changé dans Obscyro, du plus récent au plus ancien. Chaque entrée di
 
 Une entrée est écrite le jour où le changement est livré, dans le même commit que le code. Depuis novembre 2026, chaque changement visible a la sienne. Les mois d'avant sont résumés. Le détail complet, commit par commit, est dans [l'historique du dépôt](https://github.com/V1ktor7/obscyro/commits/main).
 
+## 22 novembre 2026
+
+- **Modification · Alertes.** Chaque alerte donne l'âge de sa propre valeur. L'âge se compte sur ce que la mesure de l'alerte lit, et non plus sur tout ce qui est sous l'unité : une alerte d'occupation des civières, dans une unité qui porte aussi une station de qualité de l'air, a l'âge du relevé des civières, pas celui de la station. Si ce que la mesure lit ne publie aucune heure, l'alerte dit que l'âge est inconnu, même quand une autre source de l'unité en a un. C'est le même âge dans le bandeau, la liste des alertes, la fiche de situation et les réponses de l'analyste.
+- **Modification · Alertes.** Un relevé d'urgence a un âge à toute heure. Le fichier des urgences écrit l'heure sur un seul chiffre de minuit à dix heures (`9:45`), ce qui n'était pas lu : pendant ces dix heures, les alertes disaient « age of the value unknown ». Une date sans heure se lit aussi, comme le début de ce jour : l'âge peut alors être trop grand d'un jour au plus, jamais trop petit.
+- **Modification · Studio.** La fiche d'une unité nomme trois âges. Sous la valeur, celui de cette valeur (« This value was read 14m ago »). Dans chaque alerte, celui de la valeur qui l'a levée. Dans la case « Oldest source », celui de l'unité entière, la plus vieille de toutes ses sources. La fiche de situation fait de même : chaque chiffre porte son âge, et celui de l'unité est nommé à part. Détail : [la page Units](units-page.md).
+
 ## 21 novembre 2026
 
 - **Modification · Données.** Un fichier large se charge comme jeu de données. L'API refusait les lignes d'un fichier au-delà de 1 Mio, et un CSV d'un demi-mégaoctet avec une cinquantaine de colonnes, comme une série quotidienne de santé publique, passe déjà ce seuil une fois ses lignes envoyées. La limite est de 16 Mio pour le chargement des lignes, comme pour les couches de la carte. Sur la carte, « Add data » garde aussi le fichier comme jeu de données jusqu'à cette taille. Le reste de l'API garde 1 Mio.

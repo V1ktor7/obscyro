@@ -213,10 +213,18 @@ export default function SituationView() {
                       <p className="mt-0.5 text-[18px] font-semibold tabular-nums text-ink">{printed(m.value, m.counted_in)}</p>
                       {m.value === null ? <p className="text-[10.5px] text-ink-faint">Nothing here to compute it from.</p> : null}
                       {m.about?.length ? <p className="text-[10.5px] text-ink-muted">About {m.about.join(", ")}</p> : null}
+                      {/* The age of this figure: of what this measure reads. */}
+                      {m.value_age ? (
+                        <p className="mt-0.5 text-[10.5px]">
+                          <Age age={m.value_age} />
+                        </p>
+                      ) : null}
                     </div>
                   ))}
                 </div>
+                {/* The unit as a whole answers another question, and is named for it: one figure above can be newer. */}
                 <p className="text-[11.5px]">
+                  <span className="text-ink-muted">Oldest source under this unit: </span>
                   <Age age={u.value_age} />
                 </p>
                 <p className="text-[11px] text-ink-muted">

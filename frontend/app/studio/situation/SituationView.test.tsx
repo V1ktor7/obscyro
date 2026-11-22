@@ -115,6 +115,8 @@ describe("the situation card", () => {
     // A floor is said as a floor, with its reason in the text and not in a hover.
     expect(within(figures).getByText("value read at least 2 h ago")).toBeTruthy();
     expect(within(figures).getByText(/published no readable time, so this is a floor/)).toBeTruthy();
+    // And it is named for what it is: the unit as a whole, not one of its figures.
+    expect(within(figures).getByText("Oldest source under this unit:")).toBeTruthy();
     // When the data arrived is not offered as the age of the value.
     expect(within(figures).getByText(/Last written to the twin 50 min ago: that is when the data arrived, not when it was true/)).toBeTruthy();
     expect(within(figures).getByText(/count everything under this unit, its sub-units included/)).toBeTruthy();
@@ -123,6 +125,31 @@ describe("the situation card", () => {
     expect(screen.getByRole("link", { name: "Open unit" }).getAttribute("href")).toBe("/studio/live?env=mtl&unit=u1");
     expect(screen.getByRole("link", { name: "Signal" }).getAttribute("href")).toBe("/studio/response?env=mtl&signal=s1");
     expect(screen.getByText(/thresholds last checked 4 s ago · 3 alert rules in this project/)).toBeTruthy();
+  });
+
+  it("gives each live figure the age of its own value, beside the unit's", async () => {
+    // The occupancy comes from a census read 37 minutes ago; the unit as a
+    // whole is only known to be at least two hours old.
+    api.getSituation.mockResolvedValue(
+      card({
+        unit: unit({
+          measures: [
+            { key: "occupancy", measure: "Occupancy", value: 132, counted_in: "percent", value_age: { known: "exact", age: "37 min", says: "value read 37 min ago", why: null } },
+            { key: "iqa", measure: "Air quality index", value: null, counted_in: "number" },
+          ],
+        }),
+      }),
+    );
+    render(<SituationView />);
+
+    const figures = await screen.findByRole("region", { name: "Live figures" });
+    // In the tile of the figure it dates.
+    const tile = within(figures).getByText("132%").parentElement!;
+    expect(within(tile).getByText("value read 37 min ago")).toBeTruthy();
+    // A figure with nothing to compute it from has nothing to date.
+    expect(within(within(figures).getByText("Nothing here to compute it from.").parentElement!).queryByText(/value read|age of the value/)).toBeNull();
+    // The unit's own age is still there, and is another answer.
+    expect(within(figures).getByText("Oldest source under this unit:").parentElement!.textContent).toMatch(/value read at least 2 h ago/);
   });
 
   it("shows the alert it was opened from, the others at the unit, and where the signal stands", async () => {

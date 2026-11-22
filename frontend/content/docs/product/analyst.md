@@ -3,7 +3,7 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "8125528073803094"
+translatedFrom: "ef92d9d78385176e"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
@@ -120,7 +120,7 @@ The Event finder tab is apart: it has none of these tools. It has only the API's
 | `read_series` | A column read as a daily series: total, mean, extremes, values |
 | `list_events` | The calendar: the validated events, their dates, their place, their gate, the source that published them and the passage quoted. When day 0 of the scenario has a date, each event is also placed on the days of the run |
 | `list_alerts` | What is open now: the alerts, worst first, each with its unit, its measure and its value, since when it has been open, the age of the value, and the signal it raised with its stage. Also says how many alert rules exist and when the thresholds were last checked. For the whole project or for one unit |
-| `unit_now` | The live figures of a unit, as its page shows them: each measure the organisation defined, what stands under the unit by type, the age of the reading (or that it is unknown, and why), its open alerts |
+| `unit_now` | The live figures of a unit, as its page shows them: each measure the organisation defined with the age of its own value, what stands under the unit by type, the age of the whole unit (or that it is unknown, and why), its open alerts |
 | `calculate` | A calculation, on numbers already read or given in the question |
 | `list_responses` | Options tab only. The recorded responses an option can contain: those of the organisation's library (Events page) and those the engine writes itself, each under a name, with what its rules do and whether they declare a cost. With `routes_from`, the sites to which the patients waiting at a site can be transferred |
 | `test_option` | Options tab only. Adds an option to the open scenario, for the time of a run on the server, and returns the scenario as it is beside the scenario with the option, with what the engine counted as cost when a recorded response is in one of the two runs |
@@ -310,7 +310,7 @@ Under the figures, three folded lines, which open on a click: “Why this option
 - the unit, and where it sits in the tree;
 - the time of the reading, when the thresholds were checked, and how many alert rules the project has (with no rule at all, the card says nothing can open);
 - the alert the card was opened from, with its value, since when it has been open and the age of the value; or the mention that it is no longer open;
-- the unit's live figures, as its page shows them, with the age of the reading and its reason when it is not exact, then what stands under the unit by type;
+- the unit's live figures, as its page shows them, each with the age of its own value, then the age of the unit's oldest source (“Oldest source under this unit”) with its reason when it is not exact, and what stands under the unit by type;
 - the unit's other open alerts;
 - the signal, and the path of its workflow with the stage it stands at;
 - the responses prepared for the signal's kind, with the figures of their last test and what it is worth today, the retest of each on the current state, and the “Engage” button (see “Prepared responses”);
@@ -395,7 +395,7 @@ What is not judged: the quality of the writing. That still takes a person, who r
 - An event search costs about 70 cents: each search launched returns ten pages, close to 15,000 tokens, and no setting of the API lets you ask for fewer without giving up the cap on searches. See “What a search costs”.
 - The reference questions judge the Ask tab only. On `claude-haiku-5-5`, the Options tab has been tried on a single objective (three options tested, among them a transfer of patients and two recorded responses), and the search for events has not; `claude-sonnet-5-5` has not been tried anywhere.
 - The twin holds no staff, no stocks and no history: the analyst says so, it does not fill the gap. So it cannot say what was open earlier, or what changed since this morning.
-- The age of a live figure is that of the reading of the whole unit, the oldest of its sources when it has several.
+- The age of an alert or of a measure is that of what the measure reads. The unit has its own too, the oldest of all its sources, which can be older than the age of one of its values: the analyst is given both, and must give with a figure the age of that figure. A date with no hour gives an age to the day.
 - The open signals `list_alerts` counts include those whose alert has cleared: they can be far more numerous than the open alerts.
 - The run on screen is not kept when the page is reloaded; Run has to be launched again. Nor are the tested options: what remains are the recorded decisions and the journal.
 - An option is made of capacity, measures, transfers of patients or a recorded response. Staff, a stock, a new link between a site and a territory cannot be tested: the engine or the twin does not carry them. The analyst files them under the limits.

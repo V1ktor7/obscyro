@@ -53,9 +53,11 @@ La vue **Tiles** dessine une case par unité qui a une valeur, pour voir tout le
 
 Elle est à côté de la liste, et passe dessous sur un écran étroit. Un clic sur une autre ligne la remplace : on compare sans rien fermer.
 
-De haut en bas : le nom, où l'unité se situe par rapport à son seuil, sa valeur et la règle en mots (« alert when over 100% ») ; l'âge de la valeur et le nombre d'objets liés ; les alertes ouvertes ; les autres mesures que l'unité rapporte ; ce qu'elle contient, par type ; ses échanges avec d'autres unités ; la recommandation de la règle.
+De haut en bas : le nom, où l'unité se situe par rapport à son seuil, sa valeur, la règle en mots (« alert when over 100% ») et l'âge de cette valeur ; l'âge de la plus vieille source de l'unité et le nombre d'objets liés ; les alertes ouvertes, chacune avec l'âge de sa valeur ; les autres mesures que l'unité rapporte ; ce qu'elle contient, par type ; ses échanges avec d'autres unités ; la recommandation de la règle.
 
-- **Un âge dit ce qu'il vaut.** Quand il est un plancher ou qu'il est inconnu, la fiche écrit pourquoi, en toutes lettres.
+- **Trois âges, chacun nommé.** Sous la valeur : « This value was read 14m ago », l'âge de ce que la mesure affichée lit. Dans chaque alerte : « value read 14 min ago », l'âge de la valeur qui l'a levée, dans les mots du bandeau. Dans la case « Oldest source » : l'âge de l'unité entière, la plus vieille de toutes ses sources, qui répond à « tout ce que je vois ici est-il à jour ? ». Une unité qui reçoit un relevé de civières et un relevé de qualité de l'air peut afficher 14 minutes pour son occupation et 2 heures pour sa plus vieille source : les deux sont justes ([algorithms.md](algorithms.md), D7).
+- **Un âge dit ce qu'il vaut.** Quand il est un plancher ou qu'il est inconnu, la fiche écrit pourquoi, en toutes lettres, et dit s'il s'agit de la mesure ou de l'unité.
+- **Une valeur que le jumeau n'a pas datée n'a pas de phrase.** C'est le cas des quatre comptes que tout jumeau a : la fiche ne leur prête pas l'âge de l'unité sous un autre nom.
 - **Une alerte se traite d'ici.** « Open the situation » ouvre sa fiche de situation, « Acknowledge » l'accuse. Une unité sans alerte garde un lien vers sa fiche de situation.
 - **« Ask the analyst »** ouvre l'analyste avec cette unité : la question porte sur elle.
 - **Deux lectures.** Le nom, la valeur et la barre viennent de la liste, et sont à l'écran au clic. Le reste est lu pour cette unité seule, et relu à chaque nouvelle lecture du jumeau ; en attendant, la fiche écrit « Reading this unit… ». Elle ne montre jamais les alertes d'une unité sous le nom d'une autre.
@@ -71,7 +73,8 @@ De haut en bas : le nom, où l'unité se situe par rapport à son seuil, sa vale
 
 - Le classement porte sur une mesure à la fois.
 - La page montre l'état du moment : le jumeau n'a pas d'historique.
-- L'âge affiché est celui de l'unité entière, pas celui de chaque valeur ([issue 19](https://github.com/V1ktor7/obscyro/issues/19)).
+- La liste et les tuiles ne montrent pas l'âge de chaque valeur : il se lit sur la fiche de l'unité. La mesure « âge de la donnée » du menu Measure est l'âge de l'unité entière.
+- Une date sans heure donne un âge au jour près : il peut être trop grand d'un jour au plus, jamais trop petit.
 - La mesure et le type choisis sont gardés par projet, dans le navigateur. Le tri, la vue et la recherche ne le sont pas.
 
 **Code.** `frontend/app/studio/live/units-list.ts` (états, compteurs, tri, recherche, hiérarchie, échelle, couleurs, sans écran), `UnitsBoard.tsx` (les deux bandes, la liste, les tuiles), `UnitSheet.tsx` (la fiche), `UnitsView.tsx` (les lectures : arbre, mesures, seuils, détail) ; `twinMetricNumber` dans `frontend/app/studio/twin-ui.ts` ; `bandFor` dans `frontend/app/studio/command/site-metric.ts` ; `useOpenAnalyst` dans `frontend/app/studio/AnalystDock.tsx`. **Tests.** `units-list.test.ts`, `UnitsBoard.test.tsx`, `UnitSheet.test.tsx`, `twin-ui.test.ts`, `AnalystDock.test.tsx`.

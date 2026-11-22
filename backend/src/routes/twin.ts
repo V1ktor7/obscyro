@@ -746,6 +746,15 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
     {
       schema: {
         summary: "Full unit metrics, open alerts, and recommendations",
+        description:
+          "One unit, read alone. `metrics` is its roll-up: every measure the organisation defined, counted over " +
+          "everything under the unit. `metrics.freshnessSeconds` is the age of the unit's reading as a whole, the " +
+          "oldest of its sources; `metrics.valueAges` gives, for each measure that has a value here, the age of " +
+          "what that measure reads, with what the age rests on. `alerts` are the unit's open alerts, each with " +
+          "when its value was true (`observedAt`) and what that age rests on (`observedBasis`), counted on what " +
+          "the alert's measure reads. `at` is the server's clock: ages are counted from it. `exchanges` names the " +
+          "links to other units that are not the hierarchy. Reads only. Aggregate values about a unit, never " +
+          "about a person.",
         tags: ["twin"],
         params: z.object({ env: z.string().min(1), id: z.string().uuid() }),
         response: { 200: z.record(z.unknown()), 404: errorEnvelope },
@@ -760,6 +769,9 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
       });
       const exchanges = await unitExchanges(req.db, env.id, req.params.id);
       return {
+        // The server's clock: the age of an alert's value is counted from it,
+        // not from the browser's.
+        at: new Date().toISOString(),
         metrics,
         alerts,
         exchanges,
@@ -810,7 +822,8 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
           "its unit and the unit's name, its severity, metric, value and message, when it opened (`openedAt`), when " +
           "its value was true according to the source (`observedAt`, null when the source does not say), what " +
           "that age rests on (`observedBasis`: `observed`, `partial` when it is only a floor, or the reason it is " +
-          "unknown), when the " +
+          "unknown). That age is the age of the alert's own value: it is counted on the sources its measure " +
+          "reads, not on everything under its unit. Also when the " +
           "data that opened it was written here (`writtenAt`), and the signal it raised (`signalId`). Worst first, " +
           "then newest. `counts` holds every open alert by severity and `omitted` how many are beyond the list. " +
           "`signals` says how many signals are open and when one last changed, which is enough for the response " +

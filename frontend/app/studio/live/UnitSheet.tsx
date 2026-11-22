@@ -4,8 +4,9 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
-import type { TwinAlertSeverity, TwinUnitDetail } from "@/lib/platform-api";
+import type { TwinAlert, TwinAlertSeverity, TwinUnitDetail } from "@/lib/platform-api";
 
+import { valueAge } from "../alert-feed-state";
 import { explainFreshness, formatReadingAge } from "../twin-ui";
 import { Bar } from "./UnitsBoard";
 import { bandLabel, ruleInWords, type BarScale, type Measure, type UnitRow } from "./units-list";
@@ -21,6 +22,11 @@ import { bandLabel, ruleInWords, type BarScale, type Measure, type UnitRow } fro
 // and the bar come from the list, so they are on screen at the click. The rest
 // (the age of the value, the alerts, what the unit holds) is read for this unit
 // alone, and says "reading" until it arrives.
+//
+// Three ages, each said for what it is. The value shown has its own: the age of
+// what its measure reads. Each alert has its own, for the same reason. And the
+// unit has one as a whole, the oldest of all its sources, which answers "is
+// everything here up to date" and can be older than either.
 // ---------------------------------------------------------------------------
 
 /** A measure the unit reports besides the one the list is ranked on. */
@@ -97,6 +103,8 @@ export default function UnitSheet({
   const alerts = detail?.alerts ?? [];
   const held = detail ? Object.entries(detail.metrics.instanceCountByType) : [];
   const basis = detail?.metrics.freshnessBasis;
+  // The age of the value shown: of what this measure reads, when the twin dated it.
+  const own = detail?.metrics.valueAges?.[measure.key] ?? null;
 
   return (
     // The room at the bottom keeps the last lines clear of the analyst's button, which floats over this corner.
@@ -123,6 +131,19 @@ export default function UnitSheet({
             </span>
           </div>
           <Bar row={unit} scale={scale} className="h-2" />
+          {own ? (
+            <>
+              <p className="m-0 text-xs text-ink-faint">
+                {own.seconds === null
+                  ? "The age of this value is unknown"
+                  : `This value was read ${formatReadingAge(own.seconds, own.basis)}`}
+              </p>
+              {/* A floor or an unknown says why, in the text. */}
+              {own.basis !== "observed" ? (
+                <p className="m-0 text-xs text-ink-faint">{explainFreshness(own.basis, "measure")}</p>
+              ) : null}
+            </>
+          ) : null}
           {unit.children > 0 ? (
             <p className="m-0 text-xs text-ink-faint">Counts this unit and everything under it.</p>
           ) : null}
@@ -133,7 +154,11 @@ export default function UnitSheet({
         <>
           <div>
             <div className="grid grid-cols-2 gap-px border border-line bg-line">
-              <Fact label="Value read" title={basis ? explainFreshness(basis) : undefined}>
+              {/*
+                The unit as a whole: the oldest of everything it reads. Named
+                for what it is, because one value under it can be newer.
+              */}
+              <Fact label="Oldest source" title={basis ? explainFreshness(basis) : undefined}>
                 {formatReadingAge(detail.metrics.freshnessSeconds, detail.metrics.freshnessBasis)}
               </Fact>
               <Fact label="Linked objects">{detail.metrics.linkedInstanceCount}</Fact>
@@ -152,6 +177,7 @@ export default function UnitSheet({
                 <div key={a.id} className={cn("flex flex-col gap-2.5 border px-3 py-2.5", ALERT_BOX[a.severity])}>
                   <span className={cn(PILL, "self-start", ALERT_TAG[a.severity])}>{a.severity}</span>
                   <p className="m-0 text-ink">{a.message}</p>
+                  <AlertAge alert={a} serverNow={detail.at} />
                   <div className="flex flex-wrap gap-2">
                     <Link href={situationHref(a.id)} className={PRIMARY}>
                       Open the situation
@@ -229,6 +255,24 @@ export default function UnitSheet({
           </button>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/**
+ * How old an alert's own value is, in the words the banner uses for the same
+ * alert, with the reason in the text when the age is a floor or unknown.
+ *
+ * Counted on the server's clock. An answer that came without one says nothing
+ * rather than count on this computer's.
+ */
+function AlertAge({ alert, serverNow }: { alert: TwinAlert; serverNow: string | undefined }) {
+  if (!serverNow) return null;
+  const age = valueAge({ observedAt: alert.observedAt ?? null, observedBasis: alert.observedBasis ?? null }, serverNow);
+  return (
+    <div className="flex flex-col gap-0.5 text-xs text-ink-muted">
+      <p className="m-0">{age.text}</p>
+      {age.why ? <p className="m-0">{age.why}</p> : null}
     </div>
   );
 }

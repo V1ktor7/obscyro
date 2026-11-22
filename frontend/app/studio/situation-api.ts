@@ -46,9 +46,11 @@ export interface AlertReading {
 export interface UnitReading {
   read_at: string;
   unit: { id: string; name: string; inside: string | null; sub_units: number };
-  measures: { key: string; measure: string; value: number | null; counted_in: CountedIn; about?: string[] }[];
+  /** Each measure with the age of its own value: of what that measure reads, where it has a value. */
+  measures: { key: string; measure: string; value: number | null; counted_in: CountedIn; about?: string[]; value_age?: ValueAge }[];
   under_it_by_type: Record<string, number>;
   linked: number;
+  /** The unit as a whole: the oldest of all its sources. It can be older than the age of one of its values. */
   value_age: ValueAge;
   last_written_here: string | null;
   open_alerts: AlertReading[];

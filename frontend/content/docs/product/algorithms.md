@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "8ff63a2cf9ff2a7d"
+translatedFrom: "0286d86a35678fbd"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -46,7 +46,7 @@ Every algorithm of the product has its section here: what it is for, its diagram
 | [D4](#d4-data-quality) | Data quality, six layers | `backend/src/services/data-quality.ts` |
 | [D5](#d5-twin-alerts-and-signals) | Twin alerts and signals | `backend/src/services/twin-alert-scheduler.ts` |
 | [D6](#d6-twin-metrics) | Twin metrics | `backend/src/services/twin-metrics.ts` |
-| [D7](#d7-freshness-of-a-value) | Freshness of a value | `backend/src/services/observed-at.ts` |
+| [D7](#d7-freshness-of-a-value) | Freshness of a value: the age of a unit, and of each measure | `backend/src/services/observed-at.ts` |
 | [D8](#d8-zone-correspondence) | Zone correspondence | `backend/src/services/zone-correspondence.ts` |
 | [D9](#d9-live-reading-and-situation-card) | Live reading and situation card | `backend/src/services/live-reading.ts`, `situation.ts` |
 | [D10](#d10-sites-and-units-on-the-network-map) | Sites and units on the network map | `frontend/app/studio/command/units-tree.ts` |
@@ -927,10 +927,10 @@ flowchart TD
 ```mermaid
 flowchart TD
     A["Evaluator: one evaluation finished,<br/>wait 5 s, or twice its duration if it was slow"] --> B["Projects that have at least one rule"]
-    B --> C["Metrics of each unit, with no lens:<br/>reality, never a scenario"]
+    B --> C["Metrics of each unit, with no lens:<br/>reality, never a scenario.<br/>Each measure a rule watches is dated<br/>on what it reads (D7)"]
     C --> D["Each rule evaluated"]
     D --> E{"The condition"}
-    E -->|"holds, and no alert already holds<br/>this unit and this rule"| F["Alert opened, with two times:<br/>how old the value is (and what that age rests on),<br/>when the data was written here"]
+    E -->|"holds, and no alert already holds<br/>this unit and this rule"| F["Alert opened, with two times:<br/>how old its value is, from what its measure reads<br/>(and what that age rests on),<br/>when the data was written here"]
     E -->|"holds, and an alert already holds it:<br/>open, or acknowledged at a severity at least as high"| F2["Value, age of the value and what it rests on refreshed;<br/>the write time that opened the alert does not move.<br/>Nothing new is opened"]
     E -->|"held, and demonstrably no longer holds"| G["Alert resolved, whether open or acknowledged"]
     F -->|"a person acknowledges it"| F3["Alert acknowledged: it leaves the list of open ones<br/>and stays on file for as long as the condition holds"]
@@ -965,7 +965,8 @@ flowchart TD
 - **Only reality raises alerts.** A reading made through a scenario, or at another date, evaluates nothing: an emergency department overflowing in a “what if” must not land on every screen as if it were happening.
 - **Resolution never happens in a reading**: under a lens that hides units, their absence would look like an emptied department. One project's failure does not cost the others their evaluation.
 - **Two times besides the opening.** `observed_at`: when the value was true, according to the timestamp the source publishes (D7); empty when the source does not say. `written_at`: when the data that crossed the threshold was written here; set at opening. `created_at - written_at` is the time we took to see the crossing, measured on each alert. An alert opened three seconds after its write can be about a value fifty minutes old: the screen says both.
-- **An age says what it is worth.** `observed_basis` keeps what the age rests on, as the twin computes it for the unit (D7), and follows the value at each evaluation. `observed`: the source's timestamp, the screen writes “value read 37 min ago”. `partial`: one of the unit's sources published no readable time, the age is a floor and the screen writes “value read at least 2 h ago”. The others (`undeclared`, `unreadable`, `zone-unknown`, `empty`): no age, the screen writes “age of the value unknown” and gives the reason on hover, in the words of the unit sheet. The qualifier is in the text, not in a tooltip: a figure gets repeated without its tooltip.
+- **An alert's age is the age of its own value.** It is counted on the sources the rule's measure reads, not on everything under the unit (D7). A stretcher occupancy alert, at a unit that also carries an air quality station, has the age of the stretcher census: before, it took the station's, two hours for a value fourteen minutes old. Two alerts of the same unit can therefore have two ages. And a value never borrows the age of another source: if what the measure reads publishes no time, the alert says the age is unknown, even when another source of the unit has one. The evaluator and a page's read of the tree date things the same way: the roll-up is given the measures the rules watch.
+- **An age says what it is worth.** `observed_basis` keeps what the age rests on, as the twin computes it for the rule's measure (D7), and follows the value at each evaluation. `observed`: the source's timestamp, the screen writes “value read 37 min ago”. `partial`: one of the sources the measure reads published no readable time, the age is a floor and the screen writes “value read at least 2 h ago”. The others (`undeclared`, `unreadable`, `zone-unknown`, `empty`): no age, the screen writes “age of the value unknown” and gives the reason, on hover in the banner and in full on the unit sheet. The reason speaks of the measure (“one of the sources this measure reads…”), not of the unit. The qualifier is in the text, not in a tooltip: a figure gets repeated without its tooltip.
 - **The bridge follows the evaluator.** An evaluation that opens or closes an alert launches the bridge at once; the bridge's own clock (fifteen seconds) stays as a safety net. The bridge's passes follow one another, never two at a time: “one signal per alert” rests on a `NOT EXISTS` that two simultaneous passes would both get through.
 - **A signal that opens has what was prepared for its kind tested again.** The bridge asks for it after creating the signal and does not wait for the answer: the retest runs behind, one run at a time per project, without a language model (A11). A signal created by hand asks for it too.
 - **A single read for the whole Studio.** The shell reads the alert feed every three seconds and gives it to every page. Before, each page had its own clock: ten seconds on the unit sheet, thirty on the globe, one request per unit on the tree, a button on Response.
@@ -986,8 +987,8 @@ flowchart TD
 
 **Delay.** From the moment a piece of data is written here to the moment the alert is on screen: at most five seconds of waiting by the evaluator, the duration of an evaluation, then at most three seconds of reading. That is a little over nine seconds at worst.
 
-**Code.** `backend/src/services/twin-alert-scheduler.ts` (`nextEvaluationDelay`, `evaluationPulse`), `alert-bridge.ts`, `response-retest.ts` (`requestRetests`), `alert-feed.ts`, `signals.ts` (`listSignals`, `countSignals`, `countOpenSignals`, `countOpenByType`, `domainCounters`, `closeClearedSignals`), `twin.ts` (`evaluateAlerts`, `ackAlert`, `readsReality`), `twin-alert-scheduler.ts` (`alertsOnFile`, `resolveAlerts`), routes `GET /v1/ontology/:env/alerts/feed` and `PATCH /v1/ontology/:env/twin/alerts/:id` in `backend/src/routes/twin.ts`, `GET /v1/ontology/:env/command-board` and `POST /v1/ontology/:env/signals/close-cleared` in `backend/src/routes/signals.ts`, migrations `063_twin_alert_times.sql` and `064_twin_alert_observed_basis.sql`; `frontend/app/studio/AlertFeed.tsx`, `alert-feed-state.ts`, `AlertBanner.tsx`, `StudioShell.tsx`, `signals-api.ts`, `response/ResponseView.tsx`, `live/UnitsView.tsx`.
-**Tests.** `twin-alert-scheduler.unit.test.ts`, `twin-alert-ack.unit.test.ts`, `alert-bridge.unit.test.ts`, `alert-feed.unit.test.ts`, `signals.unit.test.ts`; `alert-feed-state.test.ts`, `AlertBanner.test.tsx`, `response/ResponseView.test.tsx`, `platform-nav.test.ts`.
+**Code.** `backend/src/services/twin-alert-scheduler.ts` (`nextEvaluationDelay`, `evaluationPulse`, `evaluateProject`), `alert-bridge.ts`, `response-retest.ts` (`requestRetests`), `alert-feed.ts`, `signals.ts` (`listSignals`, `countSignals`, `countOpenSignals`, `countOpenByType`, `domainCounters`, `closeClearedSignals`), `twin.ts` (`evaluateAlerts`, `valueAgeOf`, `ackAlert`, `readsReality`, `getTwinTreeSnapshot`), `twin-alert-scheduler.ts` (`alertsOnFile`, `resolveAlerts`), routes `GET /v1/ontology/:env/alerts/feed`, `GET /v1/ontology/:env/twin/units/:id` and `PATCH /v1/ontology/:env/twin/alerts/:id` in `backend/src/routes/twin.ts`, `GET /v1/ontology/:env/command-board` and `POST /v1/ontology/:env/signals/close-cleared` in `backend/src/routes/signals.ts`, migrations `063_twin_alert_times.sql` and `064_twin_alert_observed_basis.sql`; `frontend/app/studio/AlertFeed.tsx`, `alert-feed-state.ts`, `AlertBanner.tsx`, `StudioShell.tsx`, `signals-api.ts`, `response/ResponseView.tsx`, `live/UnitsView.tsx`, `live/UnitSheet.tsx`.
+**Tests.** `twin-alert-scheduler.unit.test.ts`, `twin-alert-ack.unit.test.ts`, `alert-bridge.unit.test.ts`, `alert-feed.unit.test.ts`, `twin-value-age.unit.test.ts`, `signals.unit.test.ts`; `alert-feed-state.test.ts`, `AlertBanner.test.tsx`, `live/UnitSheet.test.tsx`, `response/ResponseView.test.tsx`, `platform-nav.test.ts`.
 
 ## D6. Twin metrics
 
@@ -1006,18 +1007,44 @@ flowchart LR
 
 ## D7. Freshness of a value
 
-**Purpose.** Measure the age of a value from the moment it was true, not from our last download.
+**Purpose.** Measure the age of a value from the moment it was true, not from our last download. And date each value on what it reads: the age of a whole unit and the age of one of its measures are two answers.
 
 ```mermaid
 flowchart TD
-    A["A reading"] --> B{"Does the type declare a property<br/>that carries the moment of the measurement?"}
-    B -->|"yes"| C["Age counted from that moment,<br/>in the declared time zone"]
-    B -->|"no"| D["Age unknown, and said to be so"]
+    A["An age to give"] --> B{"Of what?"}
+    B -->|"of a whole unit"| C["Everything under the unit"]
+    B -->|"of a measure, where it has a value"| D["Only what the measure looks at:<br/>the types and roles of its definition,<br/>before its filters"]
+    C --> E{"Objects, and a property declared<br/>as carrying the moment of the measurement?"}
+    D --> E
+    E -->|"no object"| X1["No age: nothing is linked (empty)"]
+    E -->|"no declared property"| X2["Age unknown, and said to be so (undeclared)"]
+    E -->|"one or several"| F["For each declared property:<br/>the newest timestamp among the objects"]
+    F --> G{"How it is written"}
+    G -->|"with its zone"| H["Read as it stands"]
+    G -->|"date and time with no zone,<br/>the hour on one or two digits"| I["Placed on the declared clock.<br/>With no declared clock: zone-unknown"]
+    G -->|"a date with no hour"| J["The start of that day on the declared clock:<br/>the oldest the reading can be"]
+    G -->|"anything else, or a timestamp cut short"| K["Unreadable (unreadable)"]
+    H --> L{"How many declared properties<br/>gave a time?"}
+    I --> L
+    J --> L
+    K --> L
+    L -->|"all of them"| M["The age of the oldest (observed)"]
+    L -->|"some of them"| N["The age of the oldest of those read:<br/>a floor (partial)"]
+    L -->|"none"| O["Age unknown, with the reason of the first"]
 ```
 
-**Rules.** The moment is declared, never guessed: a column that looks like a date is not necessarily the time of the measurement. A timestamp with no zone and no declared zone is reported unreadable rather than interpreted.
+**Rules.**
+- **The moment is declared, never guessed**: a column that looks like a date is not necessarily the time of the measurement. A timestamp with no zone and no declared zone is reported unreadable rather than interpreted.
+- **An hour written on one digit is read.** The MSSS emergency file writes `2026-11-19T9:45` from midnight to ten in the morning, and `2026-11-19T10:45` after. Read strictly, the first was refused: for ten hours a day no emergency reading had an age, and every alert said “age of the value unknown” until the hour reached two digits. Only the hour is completed. A timestamp cut short (`2026-11-19T9:`) stays unreadable: what is missing is never filled in, and the time of our download never stands in for it.
+- **A date with no hour is read as a day.** `2026-07-02`, what a registry or a weekly sample publishes, names a day on the declared clock. The age is counted from the start of that day: the oldest the reading can be. So it can be too large by a day at most, and never too small. Like a time with no zone, a date needs a declared clock.
+- **Two ages, two questions.** A unit's age answers “is everything I see here up to date?”: it is counted on everything under it, and takes the oldest of its sources. A value's age answers “how old is this figure?”: it is counted on what its measure looks at. At a unit that receives a stretcher census and an air quality reading, the two differ, and both are right. The screen names them: “Oldest source” for the unit, “This value was read…” for the value.
+- **What a measure looks at.** The types and roles its definition names, before its filters: a count of closed beds was made by looking at every bed, so it has the age of their latest reading, and a count of zero has an age too. A built-in measure says it in its name: `count:Lit` looks at the beds, `mean:attente` at whatever declares that number; `linkedInstanceCount` and `freshnessSeconds` are about everything under the unit, and so is their age.
+- **A value does not borrow the age of another source.** A unit's age only counts the timestamps that are declared. A wastewater reading that declares no time, beside a station that declares one, leaves the unit with the station's age. The wastewater value itself has no age, and says so with its reason.
+- **A measure is dated only where it has a value.** A unit with no air quality station has no index, so nothing to date.
+- **A time in the future is not floored at zero.** A negative age points to a wrong clock somewhere; showing it as “just now” would hide it.
 
-**Code.** `backend/src/services/observed-at.ts`. **Tests.** `observed-at.unit.test.ts`.
+**Code.** `backend/src/services/observed-at.ts` (`readStamp`, `freshnessOf`, `freshnessAcross`), `twin-metrics.ts` (`metricLooksAt`), `twin.ts` (`measureReads`, `agesOfValues`, `valueAgeOf`, `rollupFrom`, `selfRollup`, `rollupPlaces`); `frontend/app/studio/twin-ui.ts` (`formatReadingAge`, `explainFreshness`), `alert-feed-state.ts` (`valueAge`), `live/UnitSheet.tsx`.
+**Tests.** `observed-at.unit.test.ts`, `twin-value-age.unit.test.ts`, `twin-self-rollup.unit.test.ts`; `twin-ui.test.ts`, `alert-feed-state.test.ts`, `live/UnitSheet.test.tsx`.
 
 ## D8. Zone correspondence
 
@@ -1050,7 +1077,7 @@ flowchart TD
     A --> D["Alert feed of the banner (readAlertFeed)"]
     A --> E["Measures the organisation defined,<br/>number of alert rules,<br/>open signals by stage"]
     D --> F["Signals raised by the listed alerts:<br/>kind, stage, place in the workflow"]
-    B --> G["unitNow: measures rounded like the page,<br/>what stands under the unit by type,<br/>age of the reading, the unit's alerts"]
+    B --> G["unitNow: measures rounded like the page,<br/>each with the age of its own value,<br/>what stands under the unit by type,<br/>age of the whole unit, the unit's alerts"]
     C --> G
     D --> H["alertsNow: alerts, worst first,<br/>value, since when, age of the value,<br/>signal and stage, last check of the thresholds"]
     E --> H
@@ -1073,7 +1100,8 @@ flowchart TD
 - **One reading, two readers.** What the analyst gets from `unit_now` and what the card shows for the same unit come out of the same function (`unitNow`), and likewise for an alert (`alertNow`). The screen and the analyst cannot give two figures for one ward.
 - **The screen's source, not the engine's.** The reading starts from the computation of the unit page and the alert feed of the banner, not from the export (B1): the export counts only what is attached to the unit itself. A test holds the two together (D6).
 - **Rounded like the page.** A measure is handed to the analyst as the page writes it: a percentage with no decimals, a ratio with two. It has no rounding to do, so it cannot round differently.
-- **An age says what it is worth.** Exact (“value read 37 min ago”), a floor (“value read at least 2 h ago”) when one of the unit's sources published no time, or unknown with its reason. These are the three cases of the banner (D5), in the same words. The time the data was written here is given apart: it is not the age of the value.
+- **An age says what it is worth.** Exact (“value read 37 min ago”), a floor (“value read at least 2 h ago”) when one of the sources read published no time, or unknown with its reason. These are the three cases of the banner (D5), in the same words. The time the data was written here is given apart: it is not the age of the value.
+- **Each figure has its age.** An alert and a measure carry the age of what the measure reads (D7). The unit keeps its own, that of the oldest of all its sources, which answers another question and can be older than the age of one of its values. The card shows each measure's age in its tile, and names the unit's (“Oldest source under this unit”). The analyst is given both, with what each one means.
 - **Nothing open is not nothing to report.** The reading says how many alert rules exist and when the thresholds were last checked. With no rule at all, it says that nothing could have opened.
 - **Reality only.** No scenario raises an alert, and a live figure read through a “what if” would speak of a world that does not exist.
 - **No history.** The reading is that of now; it says so, to the analyst and on the card.
@@ -1083,7 +1111,7 @@ flowchart TD
 - **On screen.** The card (`/studio/situation`) reads itself again every thirty seconds, and every five seconds while a prepared response is queued or being retested, so that the result shows without a click; only the most recent reading is shown, and a reading that fails leaves the last one on screen, said to be no longer up to date. The shell's “Analyst” button and the card send the page and the selection with the question, as ids (A1).
 - A unit and an aggregate value, never a person.
 
-**Code.** `backend/src/services/live-reading.ts` (`readLive`, `unitNow`, `alertsNow`, `alertNow`, `ageOfValue`, `shown`), `situation.ts` (`situationOf`, `preparedQuestion`), `backend/src/routes/situation.ts`, the tools `list_alerts` and `unit_now` in `analyst-tools.ts`; `frontend/app/studio/situation/SituationView.tsx`, `situation-api.ts`, `AnalystDock.tsx`, `alert-feed-state.ts` (`situationHref`).
+**Code.** `backend/src/services/live-reading.ts` (`readLive`, `unitNow`, `alertsNow`, `alertNow`, `ageOfValue`, `whyAge`, `shown`), `situation.ts` (`situationOf`, `preparedQuestion`), `backend/src/routes/situation.ts`, the tools `list_alerts` and `unit_now` in `analyst-tools.ts`; `frontend/app/studio/situation/SituationView.tsx`, `situation-api.ts`, `AnalystDock.tsx`, `alert-feed-state.ts` (`situationHref`).
 **Tests.** `live-reading.unit.test.ts`, `twin-figures.unit.test.ts`, `routes/situation.unit.test.ts`; `situation/SituationView.test.tsx`, `AnalystDock.test.tsx`, `AlertBanner.test.tsx`.
 
 ## D10. Sites and units on the network map

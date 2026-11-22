@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "996b557779991d8e"
+translatedFrom: "09791b7d8ab4e6d3"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -12,6 +12,12 @@ What changed in Obscyro, from the most recent to the oldest. Each entry says wha
 - **Change**: something it already did, and now does differently, better or faster. A fix is one.
 
 An entry is written the day the change ships, in the same commit as the code. Since November 2026, every visible change has its own. The months before are summarised. The full detail, commit by commit, is in [the repository's history](https://github.com/V1ktor7/obscyro/commits/main).
+
+## 22 November 2026
+
+- **Change · Alerts.** Each alert gives the age of its own value. The age is counted on what the alert's measure reads, and no longer on everything under the unit: a stretcher occupancy alert, at a unit that also carries an air quality station, has the age of the stretcher census, not the station's. If what the measure reads publishes no time, the alert says the age is unknown, even when another source of the unit has one. It is the same age in the banner, the list of alerts, the situation card and the analyst's answers.
+- **Change · Alerts.** An emergency reading has an age at every hour. The emergency file writes the hour on a single digit from midnight to ten in the morning (`9:45`), which was not read: during those ten hours, alerts said “age of the value unknown”. A date with no hour is read too, as the start of that day: the age can then be too large by a day at most, never too small.
+- **Change · Studio.** A unit's sheet names three ages. Under the value, the age of that value (“This value was read 14m ago”). In each alert, the age of the value that raised it. In the “Oldest source” box, the age of the whole unit, the oldest of all its sources. The situation card does the same: each figure carries its age, and the unit's is named apart. Detail: [the Units page](/docs/product/units-page).
 
 ## 21 November 2026
 

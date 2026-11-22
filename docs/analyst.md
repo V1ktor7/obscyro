@@ -114,7 +114,7 @@ L'onglet Event finder est à part : il n'a aucun de ces outils. Il n'a que la re
 | `read_series` | Une colonne lue comme série quotidienne : total, moyenne, extrêmes, valeurs |
 | `list_events` | Le calendrier : les événements validés, leurs dates, leur lieu, leur porte, la source qui les a publiés et le passage cité. Quand le jour 0 du scénario a une date, chaque événement est aussi placé sur les jours du run |
 | `list_alerts` | Ce qui est ouvert maintenant : les alertes, la pire d'abord, chacune avec son unité, sa mesure et sa valeur, depuis quand elle est ouverte, l'âge de la valeur, et le signal qu'elle a levé avec son étape. Dit aussi combien de règles d'alerte existent et quand les seuils ont été vérifiés. Pour tout le projet ou pour une unité |
-| `unit_now` | Les chiffres en direct d'une unité, tels que sa page les montre : chaque mesure définie par l'organisation, ce qui est sous l'unité par type, l'âge de la lecture (ou qu'il est inconnu, et pourquoi), ses alertes ouvertes |
+| `unit_now` | Les chiffres en direct d'une unité, tels que sa page les montre : chaque mesure définie par l'organisation avec l'âge de sa propre valeur, ce qui est sous l'unité par type, l'âge de l'unité entière (ou qu'il est inconnu, et pourquoi), ses alertes ouvertes |
 | `calculate` | Un calcul, sur des nombres déjà lus ou donnés dans la question |
 | `list_responses` | Onglet Options seulement. Les réponses enregistrées qu'une option peut contenir : celles de la bibliothèque de l'organisation (page Events) et celles que le moteur écrit lui-même, chacune sous un nom, avec ce que font ses règles et si elles déclarent un coût. Avec `routes_from`, les sites vers lesquels les patients qui attendent à un site peuvent être transférés |
 | `test_option` | Onglet Options seulement. Ajoute une option au scénario ouvert, le temps d'un run sur le serveur, et rend le scénario tel quel à côté du scénario avec l'option, avec ce que le moteur a compté comme coût quand une réponse enregistrée est dans l'un des deux runs |
@@ -304,7 +304,7 @@ Sous les chiffres, trois lignes repliées, qui s'ouvrent d'un clic : « Why this
 - l'unité, et où elle se trouve dans l'arbre ;
 - l'heure de la lecture, quand les seuils ont été vérifiés, et combien de règles d'alerte le projet a (sans aucune règle, la fiche dit que rien ne peut s'ouvrir) ;
 - l'alerte d'où la fiche a été ouverte, avec sa valeur, depuis quand elle est ouverte et l'âge de la valeur ; ou la mention qu'elle n'est plus ouverte ;
-- les chiffres en direct de l'unité, tels que sa page les montre, avec l'âge de la lecture et sa raison quand il n'est pas exact, puis ce qui est sous l'unité par type ;
+- les chiffres en direct de l'unité, tels que sa page les montre, chacun avec l'âge de sa propre valeur, puis l'âge de la plus vieille source de l'unité (« Oldest source under this unit ») avec sa raison quand il n'est pas exact, et ce qui est sous l'unité par type ;
 - les autres alertes ouvertes de l'unité ;
 - le signal, et le chemin de son workflow avec l'étape où il se trouve ;
 - les réponses préparées pour le type du signal, avec les chiffres de leur dernier test et ce qu'il vaut aujourd'hui, le retest de chacune sur l'état du moment, et le bouton « Engage » (voir « Réponses préparées ») ;
@@ -389,7 +389,7 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 - Une recherche d'événements coûte environ 70 cents : chaque recherche lancée renvoie dix pages, près de 15 000 jetons, et aucun réglage de l'API ne permet d'en demander moins sans renoncer au plafond de recherches. Voir « Ce que coûte une recherche ».
 - Les questions de référence ne jugent que l'onglet Ask. Sur `claude-haiku-5-5`, l'onglet Options a été essayé sur un seul objectif (trois options testées, dont un transfert de patients et deux réponses enregistrées), et la recherche d'événements ne l'a pas été ; `claude-sonnet-5-5` n'a été essayé nulle part.
 - Le jumeau ne contient ni personnel, ni stocks, ni historique : l'analyste le dit, il ne le comble pas. Il ne peut donc pas dire ce qui était ouvert plus tôt, ni ce qui a changé depuis ce matin.
-- L'âge d'un chiffre en direct est celui de la lecture de l'unité entière, le plus vieux de ses sources quand elle en a plusieurs.
+- L'âge d'une alerte ou d'une mesure est celui de ce que la mesure lit. L'unité a aussi le sien, la plus vieille de toutes ses sources, qui peut être plus vieux que celui d'une de ses valeurs : l'analyste reçoit les deux, et doit donner avec un chiffre l'âge de ce chiffre. Une date sans heure donne un âge au jour près.
 - Les signaux ouverts que `list_alerts` compte comprennent ceux dont l'alerte est retombée : ils peuvent être bien plus nombreux que les alertes ouvertes.
 - Le run à l'écran n'est pas gardé au rechargement de la page ; il faut relancer Run. Les options testées non plus : ce qui reste, ce sont les décisions enregistrées et le journal.
 - Une option est faite de capacité, de mesures, de transferts de patients ou d'une réponse enregistrée. Du personnel, un stock, un lien nouveau entre un site et un territoire ne se testent pas : le moteur ou le jumeau ne les portent pas. L'analyste les range dans les limites.

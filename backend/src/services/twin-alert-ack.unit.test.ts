@@ -51,6 +51,7 @@ const METRICS = {
   numericMeans: {},
   freshnessSeconds: 600,
   freshnessBasis: "observed",
+  valueAges: { occupancy: { seconds: 600, basis: "observed" } },
   fetchedAgeSeconds: 4,
   linkedInstanceCount: 12,
 } as unknown as UnitMetrics;

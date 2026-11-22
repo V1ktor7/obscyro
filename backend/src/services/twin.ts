@@ -1,14 +1,16 @@
 import { clampLimit, clampOffset, config } from "../lib/config.js";
-import { freshnessAcross, type FreshnessBasis } from "./observed-at.js";
+import { freshnessAcross, type Freshness, type FreshnessBasis } from "./observed-at.js";
 import type { DbClient } from "../lib/db.js";
 import { NotFound } from "../lib/errors.js";
 import type { ReadLens } from "./ontology-lens.js";
 import {
   evaluateMetric,
+  metricLooksAt,
   metricReads,
   metricsForRollup,
   qualifiersOf,
   type MetricDef,
+  type MetricInstance,
 } from "./twin-metrics.js";
 import {
   getOrCreateLinkType,
@@ -135,6 +137,17 @@ export interface UnitMetrics {
   freshnessSeconds: number | null;
   freshnessBasis: FreshnessBasis;
   /**
+   * How old each measure's value is, counted on what that measure reads.
+   *
+   * `freshnessSeconds` above answers "is everything under this unit up to
+   * date", and takes the oldest of all its sources. That is not the age of any
+   * one value: an emergency department that also carries an air quality
+   * station had its stretcher occupancy dated by the station, two hours old
+   * for a census taken fourteen minutes ago. Keyed by measure, for the
+   * measures that have a value here; see `valueAgeOf`.
+   */
+  valueAges: Record<string, Freshness>;
+  /**
    * How long ago the row was last written here.
    *
    * Kept, and kept under a name that says what it is. It answers "did the sync
@@ -176,6 +189,11 @@ export interface TwinAlertRow {
    * with the value at every evaluation; null when the source does not say.
    */
   observedAt: Date | null;
+  /**
+   * What that age rests on, counted on what the alert's measure reads. Null
+   * for an alert last evaluated before this was kept.
+   */
+  observedBasis: FreshnessBasis | null;
   /**
    * When the data that crossed the threshold was written here. Set when the
    * alert opens and never touched again, so `createdAt - writtenAt` is how
@@ -351,7 +369,7 @@ export function buildDescendantMap(
  * times.
  */
 function observedProperties(
-  instances: readonly { propertySchema: { key: string; observedAt?: boolean; observedAtZone?: string }[] }[],
+  instances: readonly { propertySchema: readonly { key: string; observedAt?: boolean; observedAtZone?: string }[] }[],
 ): { key: string; zone?: string | null }[] {
   const out: { key: string; zone?: string | null }[] = [];
   const seen = new Set<string>();
@@ -368,6 +386,76 @@ function observedProperties(
   return out;
 }
 
+/** An instance as the roll-up holds it when it asks how old a value is. */
+type AgedInstance = MetricInstance & { propertySchema: readonly PropertyDef[] };
+
+/**
+ * Which instances a measure's value is made from, for any name a rule can
+ * threshold on.
+ *
+ * Case for case what `metricValue` reads, so the age of a value is counted on
+ * the very instances the value came from. A measure the organisation defined
+ * looks at the types and roles its definition names. The built-in ones say it
+ * in their name: `count:Bed` looks at beds, `mean:waitMinutes` at whatever
+ * declares that number. `linkedInstanceCount` and `freshnessSeconds` are about
+ * everything under the unit, and so is their age.
+ */
+export function measureReads(metric: string, defs: readonly MetricDef[]): (inst: AgedInstance) => boolean {
+  const def =
+    defs.find((d) => d.key === metric) ??
+    // `occupancyPct` is `values.occupancy` under an older name.
+    (metric === "occupancyPct" ? defs.find((d) => d.key === "occupancy") : undefined);
+  if (def) return (inst) => metricLooksAt(def, inst);
+  if (metric === "occupancyPct" || metric === "linkedInstanceCount" || metric === "freshnessSeconds") {
+    return () => true;
+  }
+  if (metric.startsWith("count:")) {
+    const type = metric.slice("count:".length);
+    return (inst) => inst.typeName === type;
+  }
+  const key = metric.startsWith("mean:") ? metric.slice("mean:".length) : metric;
+  return (inst) => inst.propertySchema.some((p) => p.key === key && p.type === "number");
+}
+
+/**
+ * How old each measure's value is under one unit.
+ *
+ * The same reading of stamps as the unit's own age (`freshnessAcross`), over
+ * fewer instances: only the ones the measure looks at. So a measure fed by one
+ * source carries that source's age, and one fed by several still takes the
+ * oldest of them and still says when that is only a floor.
+ *
+ * Only for the measures that have a value here. A unit with no air quality
+ * station has no air index, and nothing to date.
+ */
+function agesOfValues(
+  m: UnitMetrics,
+  linked: readonly AgedInstance[],
+  defs: readonly MetricDef[],
+  alsoAged: readonly string[],
+  now: number,
+): Record<string, Freshness> {
+  const out: Record<string, Freshness> = {};
+  for (const metric of new Set([...defs.map((d) => d.key), ...alsoAged])) {
+    if (metricValue(m, metric) == null) continue;
+    const sources = linked.filter(measureReads(metric, defs));
+    out[metric] = freshnessAcross(observedProperties(sources), sources, now);
+  }
+  return out;
+}
+
+/**
+ * How old the value of one measure is at this unit.
+ *
+ * The age of what the measure reads, when the roll-up counted it. Otherwise
+ * the unit's own age stands in, which is the age of everything under it: the
+ * reading made before measures had an age of their own.
+ */
+export function valueAgeOf(metrics: UnitMetrics, metric: string): Freshness {
+  const own = metrics.valueAges[metric] ?? (metric === "occupancyPct" ? metrics.valueAges.occupancy : undefined);
+  return own ?? { seconds: metrics.freshnessSeconds, basis: metrics.freshnessBasis };
+}
+
 function emptyMetrics(unitId: string): UnitMetrics {
   return {
     unitId,
@@ -378,6 +466,7 @@ function emptyMetrics(unitId: string): UnitMetrics {
     numericMeans: {},
     freshnessSeconds: null,
     freshnessBasis: "empty",
+    valueAges: {},
     fetchedAgeSeconds: null,
     linkedInstanceCount: 0,
   };
@@ -443,14 +532,23 @@ export function selfRollup(
     const v = Number(inst.properties[prop.key]);
     if (Number.isFinite(v)) m.numericMeans[prop.key] = v;
   }
+  m.valueAges = agesOfValues(m, linked, defs, [], now);
   return m;
 }
 
 
+/**
+ * The roll-up of every unit, read from the base.
+ *
+ * `alsoAged` names measures to date besides the ones the organisation
+ * defined: the evaluator passes what its rules threshold on, so a rule on a
+ * built-in measure (`count:Bed`) gets the age of that measure too.
+ */
 export async function rollupAllUnits(
   db: DbClient,
   environmentId: string,
   lens?: ReadLens,
+  alsoAged: readonly string[] = [],
 ): Promise<Map<string, UnitMetrics>> {
   const { nodes, edges } = await getUnitTree(db, environmentId, lens);
   const allInstances = await listInstancesForEnv(db, environmentId, {
@@ -467,7 +565,7 @@ export async function rollupAllUnits(
     ? await metricsForRollup(db, orgRows[0].organization_id)
     : [];
 
-  return rollupFrom(nodes, edges, allInstances, links, metricDefs, Date.now());
+  return rollupFrom(nodes, edges, allInstances, links, metricDefs, Date.now(), alsoAged);
 }
 
 /**
@@ -485,6 +583,7 @@ export function rollupFrom(
   links: readonly EnvLinkRow[],
   metricDefs: readonly MetricDef[],
   now: number,
+  alsoAged: readonly string[] = [],
 ): Map<string, UnitMetrics> {
   const unitIds = new Set(nodes.map((n) => n.id));
   const descendants = buildDescendantMap(unitIds, edges);
@@ -554,6 +653,9 @@ export function rollupFrom(
     for (const [key, acc] of numericAcc) {
       m.numericMeans[key] = acc.sum / acc.count;
     }
+    // Last: a measure is dated only where it has a value, and the built-in
+    // ones read the counts and means filled in just above.
+    m.valueAges = agesOfValues(m, linked, metricDefs, alsoAged, now);
 
     metricsByUnit.set(unitId, m);
   }
@@ -738,6 +840,7 @@ export async function rollupPlaces(
     m.freshnessSeconds = fresh.seconds;
     m.freshnessBasis = fresh.basis;
     for (const [key, acc] of numericAcc) m.numericMeans[key] = acc.sum / acc.count;
+    m.valueAges = agesOfValues(m, linked, metricDefs, [], now);
 
     out.set(placeId, {
       metrics: m,
@@ -950,15 +1053,20 @@ export async function evaluateAlerts(
 
   for (const [unitId, metrics] of metricsByUnit) {
     const kind = unitKinds.get(unitId) ?? null;
-    // The two ages the rollup already measured, turned into instants so they
-    // stay true while the alert stays open.
-    const observedAt = metrics.freshnessSeconds == null ? null : new Date(now - metrics.freshnessSeconds * 1000);
+    // An age the rollup already measured, turned into an instant so it stays
+    // true while the alert stays open.
     const writtenAt = metrics.fetchedAgeSeconds == null ? null : new Date(now - metrics.fetchedAgeSeconds * 1000);
     for (const rule of activeRules) {
       if (rule.unitKind && rule.unitKind !== kind) continue;
       const val = metricValue(metrics, rule.metric);
       if (val == null) continue;
       if (!compareOp(rule.op, val, rule.threshold)) continue;
+
+      // The age of this value, not of the unit: counted on what the rule's
+      // measure reads. An occupancy alert at a unit that also carries an air
+      // quality station is dated by the stretcher census alone.
+      const aged = valueAgeOf(metrics, rule.metric);
+      const observedAt = aged.seconds == null ? null : new Date(now - aged.seconds * 1000);
 
       const ctx = {
         unit: unitNames.get(unitId) ?? "this unit",
@@ -1017,7 +1125,7 @@ export async function evaluateAlerts(
           message,
           recommendation,
           observedAt,
-          metrics.freshnessBasis,
+          aged.basis,
           SEVERITY_RANK[rule.severity],
         ],
       );
@@ -1039,6 +1147,7 @@ export async function evaluateAlerts(
           createdAt: holder.created_at,
           ackedAt: holder.acked_at,
           observedAt,
+          observedBasis: aged.basis,
           writtenAt: holder.written_at,
           isNew: false,
         });
@@ -1079,7 +1188,7 @@ export async function evaluateAlerts(
           recommendation,
           observedAt,
           writtenAt,
-          metrics.freshnessBasis,
+          aged.basis,
         ],
       );
       created.push({
@@ -1096,6 +1205,7 @@ export async function evaluateAlerts(
         createdAt: rows[0]!.created_at,
         ackedAt: null,
         observedAt,
+        observedBasis: aged.basis,
         writtenAt: rows[0]!.written_at,
         isNew: rows[0]!.inserted,
       });
@@ -1113,7 +1223,7 @@ export async function listOpenAlerts(
   const params: unknown[] = [environmentId];
   let sql = `SELECT id, project_id, unit_instance_id, rule_id, severity, metric,
                     value::text, message, recommendation, status, created_at, acked_at,
-                    observed_at, written_at
+                    observed_at, observed_basis, written_at
                FROM app.twin_alert
               WHERE project_id = $1 AND status = 'open'`;
   if (unitId) {
@@ -1141,6 +1251,7 @@ export async function listOpenAlerts(
     created_at: Date;
     acked_at: Date | null;
     observed_at: Date | null;
+    observed_basis: FreshnessBasis | null;
     written_at: Date | null;
   }>(sql, params);
 
@@ -1158,6 +1269,7 @@ export async function listOpenAlerts(
     createdAt: r.created_at,
     ackedAt: r.acked_at,
     observedAt: r.observed_at,
+    observedBasis: r.observed_basis,
     writtenAt: r.written_at,
   }));
 }
@@ -1336,14 +1448,19 @@ export function readsReality(lens?: ReadLens): boolean {
 
 export async function getTwinTreeSnapshot(db: DbClient, environmentId: string, lens?: ReadLens) {
   const tree = await getUnitTree(db, environmentId, lens);
-  const metricsByUnit = await rollupAllUnits(db, environmentId, lens);
-  const unitKinds = new Map(tree.nodes.map((n) => [n.id, n.kind]));
-  const unitNames = new Map(tree.nodes.map((n) => [n.id, n.name]));
   // Reality only. Under a lens the metrics are those of a scenario or of
   // another instant, and a ward that overflows in a what-if must not raise an
   // alert that reaches every screen as if it were happening. The scheduler
   // evaluates reality on its own, every few seconds, whoever is watching.
-  if (readsReality(lens)) await evaluateAlerts(db, environmentId, metricsByUnit, unitKinds, unitNames);
+  //
+  // The rules are read before the roll-up so it dates what they threshold on,
+  // as the scheduler's does: an alert must not get one age from the evaluator
+  // and another from a viewer's read.
+  const rules = readsReality(lens) ? await listAlertRules(db, environmentId) : null;
+  const metricsByUnit = await rollupAllUnits(db, environmentId, lens, rules?.map((r) => r.metric));
+  const unitKinds = new Map(tree.nodes.map((n) => [n.id, n.kind]));
+  const unitNames = new Map(tree.nodes.map((n) => [n.id, n.name]));
+  if (rules) await evaluateAlerts(db, environmentId, metricsByUnit, unitKinds, unitNames, rules);
   const openAlerts = await listOpenAlerts(db, environmentId, undefined, {
     limit: config.listMaxLimit,
   });

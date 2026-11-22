@@ -150,26 +150,37 @@ export function formatReadingAge(seconds: number | null, basis: FreshnessBasis):
 }
 
 /**
+ * What an age is the age of: everything under a unit, or what one measure
+ * reads. The two can differ at the same unit, so the reason given for a floor
+ * or an unknown names the right one.
+ */
+export type AgeOf = "unit" | "measure";
+
+/**
  * Why there is no age, in a sentence.
  *
  * "—" and "unknown" are not the same thing on a screen somebody decides from.
  * The first reads as a rendering gap; the second is a statement about the data,
  * and each of these reasons is fixed in a different place.
  */
-export function explainFreshness(basis: FreshnessBasis): string {
+export function explainFreshness(basis: FreshnessBasis, of: AgeOf = "unit"): string {
   switch (basis) {
     case "observed":
       return "Age of the reading, from the timestamp the source published.";
     case "undeclared":
-      return "Unknown — no property on this type is declared as carrying the time of the reading.";
+      return of === "measure"
+        ? "Unknown — no property of what this measure reads is declared as carrying the time of the reading."
+        : "Unknown — no property on this type is declared as carrying the time of the reading.";
     case "unreadable":
       return "Unknown — the declared timestamp property carries nothing readable.";
     case "zone-unknown":
       return "Unknown — the timestamp names a wall clock and no zone is declared for it.";
     case "partial":
-      return "At least this old — one of the sources feeding this unit published no readable time.";
+      return of === "measure"
+        ? "At least this old — one of the sources this measure reads published no readable time."
+        : "At least this old — one of the sources feeding this unit published no readable time.";
     case "empty":
-      return "Nothing is linked to this unit.";
+      return of === "measure" ? "Nothing this measure reads is linked to this unit." : "Nothing is linked to this unit.";
   }
 }
 

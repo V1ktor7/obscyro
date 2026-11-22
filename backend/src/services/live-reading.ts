@@ -109,19 +109,30 @@ export function shown(value: number | null, unit: MetricUnit): number | null {
   return Math.round(value * 10) / 10;
 }
 
+/**
+ * What an age is the age of: everything under a unit, or what one measure
+ * reads. The two can differ at the same unit, and the reason given for a floor
+ * or an unknown has to name the right one.
+ */
+export type AgeOf = "unit" | "measure";
+
 /** Why a value has no age, or only a floor: the sentences of the unit's card. */
-export function whyAge(basis: FreshnessBasis | null): string | null {
+export function whyAge(basis: FreshnessBasis | null, of: AgeOf = "unit"): string | null {
   switch (basis) {
     case "undeclared":
-      return "No property of this type is declared as carrying the time of the reading.";
+      return of === "measure"
+        ? "No property of what this measure reads is declared as carrying the time of the reading."
+        : "No property of this type is declared as carrying the time of the reading.";
     case "unreadable":
       return "The declared timestamp property carries nothing readable.";
     case "zone-unknown":
       return "The timestamp names a wall clock and no zone is declared for it.";
     case "partial":
-      return "One of the sources feeding this unit published no readable time, so this is a floor.";
+      return of === "measure"
+        ? "One of the sources this measure reads published no readable time, so this is a floor."
+        : "One of the sources feeding this unit published no readable time, so this is a floor.";
     case "empty":
-      return "Nothing is linked to this unit.";
+      return of === "measure" ? "Nothing this measure reads is linked to this unit." : "Nothing is linked to this unit.";
     default:
       return null;
   }
@@ -145,8 +156,8 @@ export interface ValueAge {
  * exact age, a floor said as a floor, or no age. An unknown age is never
  * rounded toward the reassuring.
  */
-export function ageOfValue(seconds: number | null, basis: FreshnessBasis | null): ValueAge {
-  const why = basis && basis !== "observed" ? whyAge(basis) : null;
+export function ageOfValue(seconds: number | null, basis: FreshnessBasis | null, of: AgeOf = "unit"): ValueAge {
+  const why = basis && basis !== "observed" ? whyAge(basis, of) : null;
   if (seconds === null || !Number.isFinite(seconds)) return { known: "unknown", age: null, says: "age of the value unknown", why };
   const age = duration(seconds * 1000);
   if (basis === "partial") return { known: "at_least", age, says: `value read at least ${age} ago`, why };
@@ -284,7 +295,8 @@ export function alertNow(a: FeedAlert, live: Pick<LiveReading, "at" | "measures"
     says: a.message,
     opened_at: a.openedAt,
     open_for: duration(Date.parse(live.at) - Date.parse(a.openedAt)),
-    value_age: ageOfValue(secondsBetween(a.observedAt, live.at), a.observedBasis),
+    // The alert's own value: its age is counted on what its measure reads.
+    value_age: ageOfValue(secondsBetween(a.observedAt, live.at), a.observedBasis, "measure"),
     signal: signal ? SIGNAL_STEP(signal) : null,
   };
 }
@@ -328,7 +340,7 @@ export function alertsNow(live: LiveReading, only: LiveUnit | null = null) {
     open_signals: { total: live.feed.signals.open, by_stage: live.openSignalsByStage },
     how_to_read: [
       "Reality only: no scenario raises an alert.",
-      "Worst first, then newest. `value` is the measure's value as the screen shows it; `value_age` says how old that value is, or that its age is unknown and why. Give the age with the value.",
+      "Worst first, then newest. `value` is the measure's value as the screen shows it; `value_age` says how old that value is, or that its age is unknown and why. It is the age of what the alert's measure reads, not of everything under its unit. Give the age with the value.",
       total === 0 && live.rules === 0
         ? "No alert rule exists in this project, so nothing can open: no open alert is not a sign that nothing is wrong."
         : total === 0
@@ -349,13 +361,18 @@ export function unitNow(live: LiveReading, unit: LiveUnit) {
   return {
     read_at: live.at,
     unit: { id: unit.id, name: unit.name, inside: parent?.name ?? null, sub_units: children.length },
-    measures: live.measures.map((d) => ({
-      key: d.key,
-      measure: d.label,
-      value: shown(m?.values[d.key] ?? null, d.unit),
-      counted_in: d.unit,
-      ...(m?.qualifiers[d.key]?.length ? { about: m.qualifiers[d.key] } : {}),
-    })),
+    measures: live.measures.map((d) => {
+      // The age of this value: of what this measure reads, where it has a value.
+      const own = m?.valueAges[d.key];
+      return {
+        key: d.key,
+        measure: d.label,
+        value: shown(m?.values[d.key] ?? null, d.unit),
+        counted_in: d.unit,
+        ...(m?.qualifiers[d.key]?.length ? { about: m.qualifiers[d.key] } : {}),
+        ...(own ? { value_age: ageOfValue(own.seconds, own.basis, "measure") } : {}),
+      };
+    }),
     under_it_by_type: m?.instanceCountByType ?? {},
     linked: m?.linkedInstanceCount ?? 0,
     value_age: age,
@@ -365,7 +382,7 @@ export function unitNow(live: LiveReading, unit: LiveUnit) {
       "These are the figures the unit page shows. They count everything under the unit, its sub-units included.",
       "`get_site` gives what the simulation engine counts at the unit itself. For a unit with sub-units the two differ, and both are right: say which one you are giving.",
       "A measure with value null has nothing to be computed from here (no bed is no occupancy, not 0 %).",
-      "`value_age` is the age of the unit's reading as a whole: the oldest of its sources when it has several. `last_written_here` is when the data was last written to the twin, which is not when it was true.",
+      "A measure's own `value_age` is the age of what that measure reads: give it with the measure's value. The unit's `value_age` answers another question, whether everything under the unit is up to date: it is the oldest of the unit's sources when it has several, so it can be older than a measure's. `last_written_here` is when the data was last written to the twin, which is not when it was true.",
       "There is no history: this is the reading now, and nothing here says what it was earlier.",
     ],
   };

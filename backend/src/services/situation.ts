@@ -156,7 +156,7 @@ export function situationOf(
     alertRules: live.rules,
     limits: [
       "This is the reading now. The twin keeps no history: nothing here says what a figure was earlier, or what changed since this morning.",
-      "An age is the age of the unit's reading as a whole, the oldest of its sources when it has several.",
+      "An alert's age and a measure's age are the age of what that measure reads. The unit's own age is the oldest of all its sources, so it can be older than the age of one of its values.",
       "The twin holds no staff and no stocks: a figure here is capacity and what uses it, not who can open a bed.",
     ],
   };

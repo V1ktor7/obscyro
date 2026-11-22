@@ -123,18 +123,19 @@ export function ago(iso: string | null, serverNowIso: string): string | null {
 /**
  * How old an alert's value is, said with what the age rests on.
  *
- * Acting fast on an old value is the real danger, so the age never claims more
- * than the twin knows. A floor is said as a floor ("at least 2 h ago"): one of
- * the unit's sources published no time, and the others may be hiding an older
- * reading. An unknown age stays unknown, and `why` carries the reason in the
- * twin's own words, the same sentence the unit's card shows.
+ * The age is the alert's own: it is counted on what the alert's measure reads,
+ * not on everything under its unit. Acting fast on an old value is the real
+ * danger, so the age never claims more than the twin knows. A floor is said as
+ * a floor ("at least 2 h ago"): one of the sources the measure reads published
+ * no time, and the others may be hiding an older reading. An unknown age stays
+ * unknown, and `why` carries the reason in the twin's own words.
  */
 export function valueAge(
   a: Pick<FeedAlert, "observedAt" | "observedBasis">,
   serverNowIso: string,
 ): { text: string; why: string | null } {
   const basis = a.observedBasis ?? null;
-  const why = basis && basis !== "observed" ? explainFreshness(basis) : null;
+  const why = basis && basis !== "observed" ? explainFreshness(basis, "measure") : null;
   if (!a.observedAt) return { text: "age of the value unknown", why };
   const ms = Date.parse(serverNowIso) - Date.parse(a.observedAt);
   if (!Number.isFinite(ms)) return { text: "age of the value unknown", why };

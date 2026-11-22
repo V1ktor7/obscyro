@@ -176,18 +176,20 @@ describe("how old an alert's value is, and what that age rests on", () => {
     });
   });
 
-  it("is said as a floor when one of the unit's sources published no time", () => {
+  it("is said as a floor when one of the sources its measure reads published no time", () => {
     // Acting on "2 h" when it may be six is the mistake this wording prevents.
     const age = valueAge({ observedAt: "2026-11-19T13:00:10.000Z", observedBasis: "partial" }, NOW);
     expect(age.text).toBe("value read at least 2 h ago");
-    expect(age.why).toMatch(/^At least this old/);
+    // The alert's age is its own value's: the reason names the measure, not the unit.
+    expect(age.why).toBe("At least this old — one of the sources this measure reads published no readable time.");
   });
 
   it("stays unknown, with the reason, when there is no age", () => {
     const age = valueAge({ observedAt: null, observedBasis: "undeclared" }, NOW);
     expect(age.text).toBe("age of the value unknown");
-    expect(age.why).toMatch(/no property on this type is declared/);
+    expect(age.why).toMatch(/no property of what this measure reads is declared/);
     expect(valueAge({ observedAt: null, observedBasis: "zone-unknown" }, NOW).why).toMatch(/no zone is declared/);
+    expect(valueAge({ observedAt: null, observedBasis: "empty" }, NOW).why).toBe("Nothing this measure reads is linked to this unit.");
   });
 
   it("claims nothing about the basis of an alert that carries none", () => {

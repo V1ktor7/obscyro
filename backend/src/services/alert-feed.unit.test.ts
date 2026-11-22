@@ -133,8 +133,11 @@ const metrics = (over: Partial<UnitMetrics> = {}): UnitMetrics =>
     qualifiers: {},
     occupancyPct: 132,
     numericMeans: {},
-    freshnessSeconds: 3000,
+    // The unit as a whole: its oldest source, an air quality station read two hours ago.
+    freshnessSeconds: 7200,
     freshnessBasis: "observed",
+    // The occupancy itself: the stretcher census, fifty minutes old.
+    valueAges: { occupancy: { seconds: 3000, basis: "observed" } },
     fetchedAgeSeconds: 4,
     linkedInstanceCount: 12,
     ...over,
@@ -164,7 +167,9 @@ test("an alert is opened with the time its value was true and the time its data 
   assert.match(sql[1]!, /observed_at, written_at, observed_basis\)/);
   const [observedAt, writtenAt] = [params[1]![8] as Date, params[1]![9] as Date];
   assert.equal(params[1]![10], "observed");
-  // The reading is fifty minutes old; the row was written four seconds ago.
+  // The alert carries the age of its own value: the census its measure reads is
+  // fifty minutes old. The unit's two hours belong to another source, and are
+  // not the alert's. The row was written four seconds ago.
   assert.ok(observedAt.getTime() >= before - 3_000_000 && observedAt.getTime() <= after - 3_000_000);
   assert.ok(writtenAt.getTime() >= before - 4_000 && writtenAt.getTime() <= after - 4_000);
   assert.equal(out[0]!.observedAt, observedAt);
@@ -186,11 +191,34 @@ test("an alert that stays open follows its value's age, and keeps the write that
 });
 
 test("an age the twin cannot know is kept empty, not replaced by the hour of our download", async () => {
-  const { params } = await evaluate(metrics({ freshnessSeconds: null, freshnessBasis: "undeclared", fetchedAgeSeconds: null }));
+  const { params } = await evaluate(metrics({ valueAges: { occupancy: { seconds: null, basis: "undeclared" } }, fetchedAgeSeconds: null }));
   // Neither when the alert on file is refreshed, nor when a new one is opened.
   assert.equal(params[0]![8], null);
   assert.equal(params[1]![8], null);
   assert.equal(params[1]![9], null);
+  // Nor replaced by the age of another source of the same unit, which is known
+  // (two hours): a value does not borrow an age from a neighbour.
+  assert.equal(params[0]![9], "undeclared");
+  assert.equal(params[1]![10], "undeclared");
+});
+
+test("a measure the roll-up did not date takes the age of everything under its unit", async () => {
+  // No entry for the rule's measure: the unit's own age stands in, the reading
+  // made before a measure had an age of its own.
+  const { params, before, after } = await evaluate(metrics({ valueAges: {} }));
+  const observedAt = params[1]![8] as Date;
+  assert.ok(observedAt.getTime() >= before - 7_200_000 && observedAt.getTime() <= after - 7_200_000);
+  assert.equal(params[1]![10], "observed");
+});
+
+test("a rule on the older name of occupancy is dated as occupancy is", async () => {
+  const older = scriptDb([[], [{ id: "a1", created_at: new Date(), written_at: null, inserted: true }]]);
+  const before = Date.now();
+  await evaluateAlerts(older.db, "p1", new Map([["u1", metrics()]]), new Map([["u1", "org"]]), new Map([["u1", "Urgence A"]]), [
+    { ...RULE, metric: "occupancyPct" },
+  ]);
+  const observedAt = older.params[1]![8] as Date;
+  assert.ok(observedAt.getTime() >= before - 3_000_000 && observedAt.getTime() <= Date.now() - 3_000_000);
 });
 
 test("only a read of reality raises alerts: a scenario or another instant never does", () => {
@@ -202,9 +230,9 @@ test("only a read of reality raises alerts: a scenario or another instant never 
 });
 
 test("an age that is only a floor is kept as a floor", async () => {
-  // Two sources feed the unit and one published no time: the age is the oldest of
-  // the ones that did, which a screen must not print as the answer.
-  const { params } = await evaluate(metrics({ freshnessSeconds: 7200, freshnessBasis: "partial" }));
+  // The measure reads two sources and one published no time: the age is the
+  // oldest of the ones that did, which a screen must not print as the answer.
+  const { params } = await evaluate(metrics({ valueAges: { occupancy: { seconds: 7200, basis: "partial" } } }));
   // On the alert that opens, and on the one already on file when it is refreshed.
   assert.equal(params[1]![10], "partial");
   assert.equal(params[0]![9], "partial");

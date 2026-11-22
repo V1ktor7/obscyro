@@ -181,7 +181,14 @@ export async function evaluateProject(db: DbClient, projectId: string): Promise<
     return { projectId, opened: 0, resolved: 0, unreadable: 0 };
   }
 
-  const metricsByUnit = await rollupAllUnits(db, projectId);
+  // The roll-up dates every measure a rule thresholds on, so each alert gets
+  // the age of its own value and not the age of everything under its unit.
+  const metricsByUnit = await rollupAllUnits(
+    db,
+    projectId,
+    undefined,
+    rules.map((r) => r.metric),
+  );
 
   // The tree, for the same reason the read path builds one: a unit's kind is
   // `properties.kind ?? "org"` and its name falls back through code to a UUID

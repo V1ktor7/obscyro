@@ -858,6 +858,14 @@ export interface TwinUnitMetrics {
    */
   freshnessSeconds: number | null;
   freshnessBasis: FreshnessBasis;
+  /**
+   * How old each measure's value is, counted on what that measure reads, for
+   * the measures that have a value here. `freshnessSeconds` is the age of the
+   * unit as a whole, the oldest of all its sources: it can be older than the
+   * age of one of its values. Absent from an API that does not date measures
+   * yet.
+   */
+  valueAges?: Record<string, { seconds: number | null; basis: FreshnessBasis }>;
   /** How long ago the row was last written. Answers "did the sync run". */
   fetchedAgeSeconds: number | null;
   linkedInstanceCount: number;
@@ -869,7 +877,7 @@ export type FreshnessBasis =
   | "undeclared"
   | "unreadable"
   | "zone-unknown"
-  /** Several sources feed this unit; not all published a readable time. */
+  /** Several sources feed this unit, or this measure; not all published a readable time. */
   | "partial"
   | "empty";
 
@@ -1037,6 +1045,8 @@ export interface TwinAlert {
   status: "open" | "ack" | "resolved";
   /** When the value was true, from the timestamp the source published; null when it does not say. */
   observedAt?: string | null;
+  /** What that age rests on, counted on what the alert's measure reads. */
+  observedBasis?: FreshnessBasis | null;
   /** When the data that opened the alert was written here. */
   writtenAt?: string | null;
   createdAt?: string;
@@ -1059,6 +1069,8 @@ export interface TwinUnitExchange {
 }
 
 export interface TwinUnitDetail {
+  /** The server's clock when this was read: the age of an alert's value is counted from it. */
+  at?: string;
   metrics: TwinUnitMetrics;
   alerts: TwinAlert[];
   exchanges: TwinUnitExchange[];
@@ -1275,8 +1287,10 @@ export interface FeedAlert {
   /** When the value was true, from the timestamp the source published; null when it does not say. */
   observedAt: string | null;
   /**
-   * What that age rests on. `partial` means it is a floor: one of the unit's
-   * sources published no time. The others say why there is no age.
+   * What that age rests on, counted on what the alert's measure reads and not
+   * on everything under its unit. `partial` means it is a floor: one of the
+   * sources the measure reads published no time. The others say why there is
+   * no age.
    */
   observedBasis?: FreshnessBasis | null;
   /** When the data that opened the alert was written here; null when that was not kept. */

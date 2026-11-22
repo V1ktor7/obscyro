@@ -33,6 +33,7 @@ function metrics(values: Record<string, number | null>): UnitMetrics {
     numericMeans: {},
     freshnessSeconds: null,
     freshnessBasis: "undeclared",
+    valueAges: {},
     fetchedAgeSeconds: null,
     linkedInstanceCount: 0,
   } as unknown as UnitMetrics;

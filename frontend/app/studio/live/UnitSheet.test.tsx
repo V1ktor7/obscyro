@@ -118,8 +118,9 @@ describe("the sheet of a unit", () => {
     expect(screen.getByText(/alert when over 100%/)).toBeTruthy();
   });
 
-  it("shows the age of the value and what the unit holds", () => {
+  it("shows the age of the unit's oldest source and what the unit holds", () => {
     sheet();
+    expect(screen.getByText("Oldest source")).toBeTruthy();
     expect(screen.getByText("56m ago")).toBeTruthy();
     expect(screen.getByText("33")).toBeTruthy();
     expect(screen.getByText("CiviereUrgence")).toBeTruthy();
@@ -136,6 +137,72 @@ describe("the sheet of a unit", () => {
     sheet({ detail: detail({}, "undeclared") });
     expect(screen.getByText("unknown")).toBeTruthy();
     expect(screen.getByText(/no property on this type is declared as carrying the time of the reading/)).toBeTruthy();
+  });
+
+  it("gives the value shown its own age, which is not always the unit's", () => {
+    // The unit also carries an air quality station read two hours ago; its
+    // stretcher occupancy comes from a census fourteen minutes old.
+    const base = detail();
+    sheet({
+      detail: {
+        ...base,
+        metrics: { ...base.metrics, freshnessSeconds: 7140, valueAges: { stretchers: { seconds: 840, basis: "observed" } } },
+      },
+    });
+    expect(screen.getByText("This value was read 14m ago")).toBeTruthy();
+    // The unit as a whole keeps its own answer, under its own name.
+    expect(screen.getByText("Oldest source").nextElementSibling?.textContent).toBe("2h ago");
+  });
+
+  it("says why the age of the value shown is a floor or unknown, in the text", () => {
+    const base = detail();
+    const withAge = (seconds: number | null, basis: TwinUnitDetail["metrics"]["freshnessBasis"]) =>
+      sheet({ detail: { ...base, metrics: { ...base.metrics, valueAges: { stretchers: { seconds, basis } } } } });
+
+    const floor = withAge(7200, "partial");
+    expect(screen.getByText("This value was read ≥ 2h ago")).toBeTruthy();
+    expect(screen.getByText("At least this old — one of the sources this measure reads published no readable time.")).toBeTruthy();
+    floor.unmount();
+
+    withAge(null, "undeclared");
+    expect(screen.getByText("The age of this value is unknown")).toBeTruthy();
+    expect(screen.getByText(/no property of what this measure reads is declared as carrying the time of the reading/)).toBeTruthy();
+  });
+
+  it("says nothing of the age of a value the twin did not date", () => {
+    // An older API, or a built-in measure: no sentence rather than the unit's age under another name.
+    sheet();
+    expect(screen.queryByText(/This value was read/)).toBeNull();
+    expect(screen.queryByText(/The age of this value/)).toBeNull();
+  });
+
+  it("gives each alert the age of its own value, counted on the server's clock", () => {
+    const at = "2026-11-19T17:00:00.000Z";
+    const first = sheet({
+      detail: detail({
+        at,
+        alerts: [
+          { ...ALERT, observedAt: "2026-11-19T16:46:00.000Z", observedBasis: "observed" },
+          { ...ALERT, id: "alert-2", message: "Air quality above 50", observedAt: "2026-11-19T15:00:00.000Z", observedBasis: "partial" },
+          { ...ALERT, id: "alert-3", message: "Wastewater load above 1", observedAt: null, observedBasis: "undeclared" },
+        ],
+      }),
+    });
+    const box = (message: string) => within(screen.getByText(message).parentElement!);
+    // The words of the banner, for the same alert.
+    expect(box(ALERT.message).getByText("value read 14 min ago")).toBeTruthy();
+    // A floor is said as a floor, and an unknown as unknown, each with its reason in the text.
+    expect(box("Air quality above 50").getByText("value read at least 2 h ago")).toBeTruthy();
+    expect(
+      box("Air quality above 50").getByText("At least this old — one of the sources this measure reads published no readable time."),
+    ).toBeTruthy();
+    expect(box("Wastewater load above 1").getByText("age of the value unknown")).toBeTruthy();
+    expect(box("Wastewater load above 1").getByText(/^Unknown — no property of what this measure reads is declared/)).toBeTruthy();
+    first.unmount();
+
+    // An answer that came without the server's clock says nothing, rather than count on this computer's.
+    sheet({ detail: detail({ alerts: [{ ...ALERT, observedAt: "2026-11-19T16:46:00.000Z", observedBasis: "observed" }] }) });
+    expect(screen.queryByText(/value read/)).toBeNull();
   });
 
   it("opens the situation of an alert, and acknowledges it", () => {

@@ -108,7 +108,7 @@ describe("the standing summary of open alerts", () => {
     const floor = within(rows[0]!).getByText("opened 4 min ago · value read at least 2 h ago");
     expect(floor.getAttribute("title")).toMatch(/^At least this old/);
     const unknown = within(rows[1]!).getByText("opened 4 min ago · age of the value unknown");
-    expect(unknown.getAttribute("title")).toMatch(/no property on this type is declared/);
+    expect(unknown.getAttribute("title")).toMatch(/no property of what this measure reads is declared/);
   });
 
   it("is not shown at all for a calm project whose feed works", () => {

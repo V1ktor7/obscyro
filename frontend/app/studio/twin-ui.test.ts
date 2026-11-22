@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  explainFreshness,
   formatReadingAge,
   formatTwinMetric,
   kindIconName,
@@ -90,5 +91,25 @@ describe("formatReadingAge", () => {
   it("says unknown rather than showing a dash", () => {
     expect(formatReadingAge(null, "undeclared")).toBe("unknown");
     expect(formatReadingAge(null, "partial")).toBe("unknown");
+  });
+});
+
+describe("explainFreshness", () => {
+  it("names what the age is the age of: a unit, or what one measure reads", () => {
+    // The same unit can carry both, and they can differ: a reason that named
+    // the unit under a value's age would send the reader to the wrong source.
+    expect(explainFreshness("partial")).toBe("At least this old — one of the sources feeding this unit published no readable time.");
+    expect(explainFreshness("partial", "measure")).toBe(
+      "At least this old — one of the sources this measure reads published no readable time.",
+    );
+    expect(explainFreshness("undeclared", "measure")).toMatch(/no property of what this measure reads is declared/);
+    expect(explainFreshness("empty")).toBe("Nothing is linked to this unit.");
+    expect(explainFreshness("empty", "measure")).toBe("Nothing this measure reads is linked to this unit.");
+  });
+
+  it("says the same of a unit and of a measure when the reason is in the stamp itself", () => {
+    for (const basis of ["observed", "unreadable", "zone-unknown"] as const) {
+      expect(explainFreshness(basis, "measure")).toBe(explainFreshness(basis));
+    }
   });
 });

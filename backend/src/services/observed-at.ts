@@ -28,16 +28,36 @@ export type FreshnessBasis =
   /** A naive stamp with no zone declared for it — an age would be a guess. */
   | "zone-unknown"
   /**
-   * Several sources feed this unit and not all of them published a readable
-   * time. The age is the oldest of the ones that did, which is a floor rather
-   * than an answer.
+   * Several sources feed this unit, or this measure, and not all of them
+   * published a readable time. The age is the oldest of the ones that did,
+   * which is a floor rather than an answer.
    */
   | "partial"
-  /** Nothing is linked to this unit at all. */
+  /** Nothing is linked to this unit at all, or nothing this measure reads. */
   | "empty";
 
 const NAIVE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
 const ZONED = /(Z|[+-]\d{2}:?\d{2})$/;
+/** A date and nothing else: `2026-07-02`. */
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+/** An hour written with one digit: `2026-11-19T9:45`. */
+const SHORT_HOUR = /^(\d{4}-\d{2}-\d{2}[T ])(\d):/;
+
+/**
+ * The same stamp with its hour on two digits.
+ *
+ * The MSSS emergency file writes `2026-11-19T9:45` from midnight to ten in the
+ * morning and `2026-11-19T10:45` after. Read strictly, the first shape was
+ * refused: for ten hours a day no emergency reading had an age at all, and
+ * every alert on one said "age of the value unknown" until the clock reached
+ * two digits. The hour is not in doubt, only its spelling.
+ *
+ * Only the hour is completed. A stamp cut short (`2026-11-19T9:`) still fails
+ * the shapes below and stays unreadable: what is missing is never filled in.
+ */
+function withTwoDigitHour(raw: string): string {
+  return raw.replace(SHORT_HOUR, (_whole, date: string, hour: string) => `${date}0${hour}:`);
+}
 
 /**
  * The offset of a zone at an instant, in milliseconds.
@@ -93,21 +113,29 @@ export interface ReadStamp {
  * server, and on Railway that would place a 18:45 Montréal reading four hours
  * in the future, turning an hour-old figure into a negative age. So a naive
  * stamp is only readable when the institution has said which clock it is.
+ *
+ * A date with no hour (`2026-07-02`, what a registry or a weekly sample
+ * publishes) names a day on that same clock. It is read as the start of that
+ * day: the oldest the reading can be. The age it gives can overstate by up to
+ * a day and can never understate, which is the side to err on when somebody
+ * is about to act on the value.
  */
 export function readStamp(value: unknown, zone?: string | null): ReadStamp {
   if (value === null || value === undefined) return { at: null, basis: "unreadable" };
-  const raw = typeof value === "string" ? value.trim() : String(value).trim();
-  if (raw === "") return { at: null, basis: "unreadable" };
+  const given = typeof value === "string" ? value.trim() : String(value).trim();
+  if (given === "") return { at: null, basis: "unreadable" };
+  const raw = withTwoDigitHour(given);
 
   if (ZONED.test(raw)) {
     const t = Date.parse(raw);
     return Number.isNaN(t) ? { at: null, basis: "unreadable" } : { at: new Date(t), basis: "observed" };
   }
 
-  if (!NAIVE.test(raw)) return { at: null, basis: "unreadable" };
+  const dateOnly = DATE_ONLY.test(raw);
+  if (!dateOnly && !NAIVE.test(raw)) return { at: null, basis: "unreadable" };
   if (!zone) return { at: null, basis: "zone-unknown" };
 
-  const asUtc = Date.parse(`${raw.replace(" ", "T")}Z`);
+  const asUtc = Date.parse(dateOnly ? `${raw}T00:00Z` : `${raw.replace(" ", "T")}Z`);
   if (Number.isNaN(asUtc)) return { at: null, basis: "unreadable" };
   const off = zoneOffsetMs(new Date(asUtc), zone);
   if (off === null) return { at: null, basis: "zone-unknown" };

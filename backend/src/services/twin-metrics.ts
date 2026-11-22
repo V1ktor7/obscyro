@@ -116,6 +116,29 @@ export function metricReads(def: MetricDef, inst: MetricInstance): boolean {
   return def.denominator ? matches(inst, def.denominator) : false;
 }
 
+/** The part of a selector that says where to look, before anything is kept or left out. */
+function inScope(inst: MetricInstance, sel: MetricSelector): boolean {
+  if (sel.ofType && inst.typeName !== sel.ofType) return false;
+  if (sel.ofRole && (inst.simRole ?? null) !== sel.ofRole) return false;
+  return true;
+}
+
+/**
+ * Is this instance one of the things the metric's value is made from?
+ *
+ * Wider than `metricReads` on purpose. A count of occupied beds keeps the two
+ * that are occupied, but it was made by looking at all ten: the eight free
+ * ones are why the answer is two and not three. So anything asking *how old
+ * the value is* has to ask about every instance the selector looked at, by
+ * type and by role, and not only about the ones its filters kept. Asked the
+ * narrow way, a count of zero would have been made from nothing, and would
+ * have no age at all.
+ */
+export function metricLooksAt(def: MetricDef, inst: MetricInstance): boolean {
+  if (inScope(inst, def.numerator)) return true;
+  return def.denominator ? inScope(inst, def.denominator) : false;
+}
+
 /**
  * One instance's value for a numeric property, or null when it has none.
  *

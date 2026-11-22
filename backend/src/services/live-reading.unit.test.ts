@@ -197,10 +197,42 @@ test("a unit's reading says how old it is, or that nobody knows", async () => {
   assert.equal(said.value_age.known, "unknown");
   assert.equal(said.value_age.says, "age of the value unknown");
   assert.match(said.value_age.why, /No property of this type is declared/);
+  // The measure says the same of its own value, in its own words.
+  assert.equal(said.measures[0].value_age.says, "age of the value unknown");
+  assert.match(said.measures[0].value_age.why, /No property of what this measure reads is declared/);
   // When it was written here is known, and is not offered as the age of the value.
   assert.equal(said.last_written_here, "50 min ago");
   assert.equal(said.open_alerts.length, 1);
   assert.equal(said.open_alerts[0].severity, "critical");
+});
+
+test("each live figure carries its own age, which is not always the unit's", async () => {
+  // The hospital also carries an air quality station, read two hours ago. Its
+  // occupancy comes from a census fourteen minutes old.
+  const hospital = PAGE.get("H")!;
+  const metrics = new Map(PAGE).set("H", {
+    ...hospital,
+    freshnessSeconds: 119 * 60,
+    freshnessBasis: "observed",
+    valueAges: { occupancy: { seconds: 14 * 60, basis: "observed" } },
+  });
+  const said = await run("unit_now", { unit: "H" }, live({ metrics }));
+  assert.deepEqual(said.measures[0].value_age, { known: "exact", age: "14 min", says: "value read 14 min ago", why: null });
+  // The unit as a whole answers another question, and keeps its own answer.
+  assert.equal(said.value_age.says, "value read 2 h ago");
+  assert.match(said.how_to_read.join(" "), /A measure's own `value_age` is the age of what that measure reads/);
+  assert.match(said.how_to_read.join(" "), /it can be older than a measure's/);
+  // A measure with nothing to compute it from has nothing to date either.
+  const bare = await run("unit_now", { unit: "X" }, live({ units: [...UNITS, { id: "X", name: "Annexe", parentId: null }] }));
+  assert.equal(bare.measures[0].value, null);
+  assert.equal("value_age" in bare.measures[0], false);
+});
+
+test("an alert's floor is said of what its measure reads", async () => {
+  const said = await run("list_alerts", {});
+  assert.equal(said.alerts[1].value_age.why, "One of the sources this measure reads published no readable time, so this is a floor.");
+  assert.equal(said.alerts[2].value_age.why, "No property of what this measure reads is declared as carrying the time of the reading.");
+  assert.match(said.how_to_read.join(" "), /the age of what the alert's measure reads, not of everything under its unit/);
 });
 
 test("what is open is listed worst first, each value with its age and its signal's stage", async () => {

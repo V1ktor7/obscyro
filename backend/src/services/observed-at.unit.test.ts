@@ -66,6 +66,103 @@ describe("reading a published timestamp", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// An hour written with one digit.
+//
+// The MSSS emergency file writes `2026-11-19T9:45` from midnight to ten in the
+// morning, and `2026-11-19T10:45` after. Refused, the first shape left every
+// emergency reading without an age for ten hours a day: at 9:37 one morning no
+// open alert had an exact age, and two hours later all of them did, with no
+// change of code in between.
+// ---------------------------------------------------------------------------
+
+describe("an hour written with one digit", () => {
+  it("is the hour it says", () => {
+    // 9:45 in Montréal in November is 14:45 UTC.
+    const { at, basis } = readStamp("2026-11-19T9:45", MTL);
+    assert.equal(basis, "observed");
+    assert.equal(at!.toISOString(), "2026-11-19T14:45:00.000Z");
+    // The same instant as the two-digit spelling, to the millisecond.
+    assert.equal(at!.getTime(), readStamp("2026-11-19T09:45", MTL).at!.getTime());
+  });
+
+  it("is read at midnight too, and with a space or seconds", () => {
+    assert.equal(readStamp("2026-11-19T0:45", MTL).at!.toISOString(), "2026-11-19T05:45:00.000Z");
+    assert.equal(readStamp("2026-11-19 9:45", MTL).at!.toISOString(), "2026-11-19T14:45:00.000Z");
+    assert.equal(readStamp("2026-11-19T9:45:30", MTL).at!.toISOString(), "2026-11-19T14:45:30.000Z");
+  });
+
+  it("is read when the stamp carries its own zone", () => {
+    assert.equal(readStamp("2026-11-19T9:45-05:00").at!.toISOString(), "2026-11-19T14:45:00.000Z");
+    assert.equal(readStamp("2026-11-19T9:45:00Z").at!.toISOString(), "2026-11-19T09:45:00.000Z");
+  });
+
+  it("still needs a declared zone when it carries none", () => {
+    assert.deepEqual(readStamp("2026-11-19T9:45"), { at: null, basis: "zone-unknown" });
+  });
+
+  it("gives an emergency reading an age before ten in the morning", () => {
+    // 9:37 in Montréal: the newest census was published at 8:45.
+    const out = freshnessOf({
+      property: { key: "mise_a_jour", zone: MTL },
+      instances: [{ properties: { mise_a_jour: "2026-11-19T8:45" } }],
+      now: Date.parse("2026-11-19T14:37:00Z"),
+    });
+    assert.deepEqual(out, { seconds: 52 * 60, basis: "observed" });
+  });
+
+  it("does not complete a stamp that was cut short", () => {
+    // Seen once in the file: the minutes never arrived. What is missing is not
+    // filled in, and the hour of our download never stands in for it.
+    for (const v of ["2026-11-19T9:", "2026-11-19T9", "2026-11-19T", "2026-11-19T9:4"]) {
+      assert.deepEqual(readStamp(v, MTL), { at: null, basis: "unreadable" }, `read ${v}`);
+    }
+  });
+
+  it("does not turn an hour that does not exist into one that does", () => {
+    assert.equal(readStamp("2026-11-19T25:45", MTL).at, null);
+    assert.equal(readStamp("2026-11-19T9:75", MTL).at, null);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A date with no hour.
+//
+// What a registry or a weekly sample publishes: `2026-07-02`. It names a day,
+// on the clock the institution declared. It is read as the start of that day,
+// the oldest the reading can be, so the age can overstate by up to a day and
+// can never understate.
+// ---------------------------------------------------------------------------
+
+describe("a date with no hour", () => {
+  it("is the start of that day on the declared clock", () => {
+    // Midnight in Montréal is 04:00 UTC in July and 05:00 UTC in January.
+    assert.deepEqual(readStamp("2026-07-02", MTL), { at: new Date("2026-07-02T04:00:00.000Z"), basis: "observed" });
+    assert.equal(readStamp("2026-01-05", MTL).at!.toISOString(), "2026-01-05T05:00:00.000Z");
+  });
+
+  it("never makes a reading look fresher than it can be", () => {
+    // Read at 15:00 Montréal on the day itself. The sample may have been taken
+    // at 14:00 or at 00:05: the age given is the most it can be, fifteen hours.
+    const out = freshnessOf({
+      property: { key: "preleve_le", zone: MTL },
+      instances: [{ properties: { preleve_le: "2026-11-19" } }],
+      now: Date.parse("2026-11-19T20:00:00Z"),
+    });
+    assert.deepEqual(out, { seconds: 15 * 3600, basis: "observed" });
+  });
+
+  it("names a day on a clock, so it needs the clock declared", () => {
+    assert.deepEqual(readStamp("2026-07-02"), { at: null, basis: "zone-unknown" });
+  });
+
+  it("is not read from something that only looks like a date", () => {
+    for (const v of ["2026-07", "2026-7-2", "02/07/2026", "2026-13-45", "20260702"]) {
+      assert.equal(readStamp(v, MTL).at, null, `read ${v}`);
+    }
+  });
+});
+
 describe("how old the reading under a unit is", () => {
   const now = Date.parse("2026-09-05T23:24:00Z");
   const prop = { key: "Mise_a_jour", zone: MTL };

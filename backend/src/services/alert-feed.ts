@@ -39,9 +39,11 @@ export interface FeedAlert {
   /** When the value was true, from the timestamp the source published; null when it does not say. */
   observedAt: string | null;
   /**
-   * What that age rests on: the source's own timestamp, a floor because one of
-   * the unit's sources published no time, or the reason there is no age at
-   * all. Null for an alert last evaluated before this was kept.
+   * What that age rests on, counted on what the alert's measure reads and not
+   * on everything under its unit: the source's own timestamp, a floor because
+   * one of the sources the measure reads published no time, or the reason
+   * there is no age at all. Null for an alert last evaluated before this was
+   * kept.
    */
   observedBasis: FreshnessBasis | null;
   /** When the data that opened the alert was written here; null for alerts opened before this was kept. */
