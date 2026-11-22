@@ -3,7 +3,7 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "1d09b55f49e02c99"
+translatedFrom: "e6e145bfc83a929e"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
@@ -161,7 +161,7 @@ The product had two paths that did not know each other. Now that a recorded resp
 |---|---|---|
 | What is varied | A response: rules the engine evaluates at every step, on a given event | Stamps: what happens on a given day (outbreak, heat wave, measure, capacity, starting conditions), and a recorded response |
 | What this path can do and the other cannot | Write and edit a response: its conditions, its delay, its effectiveness, its cost. Compare several responses on one event and rank them on counts (deaths, care not delivered, cost), over several seeds. Vary the strength of a response (half, double). Branch: “what if we had acted on that day” | Spread an epidemic from the model the twin declares. Set starting conditions. Replace or remove a choice. Have the analyst propose and test options, with their levels of evidence. Record a decision and follow it. Keep a prepared response, retested when a signal opens |
-| What it still cannot do | Start from a scenario made of stamps. Record a decision. Keep a prepared response ([issue 22](https://github.com/V1ktor7/obscyro/issues/22)) | Follow more than one response in a run. Write or edit the rules of a response, apart from the transfer between two sites. Make a response the engine writes itself start on a given day. Give a price to a measure or to a transfer. Run several seeds |
+| What it still cannot do | Start from a scenario made of stamps. Record a decision. Keep a prepared response ([issue 22](https://github.com/V1ktor7/obscyro/issues/22)) | Follow more than one response in a run. Write or edit the rules of a response, apart from the transfer between two sites. Make a response the engine writes itself start on a given day. Give a price to a measure, or to a transfer ([issue 39](https://github.com/V1ktor7/obscyro/issues/39)). Run several seeds |
 
 What the two have in common: the engine, the shape of a response (rules, with delay, effectiveness and cost), and the marking of a dominated option, made by the same function.
 
@@ -412,7 +412,7 @@ What is not judged: the quality of the writing. That still takes a person, who r
 - The two responses the engine writes itself watch a single activity, the first of the twin in alphabetical order among those that are space, whatever activity the run reads. `list_responses` says which.
 - A cost exists only where a rule declares one, or where the twin's price list prices a capacity that is opened. A measure, a transfer written by the analyst, units that are closed and a capacity the list does not hold have no price: no option that contains one can be called dominated, dominating or “Not beaten”.
 - The cost of an option is that of its choices: opening units, then keeping them open for the days of the run. It is not what the network costs to run, and it counts neither staff nor stocks, which the twin does not hold.
-- A cost formula can name, besides the numbers of its row, only `units` and `days`. A transfer is not priced: the formula of an ambulance (a flat fee, so much a kilometre) has nothing to apply to as long as a transfer is not an operation the ledger prices.
+- A cost formula can name, besides the numbers of its row, only `units` and `days`. A transfer is not priced: the formula of an ambulance (a flat fee, so much a kilometre) has nothing to apply to as long as a transfer is not an operation the ledger prices ([issue 39](https://github.com/V1ktor7/obscyro/issues/39)).
 - The amounts of the rules of a recorded response do not come from the price list and have no source: they are shown as demo prices, on the Options tab, the Events page and the replay of the units page.
 - With a response that adds or moves units during the run, the island's occupancy is weighted by the usual capacity: the engine does not return the capacity of each day. The run says so.
 - An option is tested on the scenario as it is at the time of the test. Adding one option then another gives a scenario no test covered: the screen warns, and the objective has to be stated again.
