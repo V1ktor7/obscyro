@@ -3,7 +3,7 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "ef92d9d78385176e"
+translatedFrom: "c5ebd91cef0bdbab"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
@@ -127,7 +127,7 @@ The Event finder tab is apart: it has none of these tools. It has only the API's
 
 A tool that cannot answer (unknown name, two sites for one name, no run on screen, a table that holds several series, an option that cannot be tested) says so with a reasoned refusal that the model reads. It never guesses.
 
-**Live.** `list_alerts` and `unit_now` do not read the twin's export as the others do: they read what the screens read, the alert feed of the banner and the computation of the unit page ([Algorithms](/docs/product/algorithms), D9). That is deliberate. A unit's page adds up everything under it, its sub-units included; the export counts only what is attached to the unit itself, because that is what a run uses. For a ward with no sub-unit the two give the same figure; for a hospital that has wards, they do not. A person looking at a unit's page and asking the analyst has to be given that page's figure: `unit_now` gives it, rounded the way the page writes it, and `get_site` remains the engine's reading. The overview (`describe_twin`) keeps the same separation. An institution whose whole capacity is in its facilities has none of its own in a run: the tool puts it under “how_the_tree_is_built”, says that nothing is missing, and points to `unit_now` for the figure on its page. Only a unit under which nothing holds capacity is listed among the gaps. The three counts of sites (capacity of their own, capacity in their sub-units, no capacity under them) add up to the total. Three rules go with live reading: a value is never given without its age (exact, “at least”, or unknown with its reason); no open alert is not good news in itself (the tool says when the thresholds were checked, and whether no rule exists at all); and there is no history.
+**Live.** `list_alerts` and `unit_now` do not read the twin's export as the others do: they read what the screens read, the alert feed of the banner and the computation of the unit page ([Algorithms](/docs/product/algorithms), D9). That is deliberate. A unit's page adds up everything under it, its sub-units included; the export counts only what is attached to the unit itself, because that is what a run uses. For a ward with no sub-unit the two give the same figure; for a hospital that has wards, they do not. A person looking at a unit's page and asking the analyst has to be given that page's figure: `unit_now` gives it, rounded the way the page writes it, and `get_site` remains the engine's reading. The overview (`describe_twin`) keeps the same separation. An institution whose whole capacity is in its facilities has none of its own in a run: the tool puts it under “how_the_tree_is_built”, says that nothing is missing, and points to `unit_now` for the figure on its page. Only a unit under which nothing holds capacity is listed among the gaps. The three counts of sites (capacity of their own, capacity in their sub-units, no capacity under them) add up to the total. Three rules go with live reading: a value is never given without its age (exact, “at least”, or unknown with its reason); no open alert is not good news in itself (the tool says when the thresholds were checked, and whether no rule exists at all); and these tools read the present moment, not the past.
 
 The digest of the run on screen is built by the page (`run-digest.ts`) with the functions the Result panel already reads: the analyst and the panel cannot diverge on a figure. The digest of a tested option is built by the server (`scenario-run.ts`), and a test holds the two together: [Algorithms](/docs/product/algorithms), section A4.
 
@@ -232,7 +232,7 @@ A decision can bear on a recorded response or on a transfer: it keeps its rules,
 
 A decision cannot be edited: revising it means recording another one.
 
-The follow-up (“Compare with observed”) exists when an observed series is linked to the scenario, through the “Reality check” setting of the Result panel. It sets the arrivals the tested run expected beside those that were counted, and gives the gap: totals over the days both report, average gap per day, offset of the peaks. It does not conclude. And it compares arrivals only: the twin keeps no history of queues or of occupancy, so the expected queue has nothing observed to face it, which the screen says.
+The follow-up (“Compare with observed”) exists when an observed series is linked to the scenario, through the “Reality check” setting of the Result panel. It sets the arrivals the tested run expected beside those that were counted, and gives the gap: totals over the days both report, average gap per day, offset of the peaks. It does not conclude. And it compares arrivals only: the twin keeps the readings of its own measures, but those are not the queue or the occupancy the engine counts, and nothing sets them beside a run yet. So the expected queue has nothing observed to face it, which the screen says.
 
 ### Prepared responses, and “Engage”
 
@@ -376,7 +376,7 @@ What is not judged: the quality of the writing. That still takes a person, who r
 
 - Each question is replayed twice by default: a set that passes once has not shown that it passes.
 - Four questions cover what proved fragile with the real model: three sites cited with one figure each (`three-sites`), the sites of a run with their waiting (`run-waiting-by-site`), two territories compared (`two-catchments`), a question asked in French (`in-french`).
-- Three questions are about live reading, where a model is most tempted to reassure. `open-now`: nothing is open, but the reference project has no alert rule, and a good answer says so instead of concluding that all is well. `unit-now`: the figure of the unit's page, with an unknown age said as unknown. `no-history`: “what changed since this morning” has no answer, and a good answer says so without inferring a change from a single reading.
+- Three questions are about live reading, where a model is most tempted to reassure. `open-now`: nothing is open, but the reference project has no alert rule, and a good answer says so instead of concluding that all is well. `unit-now`: the figure of the unit's page, with an unknown age said as unknown. `no-history`: “what changed since this morning” has no answer from it, because none of its tools reads the readings the twin keeps; a good answer says so without inferring a change from a single reading.
 - The script exits with an error as soon as a question fails: it can serve as a guard before changing the instructions or a tool.
 - The expected facts are in the code (`QUESTIONS`). When the twin or the scenario changes, it is the question that gets corrected.
 
@@ -394,7 +394,8 @@ What is not judged: the quality of the writing. That still takes a person, who r
 - The validated events are the project's, not a scenario's: every scenario of the project sees the same calendar.
 - An event search costs about 70 cents: each search launched returns ten pages, close to 15,000 tokens, and no setting of the API lets you ask for fewer without giving up the cap on searches. See “What a search costs”.
 - The reference questions judge the Ask tab only. On `claude-haiku-5-5`, the Options tab has been tried on a single objective (three options tested, among them a transfer of patients and two recorded responses), and the search for events has not; `claude-sonnet-5-5` has not been tried anywhere.
-- The twin holds no staff, no stocks and no history: the analyst says so, it does not fill the gap. So it cannot say what was open earlier, or what changed since this morning.
+- The twin holds no staff and no stocks: the analyst says so, it does not fill the gap.
+- The twin keeps the readings of its measures since the day the recording started ([Algorithms](/docs/product/algorithms), D11), and a unit's page shows them. No tool of the analyst reads them: so it cannot say what was open earlier, or what changed since this morning, and it says so.
 - The age of an alert or of a measure is that of what the measure reads. The unit has its own too, the oldest of all its sources, which can be older than the age of one of its values: the analyst is given both, and must give with a figure the age of that figure. A date with no hour gives an age to the day.
 - The open signals `list_alerts` counts include those whose alert has cleared: they can be far more numerous than the open alerts.
 - The run on screen is not kept when the page is reloaded; Run has to be launched again. Nor are the tested options: what remains are the recorded decisions and the journal.

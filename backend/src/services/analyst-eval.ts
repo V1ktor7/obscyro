@@ -322,7 +322,8 @@ export const QUESTIONS: Expectation[] = [
     says: ["Lakeshore", "unknown|not known|no way to know|cannot say how old|can't say how old|does not say how old|no age"],
   },
   {
-    // The twin keeps no history. A right answer says so, and does not infer a change from one reading.
+    // The analyst cannot read the past: none of its tools reads the readings the twin keeps.
+    // A right answer says so, and does not infer a change from one reading.
     id: "no-history",
     question: "What changed at Hôpital général du Lakeshore since this morning?",
     looking: "reality",

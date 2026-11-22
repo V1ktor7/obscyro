@@ -347,7 +347,7 @@ export function alertsNow(live: LiveReading, only: LiveUnit | null = null) {
           ? "No alert is open. That is what the rules saw when they were last checked (`checked`), not a guarantee."
           : "An alert is a unit and an aggregate value, never a person.",
       "`open_signals` counts every open signal of the project, including those whose alert has since cleared: it can be far larger than the alerts open now.",
-      "There is no history: this cannot say what was open earlier, or what changed since this morning.",
+      "This reads what is open now: it cannot say what was open earlier, or what changed since this morning.",
     ],
   };
 }
@@ -383,7 +383,7 @@ export function unitNow(live: LiveReading, unit: LiveUnit) {
       "`get_site` gives what the simulation engine counts at the unit itself. For a unit with sub-units the two differ, and both are right: say which one you are giving.",
       "A measure with value null has nothing to be computed from here (no bed is no occupancy, not 0 %).",
       "A measure's own `value_age` is the age of what that measure reads: give it with the measure's value. The unit's `value_age` answers another question, whether everything under the unit is up to date: it is the oldest of the unit's sources when it has several, so it can be older than a measure's. `last_written_here` is when the data was last written to the twin, which is not when it was true.",
-      "There is no history: this is the reading now, and nothing here says what it was earlier.",
+      "This is the reading now. The twin keeps each measure's readings over time and the unit's page shows them, but this tool does not read them: nothing here says what a value was earlier.",
     ],
   };
 }

@@ -387,9 +387,11 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  * A decision's expected arrivals beside the observed series.
  *
  * Arrivals only: they are the one thing the tested run produced that the
- * network also reports day by day. The twin keeps no history of queues or
- * occupancy, so the expected queue cannot be set beside an observed one — the
- * screen says so rather than leaving the comparison to look complete.
+ * network also reports day by day. The twin keeps the readings of its own
+ * measures over time (`twin-history.ts`), but those are not the engine's queue
+ * or occupancy, and nothing sets them beside a run yet. So the expected queue
+ * cannot be set beside an observed one — the screen says so rather than
+ * leaving the comparison to look complete.
  */
 export function followUp(expected: Pick<DecisionExpected, "horizon" | "arrivals">, reality: RealityConfig, rows: ReadonlyArray<Record<string, unknown>>): FollowUp {
   const observed = alignSeries(rows, { when: reality.when, value: reality.value, origin: reality.origin, horizon: expected.horizon });

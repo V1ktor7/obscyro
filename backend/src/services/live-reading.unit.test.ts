@@ -265,7 +265,7 @@ test("what is open is listed worst first, each value with its age and its signal
   assert.equal(said.alert_rules, 2);
   assert.equal(said.checked.says, "thresholds last checked 4 s ago");
   assert.deepEqual(said.open_signals, { total: 12, by_stage: [{ stage: "Triage", n: 9 }, { stage: "Response", n: 3 }] });
-  assert.match(said.how_to_read.join(" "), /no history/i);
+  assert.match(said.how_to_read.join(" "), /cannot say what was open earlier/);
 });
 
 test("one unit's alerts can be asked for, and a unit that does not exist is said so", async () => {
@@ -391,7 +391,8 @@ test("the card says what it cannot say", () => {
   assert.match(card.decisions.note, /This card names no signal/);
   assert.equal(card.responses, null);
   assert.deepEqual(card.engage, { possible: false, why: "This card names no signal: a response is engaged on a signal." });
-  assert.match(card.limits.join(" "), /keeps no history/);
+  // The readings are kept, and the card says where they are instead of claiming there are none.
+  assert.match(card.limits.join(" "), /keeps the readings of each measure over time, and the unit's page shows them; this card does not/);
   assert.match(card.limits.join(" "), /no staff and no stocks/);
 });
 
@@ -454,7 +455,7 @@ test("asked what is open right now, the analyst answers from the alert list, cit
           { text: "Three alerts are open. The worst is at Chirurgie: occupancy is at 100 %, the alert has been open for 3 h, and the value was read 37 min ago. Its signal is at Triage, step 1 of 4.", sources: ["s1"] },
           { text: "Hôpital du Lac is at 57 %, a value read at least 2 h ago because one of its sources published no time. At Médecine the value is 33 % and its age is unknown.", sources: ["s1"] },
         ],
-        ["There is no history: this is what is open now, not what was open earlier."],
+        ["This is what is open now: I cannot read what was open earlier."],
       ),
     ]),
   ]);

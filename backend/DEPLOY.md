@@ -32,6 +32,7 @@
 | `LIST_DEFAULT_LIMIT` | `100` | Default page size for list endpoints |
 | `LIST_MAX_LIMIT` | `500` | Hard ceiling for list page size |
 | `ROLLUP_INSTANCE_CAP` | `50000` | Max rows loaded for rollups/clones/scans |
+| `TWIN_HISTORY_DISABLED` | _(unset)_ | Set to `1` to stop writing down each unit's measures every five minutes (`app.twin_reading`). What was kept stays; the history stops growing |
 | `SIM_MAX_RUNS` | `200` | Monte-Carlo simulation run ceiling |
 | `SIM_SERVICE_URL` | _(unset)_ | Hybrid ML simulation-service base URL; falls back to mechanistic SEIR when unset |
 | `SIM_SERVICE_TIMEOUT_MS` | `300000` | Upstream timeout for simulation-service calls |

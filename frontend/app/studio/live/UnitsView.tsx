@@ -9,6 +9,7 @@ import {
   ackTwinAlert,
   fetchTwinTree,
   fetchTwinUnit,
+  fetchTwinUnitHistory,
   listTwinAlertRules,
   listTwinMetrics,
   seedTwinDemo,
@@ -29,6 +30,7 @@ import AlertRuleEditor from "./AlertRuleEditor";
 import LiveMetricsDialog from "./LiveMetricsDialog";
 import MetricEditor from "./MetricEditor";
 import UnitSheet, { type OtherMeasure } from "./UnitSheet";
+import type { HistoryState } from "./unit-history";
 import UnitsBoard, { type StreamMode } from "./UnitsBoard";
 import { formatMeasure, type Measure } from "./units-list";
 
@@ -40,6 +42,11 @@ import { formatMeasure, type Measure } from "./units-list";
 // an alert, and the detail of the unit selected. What is drawn from them is in
 // `UnitsBoard` and `UnitSheet`.
 // ---------------------------------------------------------------------------
+
+/** How far back the sheet reads what the twin kept of a value. */
+const HISTORY_HOURS = 48;
+/** How often it reads it again while the sheet is open: the twin writes its measures down at this pace. */
+const HISTORY_EVERY_MS = 5 * 60_000;
 
 /** The counts every twin has, whatever its organisation defined. */
 const BUILT_IN: Measure[] = DISPLAY_METRIC_OPTIONS.filter((o) => o.key !== "occupancyPct").map((o) => ({
@@ -188,6 +195,35 @@ export default function UnitsView() {
   }, [env, selectedUnitId, isOperations, computedAt]);
 
   const detail = held && held.unitId === selectedUnitId ? held.detail : null;
+
+  // What the twin kept of the value shown. Only the measures the organisation defined are kept over time:
+  // for one of the counts every twin has, the sheet says so instead of asking.
+  const keptOverTime = defined.some((m) => m.key === measure.key);
+  const historyKey = selectedUnitId && keptOverTime ? `${selectedUnitId}|${measure.key}` : null;
+  // Kept with what it was read for, like the detail: one unit's history never shows under another's name.
+  const [historyHeld, setHistoryHeld] = useState<{ key: string; state: HistoryState } | null>(null);
+  useEffect(() => {
+    if (!env || !selectedUnitId || !historyKey || !isOperations) return;
+    let cancelled = false;
+    const read = () =>
+      fetchTwinUnitHistory(env, selectedUnitId, measure.key, HISTORY_HOURS)
+        .then((history) => { if (!cancelled) setHistoryHeld({ key: historyKey, state: { state: "read", history } }); })
+        .catch(() => { if (!cancelled) setHistoryHeld({ key: historyKey, state: { state: "failed" } }); });
+    void read();
+    const again = setInterval(() => void read(), HISTORY_EVERY_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(again);
+    };
+  }, [env, selectedUnitId, historyKey, measure.key, isOperations]);
+
+  const history: HistoryState | null = !selectedUnitId || metricDefs === null
+    ? null
+    : !keptOverTime
+      ? { state: "not_kept" }
+      : historyHeld && historyHeld.key === historyKey
+        ? historyHeld.state
+        : { state: "reading" };
 
   const selectedNode = useMemo(
     () => snapshot?.nodes.find((n) => n.id === selectedUnitId) ?? null,
@@ -344,6 +380,7 @@ export default function UnitsView() {
             measure={measure}
             scale={scale}
             detail={detail}
+            history={history}
             others={others}
             situationHref={(alertId) => situationHref({ unit: selectedUnitId, alert: alertId }, env)}
             onAck={(id) => void handleAck(id)}

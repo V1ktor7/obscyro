@@ -94,7 +94,7 @@ const card = (over: Partial<SituationCard> = {}): SituationCard => ({
   question: "What is open at Urgence — Hôpital A right now, how old are its figures, and what else is open around it?",
   checked: { at: "2026-11-20T14:59:56.000Z", says: "thresholds last checked 4 s ago" },
   alertRules: 3,
-  limits: ["This is the reading now. The twin keeps no history."],
+  limits: ["This is the reading now. The twin keeps the readings of each measure over time, and the unit's page shows them; this card does not."],
   analyst: { configured: true },
   ...over,
 });
@@ -175,7 +175,7 @@ describe("the situation card", () => {
     expect(steps[1]!.getAttribute("aria-current")).toBeNull();
 
     expect(within(screen.getByRole("region", { name: "Decisions" })).getByText(/No decision has been taken on a signal of this kind yet/)).toBeTruthy();
-    expect(within(screen.getByRole("region", { name: "What this card cannot say" })).getByText(/keeps no history/)).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "What this card cannot say" })).getByText(/this card does not/)).toBeTruthy();
   });
 
   it("has the question already written, and asks it with what the card is about", async () => {

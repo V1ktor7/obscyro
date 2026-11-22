@@ -7,6 +7,7 @@ import type { DbClient } from "../lib/db.js";
 import { AppError, BadRequest, NotFound } from "../lib/errors.js";
 import { startSseStream } from "../lib/sse.js";
 import { readAlertFeed } from "../services/alert-feed.js";
+import { readUnitHistory } from "../services/twin-history.js";
 import { recordAudit } from "../services/audit.js";
 import {
   assertEventMatchesWorld,
@@ -777,6 +778,39 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
         exchanges,
         recommendations: alerts.map((a) => a.recommendation).filter(Boolean),
       };
+    },
+  );
+
+  app.get(
+    "/ontology/:env/twin/units/:id/history",
+    {
+      schema: {
+        summary: "The readings kept for one measure of a unit",
+        description:
+          "What the twin wrote down for `metric` at this unit over the last `hours` (48 by default, 90 days at most), " +
+          "oldest first. A reading is a value, when it was true according to its source (`observedAt`, null when the " +
+          "source does not say, with `observedBasis` saying what that time rests on) and when it was written here " +
+          "(`recordedAt`). The twin is read every `everySeconds` and only changes are kept: a new value, or the same " +
+          "value read at a new time. A reading whose `value` is null says the measure had no value from then on: a " +
+          "gap is not a zero. The reading in force when the window opens is listed first, when there is one. " +
+          "`since` is when the first reading of this measure at this unit was kept, in the whole history: nothing " +
+          "is known of before, and an empty list with `since` null means nothing was ever kept, not that nothing " +
+          "changed. `cut` is true when the window held more readings than the list. Only the measures the " +
+          "organisation defined are kept, and only from reality, never through a scenario. Reads only. Aggregate " +
+          "values about a unit, never about a person.",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1), id: z.string().uuid() }),
+        querystring: z.object({
+          metric: z.string().min(1).max(200),
+          hours: z.coerce.number().int().min(1).max(24 * 90).default(48),
+        }),
+        response: { 200: z.record(z.unknown()), 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      return { ...(await readUnitHistory(req.db, env.id, req.params.id, req.query.metric, req.query.hours)) };
     },
   );
 

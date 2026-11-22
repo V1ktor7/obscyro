@@ -134,8 +134,9 @@ const decisionRoutes: FastifyPluginAsync = async (fastify) => {
           "When the decision's scenario is compared with an observed series (its `reality` setting), returns the " +
           "arrivals the tested run expected each day beside the observed ones, on the run's own axis, with the gap: " +
           "peak offset, mean absolute error, and the totals over the days both report. `linked: false` with a reason " +
-          "when no series is set or the scenario is gone. Arrivals only: the twin keeps no history of queues or " +
-          "occupancy, so the expected queue has nothing observed to stand beside. Reports the gap and concludes nothing.",
+          "when no series is set or the scenario is gone. Arrivals only: the readings the twin keeps of its own measures " +
+          "are not the engine's queue or occupancy, so the expected queue has nothing observed to stand beside. " +
+          "Reports the gap and concludes nothing.",
         tags: ["decisions"],
         params: z.object({ env: z.string().min(1), id: z.string().uuid() }),
         response: { 200: z.record(z.unknown()), 404: errorEnvelope },

@@ -3,7 +3,7 @@
 title: "The Units page"
 description: "Every unit of the twin, live, ranked on one measure: the ones in alert first, and the sheet of the unit you pick beside the list."
 source: "docs/units-page.md"
-translatedFrom: "5e5780d49a7ec7b4"
+translatedFrom: "c7f14639218561fe"
 ---
 
 Every unit of the twin, live, ranked on one measure. The page answers one question: which unit to read first. The ones in alert come first, the ones that report nothing for the measure chosen are folded away, and the sheet of the unit you pick stays beside the list.
@@ -59,11 +59,12 @@ The **Tiles** view draws one square per unit that has a value, to see the whole 
 
 It sits beside the list, and moves under it on a narrow screen. A click on another line replaces it: you compare without closing anything.
 
-From top to bottom: the name, where the unit stands against its threshold, its value, the rule in words (“alert when over 100%”) and the age of that value; the age of the unit's oldest source and the number of linked objects; the open alerts, each with the age of its value; the other measures the unit reports; what it contains, by type; its exchanges with other units; the rule's recommendation.
+From top to bottom: the name, where the unit stands against its threshold, its value, the rule in words (“alert when over 100%”) and the age of that value; the history of that value over 48 hours; the age of the unit's oldest source and the number of linked objects; the open alerts, each with the age of its value; the other measures the unit reports; what it contains, by type; its exchanges with other units; the rule's recommendation.
 
 - **Three ages, each one named.** Under the value: “This value was read 14m ago”, the age of what the measure shown reads. In each alert: “value read 14 min ago”, the age of the value that raised it, in the words of the banner. In the “Oldest source” box: the age of the whole unit, the oldest of all its sources, which answers “is everything I see here up to date?”. A unit that receives a stretcher census and an air quality reading can show 14 minutes for its occupancy and 2 hours for its oldest source: both are right ([Algorithms](/docs/product/algorithms), D7).
 - **An age says what it is worth.** When it is a floor or it is unknown, the sheet writes why, in full, and says whether it is about the measure or the unit.
 - **A value the twin did not date gets no sentence.** That is the case of the four counts every twin has: the sheet does not lend them the unit's age under another name.
+- **The history of the value shown.** The twin writes its measures down every five minutes, when they change ([Algorithms](/docs/product/algorithms), D11). The sheet shows the last 48 hours of them: a staircase line, where each value holds until the next reading, the lowest and the highest written like the value above, and the date of the first reading kept (“The first reading of this value was kept 3 h ago. Nothing earlier is known.”). The line breaks where the measure had no value. As long as no reading is kept, the sheet writes so instead of drawing an empty chart. The counts every twin has are not kept, and the sheet says so. A history that cannot be read takes nothing away from the rest of the sheet.
 - **An alert is handled from here.** “Open the situation” opens its situation card, “Acknowledge” acknowledges it. A unit with no alert keeps a link to its situation card.
 - **“Ask the analyst”** opens the analyst with this unit: the question is about it.
 - **Two readings.** The name, the value and the bar come from the list, and are on screen at the click. The rest is read for this unit alone, and read again at each new reading of the twin; meanwhile, the sheet writes “Reading this unit…”. It never shows one unit's alerts under another's name.
@@ -78,9 +79,9 @@ From top to bottom: the name, where the unit stands against its threshold, its v
 ## Limits
 
 - The ranking is on one measure at a time.
-- The page shows the present state: the twin has no history.
+- The list and the tiles show the present state. The history is on the sheet, for the value shown only and over 48 hours. It starts the day the twin started writing its measures down: nothing earlier is known.
 - The list and the tiles do not show the age of each value: it is read on the unit's sheet. The “age of the data” measure of the Measure menu is the age of the whole unit.
 - A date with no hour gives an age to the day: it can be too large by a day at most, never too small.
 - The measure and the kind chosen are kept per project, in the browser. The order, the view and the search are not.
 
-**Code.** `frontend/app/studio/live/units-list.ts` (states, counters, order, search, hierarchy, scale, colours, with no screen), `UnitsBoard.tsx` (the two bands, the list, the tiles), `UnitSheet.tsx` (the sheet), `UnitsView.tsx` (the readings: tree, measures, thresholds, detail); `twinMetricNumber` in `frontend/app/studio/twin-ui.ts`; `bandFor` in `frontend/app/studio/command/site-metric.ts`; `useOpenAnalyst` in `frontend/app/studio/AnalystDock.tsx`. **Tests.** `units-list.test.ts`, `UnitsBoard.test.tsx`, `UnitSheet.test.tsx`, `twin-ui.test.ts`, `AnalystDock.test.tsx`.
+**Code.** `frontend/app/studio/live/units-list.ts` (states, counters, order, search, hierarchy, scale, colours, with no screen), `UnitsBoard.tsx` (the two bands, the list, the tiles), `UnitSheet.tsx` (the sheet), `unit-history.ts` (the history of a value, with no screen), `UnitsView.tsx` (the readings: tree, measures, thresholds, detail, history); `twinMetricNumber` in `frontend/app/studio/twin-ui.ts`; `bandFor` in `frontend/app/studio/command/site-metric.ts`; `useOpenAnalyst` in `frontend/app/studio/AnalystDock.tsx`. **Tests.** `units-list.test.ts`, `unit-history.test.ts`, `UnitsBoard.test.tsx`, `UnitSheet.test.tsx`, `UnitsView.test.tsx`, `twin-ui.test.ts`, `AnalystDock.test.tsx`.

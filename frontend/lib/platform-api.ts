@@ -1260,6 +1260,47 @@ export async function fetchTwinUnit(
   return apiFetch(`/v1/ontology/${encEnv(env)}/twin/units/${unitId}`);
 }
 
+/** One reading the twin kept: a value, when it was true, and when it was written down. */
+export interface TwinReading {
+  /** Null when the measure had no value from then on: a gap, not a zero. */
+  value: number | null;
+  /** When the value was true, from the timestamp its source published; null when the source does not say. */
+  observedAt: string | null;
+  observedBasis: FreshnessBasis | null;
+  recordedAt: string;
+}
+
+/** The readings kept for one measure of one unit, over a window. */
+export interface TwinUnitHistory {
+  /** The server's clock when this was read. */
+  at: string;
+  unitId: string;
+  metric: string;
+  hours: number;
+  /** When the first reading of this measure at this unit was kept, in the whole history. Null when none ever was. */
+  since: string | null;
+  /** Oldest first. The reading in force when the window opens comes first, when there is one. */
+  readings: TwinReading[];
+  /** True when the window held more readings than the list. */
+  cut: boolean;
+  /** How often the twin is read for its history, in seconds. */
+  everySeconds: number;
+}
+
+/**
+ * What the twin wrote down for one measure of a unit. Only the measures the
+ * organisation defined are kept, and only from the day the history started.
+ */
+export async function fetchTwinUnitHistory(
+  env: string,
+  unitId: string,
+  metric: string,
+  hours = 48,
+): Promise<TwinUnitHistory> {
+  const qs = new URLSearchParams({ metric, hours: String(hours) });
+  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/units/${unitId}/history?${qs.toString()}`);
+}
+
 export async function listTwinAlerts(
   env: string,
   opts?: { unitId?: string; limit?: number; offset?: number },

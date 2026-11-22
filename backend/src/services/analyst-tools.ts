@@ -1114,7 +1114,7 @@ async function pickUnit(ctx: AnalystContext, query: string): Promise<{ live: Liv
 const listAlerts: AnalystTool = {
   name: "list_alerts",
   description:
-    "What is open right now: the project's open alerts, worst first, each with its unit, the measure and its value, since when it has been open, how old the value is, and the signal it raised with the stage that signal stands at. Also says how many alert rules exist and when the thresholds were last checked. Reality only. Use it for any question about what is open, alerting or needing attention now, in the whole project or at one unit. It has no history.",
+    "What is open right now: the project's open alerts, worst first, each with its unit, the measure and its value, since when it has been open, how old the value is, and the signal it raised with the stage that signal stands at. Also says how many alert rules exist and when the thresholds were last checked. Reality only. Use it for any question about what is open, alerting or needing attention now, in the whole project or at one unit. It reads now: it cannot say what was open earlier.",
   input_schema: obj({ unit: { type: "string", description: "Only this unit's alerts: its name or its id. Leave out for the whole project." } }, []),
   parse: z.object({ unit: z.string().trim().min(1).max(300).optional() }),
   async run(ctx, input: { unit?: string }) {

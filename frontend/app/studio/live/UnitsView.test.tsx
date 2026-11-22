@@ -9,6 +9,7 @@ import type { TwinTreeSnapshot, TwinUnitDetail, TwinUnitNode } from "@/lib/platf
 const api = vi.hoisted(() => ({
   fetchTwinTree: vi.fn(),
   fetchTwinUnit: vi.fn(),
+  fetchTwinUnitHistory: vi.fn(),
   listTwinMetrics: vi.fn(),
   listTwinAlertRules: vi.fn(),
   subscribeTwinStream: vi.fn(),
@@ -105,6 +106,19 @@ beforeEach(() => {
     detail(id, id === "suroit" ? "HÔPITAL DU SUROÎT — civières occupées à 150 % de la capacité" : null),
   );
   api.ackTwinAlert.mockResolvedValue(undefined);
+  api.fetchTwinUnitHistory.mockImplementation(async (_env: string, unitId: string, metric: string, hours: number) => ({
+    at: "2026-11-22T12:00:00.000Z",
+    unitId,
+    metric,
+    hours,
+    since: "2026-11-22T09:00:00.000Z",
+    readings: [
+      { value: 140, observedAt: "2026-11-22T09:00:00.000Z", observedBasis: "observed", recordedAt: "2026-11-22T09:00:00.000Z" },
+      { value: 150, observedAt: "2026-11-22T11:00:00.000Z", observedBasis: "observed", recordedAt: "2026-11-22T11:00:00.000Z" },
+    ],
+    cut: false,
+    everySeconds: 300,
+  }));
   api.subscribeTwinStream.mockImplementation((_env: string, onData: (s: TwinTreeSnapshot) => void, onError: () => void) => {
     stream.onData = onData;
     stream.onError = onError;
@@ -185,5 +199,39 @@ describe("the Units page, reading the twin", () => {
     await waitFor(() => expect(shell.refreshAlerts).toHaveBeenCalledTimes(1));
     expect(api.ackTwinAlert).toHaveBeenCalledWith("mtl", "alert-1");
     expect(api.fetchTwinTree.mock.calls.length).toBe(treeReads + 1);
+  });
+});
+
+describe("the history of the value shown", () => {
+  it("is read for the unit selected and the measure shown, over the last 48 hours", async () => {
+    render(<UnitsView />);
+    await waitFor(() => expect(within(row("suroit")).getByText("150%")).toBeTruthy());
+    expect(api.fetchTwinUnitHistory).not.toHaveBeenCalled();
+
+    fireEvent.click(row("suroit"));
+    await waitFor(() => expect(api.fetchTwinUnitHistory).toHaveBeenCalledWith("mtl", "suroit", "stretchers", 48));
+    expect(await screen.findByText("2 readings · lowest 140% · highest 150%")).toBeTruthy();
+    expect(screen.getByText("The first reading of this value was kept 3 h ago. Nothing earlier is known.")).toBeTruthy();
+  });
+
+  it("is not asked for a count the twin does not keep, and the sheet says why", async () => {
+    render(<UnitsView />);
+    await waitFor(() => expect(within(row("suroit")).getByText("150%")).toBeTruthy());
+    fireEvent.click(row("suroit"));
+    await screen.findByText("2 readings · lowest 140% · highest 150%");
+    api.fetchTwinUnitHistory.mockClear();
+
+    fireEvent.change(screen.getByLabelText("Measure"), { target: { value: "linkedInstanceCount" } });
+    expect(await screen.findByText(/This count is computed on the spot and is not kept over time/)).toBeTruthy();
+    expect(api.fetchTwinUnitHistory).not.toHaveBeenCalled();
+  });
+
+  it("leaves the rest of the sheet whole when the history cannot be read", async () => {
+    api.fetchTwinUnitHistory.mockRejectedValue(new Error("404"));
+    render(<UnitsView />);
+    await waitFor(() => expect(within(row("suroit")).getByText("150%")).toBeTruthy());
+    fireEvent.click(row("suroit"));
+    expect(await screen.findByText("The history of this value could not be read. The value above is the reading now.")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });

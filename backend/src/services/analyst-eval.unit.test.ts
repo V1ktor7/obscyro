@@ -206,6 +206,6 @@ test("the live questions are passed by what can be said, and failed by reassuran
   assert.equal(judge(unit, read("unit_now", "Hôpital général du Lakeshore shows an emergency occupancy of 100 %.")).length, 1);
 
   const history = question("no-history");
-  assert.deepEqual(judge(history, read("unit_now", "The twin keeps no history, so it cannot say what changed since this morning. It can only give the reading now.")), []);
+  assert.deepEqual(judge(history, read("unit_now", "I cannot read earlier readings: my tools give the reading now, so I cannot say what changed since this morning. The unit's page shows the readings the twin kept.")), []);
   assert.equal(judge(history, read("unit_now", "Occupancy rose at Lakeshore since this morning.")).length, 1);
 });

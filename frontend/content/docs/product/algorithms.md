@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "0286d86a35678fbd"
+translatedFrom: "eed3d655846e4ed7"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -50,6 +50,7 @@ Every algorithm of the product has its section here: what it is for, its diagram
 | [D8](#d8-zone-correspondence) | Zone correspondence | `backend/src/services/zone-correspondence.ts` |
 | [D9](#d9-live-reading-and-situation-card) | Live reading and situation card | `backend/src/services/live-reading.ts`, `situation.ts` |
 | [D10](#d10-sites-and-units-on-the-network-map) | Sites and units on the network map | `frontend/app/studio/command/units-tree.ts` |
+| [D11](#d11-history-of-twin-measures) | History of twin measures | `backend/src/services/twin-history.ts` |
 
 ---
 
@@ -405,7 +406,7 @@ flowchart TD
 - No figure of a decision comes from the browser. The server copies them from the journalled exchange (`app.analyst_exchange`, kind `options`): a figure sent with the request is ignored, and a step that is not a successful test is refused.
 - A decision stands on its own: it keeps the name of the scenario and a copy of the source steps, to stay readable if the scenario or the exchange disappears.
 - A decision cannot be edited. Revising it means recording another one.
-- The follow-up compares arrivals, nothing else: it is the only thing the tested run expected that the network also counts day by day. The twin keeps no history of queues or of occupancy, so the expected queue has nothing observed beside it, and the screen says so.
+- The follow-up compares arrivals, nothing else: it is the only thing the tested run expected that the network also counts day by day. The twin keeps the readings of its own measures (D11), but those are not the queue or the occupancy the engine counts, and nothing sets them beside a run yet. So the expected queue has nothing observed beside it, and the screen says so.
 - A day the series does not report is not compared. A series that reports nothing does not give a gap of zero, it gives no gap.
 - The follow-up does not conclude. It gives the gap; saying whether the decision held belongs to the person.
 
@@ -1139,3 +1140,47 @@ flowchart TD
 - **The line lit from the map is shown once**: the branch that hides it opens and the list scrolls to it. Folding it again afterwards is the person's choice, and a new reading of the twin does not reopen it.
 
 **Code.** `frontend/app/studio/command/units-tree.ts` (`isSiteHidden`, `alertsForSite`, `pickFromExplorer`, `lineOfSite`, `lineAndBelow`, `unitsAbove`), `NetworkTwinView.tsx` (`pickLine`), `frontend/app/studio/TreeExplorer.tsx` (`pathTo`). **Tests.** `units-tree.test.ts`, `TreeExplorer.test.tsx`.
+
+## D11. History of twin measures
+
+**Purpose.** That the twin can say something other than “now”. A unit's measures are computed when they are read, from the objects as they stand: when one piece of data replaced another, the earlier value was lost. The twin now writes down what it measures, so that one can say what an emergency department showed this morning, and later what is usual for it and what a decision changed.
+
+```mermaid
+flowchart TD
+    A["Recorder: one pass finished,<br/>wait 5 min"] --> B["Each project, one after another"]
+    B --> C{"Does the project have units?"}
+    C -->|"no"| C1["Nothing is read"]
+    C -->|"yes"| D["Measures of each unit, with no lens:<br/>reality, never a scenario"]
+    D --> E["One candidate per unit and per defined measure:<br/>the value, and the time it was true<br/>according to what the measure reads (D7)"]
+    E --> F{"Against the last reading kept<br/>for that unit and that measure"}
+    F -->|"no reading yet, and a value"| G["Reading written down"]
+    F -->|"a different value,<br/>including no value at all any more"| G
+    F -->|"same value, read at another time<br/>(more than 90 s apart)"| G
+    F -->|"same value, same time"| H["Nothing is written"]
+    F -->|"no reading yet, and no value"| H
+    G --> I["app.twin_reading: unit, measure, value,<br/>the source's time and what it is worth,<br/>the time we wrote it down"]
+    I --> J["GET /twin/units/:id/history:<br/>the readings of a measure over a period"]
+    J --> K["The reading in force when the period opens<br/>is put first"]
+    K --> L["The unit's sheet: a staircase,<br/>each value holds until the next reading"]
+    L --> M{"A reading with no value?"}
+    M -->|"yes"| N["The line breaks:<br/>a gap is not a zero"]
+    M -->|"no"| O["The lowest, the highest,<br/>and the date of the first reading kept"]
+```
+
+**Rules.**
+- **Only what changes.** A reading is written down when the value differs from the last reading kept, or when the same value is read at a new time. An hourly file read twelve times in the hour gives one reading, not twelve. An identical value read an hour later gives a second one: “still 143% at 3 pm” is information.
+- **Two times, which do not say the same thing.** `observed_at`: when the value was true, according to the source's timestamp, counted on what the measure reads (D7); empty when the source does not say. `recorded_at`: when we wrote it down. `observed_basis` keeps what the first one is worth: an age that is only a floor stays a floor.
+- **A tolerance of 90 seconds.** The twin gives a value's age in whole seconds; so the same source time comes back one or two seconds apart from one pass to the next. Two times less than 90 seconds apart are the same reading. Sources publish by the hour or by the day: that margin hides no reading.
+- **Absence shows.** A measure that no longer has a value is written down with an empty value, once. A gap in the readings is not a zero. A measure that never had a value starts no history.
+- **Reality only.** The twin is read with no lens. A reading made through a scenario describes a world that does not exist.
+- **No invented past.** The history starts the day the recorder started. Nothing from before is reconstructed, and the route returns the date of the first reading kept (`since`): the screen writes it. An empty list with an empty `since` means “nothing was kept”, not “nothing changed”.
+- **The measures the organisation defined, not the built-in counts.** The number of linked objects, the age of the data and the counts by type are computed on the spot and are not kept. The sheet says so for those measures instead of showing an empty history.
+- **A staircase.** Between two readings kept, the twin showed the first: the recorder passes every five minutes and writes down any change. So the line holds flat until the next reading, and nothing is drawn between two readings that was not read. A reading is placed at its source's time; when the source declares none, at the time it was written down.
+- **Cadence.** One pass every five minutes, never two at once: the next starts five minutes after the previous one ended. So a change is written down at most five minutes after it happened, with its source's time. One project's failure does not cost the others their reading. `TWIN_HISTORY_DISABLED=1` stops the recording; what was kept stays.
+- **A bounded read.** 48 hours by default, 90 days at most, 2,000 readings per answer. When the period holds more, the oldest are left out and the answer says so (`cut`).
+- **A unit that is removed does not lose its past.** Readings are not tied to the object by a foreign key: the history tells what was, not what is still there. A deleted project takes its own with it.
+- **What is not kept.** The objects themselves, their links and the capacities at a past date: the whole twin cannot yet be read as it was. The situation card and the analyst's tools do not read the history: they say so, and point to the unit's page.
+- A reading is a unit and an aggregated value, never a person.
+
+**Code.** `backend/src/services/twin-history.ts` (`readingsNow`, `recordReadings`, `recordProject`, `recordAllProjects`, `readUnitHistory`, `startTwinHistory`), route `GET /v1/ontology/:env/twin/units/:id/history` in `backend/src/routes/twin.ts`, migration `067_twin_reading.sql`; `frontend/app/studio/live/unit-history.ts` (`historyView`), `UnitSheet.tsx`, `UnitsView.tsx`.
+**Tests.** `twin-history.unit.test.ts`; `live/unit-history.test.ts`, `live/UnitSheet.test.tsx`, `live/UnitsView.test.tsx`.

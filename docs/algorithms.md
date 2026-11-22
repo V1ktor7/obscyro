@@ -44,6 +44,7 @@ Chaque algorithme du produit a ici sa section : à quoi il sert, son schéma, se
 | [D8](#d8-correspondance-de-zones) | Correspondance de zones | `backend/src/services/zone-correspondence.ts` |
 | [D9](#d9-lecture-du-direct-et-fiche-de-situation) | Lecture du direct et fiche de situation | `backend/src/services/live-reading.ts`, `situation.ts` |
 | [D10](#d10-sites-et-unités-sur-la-carte-du-réseau) | Sites et unités sur la carte du réseau | `frontend/app/studio/command/units-tree.ts` |
+| [D11](#d11-historique-des-mesures-du-jumeau) | Historique des mesures du jumeau | `backend/src/services/twin-history.ts` |
 
 ---
 
@@ -399,7 +400,7 @@ flowchart TD
 - Aucun chiffre d'une décision ne vient du navigateur. Le serveur les recopie de l'échange journalisé (`app.analyst_exchange`, sorte `options`) : un chiffre envoyé avec la demande est ignoré, et une étape qui n'est pas un test réussi est refusée.
 - Une décision se suffit à elle-même : elle garde le nom du scénario et une copie des étapes sources, pour rester lisible si le scénario ou l'échange disparaît.
 - Une décision ne se modifie pas. La revoir, c'est en enregistrer une autre.
-- Le suivi compare des arrivées, rien d'autre : c'est la seule chose que le run testé attendait et que le réseau compte aussi jour par jour. Le jumeau ne garde aucun historique des files ni de l'occupation, donc la file attendue n'a rien d'observé à côté d'elle, et l'écran le dit.
+- Le suivi compare des arrivées, rien d'autre : c'est la seule chose que le run testé attendait et que le réseau compte aussi jour par jour. Le jumeau garde les relevés de ses propres mesures (D11), mais ce ne sont pas la file ni l'occupation que le moteur compte, et rien ne les pose encore à côté d'un run. La file attendue n'a donc rien d'observé à côté d'elle, et l'écran le dit.
 - Un jour que la série ne rapporte pas n'est pas comparé. Une série qui ne rapporte rien ne donne pas un écart nul, elle ne donne pas d'écart.
 - Le suivi ne conclut pas. Il donne l'écart ; dire si la décision a tenu revient à la personne.
 
@@ -1133,3 +1134,47 @@ flowchart TD
 - **La ligne allumée depuis la carte est montrée une fois** : la branche qui la cache s'ouvre et la liste défile jusqu'à elle. La replier ensuite est le choix de la personne, et une relecture du jumeau ne la rouvre pas.
 
 **Code.** `frontend/app/studio/command/units-tree.ts` (`isSiteHidden`, `alertsForSite`, `pickFromExplorer`, `lineOfSite`, `lineAndBelow`, `unitsAbove`), `NetworkTwinView.tsx` (`pickLine`), `frontend/app/studio/TreeExplorer.tsx` (`pathTo`). **Tests.** `units-tree.test.ts`, `TreeExplorer.test.tsx`.
+
+## D11. Historique des mesures du jumeau
+
+**But.** Que le jumeau sache dire autre chose que « maintenant ». Les mesures d'une unité sont calculées à la lecture, à partir des objets tels qu'ils sont : quand une donnée en remplace une autre, la valeur d'avant était perdue. Le jumeau note désormais ce qu'il mesure, pour qu'on puisse dire ce qu'une urgence affichait ce matin, et plus tard ce qui est habituel pour elle et ce qu'une décision a changé.
+
+```mermaid
+flowchart TD
+    A["Enregistreur : une passe finie,<br/>attendre 5 min"] --> B["Chaque projet, l'un après l'autre"]
+    B --> C{"Le projet a-t-il des unités ?"}
+    C -->|"non"| C1["Rien n'est lu"]
+    C -->|"oui"| D["Mesures de chaque unité, sans lentille :<br/>la réalité, jamais un scénario"]
+    D --> E["Un candidat par unité et par mesure définie :<br/>la valeur, et l'heure où elle était vraie<br/>d'après ce que la mesure lit (D7)"]
+    E --> F{"Par rapport au dernier relevé gardé<br/>pour cette unité et cette mesure"}
+    F -->|"aucun relevé encore, et une valeur"| G["Relevé noté"]
+    F -->|"valeur différente,<br/>y compris plus de valeur du tout"| G
+    F -->|"même valeur, relue à une autre heure<br/>(plus de 90 s d'écart)"| G
+    F -->|"même valeur, même heure"| H["Rien n'est noté"]
+    F -->|"aucun relevé encore, et pas de valeur"| H
+    G --> I["app.twin_reading : unité, mesure, valeur,<br/>heure de la source et ce qu'elle vaut,<br/>heure où nous l'avons notée"]
+    I --> J["GET /twin/units/:id/history :<br/>les relevés d'une mesure sur une période"]
+    J --> K["Le relevé en vigueur à l'ouverture de la période<br/>est mis en tête"]
+    K --> L["Fiche de l'unité : un escalier,<br/>chaque valeur tient jusqu'au relevé suivant"]
+    L --> M{"Un relevé sans valeur ?"}
+    M -->|"oui"| N["Le trait s'interrompt :<br/>un trou n'est pas un zéro"]
+    M -->|"non"| O["Le plus bas, le plus haut,<br/>et la date du premier relevé gardé"]
+```
+
+**Règles.**
+- **Seulement ce qui change.** Un relevé est noté quand la valeur diffère du dernier relevé gardé, ou quand la même valeur est relue à une nouvelle heure. Un fichier horaire relu douze fois dans l'heure donne un relevé, pas douze. Une valeur identique relue une heure plus tard en donne un second : « toujours 143 % à 15 h » est une information.
+- **Deux heures, qui ne disent pas la même chose.** `observed_at` : quand la valeur était vraie, d'après l'horodatage de la source, compté sur ce que la mesure lit (D7) ; vide quand la source ne le dit pas. `recorded_at` : quand nous l'avons notée. `observed_basis` garde ce que vaut la première : un âge qui n'est qu'un plancher reste un plancher.
+- **Une tolérance de 90 secondes.** Le jumeau donne l'âge d'une valeur en secondes entières ; la même heure de source revient donc à une ou deux secondes près d'une passe à l'autre. Deux heures à moins de 90 secondes l'une de l'autre sont le même relevé. Les sources publient à l'heure ou au jour : cette marge ne cache aucun relevé.
+- **L'absence se voit.** Une mesure qui n'a plus de valeur est notée avec une valeur vide, une fois. Un trou dans les relevés n'est pas un zéro. Une mesure qui n'a jamais eu de valeur ne commence aucun historique.
+- **Seule la réalité.** Le jumeau est lu sans lentille. Une lecture faite à travers un scénario décrit un monde qui n'existe pas.
+- **Aucun passé inventé.** L'historique commence le jour où l'enregistreur a démarré. Rien d'avant n'est reconstitué, et la route rend la date du premier relevé gardé (`since`) : l'écran l'écrit. Une liste vide avec `since` vide veut dire « rien n'a été gardé », pas « rien n'a changé ».
+- **Les mesures définies par l'organisation, pas les comptes intégrés.** Le nombre d'objets liés, l'âge de la donnée et les comptes par type sont calculés sur le moment et ne sont pas gardés. La fiche le dit pour ces mesures au lieu de montrer un historique vide.
+- **Un escalier.** Entre deux relevés gardés, le jumeau montrait le premier : l'enregistreur passe toutes les cinq minutes et note tout changement. Le trait tient donc à l'horizontale jusqu'au relevé suivant, et rien n'est tracé entre deux relevés qui n'a pas été lu. Un relevé est placé à l'heure de sa source ; quand elle n'en déclare pas, à l'heure où il a été noté.
+- **Cadence.** Une passe toutes les cinq minutes, jamais deux à la fois : la suivante part cinq minutes après la fin de la précédente. Un changement est donc noté au plus cinq minutes après s'être produit, avec l'heure de sa source. L'échec d'un projet ne coûte pas leur relevé aux autres. `TWIN_HISTORY_DISABLED=1` arrête l'enregistrement ; ce qui a été gardé reste.
+- **Une lecture bornée.** 48 heures par défaut, 90 jours au plus, 2 000 relevés par réponse. Quand la période en contient plus, les plus anciens sont laissés de côté et la réponse le dit (`cut`).
+- **Une unité retirée ne perd pas son passé.** Les relevés ne sont pas liés à l'objet par une clé étrangère : l'historique raconte ce qui a été, pas ce qui est encore là. Un projet supprimé emporte les siens.
+- **Ce qui n'est pas gardé.** Les objets eux-mêmes, leurs liens et les capacités à une date passée : on ne peut pas encore relire tout le jumeau tel qu'il était. La fiche de situation et les outils de l'analyste ne lisent pas l'historique : ils le disent, et renvoient à la page de l'unité.
+- Un relevé est une unité et une valeur agrégée, jamais une personne.
+
+**Code.** `backend/src/services/twin-history.ts` (`readingsNow`, `recordReadings`, `recordProject`, `recordAllProjects`, `readUnitHistory`, `startTwinHistory`), route `GET /v1/ontology/:env/twin/units/:id/history` dans `backend/src/routes/twin.ts`, migration `067_twin_reading.sql` ; `frontend/app/studio/live/unit-history.ts` (`historyView`), `UnitSheet.tsx`, `UnitsView.tsx`.
+**Tests.** `twin-history.unit.test.ts` ; `live/unit-history.test.ts`, `live/UnitSheet.test.tsx`, `live/UnitsView.test.tsx`.

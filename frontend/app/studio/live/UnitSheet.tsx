@@ -9,7 +9,8 @@ import type { TwinAlert, TwinAlertSeverity, TwinUnitDetail } from "@/lib/platfor
 import { valueAge } from "../alert-feed-state";
 import { explainFreshness, formatReadingAge } from "../twin-ui";
 import { Bar } from "./UnitsBoard";
-import { bandLabel, ruleInWords, type BarScale, type Measure, type UnitRow } from "./units-list";
+import { BOX, historyView, windowLabel, type HistoryState } from "./unit-history";
+import { bandLabel, formatMeasure, ruleInWords, type BarScale, type Measure, type UnitRow } from "./units-list";
 
 // ---------------------------------------------------------------------------
 // A unit, in full, beside the list.
@@ -70,6 +71,7 @@ export default function UnitSheet({
   measure,
   scale,
   detail,
+  history,
   others,
   situationHref,
   onAck,
@@ -83,6 +85,8 @@ export default function UnitSheet({
   scale: BarScale | null;
   /** What was read for this unit alone. Null until it arrives. */
   detail: TwinUnitDetail | null;
+  /** What the twin kept of the value shown, over time. Absent where nothing reads it. */
+  history?: HistoryState | null;
   others: OtherMeasure[];
   /** Where the situation card of this unit opens, for one of its alerts or for the unit alone. */
   situationHref: (alertId?: string) => string;
@@ -149,6 +153,8 @@ export default function UnitSheet({
           ) : null}
         </Block>
       ) : null}
+
+      {history ? <History state={history} measure={measure} /> : null}
 
       {detail ? (
         <>
@@ -274,6 +280,69 @@ function AlertAge({ alert, serverNow }: { alert: TwinAlert; serverNow: string | 
       <p className="m-0">{age.text}</p>
       {age.why ? <p className="m-0">{age.why}</p> : null}
     </div>
+  );
+}
+
+/**
+ * What the twin kept of this value: a staircase of its readings, and what it
+ * can and cannot say. It never draws between two readings what was not read,
+ * and it says where the history starts: nothing before that day was kept.
+ */
+function History({ state, measure }: { state: HistoryState; measure: Measure }) {
+  if (state.state === "not_kept") {
+    return (
+      <Block title="History">
+        <Quiet>
+          This count is computed on the spot and is not kept over time. The measures your organisation defined are.
+        </Quiet>
+      </Block>
+    );
+  }
+  if (state.state === "reading") {
+    return (
+      <Block title="History">
+        <Quiet>Reading what was kept…</Quiet>
+      </Block>
+    );
+  }
+  if (state.state === "failed") {
+    return (
+      <Block title="History">
+        <Quiet>The history of this value could not be read. The value above is the reading now.</Quiet>
+      </Block>
+    );
+  }
+  const h = state.history;
+  const view = historyView(h, (v) => formatMeasure(v, measure));
+  return (
+    <Block title={`History · last ${windowLabel(h.hours)}`}>
+      {view.segments.length > 0 ? (
+        <div className="flex items-stretch gap-2">
+          <svg
+            viewBox={`0 0 ${BOX.width} ${BOX.height}`}
+            preserveAspectRatio="none"
+            role="img"
+            aria-label={`${measure.label} over the last ${windowLabel(h.hours)}: ${view.lines[0]}`}
+            className="h-14 min-w-0 flex-1 border border-line bg-surface text-brand"
+          >
+            {view.segments.map((points, i) => (
+              <polyline key={i} points={points} fill="none" stroke="currentColor" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+            ))}
+          </svg>
+          {view.high !== null && view.low !== null && view.high > view.low ? (
+            <div className="flex flex-col justify-between text-[11px] tabular-nums text-ink-faint">
+              <span>{formatMeasure(view.high, measure)}</span>
+              <span>{formatMeasure(view.low, measure)}</span>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {view.lines.map((line) => (
+        <p key={line} className="m-0 text-xs text-ink-faint">
+          {line}
+        </p>
+      ))}
+    </Block>
   );
 }
 

@@ -1,0 +1,301 @@
+import type { DbClient } from "../lib/db.js";
+import type { FreshnessBasis } from "./observed-at.js";
+import { getUnitTree, rollupAllUnits, type UnitMetrics } from "./twin.js";
+
+// ---------------------------------------------------------------------------
+// The twin keeps what it measured.
+//
+// A unit's measures are computed when they are read, from the objects as they
+// stand: once a reading replaces another, the earlier value is gone. The twin
+// could say "now" and nothing else. Not what an emergency room showed this
+// morning, not what is usual for it at this hour, not what changed after a
+// decision.
+//
+// This keeps the readings. Every few minutes the twin is read whole, and what
+// changed is written down: a unit, a measure, a value, when that value was
+// true according to its source, and when it was written here. Those are two
+// different times, and both are kept (see D7 for the first).
+//
+// Four things are deliberate:
+//
+//   only changes   a value that is the same, read at the same time, is the
+//                  same reading. An hourly file re-read twelve times in the
+//                  hour is one reading, not twelve.
+//   absence shows  a measure that stops having a value is written down as
+//                  having none. A gap in the readings is not a zero.
+//   reality only   the twin is read with no lens. A reading made through a
+//                  scenario describes a world that is not there.
+//   no backfill    the history starts the day this started. Nothing before is
+//                  made up, and the screen says when it starts.
+//
+// Nothing here is about a person: a unit and an aggregate value.
+// ---------------------------------------------------------------------------
+
+/** How often the twin is read for its history. A change is written down at most this long after it happened. */
+export const RECORD_EVERY_MS = 5 * 60_000;
+
+/** The first reading after the server starts: soon, but after the listeners are up. */
+const FIRST_AFTER_MS = 30_000;
+
+/**
+ * Two times this close are the same reading.
+ *
+ * The roll-up gives a value's age in whole seconds, counted from its own
+ * clock; the time the value was true is that age taken off ours. The same
+ * source timestamp therefore comes back a second or two apart from one pass
+ * to the next. Sources publish by the hour or by the day, so a minute and a
+ * half cannot hide a new reading.
+ */
+export const SAME_READING_SECONDS = 90;
+
+export interface Reading {
+  unitId: string;
+  metric: string;
+  /** Null when the measure has no value here now. */
+  value: number | null;
+  /** When the value was true, from the timestamp its source published; null when the source does not say. */
+  observedAt: Date | null;
+  /** What that time rests on; null when the measure was not dated. */
+  observedBasis: FreshnessBasis | null;
+}
+
+/**
+ * What the twin reads now, measure by measure: one candidate per unit and per
+ * measure the organisation defined, with or without a value.
+ *
+ * A measure without a value is listed too. Whether it is worth a line is the
+ * recorder's call: it is, when the measure had one before.
+ */
+export function readingsNow(metricsByUnit: ReadonlyMap<string, UnitMetrics>, now: Date): Reading[] {
+  const out: Reading[] = [];
+  for (const [unitId, m] of metricsByUnit) {
+    for (const [metric, raw] of Object.entries(m.values)) {
+      const value = raw !== null && Number.isFinite(raw) ? raw : null;
+      // The age of what this measure reads, not of everything under the unit.
+      const own = value === null ? undefined : m.valueAges[metric];
+      const seconds = own?.seconds ?? null;
+      out.push({
+        unitId,
+        metric,
+        value,
+        observedAt: seconds === null || !Number.isFinite(seconds) ? null : new Date(now.getTime() - seconds * 1000),
+        observedBasis: own?.basis ?? null,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Write down what changed since the last reading kept for each unit and
+ * measure, in one statement. Returns how many readings were written.
+ *
+ * A candidate becomes a reading when:
+ *   - nothing was kept for it yet, and it has a value;
+ *   - or its value differs from the last one kept (having none counts);
+ *   - or it has the same value, and its source dates it at another time.
+ */
+export async function recordReadings(db: DbClient, projectId: string, readings: readonly Reading[]): Promise<number> {
+  if (readings.length === 0) return 0;
+  const { rows } = await db.query<{ n: number }>(
+    `WITH written AS (
+       INSERT INTO app.twin_reading (project_id, unit_instance_id, metric, value, observed_at, observed_basis)
+       SELECT $1, x.unit_id, x.metric, x.value, x.observed_at, x.observed_basis
+         FROM unnest($2::uuid[], $3::text[], $4::double precision[], $5::timestamptz[], $6::text[])
+              AS x(unit_id, metric, value, observed_at, observed_basis)
+         LEFT JOIN LATERAL (
+               SELECT true AS kept, r.value, r.observed_at
+                 FROM app.twin_reading r
+                WHERE r.unit_instance_id = x.unit_id AND r.metric = x.metric AND r.project_id = $1
+                ORDER BY r.recorded_at DESC
+                LIMIT 1) last ON true
+        WHERE (last.kept IS NULL AND x.value IS NOT NULL)
+           OR (last.kept AND last.value IS DISTINCT FROM x.value)
+           OR (last.kept AND x.value IS NOT NULL
+               AND ((last.observed_at IS NULL) <> (x.observed_at IS NULL)
+                    OR abs(extract(epoch FROM (x.observed_at - last.observed_at))) > $7))
+       RETURNING 1
+     )
+     SELECT count(*)::int AS n FROM written`,
+    [
+      projectId,
+      readings.map((r) => r.unitId),
+      readings.map((r) => r.metric),
+      readings.map((r) => r.value),
+      // As text: an array of timestamps is sent the same way by every driver.
+      readings.map((r) => (r.observedAt ? r.observedAt.toISOString() : null)),
+      readings.map((r) => r.observedBasis),
+      SAME_READING_SECONDS,
+    ],
+  );
+  return rows[0]?.n ?? 0;
+}
+
+/**
+ * One project, read once and written down. Null when the project has no unit:
+ * there is nothing to roll up, and rolling up would read every object it has
+ * to find that out.
+ */
+export async function recordProject(db: DbClient, projectId: string, now: Date = new Date()): Promise<{ units: number; written: number } | null> {
+  // No lens, on purpose: reality only.
+  const { nodes } = await getUnitTree(db, projectId);
+  if (nodes.length === 0) return null;
+  const metrics = await rollupAllUnits(db, projectId);
+  return { units: metrics.size, written: await recordReadings(db, projectId, readingsNow(metrics, now)) };
+}
+
+export interface PassResult {
+  projects: number;
+  written: number;
+  failed: number;
+}
+
+/** Every project that has units, one after another. One project's failure does not cost the others their reading. */
+export async function recordAllProjects(db: DbClient, onError?: (projectId: string, err: unknown) => void): Promise<PassResult> {
+  const { rows } = await db.query<{ id: string }>(`SELECT id FROM app.project ORDER BY id`);
+  const result: PassResult = { projects: 0, written: 0, failed: 0 };
+  for (const { id } of rows) {
+    try {
+      const r = await recordProject(db, id);
+      if (!r) continue;
+      result.projects += 1;
+      result.written += r.written;
+    } catch (err) {
+      result.failed += 1;
+      onError?.(id, err);
+    }
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Reading the history back.
+// ---------------------------------------------------------------------------
+
+/** The readings a single answer lists. Past it the oldest are left out, and the answer says so. */
+export const HISTORY_LIMIT = 2000;
+
+export interface KeptReading {
+  value: number | null;
+  observedAt: string | null;
+  observedBasis: FreshnessBasis | null;
+  recordedAt: string;
+}
+
+export interface UnitHistory {
+  /** The server's clock when this was read. */
+  at: string;
+  unitId: string;
+  metric: string;
+  /** The window asked for, in hours back from `at`. */
+  hours: number;
+  /**
+   * When the first reading of this measure at this unit was written down, in
+   * the whole history and not only in the window. Null when none ever was:
+   * nothing can be said of earlier, and that is not the same as "no change".
+   */
+  since: string | null;
+  /** Oldest first. */
+  readings: KeptReading[];
+  /** True when the window held more than the list: the oldest readings of the window are missing from it. */
+  cut: boolean;
+  /** How often the twin is read for its history, in seconds: a change is written down at most this long after it happened. */
+  everySeconds: number;
+}
+
+interface ReadingRow {
+  value: number | null;
+  observed_at: Date | null;
+  observed_basis: FreshnessBasis | null;
+  recorded_at: Date;
+}
+
+const kept = (r: ReadingRow): KeptReading => ({
+  value: r.value,
+  observedAt: r.observed_at ? r.observed_at.toISOString() : null,
+  observedBasis: r.observed_basis,
+  recordedAt: r.recorded_at.toISOString(),
+});
+
+/**
+ * The readings kept for one measure of one unit, over the last `hours`.
+ *
+ * The reading in force when the window opens is included, when there is one:
+ * a value written down yesterday that has not changed since is still the value
+ * this morning, and a window that started after it would show nothing.
+ */
+export async function readUnitHistory(
+  db: DbClient,
+  projectId: string,
+  unitId: string,
+  metric: string,
+  hours: number,
+  now: Date = new Date(),
+  limit: number = HISTORY_LIMIT,
+): Promise<UnitHistory> {
+  const from = new Date(now.getTime() - hours * 3_600_000);
+  const [inWindow, before, first] = await Promise.all([
+    db.query<ReadingRow>(
+      `SELECT value, observed_at, observed_basis, recorded_at
+         FROM app.twin_reading
+        WHERE project_id = $1 AND unit_instance_id = $2 AND metric = $3 AND recorded_at >= $4
+        ORDER BY recorded_at DESC
+        LIMIT $5`,
+      [projectId, unitId, metric, from, limit + 1],
+    ),
+    db.query<ReadingRow>(
+      `SELECT value, observed_at, observed_basis, recorded_at
+         FROM app.twin_reading
+        WHERE project_id = $1 AND unit_instance_id = $2 AND metric = $3 AND recorded_at < $4
+        ORDER BY recorded_at DESC
+        LIMIT 1`,
+      [projectId, unitId, metric, from],
+    ),
+    db.query<{ since: Date | null }>(
+      `SELECT min(recorded_at) AS since FROM app.twin_reading WHERE project_id = $1 AND unit_instance_id = $2 AND metric = $3`,
+      [projectId, unitId, metric],
+    ),
+  ]);
+  const cut = inWindow.rows.length > limit;
+  const listed = inWindow.rows.slice(0, limit).reverse();
+  // Only when the window is whole: a list already cut at its oldest end has no room for what came before it.
+  const opening = !cut && before.rows[0] ? [before.rows[0]] : [];
+  return {
+    at: now.toISOString(),
+    unitId,
+    metric,
+    hours,
+    since: first.rows[0]?.since ? first.rows[0].since.toISOString() : null,
+    readings: [...opening, ...listed].map(kept),
+    cut,
+    everySeconds: RECORD_EVERY_MS / 1000,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// The clock.
+// ---------------------------------------------------------------------------
+
+let started = false;
+
+export function startTwinHistory(
+  pool: { query: DbClient["query"] },
+  log: { info: (o: unknown, m?: string) => void; warn: (o: unknown, m?: string) => void },
+): void {
+  if (started || process.env.TWIN_HISTORY_DISABLED === "1") return;
+  started = true;
+  log.info({ everyMs: RECORD_EVERY_MS }, "twin history recorder started");
+
+  const pass = async (): Promise<void> => {
+    const startedAt = Date.now();
+    try {
+      const r = await recordAllProjects(pool as DbClient, (projectId, err) => log.warn({ err, projectId }, "twin history: a project could not be read"));
+      if (r.written > 0 || r.failed > 0) log.info({ ...r, ms: Date.now() - startedAt }, "twin history written");
+    } catch (err) {
+      log.warn({ err }, "twin history pass failed");
+    }
+    // Scheduled once the pass is over, never on a clock: two passes cannot overlap.
+    setTimeout(() => void pass(), RECORD_EVERY_MS).unref?.();
+  };
+  setTimeout(() => void pass(), FIRST_AFTER_MS).unref?.();
+}

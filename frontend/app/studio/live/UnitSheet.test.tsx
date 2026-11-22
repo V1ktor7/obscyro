@@ -12,7 +12,7 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-import type { TwinUnitDetail } from "@/lib/platform-api";
+import type { TwinReading, TwinUnitDetail, TwinUnitHistory } from "@/lib/platform-api";
 
 import UnitSheet from "./UnitSheet";
 import { buildRows, type Measure, type UnitRow } from "./units-list";
@@ -271,5 +271,71 @@ describe("the sheet of a unit", () => {
     expect(screen.getByText("150%")).toBeTruthy();
     expect(screen.getByText("Reading this unit…")).toBeTruthy();
     expect(screen.queryByText("Open alert")).toBeNull();
+  });
+});
+
+describe("what the twin kept of the value shown", () => {
+  const AT = "2026-11-22T12:00:00.000Z";
+  const ago = (hours: number) => new Date(Date.parse(AT) - hours * 3_600_000).toISOString();
+  const reading = (hoursAgo: number, value: number | null): TwinReading => ({
+    value,
+    observedAt: value === null ? null : ago(hoursAgo),
+    observedBasis: value === null ? null : "observed",
+    recordedAt: ago(hoursAgo),
+  });
+  const kept = (readings: TwinReading[], over: Partial<TwinUnitHistory> = {}): TwinUnitHistory => ({
+    at: AT,
+    unitId: "suroit",
+    metric: "stretchers",
+    hours: 48,
+    since: readings.length ? readings[0]!.recordedAt : null,
+    readings,
+    cut: false,
+    everySeconds: 300,
+    ...over,
+  });
+
+  it("draws the readings, with the lowest and the highest written like the value above", () => {
+    sheet({ history: { state: "read", history: kept([reading(40, 96), reading(20, 143), reading(2, 150)], { since: ago(300) }) } });
+    const title = screen.getByRole("heading", { name: "History · last 48 h" });
+    const block = title.parentElement!;
+    const drawing = within(block).getByRole("img");
+    // The drawing says in words what it shows, for whoever cannot see it.
+    expect(drawing.getAttribute("aria-label")).toBe("Stretcher occupancy over the last 48 h: 3 readings · lowest 96% · highest 150%");
+    expect(drawing.querySelectorAll("polyline")).toHaveLength(1);
+    expect(within(block).getByText("3 readings · lowest 96% · highest 150%")).toBeTruthy();
+    // Where the history starts is on the sheet: nothing earlier was kept.
+    expect(within(block).getByText("The first reading of this value was kept 13 d ago. Nothing earlier is known.")).toBeTruthy();
+    expect(within(block).getByText("Each value holds until the next reading. The twin is read every 5 min.")).toBeTruthy();
+  });
+
+  it("breaks the line where the measure had no value", () => {
+    sheet({ history: { state: "read", history: kept([reading(40, 96), reading(30, null), reading(2, 150)]) } });
+    expect(screen.getByRole("img").querySelectorAll("polyline")).toHaveLength(2);
+  });
+
+  it("says that nothing was kept yet instead of drawing an empty chart", () => {
+    sheet({ history: { state: "read", history: kept([]) } });
+    expect(screen.queryByRole("img")).toBeNull();
+    expect(screen.getByText(/No reading of this value has been kept yet\. The twin writes its measures down every 5 min/)).toBeTruthy();
+  });
+
+  it("says that a built-in count is not kept over time", () => {
+    sheet({ history: { state: "not_kept" } });
+    expect(screen.getByText("This count is computed on the spot and is not kept over time. The measures your organisation defined are.")).toBeTruthy();
+  });
+
+  it("says when the history is being read, and when it could not be", () => {
+    const { rerender, props } = sheet({ history: { state: "reading" } });
+    expect(screen.getByText("Reading what was kept…")).toBeTruthy();
+    rerender(<UnitSheet {...props} history={{ state: "failed" }} />);
+    // The value above is still the reading now: a history that fails takes nothing else with it.
+    expect(screen.getByText("The history of this value could not be read. The value above is the reading now.")).toBeTruthy();
+    expect(screen.getByText("150%")).toBeTruthy();
+  });
+
+  it("shows no history block where nothing reads one", () => {
+    sheet();
+    expect(screen.queryByRole("heading", { name: /^History/ })).toBeNull();
   });
 });
