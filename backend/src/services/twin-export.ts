@@ -7,6 +7,7 @@ import {
   STATUS_KEYS,
   behaviourOf,
   isInUse,
+  PRICE_MECHANICS,
   type Mechanic,
   type PropertyDef,
   type SimRole,
@@ -137,6 +138,13 @@ export interface SimObject {
   properties: Record<string, unknown>;
   /** The unit this instance is attached to, or null if it hangs off nothing. */
   at: string | null;
+  /**
+   * For a price row, the units it is linked to: the sites it prices, when it
+   * does not price the whole network. Kept apart from `at` on purpose: `at`
+   * makes an object capacity at a unit, and a price is capacity nowhere.
+   * Absent from every other object.
+   */
+  priced_at?: string[];
 }
 
 /**
@@ -253,8 +261,13 @@ export function populationsFrom(
   return { populations, unsized };
 }
 
+/**
+ * Whether anything binds a mechanic the engine reads. A price list binds
+ * mechanics too, and they are not a care model: a twin that declared what a
+ * bed costs has not told the engine what an admission does.
+ */
 export function bindsAnyMechanic(types: { properties: { mechanic?: Mechanic | null }[] }[]): boolean {
-  return types.some((t) => t.properties.some((p) => p.mechanic));
+  return types.some((t) => t.properties.some((p) => p.mechanic && !PRICE_MECHANICS.has(p.mechanic)));
 }
 
 export interface SimExport {
@@ -313,7 +326,9 @@ export function facilitiesFrom(
   instances: readonly EnvInstanceRow[],
   links: readonly EnvLinkRow[],
   roleByType: ReadonlyMap<string, SimRole | null>,
-): { facilities: SimFacility[]; objects: SimObject[]; typesWithoutRole: Set<string>; placeOfUnit: Map<string, string> } {
+  /** Types that are price lists: a row linked to a unit prices that site, and is not a resource missing its role. */
+  priceTypes: ReadonlySet<string> = new Set(),
+): { facilities: SimFacility[]; objects: SimObject[]; typesWithoutRole: Set<string>; placeOfUnit: Map<string, string>; pricedAt: Map<string, string[]> } {
   const unitIds = new Set(nodes.map((n) => n.id));
   const instanceById = new Map(instances.map((i) => [i.id, i]));
 
@@ -326,6 +341,7 @@ export function facilitiesFrom(
   // of being tallied into a counter and discarded.
   const objects: SimObject[] = [];
   const typesWithoutRole = new Set<string>();
+  const pricedAt = new Map<string, string[]>();
 
   for (const link of links) {
     if (!attaches(link)) continue;
@@ -338,6 +354,11 @@ export function facilitiesFrom(
 
     const role = roleByType.get(inst.typeName) ?? null;
     if (!role) {
+      if (priceTypes.has(inst.typeName)) {
+        const sites = pricedAt.get(inst.id) ?? [];
+        if (!sites.includes(unitId)) pricedAt.set(inst.id, [...sites, unitId]);
+        continue;
+      }
       typesWithoutRole.add(inst.typeName);
       continue;
     }
@@ -418,7 +439,7 @@ export function facilitiesFrom(
     return { id: n.id, name: n.name, location, resources, census };
   });
 
-  return { facilities, objects, typesWithoutRole, placeOfUnit };
+  return { facilities, objects, typesWithoutRole, placeOfUnit, pricedAt };
 }
 
 /**
@@ -567,7 +588,8 @@ export async function buildTwinExport(
     });
   }
 
-  const { facilities, objects, typesWithoutRole, placeOfUnit } = facilitiesFrom(nodes, instances, links, roleByType);
+  const priceTypes = new Set(object_types.filter((t) => t.properties.some((p) => p.mechanic === "prices_activity")).map((t) => t.name));
+  const { facilities, objects, typesWithoutRole, placeOfUnit, pricedAt } = facilitiesFrom(nodes, instances, links, roleByType, priceTypes);
 
   // A unit that holds nothing of its own is a hole only when nothing under it
   // holds anything either. Otherwise it is the tree: a hospital whose beds are
@@ -717,6 +739,9 @@ export async function buildTwinExport(
       // capacity anywhere, and giving it a unit would make `derive_resources`
       // count it as one.
       at: null,
+      // A price row linked to sites prices those sites. Said only for a price row, so that a twin
+      // without a price list is exported exactly as before.
+      ...(priceTypes.has(inst.typeName) ? { priced_at: [...(pricedAt.get(inst.id) ?? [])].sort() } : {}),
     });
   }
 

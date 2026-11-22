@@ -387,3 +387,25 @@ def test_a_mechanic_this_service_does_not_know_is_ignored_not_fatal() -> None:
     }
     model = care_model_from([row("p1", "critique", avenir=3)], schema(future))
     assert model["critique"].consumes == {"lit": 1.0}
+
+
+def test_a_price_list_is_not_a_care_model() -> None:
+    """A twin that declared what a bed costs has not said what an admission does.
+
+    The price mechanics travel with the declared schema and the engine reads
+    none of them: no cent enters a run.
+    """
+    price_list = {
+        "name": "Tarif",
+        "properties": [
+            {"key": "activite", "type": "string", "mechanic": "prices_activity"},
+            {"key": "par_jour", "type": "number", "mechanic": "price_per_unit_day"},
+            {"key": "delai", "type": "number", "mechanic": "price_lead_days"},
+        ],
+    }
+    assert binds_care_model(PropertySchema(types=[price_list])) is False
+    # Beside a real care model, the price rows are simply not part of it.
+    both = PropertySchema(types=[protocol_type(), price_list])
+    assert binds_care_model(both) is True
+    row = SimObject(id="p1", type="Tarif", properties={"activite": "bed", "par_jour": 125050, "delai": 14})
+    assert care_model_from([row], both) == {}

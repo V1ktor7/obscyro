@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "9f90dda602efe672"
+translatedFrom: "e40ecc18fab37e99"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -15,6 +15,12 @@ An entry is written the day the change ships, in the same commit as the code. Si
 
 ## 22 November 2026
 
+- **New feature · Twin.** The twin can declare a price list. A price is an object of the ontology, under whatever name the organisation likes: what a unit of an activity costs to open and to keep open for a day, in whole cents, with a range if wanted, a mode (normal, rush) and its delay, and its source. A row attached to a site holds for that site and comes before the network's price. A price can also be a formula, which names the numbers of its row and the quantities of the operation. A row with no source is a demo price, and the screen says so wherever it is used.
+- **New feature · Analyst.** In the Options tab, each option is read on three counts: what it changes, the day it can be ready, what it costs. A click on a cost opens its lines: the quantity, the price, the arithmetic and the source of each. When the list prices an activity in several modes, the analyst can propose the same capacity sooner at a higher price, or later at a lower one; a day the delay does not allow is refused. The options no other beats on both waiting and cost are marked “Not beaten”, without being ranked among themselves. Without a price list, nothing changes.
+- **New feature · Analyst.** The analyst reads the price list (`list_prices`), and an amount no tool returned is struck from an answer like any other figure.
+- **New feature · Ontology.** The “Functions” view shows the twin's price list: the cost formulas with what each may name, every price row, and the rows that could not be read, with the reason. A type's panel shows the prices of its units.
+- **Change · Analyst.** A recorded decision keeps the expected cost and the prices it was counted from. A price corrected later does not change what it shows.
+- **Change · Studio.** The costs of recorded responses are shown as demo prices: on an option card, under the ranking of the Events page and under the options of the replay. They are the amounts their rules declare, and none has a source.
 - **New feature · Studio.** The situation card follows a signal after it is raised. It shows the measure that raised it as the twin wrote it down: when raised, at the decision, then the lowest, the highest and the last reading. It writes how long after the signal the decision was taken, what became of the alert, and what the tested run gave. What is measured and what was expected are side by side, never subtracted, and the card does not conclude.
 - **New feature · Alerts.** The threshold editor says, for each rule, what became of the signals it raised, including the share a person closed as false positives.
 - **New feature · Twin.** The twin keeps what it measures. Every five minutes it writes down, for each unit, the measures whose value changed or was read at a new time. A unit's sheet shows the history of the value shown over 48 hours: a staircase line, the lowest, the highest, and the date of the first reading kept. The history starts today: nothing from before is reconstructed, and the screen says so.

@@ -1303,6 +1303,51 @@ export async function fetchTwinUnitHistory(
   return apiFetch(`/v1/ontology/${encEnv(env)}/twin/units/${unitId}/history?${qs.toString()}`);
 }
 
+/** An amount in whole cents, with its low and high ends. Without a declared range the three are the same. */
+export interface TwinPriceAmount {
+  cents: number;
+  low: number;
+  high: number;
+}
+
+/** One row of the price list the twin declares. */
+export interface TwinPriceRow {
+  id: string;
+  /** The type the row is an instance of, as the organisation named it. */
+  type: string;
+  /** The activity whose units it prices. */
+  activity: string;
+  mode: string;
+  /** Days the mode takes before the units are available. */
+  leadDays: number;
+  perUnitOpened: TwinPriceAmount | null;
+  perUnitDay: TwinPriceAmount | null;
+  /** A formula for the cost in cents, in place of the amounts. */
+  formula: string | null;
+  /** What the formula may name: the row's own numbers, then the quantities of the operation. */
+  canName: { name: string; value: number | null; of: "row" | "operation" }[];
+  /** The sites the row prices. Empty: the whole network. */
+  sites: { id: string; name: string }[];
+  source: string | null;
+  /** True when the row names no source. */
+  demo: boolean;
+}
+
+export interface TwinPriceList {
+  /** The types whose properties are bound to the price mechanics. Empty: no price list is declared. */
+  types: string[];
+  rows: TwinPriceRow[];
+  /** Rows that could not be read as a price, each with the reason. They are not used. */
+  problems: string[];
+  /** What a cost formula can be written with: the functions it may call, and the quantities of the operation it may name. */
+  formulas: { functions: string[]; operation: string[] };
+}
+
+/** The price list the twin declares, on the twin as it stands. */
+export async function fetchTwinPrices(env: string): Promise<TwinPriceList> {
+  return apiFetch(`/v1/ontology/${encEnv(env)}/twin/prices`);
+}
+
 export async function listTwinAlerts(
   env: string,
   opts?: { unitId?: string; limit?: number; offset?: number },

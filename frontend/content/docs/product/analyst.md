@@ -3,7 +3,7 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "cd1ea51fd33af2a9"
+translatedFrom: "1d09b55f49e02c99"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
@@ -19,7 +19,7 @@ The panel has four tabs, which cover five steps of the [decision loop](/docs/pro
 | Options | Tested options, Recommendation | State an objective, see up to three options tested by the engine beside the scenario as it is |
 | Decisions | Follow-up | Read back what was retained, what was expected of it, and the gap with what was observed |
 
-The diagrams of the loop, the verifier and the calculator are in [Algorithms](/docs/product/algorithms), sections A1 to A3; those of the tested options and the decisions, sections A8 and A9; that of the online search and the calendar, section A10.
+The diagrams of the loop, the verifier and the calculator are in [Algorithms](/docs/product/algorithms), sections A1 to A3; those of the tested options and the decisions, sections A8 and A9; that of the online search and the calendar, section A10; those of the price list, the cost ledger and the delay of an option, section A12.
 
 ## What it does, and what it does not
 
@@ -103,7 +103,7 @@ A request refused before it starts (no session, analyst off, simulation service 
 
 ## The tools
 
-None of them writes. Thirteen read. Two more exist only in the Options tab: `list_responses`, which reads what an option can contain as a recorded response, and `test_option`, which runs the engine. Two worlds: `reality`, the twin as it is; `scenario`, the same twin read through the open scenario.
+None of them writes. Fourteen read. Two more exist only in the Options tab: `list_responses`, which reads what an option can contain as a recorded response, and `test_option`, which runs the engine. Two worlds: `reality`, the twin as it is; `scenario`, the same twin read through the open scenario.
 
 The Event finder tab is apart: it has none of these tools. It has only the API's web search (`web_search`), which runs at Anthropic and not with us, and its delivery tool. That is what guarantees a search can take nothing from the twin with it.
 
@@ -114,6 +114,7 @@ The Event finder tab is apart: it has none of these tools. It has only the API's
 | `get_site` | One site: place, units per activity, patients present, territories served, what the scenario changes there |
 | `compare_catchments` | For an activity: each territory, its residents, its sites, its units per 1,000 residents |
 | `scenario_recipe` | The scenario: starting conditions, events, choices (measures, capacity, a recorded response the run follows), modified links, comparison series |
+| `list_prices` | The price list the twin declares: what a unit of an activity costs to open and to keep open for a day, in each mode, the delay of that mode, the sites a price holds for, and its source. A price with no source is called a demo price. The rows that could not be read as a price are given with their reason. Without a price list, the tool says so: nothing has a price, and nothing is free |
 | `read_run` | The run on screen: digest of both passes, sites where people wait, one site day by day, the network day by day |
 | `list_datasets` | The project's datasets and their columns |
 | `preview_dataset` | The first rows of a dataset and the values of its category columns |
@@ -123,7 +124,7 @@ The Event finder tab is apart: it has none of these tools. It has only the API's
 | `unit_now` | The live figures of a unit, as its page shows them: each measure the organisation defined with the age of its own value, what stands under the unit by type, the age of the whole unit (or that it is unknown, and why), its open alerts |
 | `calculate` | A calculation, on numbers already read or given in the question |
 | `list_responses` | Options tab only. The recorded responses an option can contain: those of the organisation's library (Events page) and those the engine writes itself, each under a name, with what its rules do and whether they declare a cost. With `routes_from`, the sites to which the patients waiting at a site can be transferred |
-| `test_option` | Options tab only. Adds an option to the open scenario, for the time of a run on the server, and returns the scenario as it is beside the scenario with the option, with what the engine counted as cost when a recorded response is in one of the two runs |
+| `test_option` | Options tab only. Adds an option to the open scenario, for the time of a run on the server, and returns the scenario as it is beside the scenario with the option, with what the engine counted as cost when a recorded response is in one of the two runs. When the twin declares a price list, it also returns what the list gives for the capacity opened: the total, the total by category, each line, what is unpriced, and the day each change is available |
 
 A tool that cannot answer (unknown name, two sites for one name, no run on screen, a table that holds several series, an option that cannot be tested) says so with a reasoned refusal that the model reads. It never guesses.
 
@@ -139,7 +140,7 @@ An option is a label and one to four changes:
 
 | Change | What it takes to test it |
 |---|---|
-| Capacity: units of an activity, at a site, from a given day (negative: units closed) | The site already offers that activity; you cannot close more than it has |
+| Capacity: units of an activity, at a site, from a given day (negative: units closed) | The site already offers that activity; you cannot close more than it has. When the price list prices that activity in several modes, the change says which one, and the day asked respects the delay of that mode |
 | Measure: contact layers multiplied, in some territories, for a number of days | The twin declares those layers |
 | Transfer: patients waiting at one site, sent to another, so many a day, from a given day | The twin holds a transfer route between the two sites, the destination offers the activity, and no more than twenty patients a day are asked for |
 | Recorded response: a response of the organisation's library, or one of those the engine writes itself | It is named by the name `list_responses` gives it. A response of the engine holds for the whole run |
@@ -147,6 +148,8 @@ An option is a label and one to four changes:
 | Remove a choice of the scenario | The choice is named |
 
 “40 beds instead of the scenario's 60” is therefore a single stamp at +40: the test runs without the 60 and with the 40, and that is what the recipe holds once the option is applied. Only choices (measures, capacity, a recorded response) can be replaced or removed. Starting conditions and events are what happens: an option does not undo them.
+
+**Price and delay.** When the twin declares a price list, a capacity an option opens has a cost: opening it, then keeping it open for the days of the run. If the list prices the activity in several modes (normal in fourteen days, rush in three at another price), the analyst can propose the same capacity sooner and dearer, or later and cheaper: those are two options, both tested. The decision is taken on day 0 of the run; asking for units before the end of their mode's delay is refused, with the first day possible. The tab's instructions forbid it to give a price the list does not hold: it says there is none. The detail, the cost ledger and its rules: [Algorithms](/docs/product/algorithms), A12.
 
 A transfer and a recorded response are of another kind than the first two: they are not things placed on a given day, but rules the engine evaluates at every step of the run. A transfer of four patients a day from Lakeshore to Nord sends nobody as long as nobody waits at Lakeshore, nor when Nord is full. A run follows one response at a time: so an option holds either a recorded response, or transfers, which make one between them; and if the scenario already follows one, the option has to remove it to test another in its place.
 
@@ -158,7 +161,7 @@ The product had two paths that did not know each other. Now that a recorded resp
 |---|---|---|
 | What is varied | A response: rules the engine evaluates at every step, on a given event | Stamps: what happens on a given day (outbreak, heat wave, measure, capacity, starting conditions), and a recorded response |
 | What this path can do and the other cannot | Write and edit a response: its conditions, its delay, its effectiveness, its cost. Compare several responses on one event and rank them on counts (deaths, care not delivered, cost), over several seeds. Vary the strength of a response (half, double). Branch: “what if we had acted on that day” | Spread an epidemic from the model the twin declares. Set starting conditions. Replace or remove a choice. Have the analyst propose and test options, with their levels of evidence. Record a decision and follow it. Keep a prepared response, retested when a signal opens |
-| What it still cannot do | Start from a scenario made of stamps. Record a decision. Keep a prepared response ([issue 22](https://github.com/V1ktor7/obscyro/issues/22)) | Follow more than one response in a run. Write or edit the rules of a response, apart from the transfer between two sites. Make a response the engine writes itself start on a given day. Give a price to a capacity or a measure ([issue 20](https://github.com/V1ktor7/obscyro/issues/20)). Run several seeds |
+| What it still cannot do | Start from a scenario made of stamps. Record a decision. Keep a prepared response ([issue 22](https://github.com/V1ktor7/obscyro/issues/22)) | Follow more than one response in a run. Write or edit the rules of a response, apart from the transfer between two sites. Make a response the engine writes itself start on a given day. Give a price to a measure or to a transfer. Run several seeds |
 
 What the two have in common: the engine, the shape of a response (rules, with delay, effectiveness and cost), and the marking of a dominated option, made by the same function.
 
@@ -171,12 +174,16 @@ What comes from the model and what does not:
 | The count “2 measured · 1 published · 3 assumption” of a card | The program: it counts the items of the list per level. The three levels are never added together |
 | The level of evidence of each item: Measured, Published, Assumption | The program, from where the item comes from (twin, scenario, option, a rule of the engine) |
 | The stamps that “Add to scenario” adds | The test: they are the ones the engine received. A recorded response is one of them, with its rules |
-| “Cost counted: 7,500 $” on a card, or the sentence that says why nothing is counted | The engine: the cost each rule of the response declares, each time it fired in this run. A capacity and a measure have no price: the card then says that the count is not the whole cost, or that there is none |
+| “Cost counted: 7,500 $” on a card, or the sentence that says why nothing is counted | The engine: the cost each rule of the response declares, each time it fired in this run. Without a price list, a capacity and a measure have no price: the card then says that the count is not the whole cost, or that there is none. Those amounts have no source: the card carries “demo price” |
+| “Cost 1,472,000 $”, with its range, on a card; on a click, its lines | The ledger, from the twin's price list: each line writes its arithmetic (units × days × price), its mode, whether the price is the site's own, and its source. The total is the sum of the lines, in whole cents. What the list does not price is written under “Not priced”, with the reason |
+| “Delay”: “Open from day 14”, the mode and its delay | The program, from the mode settled at the test and the delay the list gives it. The decision is taken on day 0 of the run |
+| “demo price” | The program: at least one price behind this amount has no source. On the total, and on each line concerned |
 | “Dominated”, with the name of another option | The program, from the two runs: the other costs as much or less and leaves as much or less waiting. Only between options whose cost is whole |
+| “Not beaten” | The program, when a price list is on screen: among the options whose cost is whole, no other does at least as well on waiting and on cost at once. Several options can carry it |
 | “What it does to the scenario”: what the option adds, replaces and removes, when it does more than add | The program, from the stamps. The button then reads “Apply to scenario” |
 | The mechanism in one sentence, what the test does not say, the reading, the trade-offs, the limits | The model, every figure checked by the verifier |
 
-What the tab does not do, by construction: rank the options (they stay in the order of the tests, and no card is marked as the best), list one that was not tested, hide one that was, write to the scenario. Trade-offs of values are presented apart, under “Yours to weigh”. One thing only is said of an option against another: that it is dominated, when the other costs as much or less and leaves as much or less waiting. That stays true whatever value one gives a patient-day of waiting, so it is not a trade-off; between two options neither of which dominates the other, the tab says nothing.
+What the tab does not do, by construction: rank the options (they stay in the order of the tests, and no card is marked as the best), list one that was not tested, hide one that was, write to the scenario. Trade-offs of values are presented apart, under “Yours to weigh”. One thing only is said of an option against another: that it is dominated, when the other costs as much or less and leaves as much or less waiting. That stays true whatever value one gives a patient-day of waiting, so it is not a trade-off; between two options neither of which dominates the other, the tab does not choose. With a price list, it only marks those no other beats (“Not beaten”), which can be several: the faster and dearer one, the slower and cheaper one. No score mixes waiting and money.
 
 Cost and duration are bounded: three tests at most per objective, and the scenario as it is runs only once for the three, in a single pass of the engine. Three options make four passes. During a test, the tab says how long it has been running.
 
@@ -228,7 +235,7 @@ What is not done, and why:
 
 “Record decision” keeps the option retained with what is expected of it. The browser sends only the identifier of the exchange and the step of the test; the server copies everything else from its journal: the objective, the stamps, the figures of the tested run with and without the option, the arrivals day by day, the levels of evidence, the source steps. So only an option the engine tested can be recorded.
 
-A decision can bear on a recorded response or on a transfer: it keeps its rules, as the engine received them, and what the run counted as cost. The Decisions tab writes it under the expected figures.
+A decision can bear on a recorded response or on a transfer: it keeps its rules, as the engine received them, and what the run counted as cost. The Decisions tab writes it under the expected figures. When the cost comes from the price list, the decision keeps the whole ledger: the lines, the price of each, its source or the demo mention, the mode and the day the units were to be open. A price corrected later does not change what it shows.
 
 A decision cannot be edited: revising it means recording another one.
 
@@ -403,7 +410,10 @@ What is not judged: the quality of the writing. That still takes a person, who r
 - A run follows a single recorded response. Two responses cannot be tested together, and a response the engine writes itself cannot start on a given day.
 - A transfer can only be tested between two sites the twin links by a transfer route. The twin holds the flow of no route: the run gives each twenty patients a day, and that is an assumption.
 - The two responses the engine writes itself watch a single activity, the first of the twin in alphabetical order among those that are space, whatever activity the run reads. `list_responses` says which.
-- A cost exists only where a rule declares one. A capacity, a measure and a transfer written by the analyst have no price: no option that contains one can be called dominated or dominating.
+- A cost exists only where a rule declares one, or where the twin's price list prices a capacity that is opened. A measure, a transfer written by the analyst, units that are closed and a capacity the list does not hold have no price: no option that contains one can be called dominated, dominating or “Not beaten”.
+- The cost of an option is that of its choices: opening units, then keeping them open for the days of the run. It is not what the network costs to run, and it counts neither staff nor stocks, which the twin does not hold.
+- A cost formula can name, besides the numbers of its row, only `units` and `days`. A transfer is not priced: the formula of an ambulance (a flat fee, so much a kilometre) has nothing to apply to as long as a transfer is not an operation the ledger prices.
+- The amounts of the rules of a recorded response do not come from the price list and have no source: they are shown as demo prices, on the Options tab, the Events page and the replay of the units page.
 - With a response that adds or moves units during the run, the island's occupancy is weighted by the usual capacity: the engine does not return the capacity of each day. The run says so.
 - An option is tested on the scenario as it is at the time of the test. Adding one option then another gives a scenario no test covered: the screen warns, and the objective has to be stated again.
 - An option can replace or remove a choice of the scenario, but not a starting condition or an event. Replacing a capacity by a measure is done in two changes of the same option: remove one, add the other.
@@ -428,6 +438,8 @@ What is not judged: the quality of the writing. That still takes a person, who r
 | Reading tools, digest of the run | `backend/src/services/analyst-tools.ts` |
 | The `test_option` tool, closing of an objective, `give_options` | `backend/src/services/analyst-options.ts` |
 | The `list_responses` tool, recorded responses, the rule of a transfer | `backend/src/services/analyst-responses.ts` |
+| The twin's price list, the cost ledger of an option, the `list_prices` tool | `backend/src/services/price-catalogue.ts`, `cost-ledger.ts`, `analyst-tools.ts` |
+| The price list in the ontology: the “Functions” view, the prices of a type | `frontend/app/studio/manager/PriceList.tsx`, `price-list.ts` |
 | Closing of an event search, `give_events` | `backend/src/services/analyst-events.ts` |
 | Reading the web search: queries, pages, passages, dates, quotations | `backend/src/services/analyst-web.ts` |
 | A project's authorised sources | `backend/src/services/web-sources.ts` |

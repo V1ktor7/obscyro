@@ -1,6 +1,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 
+import { formatCents, ledgerOf, type CostLedger } from "./cost-ledger.js";
+import { catalogueOf, modesFor, priceFor, type PriceCatalogue } from "./price-catalogue.js";
 import { AppError } from "../lib/errors.js";
 import type { Closing, Step } from "./analyst.js";
 import {
@@ -232,12 +234,29 @@ export interface OptionChange {
  * and nothing else, and only complete costs can be set against one another.
  */
 export interface OptionCost {
-  /** What the engine counted over the run; null when nothing in the run declares a cost. */
+  /**
+   * What the run cost, in dollars, as far as anything says: what the engine
+   * counted for a recorded response, plus what the twin's price list gives for
+   * the capacity the option opens. Null when nothing is priced.
+   */
   counted: number | null;
   /** True when that figure is the whole cost of what the option changes. */
   complete: boolean;
   /** The same, as a sentence written by the program. */
   says: string;
+  /**
+   * True when an amount behind the count has no source: a price row that names
+   * none, or the amount a rule of a recorded response declares, which is written
+   * in the engine or typed with the response and comes from no price list.
+   * Absent when nothing is counted, and from records kept before it was said.
+   */
+  demo?: boolean;
+  /**
+   * What the twin's price list gives for the capacity the option opens, line
+   * by line, in whole cents. Absent when the twin declares no price list: a run
+   * is then costed exactly as it was before there could be one.
+   */
+  priced?: CostLedger;
 }
 
 const money = (n: number) => `${Math.round(n).toLocaleString("en-CA")} $`;
@@ -258,9 +277,122 @@ export function costOf(stamps: readonly Stamp[], unpriced: number, counted: numb
     return { counted: null, complete: false, says: `No cost is counted for this run: the rules of “${followed.name}” declare none. That is unpriced, not free.` };
   }
   const base = `The engine counted ${money(counted)} for “${followed.name}”: each of its actions at the cost its rule declares, each time it fired.`;
+  // What a rule declares has no source, whoever wrote the rule: a demo price, like a price row that names none.
   return unpriced > 0
-    ? { counted, complete: false, says: `${base} The capacity or measures this option also changes carry no price, so this is not the whole cost of the option.` }
-    : { counted, complete: true, says: base };
+    ? { counted, complete: false, says: `${base} The capacity or measures this option also changes carry no price, so this is not the whole cost of the option.`, demo: true }
+    : { counted, complete: true, says: base, demo: true };
+}
+
+/**
+ * A run's cost, with what the price list gives for its capacity.
+ *
+ * `engine` is the cost as the engine counted it (`costOf`), already told how
+ * many of the option's changes nothing prices. The two amounts are added only
+ * when both exist; neither stands in for the other, and a part nothing prices
+ * keeps the whole from being called complete.
+ */
+export function withPriceList(engine: OptionCost, ledger: CostLedger, unpriced: number, followed: boolean): OptionCost {
+  // The list exists and prices nothing of this option: the count is what it was, and the ledger says why.
+  if (ledger.lines.length === 0) {
+    // Without a recorded response the engine's sentence says the twin holds no price, which this twin does.
+    return followed
+      ? { ...engine, priced: ledger }
+      : { counted: null, complete: false, says: "No cost is counted for this run: the twin’s price list prices nothing this option changes. That is unpriced, not free.", priced: ledger };
+  }
+  const total = ledger.totalCents / 100;
+  const range = ledger.ranged ? `, between ${formatCents(ledger.lowCents)} and ${formatCents(ledger.highCents)}` : "";
+  const list =
+    `The price list gives ${formatCents(ledger.totalCents)}${range} for the capacity this option opens: opening it, then keeping it open for the days of the run.` +
+    (ledger.demo ? " At least one of these prices has no source: it is a demo price." : "");
+  if (!followed) {
+    return unpriced > 0
+      ? { counted: total, complete: false, says: `${list} The rest of what this option changes carries no price, so this is not the whole cost of the option.`, demo: ledger.demo, priced: ledger }
+      : { counted: total, complete: true, says: list, demo: ledger.demo, priced: ledger };
+  }
+  // A recorded response is in the run too: what the engine counted for it, when its rules declare a cost.
+  if (engine.counted === null) return { counted: total, complete: false, says: `${list} ${engine.says}`, demo: ledger.demo, priced: ledger };
+  // The amounts its rules declare have no source: the sum is a demo price whatever the price list says of its rows.
+  return { counted: engine.counted + total, complete: engine.complete, says: `${engine.says} ${list}`, demo: true, priced: ledger };
+}
+
+/** The prices a ledger used, as what the option rests on: published when the row names its source, assumed when it does not. */
+function priceBasis(ledger: CostLedger): Basis[] {
+  const seen = new Set<string>();
+  const out: Basis[] = [];
+  for (const l of ledger.lines) {
+    if (seen.has(l.price.id)) continue;
+    seen.add(l.price.id);
+    const rows = ledger.lines.filter((x) => x.price.id === l.price.id);
+    const amounts = rows
+      .map((x) => (x.price.unit ? `${formatCents(x.price.unit.cents)} ${x.category === "opening" ? "to open a unit" : "a unit a day"}` : `by the formula ${x.price.formula}`))
+      .join(", ");
+    out.push({
+      element: `Price of ${l.activity}, mode “${l.price.mode}”${l.price.ofSite ? `, at ${l.site}` : ""}: ${amounts}. ${l.price.source ? `Source: ${l.price.source}` : "A demo price: the price list gives it no source"}`,
+      evidence: l.price.source ? "published" : "assumption",
+      from: "twin",
+    });
+  }
+  return out;
+}
+
+/**
+ * The mode a capacity change uses, checked against the price list. Null when
+ * the list does not price the change, which then carries no mode.
+ *
+ * A mode is a price and a delay. The decision is taken on day 0 of the run, so
+ * a change cannot be open before the days its mode takes: one that asks for it
+ * is refused, with the day it can be open and the modes that are fast enough.
+ */
+function settleMode(asked: string | undefined, s: ChoiceStamp & { kind: "capacity" }, catalogue: PriceCatalogue, ctx: TwinContext): string | null {
+  const site = ctx.facilities.find((f) => f.id === s.facility)?.name ?? s.facility;
+  const days = (n: number) => `${n} day${n === 1 ? "" : "s"}`;
+  if (s.amount <= 0) {
+    if (asked) throw new ToolError(`A mode is a way of opening units, with its price and its delay. This change closes units at ${site}: leave mode out.`);
+    return null;
+  }
+  const choice = priceFor(catalogue, s.activity, asked ?? null, s.facility);
+  if (choice.priced === false) {
+    if (asked) throw new ToolError(`The price list holds no price for ${s.activity} at ${site}, so there is no mode to choose: leave mode out. list_prices says what is priced.`);
+    return null;
+  }
+  if (choice.priced === null) throw new ToolError(choice.why);
+  const e = choice.entry;
+  if (s.start < e.leadDays) {
+    const faster = modesFor(catalogue, s.activity, s.facility).filter((m) => m.id !== e.id && m.leadDays <= s.start);
+    throw new ToolError(
+      `In mode “${e.mode}”, ${s.activity} at ${site} takes ${days(e.leadDays)} to be available. The decision is taken on day 0 of the run, so these units cannot be open on day ${s.start}: ask for day ${e.leadDays} or later` +
+        (faster.length ? `, or use ${faster.map((m) => `mode “${m.mode}” (${days(m.leadDays)})`).join(" or ")}.` : "."),
+    );
+  }
+  return e.mode;
+}
+
+/** What the price list gives for an option, as the model reads it. Nothing when the twin declares no price list. */
+function priceLines(l: CostLedger | null): Record<string, unknown> {
+  if (l === null) return {};
+  return {
+    cost_from_the_price_list:
+      l.lines.length === 0
+        ? "The price list prices nothing this option changes."
+        : {
+            total_dollars: l.totalCents / 100,
+            ...(l.ranged ? { low_dollars: l.lowCents / 100, high_dollars: l.highCents / 100 } : {}),
+            contains_a_demo_price: l.demo,
+            lines: l.lines.map((x) => ({
+              what: x.category,
+              site: x.site,
+              activity: x.activity,
+              mode: x.price.mode,
+              amount_dollars: x.cents / 100,
+              arithmetic: x.says,
+              ...(x.price.source ? { source: x.price.source } : { demo_price: true }),
+            })),
+          },
+    ...(l.unpriced.length ? { not_priced: l.unpriced.map((u) => u.why) } : {}),
+    ...(l.availability.length
+      ? { available: l.availability.map((a) => ({ site: a.site, activity: a.activity, mode: a.mode, takes_days: a.leadDays, open_from_day: a.fromDay })) }
+      : {}),
+  };
 }
 
 export interface TestedOption {
@@ -402,6 +534,8 @@ const change = z.discriminatedUnion("kind", [
     activity: z.string().min(1).max(120).optional(),
     units: z.number().int().optional(),
     from_day: z.number().int().min(0).optional(),
+    // A way of opening the units the price list prices: its price, and the days it takes.
+    mode: z.string().trim().min(1).max(120).optional(),
   }),
   z.object({
     kind: z.literal("measure"),
@@ -651,6 +785,7 @@ export const testOption: AnalystTool = {
     "a transfer (waiting patients sent from one site to another, each day, along a route the twin holds: list_responses with routes_from says which), or a recorded response (rules the engine follows at every step, named by the ref list_responses gives). A run follows one recorded response: an option holds either one 'response' change or 'transfer' changes, which together make one. " +
     "Or it acts on a choice the scenario already contains, named by the ref scenario_recipe gives it: 'replaces' puts this change in its place (say only what differs: other units, another day, another duration), and kind 'remove' takes it out. To test fewer units or another date than a choice of the scenario, replace that choice; do not stack a second change on top of it. " +
     "Returns the scenario as it is and the scenario with this option, side by side: peak occupancy, sites where somebody waits, patient-days waiting, first day somebody waits, and each site with a queue. " +
+    "When the twin declares a price list (list_prices), it also returns what the capacity this option opens costs, line by line, and the day each change is open. " +
     `At most ${MAX_OPTIONS} options can be tested for one objective, and each takes the engine some seconds, so read first and test what the reading points to. Nothing is written: the scenario is unchanged until the person adds the option themselves.`,
   busy: "Testing an option in the engine",
   input_schema: obj(
@@ -680,6 +815,11 @@ export const testOption: AnalystTool = {
             site: { type: "string", description: "capacity: the site's id or name. It must already provide the activity." },
             activity: { type: "string", description: "capacity: the activity whose units change. Default: the activity the run reads." },
             units: { type: "integer", description: "capacity: units added from from_day until the end of the run. Negative closes units." },
+            mode: {
+              type: "string",
+              description:
+                "capacity: the mode the units are opened in, as list_prices names it, when the price list prices this activity in more than one. A mode has its price and takes its days: from_day cannot be earlier than the days the mode takes. Leave it out when the price list holds no price for the activity.",
+            },
             name: { type: "string", description: "measure: what it is called, e.g. 'Schools closed'." },
             layers: {
               type: "array",
@@ -720,6 +860,11 @@ export const testOption: AnalystTool = {
     const twinMs = Date.now() - startedAt;
     const { runner } = open;
     const callsBefore = runner.timings.length;
+    // The price list the twin declares, read through the scenario. Empty in a twin that declares none.
+    const catalogue = catalogueOf(open.system);
+    const listed = catalogue.entries.length > 0 || catalogue.problems.length > 0;
+    // The mode each capacity stamp of the option uses, by the stamp's id.
+    const modes = new Map<string, string | null>();
     // What the option writes, and what it takes out of the scenario.
     const option: ChoiceStamp[] = [];
     const retired: { old: ChoiceStamp; replacedBy: number | null }[] = [];
@@ -744,6 +889,8 @@ export const testOption: AnalystTool = {
       if (old && sameChoice(old, stamp)) {
         throw new ToolError(`This replaces ${named} with itself (${choiceLine(old, runner.ctx)}), which changes nothing. Say what differs: the units, the day, the duration.`);
       }
+      // Refused here, before anything runs: a mode the list does not have, or a day its delay does not allow.
+      if (stamp.kind === "capacity") modes.set(stamp.id, settleMode(c.kind === "capacity" ? c.mode : undefined, stamp, catalogue, runner.ctx));
       if (old) retired.push({ old, replacedBy: option.length });
       moves.push({ does: old ? "replaces" : "adds", now: stamp, was: old });
       option.push(stamp);
@@ -790,13 +937,34 @@ export const testOption: AnalystTool = {
       ...measuredFor([...option, ...retired.map((r) => r.old)], runner.ctx),
     ];
     const notes = [...new Set(tested.figures.notes)];
-    // What each run cost, as far as anything says. Capacity or a measure the option touches carries no price.
-    const unpriced = option.filter((s) => s.kind !== "response").length + retired.filter((r) => r.old.kind !== "response").length;
+    // What the price list gives for the capacity the option opens. Null in a twin that declares no price list.
+    const siteName = (id: string) => runner.ctx.facilities.find((f) => f.id === id)?.name ?? id;
+    const ledger = listed
+      ? ledgerOf(
+          option.flatMap((s, i) =>
+            s.kind === "capacity"
+              ? [{ stamp: i, siteId: s.facility, siteName: siteName(s.facility), activity: s.activity, units: s.amount, start: s.start, days: s.days, mode: modes.get(s.id) ?? null }]
+              : [],
+          ),
+          catalogue,
+        )
+      : null;
+    const pricedStamps = new Set((ledger?.lines ?? []).map((l) => l.stamp));
+    // What each run cost, as far as anything says. What the option changes that nothing prices: a measure,
+    // capacity the price list does not hold, a choice of the scenario it takes out.
+    const unpriced = option.filter((s, i) => s.kind !== "response" && !pricedStamps.has(i)).length + retired.filter((r) => r.old.kind !== "response").length;
     const asItIsCost = costOf(open.stamps, 0, asItIs.cost);
-    const cost = costOf(applied, unpriced, tested.cost);
+    const engineCost = costOf(applied, unpriced, tested.cost);
+    const cost = ledger ? withPriceList(engineCost, ledger, unpriced, followedIn(applied) !== null) : engineCost;
+    // A price is something the option rests on: published when its row names a source, assumed when it does not.
+    if (ledger) basis.push(...priceBasis(ledger));
     // Said only when a recorded response is in one of the two runs: without one, nothing is counted and nothing is new to read.
     const costLine = (c: OptionCost, stamps: readonly Stamp[]) =>
-      followedIn(stamps) ? (c.counted === null ? { cost: c.says } : { cost_counted_by_the_engine: c.counted, cost_how_to_read: c.says }) : {};
+      followedIn(stamps)
+        ? c.counted === null
+          ? { cost: c.says }
+          : { cost_counted_by_the_engine: c.counted, cost_how_to_read: `${c.says} The amounts a rule declares have no source: this is a demo price.` }
+        : {};
 
     const record: TestedOption = {
       label: input.label,
@@ -832,7 +1000,13 @@ export const testOption: AnalystTool = {
         ),
         tested_over: { days: bench.horizon, activity: bench.activity },
         scenario_as_it_is: { ...summariseVariant(asItIs.figures), ...costLine(asItIsCost, open.stamps) },
-        with_this_option: { ...summariseVariant(tested.figures), ...costLine(cost, applied) },
+        with_this_option: {
+          ...summariseVariant(tested.figures),
+          ...costLine(engineCost, applied),
+          ...priceLines(ledger),
+          // The two together, when the price list prices something: what a comparison of costs reads.
+          ...(ledger && ledger.lines.length ? { cost_of_this_option: { dollars: cost.counted, is_the_whole_cost: cost.complete, how_to_read: cost.says } } : {}),
+        },
         sites_where_somebody_waits_in_either: waits.map((s) => ({
           id: s.id,
           name: s.name,
@@ -845,7 +1019,10 @@ export const testOption: AnalystTool = {
           "Both columns are runs of the engine under the scenario's stated conditions, not forecasts. 'scenario_as_it_is' holds the choices the scenario already contains; " +
           "'with_this_option' applies this option's changes to them: what it adds, and what it replaces or removes among those choices. " +
           "Occupancy stops at 100 %; the queue is what says somebody was turned away. " +
-          "The run knows nothing of staff or stocks, and nobody is transferred between sites unless a recorded response in the run does it.",
+          "The run knows nothing of staff or stocks, and nobody is transferred between sites unless a recorded response in the run does it." +
+          (ledger
+            ? " 'cost_from_the_price_list' is what the twin's price list gives for the capacity this option opens: opening it, then keeping it open for the days of the run. It is not what the network costs to run. A demo price has no source: call it one whenever you give it, or a total that contains it."
+            : ""),
       },
       record,
     );
@@ -885,7 +1062,8 @@ The comparison table the person sees is built from the test results themselves, 
    When the option is a choice the scenario already contains, done differently (fewer or more units, another day, another duration), replace that choice: read its ref in scenario_recipe and give it as "replaces", with only what differs. When the option is the scenario without one of its choices, remove it by its ref. Never shrink or move a choice by stacking a second change on top of it: the scenario would hold two stamps where the person means one. Starting conditions and events have no ref and cannot be replaced or removed.
 3. Test each option with test_option. At most three tests. If a test is refused, read why: a refused test does not count and tells you what to change.
 4. An option you did not test is not an option. An idea the engine cannot test (staff, stocks: the twin holds neither) belongs in limits, not in options.
-   A cost appears in a test only when a recorded response's rules declare one: it is what the engine counted, not what the option costs when it also changes capacity or measures, which carry no price. Never give a cost the test did not return, and never say an option is free.
+   A cost appears in a test from two places only. The twin's price list (list_prices) prices the capacity an option opens: opening it, then keeping it open, in a mode that has its own price and takes its own number of days. And a recorded response's rules may declare a cost, which the engine counts. Measures carry no price. Never give a cost the test did not return, never estimate a price the list does not hold, and never say an option is free: say there is no price for it.
+   When the price list prices an activity in several modes, they are the way to offer options that differ by speed and by cost: the same units sooner at a higher price, or later at a lower one. Read list_prices before testing, name the mode of each capacity change, and respect its delay: the decision is taken on day 0, so units opened in a mode that takes 14 days cannot be open before day 14. Whenever you give a demo price, or a total that contains one, say it is a demo price.
 5. When the tests are done, call give_options once, on its own, with nothing else in that turn.
 
 Most objectives take two to five reads and two or three tests. Do not call a tool twice with the same input.

@@ -104,6 +104,21 @@ export type PropertyType = (typeof PROPERTY_TYPES)[number];
  * transition becomes demand at a named severity — which is how the thing that
  * spreads reaches the thing that has beds, without either model importing the
  * other's words.
+ *
+ * The last eleven are not read by the engine at all. They are what makes a
+ * type a *price list*: a row says which activity it prices, what a unit costs
+ * to open and to keep open for a day (or a formula that says it), each amount
+ * with a low and a high when the price is a range, in which mode, how many
+ * days that mode takes, and where the price comes from. Amounts are whole
+ * cents. The cost ledger (`cost-ledger.ts`) reads them; the engine never sees
+ * a cent. A row linked to a site prices that site, and comes before the row
+ * that prices the whole network.
+ *
+ * They are mechanics for the reason the others are: a price is a thing the
+ * institution declares, under whatever name it likes, and not a column of ours.
+ * A type called "Tarif", "Rate card" or "Agency contract" becomes a price list
+ * by binding these, and a scenario can change one of its rows like any other
+ * declared number ("what if agency staff cost 20% more?").
  */
 export const MECHANICS = [
   "serves_severity",
@@ -119,7 +134,36 @@ export const MECHANICS = [
   "couples_along",
   "couples_at",
   "produces_demand",
+  "prices_activity",
+  "price_per_unit_day",
+  "price_per_unit_day_low",
+  "price_per_unit_day_high",
+  "price_per_unit_opened",
+  "price_per_unit_opened_low",
+  "price_per_unit_opened_high",
+  "price_formula",
+  "price_mode",
+  "price_lead_days",
+  "price_source",
 ] as const;
+
+/**
+ * The mechanics that make a price list. The engine reads none of them: a twin
+ * that binds only these has declared what things cost, not how care works.
+ */
+export const PRICE_MECHANICS: ReadonlySet<Mechanic> = new Set<Mechanic>([
+  "prices_activity",
+  "price_per_unit_day",
+  "price_per_unit_day_low",
+  "price_per_unit_day_high",
+  "price_per_unit_opened",
+  "price_per_unit_opened_low",
+  "price_per_unit_opened_high",
+  "price_formula",
+  "price_mode",
+  "price_lead_days",
+  "price_source",
+]);
 
 export type Mechanic = (typeof MECHANICS)[number];
 
@@ -144,6 +188,17 @@ export const MECHANIC_KIND: Record<Mechanic, "select" | "quantity"> = {
   couples_along: "select",
   couples_at: "quantity",
   produces_demand: "select",
+  prices_activity: "select",
+  price_per_unit_day: "quantity",
+  price_per_unit_day_low: "quantity",
+  price_per_unit_day_high: "quantity",
+  price_per_unit_opened: "quantity",
+  price_per_unit_opened_low: "quantity",
+  price_per_unit_opened_high: "quantity",
+  price_formula: "select",
+  price_mode: "select",
+  price_lead_days: "quantity",
+  price_source: "select",
 };
 
 /** An institution's numeric range for a property. Both ends optional. */

@@ -276,3 +276,28 @@ test("the hole is a gap and the shape of the tree is not", () => {
 test("a twin where every unit holds something of its own says neither", () => {
   assert.deepEqual(capacityFindings(facilities, EDGES), { gaps: [], structure: [] });
 });
+
+// --- a price row linked to a site ---------------------------------------------------
+
+test("a price row linked to a unit prices that site: it is not capacity there, nor a resource missing its role", () => {
+  const general = inst("price-all", "Tarif", null, { activite: "Lits" });
+  const local = inst("price-a", "Tarif", null, { activite: "Lits" });
+  const stray = inst("note-1", "Note", null);
+  const all = [...INSTANCES, general, local, stray];
+  const [one, two] = [UNITS[1]!.id, UNITS[2]!.id];
+  const links = [...LINKS, placed(local, one), placed(local, two), placed(local, one), placed(stray, one)];
+
+  const before = facilitiesFrom(UNITS, INSTANCES, LINKS, ROLES);
+  const priced = facilitiesFrom(UNITS, all, links, ROLES, new Set(["Tarif"]));
+  // The sites it is linked to, each once.
+  assert.deepEqual([...priced.pricedAt], [["price-a", [one, two]]]);
+  // Capacity and objects are what they were: a price is capacity nowhere.
+  assert.deepEqual(priced.facilities, before.facilities);
+  assert.deepEqual(priced.objects, before.objects);
+  // A type that is not a price list and declares no role is still named as one that enters no run.
+  assert.deepEqual([...priced.typesWithoutRole], ["Note"]);
+  // Without being told which types are price lists, nothing is read as one.
+  const untold = facilitiesFrom(UNITS, all, links, ROLES);
+  assert.deepEqual([...untold.pricedAt], []);
+  assert.deepEqual([...untold.typesWithoutRole].sort(), ["Note", "Tarif"]);
+});

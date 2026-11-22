@@ -25,7 +25,9 @@
  * dominated when another costs no more and leaves no more waiting, by their
  * own runs. That is the marking of the replay of the units page
  * (`command/options.ts`), and it is made only between options whose whole cost
- * the engine counted. What a run cost sits on its card.
+ * is counted: by the engine for a recorded response, from the twin's price list
+ * for the capacity an option opens. What a run cost sits on its card, with the
+ * day what it opens is available; a click on a cost opens its lines.
  *
  * A card is read at a glance and explained on a click: what the option does and
  * why, what its run rests on, and what the test does not say are folded under
@@ -50,7 +52,7 @@ import {
 } from "../../analyst-api";
 import { Elapsed, LABEL, OptionChanges, STRUCK, Text, Trace } from "./analyst-parts";
 import KeepPrepared from "./KeepPrepared";
-import { BasisList, CostLine, EvidenceMeter, Figures, Fold, Outcome, placesResponse, waitingScale, weighOptions } from "./option-cards";
+import { BasisList, CostLine, DelayLine, EvidenceMeter, Figures, Fold, hasPriceList, Outcome, placesResponse, waitingScale, weighOptions } from "./option-cards";
 import { takesOut } from "./option-write";
 
 const LETTERS = ["A", "B", "C"];
@@ -281,9 +283,11 @@ export default function OptionsTab({
   // One scale for every bar, so the cards can be compared with each other.
   const scale = proposal ? waitingScale([...(proposal.asItIs ? [proposal.asItIs] : []), ...proposal.options.map((o) => o.figures)]) : 1;
   // Dominated options, by the runs: the one comparison of cost and effect that needs no exchange rate.
-  const weighing = proposal?.asItIs ? weighOptions(proposal.asItIs, proposal.options) : { dominated: new Map<string, string>(), weighed: 0 };
+  const weighing = proposal?.asItIs ? weighOptions(proposal.asItIs, proposal.options) : { dominated: new Map<string, string>(), weighed: 0, unbeaten: new Set<string>() };
   // Once any run on screen has a counted cost, every card says its own, or why it has none.
   const anyCost = Boolean(proposal && (proposal.asItIsCost?.counted != null || proposal.options.some((o) => o.cost?.counted != null)));
+  // The twin declares a price list and it says something of an option on screen: a price, or why there is none.
+  const anyPriceList = Boolean(proposal?.options.some((o) => hasPriceList(o.cost)));
 
   function cite(id: string) {
     setTraceOpen(true);
@@ -436,7 +440,18 @@ export default function OptionsTab({
                         <span className="ml-auto"><Outcome figures={o.figures} /></span>
                       </div>
                       <Figures figures={o.figures} against={proposal.asItIs} scale={scale} stranded={showStranded} />
-                      {o.cost && (anyCost || placesResponse(o)) ? <CostLine cost={o.cost} /> : null}
+                      {o.cost ? <DelayLine cost={o.cost} /> : null}
+                      {o.cost && (anyCost || anyPriceList || placesResponse(o)) ? <CostLine cost={o.cost} /> : null}
+                      {/* Shown once the twin's price list is on screen: without one, the cards are what they were. */}
+                      {anyPriceList && weighing.unbeaten.has(o.step) ? (
+                        <p role="note" className="flex items-start gap-1.5 bg-ok-soft px-2 py-1.5 text-[11.5px] text-ok-ink">
+                          <Check className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                          <span>
+                            <span className="font-semibold">Not beaten.</span> By these runs, no other option weighed here both costs no more and
+                            leaves no more waiting. Several options can carry this mark: it is not a ranking.
+                          </span>
+                        </p>
+                      ) : null}
                       {beatenBy !== undefined ? (
                         <p role="note" className="flex items-start gap-1.5 bg-warn-soft px-2 py-1.5 text-[11.5px] text-warn-ink">
                           <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -532,7 +547,10 @@ export default function OptionsTab({
                   Every bar is drawn on the same scale, and the tick on it marks the scenario as it is. In the order
                   tested; nothing here ranks them.
                   {weighing.weighed > 0
-                    ? ` An option is marked as dominated only when another costs no more and leaves no more waiting, which holds whatever a patient-day is worth. ${weighing.weighed} of ${proposal.options.length} option${proposal.options.length === 1 ? "" : "s"} here ${weighing.weighed === 1 ? "has" : "have"} a whole cost counted by the engine and can be weighed that way; capacity and measures carry no price.`
+                    ? ` An option is marked as dominated only when another costs no more and leaves no more waiting, which holds whatever a patient-day is worth. ${weighing.weighed} of ${proposal.options.length} option${proposal.options.length === 1 ? "" : "s"} here ${weighing.weighed === 1 ? "has" : "have"} a whole cost counted ${anyPriceList ? "(by the engine for a recorded response, from the twin’s price list for capacity) and can be weighed that way; a measure carries no price." : "by the engine and can be weighed that way; capacity and measures carry no price."}`
+                    : ""}
+                  {anyPriceList
+                    ? " A cost from the price list is the cost of what the option opens: opening units, then keeping them open for the days of the run. It is not what the network costs to run, and nothing here turns waiting into dollars."
                     : ""}
                 </p>
               ) : null}

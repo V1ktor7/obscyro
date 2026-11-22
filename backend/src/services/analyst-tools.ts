@@ -6,6 +6,7 @@ import { Ledger, numbersIn } from "./analyst-verify.js";
 import type { DatasetRow } from "./datasets.js";
 import type { HealthEvent } from "./health-events.js";
 import { alertsNow, unitNow, type LiveReading, type LiveUnit } from "./live-reading.js";
+import { catalogueOf, type Amount } from "./price-catalogue.js";
 import type { ScenarioOverride } from "./scenario-overrides.js";
 import type { SimExport } from "./twin-export.js";
 
@@ -749,6 +750,45 @@ const compareCatchments: AnalystTool = {
   },
 };
 
+/** An amount of the price list, in dollars, with its low and high ends when it is a range. */
+const priced = (a: Amount) => (a.low === a.cents && a.high === a.cents ? { dollars: a.cents / 100 } : { dollars: a.cents / 100, low_dollars: a.low / 100, high_dollars: a.high / 100 });
+
+const listPrices: AnalystTool = {
+  name: "list_prices",
+  description:
+    "The price list the twin declares: what a unit of an activity costs to open and to keep open for a day, in each mode, with the days that mode takes before the units are available, the sites a price is for, and where each price comes from. A price with no source is a demo price. Read it before proposing options that differ by speed and cost, and to know which mode a capacity change can use. It holds only what the organisation declared: an activity that is not listed has no price.",
+  input_schema: obj({ world: WORLD_PROP }, ["world"]),
+  parse: z.object({ world }),
+  async run(ctx, input: { world: WorldName }) {
+    const ex = await ctx.world(input.world);
+    const cat = catalogueOf(ex);
+    const site = (id: string) => ex.facilities.find((f) => f.id === id)?.name ?? id;
+    return {
+      world: input.world,
+      prices: cat.entries.map((e) => ({
+        activity: e.activity,
+        mode: e.mode,
+        takes_days: e.leadDays,
+        ...(e.perUnitOpened ? { to_open_one_unit: priced(e.perUnitOpened) } : {}),
+        ...(e.perUnitDay ? { one_unit_open_one_day: priced(e.perUnitDay) } : {}),
+        ...(e.formula ? { formula_giving_cents: e.formula, the_row_s_numbers: e.values } : {}),
+        priced_for: e.sites.length ? e.sites.map(site) : "the whole network",
+        ...(e.source ? { source: e.source } : { demo_price: true }),
+      })),
+      ...(cat.problems.length ? { rows_not_used: cat.problems } : {}),
+      how_to_read: [
+        cat.entries.length === 0
+          ? "The twin declares no price list, so nothing here has a price. Do not give one, and do not say something is free: say there is no price for it."
+          : "These are the prices the organisation declared, and the only ones there are. An activity or a site that is not listed has no price: say so rather than estimate one.",
+        "A mode is a way of opening units: it has its own price and takes its own number of days. The decision is taken on day 0 of the run, so units opened in a mode that takes 14 days cannot be open before day 14.",
+        "A site with a price of its own is priced by it, and not by the price of the whole network.",
+        "A price marked demo_price has no source. Whenever you give it, or a total that contains it, say it is a demo price.",
+        "The price list says what opening a unit and keeping it open costs. It says nothing of what the network costs to run, of staff or of stocks.",
+      ],
+    };
+  },
+};
+
 const scenarioRecipe: AnalystTool = {
   name: "scenario_recipe",
   description:
@@ -1258,6 +1298,7 @@ export const READ_TOOLS: AnalystTool[] = [
   getSite,
   compareCatchments,
   scenarioRecipe,
+  listPrices,
   readRun,
   listDatasets,
   previewDataset,

@@ -18,8 +18,9 @@ import { ChevronRight } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
+import { money } from "@/lib/money";
 
-import type { Basis, Evidence, OptionCost, OptionFigures, OptionStamp } from "../../analyst-api";
+import type { Basis, CostLedger, Evidence, LedgerLine, OptionCost, OptionFigures, OptionStamp } from "../../analyst-api";
 import { dominatedBy } from "../../command/options";
 import { EvidenceBadge } from "./analyst-parts";
 import { people } from "./results";
@@ -46,36 +47,191 @@ export const placesResponse = (o: { stamps: OptionStamp[] }): boolean => o.stamp
 /**
  * Which tested options another one dominates, by their own runs.
  *
- * Only an option whose whole cost the engine counted can be weighed: one made
- * of a priced recorded response and nothing else. Capacity and measures carry
- * no price, so an option that changes any is neither dominated nor
- * dominating: saying so would rest on a cost nobody gave. What an option
+ * Only an option whose whole cost is counted can be weighed: a recorded
+ * response whose rules declare a cost, capacity the twin's price list prices,
+ * or both. An option that changes anything nothing prices is neither dominated
+ * nor dominating: saying so would rest on a cost nobody gave. What an option
  * achieves is the waiting it avoids against the scenario as it is, people
  * waiting where no site serves them included.
+ *
+ * `unbeaten` names the weighed options no other weighed option beats on both
+ * counts. It is empty until two options can be weighed: one option alone is
+ * beaten by nothing, and saying so would say nothing.
  */
 export function weighOptions(
   asItIs: OptionFigures,
   options: { step: string; label: string; figures: OptionFigures; cost?: OptionCost }[],
-): { dominated: Map<string, string>; weighed: number } {
+): { dominated: Map<string, string>; weighed: number; unbeaten: Set<string> } {
   const waiting = (f: OptionFigures) => waitingOf(f) + (f.strandedWaitingDays ?? 0);
   const whole = options.filter((o) => o.cost?.complete && o.cost.counted !== null);
+  const dominated = dominatedBy(whole.map((o) => ({ id: o.step, label: o.label, achieved: waiting(asItIs) - waiting(o.figures), cost: o.cost!.counted! })));
   return {
-    dominated: dominatedBy(whole.map((o) => ({ id: o.step, label: o.label, achieved: waiting(asItIs) - waiting(o.figures), cost: o.cost!.counted! }))),
+    dominated,
     weighed: whole.length,
+    unbeaten: new Set(whole.length > 1 ? whole.filter((o) => !dominated.has(o.step)).map((o) => o.step) : []),
   };
 }
 
-/** What a run cost, on its card: the count when there is one, and the sentence that says what it is a count of. */
-export function CostLine({ cost }: { cost: OptionCost }) {
+export { money };
+
+/** Whether a cost has lines from the price list to open, or changes the list could not price. */
+export const hasPriceList = (cost: OptionCost | undefined): cost is OptionCost & { priced: CostLedger } =>
+  Boolean(cost?.priced && (cost.priced.lines.length > 0 || cost.priced.unpriced.length > 0));
+
+/**
+ * Whether an amount behind a cost has no source.
+ *
+ * The server says so. A record kept before it did can only hold what the
+ * engine counted for a recorded response, at the amounts its rules declare:
+ * none of those has a source either.
+ */
+export const restsOnDemoPrice = (cost: OptionCost): boolean => cost.demo ?? (cost.counted !== null && !cost.priced);
+
+/** On every amount that rests on a price with no source, and on every total that contains one. */
+export function DemoPrice() {
   return (
-    <p className="text-[11px] leading-snug text-ink-muted">
-      {cost.counted !== null ? (
-        <span className="font-semibold text-ink-body">
-          Cost counted: {Math.round(cost.counted).toLocaleString("en-CA")} ${cost.complete ? "" : " (not the whole cost)"}.{" "}
-        </span>
+    <span
+      title="At least one price behind this amount has no source in the price list. It is a demo price, not what the institution pays."
+      className="shrink-0 rounded bg-warn-soft px-1 py-px text-[9.5px] font-bold uppercase tracking-wide text-warn-ink"
+    >
+      demo price
+    </span>
+  );
+}
+
+const CATEGORY: Record<LedgerLine["category"], string> = { opening: "Opening", running: "Kept open", formula: "By formula" };
+const dayCount = (n: number) => `${n} day${n === 1 ? "" : "s"}`;
+
+/**
+ * When what an option opens is available: the mode each priced change uses, the
+ * days that mode takes from the decision, and the first day its units are open
+ * in the run. Nothing when the price list prices none of the option's changes.
+ */
+export function DelayLine({ cost }: { cost: OptionCost }) {
+  const open = cost.priced?.availability ?? [];
+  if (!open.length) return null;
+  return (
+    <div className="flex flex-col gap-0.5 text-[11px] leading-snug text-ink-muted">
+      <span className="font-semibold text-ink-body">Delay</span>
+      <ul className="flex flex-col gap-0.5">
+        {open.map((a) => (
+          <li key={a.stamp}>
+            <span className="tabular-nums text-ink-body">Open from day {a.fromDay}</span> · {a.activity} at {a.site}, mode “{a.mode}”:{" "}
+            {a.leadDays === 0 ? "the price list declares no delay for it" : `${dayCount(a.leadDays)} from the decision, taken on day 0 of the run`}.
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** The lines behind a cost: one per priced change and kind of amount, each with its arithmetic and where its price comes from. */
+function LedgerLines({ ledger }: { ledger: CostLedger }) {
+  const kinds = (Object.keys(CATEGORY) as LedgerLine["category"][]).filter((c) => ledger.byCategory[c] > 0);
+  return (
+    <div className="flex flex-col gap-1.5 border-l-2 border-line-strong pl-2.5 text-[11px] leading-snug text-ink-body">
+      {ledger.lines.length ? (
+        <ul aria-label="Lines of this cost" className="flex flex-col gap-1.5">
+          {ledger.lines.map((l, i) => (
+            <li key={i} className="flex flex-col gap-0.5">
+              <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                <span className="font-semibold text-ink">{CATEGORY[l.category]}</span>
+                <span className="text-ink-muted">
+                  {l.activity} at {l.site} · {l.fromDay === l.toDay ? `day ${l.fromDay}` : `days ${l.fromDay} to ${l.toDay}`} · mode “{l.price.mode}”
+                  {l.price.ofSite ? " · this site’s own price" : ""}
+                </span>
+                {l.price.demo ? <DemoPrice /> : null}
+              </span>
+              <span className="tabular-nums">{l.says}</span>
+              <span className="text-ink-muted">
+                {l.price.source ? `Source: ${l.price.source}` : "No source in the price list."} Price row: {l.price.type}.
+              </span>
+            </li>
+          ))}
+        </ul>
       ) : null}
-      {cost.says}
-    </p>
+      {ledger.lines.length ? (
+        <p className="tabular-nums text-ink-muted">
+          Price list total: <span className="text-ink-body">{money(ledger.totalCents)}</span>
+          {ledger.ranged ? ` (between ${money(ledger.lowCents)} and ${money(ledger.highCents)})` : ""}
+          {kinds.length > 1 ? ` · ${kinds.map((c) => `${CATEGORY[c].toLowerCase()} ${money(ledger.byCategory[c])}`).join(" · ")}` : ""}. The sum of the lines
+          above, in whole cents.
+        </p>
+      ) : null}
+      {ledger.unpriced.length ? (
+        <div className="flex flex-col gap-0.5">
+          <span className="font-semibold text-ink">Not priced</span>
+          <ul className="flex list-disc flex-col gap-0.5 pl-4">
+            {ledger.unpriced.map((u, i) => (
+              <li key={i}>{u.why}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * What a run cost, on its card: the count when there is one, and the sentence
+ * that says what it is a count of. When the twin's price list is behind it, a
+ * click on the cost opens its lines.
+ */
+export function CostLine({ cost }: { cost: OptionCost }) {
+  const [open, setOpen] = useState(false);
+  if (!hasPriceList(cost)) {
+    return (
+      <p className="text-[11px] leading-snug text-ink-muted">
+        {cost.counted !== null ? (
+          <span className="font-semibold text-ink-body">
+            Cost counted: {Math.round(cost.counted).toLocaleString("en-CA")} ${cost.complete ? "" : " (not the whole cost)"}.{" "}
+          </span>
+        ) : null}
+        {restsOnDemoPrice(cost) ? (
+          <>
+            <DemoPrice />{" "}
+          </>
+        ) : null}
+        {cost.says}
+      </p>
+    );
+  }
+  const ledger = cost.priced;
+  const n = ledger.lines.length;
+  return (
+    <div className="flex flex-col gap-1.5 text-[11px] leading-snug text-ink-muted">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        title={open ? "Hide the lines of this cost" : "Show the lines of this cost"}
+        className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 self-start text-left hover:text-ink"
+      >
+        <ChevronRight className={cn("h-3.5 w-3.5 shrink-0 transition-transform", open && "rotate-90")} aria-hidden="true" />
+        <span className="font-semibold text-ink-body">Cost</span>
+        {cost.counted !== null ? (
+          <span className="tabular-nums text-ink">
+            {/* Dollars to the cent: the server's own total, shown as it is. */}
+            {money(Math.round(cost.counted * 100))}
+            {cost.complete ? "" : " (not the whole cost)"}
+          </span>
+        ) : (
+          <span>not counted</span>
+        )}
+        {ledger.ranged ? (
+          <span className="tabular-nums">
+            · price list between {money(ledger.lowCents)} and {money(ledger.highCents)}
+          </span>
+        ) : null}
+        {restsOnDemoPrice(cost) || ledger.demo ? <DemoPrice /> : null}
+        <span className="text-ink-faint">
+          · {n ? `${n} line${n === 1 ? "" : "s"}` : "no line"}
+          {ledger.unpriced.length ? `, ${ledger.unpriced.length} not priced` : ""}
+        </span>
+      </button>
+      {open ? <LedgerLines ledger={ledger} /> : null}
+      <p>{cost.says}</p>
+    </div>
   );
 }
 

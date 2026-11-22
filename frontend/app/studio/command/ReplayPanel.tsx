@@ -13,6 +13,7 @@ import {
   type SimPolicy,
 } from "@/lib/platform-api";
 
+import { costSentence } from "../events/ranking";
 import { framesFor, type FacilitiesTable, type Frame } from "../events/replay-frames";
 import {
   demandFactorOf,
@@ -437,6 +438,9 @@ export default function ReplayPanel({
                     among them is a judgement about what a patient-day is worth — which is
                     yours, not the engine&rsquo;s.
                   </p>
+                  {costSentence(options.map((o) => o.cost)) ? (
+                    <p className="text-[10px] leading-snug text-warn-ink">{costSentence(options.map((o) => o.cost))}</p>
+                  ) : null}
                 </>
               )
             ) : null}

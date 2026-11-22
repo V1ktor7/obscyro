@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "ff87160f079cf271"
+translatedFrom: "a5e478a1deb4cb90"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -26,6 +26,7 @@ Every algorithm of the product has its section here: what it is for, its diagram
 | [A9](#a9-recorded-decision-and-follow-up) | Recorded decision and follow-up | `backend/src/services/decisions.ts` |
 | [A10](#a10-online-search-and-calendar-of-events) | Validated online search and calendar of events | `backend/src/services/analyst-events.ts` |
 | [A11](#a11-retest-of-a-prepared-response) | Retest of a prepared response, when a signal opens | `backend/src/services/response-retest.ts` |
+| [A12](#a12-prices-the-cost-ledger-and-the-delay-of-an-option) | Prices, the cost ledger and the delay of an option | `backend/src/services/price-catalogue.ts`, `cost-ledger.ts` |
 | **B** | **Twin and simulation engine** | |
 | [B1](#b1-export-of-the-twin) | Export of the twin to the engine | `backend/src/services/twin-export.ts` |
 | [B2](#b2-one-step-of-the-event-engine) | One step of the event engine | `simulation-service/app/events/dynamics.py` |
@@ -174,9 +175,32 @@ flowchart TD
     G -->|"yes"| H["Result returned as a step, citable"]
 ```
 
-**Rules.** Operators `+ - * / ^` and parentheses. Functions `round, abs, sqrt, floor, ceil, min, max, sum, mean`. No variable, no access to anything, nothing is executed as code. Units allowed without a source: 0, 1, 2, 7, 10, 24, 100, 1000.
+**Rules.** Operators `+ - * / ^` and parentheses. Functions `round, abs, sqrt, floor, ceil, min, max, sum, mean`. Nothing is executed as code. Units allowed without a source: 0, 1, 2, 7, 10, 24, 100, 1000. The analyst's `calculate` tool knows no variable and has access to nothing.
 
-**Code.** `backend/src/services/analyst-calc.ts`, the `calculate` tool in `analyst-tools.ts`. **Tests.** `analyst-calc.unit.test.ts`, `analyst-tools.unit.test.ts`.
+**The same evaluation serves cost formulas** (A12), with named values added. The check on operands belongs to the `calculate` tool: a cost formula is declared in the twin, and its numbers are those of its price row.
+
+```mermaid
+flowchart TD
+    A["Formula of a price row<br/>ceil(units / places) * frais_fixe"] --> B["Splitting: numbers, operators, names"]
+    B --> C{"Is a name followed by a parenthesis?"}
+    C -->|"yes"| D{"Is it one of the functions of the list?"}
+    D -->|"no"| X["Refusal: unknown function"]
+    D -->|"yes"| E["Function applied to its arguments"]
+    C -->|"no"| F{"Is the name among the values handed?"}
+    F -->|"no"| Y["Refusal: unknown name,<br/>with the list of what the formula can name"]
+    F -->|"yes"| G{"Is its value a finite number?"}
+    G -->|"no"| Z["Refusal: this name has no value"]
+    G -->|"yes"| H["The value takes the place of the name,<br/>and the pair is noted (used)"]
+    E --> I["Evaluation with the usual precedence"]
+    H --> I
+    I --> J{"Finite result?"}
+    J -->|"no"| X2["Refusal"]
+    J -->|"yes"| K["Result, with the values<br/>put in place of the names"]
+```
+
+A named value is looked up only among those the caller hands, and a function only among those of the list: a word of the formula is never taken for anything else. A formula with a hole in it gives no result, never a result with a zero in the hole.
+
+**Code.** `backend/src/services/analyst-calc.ts` (`evaluate`, `FUNCTION_NAMES`), the `calculate` tool in `analyst-tools.ts`. **Tests.** `analyst-calc.unit.test.ts`, `analyst-tools.unit.test.ts`, `cost-ledger.unit.test.ts`.
 
 ## A4. A scenario's run
 
@@ -329,11 +353,13 @@ flowchart TD
     D3 -->|"no"| E
     D3 -->|"yes"| D4["The old stamp leaves the list.<br/>Replacement: what the change does not say<br/>is kept from the old one"]
     D4 --> F
-    F --> G["One pass of the scenario as it is, with its choices:<br/>launched once, kept for all the options"]
-    F --> H["One pass of the scenario, the removed stamps taken out,<br/>those of the option added (A4)"]
+    F --> F2{"For each capacity the price list prices:<br/>does the mode exist, and does its delay<br/>allow the day asked? (A12)"}
+    F2 -->|"no"| E
+    F2 -->|"yes, or nothing to price"| G["One pass of the scenario as it is, with its choices:<br/>launched once, kept for all the options"]
+    F2 -->|"yes, or nothing to price"| H["One pass of the scenario, the removed stamps taken out,<br/>those of the option added (A4)"]
     G --> I["Result for the model: both runs in digest,<br/>the sites where people wait, what the option rests on"]
     H --> I
-    H --> J["Record for the screen: whole figures, stamps written,<br/>choices removed, what is added, replaced, removed,<br/>arrivals per day, levels of evidence,<br/>cost counted by the engine"]
+    H --> J["Record for the screen: whole figures, stamps written,<br/>choices removed, what is added, replaced, removed,<br/>arrivals per day, levels of evidence,<br/>cost counted by the engine,<br/>and the ledger of the price list when the twin declares one (A12)"]
     I --> K{"Another option to test?"}
     K -->|"yes"| C
     K -->|"no"| L["give_options: one mechanism per option,<br/>what the test does not say, reading, trade-offs, limits"]
@@ -345,7 +371,7 @@ flowchart TD
     J --> P
     P --> P2{"Two options whose cost is whole,<br/>and one costs as much or more<br/>for as much or more waiting?"}
     P2 -->|"yes"| P3["That one is marked Dominated,<br/>with the name of the option that dominates it"]
-    P2 -->|"no"| P4["No mark"]
+    P2 -->|"no"| P4["No Dominated.<br/>With a price list on screen:<br/>Not beaten on the weighed options none beats (A12)"]
     P --> Q{"Add to scenario / Apply to scenario:<br/>a human click. Does the option remove a choice?"}
     Q -->|"no"| Q1["The stamps are written"]
     Q -->|"yes"| Q2["The recipe is read again"]
@@ -364,8 +390,11 @@ flowchart TD
 - **A transfer of patients.** The `transfer` change names two sites, a number of patients per day and a day. The program writes its rule (`transferRule`): when somebody waits at the first site for the activity the run reads, and the second has a free unit of it, up to that number of patients are sent there. The condition on the destination is not one precaution more: without it patients are sent to wait behind those of a full hospital. Several transfers of one option make a single response, one rule each. Refused, with what can be asked instead: two sites between which the twin holds no transfer route (the refusal lists where the patients of the first can go), a destination that does not offer the activity, more patients a day than a route carries.
 - **What a route carries.** The twin holds the flow of no route. So the run gives each the same: twenty patients a day (`ROUTE_CAPACITY`), on the page as on the server. It is an assumption of the engine, and it appears as such among what the option rests on; that the route exists is a measure of the twin.
 - **One response per run, hence per option.** An option holds either one `response` change or `transfer` changes. If the scenario already follows a response, the test is refused until the option removes it (`remove`, by its choice name): testing another in its place is then a single test.
-- **The cost is what the engine counted, and nothing else** (`costOf`). The engine counts one thing: the cost a rule of a response declares for its action, each time it fires. A capacity and a measure have no price in the twin, and a response none of whose rules declares a cost is unpriced, not free: the card writes that in place of a figure. The cost of an option is called **whole** only when it is made of a response with a declared price and of nothing else; with a capacity beside it, the count is shown and said to be incomplete. The transfer the program writes declares no cost: nobody gave one, and inventing one would put on screen a figure no tool returned.
-- **A dominated option is marked, from the runs.** Between two options whose cost is whole, the one that costs as much or more and leaves as much or more waiting (strictly worse on one of the two) carries “Dominated” and the name of the other. It is the only comparison of cost and effect that needs no exchange rate between a dollar and a patient-day: whatever value one gives them, that option is not the one to prefer on these two counts. The waiting counted includes that of the territories no site serves, so that a queue moved out of sight does not pass for a queue avoided. The marking is made by the function of the replay of the units page (`dominatedBy`, `frontend/app/studio/command/options.ts`): both screens make it the same way. An option with a capacity or a measure is neither dominated nor dominating: it would take a price nobody gave.
+- **The cost comes from two places, and from nowhere else.** The engine counts one thing (`costOf`): the cost a rule of a response declares for its action, each time it fires. The twin's price list, when it declares one, gives the cost of the capacity the option opens (A12, `withPriceList`). The two are added when both exist; neither stands in for the other. Without a price list, nothing changes: a capacity and a measure then have no price, and the card writes that in place of a figure. A response none of whose rules declares a cost is unpriced, not free. The transfer the program writes declares no cost: nobody gave one, and inventing one would put on screen a figure no tool returned.
+- **A cost is called whole when everything the option changes has a price**: a response with a declared cost, capacity the list prices, or both. A measure, a capacity the list does not hold, units that are closed, a choice taken out of the scenario have no price: the count is then shown and said to be incomplete.
+- **A mode is chosen, and its delay is respected.** When the list prices an activity in several modes, `test_option` asks which one each capacity uses, and refuses a day the mode's delay does not allow, saying the first day possible and the modes that are fast enough (A12). That is what makes it possible to test the same capacity sooner at a higher price, or later at a lower one.
+- **A demo price shows.** A price row with no source is a demo price, and every total that contains one carries the “demo price” mark. The amounts the rules of a recorded response declare have no source either: what the engine counts for it carries the same mark (`OptionCost.demo`), and the tool's result says so to the model.
+- **A dominated option is marked, from the runs.** Between two options whose cost is whole, the one that costs as much or more and leaves as much or more waiting (strictly worse on one of the two) carries “Dominated” and the name of the other. It is the only comparison of cost and effect that needs no exchange rate between a dollar and a patient-day: whatever value one gives them, that option is not the one to prefer on these two counts. The waiting counted includes that of the territories no site serves, so that a queue moved out of sight does not pass for a queue avoided. The marking is made by the function of the replay of the units page (`dominatedBy`, `frontend/app/studio/command/options.ts`): both screens make it the same way. An option whose cost is not whole is neither dominated nor dominating: it would take a price nobody gave. When a price list is on screen, the weighed options no other beats carry “Not beaten” (A12).
 - **Replacing or removing a choice.** A change can take the place of a choice the scenario already holds (`replaces`), or remove it (`remove`). “40 beds instead of 60” is then a single stamp at +40, and not a −20 stacked on a +60: the test runs on the scenario without the old stamp and with the new one, and that is what the recipe will hold. A replacement says only what differs (the units, the day, the duration); the rest is kept from the choice replaced.
 - **A choice is designated by a name, not by its identifier.** `scenario_recipe` gives each choice a name made of letters (`choice-a`, `choice-b`…), valid for the time of the exchange. A stamp's identifier is a UUID: thirty-six characters to copy without a mistake, and full of digits the verifier would then find “in a step”. The record of the test, for its part, keeps the stamp's identifier: that is what the page removes.
 - **Only a choice can be replaced.** A starting condition says where the run begins, an event says what happens: an option that removed one would test another scenario while calling it a response. Neither has a name, and designating them is refused, with the list of what can be. Also refused: replacing a capacity by a measure (one is removed and the other added, in the same option), naming the same choice twice, replacing a choice by itself.
@@ -378,7 +407,7 @@ flowchart TD
 - The analyst writes nothing. An option enters the scenario on the “Add to scenario” click, written like a stamp placed on the map; Run then gives the figures of the test again (A4). When the option removes a choice, the button reads “Apply to scenario”: the recipe is read again, and if a stamp to remove is no longer there (someone edited it since the test), nothing is written and the screen says so. Otherwise the new stamp is written then the old one removed, as the recipe does when a stamp is edited by hand: a stop half-way leaves one stamp too many, which can be seen, rather than one too few. The parity fixture covers a replacement: the figures of the test and those of Run after the click are the same. If the scenario is no longer the one that was tested, the screen says which of three cases it is: one option added from the tab (Run must give its column again, the other columns no longer describe this scenario), several options added together (no test covered them together), or an edit made elsewhere (every column is out of date).
 - A run is not a forecast: the table carries it in its title.
 
-**Code.** `backend/src/services/analyst-options.ts` (`testOption`, `choiceNamed`, `stampOf`, `responseStamp`, `transfersStamp`, `costOf`, `benchFor`, `optionsClosing`), `analyst-responses.ts` (`listResponses`, `listedResponses`, `transferRule`, `transferRoutes`, `whatRulesDo`, `declaresCost`), `scenario-stamps.ts` (`basisOfStamp`, `choiceRefs`, `choiceLine`), `scenario-run.ts` (`ScenarioRunner.withOption`, `ROUTE_CAPACITY`), `analyst-tools.ts` (`scenario_recipe`), route `POST /v1/ontology/:env/analyst/options` in `backend/src/routes/analyst.ts`; `frontend/app/studio/simulation/hex/OptionsTab.tsx`, `option-cards.tsx` (`weighOptions`, `CostLine`), `analyst-parts.tsx` (`OptionChanges`), `option-write.ts` (`writeOption`), `addOption` in `HexTwinView.tsx`, `frontend/app/studio/command/options.ts` (`dominatedBy`).
+**Code.** `backend/src/services/analyst-options.ts` (`testOption`, `choiceNamed`, `stampOf`, `responseStamp`, `transfersStamp`, `costOf`, `withPriceList`, `settleMode`, `priceBasis`, `benchFor`, `optionsClosing`), `price-catalogue.ts` and `cost-ledger.ts` (A12), `analyst-responses.ts` (`listResponses`, `listedResponses`, `transferRule`, `transferRoutes`, `whatRulesDo`, `declaresCost`), `scenario-stamps.ts` (`basisOfStamp`, `choiceRefs`, `choiceLine`), `scenario-run.ts` (`ScenarioRunner.withOption`, `ROUTE_CAPACITY`), `analyst-tools.ts` (`scenario_recipe`), route `POST /v1/ontology/:env/analyst/options` in `backend/src/routes/analyst.ts`; `frontend/app/studio/simulation/hex/OptionsTab.tsx`, `option-cards.tsx` (`weighOptions`, `CostLine`, `DelayLine`, `DemoPrice`), `analyst-parts.tsx` (`OptionChanges`), `option-write.ts` (`writeOption`), `addOption` in `HexTwinView.tsx`, `frontend/app/studio/command/options.ts` (`dominatedBy`).
 **Tests.** `analyst-options.unit.test.ts`, `scenario-run.unit.test.ts` (parity, including the replacement and the recorded responses), `option-cards.test.tsx`, `command/options.test.ts`, `analyst-tools.unit.test.ts`, `routes/analyst.unit.test.ts`, `OptionsTab.test.tsx`, `option-write.test.ts`, `run-parity.test.ts`, `DecisionsTab.test.tsx`, `HexTwinView.test.tsx`. The fixture `scenario-run-parity.fixture.json` is written by `backend/scripts/make-scenario-run-fixture.ts`.
 
 ## A9. Recorded decision and follow-up
@@ -406,6 +435,7 @@ flowchart TD
 - No figure of a decision comes from the browser. The server copies them from the journalled exchange (`app.analyst_exchange`, kind `options`): a figure sent with the request is ignored, and a step that is not a successful test is refused.
 - A decision stands on its own: it keeps the name of the scenario and a copy of the source steps, to stay readable if the scenario or the exchange disappears.
 - A decision cannot be edited. Revising it means recording another one.
+- **A decision keeps the expected cost, and the prices it was counted from.** The cost of the option is copied from the journal with its whole ledger (A12): the lines, the price of each, its source or the demo mention, the mode and the day the units were to be open. A price corrected later in the twin does not change what the decision shows: the Decisions tab reopens the lines of the day of the test.
 - The follow-up compares arrivals, nothing else: it is the only thing the tested run expected that the network also counts day by day. The twin keeps the readings of its own measures (D11), but those are not the queue or the occupancy the engine counts, and nothing sets them beside a run yet. So the expected queue has nothing observed beside it, and the screen says so.
 - A day the series does not report is not compared. A series that reports nothing does not give a gap of zero, it gives no gap.
 - The follow-up does not conclude. It gives the gap; saying whether the decision held belongs to the person.
@@ -592,6 +622,96 @@ flowchart TD
 **Code.** `backend/src/services/response-retest.ts` (`stateMark`, `retiredNow`, `retestOne`, `Retests`, `sqlStore`, `liveTest`, `expectedOnEngage`, `startRetests`, `requestRetests`), `alert-bridge.ts` and `backend/src/routes/signals.ts` (the request), `backend/src/index.ts` (start-up), `prepared-responses.ts` (`onCard`), `backend/src/routes/situation.ts`, migration `066_prepared_response_test.sql`; `frontend/app/studio/situation/PreparedResponses.tsx`, `SituationView.tsx`, `prepared-api.ts`.
 **Tests.** `response-retest.unit.test.ts`, `alert-bridge.unit.test.ts`; `PreparedResponses.test.tsx`, `SituationView.test.tsx`, `DecisionsTab.test.tsx`.
 
+## A12. Prices, the cost ledger and the delay of an option
+
+**Purpose.** Put beside each option what it costs and the day it can be ready, so that a person compares three things: what it changes, how fast, at what price. No price is written in the code. A price is an object of the twin, declared by the institution; the ledger turns it into lines a person can redo by hand. This is not a treasury: no budget, no funding, no cash position.
+
+**The price list, and the ledger of an option.**
+
+```mermaid
+flowchart TD
+    A["Export of the twin, read through the scenario (B1):<br/>types, objects, sites"] --> B{"Does a type bind a property<br/>to the prices_activity mechanic?"}
+    B -->|"no"| B1["No price list:<br/>nothing changes, no cost is added"]
+    B -->|"yes"| C["Each instance of that type is a price row:<br/>activity, mode, delay, amounts, formula, source"]
+    C --> D{"Can the row be read?<br/>amounts in whole cents, never negative,<br/>low, price and high in order, a whole delay,<br/>an amount or a formula"}
+    D -->|"no"| D1["Set aside, with the reason.<br/>Neither rounded nor silently ignored"]
+    D -->|"yes"| E{"Two rows for the same activity,<br/>the same mode and the same place?"}
+    E -->|"yes"| D1
+    E -->|"no"| F["Catalogue"]
+    G["Each capacity of the option:<br/>site, activity, units, first day,<br/>days open, mode"] --> H{"Does it open units?"}
+    H -->|"no: it closes some"| U["Unpriced, with the reason"]
+    H -->|"yes"| I{"Does the site have rows of its own<br/>for this activity?"}
+    F --> I
+    I -->|"yes"| J["They alone count for this site"]
+    I -->|"no"| K["The rows that hold for the whole network"]
+    J --> L{"A row for this mode?<br/>A single mode with none named: that one"}
+    K --> L
+    L -->|"no row for the activity,<br/>mode absent, or mode to be named"| U
+    L -->|"yes"| M{"Does the row have a formula?"}
+    M -->|"yes"| N["Formula evaluated (A3) with the row's numbers,<br/>then units and days of the operation.<br/>Result in cents, rounded once"]
+    N -->|"unknown name, negative result,<br/>or not a finite number"| U
+    N -->|"otherwise"| O["One line: the formula,<br/>the values put in place of the names, the amount"]
+    M -->|"no"| P["Opening: units × price to open.<br/>Running: units × days open × price a day.<br/>Each at the low, the likely and the high"]
+    O --> Q["Ledger: the lines, the total that is their sum,<br/>the low total and the high total, the total by category,<br/>the demo mark, what is unpriced,<br/>and the availability of each change"]
+    P --> Q
+    U --> Q
+```
+
+**The delay of a mode**, checked before any run.
+
+```mermaid
+flowchart TD
+    A["test_option: a capacity,<br/>with or without a mode"] --> B{"Does it close units?"}
+    B -->|"yes, and a mode is given"| R1["Refusal: a mode is a way of opening units"]
+    B -->|"yes, with no mode"| N0["No mode, no price"]
+    B -->|"no"| C{"Does the list hold a price<br/>for this activity at this site?"}
+    C -->|"no, and a mode is given"| R2["Refusal: there is nothing to choose.<br/>list_prices says what is priced"]
+    C -->|"no, with no mode"| N0
+    C -->|"yes"| D{"Is a mode named?"}
+    D -->|"yes, and the list does not have it"| R3["Refusal, with the modes of the list<br/>and the delay of each"]
+    D -->|"no, and the list has several"| R4["Refusal: say which one.<br/>Choosing the cheap one or the fast one<br/>would be deciding what is compared"]
+    D -->|"yes, and it exists"| E["Mode settled"]
+    D -->|"no, and the list has only one"| E
+    E --> F{"Does the day asked come<br/>before the end of the mode's delay?<br/>The decision is taken on day 0 of the run"}
+    F -->|"yes"| R5["Refusal: the first day possible,<br/>and the modes that are fast enough, if any"]
+    F -->|"no"| G["The run opens the units on the day asked"]
+    G --> H["Ledger: the lines of that mode.<br/>Availability: the mode, its delay,<br/>the first day the units are open"]
+```
+
+**The mark of the options no other beats.**
+
+```mermaid
+flowchart TD
+    A["Tested options, each with its cost"] --> B{"Whole cost?<br/>Everything the option changes has a price"}
+    B -->|"no"| C["Not weighed: neither dominated, nor dominating, nor marked"]
+    B -->|"yes"| D["Weighed on two counts: the waiting avoided<br/>against the scenario as it is, and the likely cost"]
+    D --> E{"Does another weighed option cost as much or less<br/>for as much or more waiting avoided,<br/>and strictly better on one of the two?"}
+    E -->|"yes"| F["Dominated, with the name of the other"]
+    E -->|"no"| G{"At least two weighed options,<br/>and a price list on screen?"}
+    G -->|"yes"| H["Not beaten.<br/>Several options can carry the mark"]
+    G -->|"no"| I["No mark"]
+```
+
+**Rules.**
+- **Money is data of the twin, not code.** A price list is an object type the institution names as it likes, whose properties are bound to eleven mechanics (`PRICE_MECHANICS`): what the row prices (`prices_activity`), the price of a unit open for a day and the price of opening it, each with a low and a high end, a formula (`price_formula`), the mode (`price_mode`), its delay in days (`price_lead_days`) and the source (`price_source`). Each instance is a row. No amount is written in the API or in the engine, and no type is recognised by its name. A twin that declares no price has no price.
+- **A price is for a kind of resource, not for each unit.** The row names an activity, that is, the name of the type whose units are the capacity: sixty beds one adds do not exist yet and still have a price, and correcting a price touches one row. The name is compared without capitals, without accents, and without telling a space from an underscore: “Soins intensifs” and `soins_intensifs` are the same activity.
+- **A site's price comes first.** A row attached to a unit, by a placement link, holds for that site (`priced_at`, B1). A site that has its own rows for an activity is priced by them alone; the other sites are priced by the rows with no attachment, which hold for the whole network.
+- **Whole cents, from the row to the total.** An amount is declared in whole cents: 125050 for 1,250.50 $. An amount that is not one is refused rather than rounded, because rounding a price is changing it. Every line of the ledger is in whole cents, and a total is the sum of its lines: no sum is a floating-point number. The result of a formula is rounded once, to the cent.
+- **A range is read in three passes.** An amount can carry a low and a high end. The ledger then gives three totals: low, likely, high. Nothing is drawn at random. What the screen compares between two options is the likely cost; the range is written beside it.
+- **A mode is a price and a delay.** Normal in fourteen days, rush in three at another price: that is what makes “faster costs more” exist. The decision is taken on day 0 of the run; so a capacity cannot be open before the delay of its mode, and `test_option` refuses the day that asks for it, saying the first day possible. The engine itself delays nothing: it opens the units on the day asked, once that day is admitted. A row with no mode is called `standard`; a row with no delay declares zero, and the screen writes that no delay is declared, not that the thing is immediate.
+- **A cost function is a formula, not code.** It is written in the calculator's language (A3) and can name two kinds of values: the numbers of its own price row, by the property's name in lower case, and the quantities of the operation. For capacity that is opened, those quantities are `units` and `days`, and they come before a number of the row that would bear the same name. The ledger line keeps the formula, the values put in place of the names and the result: “why does this cost so much” has an answer one can redo.
+- **Unpriced is not free.** An activity the list does not hold, units that are closed, a mode that had to be named, a formula that names a missing value or whose result is not a price: no line, and the reason is written among what is unpriced. Never a zero. The cost of the option is then not called whole (A8).
+- **A demo price shows, on itself and on what follows from it.** A row with no source is a demo price: it carries the mark, so does the ledger line, and so does every total that contains it. Among what the option rests on, a price that names its source is **published**; a demo price is an **assumption** (`priceBasis`).
+- **What the cost covers.** The cost of the choices, and only that: opening units, then keeping them open for the days of the run. Not what the network costs to run, not staff or stocks, which the twin does not hold, and not what a closure would save. The screen says so.
+- **Health and money stay apart.** Nothing converts waiting into dollars, and no score mixes the two. “Dominated” and “Not beaten” need no exchange rate: they only say that one option does at least as well as another on both counts at once, or that none does so against it. Several options can be “Not beaten”; choosing between them is the person's.
+- **Without a price list, nothing changes.** The same options, the same figures, the same cards; “Not beaten” appears only with a price list on screen.
+- **A scenario can change a price.** The catalogue is read from the export of the twin seen through the scenario, like everything else: a scenario that changes a price row with `set_property` (B5) changes the catalogue of that scenario, with nothing more to build.
+- **Where prices are seen and corrected.** A price row is an instance: it is created and corrected in the “Instances” view of the ontology, or arrives through a pipeline like the rest of the twin. The “Functions” view shows the whole list, the formulas with what each may name, and the rows set aside with their reason. A type's panel shows the rows that price its units. The analyst reads the same list through `list_prices`.
+- **What is missing.** Only the capacity an option opens is priced. A transfer of patients has no price: its formula (a flat fee, so much a kilometre) will have something to apply to the day the ledger prices a transfer, with its own quantities. A measure has no price. The costs of recorded responses remain the amounts of their rules, outside the list (B4).
+
+**Code.** `backend/src/services/price-catalogue.ts` (`catalogueOf`, `modesFor`, `priceFor`, `priceListOf`, `fold`, `OPERATION_NAMES`), `cost-ledger.ts` (`ledgerOf`, `linesOf`, `formatCents`), `analyst-options.ts` (`settleMode`, `withPriceList`, `priceBasis`, `priceLines`), `analyst-tools.ts` (`list_prices`), `analyst-calc.ts` (`evaluate`), `property-schema.ts` (`PRICE_MECHANICS`), `twin-export.ts` (`priced_at`), `decisions.ts`, route `GET /v1/ontology/:env/twin/prices` in `backend/src/routes/twin.ts`; `simulation-service/app/events/mechanics.py` (`PRICE_MECHANICS`); `frontend/app/studio/simulation/hex/option-cards.tsx` (`CostLine`, `DelayLine`, `DemoPrice`, `weighOptions`), `OptionsTab.tsx`, `DecisionsTab.tsx`, `frontend/app/studio/manager/PriceList.tsx`, `price-list.ts`, `frontend/lib/money.ts`, `frontend/lib/property-schema.ts`.
+**Tests.** `cost-ledger.unit.test.ts` (the calculation by hand, the formula, the missing value, a site's price, the range), `analyst-options.unit.test.ts` (the mode and its delay, nothing changes without a price list, the invented amount struck, the decision keeps the cost), `twin-figures.unit.test.ts`, `tests/test_events_mechanics.py`; `option-cards.test.tsx`, `OptionsTab.test.tsx`, `DecisionsTab.test.tsx`, `manager/PriceList.test.tsx`, `PropertyRowsEditor.test.tsx`.
+
 ## B1. Export of the twin
 
 **Purpose.** Put the twin into the shape the engine reads. The engine is in Python and the ontology in Postgres: what crosses over is a payload, not a connection. Nothing here recognises the name of a type or of a link: everything is declared (the role of the type, the behaviour of the link, the mechanics of the property).
@@ -609,7 +729,11 @@ flowchart TD
     A --> I{"Does a type declare a population size?"}
     I -->|"yes"| J["Declared territories,<br/>served by the units linked to them"]
     I -->|"no"| K["One territory per place, of size zero"]
-    A --> L["Instances whose type binds a mechanic:<br/>care model, transitions"]
+    A --> L["Instances whose type binds a mechanic:<br/>care model, transitions, price list"]
+    C --> C2{"Is an object with no role, attached to a unit,<br/>a price row?"}
+    C2 -->|"yes"| C3["The row goes out with the sites it prices (priced_at).<br/>It is capacity nowhere"]
+    C2 -->|"no"| C4["Type with no role: named among the gaps"]
+    C3 --> M
     F --> M["Export: sites, objects, types, territories, routes"]
     G --> M
     H --> M
@@ -622,7 +746,7 @@ flowchart TD
     O -->|"but one of its sub-units does,<br/>at any depth"| P["Note on the shape of the tree,<br/>apart from the list of gaps"]
 ```
 
-**Rules.** Only what is attached to a unit itself counts for it (`facilitiesFrom`): a hospital's wards are sites in their own right, and their beds are theirs. That is the difference with the unit page, which adds up everything under a unit (D6, D9). So a unit can come out with no capacity for two reasons that have nothing in common, and the export tells them apart (`capacityFindings`). If one of its sub-units holds capacity, that is the shape of the tree: an institution whose beds are all in its facilities. The export notes it apart (`structure`, code `CAPACITY_IN_SUBUNITS`), never among the gaps, and the unit's page shows that capacity. If nothing under it holds any, that is a gap (`FACILITY_WITHOUT_RESOURCES`), and the page shows none. “Under” means here what it means on the unit page: both readings walk the tree with the same function (`buildDescendantMap`). A bed already occupied is not free capacity. A territory with no population figure still appears, at zero, in the list of gaps. A route has no throughput in the ontology: it comes out at zero, and that is reported. The read cap is `ROLLUP_INSTANCE_CAP`; reaching it is said, because everything else would be a silent underestimate.
+**Rules.** Only what is attached to a unit itself counts for it (`facilitiesFrom`): a hospital's wards are sites in their own right, and their beds are theirs. That is the difference with the unit page, which adds up everything under a unit (D6, D9). So a unit can come out with no capacity for two reasons that have nothing in common, and the export tells them apart (`capacityFindings`). If one of its sub-units holds capacity, that is the shape of the tree: an institution whose beds are all in its facilities. The export notes it apart (`structure`, code `CAPACITY_IN_SUBUNITS`), never among the gaps, and the unit's page shows that capacity. If nothing under it holds any, that is a gap (`FACILITY_WITHOUT_RESOURCES`), and the page shows none. “Under” means here what it means on the unit page: both readings walk the tree with the same function (`buildDescendantMap`). A bed already occupied is not free capacity. A territory with no population figure still appears, at zero, in the list of gaps. A route has no throughput in the ontology: it comes out at zero, and that is reported. The read cap is `ROLLUP_INSTANCE_CAP`; reaching it is said, because everything else would be a silent underestimate. A price row travels like the other objects whose type binds a mechanic: with its properties, and the list of the units it is attached to (`priced_at`), which says which sites it prices. It is counted as capacity nowhere, and its type is not listed among the types with no role. A price list is not a care model: a twin that declares only prices keeps, for the engine, the default model (`bindsAnyMechanic` ignores the price mechanics, as `binds_care_model` does on the engine's side). The engine reads no price.
 
 **Code.** `backend/src/services/twin-export.ts` (`buildTwinExport`, `facilitiesFrom`, `capacityFindings`), `twin.ts` (`buildDescendantMap`), `property-schema.ts`. **Tests.** `twin-export.unit.test.ts`, `twin-figures.unit.test.ts`, `scenario-lens-links.unit.test.ts`.
 
@@ -717,9 +841,10 @@ flowchart TD
 - The screen names the count that decided the first place. When nothing separates the first two responses, neither is marked as best.
 - Comparing on a single seed would amount to optimising the seed.
 - **A response is run from two places.** The Events page and the replay of the units page compare several responses on one event and rank them, as above. The Scenarios page follows one, placed as a stamp of the recipe, in the pass “with the choices” of its run (A4); that is how the analyst tests a transfer of patients (A8). What each path can do that the other cannot: [The analyst](/docs/product/analyst), “Two ways of asking ‘what if’”.
+- **The costs of responses are demo prices, and the screen says so.** The cost of a response is the amount each of its rules declares, each time it fires. Those amounts are written in the responses the engine provides, or typed with a response written by hand; none comes from the twin's price list (A12) and none has a source. Under the ranking of the Events page and under the options of the replay, a sentence says so as soon as a cost is counted (`costSentence`). Bringing those amounts into the price list remains to be done.
 - **A dominated option is marked the same way on both sides**: costing as much or more to obtain as much or less, strictly worse on one of the two (`dominatedBy`). The replay of the units page counts every cost the engine returns; the Options tab weighs only the options whose cost is whole (A8).
 
-**Code.** `simulation-service/app/events/policy.py`, `scoring.py`, `harness.py` (`rank`, `decided_by`), `api.py` (`RANK_BY`), `frontend/app/studio/events/ranking.ts`, `frontend/app/studio/command/options.ts` (`rankOptions`, `dominatedBy`), `backend/src/services/sim-policies.ts`. **Tests.** `tests/test_events_ranking.py`, `ranking.test.ts`, `command/options.test.ts`.
+**Code.** `simulation-service/app/events/policy.py`, `scoring.py`, `harness.py` (`rank`, `decided_by`), `api.py` (`RANK_BY`), `frontend/app/studio/events/ranking.ts` (`rankingSentence`, `costSentence`), `frontend/app/studio/command/options.ts` (`rankOptions`, `dominatedBy`), `backend/src/services/sim-policies.ts`. **Tests.** `tests/test_events_ranking.py`, `ranking.test.ts`, `command/options.test.ts`.
 
 ## B5. Overlay scenario
 

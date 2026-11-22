@@ -40,6 +40,7 @@ import {
 import { eventFromRows } from "../services/sim-event-from-rows.js";
 import { spreadPayload } from "../services/spread-payload.js";
 import { buildTwinExport } from "../services/twin-export.js";
+import { priceListOf } from "../services/price-catalogue.js";
 import { proxyToSimService } from "../services/ml-simulation.js";
 import {
   deactivateTwinMetric,
@@ -165,6 +166,60 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
         ? { scenarioId: req.query.scenarioId, atOffsetHours: req.query.atOffsetHours ?? 0 }
         : undefined;
       return { ...(await buildTwinExport(req.db, env.id, req.params.env, lens)) };
+    },
+  );
+
+  const amountOut = z.object({ cents: z.number().int(), low: z.number().int(), high: z.number().int() });
+  app.get(
+    "/ontology/:env/twin/prices",
+    {
+      schema: {
+        summary: "The price list the twin declares",
+        description:
+          "Every price row of the twin: the activity it prices, its mode and the days that " +
+          "mode takes, what one unit costs to open and to keep open for a day, or the formula " +
+          "that gives the cost, the sites it is for (none: the whole network), and its source. " +
+          "A price is an object of the twin whose type binds the price mechanics; nothing is " +
+          "recognised by its name and no amount is written in the API. Amounts are whole " +
+          "cents, with their low and high ends, equal when the row declares no range. A row " +
+          "with no source is a demo price (`demo`). `problems` lists the rows that could not " +
+          "be read as a price, each with the reason: they are not used, and not silently " +
+          "dropped. `types` is empty when the twin declares no price list. `formulas` says " +
+          "what a cost formula can be written with: the functions it may call and the " +
+          "quantities of the operation it may name. Read on the twin " +
+          "as it stands: a scenario that changes a price is read by the analyst's `list_prices`.",
+        tags: ["twin"],
+        params: z.object({ env: z.string().min(1) }),
+        response: {
+          200: z.object({
+            types: z.array(z.string()),
+            rows: z.array(
+              z.object({
+                id: z.string(),
+                type: z.string(),
+                activity: z.string(),
+                mode: z.string(),
+                leadDays: z.number().int(),
+                perUnitOpened: amountOut.nullable(),
+                perUnitDay: amountOut.nullable(),
+                formula: z.string().nullable(),
+                canName: z.array(z.object({ name: z.string(), value: z.number().nullable(), of: z.enum(["row", "operation"]) })),
+                sites: z.array(z.object({ id: z.string(), name: z.string() })),
+                source: z.string().nullable(),
+                demo: z.boolean(),
+              }),
+            ),
+            problems: z.array(z.string()),
+            formulas: z.object({ functions: z.array(z.string()), operation: z.array(z.string()) }),
+          }),
+          404: errorEnvelope,
+        },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      return priceListOf(await buildTwinExport(req.db, env.id, req.params.env));
     },
   );
 

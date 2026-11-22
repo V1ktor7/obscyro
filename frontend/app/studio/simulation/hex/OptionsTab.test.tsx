@@ -10,6 +10,7 @@ import type { AnalystStep, OptionFigures, OptionsEvent, OptionsProposal, Options
 const api = vi.hoisted(() => ({ proposeOptions: vi.fn(), recordDecision: vi.fn() }));
 vi.mock("../../analyst-api", async (orig) => ({ ...(await orig<typeof import("../../analyst-api")>()), ...api }));
 
+import { NORMAL_COST, RUSH_COST, UNPRICED_COST } from "./__fixtures__/priced-costs";
 import OptionsTab from "./OptionsTab";
 
 afterEach(() => {
@@ -514,5 +515,74 @@ describe("options that contain a recorded response", () => {
     const a = await screen.findByRole("region", { name: "Option A: Send Lakeshore's waiting patients to Nord" });
     expect(within(a).getByText(/That is unpriced, not free\.$/)).toBeTruthy();
     expect(screen.queryByRole("note")).toBeNull();
+  });
+});
+
+describe("options the twin's price list prices", () => {
+  const beds = (step: string, label: string, start: number, waitingDays: number, cost: ProposedOption["cost"]): ProposedOption =>
+    option({ step, label, stamps: [{ body: { kind: "capacity", facility: "f:lake", activity: "lit", amount: 40 }, start, days: 60 - start }], figures: figures({ sitesWithQueue: 2, waitingDays }), cost });
+  const normal = beds("s2", "Open 40 beds at Lakeshore from day 14, normal mode", 14, 3200, NORMAL_COST);
+  const rush = beds("s3", "Open 40 beds at Lakeshore from day 3, rush mode", 3, 900, RUSH_COST);
+  const elsewhere = beds("s4", "Open 10 stretchers at Nord from day 5", 5, 4100, UNPRICED_COST);
+  const answer = proposal({ options: [normal, rush, elsewhere] });
+
+  it("puts the effect, the delay and the cost of each option on its card", async () => {
+    await tested([{ type: "done", result: result({ answer }), exchangeId: "ex-1" }]);
+
+    const a = await screen.findByRole("region", { name: "Option A: Open 40 beds at Lakeshore from day 14, normal mode" });
+    expect(within(a).getByText(/14 days from the decision, taken on day 0 of the run\./).textContent).toBe(
+      "Open from day 14 · lit at Lakeshore, mode “normal”: 14 days from the decision, taken on day 0 of the run.",
+    );
+    expect(within(a).getByRole("button", { name: /^Cost/ }).textContent).toBe("Cost1,472,000 $· price list between 1,288,000 $ and 1,840,000 $· 1 line");
+    // Every price behind it has a source: no badge.
+    expect(within(a).queryByText("demo price")).toBeNull();
+
+    // The faster one costs more, and its total rests on a price with no source.
+    const b = screen.getByRole("region", { name: "Option B: Open 40 beds at Lakeshore from day 3, rush mode" });
+    expect(within(b).getByText(/3 days from the decision/)).toBeTruthy();
+    expect(within(b).getByRole("button", { name: /^Cost/ }).textContent).toBe("Cost2,951,140 $demo price· 2 lines");
+    expect(within(b).getAllByText("demo price")).toHaveLength(1);
+
+    // A click on the cost opens its lines, each with its arithmetic.
+    fireEvent.click(within(b).getByRole("button", { name: /^Cost/ }));
+    expect(within(b).getByText("40 units × 2,500 $ to open = 100,000 $")).toBeTruthy();
+    expect(within(b).getByText("40 units × 57 days × 1,250.50 $ a day = 2,851,140 $")).toBeTruthy();
+    // The badge is on the total and on each line that rests on the demo price.
+    expect(within(b).getAllByText("demo price")).toHaveLength(3);
+
+    // What the list does not price says so on its card: no delay, no figure.
+    const c = screen.getByRole("region", { name: "Option C: Open 10 stretchers at Nord from day 5" });
+    expect(within(c).queryByText("Delay")).toBeNull();
+    expect(within(c).getByRole("button", { name: /^Cost/ }).textContent).toBe("Costnot counted· no line, 1 not priced");
+  });
+
+  it("marks the options no other beats on waiting and cost together, without ranking them", async () => {
+    await tested([{ type: "done", result: result({ answer }), exchangeId: "ex-1" }]);
+    const a = await screen.findByRole("region", { name: "Option A: Open 40 beds at Lakeshore from day 14, normal mode" });
+    const b = screen.getByRole("region", { name: "Option B: Open 40 beds at Lakeshore from day 3, rush mode" });
+    const c = screen.getByRole("region", { name: "Option C: Open 10 stretchers at Nord from day 5" });
+    // Cheaper and slower, dearer and faster: neither beats the other, and both say so in the same words.
+    const mark =
+      "Not beaten. By these runs, no other option weighed here both costs no more and leaves no more waiting. Several options can carry this mark: it is not a ranking.";
+    expect(within(a).getByRole("note").textContent).toBe(mark);
+    expect(within(b).getByRole("note").textContent).toBe(mark);
+    // An option nothing prices is not weighed, so it is neither marked nor beaten.
+    expect(within(c).queryByRole("note")).toBeNull();
+    // Still in the order tested.
+    expect(screen.getAllByRole("region", { name: /^Option [ABC]:/ }).map((r) => r.getAttribute("aria-label")![7])).toEqual(["A", "B", "C"]);
+    expect(
+      screen.getByText(
+        /2 of 3 options here have a whole cost counted \(by the engine for a recorded response, from the twin’s price list for capacity\) and can be weighed that way; a measure carries no price\. A cost from the price list is the cost of what the option opens: opening units, then keeping them open for the days of the run\. It is not what the network costs to run, and nothing here turns waiting into dollars\./,
+      ),
+    ).toBeTruthy();
+  });
+
+  it("marks as dominated the dearer option that also leaves more waiting", async () => {
+    const slow = { ...rush, figures: figures({ sitesWithQueue: 2, waitingDays: 3900 }) };
+    await tested([{ type: "done", result: result({ answer: proposal({ options: [normal, slow] }) }), exchangeId: "ex-1" }]);
+    const a = await screen.findByRole("region", { name: "Option A: Open 40 beds at Lakeshore from day 14, normal mode" });
+    const b = screen.getByRole("region", { name: "Option B: Open 40 beds at Lakeshore from day 3, rush mode" });
+    expect(within(a).getByRole("note").textContent).toMatch(/^Not beaten\./);
+    expect(within(b).getByRole("note").textContent).toMatch(/^Dominated\. By these runs, “Open 40 beds at Lakeshore from day 14, normal mode” costs no more and leaves no more waiting\./);
   });
 });

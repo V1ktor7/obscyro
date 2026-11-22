@@ -58,6 +58,27 @@ COUPLES_ALONG = "couples_along"
 COUPLES_AT = "couples_at"
 PRODUCES_DEMAND = "produces_demand"
 
+# A price list. Listed here so the mirror of the closed set stays whole, and
+# for no other reason: the engine reads none of these. What a unit costs is
+# counted by the platform's cost ledger, from the twin, and no cent enters
+# a run. An object that binds them travels like any other declared object
+# and is ignored.
+PRICE_MECHANICS = frozenset(
+    {
+        "prices_activity",
+        "price_per_unit_day",
+        "price_per_unit_day_low",
+        "price_per_unit_day_high",
+        "price_per_unit_opened",
+        "price_per_unit_opened_low",
+        "price_per_unit_opened_high",
+        "price_formula",
+        "price_mode",
+        "price_lead_days",
+        "price_source",
+    }
+)
+
 
 class ContradictoryCareModel(ValueError):
     """Two rows describe one severity and disagree about it.
@@ -86,10 +107,18 @@ def _bound(schema: PropertySchema, type_name: str) -> dict[str, str]:
 
 
 def binds_care_model(schema: PropertySchema | None) -> bool:
-    """Whether anything at all is bound. Cheap enough to ask before loading."""
+    """Whether anything the engine reads is bound. Cheap enough to ask before loading.
+
+    A price list binds mechanics too, and it is not a care model: a twin that
+    declared what a bed costs has not said what an admission does.
+    """
     if schema is None:
         return False
-    return any(p.mechanic for t in schema.types for p in t.properties)
+    return any(
+        p.mechanic and p.mechanic not in PRICE_MECHANICS
+        for t in schema.types
+        for p in t.properties
+    )
 
 
 def care_model_from(

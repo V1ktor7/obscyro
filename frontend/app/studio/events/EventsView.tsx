@@ -43,7 +43,7 @@ import PolicyComposer, { type PolicyDraft } from "./PolicyComposer";
 import ReplayPlayer from "./ReplayPlayer";
 import { downloadText, slug, toCsv } from "./download";
 import { runBlockedBecause, unsizedPopulations } from "./run-gate";
-import { COUNT_LABEL, changeAgainst, comparedOn, hasWinner, rankingSentence } from "./ranking";
+import { COUNT_LABEL, changeAgainst, comparedOn, costSentence, hasWinner, rankingSentence } from "./ranking";
 import { useStudio } from "../StudioShell";
 import EventBuilder from "./builder/EventBuilder";
 import EventPreview from "./builder/EventPreview";
@@ -891,6 +891,10 @@ function Results({ result }: { result: SimComparison }) {
       <p className="mt-3 text-[11px] leading-relaxed text-ink-faint">
         {rankingSentence(result.ranking, result.weights)}
       </p>
+      {/* The amounts behind the cost column have no source: said wherever one is counted. */}
+      {costSentence(result.rows.map((r) => r.response_cost)) ? (
+        <p className="mt-1.5 text-[11px] leading-relaxed text-warn-ink">{costSentence(result.rows.map((r) => r.response_cost))}</p>
+      ) : null}
     </Card>
   );
 }

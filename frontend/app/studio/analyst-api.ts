@@ -267,16 +267,80 @@ export interface OptionChange {
 /**
  * What a run cost, as far as anything says. The engine counts the cost a rule
  * of a recorded response declares for its action, each time the action fires.
- * Capacity and measures carry no price in the twin, and a response whose rules
- * declare none is unpriced, not free.
+ * Capacity an option opens is priced by the twin's price list when it declares
+ * one (`priced`). Measures carry no price, and whatever nothing prices is
+ * unpriced, not free.
  */
 export interface OptionCost {
-  /** What the engine counted over the run; null when nothing in the run declares a cost. */
+  /** What the run cost, in dollars: the engine's count and the price list's total; null when nothing gives a cost. */
   counted: number | null;
   /** True when that figure is the whole cost of what the option changes: only then can two options be weighed. */
   complete: boolean;
   /** The same, as a sentence written by the server. */
   says: string;
+  /**
+   * True when an amount behind the count has no source: a price row that names
+   * none, or the amount a rule of a recorded response declares. Absent when
+   * nothing is counted, and from records kept before the server said it.
+   */
+  demo?: boolean;
+  /** What the twin's price list gives for the capacity the option opens, line by line. Absent when the twin declares no price. */
+  priced?: CostLedger;
+}
+
+/** An amount in whole cents, with its low and high ends. Without a declared range the three are the same. */
+export interface PriceAmount {
+  cents: number;
+  low: number;
+  high: number;
+}
+
+/** One line of an option's cost: a change of the option, the price row it used, and the arithmetic written out. */
+export interface LedgerLine {
+  /** The change of the option that caused it, by its position among the option's stamps. */
+  stamp: number;
+  siteId: string;
+  site: string;
+  activity: string;
+  category: "opening" | "running" | "formula";
+  fromDay: number;
+  toDay: number;
+  units: number;
+  days: number;
+  price: {
+    id: string;
+    type: string;
+    mode: string;
+    /** True when the row is the site's own price, which comes before the network's. */
+    ofSite: boolean;
+    unit: PriceAmount | null;
+    formula: string | null;
+    values: Record<string, number> | null;
+    /** Where the price comes from; null for a demo price. */
+    source: string | null;
+    demo: boolean;
+  };
+  cents: number;
+  lowCents: number;
+  highCents: number;
+  /** The arithmetic, written out by the server. */
+  says: string;
+}
+
+export interface CostLedger {
+  lines: LedgerLine[];
+  totalCents: number;
+  lowCents: number;
+  highCents: number;
+  /** True when at least one price used is a range: the three totals then differ. */
+  ranged: boolean;
+  byCategory: Record<LedgerLine["category"], number>;
+  /** True when at least one line rests on a price with no source. */
+  demo: boolean;
+  /** What the price list does not price, each with the reason. */
+  unpriced: { stamp: number; why: string }[];
+  /** For each priced change: the mode it uses and the day its units are open. */
+  availability: { stamp: number; site: string; activity: string; mode: string; leadDays: number; fromDay: number }[];
 }
 
 export interface ProposedOption {

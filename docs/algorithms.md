@@ -20,6 +20,7 @@ Chaque algorithme du produit a ici sa section : à quoi il sert, son schéma, se
 | [A9](#a9-décision-enregistrée-et-suivi) | Décision enregistrée et suivi | `backend/src/services/decisions.ts` |
 | [A10](#a10-recherche-en-ligne-et-calendrier-dévénements) | Recherche en ligne validée et calendrier d'événements | `backend/src/services/analyst-events.ts` |
 | [A11](#a11-retest-dune-réponse-préparée) | Retest d'une réponse préparée, à l'ouverture d'un signal | `backend/src/services/response-retest.ts` |
+| [A12](#a12-prix-registre-des-coûts-et-délai-dune-option) | Prix, registre des coûts et délai d'une option | `backend/src/services/price-catalogue.ts`, `cost-ledger.ts` |
 | **B** | **Jumeau et moteur de simulation** | |
 | [B1](#b1-export-du-jumeau) | Export du jumeau vers le moteur | `backend/src/services/twin-export.ts` |
 | [B2](#b2-un-pas-du-moteur-dévénements) | Un pas du moteur d'événements | `simulation-service/app/events/dynamics.py` |
@@ -168,9 +169,32 @@ flowchart TD
     G -->|"oui"| H["Résultat rendu comme une étape, citable"]
 ```
 
-**Règles.** Opérateurs `+ - * / ^` et parenthèses. Fonctions `round, abs, sqrt, floor, ceil, min, max, sum, mean`. Aucune variable, aucun accès à quoi que ce soit, rien n'est exécuté comme du code. Unités admises sans source : 0, 1, 2, 7, 10, 24, 100, 1000.
+**Règles.** Opérateurs `+ - * / ^` et parenthèses. Fonctions `round, abs, sqrt, floor, ceil, min, max, sum, mean`. Rien n'est exécuté comme du code. Unités admises sans source : 0, 1, 2, 7, 10, 24, 100, 1000. L'outil `calculate` de l'analyste ne connaît aucune variable et n'a accès à rien.
 
-**Code.** `backend/src/services/analyst-calc.ts`, outil `calculate` dans `analyst-tools.ts`. **Tests.** `analyst-calc.unit.test.ts`, `analyst-tools.unit.test.ts`.
+**La même évaluation sert aux formules de coût** (A12), avec des valeurs nommées en plus. Le contrôle des opérandes, lui, appartient à l'outil `calculate` : une formule de coût est déclarée dans le jumeau, ses nombres sont ceux de sa ligne de prix.
+
+```mermaid
+flowchart TD
+    A["Formule d'une ligne de prix<br/>ceil(units / places) * frais_fixe"] --> B["Découpage : nombres, opérateurs, noms"]
+    B --> C{"Un nom est-il suivi d'une parenthèse ?"}
+    C -->|"oui"| D{"Est-ce une des fonctions de la liste ?"}
+    D -->|"non"| X["Refus : fonction inconnue"]
+    D -->|"oui"| E["Fonction appliquée à ses arguments"]
+    C -->|"non"| F{"Le nom fait-il partie des valeurs données ?"}
+    F -->|"non"| Y["Refus : nom inconnu,<br/>avec la liste de ce que la formule peut nommer"]
+    F -->|"oui"| G{"Sa valeur est-elle un nombre fini ?"}
+    G -->|"non"| Z["Refus : ce nom n'a pas de valeur"]
+    G -->|"oui"| H["La valeur prend la place du nom,<br/>et la paire est notée (used)"]
+    E --> I["Évaluation selon les priorités usuelles"]
+    H --> I
+    I --> J{"Résultat fini ?"}
+    J -->|"non"| X2["Refus"]
+    J -->|"oui"| K["Résultat, avec les valeurs<br/>mises à la place des noms"]
+```
+
+Une valeur nommée n'est cherchée que parmi celles que l'appelant donne, et une fonction que parmi celles de la liste : un mot de la formule n'est jamais pris pour autre chose. Une formule qui a un trou ne donne aucun résultat, jamais un résultat avec un zéro dans le trou.
+
+**Code.** `backend/src/services/analyst-calc.ts` (`evaluate`, `FUNCTION_NAMES`), outil `calculate` dans `analyst-tools.ts`. **Tests.** `analyst-calc.unit.test.ts`, `analyst-tools.unit.test.ts`, `cost-ledger.unit.test.ts`.
 
 ## A4. Run d'un scénario
 
@@ -323,11 +347,13 @@ flowchart TD
     D3 -->|"non"| E
     D3 -->|"oui"| D4["L'ancien tampon sort de la liste.<br/>Remplacement : ce que le changement ne dit pas<br/>est gardé de l'ancien"]
     D4 --> F
-    F --> G["Une passe du scénario tel quel, avec ses choix :<br/>lancée une fois, gardée pour toutes les options"]
-    F --> H["Une passe du scénario, les tampons retirés en moins,<br/>ceux de l'option en plus (A4)"]
+    F --> F2{"Pour chaque capacité que la liste de prix tarife :<br/>le mode existe-t-il, et son délai<br/>permet-il le jour demandé ? (A12)"}
+    F2 -->|"non"| E
+    F2 -->|"oui, ou rien à tarifer"| G["Une passe du scénario tel quel, avec ses choix :<br/>lancée une fois, gardée pour toutes les options"]
+    F2 -->|"oui, ou rien à tarifer"| H["Une passe du scénario, les tampons retirés en moins,<br/>ceux de l'option en plus (A4)"]
     G --> I["Résultat pour le modèle : les deux runs en résumé,<br/>les sites où l'on attend, sur quoi l'option repose"]
     H --> I
-    H --> J["Relevé pour l'écran : chiffres entiers, tampons écrits,<br/>choix retirés, ce qui est ajouté, remplacé, retiré,<br/>arrivées par jour, niveaux de preuve,<br/>coût compté par le moteur"]
+    H --> J["Relevé pour l'écran : chiffres entiers, tampons écrits,<br/>choix retirés, ce qui est ajouté, remplacé, retiré,<br/>arrivées par jour, niveaux de preuve,<br/>coût compté par le moteur,<br/>et registre de la liste de prix quand le jumeau en déclare une (A12)"]
     I --> K{"Autre option à tester ?"}
     K -->|"oui"| C
     K -->|"non"| L["give_options : un mécanisme par option,<br/>ce que le test ne dit pas, lecture, arbitrages, limites"]
@@ -339,7 +365,7 @@ flowchart TD
     J --> P
     P --> P2{"Deux options dont le coût est entier,<br/>et l'une coûte autant ou plus<br/>pour autant ou plus d'attente ?"}
     P2 -->|"oui"| P3["Celle-là est marquée Dominated,<br/>avec le nom de l'option qui la domine"]
-    P2 -->|"non"| P4["Aucune marque"]
+    P2 -->|"non"| P4["Pas de Dominated.<br/>Avec une liste de prix à l'écran :<br/>Not beaten sur les options pesées qu'aucune ne bat (A12)"]
     P --> Q{"Add to scenario / Apply to scenario :<br/>clic humain. L'option retire-t-elle un choix ?"}
     Q -->|"non"| Q1["Les tampons sont écrits"]
     Q -->|"oui"| Q2["La recette est relue"]
@@ -358,8 +384,11 @@ flowchart TD
 - **Un transfert de patients.** Le changement `transfer` nomme deux sites, un nombre de patients par jour et un jour. Le programme en écrit la règle (`transferRule`) : quand quelqu'un attend au premier site pour l'activité que le run lit, et que le second en a une unité libre, jusqu'à ce nombre de patients y sont envoyés. La condition sur le site d'arrivée n'est pas une précaution de plus : sans elle on envoie des patients attendre derrière ceux d'un hôpital plein. Plusieurs transferts d'une option font une seule réponse, une règle chacun. Sont refusés, avec ce qui peut être demandé à la place : deux sites entre lesquels le jumeau ne contient aucune route de transfert (le refus liste où les patients du premier peuvent aller), un site d'arrivée qui n'offre pas l'activité, plus de patients par jour qu'une route n'en porte.
 - **Ce qu'une route porte.** Le jumeau ne contient le débit d'aucune route. Le run donne donc à chacune le même : vingt patients par jour (`ROUTE_CAPACITY`), sur la page comme sur le serveur. C'est une hypothèse du moteur, et elle figure comme telle parmi ce sur quoi l'option repose ; que la route existe est, elle, une mesure du jumeau.
 - **Une réponse par run, donc par option.** Une option contient soit un changement `response`, soit des changements `transfer`. Si le scénario suit déjà une réponse, le test est refusé tant que l'option ne la retire pas (`remove`, par son nom de choix) : la tester à sa place est alors un seul test.
-- **Le coût est ce que le moteur a compté, et rien d'autre** (`costOf`). Le moteur compte une chose : le coût que la règle d'une réponse déclare pour son action, chaque fois qu'elle se déclenche. Une capacité et une mesure n'ont aucun prix dans le jumeau, et une réponse dont aucune règle ne déclare de coût est sans prix, pas gratuite : la carte l'écrit à la place d'un chiffre. Le coût d'une option est dit **entier** seulement quand elle est faite d'une réponse à prix déclaré et de rien d'autre ; avec une capacité à côté, le compte est montré et dit incomplet. Le transfert écrit par le programme ne déclare aucun coût : personne n'en a donné, et en inventer un mettrait à l'écran un chiffre qu'aucun outil n'a rendu.
-- **Une option dominée est marquée, d'après les runs.** Entre deux options au coût entier, celle qui coûte autant ou plus et laisse autant ou plus d'attente (strictement pire sur l'un des deux) porte « Dominated » et le nom de l'autre. C'est la seule comparaison de coût et d'effet qui ne demande aucun taux de change entre un dollar et un jour-patient : quelle que soit la valeur qu'on leur donne, cette option n'est pas celle à préférer sur ces deux comptes. L'attente comptée comprend celle des territoires qu'aucun site ne sert, pour qu'une file déplacée hors de vue ne passe pas pour une file évitée. Le marquage est fait par la fonction du rejeu de la page des unités (`dominatedBy`, `frontend/app/studio/command/options.ts`) : les deux écrans le font de la même façon. Une option à capacité ou à mesure n'est ni dominée ni dominante : il faudrait un prix que personne n'a donné.
+- **Le coût vient de deux endroits, et de nulle part ailleurs.** Le moteur compte une chose (`costOf`) : le coût que la règle d'une réponse déclare pour son action, chaque fois qu'elle se déclenche. La liste de prix du jumeau, quand il en déclare une, donne le coût de la capacité que l'option ouvre (A12, `withPriceList`). Les deux s'additionnent quand les deux existent ; aucun ne remplace l'autre. Sans liste de prix, rien ne change : une capacité et une mesure n'ont alors aucun prix, et la carte l'écrit à la place d'un chiffre. Une réponse dont aucune règle ne déclare de coût est sans prix, pas gratuite. Le transfert écrit par le programme ne déclare aucun coût : personne n'en a donné, et en inventer un mettrait à l'écran un chiffre qu'aucun outil n'a rendu.
+- **Un coût est dit entier quand tout ce que l'option change a un prix** : une réponse à coût déclaré, de la capacité que la liste tarife, ou les deux. Une mesure, une capacité que la liste ne contient pas, des unités fermées, un choix retiré du scénario n'ont pas de prix : le compte est alors montré et dit incomplet.
+- **Un mode se choisit, et son délai se respecte.** Quand la liste tarife une activité en plusieurs modes, `test_option` demande lequel chaque capacité utilise, et refuse un jour que le délai du mode ne permet pas, en disant le premier jour possible et les modes assez rapides (A12). C'est ce qui permet de tester la même capacité plus tôt à un prix plus élevé, ou plus tard à un prix plus bas.
+- **Un prix de démo se voit.** Une ligne de prix sans source est un prix de démo, et tout total qui en contient un porte la marque « demo price ». Les montants que déclarent les règles d'une réponse enregistrée n'ont pas de source non plus : ce que le moteur compte pour elle porte la même marque (`OptionCost.demo`), et le résultat de l'outil le dit au modèle.
+- **Une option dominée est marquée, d'après les runs.** Entre deux options au coût entier, celle qui coûte autant ou plus et laisse autant ou plus d'attente (strictement pire sur l'un des deux) porte « Dominated » et le nom de l'autre. C'est la seule comparaison de coût et d'effet qui ne demande aucun taux de change entre un dollar et un jour-patient : quelle que soit la valeur qu'on leur donne, cette option n'est pas celle à préférer sur ces deux comptes. L'attente comptée comprend celle des territoires qu'aucun site ne sert, pour qu'une file déplacée hors de vue ne passe pas pour une file évitée. Le marquage est fait par la fonction du rejeu de la page des unités (`dominatedBy`, `frontend/app/studio/command/options.ts`) : les deux écrans le font de la même façon. Une option dont le coût n'est pas entier n'est ni dominée ni dominante : il faudrait un prix que personne n'a donné. Quand une liste de prix est à l'écran, les options pesées qu'aucune autre ne bat portent « Not beaten » (A12).
 - **Remplacer ou retirer un choix.** Un changement peut prendre la place d'un choix que le scénario contient déjà (`replaces`), ou le retirer (`remove`). « 40 lits au lieu de 60 » est alors un seul tampon à +40, et non un −20 empilé sur un +60 : le test tourne sur le scénario sans l'ancien tampon et avec le nouveau, et c'est ce que la recette contiendra. Un remplacement ne dit que ce qui diffère (les unités, le jour, la durée) ; le reste est gardé du choix remplacé.
 - **Un choix se désigne par un nom, pas par son identifiant.** `scenario_recipe` donne à chaque choix un nom fait de lettres (`choice-a`, `choice-b`…), valable le temps de l'échange. L'identifiant d'un tampon est un UUID : trente-six caractères à recopier sans faute, et pleins de chiffres que le vérificateur trouverait ensuite « dans une étape ». Le relevé du test, lui, garde l'identifiant du tampon : c'est ce que la page retire.
 - **Seul un choix se remplace.** Une condition de départ dit où le run commence, un événement dit ce qui arrive : une option qui en retirerait un testerait un autre scénario en l'appelant une réponse. Ni l'un ni l'autre n'a de nom, et les désigner est refusé, avec la liste de ce qui peut l'être. Sont refusés aussi : remplacer une capacité par une mesure (on retire l'une et on ajoute l'autre, dans la même option), nommer deux fois le même choix, remplacer un choix par lui-même.
@@ -372,7 +401,7 @@ flowchart TD
 - L'analyste n'écrit rien. Une option entre dans le scénario au clic « Add to scenario », écrite comme un tampon posé sur la carte ; Run redonne alors les chiffres du test (A4). Quand l'option retire un choix, le bouton dit « Apply to scenario » : la recette est relue, et si un tampon à retirer n'y est plus (quelqu'un l'a modifié depuis le test), rien n'est écrit et l'écran le dit. Sinon le nouveau tampon est écrit puis l'ancien retiré, comme le fait la recette quand on modifie un tampon à la main : un arrêt à mi-chemin laisse un tampon de trop, qui se voit, plutôt qu'un de moins. Le jeu d'essai de parité couvre un remplacement : les chiffres du test et ceux de Run après le clic sont les mêmes. Si le scénario n'est plus celui qui a été testé, l'écran dit lequel des trois cas c'est : une option ajoutée depuis l'onglet (Run doit redonner sa colonne, les autres colonnes ne décrivent plus ce scénario), plusieurs options ajoutées ensemble (aucun test ne les a couvertes ensemble), ou une modification faite ailleurs (toutes les colonnes sont dépassées).
 - Un run n'est pas une prévision : le tableau le porte dans son titre.
 
-**Code.** `backend/src/services/analyst-options.ts` (`testOption`, `choiceNamed`, `stampOf`, `responseStamp`, `transfersStamp`, `costOf`, `benchFor`, `optionsClosing`), `analyst-responses.ts` (`listResponses`, `listedResponses`, `transferRule`, `transferRoutes`, `whatRulesDo`, `declaresCost`), `scenario-stamps.ts` (`basisOfStamp`, `choiceRefs`, `choiceLine`), `scenario-run.ts` (`ScenarioRunner.withOption`, `ROUTE_CAPACITY`), `analyst-tools.ts` (`scenario_recipe`), route `POST /v1/ontology/:env/analyst/options` dans `backend/src/routes/analyst.ts` ; `frontend/app/studio/simulation/hex/OptionsTab.tsx`, `option-cards.tsx` (`weighOptions`, `CostLine`), `analyst-parts.tsx` (`OptionChanges`), `option-write.ts` (`writeOption`), `addOption` dans `HexTwinView.tsx`, `frontend/app/studio/command/options.ts` (`dominatedBy`).
+**Code.** `backend/src/services/analyst-options.ts` (`testOption`, `choiceNamed`, `stampOf`, `responseStamp`, `transfersStamp`, `costOf`, `withPriceList`, `settleMode`, `priceBasis`, `benchFor`, `optionsClosing`), `price-catalogue.ts` et `cost-ledger.ts` (A12), `analyst-responses.ts` (`listResponses`, `listedResponses`, `transferRule`, `transferRoutes`, `whatRulesDo`, `declaresCost`), `scenario-stamps.ts` (`basisOfStamp`, `choiceRefs`, `choiceLine`), `scenario-run.ts` (`ScenarioRunner.withOption`, `ROUTE_CAPACITY`), `analyst-tools.ts` (`scenario_recipe`), route `POST /v1/ontology/:env/analyst/options` dans `backend/src/routes/analyst.ts` ; `frontend/app/studio/simulation/hex/OptionsTab.tsx`, `option-cards.tsx` (`weighOptions`, `CostLine`, `DelayLine`, `DemoPrice`), `analyst-parts.tsx` (`OptionChanges`), `option-write.ts` (`writeOption`), `addOption` dans `HexTwinView.tsx`, `frontend/app/studio/command/options.ts` (`dominatedBy`).
 **Tests.** `analyst-options.unit.test.ts`, `scenario-run.unit.test.ts` (parité, dont le remplacement et les réponses enregistrées), `option-cards.test.tsx`, `command/options.test.ts`, `analyst-tools.unit.test.ts`, `routes/analyst.unit.test.ts`, `OptionsTab.test.tsx`, `option-write.test.ts`, `run-parity.test.ts`, `DecisionsTab.test.tsx`, `HexTwinView.test.tsx`. Le jeu d'essai `scenario-run-parity.fixture.json` est écrit par `backend/scripts/make-scenario-run-fixture.ts`.
 
 ## A9. Décision enregistrée et suivi
@@ -400,6 +429,7 @@ flowchart TD
 - Aucun chiffre d'une décision ne vient du navigateur. Le serveur les recopie de l'échange journalisé (`app.analyst_exchange`, sorte `options`) : un chiffre envoyé avec la demande est ignoré, et une étape qui n'est pas un test réussi est refusée.
 - Une décision se suffit à elle-même : elle garde le nom du scénario et une copie des étapes sources, pour rester lisible si le scénario ou l'échange disparaît.
 - Une décision ne se modifie pas. La revoir, c'est en enregistrer une autre.
+- **Une décision garde le coût attendu, et les prix dont il a été compté.** Le coût de l'option est recopié du journal avec son registre entier (A12) : les lignes, le prix de chacune, sa source ou la mention de démo, le mode et le jour où les unités devaient être ouvertes. Un prix corrigé plus tard dans le jumeau ne change pas ce que la décision montre : l'onglet Decisions rouvre les lignes du jour du test.
 - Le suivi compare des arrivées, rien d'autre : c'est la seule chose que le run testé attendait et que le réseau compte aussi jour par jour. Le jumeau garde les relevés de ses propres mesures (D11), mais ce ne sont pas la file ni l'occupation que le moteur compte, et rien ne les pose encore à côté d'un run. La file attendue n'a donc rien d'observé à côté d'elle, et l'écran le dit.
 - Un jour que la série ne rapporte pas n'est pas comparé. Une série qui ne rapporte rien ne donne pas un écart nul, elle ne donne pas d'écart.
 - Le suivi ne conclut pas. Il donne l'écart ; dire si la décision a tenu revient à la personne.
@@ -586,6 +616,96 @@ flowchart TD
 **Code.** `backend/src/services/response-retest.ts` (`stateMark`, `retiredNow`, `retestOne`, `Retests`, `sqlStore`, `liveTest`, `expectedOnEngage`, `startRetests`, `requestRetests`), `alert-bridge.ts` et `backend/src/routes/signals.ts` (la demande), `backend/src/index.ts` (le démarrage), `prepared-responses.ts` (`onCard`), `backend/src/routes/situation.ts`, migration `066_prepared_response_test.sql` ; `frontend/app/studio/situation/PreparedResponses.tsx`, `SituationView.tsx`, `prepared-api.ts`.
 **Tests.** `response-retest.unit.test.ts`, `alert-bridge.unit.test.ts` ; `PreparedResponses.test.tsx`, `SituationView.test.tsx`, `DecisionsTab.test.tsx`.
 
+## A12. Prix, registre des coûts et délai d'une option
+
+**But.** Mettre à côté de chaque option ce qu'elle coûte et le jour où elle peut être prête, pour qu'une personne compare trois choses : ce que ça change, en combien de temps, à quel prix. Aucun prix n'est écrit dans le code. Un prix est un objet du jumeau, déclaré par l'établissement ; le registre en fait des lignes qu'on peut refaire à la main. Ce n'est pas une trésorerie : ni budget, ni financement, ni encaisse.
+
+**La liste de prix, et le registre d'une option.**
+
+```mermaid
+flowchart TD
+    A["Export du jumeau, lu à travers le scénario (B1) :<br/>types, objets, sites"] --> B{"Un type lie-t-il une propriété<br/>à la mécanique prices_activity ?"}
+    B -->|"non"| B1["Aucune liste de prix :<br/>rien ne change, aucun coût n'est ajouté"]
+    B -->|"oui"| C["Chaque instance de ce type est une ligne de prix :<br/>activité, mode, délai, montants, formule, source"]
+    C --> D{"La ligne se lit-elle ?<br/>montants en cents entiers, jamais négatifs,<br/>bas, prix et haut dans l'ordre, délai entier,<br/>un montant ou une formule"}
+    D -->|"non"| D1["Mise de côté, avec la raison.<br/>Ni arrondie, ni ignorée en silence"]
+    D -->|"oui"| E{"Deux lignes pour la même activité,<br/>le même mode et le même lieu ?"}
+    E -->|"oui"| D1
+    E -->|"non"| F["Catalogue"]
+    G["Chaque capacité de l'option :<br/>site, activité, unités, premier jour,<br/>jours ouverts, mode"] --> H{"Ouvre-t-elle des unités ?"}
+    H -->|"non : elle en ferme"| U["Sans prix, avec la raison"]
+    H -->|"oui"| I{"Le site a-t-il ses propres lignes<br/>pour cette activité ?"}
+    F --> I
+    I -->|"oui"| J["Elles seules comptent pour ce site"]
+    I -->|"non"| K["Les lignes qui valent pour tout le réseau"]
+    J --> L{"Une ligne pour ce mode ?<br/>Un seul mode sans en nommer : c'est lui"}
+    K --> L
+    L -->|"aucune ligne pour l'activité,<br/>mode absent, ou mode à nommer"| U
+    L -->|"oui"| M{"La ligne a-t-elle une formule ?"}
+    M -->|"oui"| N["Formule évaluée (A3) avec les nombres de la ligne,<br/>puis units et days de l'opération.<br/>Résultat en cents, arrondi une fois"]
+    N -->|"nom inconnu, résultat négatif<br/>ou qui n'est pas un nombre fini"| U
+    N -->|"sinon"| O["Une ligne : la formule,<br/>les valeurs mises à la place des noms, le montant"]
+    M -->|"non"| P["Ouverture : unités × prix d'ouverture.<br/>Maintien : unités × jours ouverts × prix par jour.<br/>Chacune au bas, au probable et au haut"]
+    O --> Q["Registre : les lignes, le total qui est leur somme,<br/>le total bas et le total haut, le total par catégorie,<br/>la marque démo, ce qui est sans prix,<br/>et la disponibilité de chaque changement"]
+    P --> Q
+    U --> Q
+```
+
+**Le délai d'un mode**, contrôlé avant tout run.
+
+```mermaid
+flowchart TD
+    A["test_option : une capacité,<br/>avec ou sans mode"] --> B{"Ferme-t-elle des unités ?"}
+    B -->|"oui, et un mode est donné"| R1["Refus : un mode sert à ouvrir des unités"]
+    B -->|"oui, sans mode"| N0["Pas de mode, pas de prix"]
+    B -->|"non"| C{"La liste a-t-elle un prix<br/>pour cette activité à ce site ?"}
+    C -->|"non, et un mode est donné"| R2["Refus : il n'y a rien à choisir.<br/>list_prices dit ce qui a un prix"]
+    C -->|"non, sans mode"| N0
+    C -->|"oui"| D{"Un mode est-il nommé ?"}
+    D -->|"oui, et la liste ne l'a pas"| R3["Refus, avec les modes de la liste<br/>et le délai de chacun"]
+    D -->|"non, et la liste en a plusieurs"| R4["Refus : dire lequel.<br/>Choisir le moins cher ou le plus rapide<br/>serait décider de ce qu'on compare"]
+    D -->|"oui, et il existe"| E["Mode retenu"]
+    D -->|"non, et la liste n'en a qu'un"| E
+    E --> F{"Le jour demandé vient-il<br/>avant la fin du délai du mode ?<br/>La décision est prise au jour 0 du run"}
+    F -->|"oui"| R5["Refus : le premier jour possible,<br/>et les modes assez rapides s'il y en a"]
+    F -->|"non"| G["Le run ouvre les unités au jour demandé"]
+    G --> H["Registre : les lignes de ce mode.<br/>Disponibilité : le mode, son délai,<br/>le premier jour où les unités sont ouvertes"]
+```
+
+**La marque des options qu'aucune autre ne bat.**
+
+```mermaid
+flowchart TD
+    A["Options testées, chacune avec son coût"] --> B{"Coût entier ?<br/>Tout ce que l'option change a un prix"}
+    B -->|"non"| C["Pas pesée : ni dominée, ni dominante, ni marquée"]
+    B -->|"oui"| D["Pesée sur deux comptes : l'attente évitée<br/>contre le scénario tel quel, et le coût probable"]
+    D --> E{"Une autre option pesée coûte-t-elle autant ou moins<br/>pour autant ou plus d'attente évitée,<br/>et strictement mieux sur l'un des deux ?"}
+    E -->|"oui"| F["Dominated, avec le nom de l'autre"]
+    E -->|"non"| G{"Au moins deux options pesées,<br/>et une liste de prix à l'écran ?"}
+    G -->|"oui"| H["Not beaten.<br/>Plusieurs options peuvent porter la marque"]
+    G -->|"non"| I["Aucune marque"]
+```
+
+**Règles.**
+- **L'argent est une donnée du jumeau, pas du code.** Une liste de prix est un type d'objet que l'établissement nomme comme il veut, dont les propriétés sont liées à onze mécaniques (`PRICE_MECHANICS`) : ce que la ligne tarife (`prices_activity`), le prix d'une unité ouverte un jour et celui de son ouverture, chacun avec un bas et un haut, une formule (`price_formula`), le mode (`price_mode`), son délai en jours (`price_lead_days`) et la source (`price_source`). Chaque instance est une ligne. Aucun montant n'est écrit dans l'API ni dans le moteur, et aucun type n'est reconnu à son nom. Un jumeau qui ne déclare aucun prix n'a aucun prix.
+- **Un prix vise une sorte de ressource, pas chaque unité.** La ligne nomme une activité, c'est-à-dire le nom du type dont les unités sont la capacité : soixante lits qu'on ajoute n'existent pas encore et ont quand même un prix, et corriger un prix ne touche qu'une ligne. Le nom se compare sans majuscules, sans accents, et sans distinguer une espace d'un soulignement : « Soins intensifs » et `soins_intensifs` sont la même activité.
+- **Le prix d'un site passe avant.** Une ligne rattachée à une unité, par un lien de placement, vaut pour ce site (`priced_at`, B1). Un site qui a ses propres lignes pour une activité n'est tarifé que par elles ; les autres sites le sont par les lignes sans rattachement, qui valent pour tout le réseau.
+- **Des cents entiers, de la ligne au total.** Un montant se déclare en cents entiers : 125050 pour 1 250,50 $. Un montant qui n'en est pas un est refusé plutôt qu'arrondi, parce qu'arrondir un prix, c'est le changer. Chaque ligne du registre est en cents entiers, et un total est la somme de ses lignes : aucune somme n'est un nombre à virgule. Le résultat d'une formule est arrondi une fois, au cent.
+- **Une fourchette se lit en trois passes.** Un montant peut porter un bas et un haut. Le registre donne alors trois totaux : bas, probable, haut. Rien n'est tiré au hasard. Ce que l'écran compare entre deux options est le coût probable ; la fourchette est écrite à côté.
+- **Un mode est un prix et un délai.** Normal en quatorze jours, accéléré en trois à un autre prix : c'est ce qui fait exister « plus vite coûte plus cher ». La décision est prise au jour 0 du run ; une capacité ne peut donc pas être ouverte avant le délai de son mode, et `test_option` refuse le jour qui le demande, en disant le premier jour possible. Le moteur, lui, ne retarde rien : il ouvre les unités au jour demandé, une fois ce jour admis. Une ligne sans mode s'appelle `standard` ; une ligne sans délai en déclare zéro, et l'écran écrit qu'aucun délai n'est déclaré, pas que la chose est immédiate.
+- **Une fonction de coût est une formule, pas du code.** Elle s'écrit dans la langue de la calculatrice (A3) et peut nommer deux sortes de valeurs : les nombres de sa propre ligne de prix, par le nom de la propriété en minuscules, et les quantités de l'opération. Pour une capacité ouverte, ces quantités sont `units` et `days`, et elles passent avant un nombre de la ligne qui porterait le même nom. La ligne du registre garde la formule, les valeurs mises à la place des noms et le résultat : « pourquoi ça coûte tant » a une réponse qu'on peut refaire.
+- **Sans prix n'est pas gratuit.** Une activité que la liste ne contient pas, des unités fermées, un mode qu'il fallait nommer, une formule qui nomme une valeur absente ou dont le résultat n'est pas un prix : aucune ligne, et la raison est écrite parmi ce qui est sans prix. Jamais un zéro. Le coût de l'option n'est alors pas dit entier (A8).
+- **Un prix de démo se voit, sur lui et sur ce qui en découle.** Une ligne sans source est un prix de démo : elle le porte, la ligne du registre aussi, et tout total qui la contient. Parmi ce sur quoi l'option repose, un prix qui nomme sa source est **publié** ; un prix de démo est une **hypothèse** (`priceBasis`).
+- **Ce que le coût couvre.** Le coût des choix, et seulement lui : ouvrir des unités, puis les garder ouvertes pendant les jours du run. Pas ce que le réseau coûte à faire tourner, pas le personnel ni les stocks, que le jumeau ne contient pas, et pas ce qu'une fermeture ferait économiser. L'écran le dit.
+- **La santé et l'argent restent séparés.** Rien ne convertit une attente en dollars, et aucun score ne mélange les deux. « Dominated » et « Not beaten » ne demandent aucun taux de change : ils disent seulement qu'une option fait au moins aussi bien qu'une autre sur les deux comptes à la fois, ou qu'aucune ne le fait contre elle. Plusieurs options peuvent être « Not beaten » ; choisir entre elles revient à la personne.
+- **Sans liste de prix, rien ne change.** Les mêmes options, les mêmes chiffres, les mêmes cartes ; « Not beaten » n'apparaît qu'avec une liste de prix à l'écran.
+- **Un scénario peut changer un prix.** Le catalogue se lit dans l'export du jumeau vu à travers le scénario, comme tout le reste : un scénario qui modifie une ligne de prix par `set_property` (B5) change le catalogue de ce scénario, sans rien construire de plus.
+- **Où les prix se voient et se corrigent.** Une ligne de prix est une instance : elle se crée et se corrige dans la vue « Instances » de l'ontologie, ou arrive par un pipeline comme le reste du jumeau. La vue « Functions » montre la liste entière, les formules avec ce que chacune peut nommer, et les lignes mises de côté avec leur raison. Le panneau d'un type montre les lignes qui tarifent ses unités. L'analyste lit la même liste par `list_prices`.
+- **Ce qui manque.** Seule la capacité qu'une option ouvre est tarifée. Un transfert de patients n'a pas de prix : sa formule (un forfait, tant par kilomètre) aura de quoi s'appliquer le jour où le registre tarifera un transfert, avec ses propres quantités. Une mesure n'a pas de prix. Les coûts des réponses enregistrées restent les montants de leurs règles, hors de la liste (B4).
+
+**Code.** `backend/src/services/price-catalogue.ts` (`catalogueOf`, `modesFor`, `priceFor`, `priceListOf`, `fold`, `OPERATION_NAMES`), `cost-ledger.ts` (`ledgerOf`, `linesOf`, `formatCents`), `analyst-options.ts` (`settleMode`, `withPriceList`, `priceBasis`, `priceLines`), `analyst-tools.ts` (`list_prices`), `analyst-calc.ts` (`evaluate`), `property-schema.ts` (`PRICE_MECHANICS`), `twin-export.ts` (`priced_at`), `decisions.ts`, route `GET /v1/ontology/:env/twin/prices` dans `backend/src/routes/twin.ts` ; `simulation-service/app/events/mechanics.py` (`PRICE_MECHANICS`) ; `frontend/app/studio/simulation/hex/option-cards.tsx` (`CostLine`, `DelayLine`, `DemoPrice`, `weighOptions`), `OptionsTab.tsx`, `DecisionsTab.tsx`, `frontend/app/studio/manager/PriceList.tsx`, `price-list.ts`, `frontend/lib/money.ts`, `frontend/lib/property-schema.ts`.
+**Tests.** `cost-ledger.unit.test.ts` (le calcul à la main, la formule, la valeur absente, le prix d'un site, la fourchette), `analyst-options.unit.test.ts` (le mode et son délai, sans liste de prix rien ne change, le montant inventé retiré, la décision garde le coût), `twin-figures.unit.test.ts`, `tests/test_events_mechanics.py` ; `option-cards.test.tsx`, `OptionsTab.test.tsx`, `DecisionsTab.test.tsx`, `manager/PriceList.test.tsx`, `PropertyRowsEditor.test.tsx`.
+
 ## B1. Export du jumeau
 
 **But.** Mettre le jumeau dans la forme que lit le moteur. Le moteur est en Python et l'ontologie en Postgres : ce qui traverse est une charge utile, pas une connexion. Rien ici ne reconnaît un nom de type ou de lien : tout est déclaré (rôle du type, comportement du lien, mécanique de la propriété).
@@ -603,7 +723,11 @@ flowchart TD
     A --> I{"Un type déclare une taille de population ?"}
     I -->|"oui"| J["Territoires déclarés,<br/>servis par les unités qui leur sont liées"]
     I -->|"non"| K["Un territoire par lieu, de taille zéro"]
-    A --> L["Instances dont le type lie une mécanique :<br/>modèle de soins, transitions"]
+    A --> L["Instances dont le type lie une mécanique :<br/>modèle de soins, transitions, liste de prix"]
+    C --> C2{"Un objet sans rôle, rattaché à une unité,<br/>est-il une ligne de prix ?"}
+    C2 -->|"oui"| C3["La ligne sort avec les sites qu'elle tarife (priced_at).<br/>Elle n'est de la capacité nulle part"]
+    C2 -->|"non"| C4["Type sans rôle : nommé parmi les manques"]
+    C3 --> M
     F --> M["Export : sites, objets, types, territoires, routes"]
     G --> M
     H --> M
@@ -616,7 +740,7 @@ flowchart TD
     O -->|"mais une de ses sous-unités en porte,<br/>à n'importe quelle profondeur"| P["Note sur la forme de l'arbre,<br/>à part de la liste des manques"]
 ```
 
-**Règles.** Seul ce qui est rattaché à une unité elle-même compte pour elle (`facilitiesFrom`) : les services d'un hôpital sont des sites à part entière, et leurs lits sont les leurs. C'est la différence avec la page des unités, qui additionne tout ce qui est sous une unité (D6, D9). Une unité peut donc sortir sans capacité pour deux raisons qui n'ont rien à voir, et l'export les sépare (`capacityFindings`). Si une de ses sous-unités porte de la capacité, c'est la forme de l'arbre : un établissement dont tous les lits sont dans ses installations. L'export le note à part (`structure`, code `CAPACITY_IN_SUBUNITS`), jamais parmi les manques, et la page de l'unité montre cette capacité. Si rien sous elle n'en porte, c'est un manque (`FACILITY_WITHOUT_RESOURCES`), et la page n'en montre aucune. « Sous » a ici le sens de la page des unités : les deux lectures parcourent l'arbre avec la même fonction (`buildDescendantMap`). Un lit déjà occupé n'est pas de la capacité libre. Un territoire sans chiffre de population apparaît quand même, à zéro, dans la liste des manques. Une route n'a pas de débit dans l'ontologie : elle sort à zéro, et c'est signalé. Le plafond de lecture est `ROLLUP_INSTANCE_CAP` ; l'atteindre se dit, parce que tout le reste serait une sous-estimation silencieuse.
+**Règles.** Seul ce qui est rattaché à une unité elle-même compte pour elle (`facilitiesFrom`) : les services d'un hôpital sont des sites à part entière, et leurs lits sont les leurs. C'est la différence avec la page des unités, qui additionne tout ce qui est sous une unité (D6, D9). Une unité peut donc sortir sans capacité pour deux raisons qui n'ont rien à voir, et l'export les sépare (`capacityFindings`). Si une de ses sous-unités porte de la capacité, c'est la forme de l'arbre : un établissement dont tous les lits sont dans ses installations. L'export le note à part (`structure`, code `CAPACITY_IN_SUBUNITS`), jamais parmi les manques, et la page de l'unité montre cette capacité. Si rien sous elle n'en porte, c'est un manque (`FACILITY_WITHOUT_RESOURCES`), et la page n'en montre aucune. « Sous » a ici le sens de la page des unités : les deux lectures parcourent l'arbre avec la même fonction (`buildDescendantMap`). Un lit déjà occupé n'est pas de la capacité libre. Un territoire sans chiffre de population apparaît quand même, à zéro, dans la liste des manques. Une route n'a pas de débit dans l'ontologie : elle sort à zéro, et c'est signalé. Le plafond de lecture est `ROLLUP_INSTANCE_CAP` ; l'atteindre se dit, parce que tout le reste serait une sous-estimation silencieuse. Une ligne de prix voyage comme les autres objets dont le type lie une mécanique : avec ses propriétés, et la liste des unités auxquelles elle est rattachée (`priced_at`), qui dit quels sites elle tarife. Elle n'est comptée comme capacité nulle part, et son type ne figure pas parmi les types sans rôle. Une liste de prix n'est pas un modèle de soins : un jumeau qui ne déclare que des prix garde, pour le moteur, le modèle par défaut (`bindsAnyMechanic` ignore les mécaniques de prix, comme `binds_care_model` du côté du moteur). Le moteur ne lit aucun prix.
 
 **Code.** `backend/src/services/twin-export.ts` (`buildTwinExport`, `facilitiesFrom`, `capacityFindings`), `twin.ts` (`buildDescendantMap`), `property-schema.ts`. **Tests.** `twin-export.unit.test.ts`, `twin-figures.unit.test.ts`, `scenario-lens-links.unit.test.ts`.
 
@@ -711,9 +835,10 @@ flowchart TD
 - L'écran nomme le compte qui a décidé de la première place. Quand rien ne sépare les deux premières réponses, aucune n'est marquée meilleure.
 - Comparer sur une seule graine reviendrait à optimiser la graine.
 - **Une réponse se lance de deux endroits.** La page Events et le rejeu de la page des unités comparent plusieurs réponses sur un même événement et les classent, comme ci-dessus. La page Scenarios en suit une, posée comme un tampon de la recette, dans la passe « avec les choix » de son run (A4) ; c'est par là que l'analyste teste un transfert de patients (A8). Ce que chaque chemin sait faire et que l'autre ne sait pas : [analyst.md](analyst.md), « Deux façons de demander “et si” ».
+- **Les coûts des réponses sont des prix de démo, et l'écran le dit.** Le coût d'une réponse est le montant que chacune de ses règles déclare, chaque fois qu'elle se déclenche. Ces montants sont écrits dans les réponses que le moteur fournit, ou saisis avec une réponse écrite à la main ; aucun ne vient de la liste de prix du jumeau (A12) et aucun n'a de source. Sous le classement de la page Events et sous les options du rejeu, une phrase le dit dès qu'un coût est compté (`costSentence`). Faire entrer ces montants dans la liste de prix reste à faire.
 - **Une option dominée se marque de la même façon des deux côtés** : coûter autant ou plus pour obtenir autant ou moins, strictement pire sur l'un des deux (`dominatedBy`). Le rejeu de la page des unités compte tout coût que le moteur rend ; l'onglet Options ne pèse que les options dont le coût est entier (A8).
 
-**Code.** `simulation-service/app/events/policy.py`, `scoring.py`, `harness.py` (`rank`, `decided_by`), `api.py` (`RANK_BY`), `frontend/app/studio/events/ranking.ts`, `frontend/app/studio/command/options.ts` (`rankOptions`, `dominatedBy`), `backend/src/services/sim-policies.ts`. **Tests.** `tests/test_events_ranking.py`, `ranking.test.ts`, `command/options.test.ts`.
+**Code.** `simulation-service/app/events/policy.py`, `scoring.py`, `harness.py` (`rank`, `decided_by`), `api.py` (`RANK_BY`), `frontend/app/studio/events/ranking.ts` (`rankingSentence`, `costSentence`), `frontend/app/studio/command/options.ts` (`rankOptions`, `dominatedBy`), `backend/src/services/sim-policies.ts`. **Tests.** `tests/test_events_ranking.py`, `ranking.test.ts`, `command/options.test.ts`.
 
 ## B5. Scénario en surcouche
 

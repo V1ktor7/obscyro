@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { changeAgainst, comparedOn, hasWinner, rankingSentence, type Ranking } from "./ranking";
+import { changeAgainst, comparedOn, costSentence, hasWinner, rankingSentence, type Ranking } from "./ranking";
 
 const BY = ["excess_deaths", "unmet_care", "response_cost"];
 const ranking = (decided_by: string | null): Ranking => ({ by: BY, tie_below: 0.5, decided_by });
@@ -51,5 +51,18 @@ describe("what acting is compared with", () => {
 
   it("never compares the baseline with itself", () => {
     expect(changeAgainst(nothing, nothing, "unmet_care")).toBeNull();
+  });
+});
+
+describe("what the cost column is made of", () => {
+  it("says the costs of responses are demo prices, wherever one is counted", () => {
+    expect(costSentence([nothing.response_cost, transfers.response_cost])).toBe(
+      "Costs are demo prices: a response is counted at the amount each of its rules declares, each time it fires, and none of these amounts has a source.",
+    );
+  });
+
+  it("says nothing when no response counts a cost", () => {
+    expect(costSentence([0, undefined, "0"])).toBe("");
+    expect(costSentence([])).toBe("");
   });
 });

@@ -41,6 +41,18 @@ export const MECHANICS = [
   "couples_along",
   "couples_at",
   "produces_demand",
+  // A price list: read by the cost ledger, never by the engine.
+  "prices_activity",
+  "price_per_unit_day",
+  "price_per_unit_day_low",
+  "price_per_unit_day_high",
+  "price_per_unit_opened",
+  "price_per_unit_opened_low",
+  "price_per_unit_opened_high",
+  "price_formula",
+  "price_mode",
+  "price_lead_days",
+  "price_source",
 ] as const;
 
 export type Mechanic = (typeof MECHANICS)[number];
@@ -60,6 +72,17 @@ export const MECHANIC_KIND: Record<Mechanic, "select" | "quantity"> = {
   couples_along: "select",
   couples_at: "quantity",
   produces_demand: "select",
+  prices_activity: "select",
+  price_per_unit_day: "quantity",
+  price_per_unit_day_low: "quantity",
+  price_per_unit_day_high: "quantity",
+  price_per_unit_opened: "quantity",
+  price_per_unit_opened_low: "quantity",
+  price_per_unit_opened_high: "quantity",
+  price_formula: "select",
+  price_mode: "select",
+  price_lead_days: "quantity",
+  price_source: "select",
 };
 
 /**
@@ -84,6 +107,17 @@ export const MECHANIC_LABEL: Record<Mechanic, string> = {
   couples_along: "Names the coupling it travels — leave it out and it reaches the whole catchment",
   couples_at: "How strongly this catchment couples along the layer this property is named for",
   produces_demand: "Names the severity a unit becomes when it crosses",
+  prices_activity: "Price list: names the activity this row prices",
+  price_per_unit_day: "Price list: whole cents for one unit kept open one day",
+  price_per_unit_day_low: "Price list: the low end of that price, in whole cents — leave it out when the price is not a range",
+  price_per_unit_day_high: "Price list: the high end of that price, in whole cents",
+  price_per_unit_opened: "Price list: whole cents to open one unit, once",
+  price_per_unit_opened_low: "Price list: the low end of the price to open a unit, in whole cents",
+  price_per_unit_opened_high: "Price list: the high end of the price to open a unit, in whole cents",
+  price_formula: "Price list: a formula for the cost in cents, in place of the amounts — it may name units, days and this row's own numbers",
+  price_mode: "Price list: names the mode this row is for (normal, rush) — leave it out when there is one",
+  price_lead_days: "Price list: days this mode takes before the units are available",
+  price_source: "Price list: where this price comes from — left empty, it is shown as a demo price",
 };
 
 export const PROPERTY_BEHAVIOURS = ["level", "rate", "stock", "state"] as const;

@@ -8,6 +8,7 @@ import type { Decision, FollowUp, OptionFigures } from "../../analyst-api";
 const api = vi.hoisted(() => ({ listDecisions: vi.fn(), fetchFollowUp: vi.fn() }));
 vi.mock("../../analyst-api", async (orig) => ({ ...(await orig<typeof import("../../analyst-api")>()), ...api }));
 
+import { RUSH_COST } from "./__fixtures__/priced-costs";
 import DecisionsTab from "./DecisionsTab";
 
 afterEach(() => {
@@ -259,5 +260,27 @@ describe("a decision that bears on a recorded response", () => {
     tab();
     await screen.findByText("Open 80 beds at Lakeshore from day 5");
     expect(screen.queryByText(/Cost counted/)).toBeNull();
+  });
+});
+
+describe("a decision whose option the price list priced", () => {
+  it("keeps the cost expected of it, the prices it used and the day its units were to be open", async () => {
+    api.listDecisions.mockResolvedValue({
+      decisions: [
+        decision({
+          optionLabel: "Open 40 beds at Lakeshore from day 3, rush mode",
+          optionStamps: [{ body: { kind: "capacity", facility: "f:lake", activity: "lit", amount: 40 }, start: 3, days: 57 }],
+          expected: { ...decision().expected, cost: RUSH_COST },
+        }),
+      ],
+    });
+    tab();
+    const cost = await screen.findByRole("button", { name: /^Cost/ });
+    expect(cost.textContent).toBe("Cost2,951,140 $demo price· 2 lines");
+    expect(screen.getByText(/3 days from the decision, taken on day 0 of the run\./)).toBeTruthy();
+    fireEvent.click(cost);
+    // The lines are the ones the test gave on the day of the decision, not a price read again today.
+    expect(screen.getByText("40 units × 57 days × 1,250.50 $ a day = 2,851,140 $")).toBeTruthy();
+    expect(screen.getAllByText("No source in the price list. Price row: Tarif.")).toHaveLength(2);
   });
 });

@@ -142,6 +142,14 @@ describe("binding a mechanic", () => {
       "scales_incidence",
       "transition_rate",
       "couples_at",
+      // The price list: amounts in whole cents and the days a mode takes. Read by the cost ledger, never by the engine.
+      "price_per_unit_day",
+      "price_per_unit_day_low",
+      "price_per_unit_day_high",
+      "price_per_unit_opened",
+      "price_per_unit_opened_low",
+      "price_per_unit_opened_high",
+      "price_lead_days",
     ]);
   });
 
@@ -158,6 +166,11 @@ describe("binding a mechanic", () => {
       "driven_by_state",
       "couples_along",
       "produces_demand",
+      // The price list: what a row prices, its formula, its mode and its source.
+      "prices_activity",
+      "price_formula",
+      "price_mode",
+      "price_source",
     ]);
   });
 

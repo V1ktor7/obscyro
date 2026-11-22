@@ -29,7 +29,6 @@ import {
   Pill,
   Plus,
   Search,
-  Sigma,
   Star,
   Stethoscope,
   User,
@@ -102,6 +101,8 @@ import {
 } from "@/lib/property-schema";
 import { listQualityFlags, type QualityFlag } from "../quality-api";
 import LinkBehaviourDialog from "./LinkBehaviourDialog";
+import { PriceListPage, TypePrices } from "./PriceList";
+import { forgetPriceLists } from "./price-list";
 import SchemaGraphCanvas from "./SchemaGraphCanvas";
 import { useStudio } from "../StudioShell";
 
@@ -521,6 +522,8 @@ export default function ManagerView() {
   }
 
   function notifyChanged() {
+    // A price is an object of the ontology: what was read of the price list may no longer hold.
+    forgetPriceLists();
     bumpOntology();
   }
 
@@ -920,6 +923,7 @@ export default function ManagerView() {
         <TypeEditorPanel
           key={selectedTypeDef.id}
           mode="edit"
+          env={env}
           initial={selectedTypeDef}
           onClose={() => setSelectedType(null)}
           onSubmit={async (_name, description, schema, nature, simRole) => {
@@ -1897,12 +1901,11 @@ function ResourcePages({
       />
     );
   }
+  // The cost formulas the ontology declares, with the price list they belong to.
   return (
-    <PlaceholderPage
-      title="Functions"
-      icon={Sigma}
-      body="Derived metrics and data-quality functions over ontology instances will live here. Today, rules run from the Data Quality workspace."
-    />
+    <PageShell title="Functions">
+      <PriceListPage env={env} />
+    </PageShell>
   );
 }
 
@@ -2242,6 +2245,7 @@ const SIM_ROLE_HINT: Record<SimRole | "", string> = {
 
 function TypeEditorPanel({
   mode,
+  env,
   initial,
   onClose,
   onSubmit,
@@ -2249,6 +2253,8 @@ function TypeEditorPanel({
   onError,
 }: {
   mode: "create" | "edit";
+  /** The environment the type is read in: what its prices are read from. */
+  env?: string | null;
   initial?: EnvObjectType;
   onClose: () => void;
   onSubmit: (
@@ -2357,6 +2363,15 @@ function TypeEditorPanel({
         <Labelled label="Properties">
           <PropertyRowsEditor rows={rows} onChange={setRows} />
         </Labelled>
+        {/* What the twin's price list says a unit of this type costs. Read only: a price is corrected under Instances. */}
+        {mode === "edit" && initial && env ? (
+          <div className="mb-3">
+            <SectionLabel>Prices</SectionLabel>
+            <div className="mt-1">
+              <TypePrices env={env} typeName={initial.name} />
+            </div>
+          </div>
+        ) : null}
       </div>
       <div className="flex items-center gap-2 border-t border-line p-3">
         <button

@@ -55,6 +55,22 @@ export function rankingSentence(ranking: Ranking | undefined, weights: Record<st
 }
 
 /**
+ * What the cost column is made of, said under any table that shows one.
+ *
+ * A response is counted at the amount each of its rules declares. Those
+ * amounts are written in the engine's built-in responses, or typed with a
+ * response somebody wrote; none comes from the twin's price list, and none has
+ * a source. So they are demo prices, and the screen says so wherever one is
+ * shown. Empty when no response on screen counts any cost.
+ */
+export const DEMO_COSTS =
+  "Costs are demo prices: a response is counted at the amount each of its rules declares, each time it fires, and none of these amounts has a source.";
+
+export function costSentence(costs: readonly unknown[]): string {
+  return costs.some((c) => Number(c ?? 0) > 0) ? DEMO_COSTS : "";
+}
+
+/**
  * What "vs doing nothing" compares.
  *
  * Deaths when doing nothing costs any; otherwise the care it leaves

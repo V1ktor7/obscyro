@@ -8,7 +8,13 @@
  * other — with the expression beside it, where a person can redo it.
  *
  * A small grammar on purpose. Numbers, + − × ÷ ^, brackets and a handful of
- * functions. No variables, no property access, nothing evaluated as code.
+ * functions. No property access, nothing evaluated as code.
+ *
+ * The analyst's calculator names nothing: every number in its expression is
+ * written out, and has to have come from somewhere. A cost formula declared in
+ * the twin is the same grammar with named values handed to it (`units`,
+ * `days`, the numbers of the price row itself): `evaluate(expression, names)`.
+ * A name it was not handed is an error, never a zero.
  */
 
 export class CalcError extends Error {
@@ -38,7 +44,8 @@ function lex(src: string): Tok[] {
       i += num[0].length;
       continue;
     }
-    const id = /^[A-Za-z_]+/.exec(src.slice(i));
+    // A name starts with a letter or an underscore; digits may follow (`rate_2`).
+    const id = /^[A-Za-z_][A-Za-z0-9_]*/.exec(src.slice(i));
     if (id) {
       out.push({ t: "id", v: id[0].toLowerCase() });
       i += id[0].length;
@@ -72,6 +79,9 @@ const FUNCTIONS: Record<string, (args: number[]) => number> = {
   sum: (xs) => xs.reduce((a, b) => a + b, 0),
   mean: (xs) => xs.reduce((a, b) => a + b, 0) / xs.length,
 };
+/** The functions an expression may call, by name: the whole list, for whoever has to show it. */
+export const FUNCTION_NAMES: readonly string[] = Object.keys(FUNCTIONS);
+
 const ARITY: Record<string, [number, number]> = {
   abs: [1, 1],
   sqrt: [1, 1],
@@ -91,15 +101,25 @@ export interface Evaluated {
    * decimals asked of `round` is not one of them: it is an instruction.
    */
   operands: string[];
+  /** The named values the expression used, with what each stood for. Empty when none was handed. */
+  used: Record<string, number>;
 }
 
-/** Evaluate an arithmetic expression. Throws `CalcError` on anything else. */
-export function evaluate(expression: string): Evaluated {
+/**
+ * Evaluate an arithmetic expression. Throws `CalcError` on anything else.
+ *
+ * `names` are the values the expression may name, by lower-case name. A name
+ * that is not among them is refused, and so is one whose value is not a finite
+ * number: a formula with a hole in it gives no result, not a result with a
+ * zero in the hole.
+ */
+export function evaluate(expression: string, names: Readonly<Record<string, number>> = {}): Evaluated {
   if (expression.length > 600) throw new CalcError("Expression too long (600 characters at most).");
   const toks = lex(expression);
   if (toks.length === 0) throw new CalcError("Empty expression.");
   let pos = 0;
   const operands: string[] = [];
+  const used: Record<string, number> = {};
   let recording = true;
 
   const peek = () => toks[pos];
@@ -163,9 +183,28 @@ export function evaluate(expression: string): Evaluated {
       return t.v;
     }
     if (t.t === "id") {
-      const fn = FUNCTIONS[t.v];
-      if (!fn) {
-        throw new CalcError(`Unknown function "${t.v}". Available: ${Object.keys(FUNCTIONS).join(", ")}.`);
+      const next = toks[pos + 1];
+      const called = next !== undefined && next.t === "op" && next.v === "(";
+      // A named value: handed by the caller, and only when the name is not being called as a function.
+      if (!called && Object.prototype.hasOwnProperty.call(names, t.v)) {
+        const v = names[t.v]!;
+        if (!Number.isFinite(v)) throw new CalcError(`"${t.v}" has no value.`);
+        pos += 1;
+        used[t.v] = v;
+        return v;
+      }
+      // Looked up among the functions listed here and nowhere else: a plain lookup would find
+      // `constructor` on the object itself, and take a word of the expression for something to call.
+      const fn = Object.prototype.hasOwnProperty.call(FUNCTIONS, t.v) ? FUNCTIONS[t.v] : undefined;
+      if (!fn || !called) {
+        const known = Object.keys(names);
+        throw new CalcError(
+          fn
+            ? `"${t.v}" is a function: write ${t.v}(…).`
+            : known.length
+              ? `Unknown name "${t.v}". This formula can name: ${known.join(", ")}. Functions: ${Object.keys(FUNCTIONS).join(", ")}.`
+              : `Unknown function "${t.v}". Available: ${Object.keys(FUNCTIONS).join(", ")}.`,
+        );
       }
       pos += 1;
       expect("(");
@@ -206,7 +245,7 @@ export function evaluate(expression: string): Evaluated {
     throw new CalcError(`Unexpected "${t.t === "num" ? t.raw : t.v}" after the expression.`);
   }
   if (!Number.isFinite(value)) throw new CalcError("The result is not a finite number.");
-  return { value, operands };
+  return { value, operands, used };
 }
 
 /**

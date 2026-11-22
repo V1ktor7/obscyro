@@ -192,6 +192,17 @@ fonction pure de son entrée, et les deux moitiés se testent séparément.
 | débit d'une route | un lien ne porte pas de capacité | sur le lancement |
 | modèle de soins | ce qu'une admission consomme, et qui meurt quand on la refuse | dans la crise |
 
+**Ce que le moteur ne lit pas : les prix.** Un jumeau peut déclarer une liste
+de prix, par des propriétés liées aux mécaniques de prix (`PRICE_MECHANICS` dans
+`mechanics.py`). Elles voyagent dans le schéma déclaré avec le reste, et le
+moteur n'en lit aucune : aucun cent n'entre dans un run. Une liste de prix n'est
+pas un modèle de soins (`binds_care_model` les ignore) : un jumeau qui ne
+déclare que des prix garde le modèle par défaut. Le coût d'une capacité est
+compté hors du moteur, par le registre de l'API
+([algorithms.md](../../../docs/algorithms.md), A12). Le seul coût que le moteur
+compte reste celui qu'une règle déclare (`Friction.cost`) : un montant sans
+source, montré à l'écran comme un prix de démo.
+
 Les trois sont **refusés plutôt que devinés** (`UnrunnableExport`). Chacun
 produit sinon un résultat parfaitement lisible et faux : un réseau sans capacité
 ne refuse personne, ne tue personne, et classe toutes les réponses à égalité.

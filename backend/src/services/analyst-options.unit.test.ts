@@ -14,6 +14,8 @@ import {
   figuresOf,
   optionsClosing,
   testOption,
+  withPriceList,
+  type OptionCost,
   type OptionsFinding,
   type OptionsProposal,
   type TestedOption,
@@ -21,7 +23,9 @@ import {
 import { Recorded, ToolError, summariseVariant, type AnalystContext, type RunDigest } from "./analyst-tools.js";
 import { declaresCost, listedResponses, transferRule, type StoredResponse } from "./analyst-responses.js";
 import { Ledger, STRUCK } from "./analyst-verify.js";
+import { ledgerOf } from "./cost-ledger.js";
 import { decisionFromExchange } from "./decisions.js";
+import { catalogueOf } from "./price-catalogue.js";
 import type { ScenarioOverride } from "./scenario-overrides.js";
 import type { ScenarioEngine } from "./scenario-run.js";
 import { stampsOf } from "./scenario-stamps.js";
@@ -808,12 +812,17 @@ test("a response of the organisation's library is tested by the same run, from t
   const result = out.result as Record<string, any>;
   const says = "The engine counted 7,500 $ for “Send Lakeshore's queue to Nord”: each of its actions at the cost its rule declares, each time it fired.";
 
-  assert.deepEqual(result.with_this_option, { ...summariseVariant(fixture.withResponse.digest.full), cost_counted_by_the_engine: 7500, cost_how_to_read: says });
+  // The amount is what a rule declares, and no rule amount has a source: the model is told it is a demo price.
+  assert.deepEqual(result.with_this_option, {
+    ...summariseVariant(fixture.withResponse.digest.full),
+    cost_counted_by_the_engine: 7500,
+    cost_how_to_read: `${says} The amounts a rule declares have no source: this is a demo price.`,
+  });
   assert.equal(result.changes[0].from, "the organisation's library");
   const record = out.record as TestedOption;
   assert.deepEqual(JSON.parse(JSON.stringify(record.stamps)), [kept(fixture.withResponse.added[0]!)]);
   // Made of a priced response and nothing else: its cost is whole, and can be set against another's.
-  assert.deepEqual(record.cost, { counted: 7500, complete: true, says });
+  assert.deepEqual(record.cost, { counted: 7500, complete: true, says, demo: true });
   assert.deepEqual([record.asItIsCost.counted, record.asItIsCost.complete], [null, false]);
 
   // By its name too, and with beds beside it the count is no longer the option's whole cost.
@@ -899,7 +908,8 @@ test("a scenario that already follows a response: an option takes it out to test
   assert.deepEqual(result.with_this_option, {
     ...summariseVariant(fixture.withBuiltIn.digest.full),
     cost_counted_by_the_engine: 0,
-    cost_how_to_read: "The engine counted 0 $ for “Transfer when full”: each of its actions at the cost its rule declares, each time it fired.",
+    cost_how_to_read:
+      "The engine counted 0 $ for “Transfer when full”: each of its actions at the cost its rule declares, each time it fired. The amounts a rule declares have no source: this is a demo price.",
   });
   assert.deepEqual(result.changes.map((c: any) => [c.does, c.name]), [
     ["removes", "Send Lakeshore's queue to Nord"],
@@ -1035,4 +1045,255 @@ test("the options are shown in the order they were tested, whatever order the mo
   );
   // Each keeps its own sentence: only the order was the program's to set.
   assert.match(out.answer!.options[0]!.mechanism, /the only ones the west's patients reach/);
+});
+
+// --- prices: what an option costs, and how fast it can be had ---------------------------------
+
+/** A price list as an institution declares it, in its own words. Amounts are whole cents. */
+const TARIF = {
+  name: "Tarif",
+  role: null,
+  properties: [
+    ["activite", "prices_activity"],
+    ["par_jour", "price_per_unit_day"],
+    ["par_jour_haut", "price_per_unit_day_high"],
+    ["ouverture", "price_per_unit_opened"],
+    ["mode", "price_mode"],
+    ["delai_jours", "price_lead_days"],
+    ["source", "price_source"],
+  ].map(([key, mechanic]) => ({ key, type: "number", label: null, unit: null, min: null, max: null, behaviour: null, mechanic })),
+} as unknown as SimExport["object_types"][number];
+
+const price = (id: string, properties: Record<string, unknown>, sites?: string[]) =>
+  ({ id, type: "Tarif", role: null, properties, at: null, ...(sites ? { priced_at: sites } : {}) }) as SimExport["objects"][number];
+
+// 1,250.50 $ a unit a day and 2,500 $ to open, in 5 days, from a published rate card; or 2,100 $ and 6,000 $ in 3 days, with no source.
+const NORMAL = price("p-normal", { activite: fixture.activity, par_jour: 125050, ouverture: 250000, mode: "normal", delai_jours: 5, source: "Grille tarifaire 2026, p. 12" });
+const RUSH = price("p-rush", { activite: fixture.activity, par_jour: 210000, ouverture: 600000, mode: "accéléré", delai_jours: 3 });
+
+function withPrices(rows: SimExport["objects"], engine: ScenarioEngine = recorded()): AnalystContext {
+  const ctx = context(engine);
+  const twin: SimExport = { ...fixture.twin, object_types: [...fixture.twin.object_types, TARIF], objects: [...fixture.twin.objects, ...rows] };
+  ctx.world = async () => twin;
+  ctx.bench = benchFor({ engine, scenario: ctx.scenario!, horizon: fixture.horizon, activity: fixture.activity, world: ctx.world });
+  return ctx;
+}
+
+test("with a price list, a tested option says what its capacity costs, line by line, and when it is open", async () => {
+  const engine = recorded();
+  const out = (await run(withPrices([NORMAL], engine), BEDS)) as Recorded;
+  const result = out.result as Record<string, any>;
+  const record = out.record as TestedOption;
+
+  // 6 beds open from day 5 of a 30-day run: 25 days.
+  //   opening   6 × 2,500.00 $           =  15,000.00 $
+  //   running   6 × 25 days × 1,250.50 $ = 187,575.00 $
+  //   total                                202,575.00 $
+  assert.deepEqual(result.with_this_option.cost_from_the_price_list, {
+    total_dollars: 202575,
+    contains_a_demo_price: false,
+    lines: [
+      { what: "opening", site: "Lakeshore", activity: "lit", mode: "normal", amount_dollars: 15000, arithmetic: "6 units × 2,500 $ to open = 15,000 $", source: "Grille tarifaire 2026, p. 12" },
+      { what: "running", site: "Lakeshore", activity: "lit", mode: "normal", amount_dollars: 187575, arithmetic: "6 units × 25 days × 1,250.50 $ a day = 187,575 $", source: "Grille tarifaire 2026, p. 12" },
+    ],
+  });
+  // How fast: the mode it uses, the days that mode takes, and the day the units are open.
+  assert.deepEqual(result.with_this_option.available, [{ site: "Lakeshore", activity: "lit", mode: "normal", takes_days: 5, open_from_day: 5 }]);
+  assert.deepEqual(result.with_this_option.cost_of_this_option.dollars, 202575);
+  assert.equal(result.with_this_option.cost_of_this_option.is_the_whole_cost, true);
+  assert.match(result.how_to_read, /It is not what the network costs to run\. A demo price has no source/);
+
+  // The effect is what it was without a price list: prices change no run.
+  const { cost_from_the_price_list: _c, available: _a, cost_of_this_option: _t, ...effect } = result.with_this_option;
+  assert.deepEqual(effect, summariseVariant(fixture.withOption.digest.full));
+  assert.equal(engine.compares, 2, "no pass of the engine is spent on a price");
+
+  // What is kept for the screen and the journal: the ledger whole, in whole cents, each line back to its stamp and its price.
+  assert.deepEqual([record.cost.counted, record.cost.complete], [202575, true]);
+  assert.equal(record.cost.priced!.totalCents, 20257500);
+  assert.deepEqual(record.cost.priced!.lines.map((l) => [l.stamp, l.category, l.cents, l.price.id]), [[0, "opening", 1500000, "p-normal"], [0, "running", 18757500, "p-normal"]]);
+  assert.equal(record.cost.says, "The price list gives 202,575 $ for the capacity this option opens: opening it, then keeping it open for the days of the run.");
+  // A price with a source is published, and is among what the option rests on.
+  assert.deepEqual(record.basis.find((b) => b.element.startsWith("Price of")), {
+    element: "Price of lit, mode “normal”: 2,500 $ to open a unit, 1,250.50 $ a unit a day. Source: Grille tarifaire 2026, p. 12",
+    evidence: "published",
+    from: "twin",
+  });
+});
+
+test("faster costs more: the same beds in a faster mode are open sooner, at the price of that mode, and a demo price is said", async () => {
+  const out = (await run(withPrices([NORMAL, RUSH]), { label: "Open 6 beds at Lakeshore from day 5, rush", changes: [{ kind: "capacity", site: "Lakeshore", units: 6, from_day: 5, mode: "Accelere" }] })) as Recorded;
+  const record = out.record as TestedOption;
+  // 6 × 6,000 $ + 6 × 25 days × 2,100 $ = 36,000 + 315,000 = 351,000 $.
+  assert.equal(record.cost.priced!.totalCents, 35100000);
+  assert.deepEqual(record.cost.priced!.availability.map((a) => [a.mode, a.leadDays, a.fromDay]), [["accéléré", 3, 5]]);
+  // No source: a demo price, on the total, in the sentence, and as an assumption in what the option rests on.
+  assert.equal(record.cost.priced!.demo, true);
+  assert.match(record.cost.says, /At least one of these prices has no source: it is a demo price\.$/);
+  assert.equal((out.result as Record<string, any>).with_this_option.cost_from_the_price_list.contains_a_demo_price, true);
+  assert.equal(record.basis.find((b) => b.element.startsWith("Price of"))!.evidence, "assumption");
+  assert.match(record.basis.find((b) => b.element.startsWith("Price of"))!.element, /A demo price: the price list gives it no source$/);
+});
+
+test("a mode has to be named when the list has several, and a day its delay does not allow is refused before any run", async () => {
+  const engine = recorded();
+  const slow = price("p-normal", { ...NORMAL.properties, delai_jours: 14 });
+  const ctx = withPrices([slow, RUSH], engine);
+  // Nobody chooses fast or cheap for the person.
+  await assert.rejects(() => run(ctx, BEDS), (e: unknown) => e instanceof ToolError && /prices lit in 2 modes: “accéléré” \(3 days\), “normal” \(14 days\)\. Say which one this change uses \(mode\)\./.test(e.message));
+  // Fourteen days from the decision, taken on day 0: not open on day 5. The refusal says when, and what is fast enough.
+  await assert.rejects(
+    () => run(ctx, { ...BEDS, changes: [{ ...BEDS.changes[0], mode: "normal" }] }),
+    (e: unknown) =>
+      e instanceof ToolError &&
+      e.message ===
+        "In mode “normal”, lit at Lakeshore takes 14 days to be available. The decision is taken on day 0 of the run, so these units cannot be open on day 5: ask for day 14 or later, or use mode “accéléré” (3 days).",
+  );
+  await assert.rejects(() => run(ctx, { ...BEDS, changes: [{ ...BEDS.changes[0], mode: "express" }] }), /The price list has no mode “express” for lit/);
+  // A refusal runs nothing and uses up no test.
+  assert.equal(engine.compares, 0);
+  assert.equal(ctx.bench!.tested.length, 0);
+});
+
+test("a mode is not asked of what the list does not price, and closing units takes none", async () => {
+  // The list prices another activity only.
+  const other = withPrices([price("p-x", { activite: "civière", par_jour: 40000 })], blank);
+  await assert.rejects(() => run(other, { ...BEDS, changes: [{ ...BEDS.changes[0], mode: "normal" }] }), /The price list holds no price for lit at Lakeshore, so there is no mode to choose: leave mode out/);
+  const closing = withPrices([NORMAL], blank);
+  await assert.rejects(
+    () => run(closing, { label: "Close 2 beds at Lakeshore", changes: [{ kind: "capacity", site: "Lakeshore", units: -2, from_day: 5, mode: "normal" }] }),
+    /This change closes units at Lakeshore: leave mode out\./,
+  );
+});
+
+test("capacity the list does not price is said as unpriced, and the cost is not called whole", async () => {
+  const out = (await run(withPrices([price("p-x", { activite: "civière", par_jour: 40000 })]), BEDS)) as Recorded;
+  const record = out.record as TestedOption;
+  const result = out.result as Record<string, any>;
+  assert.equal(result.with_this_option.cost_from_the_price_list, "The price list prices nothing this option changes.");
+  assert.deepEqual(result.with_this_option.not_priced, ["The price list holds no price for lit at Lakeshore."]);
+  assert.equal("cost_of_this_option" in result.with_this_option, false);
+  // Never a zero: nothing is counted, and it is not complete.
+  assert.deepEqual([record.cost.counted, record.cost.complete], [null, false]);
+  // The twin has a price list: the sentence does not say it holds no price, only that this option is not in it.
+  assert.equal(record.cost.says, "No cost is counted for this run: the twin’s price list prices nothing this option changes. That is unpriced, not free.");
+  assert.deepEqual(record.cost.priced!.unpriced, [{ stamp: 0, why: "The price list holds no price for lit at Lakeshore." }]);
+});
+
+test("a site with a price of its own is costed by it", async () => {
+  const own = price("p-lake", { activite: fixture.activity, par_jour: 100000, par_jour_haut: 130000, mode: "normal", delai_jours: 2, source: "Entente locale" }, ["site:lake"]);
+  const out = (await run(withPrices([NORMAL, RUSH, own]), BEDS)) as Recorded;
+  const priced = (out.record as TestedOption).cost.priced!;
+  // 6 × 25 days × 1,000 $ = 150,000 $; at the high end, 6 × 25 × 1,300 $ = 195,000 $.
+  assert.deepEqual(priced.lines.map((l) => [l.price.id, l.price.ofSite, l.cents]), [["p-lake", true, 15000000]]);
+  assert.deepEqual([priced.totalCents, priced.lowCents, priced.highCents, priced.ranged], [15000000, 15000000, 19500000, true]);
+  const list = (out.result as Record<string, any>).with_this_option.cost_from_the_price_list;
+  assert.deepEqual([list.total_dollars, list.low_dollars, list.high_dollars], [150000, 150000, 195000]);
+  assert.match((out.record as TestedOption).cost.says, /^The price list gives 150,000 \$, between 150,000 \$ and 195,000 \$ for the capacity this option opens/);
+});
+
+test("without a price list an option is costed exactly as before there could be one", async () => {
+  const out = (await run(context(), BEDS)) as Recorded;
+  const result = out.result as Record<string, any>;
+  const record = out.record as TestedOption;
+  assert.deepEqual(result.with_this_option, summariseVariant(fixture.withOption.digest.full));
+  assert.equal("priced" in record.cost, false);
+  assert.equal(record.basis.some((b) => b.element.startsWith("Price of")), false);
+  assert.doesNotMatch(result.how_to_read, /price list/);
+});
+
+test("what the price list gives and what the engine counted are added only when both exist", () => {
+  const ledger = ledgerOf([{ stamp: 0, siteId: "site:lake", siteName: "Lakeshore", activity: "lit", units: 6, start: 5, days: 25, mode: null }], catalogueOf({ object_types: [TARIF], objects: [NORMAL] }));
+  const engine = (counted: number | null, complete: boolean): OptionCost => ({ counted, complete, says: "The engine counted 12,000 $ for “Send to Nord”." });
+  // No recorded response in the run: the list's total is the cost, whole when nothing else is unpriced.
+  assert.deepEqual(
+    [withPriceList(engine(null, false), ledger, 0, false).counted, withPriceList(engine(null, false), ledger, 0, false).complete],
+    [202575, true],
+  );
+  const partly = withPriceList(engine(null, false), ledger, 1, false);
+  assert.deepEqual([partly.counted, partly.complete], [202575, false]);
+  assert.match(partly.says, /The rest of what this option changes carries no price, so this is not the whole cost of the option\.$/);
+  // A priced response beside it: the two are added, and the whole is whole only if the engine's part was.
+  const both = withPriceList(engine(12000, true), ledger, 0, true);
+  assert.deepEqual([both.counted, both.complete], [214575, true]);
+  // Every row of this list names its source, and the sum still rests on a demo price: the amount a rule declares has none.
+  assert.deepEqual([ledger.demo, both.demo, withPriceList(engine(null, false), ledger, 0, false).demo], [false, true, false]);
+  // A response whose rules declare no cost: the list's part is given, and the whole is not.
+  const half = withPriceList({ counted: null, complete: false, says: "No cost is counted for this run: the rules of “X” declare none. That is unpriced, not free." }, ledger, 0, true);
+  assert.deepEqual([half.counted, half.complete], [202575, false]);
+  assert.match(half.says, /That is unpriced, not free\.$/);
+});
+
+test("the analyst reads the price list: what is priced, in which mode, how fast, for where, and from what source", async () => {
+  const tool = OPTION_TOOLS.find((t) => t.name === "list_prices")!;
+  const own = price("p-lake", { activite: fixture.activity, par_jour: 100000, par_jour_haut: 130000, mode: "normal", delai_jours: 2, source: "Entente locale" }, ["site:lake"]);
+  const out = (await tool.run(withPrices([NORMAL, RUSH, own, price("bad", { activite: "civière", par_jour: 12.5 })]), tool.parse.parse({ world: "scenario" }))) as Record<string, any>;
+  assert.deepEqual(out.prices, [
+    { activity: "lit", mode: "normal", takes_days: 2, one_unit_open_one_day: { dollars: 1000, low_dollars: 1000, high_dollars: 1300 }, priced_for: ["Lakeshore"], source: "Entente locale" },
+    { activity: "lit", mode: "accéléré", takes_days: 3, to_open_one_unit: { dollars: 6000 }, one_unit_open_one_day: { dollars: 2100 }, priced_for: "the whole network", demo_price: true },
+    { activity: "lit", mode: "normal", takes_days: 5, to_open_one_unit: { dollars: 2500 }, one_unit_open_one_day: { dollars: 1250.5 }, priced_for: "the whole network", source: "Grille tarifaire 2026, p. 12" },
+  ]);
+  // A row that is not a price is said, not hidden.
+  assert.equal(out.rows_not_used.length, 1);
+  assert.match(out.rows_not_used[0], /is not a whole number of cents \(12\.5\)/);
+  assert.match(out.how_to_read.join(" "), /A price marked demo_price has no source/);
+
+  // A twin that declares none says so, and says not to invent one.
+  const none = (await tool.run(context(), tool.parse.parse({ world: "scenario" }))) as Record<string, any>;
+  assert.deepEqual(none.prices, []);
+  assert.match(none.how_to_read[0], /The twin declares no price list, so nothing here has a price\. Do not give one/);
+});
+
+test("a decision keeps the cost that was expected, with the prices it was counted from", () => {
+  const ledger = ledgerOf([{ stamp: 0, siteId: "site:lake", siteName: "Lakeshore", activity: "lit", units: 6, start: 5, days: 25, mode: null }], catalogueOf({ object_types: [TARIF], objects: [NORMAL] }));
+  const f = figuresOf(fixture.asItIs.digest.full);
+  const draft = decisionFromExchange(
+    {
+      kind: "options",
+      status: "answered",
+      question: "Nobody should wait at Lakeshore.",
+      answer: {
+        objective: "Nobody should wait at Lakeshore.",
+        horizon: 30,
+        activity: "lit",
+        asItIs: f,
+        basis: [],
+        reading: [{ text: "It does.", sources: ["s1"] }],
+        options: [
+          { step: "s1", label: "Open 6 beds", stamps: [], figures: f, sites: [], basis: [], arrivals: {}, notes: [], mechanism: "More beds.", notTested: [], cost: withPriceList({ counted: null, complete: false, says: "" }, ledger, 0, false) },
+        ],
+      },
+      steps: [{ id: "s1", tool: "test_option", ok: true, input: {}, output: {} }],
+    },
+    "s1",
+  );
+  // The total, and under it every line with the price row it used and where that price comes from.
+  assert.deepEqual([draft.expected.cost!.counted, draft.expected.cost!.complete], [202575, true]);
+  assert.deepEqual(draft.expected.cost!.priced, JSON.parse(JSON.stringify(ledger)));
+  assert.equal(draft.expected.cost!.priced!.lines[1]!.price.source, "Grille tarifaire 2026, p. 12");
+});
+
+test("an amount of money is checked like any other figure: one the tests did not return is sent back, then struck", async () => {
+  // The test returned 202,575 $. The model writes that, and a saving nobody computed.
+  const invented = () =>
+    give({ reading: [{ text: "With 6 beds added from day 5 nobody waits at Lakeshore. It costs 202,575 $ over the run, about 90,000 $ less than opening them on day 0.", sources: ["s1"] }] });
+  const { model, out } = await propose([reply([use("test_option", BEDS)]), reply([invented()]), reply([invented()]), reply([invented()])], withPrices([NORMAL]));
+
+  const back = sentBack(model, 2)[0]!;
+  assert.equal(back.error, true);
+  assert.match(back.text, /"90,000" is not in the result/);
+  // The amount the price list gave stays; the one from nowhere is taken out, and the person sees the gap.
+  assert.equal(out.status, "answered");
+  assert.equal(out.verified, false);
+  assert.equal(out.answer!.reading[0]!.text, `With 6 beds added from day 5 nobody waits at Lakeshore. It costs 202,575 $ over the run, about ${STRUCK} $ less than opening them on day 0.`);
+  // The table's cost comes from the test, not from the text.
+  assert.equal(out.answer!.options[0]!.cost.counted, 202575);
+  assert.equal(out.answer!.options[0]!.cost.priced!.totalCents, 20257500);
+
+  // The same reading with only the amount the test returned passes.
+  const sourced = await propose(
+    [reply([use("test_option", BEDS)]), reply([give({ reading: [{ text: "With 6 beds added from day 5 nobody waits at Lakeshore, for 202,575 $ over the run.", sources: ["s1"] }] })])],
+    withPrices([NORMAL]),
+  );
+  assert.equal(sourced.out.verified, true);
 });

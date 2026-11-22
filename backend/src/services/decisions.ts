@@ -127,7 +127,8 @@ const journalledProposal = z.object({
       mechanism: z.string(),
       notTested: z.array(z.string()),
       // Absent from exchanges journalled before an option could contain a recorded response.
-      cost: z.object({ counted: z.number().nullable(), complete: z.boolean(), says: z.string() }).optional(),
+      // `priced` is the ledger of the price list, kept whole: the lines, the prices used and where they come from.
+      cost: z.object({ counted: z.number().nullable(), complete: z.boolean(), says: z.string(), demo: z.boolean().optional(), priced: z.unknown().optional() }).optional(),
     }),
   ),
 });
@@ -173,7 +174,8 @@ export function decisionFromExchange(exchange: JournalledExchange, step: string)
       mechanism: option.mechanism,
       notTested: option.notTested,
       notes: option.notes,
-      ...(option.cost ? { cost: option.cost } : {}),
+      // The journal holds the ledger as the test wrote it; it is copied whole, not read.
+      ...(option.cost ? { cost: option.cost as OptionCost } : {}),
     },
     sourceSteps: steps.data.filter((s) => cited.has(s.id)).map((s) => ({ id: s.id, tool: s.tool, input: s.input, output: s.output })),
   };
