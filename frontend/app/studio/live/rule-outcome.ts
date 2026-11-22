@@ -46,7 +46,7 @@ export function ruleOutcomeLines(signals: RuleSignals | undefined | null): strin
     return lines;
   }
   lines.push(
-    `${n(signals.falsePositives)} of the ${n(signals.closed)} closed ${signals.falsePositives === 1 ? "was" : "were"} dismissed as a false positive: ${sharePct(signals.falsePositives, signals.closed)}.`,
+    `${n(signals.falsePositives)} of the ${n(signals.closed)} closed ${signals.falsePositives === 1 ? "was dismissed as a false positive" : "were dismissed as false positives"}: ${sharePct(signals.falsePositives, signals.closed)}.`,
   );
   if (signals.clearedOnOwn > 0) {
     lines.push(`${n(signals.clearedOnOwn)} ${signals.clearedOnOwn === 1 ? "was" : "were"} closed after the alert cleared on its own, with nobody having had to act.`);

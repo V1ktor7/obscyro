@@ -6,7 +6,7 @@ describe("what became of the signals a rule raised", () => {
   it("gives the share of false positives among the signals that were closed", () => {
     expect(ruleOutcomeLines({ raised: 2878, open: 46, closed: 2832, falsePositives: 3, clearedOnOwn: 2810 })).toEqual([
       "2,878 signals raised: 46 open, 2,832 closed.",
-      "3 of the 2,832 closed were dismissed as a false positive: 0.1%.",
+      "3 of the 2,832 closed were dismissed as false positives: 0.1%.",
       "2,810 were closed after the alert cleared on its own, with nobody having had to act.",
     ]);
   });
