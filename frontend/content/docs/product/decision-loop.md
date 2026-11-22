@@ -3,7 +3,7 @@
 title: "The decision loop"
 description: "Obscyro does not decide. It helps a person decide, by showing what is measured, what has been tried and what each option would change."
 source: "docs/decision-loop.md"
-translatedFrom: "0736069922b60cb2"
+translatedFrom: "4ee6749b4daed552"
 ---
 
 Obscyro does not decide. It helps a person decide, by showing what is measured, what has been tried and what each option would change, leaving nothing to chance.
@@ -61,7 +61,7 @@ Putting the analyst into service ([issue 5](https://github.com/V1ktor7/obscyro/i
 2. Options tested by the engine, recommendation, recorded decision: [issue 6](https://github.com/V1ktor7/obscyro/issues/6). **Done.** Next: the test of an option shortened by one pass, and its duration measured ([issue 8](https://github.com/V1ktor7/obscyro/issues/8), **done**), letting an option replace or remove a choice of the scenario ([issue 9](https://github.com/V1ktor7/obscyro/issues/9), **done**).
 3. Validated online search and the calendar of events: [issue 7](https://github.com/V1ktor7/obscyro/issues/7). **Done.** Next: reduce the token cost of a search ([issue 11](https://github.com/V1ktor7/obscyro/issues/11), **done**).
 4. Live: from the alert to the decision in one click. Six issues, in this order.
-   1. The alert reaches every page, with a link to its unit: [issue 12](https://github.com/V1ktor7/obscyro/issues/12). **Done.** Next: keep the Response board readable when alerts close by themselves ([issue 18](https://github.com/V1ktor7/obscyro/issues/18)), **delivered**; give each alert the age of its own value ([issue 19](https://github.com/V1ktor7/obscyro/issues/19)).
+   1. The alert reaches every page, with a link to its unit: [issue 12](https://github.com/V1ktor7/obscyro/issues/12). **Done.** Next: keep the Response board readable when alerts close by themselves ([issue 18](https://github.com/V1ktor7/obscyro/issues/18)), **done**; give each alert the age of its own value ([issue 19](https://github.com/V1ktor7/obscyro/issues/19)); undo an acknowledgement and reopen a signal closed in a batch ([issue 32](https://github.com/V1ktor7/obscyro/issues/32)).
    2. A situation card opens from an alert, with the analyst inside: [issue 13](https://github.com/V1ktor7/obscyro/issues/13). **Done.** Follow-up done: the overview of the twin says that a unit can hold its capacity through its sub-units, apart from what is missing ([issue 21](https://github.com/V1ktor7/obscyro/issues/21)). Follow-up to do: say likewise that a unit holding only readings is not a site without capacity ([issue 23](https://github.com/V1ktor7/obscyro/issues/23)).
    3. Responses prepared per kind of signal, engaged with one click: [issue 14](https://github.com/V1ktor7/obscyro/issues/14). **Done.** Next: also keep a response of the Events page ([issue 22](https://github.com/V1ktor7/obscyro/issues/22)).
    4. The prepared responses retested on the state of the moment, as soon as an alert opens: [issue 15](https://github.com/V1ktor7/obscyro/issues/15). **Done.** Next: retest a response on request, and when its card is opened again ([issue 26](https://github.com/V1ktor7/obscyro/issues/26)).
