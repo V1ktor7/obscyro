@@ -316,6 +316,12 @@ export async function listDecisionsForSignalType(db: DbClient, projectId: string
   return rows.map(outDecision);
 }
 
+/** The decisions taken on one signal, oldest first: the first is the one its follow-up is counted from. */
+export async function listDecisionsForSignal(db: DbClient, projectId: string, signalId: string): Promise<Decision[]> {
+  const { rows } = await db.query<DecisionDbRow>(`${SELECT} WHERE d.project_id = $1 AND d.signal_id = $2 ORDER BY d.decided_at ASC`, [projectId, signalId]);
+  return rows.map(outDecision);
+}
+
 export async function listDecisions(db: DbClient, projectId: string, scenarioId: string | null, limit = 100): Promise<Decision[]> {
   const { rows } = await db.query<DecisionDbRow>(
     `${SELECT} WHERE d.project_id = $1 AND ($2::uuid IS NULL OR d.scenario_id = $2::uuid) ORDER BY d.decided_at DESC LIMIT $3`,

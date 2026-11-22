@@ -155,7 +155,7 @@ export function situationOf(
     checked: lastChecked(live),
     alertRules: live.rules,
     limits: [
-      "This is the reading now. The twin keeps the readings of each measure over time, and the unit's page shows them; this card does not, so nothing here says what a figure was earlier, or what changed since this morning.",
+      "The live figures above are the reading now. What a figure was earlier is on the unit's page, which shows the readings the twin kept; this card only follows the measure that raised its signal, from the moment the signal was raised.",
       "An alert's age and a measure's age are the age of what that measure reads. The unit's own age is the oldest of all its sources, so it can be older than the age of one of its values.",
       "The twin holds no staff and no stocks: a figure here is capacity and what uses it, not who can open a bed.",
     ],

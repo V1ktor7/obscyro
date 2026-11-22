@@ -27,7 +27,7 @@ import type { TwinAlertSeverity } from "@/lib/platform-api";
 import { useStudio } from "../StudioShell";
 import { ALERT_PARAM, SIGNAL_PARAM, UNIT_PARAM, signalHref, unitHref } from "../alert-feed-state";
 import { AskTab } from "../simulation/hex/AnalystPanel";
-import { getSituation, printed, type AlertReading, type SituationCard, type ValueAge } from "../situation-api";
+import { getSituation, printed, type AlertReading, type SignalFollowUp, type SituationCard, type ValueAge } from "../situation-api";
 import PreparedResponses from "./PreparedResponses";
 
 /** The card reads itself again this often: a figure left on screen grows old without saying so. */
@@ -67,6 +67,84 @@ function Alert({ a }: { a: AlertReading }) {
         {a.measure}: <span className="font-semibold text-ink">{printed(a.value, a.counted_in)}</span> · open for {a.open_for} · <Age age={a.value_age} />
       </p>
     </div>
+  );
+}
+
+/**
+ * What happened on the signal after it was raised.
+ *
+ * Three things, kept apart on screen as they are in the data: what the twin
+ * measured (figures, from its own history), what was recorded (who decided,
+ * and how long after the signal), and what the tested run gave. Nothing here
+ * subtracts a run's figure from a measure, and nothing concludes.
+ */
+function FollowUp({ f }: { f: SignalFollowUp }) {
+  if (!f.followed) {
+    return (
+      <section aria-label="Follow-up" className={cn(CARD, "flex flex-col gap-1.5 p-3")}>
+        <p className={LABEL}>Follow-up</p>
+        <p className="text-[12px] text-ink-body">{f.why}</p>
+      </section>
+    );
+  }
+  const show = (v: number | null) => printed(v, f.measure.countedIn);
+  const facts: { label: string; value: string }[] = [
+    { label: "When the signal was raised", value: show(f.raised.value) },
+    ...(f.decision ? [{ label: "At the decision", value: show(f.measured.atStart) }] : []),
+    { label: "Lowest since", value: show(f.measured.lowest) },
+    { label: "Highest since", value: show(f.measured.highest) },
+    { label: f.measured.closed ? "When it closed" : "Last reading", value: show(f.measured.latest) },
+  ];
+  return (
+    <section aria-label="Follow-up" className={cn(CARD, "flex flex-col gap-2 p-3")}>
+      <p className={LABEL}>{f.decision ? "Follow-up · since the decision" : "Follow-up · since the signal was raised"}</p>
+      {f.decision ? (
+        <p className="text-[12px] text-ink-body">
+          <span className="font-semibold text-ink">{f.decision.label}</span>
+          {" · "}engaged by {f.decision.by ?? "someone"}, {f.decision.delay} after the signal was raised
+          {f.decision.others > 0 ? ` · ${f.decision.others} other decision${f.decision.others === 1 ? "" : "s"} on this signal after it` : ""}
+        </p>
+      ) : (
+        <p className="text-[12px] text-ink-body">No decision has been taken on this signal.</p>
+      )}
+
+      <div>
+        <p className="text-[11px] font-semibold text-ink-muted">Measured · {f.measure.label}, as the twin wrote it down</p>
+        <dl className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-5">
+          {facts.map((x) => (
+            <div key={x.label} className="rounded-md border border-line bg-canvas-raised p-2">
+              <dt className="text-[10.5px] text-ink-muted">{x.label}</dt>
+              <dd className="m-0 mt-0.5 text-[15px] font-semibold tabular-nums text-ink">{x.value}</dd>
+            </div>
+          ))}
+        </dl>
+        {f.measured.says.map((s) => (
+          <p key={s} className="mt-1 text-[11.5px] text-ink-body">
+            {s}
+          </p>
+        ))}
+        <p className="mt-1 text-[11.5px] text-ink-body">{f.alert.says}</p>
+      </div>
+
+      {f.expected ? (
+        <div>
+          <p className="text-[11px] font-semibold text-ink-muted">Expected · what the tested run gave</p>
+          {f.expected.says.map((s) => (
+            <p key={s} className="mt-1 text-[11.5px] text-ink-body">
+              {s}
+            </p>
+          ))}
+        </div>
+      ) : null}
+
+      {f.gap ? <p className="rounded bg-canvas-raised px-2 py-1.5 text-[11.5px] text-ink-body">{f.gap}</p> : null}
+      {f.closedAs ? <p className="text-[11.5px] text-ink-muted">Closed as: {f.closedAs}</p> : null}
+      <ul className="flex list-disc flex-col gap-0.5 pl-4 text-[11px] text-ink-muted">
+        {f.limits.map((l) => (
+          <li key={l}>{l}</li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -312,6 +390,8 @@ export default function SituationView() {
                 onEngaged={() => void read()}
               />
             ) : null}
+
+            {sig && card.followUp ? <FollowUp f={card.followUp} /> : null}
 
             <section aria-label="Decisions" className={cn(CARD, "flex flex-col gap-1.5 p-3")}>
               <p className={LABEL}>Decisions already taken on this kind of signal</p>

@@ -392,7 +392,7 @@ test("the card says what it cannot say", () => {
   assert.equal(card.responses, null);
   assert.deepEqual(card.engage, { possible: false, why: "This card names no signal: a response is engaged on a signal." });
   // The readings are kept, and the card says where they are instead of claiming there are none.
-  assert.match(card.limits.join(" "), /keeps the readings of each measure over time, and the unit's page shows them; this card does not/);
+  assert.match(card.limits.join(" "), /What a figure was earlier is on the unit's page, which shows the readings the twin kept/);
   assert.match(card.limits.join(" "), /no staff and no stocks/);
 });
 

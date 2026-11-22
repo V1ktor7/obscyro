@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "2b8491522a564a21"
+translatedFrom: "9f90dda602efe672"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -15,6 +15,8 @@ An entry is written the day the change ships, in the same commit as the code. Si
 
 ## 22 November 2026
 
+- **New feature · Studio.** The situation card follows a signal after it is raised. It shows the measure that raised it as the twin wrote it down: when raised, at the decision, then the lowest, the highest and the last reading. It writes how long after the signal the decision was taken, what became of the alert, and what the tested run gave. What is measured and what was expected are side by side, never subtracted, and the card does not conclude.
+- **New feature · Alerts.** The threshold editor says, for each rule, what became of the signals it raised, including the share a person closed as false positives.
 - **New feature · Twin.** The twin keeps what it measures. Every five minutes it writes down, for each unit, the measures whose value changed or was read at a new time. A unit's sheet shows the history of the value shown over 48 hours: a staircase line, the lowest, the highest, and the date of the first reading kept. The history starts today: nothing from before is reconstructed, and the screen says so.
 - **Change · Alerts.** Each alert gives the age of its own value. The age is counted on what the alert's measure reads, and no longer on everything under the unit: a stretcher occupancy alert, at a unit that also carries an air quality station, has the age of the stretcher census, not the station's. If what the measure reads publishes no time, the alert says the age is unknown, even when another source of the unit has one. It is the same age in the banner, the list of alerts, the situation card and the analyst's answers.
 - **Change · Alerts.** An emergency reading has an age at every hour. The emergency file writes the hour on a single digit from midnight to ten in the morning (`9:45`), which was not read: during those ten hours, alerts said “age of the value unknown”. A date with no hour is read too, as the start of that day: the age can then be too large by a day at most, never too small.

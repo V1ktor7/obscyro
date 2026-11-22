@@ -938,6 +938,8 @@ export interface TwinAlertRule {
   severity: TwinAlertSeverity;
   messageTemplate: string;
   recommendationTemplate: string;
+  /** What became of the signals this rule raised. Absent from an answer that does not count them. */
+  signals?: { raised: number; open: number; closed: number; falsePositives: number; clearedOnOwn: number };
 }
 
 export interface TwinAlertRuleInput {

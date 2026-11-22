@@ -89,6 +89,49 @@ export interface DecisionOnCard {
   waitingWithout: number;
 }
 
+/** What the run that tested the engaged response gave, in the engine's own terms. */
+export interface FollowUpExpected {
+  run: "kept_test" | "retest";
+  testedAt: string | null;
+  horizon: number;
+  activity: string;
+  waiting: { without: number; with: number; change: number };
+  site: { name: string; peakOccupancyPct: { without: number; with: number }; waiting: { without: number; with: number } } | null;
+  says: string[];
+}
+
+/**
+ * A signal, followed: what was decided on it and what the twin measured after.
+ * Measured and expected are set side by side and never subtracted from one
+ * another: `gap` says why.
+ */
+export type SignalFollowUp =
+  | { followed: false; why: string }
+  | {
+      followed: true;
+      measure: { key: string; label: string; countedIn: CountedIn };
+      raised: { at: string; value: number | null };
+      decision: { id: string; label: string; by: string | null; at: string; delaySeconds: number; delay: string; others: number } | null;
+      measured: {
+        from: "decision" | "raised";
+        fromAt: string;
+        untilAt: string;
+        closed: boolean;
+        readings: number;
+        atStart: number | null;
+        latest: number | null;
+        lowest: number | null;
+        highest: number | null;
+        change: number | null;
+        says: string[];
+      };
+      alert: { state: "holds" | "acknowledged" | "cleared" | "unknown"; clearedAt: string | null; says: string };
+      expected: FollowUpExpected | null;
+      gap: string | null;
+      closedAs: string | null;
+      limits: string[];
+    };
+
 export interface SituationCard {
   /** The server's clock when this was read. */
   at: string;
@@ -100,6 +143,8 @@ export interface SituationCard {
   /** Whether a response can be engaged on this signal now, and why not. */
   engage: { possible: boolean; why: string | null };
   decisions: { items: DecisionOnCard[]; note: string };
+  /** What happened on this signal after it was raised. Null when the card names no signal; absent from an older answer. */
+  followUp?: SignalFollowUp | null;
   /** A question for the analyst, written by the program. */
   question: string;
   checked: { at: string | null; says: string };

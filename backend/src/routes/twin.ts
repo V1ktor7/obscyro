@@ -7,6 +7,7 @@ import type { DbClient } from "../lib/db.js";
 import { AppError, BadRequest, NotFound } from "../lib/errors.js";
 import { startSseStream } from "../lib/sse.js";
 import { readAlertFeed } from "../services/alert-feed.js";
+import { ruleOutcomes } from "../services/signals.js";
 import { readUnitHistory } from "../services/twin-history.js";
 import { recordAudit } from "../services/audit.js";
 import {
@@ -1326,6 +1327,12 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
     {
       schema: {
         summary: "List twin alert rules",
+        description:
+          "The project's alert rules, each with what became of the signals it raised (`signals`): how many it raised, " +
+          "how many are open, how many are closed, and among the closed how many a person dismissed as false positives " +
+          "(`falsePositives`) and how many were closed in a batch after their alert cleared on its own (`clearedOnOwn`). " +
+          "The counts are of signals, not of alerts: an alert on a measure no signal type claims raises none. A rule " +
+          "that raised no signal has zeros.",
         tags: ["twin"],
         params: z.object({ env: z.string().min(1) }),
         response: { 200: z.object({ rules: z.array(z.record(z.unknown())) }) },
@@ -1334,8 +1341,23 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
     async (req) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
-      const rules = await listAlertRules(req.db, env.id);
-      return { rules: rules.map(serializeAlertRule) };
+      const [rules, outcomes] = await Promise.all([listAlertRules(req.db, env.id), ruleOutcomes(req.db, env.id)]);
+      const byRule = new Map(outcomes.map((o) => [o.ruleId, o]));
+      return {
+        rules: rules.map((r) => {
+          const o = byRule.get(r.id);
+          return {
+            ...serializeAlertRule(r),
+            signals: {
+              raised: o?.raised ?? 0,
+              open: o?.open ?? 0,
+              closed: o?.closed ?? 0,
+              falsePositives: o?.falsePositives ?? 0,
+              clearedOnOwn: o?.clearedOnOwn ?? 0,
+            },
+          };
+        }),
+      };
     },
   );
 

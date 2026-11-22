@@ -226,7 +226,7 @@ Une décision peut porter sur une réponse enregistrée ou sur un transfert : el
 
 Une décision ne se modifie pas : la revoir, c'est en enregistrer une autre.
 
-Le suivi (« Compare with observed ») existe quand une série observée est liée au scénario, par le réglage « Reality check » du panneau Result. Il pose les arrivées que le run testé attendait à côté de celles qui ont été comptées, et donne l'écart : totaux sur les jours que les deux rapportent, écart moyen par jour, décalage des pics. Il ne conclut pas. Et il ne compare que des arrivées : le jumeau garde les relevés de ses propres mesures, mais ce ne sont pas la file ni l'occupation que le moteur compte, et rien ne les pose encore à côté d'un run. La file attendue n'a donc rien d'observé en face, ce que l'écran dit.
+Le suivi (« Compare with observed ») existe quand une série observée est liée au scénario, par le réglage « Reality check » du panneau Result. Il pose les arrivées que le run testé attendait à côté de celles qui ont été comptées, et donne l'écart : totaux sur les jours que les deux rapportent, écart moyen par jour, décalage des pics. Il ne conclut pas. Et il ne compare que des arrivées : le jumeau garde les relevés de ses propres mesures, mais ce ne sont pas la file ni l'occupation que le moteur compte, et rien ne les pose encore à côté d'un run. La file attendue n'a donc rien d'observé en face, ce que l'écran dit. Une décision prise sur un signal a un second suivi, sur la fiche de situation de ce signal : la mesure qui a levé le signal, telle que le jumeau l'a notée depuis la décision, à côté de ce que le run donnait ([algorithms.md](algorithms.md), A9).
 
 ### Réponses préparées, et « Engage »
 

@@ -272,6 +272,64 @@ export async function readUnitHistory(
   };
 }
 
+export interface ReadingsBetween {
+  /** The reading in force when the stretch begins: the last one written down before it. Null when none was. */
+  opening: KeptReading | null;
+  /** The readings written down during the stretch, oldest first. */
+  readings: KeptReading[];
+  /** True when the stretch held more than the list: its oldest readings are missing from it. */
+  cut: boolean;
+  /** When the first reading of this measure at this unit was written down, in the whole history. */
+  since: string | null;
+}
+
+/**
+ * What was written down for one measure of one unit between two instants.
+ *
+ * "Between" is counted on when a reading was written down, not on when its
+ * source says it was true: what is asked is what the twin showed at the time,
+ * to a person who was looking at it.
+ */
+export async function readReadingsBetween(
+  db: DbClient,
+  projectId: string,
+  unitId: string,
+  metric: string,
+  from: Date,
+  to: Date,
+  limit: number = HISTORY_LIMIT,
+): Promise<ReadingsBetween> {
+  const [during, before, first] = await Promise.all([
+    db.query<ReadingRow>(
+      `SELECT value, observed_at, observed_basis, recorded_at
+         FROM app.twin_reading
+        WHERE project_id = $1 AND unit_instance_id = $2 AND metric = $3 AND recorded_at >= $4 AND recorded_at <= $5
+        ORDER BY recorded_at DESC
+        LIMIT $6`,
+      [projectId, unitId, metric, from, to, limit + 1],
+    ),
+    db.query<ReadingRow>(
+      `SELECT value, observed_at, observed_basis, recorded_at
+         FROM app.twin_reading
+        WHERE project_id = $1 AND unit_instance_id = $2 AND metric = $3 AND recorded_at < $4
+        ORDER BY recorded_at DESC
+        LIMIT 1`,
+      [projectId, unitId, metric, from],
+    ),
+    db.query<{ since: Date | null }>(
+      `SELECT min(recorded_at) AS since FROM app.twin_reading WHERE project_id = $1 AND unit_instance_id = $2 AND metric = $3`,
+      [projectId, unitId, metric],
+    ),
+  ]);
+  const cut = during.rows.length > limit;
+  return {
+    opening: before.rows[0] ? kept(before.rows[0]) : null,
+    readings: during.rows.slice(0, limit).reverse().map(kept),
+    cut,
+    since: first.rows[0]?.since ? first.rows[0].since.toISOString() : null,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // The clock.
 // ---------------------------------------------------------------------------

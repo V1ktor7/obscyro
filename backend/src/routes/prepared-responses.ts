@@ -175,7 +175,8 @@ const preparedRoutes: FastifyPluginAsync = async (fastify) => {
         description:
           "One click, three records. A decision is recorded, tied to the signal, with the figures expected of the " +
           "response (those of its test; when the response was tested again on the network as it is, those figures " +
-          "are recorded beside them as `expected.retested`, with their date). The signal's trail says which response was taken and by whom. And the " +
+          "are recorded beside them as `expected.retested`, with their date). The signal's trail says which response was taken, by whom, and how " +
+          "long after the signal was raised (`secondsSinceRaised`). And the " +
           "signal moves to its next stage; when that stage requires an approval, the person engaging is the one " +
           "named as approving. Refused before anything is written when the signal is closed or at its last stage, " +
           "or when the response was prepared for another kind of signal. Nothing is triggered in any other system: " +
@@ -227,7 +228,12 @@ const preparedRoutes: FastifyPluginAsync = async (fastify) => {
         actorUserId: userId,
         fromStageId: signal.stageId,
         note: `Engaged the prepared response “${response.label}”.`,
-        payload: { decisionId: decision.id, preparedResponseId: response.id },
+        payload: {
+          decisionId: decision.id,
+          preparedResponseId: response.id,
+          // How long after the signal was raised the decision came: kept on the trail, which nothing rewrites.
+          secondsSinceRaised: Math.max(0, Math.round((Date.parse(decision.decidedAt) - Date.parse(signal.detectedAt)) / 1000)),
+        },
       });
       const moved = await moveSignal(req.db, signal.id, "forward", { actorUserId: userId, note: req.body.note || null });
       await recordAudit(req.db, {

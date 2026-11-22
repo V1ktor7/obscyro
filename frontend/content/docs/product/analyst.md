@@ -3,7 +3,7 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "c5ebd91cef0bdbab"
+translatedFrom: "cd1ea51fd33af2a9"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
@@ -232,7 +232,7 @@ A decision can bear on a recorded response or on a transfer: it keeps its rules,
 
 A decision cannot be edited: revising it means recording another one.
 
-The follow-up (“Compare with observed”) exists when an observed series is linked to the scenario, through the “Reality check” setting of the Result panel. It sets the arrivals the tested run expected beside those that were counted, and gives the gap: totals over the days both report, average gap per day, offset of the peaks. It does not conclude. And it compares arrivals only: the twin keeps the readings of its own measures, but those are not the queue or the occupancy the engine counts, and nothing sets them beside a run yet. So the expected queue has nothing observed to face it, which the screen says.
+The follow-up (“Compare with observed”) exists when an observed series is linked to the scenario, through the “Reality check” setting of the Result panel. It sets the arrivals the tested run expected beside those that were counted, and gives the gap: totals over the days both report, average gap per day, offset of the peaks. It does not conclude. And it compares arrivals only: the twin keeps the readings of its own measures, but those are not the queue or the occupancy the engine counts, and nothing sets them beside a run yet. So the expected queue has nothing observed to face it, which the screen says. A decision taken on a signal has a second follow-up, on that signal's situation card: the measure that raised the signal, as the twin wrote it down since the decision, beside what the run gave ([Algorithms](/docs/product/algorithms), A9).
 
 ### Prepared responses, and “Engage”
 

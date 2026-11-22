@@ -94,7 +94,7 @@ const card = (over: Partial<SituationCard> = {}): SituationCard => ({
   question: "What is open at Urgence — Hôpital A right now, how old are its figures, and what else is open around it?",
   checked: { at: "2026-11-20T14:59:56.000Z", says: "thresholds last checked 4 s ago" },
   alertRules: 3,
-  limits: ["This is the reading now. The twin keeps the readings of each measure over time, and the unit's page shows them; this card does not."],
+  limits: ["The live figures above are the reading now. What a figure was earlier is on the unit's page; this card does not show it."],
   analyst: { configured: true },
   ...over,
 });
@@ -311,5 +311,101 @@ describe("a card whose prepared response is being tested on the current state", 
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("what happened on the signal after it was raised", () => {
+  const followed = (over: Record<string, unknown> = {}): NonNullable<SituationCard["followUp"]> =>
+    ({
+      followed: true,
+      measure: { key: "occupancy", label: "Stretcher occupancy", countedIn: "percent" },
+      raised: { at: "2026-11-20T12:00:00.000Z", value: 138 },
+      decision: { id: "d1", label: "60 more stretchers", by: "A. Tremblay", at: "2026-11-20T14:14:00.000Z", delaySeconds: 8040, delay: "2 h", others: 0 },
+      measured: {
+        from: "decision",
+        fromAt: "2026-11-20T14:14:00.000Z",
+        untilAt: "2026-11-20T15:00:00.000Z",
+        closed: false,
+        readings: 2,
+        atStart: 150,
+        latest: 96,
+        lowest: 96,
+        highest: 131,
+        change: -54,
+        says: ["Stretcher occupancy was 150% when the decision was taken.", "Since then, until now: 2 readings, lowest 96%, highest 131%; the last one is 96%.", "Measured change over that stretch: −54 points."],
+      },
+      alert: { state: "cleared", clearedAt: "2026-11-20T14:50:00.000Z", says: "The alert cleared 36 min after the decision: the condition stopped firing." },
+      expected: {
+        run: "kept_test",
+        testedAt: null,
+        horizon: 30,
+        activity: "Stretchers",
+        waiting: { without: 267, with: 120, change: -147 },
+        site: null,
+        says: ["What is given is the test the response was kept from, made in calm time.", "Over 30 days, for Stretchers, across the whole network: 267 patient-days waiting without the response, 120 with it."],
+      },
+      gap: "No figure sets one against the other. They are two different quantities, shown side by side. Whether the decision held is yours to judge.",
+      closedAs: null,
+      limits: ["A change measured after a decision is not an effect of the decision: other things changed too, and this does not tell them apart."],
+      ...over,
+    }) as NonNullable<SituationCard["followUp"]>;
+
+  it("sets the decision, what was measured since and what the run gave side by side, and subtracts nothing", async () => {
+    api.getSituation.mockResolvedValue(card({ followUp: followed() }));
+    render(<SituationView />);
+    const block = await screen.findByRole("region", { name: "Follow-up" });
+
+    // Who decided, and how long after the signal: the delay is on the card.
+    expect(within(block).getByText(/engaged by A\. Tremblay, 2 h after the signal was raised/)).toBeTruthy();
+    // The measure, as the twin wrote it down, printed like the unit page prints it.
+    const fact = (label: string) => within(block).getByText(label).parentElement!.textContent;
+    expect(fact("When the signal was raised")).toBe("When the signal was raised138%");
+    expect(fact("At the decision")).toBe("At the decision150%");
+    expect(fact("Lowest since")).toBe("Lowest since96%");
+    expect(fact("Highest since")).toBe("Highest since131%");
+    expect(fact("Last reading")).toBe("Last reading96%");
+    expect(within(block).getByText("Measured change over that stretch: −54 points.")).toBeTruthy();
+    expect(within(block).getByText("The alert cleared 36 min after the decision: the condition stopped firing.")).toBeTruthy();
+    // What the run gave is named as expected, apart from what was measured.
+    expect(within(block).getByText("Measured · Stretcher occupancy, as the twin wrote it down")).toBeTruthy();
+    expect(within(block).getByText("Expected · what the tested run gave")).toBeTruthy();
+    expect(within(block).getByText(/267 patient-days waiting without the response, 120 with it/)).toBeTruthy();
+    // And the card says why no figure sets one against the other, and that it does not conclude.
+    expect(within(block).getByText(/No figure sets one against the other.*Whether the decision held is yours to judge\./)).toBeTruthy();
+    expect(within(block).getByText(/is not an effect of the decision/)).toBeTruthy();
+  });
+
+  it("follows a signal nobody decided on from the moment it was raised, and claims nothing was expected", async () => {
+    const none = followed({ decision: null, expected: null, gap: null });
+    api.getSituation.mockResolvedValue(card({ followUp: { ...none, measured: { ...(none as { measured: object }).measured, from: "raised" } } as SituationCard["followUp"] }));
+    render(<SituationView />);
+    const block = await screen.findByRole("region", { name: "Follow-up" });
+    expect(within(block).getByText("Follow-up · since the signal was raised")).toBeTruthy();
+    expect(within(block).getByText("No decision has been taken on this signal.")).toBeTruthy();
+    expect(within(block).queryByText("At the decision")).toBeNull();
+    expect(within(block).queryByText("Expected · what the tested run gave")).toBeNull();
+  });
+
+  it("shows a closed signal with what it was closed as", async () => {
+    const closed = followed({ closedAs: "Resolved" });
+    api.getSituation.mockResolvedValue(card({ followUp: { ...closed, measured: { ...(closed as { measured: object }).measured, closed: true } } as SituationCard["followUp"] }));
+    render(<SituationView />);
+    const block = await screen.findByRole("region", { name: "Follow-up" });
+    expect(within(block).getByText("When it closed")).toBeTruthy();
+    expect(within(block).getByText("Closed as: Resolved")).toBeTruthy();
+  });
+
+  it("says why nothing is followed when the signal has no measure the twin keeps", async () => {
+    api.getSituation.mockResolvedValue(card({ followUp: { followed: false, why: "This signal was not raised by an alert on a unit, so there is no measure to follow after it." } }));
+    render(<SituationView />);
+    const block = await screen.findByRole("region", { name: "Follow-up" });
+    expect(within(block).getByText("This signal was not raised by an alert on a unit, so there is no measure to follow after it.")).toBeTruthy();
+  });
+
+  it("shows no follow-up where the card names no signal, or the answer brings none", async () => {
+    api.getSituation.mockResolvedValue(card());
+    render(<SituationView />);
+    await screen.findByRole("region", { name: "Live figures" });
+    expect(screen.queryByRole("region", { name: "Follow-up" })).toBeNull();
   });
 });

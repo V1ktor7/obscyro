@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "eed3d655846e4ed7"
+translatedFrom: "ff87160f079cf271"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -410,6 +410,35 @@ flowchart TD
 - A day the series does not report is not compared. A series that reports nothing does not give a gap of zero, it gives no gap.
 - The follow-up does not conclude. It gives the gap; saying whether the decision held belongs to the person.
 
+**Follow-up on the signal.** A decision taken on a signal is read back with what was measured afterwards, in the same place: that signal's situation card.
+
+```mermaid
+flowchart TD
+    A["Situation card of a signal"] --> B{"Signal raised by an alert on a unit,<br/>on a measure the twin keeps?"}
+    B -->|"no"| B1["The card says why nothing is followed"]
+    B -->|"yes"| C["Readings of that measure at that unit (D11),<br/>from when the signal was raised to its closing, or to now"]
+    C --> D{"Was a decision taken on this signal?"}
+    D -->|"no"| E["Measured since it was raised:<br/>the value when raised, the lowest, the highest, the last reading"]
+    D -->|"yes: the first one counts"| F["Delay between the signal being raised and the decision,<br/>written on the signal's log when the response is engaged"]
+    F --> G["Measured since the decision:<br/>the value at the decision, the lowest, the highest,<br/>the last reading, and the measured change"]
+    F --> H["Expected: what the tested run gave.<br/>The retest made at opening if it gave figures, else the kept test;<br/>the site's figures when the unit is one"]
+    G --> I["Set side by side, never subtracted:<br/>the run counts a queue and an occupancy capped at 100%,<br/>the twin measures what the organisation defined"]
+    H --> I
+    E --> J["What became of the alert: it holds, it is acknowledged,<br/>or it cleared, and how long after"]
+    I --> J
+    J --> K["The card gives the figures and stops.<br/>The person judges"]
+```
+
+- **Measured, recorded, expected: three things, never mixed.** Measured: the measure that raised the signal, at its unit, as the twin wrote it down (D11). Recorded: who decided, when, and how long after the signal was raised. Expected: what the run that tested the response gave, in the engine's terms. The screen separates them under three headings.
+- **No figure sets the run against the twin.** The run counts people waiting and an occupancy that stops at 100% of capacity; the twin measures what the organisation defined, and can read 143%. Subtracting one from the other would give a number that means nothing. Each side gives its own change, in its own unit: points of the measure on one side, patient-days of waiting on the other. The card writes why no gap is computed between the two.
+- **The run in question is named.** When the retest made at the opening of the signal had given figures, those are the ones shown, with their date. Otherwise it is the test kept in calm time, and the card says so. The figures by site always come from the kept test: a retest keeps only the network's. If the signal's unit is not a site of that run, the run gives no figure for it, and the card writes so.
+- **The delay is written twice.** It is computed from two recorded times, the signal's and the decision's, and it is also written on the signal's log when the response is engaged (`secondsSinceRaised`), a log nothing modifies afterwards.
+- **What the twin showed.** The value “at the decision” is the last reading written down at that moment: what the person had in front of them, not what the source published later for the same hour.
+- **No new reading is not no change.** When nothing was written down since the decision, the card writes so, and gives no change. A measure that lost its value says so instead of showing a figure.
+- **A change after a decision is not its effect.** Other things changed at the same time, and this follow-up does not tell them apart. The card says so, and does not conclude.
+- **A closed signal** is followed until its closing, and the card keeps how it was closed.
+- **What is not followed.** A signal no alert raised has no measure. Neither does a signal raised on a built-in count: the twin keeps only the measures the organisation defined. A signal older than the history has no readings before the day it started. Each case is written on the card.
+
 **Prepared response and engagement.** A decision can also be taken on a signal, by engaging a response prepared in calm time.
 
 ```mermaid
@@ -445,8 +474,8 @@ flowchart TD
 - **Retiring is not erasing.** A retired response is no longer offered; the decisions that engaged it still read.
 - **Nothing is triggered elsewhere.** Engaging records and follows. The screen says so.
 
-**Code.** `backend/src/services/decisions.ts` (`decisionFromExchange`, `followUp`, `realityOf`, `listDecisionsForSignalType`), `prepared-responses.ts` (`scenarioMark`, `standingOf`, `onCard`), `response-retest.ts` (`expectedOnEngage`), `signals.ts` (`stageAhead`, `recordOptionTaken`, `moveSignal`), `backend/src/routes/decisions.ts`, `routes/prepared-responses.ts`, migrations `060_analyst_exchange_kind.sql`, `061_decision.sql` and `065_prepared_response.sql`; `frontend/app/studio/simulation/hex/DecisionsTab.tsx`, `KeepPrepared.tsx`, `frontend/app/studio/situation/PreparedResponses.tsx`.
-**Tests.** `decisions.unit.test.ts`, `prepared-responses.unit.test.ts`, `analyst-options.unit.test.ts` (from a tested option to a decision), `routes/decisions.unit.test.ts`, `DecisionsTab.test.tsx`, `KeepPrepared.test.tsx`, `PreparedResponses.test.tsx`.
+**Code.** `backend/src/services/decisions.ts` (`decisionFromExchange`, `followUp`, `realityOf`, `listDecisionsForSignalType`, `listDecisionsForSignal`), `signal-follow-up.ts` (`signalFacts`, `signalFollowUp`), `twin-history.ts` (`readReadingsBetween`), `prepared-responses.ts` (`scenarioMark`, `standingOf`, `onCard`), `response-retest.ts` (`expectedOnEngage`), `signals.ts` (`stageAhead`, `recordOptionTaken`, `moveSignal`), `backend/src/routes/decisions.ts`, `routes/prepared-responses.ts`, migrations `060_analyst_exchange_kind.sql`, `061_decision.sql` and `065_prepared_response.sql`; `frontend/app/studio/simulation/hex/DecisionsTab.tsx`, `KeepPrepared.tsx`, `frontend/app/studio/situation/PreparedResponses.tsx`, `SituationView.tsx`.
+**Tests.** `decisions.unit.test.ts`, `signal-follow-up.unit.test.ts`, `prepared-responses.unit.test.ts`, `analyst-options.unit.test.ts` (from a tested option to a decision), `routes/decisions.unit.test.ts`, `DecisionsTab.test.tsx`, `KeepPrepared.test.tsx`, `PreparedResponses.test.tsx`.
 
 ## A10. Online search and calendar of events
 
@@ -983,12 +1012,13 @@ flowchart TD
 - **What is set apart is counted, never hidden.** The API returns three figures over all the open signals, whatever the view (`counts`: open, active, set apart), and the two tabs display them. `total` is the number of signals of the view asked for; when the list stops at 500, the header writes “Showing 500 of 2,810 signals whose alert has cleared” rather than “500”.
 - **The counters by domain are counted in the database**, over all the open signals of the view and not over the 500 listed: past 500 signals, counted on the list, they were wrong.
 - **Closing in a batch is a decision, not housekeeping.** Nothing closes by itself: a condition that cleared is not a condition that was fixed. From the “Alert cleared” view, a person closes in one go the signals set apart in the domain on screen, and has to write a reason. It is a single statement: all of them close or none does. Each signal gets its own `closed` line in its log, with who and why. A signal somebody takes up between the count on screen and the click is no longer set apart and stays open; the screen displays the number actually closed.
+- **The share of false positives is read where the rule is set.** The threshold editor writes, for the rule picked, what became of the signals it raised: how many, how many open, how many closed, and among the closed how many a person closed as false positives, with the share that makes. The share is counted on the closed signals, never on all of them: an open signal has not been judged yet, and with no closed signal no share is given. Those closed in a batch after an alert cleared on its own are counted apart. The counts are of signals, not of alerts: an alert on a measure no signal type claims raises none.
 - **Three ways to close, never mixed.** Reached the last step of its workflow: handled. “False positive”: it should not have been raised (`false positive: …`). Closed in a batch: real, cleared on its own, without anyone having to act (`alert cleared: …`). Mixing them would make all three rates unreadable.
 - An alert is a unit and an aggregated value, never a person.
 
 **Delay.** From the moment a piece of data is written here to the moment the alert is on screen: at most five seconds of waiting by the evaluator, the duration of an evaluation, then at most three seconds of reading. That is a little over nine seconds at worst.
 
-**Code.** `backend/src/services/twin-alert-scheduler.ts` (`nextEvaluationDelay`, `evaluationPulse`, `evaluateProject`), `alert-bridge.ts`, `response-retest.ts` (`requestRetests`), `alert-feed.ts`, `signals.ts` (`listSignals`, `countSignals`, `countOpenSignals`, `countOpenByType`, `domainCounters`, `closeClearedSignals`), `twin.ts` (`evaluateAlerts`, `valueAgeOf`, `ackAlert`, `readsReality`, `getTwinTreeSnapshot`), `twin-alert-scheduler.ts` (`alertsOnFile`, `resolveAlerts`), routes `GET /v1/ontology/:env/alerts/feed`, `GET /v1/ontology/:env/twin/units/:id` and `PATCH /v1/ontology/:env/twin/alerts/:id` in `backend/src/routes/twin.ts`, `GET /v1/ontology/:env/command-board` and `POST /v1/ontology/:env/signals/close-cleared` in `backend/src/routes/signals.ts`, migrations `063_twin_alert_times.sql` and `064_twin_alert_observed_basis.sql`; `frontend/app/studio/AlertFeed.tsx`, `alert-feed-state.ts`, `AlertBanner.tsx`, `StudioShell.tsx`, `signals-api.ts`, `response/ResponseView.tsx`, `live/UnitsView.tsx`, `live/UnitSheet.tsx`.
+**Code.** `backend/src/services/twin-alert-scheduler.ts` (`nextEvaluationDelay`, `evaluationPulse`, `evaluateProject`), `alert-bridge.ts`, `response-retest.ts` (`requestRetests`), `alert-feed.ts`, `signals.ts` (`listSignals`, `countSignals`, `countOpenSignals`, `countOpenByType`, `domainCounters`, `closeClearedSignals`, `ruleOutcomes`), `twin.ts` (`evaluateAlerts`, `valueAgeOf`, `ackAlert`, `readsReality`, `getTwinTreeSnapshot`), `twin-alert-scheduler.ts` (`alertsOnFile`, `resolveAlerts`), routes `GET /v1/ontology/:env/alerts/feed`, `GET /v1/ontology/:env/twin/units/:id` and `PATCH /v1/ontology/:env/twin/alerts/:id` in `backend/src/routes/twin.ts`, `GET /v1/ontology/:env/command-board` and `POST /v1/ontology/:env/signals/close-cleared` in `backend/src/routes/signals.ts`, migrations `063_twin_alert_times.sql` and `064_twin_alert_observed_basis.sql`; `frontend/app/studio/AlertFeed.tsx`, `alert-feed-state.ts`, `AlertBanner.tsx`, `StudioShell.tsx`, `signals-api.ts`, `response/ResponseView.tsx`, `live/UnitsView.tsx`, `live/UnitSheet.tsx`.
 **Tests.** `twin-alert-scheduler.unit.test.ts`, `twin-alert-ack.unit.test.ts`, `alert-bridge.unit.test.ts`, `alert-feed.unit.test.ts`, `twin-value-age.unit.test.ts`, `signals.unit.test.ts`; `alert-feed-state.test.ts`, `AlertBanner.test.tsx`, `live/UnitSheet.test.tsx`, `response/ResponseView.test.tsx`, `platform-nav.test.ts`.
 
 ## D6. Twin metrics
@@ -1105,7 +1135,7 @@ flowchart TD
 - **Each figure has its age.** An alert and a measure carry the age of what the measure reads (D7). The unit keeps its own, that of the oldest of all its sources, which answers another question and can be older than the age of one of its values. The card shows each measure's age in its tile, and names the unit's (“Oldest source under this unit”). The analyst is given both, with what each one means.
 - **Nothing open is not nothing to report.** The reading says how many alert rules exist and when the thresholds were last checked. With no rule at all, it says that nothing could have opened.
 - **Reality only.** No scenario raises an alert, and a live figure read through a “what if” would speak of a world that does not exist.
-- **No history.** The reading is that of now; it says so, to the analyst and on the card.
+- **The past is not in this reading.** The reading is that of now; it says so, to the analyst and on the card. What a measure was worth earlier is kept elsewhere (D11): the unit's page shows it, and the card only follows the measure that raised its signal, since it was raised (A9).
 - **The card does not wait for the model.** `GET /situation` calls no model and writes nothing. The question for the analyst is written by the program; asking it is the person's move.
 - **A signal is looked up in its project.** A signal of another project is not found, whoever the caller is.
 - **A signal brings what was prepared for its kind.** The prepared responses, with the figures of their test and what it is worth today, what the engine made of them when the signal opened (the retest, A11), and the decisions already taken on signals of that kind (A9). A card with no signal shows none: nothing there says which kind it is. The card also says whether a response can be engaged now, and why not.
@@ -1179,7 +1209,7 @@ flowchart TD
 - **Cadence.** One pass every five minutes, never two at once: the next starts five minutes after the previous one ended. So a change is written down at most five minutes after it happened, with its source's time. One project's failure does not cost the others their reading. `TWIN_HISTORY_DISABLED=1` stops the recording; what was kept stays.
 - **A bounded read.** 48 hours by default, 90 days at most, 2,000 readings per answer. When the period holds more, the oldest are left out and the answer says so (`cut`).
 - **A unit that is removed does not lose its past.** Readings are not tied to the object by a foreign key: the history tells what was, not what is still there. A deleted project takes its own with it.
-- **What is not kept.** The objects themselves, their links and the capacities at a past date: the whole twin cannot yet be read as it was. The situation card and the analyst's tools do not read the history: they say so, and point to the unit's page.
+- **What is not kept.** The objects themselves, their links and the capacities at a past date: the whole twin cannot yet be read as it was. The situation card reads of the history only the measure that raised its signal, since it was raised (A9). The analyst's tools do not read it: they say so, and point to the unit's page.
 - A reading is a unit and an aggregated value, never a person.
 
 **Code.** `backend/src/services/twin-history.ts` (`readingsNow`, `recordReadings`, `recordProject`, `recordAllProjects`, `readUnitHistory`, `startTwinHistory`), route `GET /v1/ontology/:env/twin/units/:id/history` in `backend/src/routes/twin.ts`, migration `067_twin_reading.sql`; `frontend/app/studio/live/unit-history.ts` (`historyView`), `UnitSheet.tsx`, `UnitsView.tsx`.

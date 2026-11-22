@@ -21,6 +21,7 @@ import {
   signalTypeForMetric,
   type SignalType,
 } from "../signals-api";
+import { ruleOutcomeLines } from "./rule-outcome";
 
 // ---------------------------------------------------------------------------
 // When the twin shouts.
@@ -290,6 +291,18 @@ export default function AlertRuleEditor({
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
+
+          {/* Where the rule is set is where its false alarms are read. */}
+          {editing && editing !== "new" && ruleOutcomeLines(editing.signals).length > 0 ? (
+            <div aria-label="What became of its signals" role="group" className="border-b border-line-soft bg-canvas-raised px-3 py-2">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-ink-faint">What became of its signals</p>
+              {ruleOutcomeLines(editing.signals).map((line) => (
+                <p key={line} className="mt-0.5 text-[11px] leading-snug text-ink-muted">
+                  {line}
+                </p>
+              ))}
+            </div>
+          ) : null}
 
           {!editing ? (
             <p className="p-6 text-center text-[11.5px] leading-relaxed text-ink-faint">

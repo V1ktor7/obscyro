@@ -404,6 +404,35 @@ flowchart TD
 - Un jour que la série ne rapporte pas n'est pas comparé. Une série qui ne rapporte rien ne donne pas un écart nul, elle ne donne pas d'écart.
 - Le suivi ne conclut pas. Il donne l'écart ; dire si la décision a tenu revient à la personne.
 
+**Suivi sur le signal.** Une décision prise sur un signal se relit avec ce qui a été mesuré ensuite, au même endroit : la fiche de situation de ce signal.
+
+```mermaid
+flowchart TD
+    A["Fiche de situation d'un signal"] --> B{"Signal levé par une alerte sur une unité,<br/>sur une mesure que le jumeau garde ?"}
+    B -->|"non"| B1["La fiche dit pourquoi rien n'est suivi"]
+    B -->|"oui"| C["Relevés de cette mesure à cette unité (D11),<br/>de la levée du signal à sa clôture, ou à maintenant"]
+    C --> D{"Une décision a-t-elle été prise sur ce signal ?"}
+    D -->|"non"| E["Mesuré depuis la levée :<br/>la valeur à la levée, le plus bas, le plus haut, le dernier relevé"]
+    D -->|"oui : la première compte"| F["Délai entre la levée du signal et la décision,<br/>écrit au journal du signal à l'engagement"]
+    F --> G["Mesuré depuis la décision :<br/>la valeur à la décision, le plus bas, le plus haut,<br/>le dernier relevé, et le changement mesuré"]
+    F --> H["Attendu : ce que donnait le run testé.<br/>Le retest de l'ouverture s'il a donné des chiffres, sinon le test gardé ;<br/>les chiffres du site quand l'unité en est un"]
+    G --> I["Posés côte à côte, jamais soustraits :<br/>le run compte une file et une occupation plafonnée à 100 %,<br/>le jumeau mesure ce que l'organisation a défini"]
+    H --> I
+    E --> J["Ce qu'est devenue l'alerte : elle tient, elle est accusée,<br/>ou elle est retombée, et combien de temps après"]
+    I --> J
+    J --> K["La fiche donne les chiffres et s'arrête.<br/>La personne juge"]
+```
+
+- **Mesuré, enregistré, attendu : trois choses, jamais mélangées.** Mesuré : la mesure qui a levé le signal, à son unité, telle que le jumeau l'a notée (D11). Enregistré : qui a décidé, quand, et combien de temps après la levée du signal. Attendu : ce que donnait le run qui a testé la réponse, dans les termes du moteur. L'écran les sépare sous trois titres.
+- **Aucun chiffre ne pose le run contre le jumeau.** Le run compte des personnes en attente et une occupation qui s'arrête à 100 % de la capacité ; le jumeau mesure ce que l'organisation a défini, et peut lire 143 %. Soustraire l'un de l'autre donnerait un nombre qui ne veut rien dire. Chaque côté donne son propre changement, dans sa propre unité : des points de la mesure d'un côté, des jours-patients d'attente de l'autre. La fiche écrit pourquoi aucun écart n'est calculé entre les deux.
+- **Le run dont on parle est nommé.** Quand le retest fait à l'ouverture du signal avait donné des chiffres, ce sont eux qui sont montrés, avec leur date. Sinon c'est le test gardé à froid, et la fiche le dit. Les chiffres par site viennent toujours du test gardé : un retest ne garde que ceux du réseau. Si l'unité du signal n'est pas un site de ce run, le run ne donne aucun chiffre pour elle, et la fiche l'écrit.
+- **Le délai est écrit deux fois.** Il se calcule à partir de deux heures enregistrées, celle du signal et celle de la décision, et il est aussi écrit au journal du signal quand la réponse est engagée (`secondsSinceRaised`), journal que rien ne modifie ensuite.
+- **Ce que le jumeau montrait.** La valeur « à la décision » est le dernier relevé noté à ce moment-là : ce que la personne avait sous les yeux, pas ce que la source a publié plus tard pour la même heure.
+- **Aucun nouveau relevé n'est pas aucun changement.** Quand rien n'a été noté depuis la décision, la fiche l'écrit, et ne donne pas de changement. Une mesure qui a perdu sa valeur le dit au lieu d'afficher un chiffre.
+- **Un changement après une décision n'est pas son effet.** D'autres choses ont changé en même temps, et ce suivi ne les distingue pas. La fiche le dit, et ne conclut pas.
+- **Un signal clos** est suivi jusqu'à sa clôture, et la fiche garde la façon dont il a été clos.
+- **Ce qui ne se suit pas.** Un signal qu'aucune alerte n'a levé n'a pas de mesure. Un signal levé sur un compte intégré non plus : le jumeau ne garde que les mesures que l'organisation a définies. Un signal plus ancien que l'historique n'a pas de relevés avant le jour où il a commencé. Chaque cas est écrit sur la fiche.
+
 **Réponse préparée et engagement.** Une décision peut aussi être prise sur un signal, en engageant une réponse préparée à froid.
 
 ```mermaid
@@ -439,8 +468,8 @@ flowchart TD
 - **Retirer n'est pas effacer.** Une réponse retirée n'est plus proposée ; les décisions qui l'ont engagée restent lisibles.
 - **Rien n'est déclenché ailleurs.** Engager enregistre et suit. L'écran le dit.
 
-**Code.** `backend/src/services/decisions.ts` (`decisionFromExchange`, `followUp`, `realityOf`, `listDecisionsForSignalType`), `prepared-responses.ts` (`scenarioMark`, `standingOf`, `onCard`), `response-retest.ts` (`expectedOnEngage`), `signals.ts` (`stageAhead`, `recordOptionTaken`, `moveSignal`), `backend/src/routes/decisions.ts`, `routes/prepared-responses.ts`, migrations `060_analyst_exchange_kind.sql`, `061_decision.sql` et `065_prepared_response.sql` ; `frontend/app/studio/simulation/hex/DecisionsTab.tsx`, `KeepPrepared.tsx`, `frontend/app/studio/situation/PreparedResponses.tsx`.
-**Tests.** `decisions.unit.test.ts`, `prepared-responses.unit.test.ts`, `analyst-options.unit.test.ts` (d'une option testée à une décision), `routes/decisions.unit.test.ts`, `DecisionsTab.test.tsx`, `KeepPrepared.test.tsx`, `PreparedResponses.test.tsx`.
+**Code.** `backend/src/services/decisions.ts` (`decisionFromExchange`, `followUp`, `realityOf`, `listDecisionsForSignalType`, `listDecisionsForSignal`), `signal-follow-up.ts` (`signalFacts`, `signalFollowUp`), `twin-history.ts` (`readReadingsBetween`), `prepared-responses.ts` (`scenarioMark`, `standingOf`, `onCard`), `response-retest.ts` (`expectedOnEngage`), `signals.ts` (`stageAhead`, `recordOptionTaken`, `moveSignal`), `backend/src/routes/decisions.ts`, `routes/prepared-responses.ts`, migrations `060_analyst_exchange_kind.sql`, `061_decision.sql` et `065_prepared_response.sql` ; `frontend/app/studio/simulation/hex/DecisionsTab.tsx`, `KeepPrepared.tsx`, `frontend/app/studio/situation/PreparedResponses.tsx`, `SituationView.tsx`.
+**Tests.** `decisions.unit.test.ts`, `signal-follow-up.unit.test.ts`, `prepared-responses.unit.test.ts`, `analyst-options.unit.test.ts` (d'une option testée à une décision), `routes/decisions.unit.test.ts`, `DecisionsTab.test.tsx`, `KeepPrepared.test.tsx`, `PreparedResponses.test.tsx`.
 
 ## A10. Recherche en ligne et calendrier d'événements
 
@@ -977,12 +1006,13 @@ flowchart TD
 - **Ce qui est mis à part est compté, jamais caché.** L'API rend trois chiffres sur tous les signaux ouverts, quelle que soit la vue (`counts` : ouverts, actifs, mis à part), et les deux onglets les affichent. `total` est le nombre de signaux de la vue demandée ; quand la liste s'arrête à 500, l'en-tête écrit « Showing 500 of 2,810 signals whose alert has cleared » plutôt que « 500 ».
 - **Les compteurs par domaine se comptent en base**, sur tous les signaux ouverts de la vue et non sur les 500 listés : au-delà de 500 signaux, comptés sur la liste, ils étaient faux.
 - **Clore en lot est une décision, pas un ménage.** Rien ne se ferme seul : une condition retombée n'est pas une condition réglée. Depuis la vue « Alert cleared », une personne ferme en une fois les signaux mis à part du domaine affiché, et doit écrire un motif. C'est une seule requête : tous se ferment ou aucun. Chaque signal reçoit sa propre ligne `closed` au journal, avec qui et pourquoi. Un signal que quelqu'un prend en main entre le compte affiché et le clic n'est plus mis à part et reste ouvert ; l'écran affiche le nombre réellement fermé.
+- **La part de faux positifs se lit là où la règle se règle.** L'éditeur de seuils écrit, pour la règle choisie, ce que sont devenus les signaux qu'elle a levés : combien, combien d'ouverts, combien de clos, et parmi les clos combien une personne a fermés comme faux positifs, avec la part que cela fait. La part se compte sur les signaux clos, jamais sur tous : un signal ouvert n'a pas encore été jugé, et sans signal clos aucune part n'est donnée. Ceux clos en lot après une alerte retombée seule sont comptés à part. Les comptes portent sur les signaux, pas sur les alertes : une alerte sur une mesure qu'aucun type de signal ne réclame n'en lève aucun.
 - **Trois façons de se fermer, jamais confondues.** Arrivé à la dernière étape de son workflow : traité. « Faux positif » : il n'aurait pas dû se lever (`false positive: …`). Clos en lot : réel, retombé seul, sans que personne ait eu à agir (`alert cleared: …`). Les mélanger rendrait les trois taux illisibles.
 - Une alerte est une unité et une valeur agrégée, jamais une personne.
 
 **Délai.** Du moment où une donnée est écrite ici au moment où l'alerte est à l'écran : au plus cinq secondes d'attente de l'évaluateur, la durée d'une évaluation, puis au plus trois secondes de lecture. Soit un peu plus de neuf secondes au pire.
 
-**Code.** `backend/src/services/twin-alert-scheduler.ts` (`nextEvaluationDelay`, `evaluationPulse`, `evaluateProject`), `alert-bridge.ts`, `response-retest.ts` (`requestRetests`), `alert-feed.ts`, `signals.ts` (`listSignals`, `countSignals`, `countOpenSignals`, `countOpenByType`, `domainCounters`, `closeClearedSignals`), `twin.ts` (`evaluateAlerts`, `valueAgeOf`, `ackAlert`, `readsReality`, `getTwinTreeSnapshot`), `twin-alert-scheduler.ts` (`alertsOnFile`, `resolveAlerts`), routes `GET /v1/ontology/:env/alerts/feed`, `GET /v1/ontology/:env/twin/units/:id` et `PATCH /v1/ontology/:env/twin/alerts/:id` dans `backend/src/routes/twin.ts`, `GET /v1/ontology/:env/command-board` et `POST /v1/ontology/:env/signals/close-cleared` dans `backend/src/routes/signals.ts`, migrations `063_twin_alert_times.sql` et `064_twin_alert_observed_basis.sql` ; `frontend/app/studio/AlertFeed.tsx`, `alert-feed-state.ts`, `AlertBanner.tsx`, `StudioShell.tsx`, `signals-api.ts`, `response/ResponseView.tsx`, `live/UnitsView.tsx`, `live/UnitSheet.tsx`.
+**Code.** `backend/src/services/twin-alert-scheduler.ts` (`nextEvaluationDelay`, `evaluationPulse`, `evaluateProject`), `alert-bridge.ts`, `response-retest.ts` (`requestRetests`), `alert-feed.ts`, `signals.ts` (`listSignals`, `countSignals`, `countOpenSignals`, `countOpenByType`, `domainCounters`, `closeClearedSignals`, `ruleOutcomes`), `twin.ts` (`evaluateAlerts`, `valueAgeOf`, `ackAlert`, `readsReality`, `getTwinTreeSnapshot`), `twin-alert-scheduler.ts` (`alertsOnFile`, `resolveAlerts`), routes `GET /v1/ontology/:env/alerts/feed`, `GET /v1/ontology/:env/twin/units/:id` et `PATCH /v1/ontology/:env/twin/alerts/:id` dans `backend/src/routes/twin.ts`, `GET /v1/ontology/:env/command-board` et `POST /v1/ontology/:env/signals/close-cleared` dans `backend/src/routes/signals.ts`, migrations `063_twin_alert_times.sql` et `064_twin_alert_observed_basis.sql` ; `frontend/app/studio/AlertFeed.tsx`, `alert-feed-state.ts`, `AlertBanner.tsx`, `StudioShell.tsx`, `signals-api.ts`, `response/ResponseView.tsx`, `live/UnitsView.tsx`, `live/UnitSheet.tsx`.
 **Tests.** `twin-alert-scheduler.unit.test.ts`, `twin-alert-ack.unit.test.ts`, `alert-bridge.unit.test.ts`, `alert-feed.unit.test.ts`, `twin-value-age.unit.test.ts`, `signals.unit.test.ts` ; `alert-feed-state.test.ts`, `AlertBanner.test.tsx`, `live/UnitSheet.test.tsx`, `response/ResponseView.test.tsx`, `platform-nav.test.ts`.
 
 ## D6. Métriques du jumeau
@@ -1099,7 +1129,7 @@ flowchart TD
 - **Chaque chiffre a son âge.** Une alerte et une mesure portent l'âge de ce que la mesure lit (D7). L'unité garde le sien, celui de la plus vieille de toutes ses sources, qui répond à une autre question et peut être plus vieux que celui d'une de ses valeurs. La fiche montre l'âge de chaque mesure dans sa case, et nomme celui de l'unité (« Oldest source under this unit »). L'analyste reçoit les deux, avec ce que chacun veut dire.
 - **Rien d'ouvert n'est pas rien à signaler.** La lecture dit combien de règles d'alerte existent et quand les seuils ont été vérifiés pour la dernière fois. Sans aucune règle, elle dit que rien ne pouvait s'ouvrir.
 - **Réalité seulement.** Aucun scénario ne lève d'alerte, et un chiffre en direct lu à travers un « et si » parlerait d'un monde qui n'existe pas.
-- **Pas d'historique.** La lecture est celle de maintenant ; elle le dit, à l'analyste et sur la fiche.
+- **Le passé n'est pas dans cette lecture.** La lecture est celle de maintenant ; elle le dit, à l'analyste et sur la fiche. Ce qu'une mesure valait plus tôt est gardé ailleurs (D11) : la page de l'unité le montre, et la fiche ne suit que la mesure qui a levé son signal, depuis sa levée (A9).
 - **La fiche n'attend pas le modèle.** `GET /situation` n'appelle aucun modèle et n'écrit rien. La question à l'analyste est écrite par le programme ; la poser est un geste de la personne.
 - **Un signal se cherche dans son projet.** Un signal d'un autre projet est introuvable, qui que soit l'appelant.
 - **Un signal apporte ce qui a été préparé pour son type.** Les réponses préparées, avec les chiffres de leur test et ce qu'il vaut aujourd'hui, ce que le moteur en a fait à l'ouverture du signal (le retest, A11), et les décisions déjà prises sur des signaux de ce type (A9). Une fiche sans signal n'en montre pas : rien n'y dit de quel type il s'agit. La fiche dit aussi si une réponse peut être engagée maintenant, et pourquoi non.
@@ -1173,7 +1203,7 @@ flowchart TD
 - **Cadence.** Une passe toutes les cinq minutes, jamais deux à la fois : la suivante part cinq minutes après la fin de la précédente. Un changement est donc noté au plus cinq minutes après s'être produit, avec l'heure de sa source. L'échec d'un projet ne coûte pas leur relevé aux autres. `TWIN_HISTORY_DISABLED=1` arrête l'enregistrement ; ce qui a été gardé reste.
 - **Une lecture bornée.** 48 heures par défaut, 90 jours au plus, 2 000 relevés par réponse. Quand la période en contient plus, les plus anciens sont laissés de côté et la réponse le dit (`cut`).
 - **Une unité retirée ne perd pas son passé.** Les relevés ne sont pas liés à l'objet par une clé étrangère : l'historique raconte ce qui a été, pas ce qui est encore là. Un projet supprimé emporte les siens.
-- **Ce qui n'est pas gardé.** Les objets eux-mêmes, leurs liens et les capacités à une date passée : on ne peut pas encore relire tout le jumeau tel qu'il était. La fiche de situation et les outils de l'analyste ne lisent pas l'historique : ils le disent, et renvoient à la page de l'unité.
+- **Ce qui n'est pas gardé.** Les objets eux-mêmes, leurs liens et les capacités à une date passée : on ne peut pas encore relire tout le jumeau tel qu'il était. La fiche de situation ne lit de l'historique que la mesure qui a levé son signal, depuis sa levée (A9). Les outils de l'analyste ne le lisent pas : ils le disent, et renvoient à la page de l'unité.
 - Un relevé est une unité et une valeur agrégée, jamais une personne.
 
 **Code.** `backend/src/services/twin-history.ts` (`readingsNow`, `recordReadings`, `recordProject`, `recordAllProjects`, `readUnitHistory`, `startTwinHistory`), route `GET /v1/ontology/:env/twin/units/:id/history` dans `backend/src/routes/twin.ts`, migration `067_twin_reading.sql` ; `frontend/app/studio/live/unit-history.ts` (`historyView`), `UnitSheet.tsx`, `UnitsView.tsx`.

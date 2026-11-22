@@ -930,7 +930,7 @@ export async function dismissSignal(
     `UPDATE app.signal
         SET closed_at = NOW(), closed_reason = $2, updated_at = NOW()
       WHERE id = $1`,
-    [signalId, `false positive: ${opts.reason.trim()}`],
+    [signalId, `${FALSE_POSITIVE_PREFIX}${opts.reason.trim()}`],
   );
   await appendEvent(db, signalId, {
     kind: "dismissed",
@@ -939,6 +939,57 @@ export async function dismissSignal(
     note: opts.reason.trim(),
   });
   return getSignal(db, signalId);
+}
+
+/** How a dismissed signal says it closed. */
+export const FALSE_POSITIVE_PREFIX = "false positive: ";
+
+/** What became of the signals one alert rule raised. */
+export interface RuleOutcome {
+  ruleId: string;
+  /** Every signal an alert of this rule raised. */
+  raised: number;
+  open: number;
+  closed: number;
+  /** Closed by a person as "should not have fired". */
+  falsePositives: number;
+  /** Closed in a batch after their alert cleared on its own, with nobody having acted. */
+  clearedOnOwn: number;
+}
+
+/**
+ * What became of the signals each alert rule raised, in one project.
+ *
+ * Alert fatigue is how decision support fails: a rule that mostly raises
+ * signals somebody dismisses teaches people to stop reading. The share of
+ * false positives is only readable because a dismissal, a batch close and a
+ * resolution close three different ways.
+ *
+ * Counted on signals that still name their alert's rule: a rule that was
+ * deleted keeps its alerts but they no longer say which rule raised them.
+ */
+export async function ruleOutcomes(db: DbClient, projectId: string): Promise<RuleOutcome[]> {
+  const { rows } = await db.query<{ rule_id: string; raised: number; open: number; closed: number; false_positives: number; cleared_on_own: number }>(
+    `SELECT a.rule_id,
+            count(*)::int AS raised,
+            (count(*) FILTER (WHERE s.closed_at IS NULL))::int AS open,
+            (count(*) FILTER (WHERE s.closed_at IS NOT NULL))::int AS closed,
+            (count(*) FILTER (WHERE s.closed_at IS NOT NULL AND s.closed_reason LIKE $2))::int AS false_positives,
+            (count(*) FILTER (WHERE s.closed_at IS NOT NULL AND s.closed_reason LIKE $3))::int AS cleared_on_own
+       FROM app.signal s
+       JOIN app.twin_alert a ON a.id = s.origin_id
+      WHERE s.project_id = $1 AND s.origin_kind = 'twin_alert' AND a.rule_id IS NOT NULL
+      GROUP BY a.rule_id`,
+    [projectId, `${FALSE_POSITIVE_PREFIX}%`, `${CLEARED_CLOSE_PREFIX}%`],
+  );
+  return rows.map((r) => ({
+    ruleId: r.rule_id,
+    raised: r.raised,
+    open: r.open,
+    closed: r.closed,
+    falsePositives: r.false_positives,
+    clearedOnOwn: r.cleared_on_own,
+  }));
 }
 
 /** How a signal closed in a batch says it closed: neither resolved, nor a false positive. */
