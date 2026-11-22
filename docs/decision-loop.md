@@ -61,7 +61,7 @@ La mise en service de l'analyste ([issue 5](https://github.com/V1ktor7/obscyro/i
    4. Les réponses préparées retestées sur l'état du moment, dès qu'une alerte s'ouvre : [issue 15](https://github.com/V1ktor7/obscyro/issues/15). **Fait.** Suite : retester une réponse à la demande, et quand sa fiche est rouverte ([issue 26](https://github.com/V1ktor7/obscyro/issues/26)).
    5. Les deux moteurs d'options réunis, réponses enregistrées et tampons : [issue 16](https://github.com/V1ktor7/obscyro/issues/16). **Fait.** Suite : dire en une phrase pourquoi un outil de l'analyste refuse une entrée ([issue 27](https://github.com/V1ktor7/obscyro/issues/27)).
    6. Le suivi d'une décision rattaché à son signal : [issue 17](https://github.com/V1ktor7/obscyro/issues/17). **Livré.**
-5. L'historique du jumeau : garder les relevés de chaque mesure, par unité, et les montrer sur la fiche d'une unité ([issue 35](https://github.com/V1ktor7/obscyro/issues/35)).
+5. L'historique du jumeau : garder les relevés de chaque mesure, par unité, et les montrer sur la fiche d'une unité ([issue 35](https://github.com/V1ktor7/obscyro/issues/35)). **Fait.** Suites, sans issue encore : que la fiche de situation et l'analyste lisent ces relevés, et garder aussi les comptes intégrés.
 6. Ensuite, sans issue encore : lire tout le réseau à une date passée (ses objets, et pas seulement ses mesures), moteur de facteurs, stocks et répartition des ressources rares, personnel dans le jumeau.
 
 ### Pourquoi le direct passe avant le reste

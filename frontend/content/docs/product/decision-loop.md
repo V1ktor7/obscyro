@@ -3,7 +3,7 @@
 title: "The decision loop"
 description: "Obscyro does not decide. It helps a person decide, by showing what is measured, what has been tried and what each option would change."
 source: "docs/decision-loop.md"
-translatedFrom: "8f524cb893b49f2c"
+translatedFrom: "78ff267181543afc"
 ---
 
 Obscyro does not decide. It helps a person decide, by showing what is measured, what has been tried and what each option would change, leaving nothing to chance.
@@ -67,7 +67,7 @@ Putting the analyst into service ([issue 5](https://github.com/V1ktor7/obscyro/i
    4. The prepared responses retested on the state of the moment, as soon as an alert opens: [issue 15](https://github.com/V1ktor7/obscyro/issues/15). **Done.** Next: retest a response on request, and when its card is opened again ([issue 26](https://github.com/V1ktor7/obscyro/issues/26)).
    5. The two option engines brought together, recorded responses and stamps: [issue 16](https://github.com/V1ktor7/obscyro/issues/16). **Done.** Follow-up: say in one sentence why a tool of the analyst refuses an input ([issue 27](https://github.com/V1ktor7/obscyro/issues/27)).
    6. The follow-up of a decision attached to its signal: [issue 17](https://github.com/V1ktor7/obscyro/issues/17). **Delivered.**
-5. The twin's history: keeping the readings of each measure, by unit, and showing them on a unit's sheet ([issue 35](https://github.com/V1ktor7/obscyro/issues/35)).
+5. The twin's history: keeping the readings of each measure, by unit, and showing them on a unit's sheet ([issue 35](https://github.com/V1ktor7/obscyro/issues/35)). **Done.** Next, with no issue yet: have the situation card and the analyst read those readings, and keep the built-in counts too.
 6. After that, with no issue yet: reading the whole network at a past date (its objects, and not only its measures), the factor engine, stocks and the allocation of scarce resources, staff in the twin.
 
 ### Why live comes before the rest
