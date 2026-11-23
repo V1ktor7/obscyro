@@ -179,6 +179,16 @@ test("when the recorder has not caught up, the newest kept reading is the one be
   assert.equal(c.previous?.at, T1645.replace("Z", ".000Z"));
 });
 
+test("a value corrected within its hour is not compared with its own first writing", () => {
+  // 09:45 was first written down as 199, then corrected to 217 at the same hour. The reading before is 08:45's.
+  const kept = [row("o", 217, T1745, "2026-11-22T22:58:00Z"), row("o", 199, T1745, "2026-11-22T22:50:00Z"), row("o", 181, T1645, "2026-11-22T21:50:00Z")];
+  const c = changeOf({ value: 217, observedAt: new Date(T1745) }, kept, now);
+  assert.deepEqual([c.previous?.value, c.delta], [181, 36]);
+  // And before the correction is written down, the first writing is still the value's own hour.
+  const before = changeOf({ value: 217, observedAt: new Date(T1745) }, kept.slice(1), now);
+  assert.deepEqual([before.previous?.value, before.delta], [181, 36]);
+});
+
 test("the same value an hour later is no change, not a missing one", () => {
   const kept = [row("p", 53, T1745, "2026-11-22T22:50:00Z"), row("p", 53, T1645, "2026-11-22T21:50:00Z")];
   assert.equal(changeOf({ value: 53, observedAt: new Date(T1745) }, kept, now).delta, 0);

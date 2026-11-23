@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "c015b846196eaa19"
+translatedFrom: "c887481fff59700f"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -1378,7 +1378,7 @@ flowchart TD
 - **What is not kept.** The objects themselves, their links and the capacities at a past date: the whole twin cannot yet be read as it was. The situation card reads of the history only the measure that raised its signal, since it was raised (A9). The analyst's tools do not read it: they say so, and point to the unit's page.
 - A reading is a unit and an aggregated value, never a person.
 
-- **The change since the reading before.** For each measure that has a value, a unit's sheet and a site's inspector give the change since the reading kept before, and the hour of that reading. The arithmetic is done by the server (`changeOf`), in one read for every measure of the unit (`readUnitTrends`); the screen subtracts nothing. The last reading kept is most often the value on screen itself, written down a few minutes ago: it is recognised by its hour, within 90 seconds, or by its value when the source gives no time, and the one before it is used. If the recorder has not yet written down the value on screen, the last one kept already is the reading before.
+- **The change since the reading before.** For each measure that has a value, a unit's sheet and a site's inspector give the change since the reading kept before, and the hour of that reading. The arithmetic is done by the server (`changeOf`), in one read for every measure of the unit (`readUnitTrends`); the screen subtracts nothing. The last reading kept is most often the value on screen itself, written down a few minutes ago: it is recognised by its hour, within 90 seconds, or by its value when the source gives no time, and the one before it is used. A value corrected within its hour leaves two readings at the same time: neither is the reading before, and the change is counted from the hour before. If the recorder has not yet written down the value on screen, the last one kept already is the reading before.
 - **No change against an absence.** With no earlier reading, the screen writes that none was kept. If the reading before had no value, no change is counted: an absence is not a zero.
 - **A figure of the day before is compared with the day before's.** Republished every hour, it is not compared with itself an hour earlier: its reading before is the last one kept on an earlier day, counted on the clock of its source (D7).
 - **The 30-day mean.** For a figure of the day before, the mean of one value a day, the last one written down that day, over 30 days at most (`meanOfDays`). It says how many days it rests on (“average over 12 days kept”) while there are fewer than thirty. A day with no reading is not filled in.

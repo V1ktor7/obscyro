@@ -408,6 +408,8 @@ export function dayOn(at: Date, zone: string | null | undefined): string {
  * (within the tolerance that makes two readings one, D11), or by its value when
  * the source gives no time, and stepped over. When the recorder has not caught
  * up yet, the newest kept reading is the one before, and is used as such.
+ * A value corrected within its hour leaves two readings at the same time: both
+ * are stepped over, and the change is counted from the hour before.
  *
  * A value that describes a day is compared with the last reading of an earlier
  * day: the same daily figure republished an hour ago is not "the reading
@@ -423,13 +425,15 @@ export function changeOf(
   if (current.period === "previous_day") {
     const today = dayOn(current.observedAt ?? now, current.zone);
     previous = kept.find((r) => dayOn(timeOf(r), current.zone) < today);
+  } else if (current.observedAt) {
+    // Every reading kept at the hour of the value on screen is that value, or
+    // an earlier writing of it: a figure corrected within its hour is kept
+    // twice at the same time. None of them is "the reading before".
+    const at = current.observedAt.getTime();
+    previous = kept.find((r) => !r.observed_at || Math.abs(at - r.observed_at.getTime()) > SAME_READING_SECONDS * 1000);
   } else {
     const first = kept[0];
-    const isCurrent =
-      first !== undefined &&
-      (current.observedAt && first.observed_at
-        ? Math.abs(current.observedAt.getTime() - first.observed_at.getTime()) <= SAME_READING_SECONDS * 1000
-        : !current.observedAt && !first.observed_at && first.value === current.value);
+    const isCurrent = first !== undefined && !first.observed_at && first.value === current.value;
     previous = isCurrent ? kept[1] : first;
   }
   if (!previous) return { previous: null, delta: null };
