@@ -2235,7 +2235,11 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                 />
               ) : null}
 
-          <div className="ml-auto flex max-h-full min-h-0 items-start gap-2">
+          {/* Stretched to the height of the map, so the inspector's `max-h-full`
+              has something to be a fraction of. Left to the height of its
+              content, a long inspector ran past the bottom of the map with its
+              buttons out of reach, and nothing scrolled. */}
+          <div className="ml-auto flex min-h-0 items-start gap-2 self-stretch">
                 <div className="pointer-events-auto flex shrink-0 flex-col gap-1">
                 <button
                   type="button"
