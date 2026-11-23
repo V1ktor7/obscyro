@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { TwinUnitMetrics, TwinUnitTrends } from "@/lib/platform-api";
 
-import { agePhrase, changeView, clockLabel, commonSince, formatDelta, meanView, reportLines, sourceNotes, withheldPhrase } from "./unit-trends";
+import { ageNote, agePhrase, changeView, clockLabel, commonAge, commonSince, formatDelta, meanView, reportLines, sourceNotes, withheldPhrase } from "./unit-trends";
 
 // 18:00 in Montréal on 22 November.
 const NOW = "2026-11-22T23:00:00.000Z";
@@ -158,5 +158,31 @@ describe("where the figures come from", () => {
     expect(sourceNotes(DEFS, reported, notes)).toEqual([{ type: "ReleveUrgence", text: notes.ReleveUrgence }]);
     expect(sourceNotes(DEFS, reported, undefined)).toEqual([]);
     expect(sourceNotes(DEFS, reported, {})).toEqual([]);
+  });
+});
+
+describe("the age of each figure in a list", () => {
+  it("is said for what it is: a reading, or the publication of a figure of the day before", () => {
+    expect(ageNote({ seconds: 1620, basis: "observed" })).toBe("read 27m ago");
+    expect(ageNote({ seconds: 1620, basis: "observed", period: "previous_day" })).toBe("published 27m ago");
+    expect(ageNote({ seconds: null, basis: "undeclared" })).toBe("age unknown");
+    expect(ageNote(null)).toBeNull();
+  });
+
+  it("is carried by every line that has a value, and said once for those that share it", () => {
+    const m = metrics({
+      values: { occupancy: 209.4, patients_presents: 136, dms_ambulatoire: 5.99, iqa: 14 },
+      valueAges: {
+        occupancy: { seconds: 900, basis: "observed" },
+        patients_presents: { seconds: 900, basis: "observed" },
+        dms_ambulatoire: { seconds: 900, basis: "observed", period: "previous_day", zone: MTL },
+        iqa: { seconds: 7200, basis: "observed" },
+      },
+    });
+    const lines = reportLines(DEFS, m, TRENDS, NOW);
+    expect(lines.map((l) => l.age)).toEqual(["read 15m ago", "read 15m ago", "published 15m ago", "read 2h ago"]);
+    // The age two of the hourly values share. The figure of the day before is not counted: it says its own.
+    expect(commonAge(lines)).toBe("read 15m ago");
+    expect(commonAge([])).toBeNull();
   });
 });

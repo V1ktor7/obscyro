@@ -9,7 +9,7 @@ import type { TwinAlert, TwinMetric, TwinNetworkSite, TwinUnitDetail } from "@/l
 
 import { BOX, historyView, windowLabel, type HistoryState } from "../live/unit-history";
 import { ruleInWords } from "../live/units-list";
-import { agePhrase, commonSince, reportLines, sourceNotes, type ReportLine } from "../live/unit-trends";
+import { agePhrase, commonAge, commonSince, reportLines, sourceNotes, type ReportLine } from "../live/unit-trends";
 import { OVERLAY_BAR } from "../map-overlay";
 import { explainFreshness, formatFreshness, formatMetricValue, formatReadingAge } from "../twin-ui";
 import { bandFor, ruleForMetric, type BandRule } from "./site-metric";
@@ -97,6 +97,8 @@ export default function SiteInspector({
   const hourly = rest.filter((l) => !l.daily);
   const daily = rest.filter((l) => l.daily);
   const since = commonSince(hourly);
+  // Every figure has its age: said once for the list, and on the line when it differs.
+  const listAge = commonAge(hourly);
 
   const badgeValue = typeof m.values[badgeMetric] === "number" ? (m.values[badgeMetric] as number) : null;
   const rule = ruleForMetric(rules, badgeMetric);
@@ -198,9 +200,10 @@ export default function SiteInspector({
             {hourly.length > 0 ? (
               <Section title="Also reports" open={!!open.reports} onToggle={() => toggle("reports")}>
                 {hourly.map((l) => (
-                  <Row key={l.key} line={l} since={since} danger={bandFor(valueOf(m.values[l.key]), ruleForMetric(rules, l.key)) === "over"} />
+                  <Row key={l.key} line={l} since={since} listAge={listAge} danger={bandFor(valueOf(m.values[l.key]), ruleForMetric(rules, l.key)) === "over"} />
                 ))}
-                {since ? <p className="m-0 mt-1.5 text-[10px] text-ink-faint">Change since the reading of {since}.</p> : null}
+                {listAge ? <p className="m-0 mt-1.5 text-[10px] text-ink-faint">Values {listAge}.</p> : null}
+                {since ? <p className="m-0 text-[10px] text-ink-faint">Change since the reading of {since}.</p> : null}
               </Section>
             ) : null}
 
@@ -214,6 +217,7 @@ export default function SiteInspector({
                         {l.text ?? "no value"}
                       </span>
                     </div>
+                    {l.age ? <p className="m-0 pl-2.5 text-[10px] text-ink-faint">{l.age}</p> : null}
                     {l.mean ? (
                       <div className="flex items-baseline justify-between gap-2 pl-2.5 text-[10.5px] text-ink-faint">
                         <span>{l.mean.label}</span>
@@ -363,7 +367,7 @@ function Section({
 }
 
 /** One figure the site reports: its value, and how far it moved. The change has no colour. */
-function Row({ line, since, danger }: { line: ReportLine; since: string | null; danger: boolean }) {
+function Row({ line, since, listAge, danger }: { line: ReportLine; since: string | null; listAge: string | null; danger: boolean }) {
   const c = line.change;
   return (
     <div className="border-b border-line-faint py-1 last:border-0">
@@ -379,6 +383,7 @@ function Row({ line, since, danger }: { line: ReportLine; since: string | null; 
           {c ? (c.since && c.since !== since ? `${c.text} · ${c.since}` : c.text) : ""}
         </span>
       </div>
+      {line.age && line.age !== listAge ? <p className="m-0 text-[10px] text-ink-faint">{line.age}</p> : null}
       {line.withheld ? <p className="m-0 text-[10px] leading-relaxed text-ink-faint">{line.withheld}</p> : null}
     </div>
   );

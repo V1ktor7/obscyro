@@ -10,7 +10,7 @@ import { valueAge } from "../alert-feed-state";
 import { explainFreshness, formatReadingAge } from "../twin-ui";
 import { Bar } from "./UnitsBoard";
 import { BOX, historyView, windowLabel, type HistoryState } from "./unit-history";
-import { agePhrase, changeView, commonSince, meanView, withheldPhrase, type ChangeView, type MeanView } from "./unit-trends";
+import { agePhrase, changeView, commonAge, commonSince, meanView, withheldPhrase, type ChangeView, type MeanView } from "./unit-trends";
 import { bandLabel, formatMeasure, ruleInWords, type BarScale, type Measure, type UnitRow } from "./units-list";
 
 // ---------------------------------------------------------------------------
@@ -46,6 +46,8 @@ export interface OtherMeasure {
   about: string[];
   /** A figure of the day before, republished with each reading. */
   daily?: boolean;
+  /** How old the value is: "read 27m ago", or "published 27m ago" for a figure of the day before. */
+  age?: string | null;
   /** How far it moved since the reading kept before. */
   change?: ChangeView | null;
   /** Its mean over the days kept, for a figure of the day before. */
@@ -390,6 +392,8 @@ function History({ state, measure }: { state: HistoryState; measure: Measure }) 
  */
 function Reports({ lines }: { lines: OtherMeasure[] }) {
   const since = commonSince(lines.map((l) => ({ change: l.change ?? null })));
+  // Every figure has its age: said once for the list, and on the line when it differs.
+  const age = commonAge(lines);
   return (
     <>
       <dl className="m-0 grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-3 gap-y-1">
@@ -399,8 +403,11 @@ function Reports({ lines }: { lines: OtherMeasure[] }) {
               {o.about.length > 0 ? `${o.label} · ${o.about.join(", ")}` : o.label}
               {o.daily ? (
                 <span className="block text-[11px] text-ink-faint">
-                  yesterday{o.mean ? ` · ${o.mean.label} ${o.mean.text}` : ""}
+                  yesterday{o.age ? `, ${o.age}` : ""}
+                  {o.mean ? ` · ${o.mean.label} ${o.mean.text}` : ""}
                 </span>
+              ) : o.age && o.age !== age ? (
+                <span className="block text-[11px] text-ink-faint">{o.age}</span>
               ) : null}
               {o.withheld ? <span className="block text-[11px] text-ink-faint">{o.withheld}</span> : null}
             </dt>
@@ -417,6 +424,7 @@ function Reports({ lines }: { lines: OtherMeasure[] }) {
           </div>
         ))}
       </dl>
+      {age ? <p className="m-0 text-xs text-ink-faint">Values {age}.</p> : null}
       {since ? <p className="m-0 text-xs text-ink-faint">Change since the reading of {since}.</p> : null}
     </>
   );

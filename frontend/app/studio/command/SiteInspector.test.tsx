@@ -191,3 +191,13 @@ describe("the inspector of a site on the network map", () => {
     expect(screen.getByText("572")).toBeTruthy();
   });
 });
+
+describe("the age of each figure in the inspector", () => {
+  it("is said once for the figures of the hour, and under each figure of the day before", () => {
+    inspector();
+    const hourly = screen.getByRole("button", { name: /Also reports/ }).parentElement!;
+    expect(within(hourly).getByText("Values read 15m ago.")).toBeTruthy();
+    const daily = screen.getByRole("button", { name: /Yesterday/ }).parentElement!;
+    expect(within(daily).getByText("published 15m ago")).toBeTruthy();
+  });
+});

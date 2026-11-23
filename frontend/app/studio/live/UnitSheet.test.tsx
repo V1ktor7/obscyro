@@ -428,3 +428,23 @@ describe("beside a value, what the twin kept of it", () => {
     expect(screen.queryByRole("heading", { name: "About these figures" })).toBeNull();
   });
 });
+
+describe("the age of what else a unit reports", () => {
+  it("is said once for the list, and on the line of a value read at another hour", () => {
+    sheet({
+      others: [
+        { key: "present", label: "People in the emergency room", text: "136", about: [], age: "read 27m ago" },
+        { key: "waiting", label: "Waiting to see a doctor", text: "35", about: [], age: "read 27m ago" },
+        { key: "iqa", label: "Air quality index", text: "14.0", about: ["O3"], age: "read 2h ago" },
+        { key: "stay", label: "Average stay, walk-in patients", text: "5 h 59", about: [], daily: true, age: "published 27m ago" },
+      ],
+    });
+    const block = screen.getByRole("heading", { name: "Also reports" }).parentElement!;
+    expect(within(block).getByText("Values read 27m ago.")).toBeTruthy();
+    // The value from another source carries its own age; the two that share the list's do not repeat it.
+    expect(within(block).getByText("read 2h ago")).toBeTruthy();
+    expect(within(block).queryByText("read 27m ago")).toBeNull();
+    // A figure of the day before says when it was published.
+    expect(within(block).getByText("yesterday, published 27m ago")).toBeTruthy();
+  });
+});

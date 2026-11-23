@@ -3,7 +3,7 @@
 title: "The Units page"
 description: "Every unit of the twin, live, ranked on one measure: the ones in alert first, and the sheet of the unit you pick beside the list."
 source: "docs/units-page.md"
-translatedFrom: "c0eb22aa061e3a73"
+translatedFrom: "dddb47a7e952ff4b"
 ---
 
 Every unit of the twin, live, ranked on one measure. The page answers one question: which unit to read first. The ones in alert come first, the ones that report nothing for the measure chosen are folded away, and the sheet of the unit you pick stays beside the list.
@@ -64,6 +64,7 @@ From top to bottom: the name, where the unit stands against its threshold, its v
 - **Three ages, each one named.** Under the value: “This value was read 14m ago”, the age of what the measure shown reads. In each alert: “value read 14 min ago”, the age of the value that raised it, in the words of the banner. In the “Oldest source” box: the age of the whole unit, the oldest of all its sources, which answers “is everything I see here up to date?”. A unit that receives a stretcher census and an air quality reading can show 14 minutes for its occupancy and 2 hours for its oldest source: both are right ([Algorithms](/docs/product/algorithms), D7).
 - **An age says what it is worth.** When it is a floor or it is unknown, the sheet writes why, in full, and says whether it is about the measure or the unit.
 - **A value the twin did not date gets no sentence.** That is the case of the four counts every twin has: the sheet does not lend them the unit's age under another name.
+- **Every figure of the list has its age.** “Also reports” writes once the age its values share (“Values read 27m ago.”). A value read at another hour carries its own on its line, and a figure of the day before says when it was published.
 - **The change since the reading before.** Under the value, one sentence: “Up 6 pts since the reading of 16:45.”, “No change since the reading of 16:45.”, or that no earlier reading was kept. The “Also reports” list gives the same change for every other measure and says once the hour it is counted from; a change counted from another hour carries its own. The change is counted by the server, on the readings kept ([Algorithms](/docs/product/algorithms), D11). It has no colour: more is not always worse.
 - **A figure of the day before does not have the age of the last hour.** A measure whose value describes the day before, such as an average length of stay republished every hour, is written “Yesterday's average, published 14m ago”. Its mean follows: “30-day average”, or “Average over 12 days kept” while the history is younger than thirty days (D7, D11).
 - **A withheld value says why.** A measure that has something to read and gives nothing writes it: several units under this one each publish their own average, and averages are not averaged again; or its source published no figure in the latest reading. It is neither a zero nor a feed that stopped (D6).

@@ -124,6 +124,17 @@ export function agePhrase(age: TwinValueAge, unit: TwinMetricUnit | undefined): 
   return age.seconds === null ? "The age of this value is unknown" : `This value was read ${formatReadingAge(age.seconds, age.basis)}`;
 }
 
+/**
+ * The age of a value in a list, without its subject: "read 27m ago",
+ * "published 27m ago" for a figure of the day before, "age unknown".
+ */
+export function ageNote(age: TwinValueAge | null | undefined): string | null {
+  if (!age) return null;
+  const daily = age.period === "previous_day";
+  if (age.seconds === null) return daily ? "publication time unknown" : "age unknown";
+  return `${daily ? "published" : "read"} ${formatReadingAge(age.seconds, age.basis)}`;
+}
+
 /** Why a measure that has something to read here shows no value. */
 export function withheldPhrase(w: { reason: "several" | "blank"; count: number }): string {
   return w.reason === "several"
@@ -140,6 +151,8 @@ export interface ReportLine {
   about: string[];
   /** A figure of the day before. */
   daily: boolean;
+  /** How old the value is, as a list says it; null when the twin did not date it, or when there is no value. */
+  age: string | null;
   change: ChangeView | null;
   mean: MeanView | null;
   /** Why there is no value, when there is a reason to give. */
@@ -171,6 +184,7 @@ export function reportLines(
       text: value === null ? null : formatMetricValue(value, d.unit),
       about: metrics.qualifiers?.[d.key] ?? [],
       daily: age?.period === "previous_day",
+      age: value === null ? null : ageNote(age),
       change: value === null ? null : changeView(trends?.changes[d.key], d.unit, nowIso, age),
       mean: value === null ? null : meanView(trends?.means[d.key], d.unit),
       withheld: value === null && held ? withheldPhrase(held) : null,
@@ -189,6 +203,21 @@ export function commonSince(lines: readonly { change: ChangeView | null }[]): st
   let best: string | null = null;
   count.forEach((n, since) => {
     if (best === null || n > count.get(best)!) best = since;
+  });
+  return best;
+}
+
+/**
+ * The age most values of a list share, so the list can say it once. Figures
+ * of the day before are left out: their age is that of a publication, and is
+ * said on their own line. Null when no line is dated.
+ */
+export function commonAge(lines: readonly { age?: string | null; daily?: boolean }[]): string | null {
+  const count = new Map<string, number>();
+  for (const l of lines) if (l.age && !l.daily) count.set(l.age, (count.get(l.age) ?? 0) + 1);
+  let best: string | null = null;
+  count.forEach((n, age) => {
+    if (best === null || n > count.get(best)!) best = age;
   });
   return best;
 }
