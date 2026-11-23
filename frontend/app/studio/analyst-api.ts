@@ -714,6 +714,10 @@ export function stepLabel(step: Pick<AnalystStep, "tool" | "input" | "output" | 
       return `Catchments compared on ${str(i.activity)}, ${world}`;
     case "scenario_recipe":
       return "What the scenario contains";
+    case "list_prices": {
+      const n = step.ok ? ((step.output as { prices?: unknown[] } | null)?.prices?.length ?? 0) : 0;
+      return `The twin’s price list, ${world}${step.ok ? `: ${n} price${n === 1 ? "" : "s"}` : ""}`;
+    }
     case "read_run":
       return i.part === "site"
         ? `The run, day by day at ${str(i.site)}`

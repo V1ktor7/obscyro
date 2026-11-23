@@ -3,7 +3,7 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "e6e145bfc83a929e"
+translatedFrom: "677123c35e4931ab"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
@@ -296,9 +296,11 @@ An option's card reads at a glance and explains itself on a click (`option-cards
 - the sites with a queue, “3 of 34”, and a square per site, red when it has a queue. Beyond 60 sites, the squares become a share of a bar;
 - the peak occupancy and its day, the first day somebody waits, and the waiting where no site serves when the scenario has some.
 
+When the twin declares a price list, two blocks follow the figures. “Delay”: for each priced capacity, the first day its units are open, its mode, and the days that mode takes from the decision. “Cost”: the total, its range when a price declares one, the “demo price” mark when a price has no source, and the number of lines. A click on “Cost” opens the lines: for each, what it prices (opening, running, formula), the site, the days, the mode, its arithmetic written out, and its source; then the total of the list, and what is unpriced with the reason. Under the cost, “Not beaten” or “Dominated” when the option could be weighed.
+
 Under the figures, three folded lines, which open on a click: “Why this option” (the mechanism, what the option replaces or removes, and the step that tested it), “What it rests on” (each item with its level of evidence; the count per level reads without opening), “What this test does not say”. A line whose text lost a figure opens by itself: a removal is not hidden behind a click. At the bottom, “Add to scenario” (or “Apply to scenario”) and “Record decision”.
 
-**Decisions** (`DecisionsTab.tsx`): the decisions of the open scenario first, then those of the project's other scenarios. Each is a card of the same design: who took it, when, the objective, the figures expected with the option (the gap is given against the same run without it), then, folded, what was expected without the option, the mechanism, what it rested on, what the test did not say. The follow-up is asked for with a button. The tab reads even when the analyst is off: a decision is a record, not an answer.
+**Decisions** (`DecisionsTab.tsx`): the decisions of the open scenario first, then those of the project's other scenarios. Each is a card of the same design: who took it, when, the objective, the figures expected with the option (the gap is given against the same run without it), the delay and the cost kept with their lines when there were any, then, folded, what was expected without the option, the mechanism, what it rested on, what the test did not say. The follow-up is asked for with a button. The tab reads even when the analyst is off: a decision is a record, not an answer.
 
 **Ask**, top to bottom:
 

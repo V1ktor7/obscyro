@@ -46,6 +46,14 @@ describe("a step in a planner's words", () => {
     expect(label("list_events", { from_date: "2021-12-01" }, { events: [] })).toBe("Validated events from official sources, 2021-12-01 to …: 0");
   });
 
+  it("says the price list was read, in which world, and how many prices it holds", () => {
+    expect(label("list_prices", { world: "scenario" }, { prices: [{}, {}] })).toBe("The twin’s price list, with the scenario: 2 prices");
+    expect(label("list_prices", { world: "reality" }, { prices: [{}] })).toBe("The twin’s price list, as it stands: 1 price");
+    // A twin that declares none: the step says so by its count, not by a missing label.
+    expect(label("list_prices", { world: "scenario" }, { prices: [] })).toBe("The twin’s price list, with the scenario: 0 prices");
+    expect(label("list_prices", { world: "scenario" }, { error: "no" }, false)).toBe("The twin’s price list, with the scenario");
+  });
+
   it("falls back to the tool's name for one it does not know", () => {
     expect(label("something_new", {})).toBe("something_new");
   });
