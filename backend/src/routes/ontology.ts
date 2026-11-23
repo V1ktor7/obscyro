@@ -27,6 +27,7 @@ import {
   MECHANICS,
   PROPERTY_BEHAVIOURS,
   PROPERTY_TYPES,
+  VALUE_PERIODS,
   propertyProblem,
 } from "../services/property-schema.js";
 
@@ -66,6 +67,10 @@ const propertyDefFields = {
   // and then quietly did not.
   observedAt: z.boolean().optional(),
   observedAtZone: z.string().trim().min(1).max(64).optional(),
+  // Which stretch of time the number describes, when it is not the moment of
+  // its reading. Listed here for the same reason: left out, a save from the
+  // type editor would turn yesterday's average back into "14 minutes old".
+  period: z.enum(VALUE_PERIODS).optional(),
   // The map layer this property is, when it was added as one. Here for the
   // reason the two above learned the hard way: a field missing from this
   // schema is stripped on every save from the type editor.

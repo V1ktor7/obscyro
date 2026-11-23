@@ -117,7 +117,7 @@ export function quantileRamp(values: (number | null)[], unit: string | null = nu
 // Live readings: the twin's own measures, one number per site.
 // ---------------------------------------------------------------------------
 
-export type ReadingUnit = "percent" | "ratio" | "count" | "number";
+export type ReadingUnit = "percent" | "ratio" | "count" | "number" | "hours";
 
 export interface Reading {
   key: string;

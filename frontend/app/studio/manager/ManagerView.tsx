@@ -68,6 +68,7 @@ import {
   type PropertyDefinition,
   type PropertyType,
 } from "@/lib/platform-api";
+import type { ValuePeriod } from "@/lib/property-schema";
 import {
   loadFavorites,
   loadRecents,
@@ -2158,6 +2159,32 @@ export function PropertyRowsEditor({
                       />
                     </div>
                   </div>
+                ) : null}
+
+                {numeric ? (
+                  <>
+                    <label className="mb-0.5 mt-2 block text-[10px] uppercase tracking-wide text-ink-faint">
+                      Describes
+                    </label>
+                    <select
+                      value={row.period ?? ""}
+                      onChange={(e) =>
+                        patch(i, {
+                          ...row,
+                          period: e.target.value === "" ? undefined : (e.target.value as ValuePeriod),
+                        })
+                      }
+                      aria-label={`What stretch of time ${row.key || "this property"} describes`}
+                      className={cn(CELL, "w-full")}
+                    >
+                      <option value="">The moment of its reading</option>
+                      <option value="previous_day">The day before its reading</option>
+                    </select>
+                    <p className="mt-1 text-[10px] leading-snug text-ink-faint">
+                      A daily average republished with every reading is yesterday&apos;s figure. Declared here, it
+                      is never shown as minutes old.
+                    </p>
+                  </>
                 ) : null}
 
                 <label className="mb-0.5 mt-2 block text-[10px] uppercase tracking-wide text-ink-faint">

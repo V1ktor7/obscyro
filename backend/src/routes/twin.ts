@@ -8,7 +8,7 @@ import { AppError, BadRequest, NotFound } from "../lib/errors.js";
 import { startSseStream } from "../lib/sse.js";
 import { readAlertFeed } from "../services/alert-feed.js";
 import { ruleOutcomes } from "../services/signals.js";
-import { readUnitHistory } from "../services/twin-history.js";
+import { readUnitHistory, readUnitTrends } from "../services/twin-history.js";
 import { recordAudit } from "../services/audit.js";
 import {
   assertEventMatchesWorld,
@@ -58,6 +58,7 @@ import {
   listAlertRules,
   listOpenAlerts,
   rollupUnit,
+  describeTypes,
   seedTwinDemo,
   unitExchanges,
   updateAlertRule,
@@ -807,7 +808,16 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
           "One unit, read alone. `metrics` is its roll-up: every measure the organisation defined, counted over " +
           "everything under the unit. `metrics.freshnessSeconds` is the age of the unit's reading as a whole, the " +
           "oldest of its sources; `metrics.valueAges` gives, for each measure that has a value here, the age of " +
-          "what that measure reads, with what the age rests on. `alerts` are the unit's open alerts, each with " +
+          "what that measure reads, with what the age rests on; a value that describes a day and not the moment " +
+          "of its reading says so there (`period`), and its age is then that of the reading that published it. " +
+          "`metrics.withheld` says why a measure that has something to read here gives no value: several averages " +
+          "that are not averaged again, or a source that published no figure. `trends.changes` gives, for each " +
+          "measure with a value, the reading kept before the one shown and the value now minus that reading's " +
+          "(`delta`, null when there is no earlier reading or when it had no value); `trends.means` gives, for a " +
+          "value that describes a day, the mean of one value a day over at most 30 days kept, with the number of " +
+          "days it is made of. `trends` is null when the history could not be read: the rest still stands. " +
+          "`typeNotes` is the description the organisation wrote for each object type under the unit, which is " +
+          "where a source, its licence and its limits are said. `alerts` are the unit's open alerts, each with " +
           "when its value was true (`observedAt`) and what that age rests on (`observedBasis`), counted on what " +
           "the alert's measure reads. `at` is the server's clock: ages are counted from it. `exchanges` names the " +
           "links to other units that are not the hierarchy. Reads only. Aggregate values about a unit, never " +
@@ -825,11 +835,21 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
         limit: config.listMaxLimit,
       });
       const exchanges = await unitExchanges(req.db, env.id, req.params.id);
+      const now = new Date();
+      // What was kept is read beside the unit, and never instead of it: a
+      // history that cannot be read takes nothing away from the reading now.
+      const trends = await readUnitTrends(req.db, env.id, req.params.id, metrics, now).catch((err: unknown) => {
+        req.log.warn({ err, unitId: req.params.id }, "unit trends could not be read");
+        return null;
+      });
+      const typeNotes = await describeTypes(req.db, env.id, Object.keys(metrics.instanceCountByType));
       return {
         // The server's clock: the age of an alert's value is counted from it,
         // not from the browser's.
-        at: new Date().toISOString(),
+        at: now.toISOString(),
         metrics,
+        trends,
+        typeNotes,
         alerts,
         exchanges,
         recommendations: alerts.map((a) => a.recommendation).filter(Boolean),
@@ -1011,7 +1031,7 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
     where: z
       .array(z.object({ property: z.string().min(1).max(200), equals: z.string().max(500) }))
       .optional(),
-    agg: z.enum(["count", "sum", "mean", "min", "max"]),
+    agg: z.enum(["count", "sum", "mean", "min", "max", "only"]),
     property: z.string().max(200).nullable().optional(),
   });
 
@@ -1264,7 +1284,7 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
     key: z.string(),
     label: z.string(),
     objectType: z.string(),
-    unit: z.enum(["percent", "ratio", "count", "number"]),
+    unit: z.enum(["percent", "ratio", "count", "number", "hours"]),
     numerator: metricSelector,
     denominator: metricSelector.nullish(),
     /** The property saying what the reading is about — a pollutant, an assay. */
@@ -1294,12 +1314,18 @@ const twinRoutes: FastifyPluginAsync = async (fastify) => {
     {
       schema: {
         summary: "Define or redefine a twin metric",
+        description:
+          "A measure is one aggregate over the objects under a unit, divided by a second one for a percentage or a " +
+          "ratio. `unit` says how its value is written: `hours` is a duration held in decimal hours and written in " +
+          "hours and minutes. The aggregate `only` gives the value of the one object that carries it and no value " +
+          "when several do: it is for a figure that is already an average when it arrives, which must not be " +
+          "averaged again under a unit that holds several.",
         tags: ["twin"],
         params: z.object({ env: z.string().min(1), key: z.string().min(1).max(64) }),
         body: z.object({
           label: z.string().min(1).max(200),
           objectType: z.string().min(1).max(200).default("OrgUnit"),
-          unit: z.enum(["percent", "ratio", "count", "number"]),
+          unit: z.enum(["percent", "ratio", "count", "number", "hours"]),
           numerator: metricSelector,
           denominator: metricSelector.nullable().optional(),
           qualifiedBy: z.string().trim().max(64).nullable().optional(),

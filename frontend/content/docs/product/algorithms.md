@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "3bd79376934810c2"
+translatedFrom: "c015b846196eaa19"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -50,7 +50,7 @@ Every algorithm of the product has its section here: what it is for, its diagram
 | [D7](#d7-freshness-of-a-value) | Freshness of a value: the age of a unit, and of each measure | `backend/src/services/observed-at.ts` |
 | [D8](#d8-zone-correspondence) | Zone correspondence | `backend/src/services/zone-correspondence.ts` |
 | [D9](#d9-live-reading-and-situation-card) | Live reading and situation card | `backend/src/services/live-reading.ts`, `situation.ts` |
-| [D10](#d10-sites-and-units-on-the-network-map) | Sites and units on the network map | `frontend/app/studio/command/units-tree.ts` |
+| [D10](#d10-sites-and-units-on-the-network-map) | Sites and units on the network map, and the inspector of a site | `frontend/app/studio/command/units-tree.ts` |
 | [D11](#d11-history-of-twin-measures) | History of twin measures | `backend/src/services/twin-history.ts` |
 
 ---
@@ -1151,15 +1151,24 @@ flowchart TD
 **Purpose.** Let each institution define its measures, without the engine knowing what a bed is.
 
 ```mermaid
-flowchart LR
-    A["Definition: one aggregate,<br/>divided by a second one if needed"] --> B["Objects of a unit's subtree"]
-    B --> C["Count, sum, mean, minimum or maximum,<br/>over the objects retained"]
-    C --> D["Value of the metric for the unit"]
+flowchart TD
+    A["Definition: one aggregate,<br/>divided by a second one if needed"] --> B["Objects of a unit's subtree,<br/>retained by type, role and filters"]
+    B --> K{"The aggregate"}
+    K -->|"count"| V["Value of the metric for the unit"]
+    K -->|"sum, mean, minimum,<br/>maximum, only"| C{"How many retained objects<br/>carry a figure?"}
+    C -->|"no object retained"| N["No value: nothing to read here"]
+    C -->|"objects, and no figure"| W1["No value, and its reason (blank):<br/>the source published no figure"]
+    C -->|"one or several"| D{"only?"}
+    D -->|"no"| V
+    D -->|"yes, a single figure"| V
+    D -->|"yes, several"| W2["No value, and its reason (several):<br/>averages are not averaged again"]
 ```
 
 **Rules.** Nothing rests on a type name or a status value written in the code: “occupied beds over beds” is a definition, not a special case. The value of a unit covers its whole subtree: a hospital's occupancy is that of its wards taken together, not an average of averages. The computation (`rollupFrom`) is kept apart from its database reads, and a test holds it against the twin's export on one twin: for a unit with no sub-unit the two give the same figure, and the page's figure for a unit is exactly the sum of the export's over everything under it.
 
-**Code.** `backend/src/services/twin-metrics.ts`, `twin.ts` (`rollupAllUnits`, `rollupFrom`). **Tests.** `twin-metrics.unit.test.ts`, `twin-self-rollup.unit.test.ts`, `twin-figures.unit.test.ts`.
+**An average already made is not made again.** The `only` aggregate gives the value of the one object that carries it, and nothing when several do. It is for figures that arrive as averages: two emergency rooms publishing a length of stay of 4 h and 12 h do not have one of 8 h between them, since the file does not say how many people each was made from. A unit holding several such objects has no value for the measure, and says so. **A measure without a value gives its reason when it has one** (`withheldOf`): `several`, several averages that are not averaged; `blank`, what the measure reads is there but the source published no figure. With no reason, nothing the measure reads is linked to the unit. **A measure can be a duration** (unit `hours`): held in decimal hours, written in hours and minutes (“5 h 59”).
+
+**Code.** `backend/src/services/twin-metrics.ts`, `twin.ts` (`rollupAllUnits`, `rollupFrom`, `withheldOf`), migration `068_twin_metric_hours.sql`. **Tests.** `twin-daily-figures.unit.test.ts`, `twin-metrics.unit.test.ts`, `twin-self-rollup.unit.test.ts`, `twin-figures.unit.test.ts`.
 
 ## D7. Freshness of a value
 
@@ -1187,6 +1196,10 @@ flowchart TD
     L -->|"all of them"| M["The age of the oldest (observed)"]
     L -->|"some of them"| N["The age of the oldest of those read:<br/>a floor (partial)"]
     L -->|"none"| O["Age unknown, with the reason of the first"]
+    M --> P{"Does the property the measure reads<br/>declare a period?"}
+    N --> P
+    P -->|"no"| Q["The age is that of the value"]
+    P -->|"the day before (previous_day)"| R["The value is a figure of the day before.<br/>The age is that of the reading that published it"]
 ```
 
 **Rules.**
@@ -1199,8 +1212,9 @@ flowchart TD
 - **A measure is dated only where it has a value.** A unit with no air quality station has no index, so nothing to date.
 - **A time in the future is not floored at zero.** A negative age points to a wrong clock somewhere; showing it as “just now” would hide it.
 
-**Code.** `backend/src/services/observed-at.ts` (`readStamp`, `freshnessOf`, `freshnessAcross`), `twin-metrics.ts` (`metricLooksAt`), `twin.ts` (`measureReads`, `agesOfValues`, `valueAgeOf`, `rollupFrom`, `selfRollup`, `rollupPlaces`); `frontend/app/studio/twin-ui.ts` (`formatReadingAge`, `explainFreshness`), `alert-feed-state.ts` (`valueAge`), `live/UnitSheet.tsx`.
-**Tests.** `observed-at.unit.test.ts`, `twin-value-age.unit.test.ts`, `twin-self-rollup.unit.test.ts`; `twin-ui.test.ts`, `alert-feed-state.test.ts`, `live/UnitSheet.test.tsx`.
+- **A figure of the day before is declared.** The hourly emergency file republishes, every hour, the average length of stay of the people who left the day before: the row is stamped 17:45 today, and the figure is yesterday's. Dated by its row, it would read “14 minutes ago”. A numeric property can therefore declare the period it describes (`period: previous_day`, set in a type's editor, “Describes”). A measure that reads a single property declared that way carries the period with its age, and the age is then that of the reading that published the figure: the screen writes “Yesterday's average, published 14m ago”, never “This value was read 14m ago”. Every object the measure reads must declare the same period; otherwise none is kept. Nothing is guessed: a column of hours looks the same whether it is of the last hour or of the day before. Limit: an alert raised on such a measure keeps, in the banner, the sentence of a value of the hour ([issue 40](https://github.com/V1ktor7/obscyro/issues/40)).
+**Code.** `backend/src/services/observed-at.ts` (`readStamp`, `freshnessOf`, `freshnessAcross`), `twin-metrics.ts` (`metricLooksAt`), `twin.ts` (`measureReads`, `agesOfValues`, `valueAgeOf`, `rollupFrom`, `selfRollup`, `rollupPlaces`); `frontend/app/studio/twin-ui.ts` (`formatReadingAge`, `explainFreshness`), `alert-feed-state.ts` (`valueAge`), `live/UnitSheet.tsx`, `live/unit-trends.ts` (`agePhrase`), `property-schema.ts` (`VALUE_PERIODS`), `twin.ts` (`periodOfMeasure`).
+**Tests.** `observed-at.unit.test.ts`, `twin-value-age.unit.test.ts`, `twin-self-rollup.unit.test.ts`; `twin-ui.test.ts`, `alert-feed-state.test.ts`, `live/UnitSheet.test.tsx`, `twin-daily-figures.unit.test.ts`, `live/unit-trends.test.ts`.
 
 ## D8. Zone correspondence
 
@@ -1294,7 +1308,26 @@ flowchart TD
 - **A site nothing stands for in the explorer**, a sensor for instance, lights no line there, and the explorer cannot hide it.
 - **The line lit from the map is shown once**: the branch that hides it opens and the list scrolls to it. Folding it again afterwards is the person's choice, and a new reading of the twin does not reopen it.
 
-**Code.** `frontend/app/studio/command/units-tree.ts` (`isSiteHidden`, `alertsForSite`, `pickFromExplorer`, `lineOfSite`, `lineAndBelow`, `unitsAbove`), `NetworkTwinView.tsx` (`pickLine`), `frontend/app/studio/TreeExplorer.tsx` (`pathTo`). **Tests.** `units-tree.test.ts`, `TreeExplorer.test.tsx`.
+**The inspector of a site.** A click on a site opens a collapsible overlay, set on the map. From top to bottom: its open alerts; the measure the map paints, with its rule, its gauge, its age and its change since the reading before; what else the site reports, each figure with its change; apart, the figures of the day before (D7), with their 30-day mean; what the twin kept of the painted measure over 24 hours; then, folded, the other readings and the units counted; and last, where the figures come from. The rows are the measures the organisation defined: none is written in the code.
+
+```mermaid
+flowchart TD
+    S["A site selected on the map"] --> V["Its figures: the sum of its units,<br/>read with the network"]
+    S --> U{"How many units does it count?"}
+    U -->|"one"| D["A read of that unit (GET /twin/units/:id):<br/>changes, means, the text of the types.<br/>And the history of the painted measure, 24 h"]
+    U -->|"several"| N["No change and no history: they are kept<br/>by unit, and the panel says so"]
+    U -->|"none: the site is its own reading"| Z["The figures alone"]
+    D --> P["Panel: alerts, painted measure, other figures,<br/>figures of the day before, history, source"]
+    V --> P
+    N --> P
+    Z --> P
+```
+
+- **What was kept is kept by unit** (D11). A site that counts a single unit reads that unit's, and reads it again every minute. A site that counts several does not add them up: histories that were not kept together do not make one history.
+- **Alerts come first.** The panel grew longer, and an open alert must not end up below the fold.
+- **The source is a text of the twin.** “About these figures” prints the description the organisation wrote on the object types the measures read (`typeNotes`): the source, its licence, its limits. No screen names a source.
+
+**Code.** `frontend/app/studio/command/units-tree.ts` (`isSiteHidden`, `alertsForSite`, `pickFromExplorer`, `lineOfSite`, `lineAndBelow`, `unitsAbove`), `NetworkTwinView.tsx` (`pickLine`), `SiteInspector.tsx`, `frontend/app/studio/TreeExplorer.tsx` (`pathTo`). **Tests.** `units-tree.test.ts`, `TreeExplorer.test.tsx`, `SiteInspector.test.tsx`.
 
 ## D11. History of twin measures
 
@@ -1320,6 +1353,14 @@ flowchart TD
     L --> M{"A reading with no value?"}
     M -->|"yes"| N["The line breaks:<br/>a gap is not a zero"]
     M -->|"no"| O["The lowest, the highest,<br/>and the date of the first reading kept"]
+    I --> P["GET /twin/units/:id, trends:<br/>one read for every measure of the unit"]
+    P --> Q{"Does the value describe a day (D7)?"}
+    Q -->|"no"| R["Reading before: the last one kept<br/>that is not the one on screen"]
+    Q -->|"yes, the day before"| S["Reading before: the last one kept on an earlier day.<br/>And the mean of one value a day, 30 days at most"]
+    R --> T{"A reading before, with a value?"}
+    S --> T
+    T -->|"yes"| U["Change: the value now minus that reading's,<br/>with the hour of that reading"]
+    T -->|"no"| W["No change, and the screen writes it"]
 ```
 
 **Rules.**
@@ -1337,5 +1378,10 @@ flowchart TD
 - **What is not kept.** The objects themselves, their links and the capacities at a past date: the whole twin cannot yet be read as it was. The situation card reads of the history only the measure that raised its signal, since it was raised (A9). The analyst's tools do not read it: they say so, and point to the unit's page.
 - A reading is a unit and an aggregated value, never a person.
 
-**Code.** `backend/src/services/twin-history.ts` (`readingsNow`, `recordReadings`, `recordProject`, `recordAllProjects`, `readUnitHistory`, `startTwinHistory`), route `GET /v1/ontology/:env/twin/units/:id/history` in `backend/src/routes/twin.ts`, migration `067_twin_reading.sql`; `frontend/app/studio/live/unit-history.ts` (`historyView`), `UnitSheet.tsx`, `UnitsView.tsx`.
-**Tests.** `twin-history.unit.test.ts`; `live/unit-history.test.ts`, `live/UnitSheet.test.tsx`, `live/UnitsView.test.tsx`.
+- **The change since the reading before.** For each measure that has a value, a unit's sheet and a site's inspector give the change since the reading kept before, and the hour of that reading. The arithmetic is done by the server (`changeOf`), in one read for every measure of the unit (`readUnitTrends`); the screen subtracts nothing. The last reading kept is most often the value on screen itself, written down a few minutes ago: it is recognised by its hour, within 90 seconds, or by its value when the source gives no time, and the one before it is used. If the recorder has not yet written down the value on screen, the last one kept already is the reading before.
+- **No change against an absence.** With no earlier reading, the screen writes that none was kept. If the reading before had no value, no change is counted: an absence is not a zero.
+- **A figure of the day before is compared with the day before's.** Republished every hour, it is not compared with itself an hour earlier: its reading before is the last one kept on an earlier day, counted on the clock of its source (D7).
+- **The 30-day mean.** For a figure of the day before, the mean of one value a day, the last one written down that day, over 30 days at most (`meanOfDays`). It says how many days it rests on (“average over 12 days kept”) while there are fewer than thirty. A day with no reading is not filled in.
+- **A change has no colour.** Twelve more people waiting is worse; twelve more stretchers is better. The sign says “more”, and nothing else.
+**Code.** `backend/src/services/twin-history.ts` (`readingsNow`, `recordReadings`, `recordProject`, `recordAllProjects`, `readUnitHistory`, `changeOf`, `meanOfDays`, `readUnitTrends`, `startTwinHistory`), route `GET /v1/ontology/:env/twin/units/:id/history` in `backend/src/routes/twin.ts`, migration `067_twin_reading.sql`; `frontend/app/studio/live/unit-history.ts` (`historyView`), `unit-trends.ts`, `UnitSheet.tsx`, `UnitsView.tsx`, `command/SiteInspector.tsx`.
+**Tests.** `twin-history.unit.test.ts`, `twin-daily-figures.unit.test.ts`; `live/unit-history.test.ts`, `live/unit-trends.test.ts`, `live/UnitSheet.test.tsx`, `live/UnitsView.test.tsx`.

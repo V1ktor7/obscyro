@@ -1,7 +1,8 @@
 import type { DbClient } from "../lib/db.js";
 import { readAlertFeed, type AlertFeed, type AlertSeverity, type FeedAlert } from "./alert-feed.js";
 import type { FreshnessBasis } from "./observed-at.js";
-import { DEFAULT_OCCUPANCY, listTwinMetrics, type MetricUnit } from "./twin-metrics.js";
+import type { ValuePeriod } from "./property-schema.js";
+import { DEFAULT_OCCUPANCY, listTwinMetrics, type MetricUnit, type Withheld } from "./twin-metrics.js";
 import { getUnitTree, listAlertRules, rollupAllUnits, type UnitMetrics } from "./twin.js";
 
 /**
@@ -105,8 +106,21 @@ export function duration(ms: number): string {
 export function shown(value: number | null, unit: MetricUnit): number | null {
   if (value === null || !Number.isFinite(value)) return null;
   if (unit === "percent" || unit === "count") return Math.round(value);
-  if (unit === "ratio") return Math.round(value * 100) / 100;
+  if (unit === "ratio" || unit === "hours") return Math.round(value * 100) / 100;
   return Math.round(value * 10) / 10;
+}
+
+/** A duration held in decimal hours, the way the unit page writes it: `5 h 59`. */
+export function hoursText(hours: number): string {
+  const minutes = Math.max(0, Math.round(hours * 60));
+  return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")}`;
+}
+
+/** Why a measure that has something to read gives no value, in a sentence. */
+export function whyWithheld(w: Withheld): string {
+  return w.reason === "several"
+    ? `${w.count} values are under this unit, each already an average: they are not averaged again. Read them on the units that carry them.`
+    : "What this measure reads is linked here, and its source published no figure for it.";
 }
 
 /**
@@ -156,8 +170,24 @@ export interface ValueAge {
  * exact age, a floor said as a floor, or no age. An unknown age is never
  * rounded toward the reassuring.
  */
-export function ageOfValue(seconds: number | null, basis: FreshnessBasis | null, of: AgeOf = "unit"): ValueAge {
+export function ageOfValue(
+  seconds: number | null,
+  basis: FreshnessBasis | null,
+  of: AgeOf = "unit",
+  period: ValuePeriod | null = null,
+): ValueAge {
   const why = basis && basis !== "observed" ? whyAge(basis, of) : null;
+  // A figure of the day before is not "read 14 minutes ago": what is 14 minutes
+  // old is the reading that republished it.
+  if (period === "previous_day") {
+    if (seconds === null || !Number.isFinite(seconds)) {
+      return { known: "unknown", age: null, says: "figure of the day before; when it was published is unknown", why };
+    }
+    const published = duration(seconds * 1000);
+    return basis === "partial"
+      ? { known: "at_least", age: published, says: `figure of the day before, published at least ${published} ago`, why }
+      : { known: "exact", age: published, says: `figure of the day before, published ${published} ago`, why };
+  }
   if (seconds === null || !Number.isFinite(seconds)) return { known: "unknown", age: null, says: "age of the value unknown", why };
   const age = duration(seconds * 1000);
   if (basis === "partial") return { known: "at_least", age, says: `value read at least ${age} ago`, why };
@@ -369,8 +399,11 @@ export function unitNow(live: LiveReading, unit: LiveUnit) {
         measure: d.label,
         value: shown(m?.values[d.key] ?? null, d.unit),
         counted_in: d.unit,
+        ...(d.unit === "hours" && typeof m?.values[d.key] === "number" ? { written_as: hoursText(m.values[d.key]!) } : {}),
         ...(m?.qualifiers[d.key]?.length ? { about: m.qualifiers[d.key] } : {}),
-        ...(own ? { value_age: ageOfValue(own.seconds, own.basis, "measure") } : {}),
+        ...(own?.period === "previous_day" ? { covers: "the day before its reading, not the last hour" } : {}),
+        ...(own ? { value_age: ageOfValue(own.seconds, own.basis, "measure", own.period ?? null) } : {}),
+        ...(m?.withheld?.[d.key] ? { no_value_because: whyWithheld(m.withheld[d.key]!) } : {}),
       };
     }),
     under_it_by_type: m?.instanceCountByType ?? {},
@@ -381,7 +414,8 @@ export function unitNow(live: LiveReading, unit: LiveUnit) {
     how_to_read: [
       "These are the figures the unit page shows. They count everything under the unit, its sub-units included.",
       "`get_site` gives what the simulation engine counts at the unit itself. For a unit with sub-units the two differ, and both are right: say which one you are giving.",
-      "A measure with value null has nothing to be computed from here (no bed is no occupancy, not 0 %).",
+      "A measure with value null has nothing to be computed from here (no bed is no occupancy, not 0 %). When it carries `no_value_because`, give that reason: the figure is withheld or was not published, which is not the same as nothing to read.",
+      "A measure that carries `covers` is a figure of the day before, republished with each reading: say it is yesterday's, never that it is of the last hour. A value counted in hours is a duration, and `written_as` is how the page writes it.",
       "A measure's own `value_age` is the age of what that measure reads: give it with the measure's value. The unit's `value_age` answers another question, whether everything under the unit is up to date: it is the oldest of the unit's sources when it has several, so it can be older than a measure's. `last_written_here` is when the data was last written to the twin, which is not when it was true.",
       "This is the reading now. The twin keeps each measure's readings over time and the unit's page shows them, but this tool does not read them: nothing here says what a value was earlier.",
     ],

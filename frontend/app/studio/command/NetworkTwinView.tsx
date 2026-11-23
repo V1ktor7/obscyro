@@ -15,17 +15,14 @@
 
 import "mapbox-gl/dist/mapbox-gl.css";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Map as MapboxMap, Marker } from "mapbox-gl";
 
 import {
-  Building2,
   ChevronDown,
   Earth,
   Eye,
   Globe2,
-  HeartPulse,
   Hexagon,
   Loader2,
   Map as MapIcon,
@@ -51,6 +48,8 @@ import {
   createEnvType,
   fetchGeoCapability,
   fetchTwinNetwork,
+  fetchTwinUnit,
+  fetchTwinUnitHistory,
   fetchTwinTree,
   getEnvObject,
   listEnvTypes,
@@ -61,6 +60,7 @@ import {
   listTwinMetrics,
   type TwinAlertRule,
   type TwinMetric,
+  type TwinUnitDetail,
   saveGeoShape,
   updateEnvObject,
   updateEnvType,
@@ -72,7 +72,6 @@ import {
   type TwinNetworkSite,
   type TwinNetworkSnapshot,
 } from "@/lib/platform-api";
-import { explainFreshness, formatFreshness, formatReadingAge } from "../twin-ui";
 import { OVERLAY_BAR } from "../map-overlay";
 import { GLOBE_ZOOM, MAPBOX_TOKEN, STYLE_SATELLITE, STYLE_STANDARD } from "../map-style";
 import { useAlertFeed } from "../AlertFeed";
@@ -98,10 +97,11 @@ import {
   bandColour,
   bandFor,
   formatValue,
-  panelMetrics,
   ruleForMetric,
   siteValue,
 } from "./site-metric";
+import SiteInspector, { type UnitReading } from "./SiteInspector";
+import type { HistoryState } from "../live/unit-history";
 import {
   choroplethIntensity,
   choroplethRange,
@@ -308,6 +308,10 @@ function arcCoords(a: [number, number], b: [number, number]): [number, number][]
   }
   return pts;
 }
+
+/** The window of history the inspector draws, and how often it reads it again. */
+const INSPECTOR_HISTORY_HOURS = 24;
+const INSPECTOR_EVERY_MS = 60_000;
 
 export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }) {
   const { hasKey, selectedEnv } = useStudio();
@@ -1518,6 +1522,53 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     );
   }, [network, selectedId]);
 
+  // What a figure was earlier is kept unit by unit. A site that counts exactly
+  // one unit reads that unit's: the change since the reading before, the mean
+  // of a daily figure, and the history of the measure the map paints. A site
+  // that counts several says so, instead of adding up histories that were not
+  // kept together.
+  const readUnitId = selected && selected.contributingUnits.length === 1 ? selected.contributingUnits[0]!.id : null;
+  const keptOverTime = twinMetrics.some((def) => def.key === badgeMetric);
+  const [unitHeld, setUnitHeld] = useState<{ key: string; detail: TwinUnitDetail | null; history: HistoryState; failed: boolean } | null>(null);
+  useEffect(() => {
+    if (!env || !readUnitId) return;
+    const key = `${readUnitId}|${badgeMetric}`;
+    let cancelled = false;
+    const read = async () => {
+      const [detail, history] = await Promise.allSettled([
+        fetchTwinUnit(env, readUnitId),
+        keptOverTime ? fetchTwinUnitHistory(env, readUnitId, badgeMetric, INSPECTOR_HISTORY_HOURS) : Promise.resolve(null),
+      ]);
+      if (cancelled) return;
+      setUnitHeld({
+        key,
+        detail: detail.status === "fulfilled" ? detail.value : null,
+        failed: detail.status === "rejected",
+        history: !keptOverTime
+          ? { state: "not_kept" }
+          : history.status === "fulfilled" && history.value
+            ? { state: "read", history: history.value }
+            : { state: "failed" },
+      });
+    };
+    void read();
+    const again = setInterval(() => void read(), INSPECTOR_EVERY_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(again);
+    };
+  }, [env, readUnitId, badgeMetric, keptOverTime]);
+
+  const unitReading: UnitReading = useMemo(() => {
+    if (!selected || selected.contributingUnits.length === 0) return { state: "none", detail: null, history: null };
+    if (selected.contributingUnits.length > 1) return { state: "several", detail: null, history: null };
+    // Kept with what it was read for: one unit's history never shows under another's name.
+    const held = unitHeld && unitHeld.key === `${readUnitId}|${badgeMetric}` ? unitHeld : null;
+    if (!held) return { state: "reading", detail: null, history: { state: "reading" } };
+    if (held.failed) return { state: "failed", detail: null, history: held.history };
+    return { state: "read", detail: held.detail, history: held.history };
+  }, [selected, readUnitId, unitHeld, badgeMetric]);
+
   const missingCoords = network?.sites.filter((s) => s.latitude === null).length ?? 0;
 
   const nameOfSite = useCallback(
@@ -2232,189 +2283,22 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               </div>
           {/* Inspector */}
         {selected ? (
-          <aside className={cn(OVERLAY_BAR, "flex max-h-full w-64 shrink-0 flex-col overflow-y-auto p-3")}>
-            <div className="flex items-center gap-2">
-              <span
-                className={cn(
-                  "h-2 w-2 rounded-full",
-                  selected.worstAlertSeverity === "critical"
-                    ? "bg-danger"
-                    : selected.worstAlertSeverity === "warn"
-                      ? "bg-warn"
-                      : "bg-ok",
-                )}
-              />
-              <span className="text-[13px] font-semibold text-ink">{selected.name}</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setPicked(null);
-                  setSelectedId(null);
-                }}
-                className="ml-auto text-ink-faint hover:text-ink"
-                aria-label="Close inspector"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            <p className="mb-2 text-[10.5px] text-ink-faint">{selected.kind}</p>
-            {/* What this site carries, not one measure chosen for everybody.
-                A station of the air quality network has no stretchers, so the
-                single occupancy row read "—" while the map beside it painted
-                that same station green at an index of 19: two panes of one
-                screen contradicting each other about the same dot. The row
-                for the measure being painted always appears, so a dash
-                answers the question the viewer asked. */}
-            {panelMetrics(selected, twinMetrics, badgeMetric).map((m) => (
-              <MetricRow
-                key={m.key}
-                label={m.label}
-                // What the number is about, when the measure declares it. An
-                // index of 7 on fine particles and one of 14 on ozone are
-                // comparable as indices and are not the same thing to act on.
-                note={m.about.join(", ")}
-                value={formatValue(m.value, m.unit)}
-                // The same band the badge uses, from the same rule, so the
-                // colour on the map and the emphasis in the panel cannot come
-                // to disagree.
-                danger={
-                  bandFor(m.value, ruleForMetric(alertRules, m.key)) === "over"
-                }
-              />
-            ))}
-            <MetricRow
-              label="Linked instances"
-              value={selected.metrics.linkedInstanceCount.toLocaleString()}
-            />
-            {/* The age of the reading, never the age of the download. An
-                hourly file re-fetched unchanged would otherwise reset this to
-                nothing while the census under it stayed an hour old. */}
-            <MetricRow
-              label="Reading age"
-              value={formatReadingAge(
-                selected.metrics.freshnessSeconds,
-                selected.metrics.freshnessBasis,
-              )}
-              title={explainFreshness(selected.metrics.freshnessBasis)}
-              danger={(selected.metrics.freshnessSeconds ?? 0) > 3 * 3600}
-            />
-            <MetricRow
-              label="Last fetched"
-              value={
-                selected.metrics.fetchedAgeSeconds !== null
-                  ? formatFreshness(selected.metrics.fetchedAgeSeconds)
-                  : "—"
-              }
-            />
-            {selectedShape ? (
-              <MetricRow
-                label={selectedShape.kind}
-                value={formatArea(selectedShape.areaM2)}
-              />
-            ) : null}
-
-            {/* Where the numbers above come from.
-                A site's figures are the sum of the units placed in it, and only
-                the topmost ones — a ward inside a hospital at the same address
-                is already counted through the hospital. Showing the list is how
-                you tell a real 82% from a plausible one. */}
-            {selected.contributingUnits.length > 0 ? (
-              <>
-                <p className="mb-1 mt-3 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-faint">
-                  Counted from · {selected.contributingUnits.length}
-                </p>
-                {selected.contributingUnits.map((u) => (
-                  <div
-                    key={u.id}
-                    className="flex items-center gap-1.5 border-b border-line-faint py-1 last:border-0 text-[11px] text-ink-body"
-                  >
-                    <span className="h-1 w-1 shrink-0 rounded-full bg-ink-ghost" />
-                    <span className="min-w-0 truncate">{u.name}</span>
-                  </div>
-                ))}
-                <p className="mt-1 text-[10px] leading-relaxed text-ink-faint">
-                  Units placed here. Anything inside one of them is already included.
-                </p>
-              </>
-            ) : null}
-            {selectedFlows.length === 0 ? (
-              <MetricRow label="Flows" value="none" last />
-            ) : (
-              selectedFlows.map((f, i) => (
-                <MetricRow
-                  key={f.linkType}
-                  label={f.linkType}
-                  value={String(f.count)}
-                  last={i === selectedFlows.length - 1}
-                />
-              ))
-            )}
-
-            {/* The count the ring is drawn from, so the panel and the dot
-                beside it cannot disagree. The list below can be shorter — only
-                the most recent alerts are fetched — and says so rather than
-                leaving the difference to be noticed. */}
-            <p className="mb-1 mt-3 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-faint">
-              Open alerts · {selected.openAlertCount}
-            </p>
-            {selectedAlerts.slice(0, 4).map((a) => (
-              <div
-                key={a.id}
-                className={cn(
-                  "mb-1.5 rounded border px-2 py-1.5",
-                  a.severity === "critical"
-                    ? "border-danger-line bg-danger-soft"
-                    : "border-warn-line bg-warn-soft",
-                )}
-              >
-                <p
-                  className={cn(
-                    "text-[10.5px] font-medium",
-                    a.severity === "critical" ? "text-danger-ink" : "text-warn-ink",
-                  )}
-                >
-                  {a.message}
-                </p>
-              </div>
-            ))}
-            {selectedAlerts.length === 0 ? (
-              <p className="text-[10.5px] text-ink-faint">
-                {selected.openAlertCount > 0
-                  ? "Open, but not in the alerts fetched for this window."
-                  : "none"}
-              </p>
-            ) : selectedAlerts.length > 4 ? (
-              <p className="text-[10px] text-ink-faint">
-                {selectedAlerts.length - 4} more, not shown.
-              </p>
-            ) : null}
-
-            <div className="mt-auto flex flex-col gap-1.5 pt-3">
-              <button
-                type="button"
-                onClick={() => setPlacing({ mode: "move", siteId: selected.id })}
-                className="flex items-center gap-1.5 rounded border border-line px-2.5 py-1.5 text-xs text-ink-body hover:border-brand"
-              >
-                <MapPin className="h-3.5 w-3.5" />
-                Edit location
-              </button>
-              <button
-                type="button"
-                onClick={onDrillIn}
-                className="flex items-center gap-1.5 rounded bg-brand px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-deep"
-              >
-                <Building2 className="h-3.5 w-3.5" />
-                Open unit canvas
-              </button>
-              <Link
-                href="/studio/flux"
-                className="flex items-center gap-1.5 rounded border border-line px-2.5 py-1.5 text-xs text-ink-body hover:border-brand"
-              >
-                <HeartPulse className="h-3.5 w-3.5" />
-                Data health
-              </Link>
-            </div>
-          </aside>
+          <SiteInspector
+            site={selected}
+            metricDefs={twinMetrics}
+            badgeMetric={badgeMetric}
+            rules={alertRules}
+            alerts={selectedAlerts}
+            flows={selectedFlows}
+            area={selectedShape ? { kind: selectedShape.kind, text: formatArea(selectedShape.areaM2) } : null}
+            reading={unitReading}
+            onClose={() => {
+              setPicked(null);
+              setSelectedId(null);
+            }}
+            onEditLocation={() => setPlacing({ mode: "move", siteId: selected.id })}
+            onDrillIn={onDrillIn}
+          />
         ) : null}
           </div>
         </div>
@@ -2465,41 +2349,6 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   );
 }
 
-function MetricRow({
-  label,
-  value,
-  danger,
-  last,
-  title,
-  note,
-}: {
-  label: string;
-  value: string;
-  danger?: boolean;
-  last?: boolean;
-  /** Hovered explanation — why a value is unknown, when it is. */
-  title?: string;
-  /** What the number is about, beside the number rather than in a tooltip. */
-  note?: string;
-}) {
-  return (
-    <div
-      title={title}
-      className={cn(
-        "flex items-center justify-between gap-2 py-1 text-[11px]",
-        !last && "border-b border-line-faint",
-      )}
-    >
-      <span className="min-w-0 truncate text-ink-faint">{label}</span>
-      <span className="flex shrink-0 items-baseline gap-1.5">
-        {note ? <span className="text-[10px] text-ink-faint">{note}</span> : null}
-        <span className={cn("font-medium", danger ? "text-danger" : "text-ink")}>
-          {value}
-        </span>
-      </span>
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Multi-lane event timeline (alerts + feed activity)

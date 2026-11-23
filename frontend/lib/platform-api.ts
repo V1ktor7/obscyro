@@ -865,7 +865,14 @@ export interface TwinUnitMetrics {
    * age of one of its values. Absent from an API that does not date measures
    * yet.
    */
-  valueAges?: Record<string, { seconds: number | null; basis: FreshnessBasis }>;
+  valueAges?: Record<string, TwinValueAge>;
+  /**
+   * Why a measure that has something to read here gives no value: `several`
+   * values that are each an average and are not averaged again, or `blank`,
+   * a source that published no figure. Absent for a measure with a value, or
+   * with nothing to read.
+   */
+  withheld?: Record<string, { reason: "several" | "blank"; count: number }>;
   /** How long ago the row was last written. Answers "did the sync run". */
   fetchedAgeSeconds: number | null;
   linkedInstanceCount: number;
@@ -881,7 +888,43 @@ export type FreshnessBasis =
   | "partial"
   | "empty";
 
-export type TwinMetricUnit = "percent" | "ratio" | "count" | "number";
+/** `hours` is a duration held in decimal hours, written in hours and minutes. */
+export type TwinMetricUnit = "percent" | "ratio" | "count" | "number" | "hours";
+
+/**
+ * How old a measure's value is. `period` is set when the value describes a
+ * stretch of time and not the moment of its reading: it is then a figure of the
+ * day before, and `seconds` is the age of the reading that published it.
+ */
+export interface TwinValueAge {
+  seconds: number | null;
+  basis: FreshnessBasis;
+  period?: "previous_day";
+  zone?: string | null;
+}
+
+/** The reading kept before the one shown, and how far the value moved since. */
+export interface TwinMeasureChange {
+  /** Null when no earlier reading was kept. Its `value` is null when the measure had none then. */
+  previous: { value: number | null; at: string; atIs: "observed" | "recorded" } | null;
+  /** The value now minus that reading's; null when there is nothing to subtract from. */
+  delta: number | null;
+}
+
+/** The mean of one value a day, over the days kept. */
+export interface TwinDailyMean {
+  mean: number;
+  days: number;
+  from: string;
+  to: string;
+  window: number;
+}
+
+export interface TwinUnitTrends {
+  at: string;
+  changes: Record<string, TwinMeasureChange>;
+  means: Record<string, TwinDailyMean>;
+}
 
 export interface TwinMetricSelector {
   ofType?: string | null;
@@ -890,7 +933,7 @@ export interface TwinMetricSelector {
   /** Keep only units of capacity already spoken for. */
   inUse?: boolean;
   where?: { property: string; equals: string }[];
-  agg: "count" | "sum" | "mean" | "min" | "max";
+  agg: "count" | "sum" | "mean" | "min" | "max" | "only";
   property?: string | null;
 }
 
@@ -1074,6 +1117,10 @@ export interface TwinUnitDetail {
   /** The server's clock when this was read: the age of an alert's value is counted from it. */
   at?: string;
   metrics: TwinUnitMetrics;
+  /** What was kept of the unit's measures. Null when the history could not be read; absent from an older API. */
+  trends?: TwinUnitTrends | null;
+  /** What the organisation wrote about each object type under the unit: a source, its licence, its limits. */
+  typeNotes?: Record<string, string>;
   alerts: TwinAlert[];
   exchanges: TwinUnitExchange[];
   recommendations: string[];

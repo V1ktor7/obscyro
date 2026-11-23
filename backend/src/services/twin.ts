@@ -9,9 +9,12 @@ import {
   metricReads,
   metricsForRollup,
   qualifiersOf,
+  withheldOf,
   type MetricDef,
   type MetricInstance,
+  type Withheld,
 } from "./twin-metrics.js";
+import type { ValuePeriod } from "./property-schema.js";
 import {
   getOrCreateLinkType,
   getOrCreateObjectType,
@@ -115,6 +118,20 @@ export interface TwinTreeEdge {
   toId: string;
 }
 
+/**
+ * How old a measure's value is, and which stretch of time it describes when
+ * that is not the moment of its reading.
+ *
+ * `period` is set when the property the measure reads declares one: the value
+ * is then of that stretch (the day before), and `seconds` is the age of the
+ * reading that published it, not of the value. `zone` is the clock the reading
+ * is stamped on, which is what "the day before" is counted on.
+ */
+export interface ValueAge extends Freshness {
+  period?: ValuePeriod;
+  zone?: string | null;
+}
+
 export interface UnitMetrics {
   unitId: string;
   instanceCountByType: Record<string, number>;
@@ -126,6 +143,13 @@ export interface UnitMetrics {
    * and absent for the measures that are about exactly one thing.
    */
   qualifiers: Record<string, string[]>;
+  /**
+   * Why a measure that has something to read here gives no value: several
+   * averages that must not be averaged again, or a source that published no
+   * figure. Keyed by measure, and absent for a measure with a value or with
+   * nothing to read. See `withheldOf`.
+   */
+  withheld: Record<string, Withheld>;
   /** Kept for callers that name it directly; it is `values.occupancy`. */
   occupancyPct: number | null;
   numericMeans: Record<string, number>;
@@ -146,7 +170,7 @@ export interface UnitMetrics {
    * for a census taken fourteen minutes ago. Keyed by measure, for the
    * measures that have a value here; see `valueAgeOf`.
    */
-  valueAges: Record<string, Freshness>;
+  valueAges: Record<string, ValueAge>;
   /**
    * How long ago the row was last written here.
    *
@@ -387,7 +411,7 @@ function observedProperties(
 }
 
 /** An instance as the roll-up holds it when it asks how old a value is. */
-type AgedInstance = MetricInstance & { propertySchema: readonly PropertyDef[] };
+export type AgedInstance = MetricInstance & { propertySchema: readonly PropertyDef[] };
 
 /**
  * Which instances a measure's value is made from, for any name a rule can
@@ -434,14 +458,40 @@ function agesOfValues(
   defs: readonly MetricDef[],
   alsoAged: readonly string[],
   now: number,
-): Record<string, Freshness> {
-  const out: Record<string, Freshness> = {};
+): Record<string, ValueAge> {
+  const out: Record<string, ValueAge> = {};
   for (const metric of new Set([...defs.map((d) => d.key), ...alsoAged])) {
     if (metricValue(m, metric) == null) continue;
     const sources = linked.filter(measureReads(metric, defs));
-    out[metric] = freshnessAcross(observedProperties(sources), sources, now);
+    const stamps = observedProperties(sources);
+    const age = freshnessAcross(stamps, sources, now);
+    const period = periodOfMeasure(defs.find((d) => d.key === metric), sources);
+    out[metric] = period ? { ...age, period, zone: stamps[0]?.zone ?? null } : age;
   }
   return out;
+}
+
+/**
+ * The stretch of time a measure's value describes, when the property it reads
+ * declares one.
+ *
+ * Only for a plain aggregate of one property: a ratio of two has no single
+ * property to ask. Every instance the measure reads that declares the property
+ * must declare the same period. One that does not makes the answer "none":
+ * half of yesterday and half of this hour is neither.
+ */
+export function periodOfMeasure(def: MetricDef | undefined, sources: readonly AgedInstance[]): ValuePeriod | null {
+  const prop = def && !def.denominator ? def.numerator.property : null;
+  if (!prop) return null;
+  let period: ValuePeriod | null = null;
+  for (const inst of sources) {
+    const decl = inst.propertySchema.find((p) => p.key === prop);
+    if (!decl) continue;
+    if (!decl.period) return null;
+    if (period !== null && period !== decl.period) return null;
+    period = decl.period;
+  }
+  return period;
 }
 
 /**
@@ -462,6 +512,7 @@ function emptyMetrics(unitId: string): UnitMetrics {
     instanceCountByType: {},
     values: {},
     qualifiers: {},
+    withheld: {},
     occupancyPct: null,
     numericMeans: {},
     freshnessSeconds: null,
@@ -515,6 +566,8 @@ export function selfRollup(
   const m = emptyMetrics(siteId);
   for (const def of defs) {
     m.values[def.key] = evaluateMetric(def, linked);
+    const held = withheldOf(def, linked);
+    if (held) m.withheld[def.key] = held;
     const about = qualifiersOf(def, linked);
     if (about.length > 0) m.qualifiers[def.key] = about;
   }
@@ -640,6 +693,8 @@ export function rollupFrom(
     // beds over its wards' total beds. No second pass, and nothing to average.
     for (const def of metricDefs) {
       m.values[def.key] = evaluateMetric(def, linked);
+      const held = withheldOf(def, linked);
+      if (held) m.withheld[def.key] = held;
       // What the number is about, read off the same instances that made it.
       const about = qualifiersOf(def, linked);
       if (about.length > 0) m.qualifiers[def.key] = about;
@@ -831,6 +886,8 @@ export async function rollupPlaces(
 
     for (const def of metricDefs) {
       m.values[def.key] = evaluateMetric(def, linked);
+      const held = withheldOf(def, linked);
+      if (held) m.withheld[def.key] = held;
       const about = qualifiersOf(def, linked);
       if (about.length > 0) m.qualifiers[def.key] = about;
     }
@@ -870,6 +927,36 @@ export interface UnitExchange {
  * Counted per (link type, direction, other unit): a route used forty times is
  * one relationship, not forty.
  */
+/**
+ * What the organisation wrote about each of these object types.
+ *
+ * A figure on a unit's sheet comes from somewhere, under a licence, with limits:
+ * "MSSS, hourly census, CC-BY 4.0, released 45 minutes after its hour, says
+ * nothing of the staff on site". That is a fact about the data, written by
+ * whoever brought it in, on the type that holds it. The sheet prints it; no
+ * screen knows a source by name. Types with nothing written are left out.
+ */
+export async function describeTypes(
+  db: DbClient,
+  environmentId: string,
+  typeNames: readonly string[],
+): Promise<Record<string, string>> {
+  if (typeNames.length === 0) return {};
+  const { rows } = await db.query<{ name: string; description: string | null }>(
+    `SELECT name, description
+       FROM app.ontology_object_types
+      WHERE organization_id = (SELECT organization_id FROM app.project WHERE id = $1)
+        AND name = ANY($2::text[])`,
+    [environmentId, typeNames],
+  );
+  const out: Record<string, string> = {};
+  for (const r of rows) {
+    const text = (r.description ?? "").trim();
+    if (text) out[r.name] = text;
+  }
+  return out;
+}
+
 export async function unitExchanges(
   db: DbClient,
   environmentId: string,

@@ -25,14 +25,15 @@ import { useAnalystFocus, useOpenAnalyst } from "../AnalystDock";
 import { UNIT_PARAM, situationHref } from "../alert-feed-state";
 import { useStudio } from "../StudioShell";
 import { loadTwinPreferences, saveTwinPreferences } from "../twin-preferences";
-import { DISPLAY_METRIC_OPTIONS, twinMetricNumber } from "../twin-ui";
+import { DISPLAY_METRIC_OPTIONS } from "../twin-ui";
 import AlertRuleEditor from "./AlertRuleEditor";
 import LiveMetricsDialog from "./LiveMetricsDialog";
 import MetricEditor from "./MetricEditor";
 import UnitSheet, { type OtherMeasure } from "./UnitSheet";
 import type { HistoryState } from "./unit-history";
+import { reportLines, sourceNotes } from "./unit-trends";
 import UnitsBoard, { type StreamMode } from "./UnitsBoard";
-import { formatMeasure, type Measure } from "./units-list";
+import { type Measure } from "./units-list";
 
 // ---------------------------------------------------------------------------
 // Units: every unit of the twin, live, ranked on one measure.
@@ -231,16 +232,22 @@ export default function UnitsView() {
   );
 
   // What else the unit reports: a unit with no value for the measure shown is often not silent.
+  // The values are on screen from the list's own reading; what was kept of them (the change since the
+  // reading before, the mean of a daily figure) and why one is withheld arrive with the unit's detail.
   const others: OtherMeasure[] = useMemo(() => {
     if (!selectedNode) return [];
-    return defined
-      .filter((m) => m.key !== measure.key)
-      .flatMap((m) => {
-        const value = twinMetricNumber(selectedNode.metrics, m.key);
-        if (value === null) return [];
-        return [{ key: m.key, label: m.label, text: formatMeasure(value, m), about: selectedNode.metrics.qualifiers?.[m.key] ?? [] }];
-      });
-  }, [defined, measure.key, selectedNode]);
+    const defs = (metricDefs ?? []).filter((m) => m.key !== measure.key);
+    return reportLines(defs, detail?.metrics ?? selectedNode.metrics, detail?.trends, detail?.at ?? new Date().toISOString());
+  }, [metricDefs, measure.key, selectedNode, detail]);
+
+  // Where these figures come from: what the organisation wrote on the types its measures read.
+  const notes = useMemo(() => {
+    if (!detail || !metricDefs) return [];
+    const reported = new Set(
+      metricDefs.filter((m) => typeof detail.metrics.values[m.key] === "number" || detail.metrics.withheld?.[m.key]).map((m) => m.key),
+    );
+    return sourceNotes(metricDefs, reported, detail.typeNotes);
+  }, [detail, metricDefs]);
 
   const handleMeasure = (key: string) => {
     setDisplayMetric(key);
@@ -382,6 +389,7 @@ export default function UnitsView() {
             detail={detail}
             history={history}
             others={others}
+            notes={notes}
             situationHref={(alertId) => situationHref({ unit: selectedUnitId, alert: alertId }, env)}
             onAck={(id) => void handleAck(id)}
             onAsk={openAnalyst}

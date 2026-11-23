@@ -115,6 +115,11 @@ export function siteValue(
 /** The reading as a reader would write it, unit included. */
 export function formatValue(value: number | null, unit?: string): string {
   if (value === null) return "—";
+  // A duration is held in decimal hours and written in hours and minutes.
+  if (unit === "hours") {
+    const minutes = Math.max(0, Math.round(value * 60));
+    return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")}`;
+  }
   if (unit === "percent") return `${Math.round(value)}%`;
   if (unit === "ratio") return value.toFixed(2);
   return Math.abs(value) >= 100 ? String(Math.round(value)) : String(Math.round(value * 100) / 100);

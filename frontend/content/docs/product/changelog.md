@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "e40ecc18fab37e99"
+translatedFrom: "f971f6425dbfc9d5"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -15,6 +15,12 @@ An entry is written the day the change ships, in the same commit as the code. Si
 
 ## 22 November 2026
 
+- **New feature · Studio.** A unit's sheet says, for each measure, the change since the reading kept before and the hour of that reading: “Up 6 pts since the reading of 16:45.”. With no earlier reading, it writes so; against a reading with no value, no change is counted. A change has no colour: more is not always worse.
+- **New feature · Twin.** A figure can be declared “of the day before”. A numeric property says the period it describes (a type's editor, “Describes”); a measure that reads it is written “Yesterday's average, published 14m ago” instead of taking the age of the hour that republished it. Its 30-day mean is given with the number of days it rests on.
+- **New feature · Twin.** A measure can be a duration, held in hours and written “5 h 59”. The new `only` aggregate takes the value of the one object that carries it: under a unit that holds several, an average already made is not averaged again, and the sheet says why there is no value. A source that published no figure is said to be so, and is never read as a zero.
+- **Change · Studio.** On the network map, the inspector of a site is redone. The open alert comes first; then the measure the map paints, with its gauge and its age; what else the site reports, each figure with its change; the figures of the day before apart, with their mean; the history over 24 hours. Each block folds, and so does the whole panel. A site that counts several units says the history is read unit by unit.
+- **New feature · Studio.** A unit's sheet and a site's inspector say where the figures come from: “About these figures” prints what the organisation wrote on the object types read, that is the source, its licence and its limits.
+- **Change · Analyst.** `unit_now` says when a measure is a figure of the day before, how a duration is written, and why a measure has no value when there is a reason.
 - **New feature · Twin.** The twin can declare a price list. A price is an object of the ontology, under whatever name the organisation likes: what a unit of an activity costs to open and to keep open for a day, in whole cents, with a range if wanted, a mode (normal, rush) and its delay, and its source. A row attached to a site holds for that site and comes before the network's price. A price can also be a formula, which names the numbers of its row and the quantities of the operation. A row with no source is a demo price, and the screen says so wherever it is used.
 - **New feature · Analyst.** In the Options tab, each option is read on three counts: what it changes, the day it can be ready, what it costs. A click on a cost opens its lines: the quantity, the price, the arithmetic and the source of each. When the list prices an activity in several modes, the analyst can propose the same capacity sooner at a higher price, or later at a lower one; a day the delay does not allow is refused. The options no other beats on both waiting and cost are marked “Not beaten”, without being ranked among themselves. Without a price list, nothing changes.
 - **New feature · Analyst.** The analyst reads the price list (`list_prices`), and an amount no tool returned is struck from an answer like any other figure.

@@ -251,6 +251,11 @@ export interface PropertyDef {
    */
   observedAtZone?: string;
   /**
+   * The stretch of time this number describes, when that is not the moment of
+   * the reading. See `VALUE_PERIODS`.
+   */
+  period?: ValuePeriod;
+  /**
    * This property is a map layer: added as data, read on the twin's hexes.
    *
    * Declared on the property rather than kept in a list beside the ontology,
@@ -260,6 +265,22 @@ export interface PropertyDef {
    */
   layer?: LayerDecl;
 }
+
+/**
+ * The stretch of time a number describes, when it is not the moment of the
+ * reading that carries it.
+ *
+ * The ministry's hourly emergency file republishes, every hour, the average
+ * length of stay of the people who left the day before. The row is stamped
+ * 17:45 today and the figure is yesterday's: dated by its row, it reads "14
+ * minutes old" beside a census that really is. Declared, never guessed: a
+ * column of hours looks the same whether it is of the last hour or of the day
+ * before.
+ *
+ * Absent means the value is of the moment its reading is stamped with.
+ */
+export const VALUE_PERIODS = ["previous_day"] as const;
+export type ValuePeriod = (typeof VALUE_PERIODS)[number];
 
 export const LAYER_ROLES = ["capacity", "population", "reading", "exposure", "outcome"] as const;
 export type LayerRole = (typeof LAYER_ROLES)[number];
@@ -348,6 +369,10 @@ export function propertyProblem(def: PropertyDef): string | null {
   const b = def.behaviour;
   if (b && b !== "state" && !numeric) {
     return `"${b}" means the value gets multiplied or added to, and "${key}" holds ${def.type}. A non-numeric property can only be set, which is "state".`;
+  }
+
+  if (def.period !== undefined && !numeric) {
+    return `A period says which stretch of time a number describes, and "${key}" holds ${def.type}.`;
   }
 
   if (def.observedAtZone !== undefined) {

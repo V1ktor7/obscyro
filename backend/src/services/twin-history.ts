@@ -331,6 +331,193 @@ export async function readReadingsBetween(
 }
 
 // ---------------------------------------------------------------------------
+// What moved, and what is usual.
+//
+// Two figures a person reads beside a value: how far it is from the reading
+// before, and, for a figure published once a day, what it has been on average.
+// Both are arithmetic on readings that were kept, done here and not on a
+// screen, and both say what they rest on: the hour of the reading compared
+// with, the number of days under the average.
+// ---------------------------------------------------------------------------
+
+/** How many readings back a change looks for the one before: enough to step over a day of hourly republication. */
+export const TREND_READINGS = 40;
+
+/** The days an average covers at most. */
+export const MEAN_DAYS = 30;
+
+export interface MeasureChange {
+  /**
+   * The reading kept before the value now shown. Null when none was kept: the
+   * history starts with this value, and nothing can be said of before.
+   */
+  previous: {
+    /** Null when the measure had no value then: there is no change to count against an absence. */
+    value: number | null;
+    /** When that reading was true by its source; when it was written here, if the source gave no time. */
+    at: string;
+    atIs: "observed" | "recorded";
+  } | null;
+  /** The value now minus that reading's. Null whenever there is nothing to subtract from. */
+  delta: number | null;
+}
+
+export interface DailyMean {
+  /** The mean of one value a day. */
+  mean: number;
+  /** How many days it is made of. Fewer than the window when the history is younger. */
+  days: number;
+  /** The first and last day counted, as dates on the source's clock. */
+  from: string;
+  to: string;
+  /** The most days it could cover. */
+  window: number;
+}
+
+export interface UnitTrends {
+  /** The server's clock when this was read. */
+  at: string;
+  /** Keyed by measure, for the measures that have a value at the unit. */
+  changes: Record<string, MeasureChange>;
+  /** Keyed by measure, for the measures whose value describes a day and that have days kept. */
+  means: Record<string, DailyMean>;
+}
+
+interface TrendRow {
+  metric: string;
+  value: number | null;
+  observed_at: Date | null;
+  recorded_at: Date;
+}
+
+/** The date a moment falls on, on a named clock: `2026-11-22`. */
+export function dayOn(at: Date, zone: string | null | undefined): string {
+  try {
+    // en-CA writes a date as YYYY-MM-DD.
+    return new Intl.DateTimeFormat("en-CA", { timeZone: zone || "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
+  } catch {
+    return at.toISOString().slice(0, 10);
+  }
+}
+
+/**
+ * The reading before the one on screen, and how far the value moved since.
+ *
+ * `kept` is newest first. The newest kept reading is usually the value on
+ * screen itself, written down a few minutes ago: it is recognised by its time
+ * (within the tolerance that makes two readings one, D11), or by its value when
+ * the source gives no time, and stepped over. When the recorder has not caught
+ * up yet, the newest kept reading is the one before, and is used as such.
+ *
+ * A value that describes a day is compared with the last reading of an earlier
+ * day: the same daily figure republished an hour ago is not "the reading
+ * before".
+ */
+export function changeOf(
+  current: { value: number; observedAt: Date | null; period?: string | null; zone?: string | null },
+  kept: readonly TrendRow[],
+  now: Date,
+): MeasureChange {
+  const timeOf = (r: TrendRow) => r.observed_at ?? r.recorded_at;
+  let previous: TrendRow | undefined;
+  if (current.period === "previous_day") {
+    const today = dayOn(current.observedAt ?? now, current.zone);
+    previous = kept.find((r) => dayOn(timeOf(r), current.zone) < today);
+  } else {
+    const first = kept[0];
+    const isCurrent =
+      first !== undefined &&
+      (current.observedAt && first.observed_at
+        ? Math.abs(current.observedAt.getTime() - first.observed_at.getTime()) <= SAME_READING_SECONDS * 1000
+        : !current.observedAt && !first.observed_at && first.value === current.value);
+    previous = isCurrent ? kept[1] : first;
+  }
+  if (!previous) return { previous: null, delta: null };
+  return {
+    previous: {
+      value: previous.value,
+      at: timeOf(previous).toISOString(),
+      atIs: previous.observed_at ? "observed" : "recorded",
+    },
+    delta: previous.value === null ? null : current.value - previous.value,
+  };
+}
+
+/**
+ * The mean of one value a day, over the days kept.
+ *
+ * `days` is newest first, one row a day. Nothing is filled in for a day that
+ * has no reading: the mean says how many days it is made of.
+ */
+export function meanOfDays(days: readonly { day: string; value: number }[], window: number = MEAN_DAYS): DailyMean | null {
+  const counted = days.slice(0, window);
+  if (counted.length === 0) return null;
+  return {
+    mean: counted.reduce((a, d) => a + d.value, 0) / counted.length,
+    days: counted.length,
+    from: counted[counted.length - 1]!.day,
+    to: counted[0]!.day,
+    window,
+  };
+}
+
+/**
+ * For every measure that has a value at this unit: the change since the reading
+ * before. For those whose value describes a day: their mean over the days kept.
+ *
+ * One read for the changes, whatever the number of measures, and one per daily
+ * measure for its days.
+ */
+export async function readUnitTrends(
+  db: DbClient,
+  projectId: string,
+  unitId: string,
+  metrics: Pick<UnitMetrics, "values" | "valueAges">,
+  now: Date = new Date(),
+): Promise<UnitTrends> {
+  const measures = Object.entries(metrics.values).filter(
+    (e): e is [string, number] => typeof e[1] === "number" && Number.isFinite(e[1]),
+  );
+  const out: UnitTrends = { at: now.toISOString(), changes: {}, means: {} };
+  if (measures.length === 0) return out;
+
+  const { rows } = await db.query<TrendRow>(
+    `SELECT metric, value, observed_at, recorded_at
+       FROM (SELECT metric, value, observed_at, recorded_at,
+                    row_number() OVER (PARTITION BY metric ORDER BY recorded_at DESC) AS n
+               FROM app.twin_reading
+              WHERE project_id = $1 AND unit_instance_id = $2 AND metric = ANY($3::text[])) x
+      WHERE n <= $4
+      ORDER BY metric, recorded_at DESC`,
+    [projectId, unitId, measures.map(([key]) => key), TREND_READINGS],
+  );
+  const keptBy = new Map<string, TrendRow[]>();
+  for (const r of rows) keptBy.set(r.metric, [...(keptBy.get(r.metric) ?? []), r]);
+
+  for (const [metric, value] of measures) {
+    const age = metrics.valueAges[metric];
+    const seconds = age?.seconds ?? null;
+    const observedAt = seconds === null || !Number.isFinite(seconds) ? null : new Date(now.getTime() - seconds * 1000);
+    out.changes[metric] = changeOf({ value, observedAt, period: age?.period ?? null, zone: age?.zone ?? null }, keptBy.get(metric) ?? [], now);
+
+    if (age?.period !== "previous_day") continue;
+    // One value a day: the last one written down that day, on the source's clock.
+    const days = await db.query<{ day: string; value: number }>(
+      `SELECT DISTINCT ON (day) day::text AS day, value
+         FROM (SELECT (COALESCE(observed_at, recorded_at) AT TIME ZONE $4)::date AS day, value, recorded_at
+                 FROM app.twin_reading
+                WHERE project_id = $1 AND unit_instance_id = $2 AND metric = $3
+                  AND value IS NOT NULL AND recorded_at >= $5) x
+        ORDER BY day DESC, recorded_at DESC`,
+      [projectId, unitId, metric, age.zone || "UTC", new Date(now.getTime() - (MEAN_DAYS + 1) * 86_400_000)],
+    );
+    const mean = meanOfDays(days.rows);
+    if (mean) out.means[metric] = mean;
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // The clock.
 // ---------------------------------------------------------------------------
 

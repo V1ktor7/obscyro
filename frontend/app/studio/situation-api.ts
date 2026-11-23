@@ -2,6 +2,7 @@ import { apiFetch } from "@/lib/auth";
 import type { TwinAlertSeverity } from "@/lib/platform-api";
 
 import type { PreparedResponseCard } from "./prepared-api";
+import { formatHours } from "./twin-ui";
 
 /**
  * The situation card, as the server reads it.
@@ -25,7 +26,7 @@ export interface ValueAge {
   why: string | null;
 }
 
-export type CountedIn = "percent" | "ratio" | "count" | "number";
+export type CountedIn = "percent" | "ratio" | "count" | "number" | "hours";
 
 export interface AlertReading {
   id: string;
@@ -170,6 +171,7 @@ export async function getSituation(env: string, of: SituationOf): Promise<Situat
 /** A measure's value the way the unit page prints it. The server already rounded it; this only adds the sign. */
 export function printed(value: number | null, countedIn: CountedIn): string {
   if (value === null) return "—";
+  if (countedIn === "hours") return formatHours(value);
   if (countedIn === "percent") return `${value}%`;
   if (countedIn === "ratio") return value.toFixed(2);
   if (countedIn === "count") return String(value);

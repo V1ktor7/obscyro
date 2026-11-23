@@ -3,7 +3,7 @@
 title: "The Units page"
 description: "Every unit of the twin, live, ranked on one measure: the ones in alert first, and the sheet of the unit you pick beside the list."
 source: "docs/units-page.md"
-translatedFrom: "c7f14639218561fe"
+translatedFrom: "c0eb22aa061e3a73"
 ---
 
 Every unit of the twin, live, ranked on one measure. The page answers one question: which unit to read first. The ones in alert come first, the ones that report nothing for the measure chosen are folded away, and the sheet of the unit you pick stays beside the list.
@@ -64,6 +64,10 @@ From top to bottom: the name, where the unit stands against its threshold, its v
 - **Three ages, each one named.** Under the value: “This value was read 14m ago”, the age of what the measure shown reads. In each alert: “value read 14 min ago”, the age of the value that raised it, in the words of the banner. In the “Oldest source” box: the age of the whole unit, the oldest of all its sources, which answers “is everything I see here up to date?”. A unit that receives a stretcher census and an air quality reading can show 14 minutes for its occupancy and 2 hours for its oldest source: both are right ([Algorithms](/docs/product/algorithms), D7).
 - **An age says what it is worth.** When it is a floor or it is unknown, the sheet writes why, in full, and says whether it is about the measure or the unit.
 - **A value the twin did not date gets no sentence.** That is the case of the four counts every twin has: the sheet does not lend them the unit's age under another name.
+- **The change since the reading before.** Under the value, one sentence: “Up 6 pts since the reading of 16:45.”, “No change since the reading of 16:45.”, or that no earlier reading was kept. The “Also reports” list gives the same change for every other measure and says once the hour it is counted from; a change counted from another hour carries its own. The change is counted by the server, on the readings kept ([Algorithms](/docs/product/algorithms), D11). It has no colour: more is not always worse.
+- **A figure of the day before does not have the age of the last hour.** A measure whose value describes the day before, such as an average length of stay republished every hour, is written “Yesterday's average, published 14m ago”. Its mean follows: “30-day average”, or “Average over 12 days kept” while the history is younger than thirty days (D7, D11).
+- **A withheld value says why.** A measure that has something to read and gives nothing writes it: several units under this one each publish their own average, and averages are not averaged again; or its source published no figure in the latest reading. It is neither a zero nor a feed that stopped (D6).
+- **Where the figures come from.** “About these figures” prints what the organisation wrote on the object types the measures read: the source, its licence, its limits. The text is set in the ontology, on the type; no screen names a source.
 - **The history of the value shown.** The twin writes its measures down every five minutes, when they change ([Algorithms](/docs/product/algorithms), D11). The sheet shows the last 48 hours of them: a staircase line, where each value holds until the next reading, the lowest and the highest written like the value above, and the date of the first reading kept (“The first reading of this value was kept 3 h ago. Nothing earlier is known.”). The line breaks where the measure had no value. As long as no reading is kept, the sheet writes so instead of drawing an empty chart. The counts every twin has are not kept, and the sheet says so. A history that cannot be read takes nothing away from the rest of the sheet.
 - **An alert is handled from here.** “Open the situation” opens its situation card, “Acknowledge” acknowledges it. A unit with no alert keeps a link to its situation card.
 - **“Ask the analyst”** opens the analyst with this unit: the question is about it.
@@ -72,7 +76,7 @@ From top to bottom: the name, where the unit stands against its threshold, its v
 
 ## The other controls
 
-- **Measures**: define what the twin measures. **Alert thresholds**: set the thresholds that raise an alert; the list takes its colours again when the editor closes. **Live metrics**: the project's counts, live.
+- **Measures**: define what the twin measures. A measure can be a duration (“Duration”, written “5 h 59”), and the `only` aggregate takes the value of the one object that carries it, never averaging averages. **Alert thresholds**: set the thresholds that raise an alert; the list takes its colours again when the editor closes. **Live metrics**: the project's counts, live.
 - The chip says how the list keeps up to date. “Connecting”: the stream has been asked for, nothing has arrived through it yet. “Live stream”: the stream has delivered a reading, and the list follows the twin continuously. “Polling”: the stream failed six times in a row, and the list is read again every five seconds. The page writes “Live stream” only after a first piece of data received through the stream, never on the mere request.
 - “Seed demo” is offered only on a project with no unit.
 
@@ -83,5 +87,6 @@ From top to bottom: the name, where the unit stands against its threshold, its v
 - The list and the tiles do not show the age of each value: it is read on the unit's sheet. The “age of the data” measure of the Measure menu is the age of the whole unit.
 - A date with no hour gives an age to the day: it can be too large by a day at most, never too small.
 - The measure and the kind chosen are kept per project, in the browser. The order, the view and the search are not.
+- The change and the mean come from the readings kept: nothing is said of before the first one, and a mean writes how many days it rests on.
 
-**Code.** `frontend/app/studio/live/units-list.ts` (states, counters, order, search, hierarchy, scale, colours, with no screen), `UnitsBoard.tsx` (the two bands, the list, the tiles), `UnitSheet.tsx` (the sheet), `unit-history.ts` (the history of a value, with no screen), `UnitsView.tsx` (the readings: tree, measures, thresholds, detail, history); `twinMetricNumber` in `frontend/app/studio/twin-ui.ts`; `bandFor` in `frontend/app/studio/command/site-metric.ts`; `useOpenAnalyst` in `frontend/app/studio/AnalystDock.tsx`. **Tests.** `units-list.test.ts`, `unit-history.test.ts`, `UnitsBoard.test.tsx`, `UnitSheet.test.tsx`, `UnitsView.test.tsx`, `twin-ui.test.ts`, `AnalystDock.test.tsx`.
+**Code.** `frontend/app/studio/live/units-list.ts` (states, counters, order, search, hierarchy, scale, colours, with no screen), `UnitsBoard.tsx` (the two bands, the list, the tiles), `UnitSheet.tsx` (the sheet), `unit-history.ts` (the history of a value, with no screen), `unit-trends.ts` (the change, the mean and the sheet's sentences, with no screen), `UnitsView.tsx` (the readings: tree, measures, thresholds, detail, history); `twinMetricNumber` in `frontend/app/studio/twin-ui.ts`; `bandFor` in `frontend/app/studio/command/site-metric.ts`; `useOpenAnalyst` in `frontend/app/studio/AnalystDock.tsx`. **Tests.** `units-list.test.ts`, `unit-history.test.ts`, `unit-trends.test.ts`, `UnitsBoard.test.tsx`, `UnitSheet.test.tsx`, `UnitsView.test.tsx`, `twin-ui.test.ts`, `AnalystDock.test.tsx`.

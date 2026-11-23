@@ -3,7 +3,7 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "677123c35e4931ab"
+translatedFrom: "c9366186041065ee"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
@@ -121,7 +121,7 @@ The Event finder tab is apart: it has none of these tools. It has only the API's
 | `read_series` | A column read as a daily series: total, mean, extremes, values |
 | `list_events` | The calendar: the validated events, their dates, their place, their gate, the source that published them and the passage quoted. When day 0 of the scenario has a date, each event is also placed on the days of the run |
 | `list_alerts` | What is open now: the alerts, worst first, each with its unit, its measure and its value, since when it has been open, the age of the value, and the signal it raised with its stage. Also says how many alert rules exist and when the thresholds were last checked. For the whole project or for one unit |
-| `unit_now` | The live figures of a unit, as its page shows them: each measure the organisation defined with the age of its own value, what stands under the unit by type, the age of the whole unit (or that it is unknown, and why), its open alerts |
+| `unit_now` | The live figures of a unit, as its page shows them: each measure the organisation defined with the age of its own value, what stands under the unit by type, the age of the whole unit (or that it is unknown, and why), its open alerts; a measure says when it is a figure of the day before (`covers`), how a duration is written (`written_as`) and, when there is a reason, why it has no value (`no_value_because`) |
 | `calculate` | A calculation, on numbers already read or given in the question |
 | `list_responses` | Options tab only. The recorded responses an option can contain: those of the organisation's library (Events page) and those the engine writes itself, each under a name, with what its rules do and whether they declare a cost. With `routes_from`, the sites to which the patients waiting at a site can be transferred |
 | `test_option` | Options tab only. Adds an option to the open scenario, for the time of a run on the server, and returns the scenario as it is beside the scenario with the option, with what the engine counted as cost when a recorded response is in one of the two runs. When the twin declares a price list, it also returns what the list gives for the capacity opened: the total, the total by category, each line, what is unpriced, and the day each change is available |

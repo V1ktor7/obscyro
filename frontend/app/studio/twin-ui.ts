@@ -59,11 +59,18 @@ export function kindIconName(kind: string): TwinKindIcon {
  * mean waiting time all arrive as bare numbers in `values`, so the definition
  * has to say how to render them.
  */
+/** A duration held in decimal hours, in hours and minutes: `5 h 59`. */
+export function formatHours(hours: number): string {
+  const minutes = Math.max(0, Math.round(hours * 60));
+  return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")}`;
+}
+
 export function formatMetricValue(
   value: number | null | undefined,
-  unit: "percent" | "ratio" | "count" | "number",
+  unit: "percent" | "ratio" | "count" | "number" | "hours",
 ): string {
   if (value == null) return EMPTY;
+  if (unit === "hours") return formatHours(value);
   if (unit === "percent") return `${Math.round(value)}%`;
   if (unit === "ratio") return value.toFixed(2);
   if (unit === "count") return String(Math.round(value));
@@ -73,7 +80,7 @@ export function formatMetricValue(
 export function formatTwinMetric(
   metrics: TwinUnitMetrics | undefined,
   key: string,
-  unit?: "percent" | "ratio" | "count" | "number",
+  unit?: "percent" | "ratio" | "count" | "number" | "hours",
 ): string {
   if (!metrics) return EMPTY;
   // A user-defined metric wins, and is rendered with the unit it declares.

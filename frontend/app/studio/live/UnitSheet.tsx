@@ -10,6 +10,7 @@ import { valueAge } from "../alert-feed-state";
 import { explainFreshness, formatReadingAge } from "../twin-ui";
 import { Bar } from "./UnitsBoard";
 import { BOX, historyView, windowLabel, type HistoryState } from "./unit-history";
+import { agePhrase, changeView, commonSince, meanView, withheldPhrase, type ChangeView, type MeanView } from "./unit-trends";
 import { bandLabel, formatMeasure, ruleInWords, type BarScale, type Measure, type UnitRow } from "./units-list";
 
 // ---------------------------------------------------------------------------
@@ -28,15 +29,29 @@ import { bandLabel, formatMeasure, ruleInWords, type BarScale, type Measure, typ
 // what its measure reads. Each alert has its own, for the same reason. And the
 // unit has one as a whole, the oldest of all its sources, which answers "is
 // everything here up to date" and can be older than either.
+//
+// A value that is a figure of the day before says so, and is never given the
+// age of the hour that republished it. Beside each value: how far it moved
+// since the reading kept before it, counted by the server. A change has no
+// colour: more is not always worse.
 // ---------------------------------------------------------------------------
 
 /** A measure the unit reports besides the one the list is ranked on. */
 export interface OtherMeasure {
   key: string;
   label: string;
-  text: string;
+  /** The value as written. Null when the measure is withheld here: see `withheld`. */
+  text: string | null;
   /** What the number is about, when the measure declares it: the pollutant behind an air index. */
   about: string[];
+  /** A figure of the day before, republished with each reading. */
+  daily?: boolean;
+  /** How far it moved since the reading kept before. */
+  change?: ChangeView | null;
+  /** Its mean over the days kept, for a figure of the day before. */
+  mean?: MeanView | null;
+  /** Why it has no value here, when there is a reason to give. */
+  withheld?: string | null;
 }
 
 const TAG: Record<UnitRow["band"], string> = {
@@ -73,6 +88,7 @@ export default function UnitSheet({
   detail,
   history,
   others,
+  notes,
   situationHref,
   onAck,
   onAsk,
@@ -88,6 +104,8 @@ export default function UnitSheet({
   /** What the twin kept of the value shown, over time. Absent where nothing reads it. */
   history?: HistoryState | null;
   others: OtherMeasure[];
+  /** What the organisation wrote about the object types these figures are read from: a source, its licence, its limits. */
+  notes?: { type: string; text: string }[];
   /** Where the situation card of this unit opens, for one of its alerts or for the unit alone. */
   situationHref: (alertId?: string) => string;
   onAck: (alertId: string) => void;
@@ -109,6 +127,10 @@ export default function UnitSheet({
   const basis = detail?.metrics.freshnessBasis;
   // The age of the value shown: of what this measure reads, when the twin dated it.
   const own = detail?.metrics.valueAges?.[measure.key] ?? null;
+  // What was kept of the value shown, counted by the server and only put in words here.
+  const change = detail?.at ? changeView(detail.trends?.changes[measure.key], measure.unit, detail.at, own) : null;
+  const mean = meanView(detail?.trends?.means[measure.key], measure.unit);
+  const withheld = unit.value === null ? (detail?.metrics.withheld?.[measure.key] ?? null) : null;
 
   return (
     // The room at the bottom keeps the last lines clear of the analyst's button, which floats over this corner.
@@ -137,20 +159,30 @@ export default function UnitSheet({
           <Bar row={unit} scale={scale} className="h-2" />
           {own ? (
             <>
-              <p className="m-0 text-xs text-ink-faint">
-                {own.seconds === null
-                  ? "The age of this value is unknown"
-                  : `This value was read ${formatReadingAge(own.seconds, own.basis)}`}
-              </p>
+              <p className="m-0 text-xs text-ink-faint">{agePhrase(own, measure.unit)}</p>
               {/* A floor or an unknown says why, in the text. */}
               {own.basis !== "observed" ? (
                 <p className="m-0 text-xs text-ink-faint">{explainFreshness(own.basis, "measure")}</p>
               ) : null}
             </>
           ) : null}
+          {change ? <p className="m-0 text-xs text-ink-faint">{change.says}</p> : null}
+          {mean ? (
+            <p className="m-0 text-xs text-ink-faint">
+              {mean.label.charAt(0).toUpperCase() + mean.label.slice(1)}: <b className="font-semibold text-ink-muted">{mean.text}</b>.
+              Nothing before the first day kept is known.
+            </p>
+          ) : null}
           {unit.children > 0 ? (
             <p className="m-0 text-xs text-ink-faint">Counts this unit and everything under it.</p>
           ) : null}
+        </Block>
+      ) : null}
+
+      {/* No value, and a reason to give: a figure withheld is not a feed that stopped. */}
+      {withheld ? (
+        <Block title={measure.label}>
+          <Quiet>{withheldPhrase(withheld)}</Quiet>
         </Block>
       ) : null}
 
@@ -199,13 +231,18 @@ export default function UnitSheet({
 
           {others.length > 0 ? (
             <Block title="Also reports">
-              <KeyValues
-                rows={others.map((o) => ({
-                  key: o.key,
-                  label: o.about.length > 0 ? `${o.label} · ${o.about.join(", ")}` : o.label,
-                  value: o.text,
-                }))}
-              />
+              <Reports lines={others} />
+            </Block>
+          ) : null}
+
+          {/* Where the figures come from, in the words of whoever brought them in. No screen names a source. */}
+          {notes && notes.length > 0 ? (
+            <Block title="About these figures">
+              {notes.map((n) => (
+                <p key={n.type} className="m-0 text-xs text-ink-faint">
+                  <span className="text-ink-muted">{n.type}</span> · {n.text}
+                </p>
+              ))}
             </Block>
           ) : null}
 
@@ -343,6 +380,45 @@ function History({ state, measure }: { state: HistoryState; measure: Measure }) 
         </p>
       ))}
     </Block>
+  );
+}
+
+/**
+ * What else the unit reports: each value with how far it moved since the
+ * reading kept before. The hour most changes are counted from is said once,
+ * under the list; a change counted from another hour carries its own.
+ */
+function Reports({ lines }: { lines: OtherMeasure[] }) {
+  const since = commonSince(lines.map((l) => ({ change: l.change ?? null })));
+  return (
+    <>
+      <dl className="m-0 grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-3 gap-y-1">
+        {lines.map((o) => (
+          <div key={o.key} className="contents">
+            <dt className="min-w-0 break-words">
+              {o.about.length > 0 ? `${o.label} · ${o.about.join(", ")}` : o.label}
+              {o.daily ? (
+                <span className="block text-[11px] text-ink-faint">
+                  yesterday{o.mean ? ` · ${o.mean.label} ${o.mean.text}` : ""}
+                </span>
+              ) : null}
+              {o.withheld ? <span className="block text-[11px] text-ink-faint">{o.withheld}</span> : null}
+            </dt>
+            <dd className={cn("m-0 text-right tabular-nums", o.text === null ? "text-ink-faint" : "text-ink")}>
+              {o.text ?? "no value"}
+            </dd>
+            <dd className="m-0 whitespace-nowrap text-right text-[11px] tabular-nums text-ink-faint" title={o.change?.says}>
+              {o.change
+                ? o.change.since && o.change.since !== since
+                  ? `${o.change.text} · ${o.change.since}`
+                  : o.change.text
+                : ""}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {since ? <p className="m-0 text-xs text-ink-faint">Change since the reading of {since}.</p> : null}
+    </>
   );
 }
 

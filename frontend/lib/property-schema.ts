@@ -129,6 +129,14 @@ export interface PropertyBounds {
   max: number | null;
 }
 
+/**
+ * The stretch of time a number describes, when it is not the moment of the
+ * reading that carries it. A daily average republished every hour is
+ * yesterday's figure under today's stamp. Mirrors the server's list.
+ */
+export const VALUE_PERIODS = ["previous_day"] as const;
+export type ValuePeriod = (typeof VALUE_PERIODS)[number];
+
 export interface PropertyDefinition {
   key: string;
   type: PropertyType;
@@ -138,6 +146,8 @@ export interface PropertyDefinition {
   bounds?: PropertyBounds | null;
   behaviour?: PropertyBehaviour;
   mechanic?: Mechanic;
+  /** Which stretch of time the number describes. Absent: the moment of its reading. */
+  period?: ValuePeriod;
   /** Added as a map layer. Kept on every save so the layer is not lost. */
   layer?: {
     role: "capacity" | "population" | "reading" | "exposure" | "outcome";
@@ -203,6 +213,9 @@ export function propertyProblem(def: PropertyDefinition): string | null {
   }
   if (!numeric && def.bounds && (def.bounds.min !== null || def.bounds.max !== null)) {
     return `Bounds describe a numeric range, and "${key}" holds ${def.type}.`;
+  }
+  if (def.period !== undefined && !numeric) {
+    return `A period says which stretch of time a number describes, and "${key}" holds ${def.type}.`;
   }
   if (
     def.bounds &&

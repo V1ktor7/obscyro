@@ -339,3 +339,92 @@ describe("what the twin kept of the value shown", () => {
     expect(screen.queryByRole("heading", { name: /^History/ })).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// What moved, what is usual, what is withheld, and where it comes from.
+// ---------------------------------------------------------------------------
+
+const STAY: Measure = { key: "stay", label: "Average stay, walk-in patients", unit: "hours" };
+const AT = "2026-11-22T23:00:00.000Z";
+
+function stayUnit(value: number | null): UnitRow {
+  const row = unit(value === null ? null : 150);
+  return { ...row, value, text: value === null ? "no value" : "5 h 59", band: value === null ? "absent" : "unbanded", rule: null };
+}
+
+describe("beside a value, what the twin kept of it", () => {
+  it("says how far the value moved since the reading before, and from which hour", () => {
+    sheet({
+      detail: detail({
+        at: AT,
+        trends: { at: AT, changes: { stretchers: { previous: { value: 144, at: "2026-11-22T21:45:00.000Z", atIs: "observed" }, delta: 6 } }, means: {} },
+      }),
+    });
+    expect(screen.getByText(/^Up 6 pts since the reading of \d{2}:45\.$/)).toBeTruthy();
+  });
+
+  it("writes that nothing was kept before, instead of a change", () => {
+    sheet({ detail: detail({ at: AT, trends: { at: AT, changes: { stretchers: { previous: null, delta: null } }, means: {} } }) });
+    expect(screen.getByText("No earlier reading of this value was kept: nothing to compare it with.")).toBeTruthy();
+  });
+
+  it("says nothing about a change when the history could not be read", () => {
+    sheet({ detail: detail({ at: AT, trends: null }) });
+    expect(screen.queryByText(/since the reading/)).toBeNull();
+    // The reading now is still there.
+    expect(screen.getByText("Linked objects")).toBeTruthy();
+  });
+
+  it("never gives a figure of the day before the age of the last hour", () => {
+    const d = detail({
+      at: AT,
+      trends: { at: AT, changes: {}, means: { stay: { mean: 6.2, days: 12, from: "2026-11-11", to: "2026-11-22", window: 30 } } },
+    });
+    d.metrics.values = { stay: 5.99 };
+    d.metrics.valueAges = { stay: { seconds: 900, basis: "observed", period: "previous_day", zone: "America/Toronto" } };
+    sheet({ unit: stayUnit(5.99), measure: STAY, detail: d });
+    expect(screen.getByText("Yesterday's average, published 15m ago")).toBeTruthy();
+    expect(screen.queryByText(/This value was read/)).toBeNull();
+    // The mean says how many days it rests on.
+    expect(screen.getByText(/Average over 12 days kept:/).textContent).toContain("6 h 12");
+  });
+
+  it("says why a measure with something to read shows no value", () => {
+    const d = detail({ at: AT });
+    d.metrics.values = { stay: null };
+    d.metrics.withheld = { stay: { reason: "several", count: 2 } };
+    sheet({ unit: stayUnit(null), measure: STAY, detail: d });
+    expect(screen.getByText(/2 units under this one each publish their own average/)).toBeTruthy();
+  });
+
+  it("lists what else the unit reports with each change, and says the hour once", () => {
+    sheet({
+      others: [
+        { key: "present", label: "People in the emergency room", text: "136", about: [], change: { text: "▲ 6", since: "16:45", says: "Up 6 since the reading of 16:45." } },
+        { key: "waiting", label: "Waiting to see a doctor", text: "35", about: [], change: { text: "no change", since: "16:45", says: "No change since the reading of 16:45." } },
+        { key: "stay", label: "Average stay, walk-in patients", text: "5 h 59", about: [], daily: true, change: { text: "▼ 0 h 25", since: "21 Nov 23:45", says: "Down 0 h 25 since the reading of 21 Nov 23:45." }, mean: { text: "6 h 12", label: "average over 12 days kept" } },
+        { key: "stretcher_stay", label: "Average stay, stretcher patients", text: null, about: [], withheld: "Its source published no figure in the latest reading." },
+      ],
+    });
+    const block = screen.getByRole("heading", { name: "Also reports" }).parentElement!;
+    expect(within(block).getByText("▲ 6")).toBeTruthy();
+    expect(within(block).getByText("no change")).toBeTruthy();
+    // Counted from another hour: it carries its own.
+    expect(within(block).getByText("▼ 0 h 25 · 21 Nov 23:45")).toBeTruthy();
+    expect(within(block).getByText("yesterday · average over 12 days kept 6 h 12")).toBeTruthy();
+    expect(within(block).getByText("Change since the reading of 16:45.")).toBeTruthy();
+    // A withheld measure keeps its line, with the reason and no figure.
+    expect(within(block).getByText("no value")).toBeTruthy();
+    expect(within(block).getByText("Its source published no figure in the latest reading.")).toBeTruthy();
+  });
+
+  it("prints where the figures come from, in the organisation's own words", () => {
+    sheet({ notes: [{ type: "ReleveUrgence", text: "Source : MSSS, Console provinciale des urgences, CC-BY 4.0. Diffusé 45 minutes après l'heure du relevé." }] });
+    const block = screen.getByRole("heading", { name: "About these figures" }).parentElement!;
+    expect(within(block).getByText(/CC-BY 4\.0/)).toBeTruthy();
+    cleanup();
+    // Nothing written on the type: no block, rather than an empty one.
+    sheet({ notes: [] });
+    expect(screen.queryByRole("heading", { name: "About these figures" })).toBeNull();
+  });
+});

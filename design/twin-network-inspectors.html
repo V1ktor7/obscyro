@@ -1,0 +1,737 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Obscyro — Network inspectors: institution and region (mockup)</title>
+<!--
+  The inspector of Twin → Network, redrawn for issues 36 and 37: what an
+  emergency room reports (the ministry's full hourly census), and a second
+  inspector for a region, which is the only level the surgery waiting list is
+  published at. A mockup: it talks to nothing.
+
+  WHAT IS REAL IN IT
+    Emergency rooms   The 21 emergency rooms of region 06 (Montréal) as the
+                      ministry published them on 22 Nov 2026, census of 17:00,
+                      released 17:45 (Releve_horaire_urgences_7jours_nbpers.csv):
+                      functional and occupied stretchers, over 24 h, over 48 h,
+                      people present, people waiting to see a doctor, yesterday's
+                      two average lengths of stay. Four of them publish "pas
+                      d'information disponible". The regional row is the
+                      ministry's own "Total régional".
+    Surgery           Region RSS06, periods 2526-P08 to 2627-P07 of
+                      Chirurgie_ListeAttente.csv, including the change from
+                      2627-P06, computed from the two periods.
+    The panel         Its rows, sizes and buttons follow the inspector in
+                      frontend/app/studio/command/NetworkTwinView.tsx; the air
+                      quality row and the 572 linked instances are those of the
+                      screen it was drawn from.
+
+    Layers            The surgery figures of five health regions (06, 13, 14,
+                      15, 16), period 2627-P07 of the same file. A layer is a
+                      numeric property of the region objects, declared from
+                      the panel: it is added, edited and removed there, and
+                      nothing about it is written in code. Removing a layer
+                      removes its declaration; the figures stay in the
+                      ontology, where a sync keeps writing them.
+
+  WHAT IS AN EXAMPLE (dotted underline on the page)
+    The change since the previous census, the 30-day averages, the number of
+    days they rest on, and the 24-hour curve. The file carries the last hour
+    only, so these exist once the twin has kept its own readings.
+    The map is a sketch: the island and the dots are placed by hand.
+
+  WHAT EACH PART MAPS TO
+    Census rows       New properties on ReleveUrgence and one measure each.
+    Change            The previous reading kept in app.twin_reading (D11).
+    30-day average    One value a day from the same readings.
+    Region            A unit per health region, emergency rooms under it; the
+                      waiting list as objects linked to the region (issue 37).
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --canvas:#161616;--surface:#262626;--surface-hover:#333333;--raised:#303030;
+    --ink:#f4f4f4;--ink-body:#e0e0e0;--ink-muted:#c6c6c6;--ink-faint:#a8a8a8;--ink-ghost:#6f6f6f;
+    --line:#393939;--line-soft:#333333;--line-faint:#2c2c2c;--line-strong:#525252;
+    --brand:#0f62fe;--brand-deep:#0353e9;--brand-soft:#16305f;--brand-line:#2a4f8f;
+    --brand-text:#78a9ff;--brand-text-deep:#a6c8ff;--brand-edge:#4589ff;
+    --ok:#42be65;--warn:#f1c21b;--warn-soft:#33290a;--warn-line:#684e00;--warn-ink:#fddc69;
+    --danger:#fa4d56;--danger-soft:#3b1518;--danger-line:#75252b;--danger-ink:#ffb3b8;
+    --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--canvas);color:var(--ink-body);font-family:var(--sans);font-size:12px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:left}
+  button:focus-visible,a:focus-visible{outline:2px solid #fff;outline-offset:-2px}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ---- page chrome -------------------------------------------------- */
+  .top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;padding:10px 16px;border-bottom:1px solid var(--line)}
+  .top h1{margin:0;font-size:13px;font-weight:600;color:var(--ink)}
+  .top p{margin:0;font-size:11px;color:var(--ink-faint)}
+  .seg{margin-left:auto;display:flex;border:1px solid var(--line-strong)}
+  .seg button{padding:5px 12px;font-size:11.5px;color:var(--ink-muted)}
+  .seg button+button{border-left:1px solid var(--line-strong)}
+  .seg button[aria-pressed="true"]{background:var(--brand-soft);color:var(--brand-text-deep)}
+  .key{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink-faint)}
+  .ex{border-bottom:1px dotted var(--ink-faint)}
+
+  /* ---- stage: the map and what floats on it ------------------------- */
+  .stage{position:relative;height:clamp(680px,calc(100vh - 56px),1040px);overflow:hidden;border-bottom:1px solid var(--line)}
+  /* The sketch keeps clear of the two panels so everything can be read at once;
+     in the product the map runs under them. */
+  .map{position:absolute;inset:0 352px 0 294px;width:calc(100% - 646px);height:100%;display:block;overflow:visible}
+  .bar{background:rgba(38,38,38,.95);border:1px solid var(--line);backdrop-filter:blur(6px);box-shadow:0 1px 2px rgba(0,0,0,.4)}
+
+  /* ---- the Layers panel --------------------------------------------- */
+  .lay{position:absolute;top:12px;left:12px;width:270px;max-height:calc(100% - 112px);display:flex;flex-direction:column}
+  .lay-h{display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px}
+  .lay-h:hover{background:var(--surface-hover)}
+  .lay-h b{font-size:12px;font-weight:600;color:var(--ink)}
+  .lay-h span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--ink-muted)}
+  .lay-h svg{margin-left:auto;flex:none;color:var(--ink-muted);transition:transform .15s;transform:rotate(180deg)}
+  .lay.folded .lay-h svg{transform:none}
+  .lay.folded .lay-b{display:none}
+  .lay-b{min-height:0;overflow-y:auto;border-top:1px solid var(--line-soft);padding:0 12px 12px;scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent}
+  .grp{margin:10px 0 2px;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-faint)}
+  .grp small{display:block;margin-top:1px;font-size:10px;font-weight:400;text-transform:none;letter-spacing:0}
+  .ly{display:grid;grid-template-columns:16px 1fr auto;gap:2px 8px;align-items:start;padding:6px 0;border-bottom:1px solid var(--line-faint)}
+  .ly input{margin:2px 0 0;accent-color:#4589ff}
+  .ly label{font-size:11.5px;line-height:1.35;color:var(--ink-body);cursor:pointer}
+  .ly.on label{color:var(--ink);font-weight:500}
+  .ly .src{grid-column:2 / 4;font-size:10px;color:var(--ink-faint)}
+  .ly .tools{display:flex;gap:2px;margin-top:-2px}
+  .ly .tools button{width:22px;height:22px;display:grid;place-items:center;color:var(--ink-faint)}
+  .ly .tools button:hover{color:var(--ink);background:var(--surface-hover)}
+  .form{margin:8px 0 6px;padding:10px;border:1px solid var(--line-strong);background:var(--raised)}
+  .form h4{margin:0 0 8px;font-size:11.5px;font-weight:600;color:var(--ink)}
+  .form p{margin:0 0 8px;font-size:10.5px;line-height:1.5;color:var(--ink-muted)}
+  .fld{display:block;margin-bottom:8px;font-size:10px;color:var(--ink-faint)}
+  .fld input,.fld select{display:block;width:100%;margin-top:3px;padding:5px 7px;background:var(--surface);border:1px solid var(--line-strong);border-radius:0;color:var(--ink);font:inherit;font-size:11.5px}
+  .fld input:focus-visible,.fld select:focus-visible{outline:2px solid #fff;outline-offset:-2px}
+  .btns{display:flex;gap:6px;flex-wrap:wrap}
+  .btn{padding:5px 10px;border:1px solid var(--line-strong);font-size:11.5px;color:var(--ink)}
+  .btn:hover{background:var(--surface-hover)}
+  .btn.pri{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:500}
+  .btn.pri:hover{background:var(--brand-deep)}
+  .btn.pri:disabled{background:var(--line);border-color:var(--line);color:var(--ink-ghost);cursor:default}
+  .btn.del{border-color:var(--danger-line);color:var(--danger-ink)}
+  .btn.del:hover{background:var(--danger-soft)}
+  .add{display:flex;align-items:center;gap:6px;width:100%;margin-top:10px;padding:6px 10px;border:1px dashed var(--line-strong);font-size:11.5px;color:var(--ink-body)}
+  .add:hover{border-color:var(--brand-edge);color:var(--ink)}
+
+  .legend{position:absolute;left:12px;bottom:12px;display:flex;flex-direction:column;gap:5px;padding:7px 10px;font-size:10px;color:var(--ink-muted);max-width:calc(100% - 388px)}
+  .legend div{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px}
+  .legend span{display:flex;align-items:center;gap:5px}
+  .legend b{font-weight:500;color:var(--ink)}
+  .ramp{width:84px;height:8px;flex:none}
+  .dot{width:8px;height:8px;border-radius:999px;display:inline-block;flex:none}
+
+  /* ---- the inspector ------------------------------------------------ */
+  .insp{position:absolute;top:12px;right:12px;width:328px;max-height:calc(100% - 24px);display:flex;flex-direction:column}
+  .insp-h{display:flex;align-items:flex-start;gap:8px;padding:10px 12px 8px}
+  .insp-h .dot{margin-top:5px}
+  .insp-h h2{margin:0;font-size:13px;font-weight:600;color:var(--ink);line-height:1.3}
+  .insp-h .sub{margin:1px 0 0;font-size:10.5px;color:var(--ink-faint)}
+  .icon-b{margin-left:auto;display:flex;gap:2px;flex:none}
+  .icon-b button{width:22px;height:22px;display:grid;place-items:center;color:var(--ink-faint)}
+  .icon-b button:hover{color:var(--ink);background:var(--surface-hover)}
+  .insp-body{min-height:0;overflow-y:auto;padding:0 12px 4px;scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent}
+  .insp.folded .insp-body,.insp.folded .acts{display:none}
+  .insp.folded .fold svg{transform:rotate(180deg)}
+  .chip{display:inline-flex;align-items:center;gap:5px;margin-top:6px;padding:2px 7px;border:1px solid var(--line-strong);font-size:10.5px;color:var(--ink-muted)}
+  .chip:hover{border-color:var(--brand-edge);color:var(--ink)}
+
+  .alert{margin:2px 0 10px;padding:6px 8px;border:1px solid var(--danger-line);background:var(--danger-soft);color:var(--danger-ink);font-size:10.5px;font-weight:500}
+  .alert small{display:block;margin-top:2px;font-weight:400;font-size:10px;opacity:.85}
+
+  .hero{padding:2px 0 10px}
+  .hero-l{display:flex;justify-content:space-between;gap:8px;font-size:10.5px;color:var(--ink-faint)}
+  .hero-v{font-size:34px;font-weight:300;line-height:1.1;color:var(--ink);letter-spacing:-.01em}
+  .hero-v small{font-size:16px;margin-left:1px}
+  .hero-v.over{color:var(--danger)}
+  .hero-v.near{color:var(--warn)}
+  .gauge{position:relative;height:6px;margin:6px 0 6px;background:var(--line)}
+  .gauge i{position:absolute;inset:0 auto 0 0;background:var(--ink-muted)}
+  .gauge i.over{background:var(--danger)}
+  .gauge i.near{background:var(--warn)}
+  .gauge u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink)}
+  .meta{margin:0;font-size:10.5px;color:var(--ink-faint)}
+  .meta b{color:var(--ink-muted);font-weight:500}
+
+  .sec{border-top:1px solid var(--line-soft)}
+  .sec-h{display:flex;align-items:baseline;gap:8px;width:100%;padding:8px 0 5px}
+  .sec-t{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-faint)}
+  .sec-m{font-size:10px;color:var(--ink-faint);margin-left:auto}
+  .sec-h svg{flex:none;align-self:center;color:var(--ink-faint);transition:transform .15s}
+  .sec-h:hover .sec-t,.sec-h:hover svg{color:var(--ink)}
+  .sec.shut .sec-b{display:none}
+  .sec.shut .sec-h svg{transform:rotate(-90deg)}
+  .sec-b{padding-bottom:10px}
+
+  .row{display:grid;grid-template-columns:1fr auto 62px;align-items:baseline;gap:8px;padding:4px 0;border-bottom:1px solid var(--line-faint);font-size:11px}
+  .row:last-child{border-bottom:0}
+  .row.two{grid-template-columns:1fr auto}
+  .row .l{color:var(--ink-faint);min-width:0}
+  .row .v{color:var(--ink);font-weight:500;text-align:right}
+  .row .v.over{color:var(--danger)}
+  .row .v small{font-weight:400;color:var(--ink-faint);font-size:10px;margin-right:6px}
+  .row.sub .l{padding-left:10px}
+  .row.sub .v{font-weight:400;color:var(--ink-muted)}
+  .dl{justify-self:end;font-family:var(--mono);font-size:10px;color:var(--ink-muted);white-space:nowrap}
+  .colh{display:grid;grid-template-columns:1fr auto 62px;white-space:nowrap;gap:8px;font-size:9.5px;color:var(--ink-faint);padding-bottom:2px}
+  .colh span:last-child{justify-self:end}
+  .note{margin:6px 0 0;font-size:10px;line-height:1.5;color:var(--ink-faint)}
+  .note b{color:var(--ink-muted);font-weight:500}
+  .link{display:flex;align-items:center;gap:8px;width:100%;margin-top:6px;padding:7px 8px;border:1px solid var(--line-strong);font-size:11px;color:var(--ink-body)}
+  .link:hover{border-color:var(--brand-edge);background:var(--surface-hover)}
+  .link strong{color:var(--ink);font-weight:500}
+  .link svg{margin-left:auto;flex:none;color:var(--ink-faint)}
+
+  .chart{display:block;width:100%;height:auto;margin-top:2px}
+  .chart text{font-family:var(--mono);font-size:8.5px;fill:#a8a8a8}
+
+  .site{display:grid;grid-template-columns:1fr 64px 38px;align-items:center;gap:8px;width:100%;padding:5px 0;border-bottom:1px solid var(--line-faint);font-size:10.5px;color:var(--ink-body)}
+  .site:hover .nm{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
+  .site .nm{min-width:0;line-height:1.3}
+  .site .mini{position:relative;height:4px;background:var(--line)}
+  .site .mini i{position:absolute;inset:0 auto 0 0}
+  .site .mini u{position:absolute;top:-2px;bottom:-2px;width:1px;background:var(--ink-faint)}
+  .site .pc{text-align:right;font-weight:500;color:var(--ink)}
+  .site.mute{color:var(--ink-faint);cursor:default}
+  .site.mute .pc{font-weight:400;color:var(--ink-faint)}
+  .more{margin-top:6px;font-size:10.5px;color:var(--brand-text)}
+  .more:hover{text-decoration:underline}
+
+  .big{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+  .big .n{font-size:26px;font-weight:300;color:var(--ink);line-height:1.15}
+  .big .u{font-size:11px;color:var(--ink-faint)}
+  .big .dl{margin-left:auto;font-size:10.5px}
+  .band{display:grid;grid-template-columns:86px 1fr 50px 46px;align-items:center;gap:8px;padding:3px 0;font-size:11px}
+  .band .l{color:var(--ink-faint)}
+  .band .t{height:6px;background:var(--line);position:relative}
+  .band .t i{position:absolute;inset:0 auto 0 0}
+  .band .v{text-align:right;color:var(--ink);font-weight:500}
+  table.sp{width:100%;border-collapse:collapse;margin-top:2px;font-size:10.5px}
+  table.sp th{font-weight:400;font-size:9.5px;color:var(--ink-faint);text-align:right;padding:0 0 3px 6px;white-space:nowrap}
+  table.sp th:first-child{text-align:left;padding-left:0}
+  table.sp td{padding:4px 0 4px 6px;border-top:1px solid var(--line-faint);text-align:right;vertical-align:baseline;color:var(--ink)}
+  table.sp td:first-child{text-align:left;padding-left:0;color:var(--ink-body)}
+  table.sp td.d{font-family:var(--mono);font-size:10px;color:var(--ink-muted);white-space:nowrap}
+  table.sp td.m{color:var(--ink-muted)}
+
+  .acts{display:flex;flex-direction:column;gap:6px;padding:10px 12px 12px;border-top:1px solid var(--line-soft)}
+  .acts button{display:flex;align-items:center;gap:7px;padding:6px 10px;border:1px solid var(--line);font-size:12px;color:var(--ink-body)}
+  .acts button:hover{border-color:var(--brand-edge)}
+  .acts button.primary{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:500}
+  .acts button.primary:hover{background:var(--brand-deep)}
+
+  /* ---- notes for the reader of the mockup --------------------------- */
+  .notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;padding:16px}
+  .card{border:1px solid var(--line);background:var(--surface);padding:12px 14px}
+  .card h3{margin:0 0 6px;font-size:12px;font-weight:600;color:var(--ink)}
+  .card ul{margin:0;padding-left:16px;color:var(--ink-muted);font-size:12px;line-height:1.55}
+  .card li+li{margin-top:4px}
+  .card code{font-family:var(--mono);font-size:11px;color:var(--ink-body)}
+
+  /* Between a phone and a wide screen the two panels leave the sketch too little
+     room side by side: it moves under the Layers panel while that one is open. */
+  @media (max-width:1179px){
+    .stage{height:clamp(820px,calc(100vh - 56px),1040px)}
+    .map{inset:0 352px 0 0;width:calc(100% - 352px)}
+    .stage.lay-open .map{inset:326px 352px 112px 0;height:calc(100% - 438px)}
+    .stage.lay-open .lay{max-height:306px}
+  }
+  @media (max-width:760px){
+    .stage{height:auto;overflow:visible}
+    .map,.stage.lay-open .map{position:relative;inset:auto;width:100%;height:300px;overflow:hidden}
+    .lay,.stage.lay-open .lay{position:static;width:auto;max-height:none;margin:12px 16px 0}
+    .lay-b{overflow:visible}
+    .legend{position:static;max-width:none;margin:10px 16px 0;border:0;background:none;box-shadow:none;padding:0}
+    .insp{position:static;width:auto;max-height:none;margin:12px 16px 16px}
+    .insp-body{overflow:visible}
+    .seg{margin-left:0}
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div>
+    <h1>Twin → Network · inspectors and layers</h1>
+    <p>Mockup for issues 36, 37 and 38. Montréal, census of 17:00 on 22 Nov 2026.</p>
+  </div>
+  <span class="key"><span class="ex">12</span> dotted underline: example value, not published data</span>
+  <div class="seg" role="group" aria-label="What is selected on the map">
+    <button type="button" id="seg-site" aria-pressed="true">Institution</button>
+    <button type="button" id="seg-region" aria-pressed="false">Region</button>
+  </div>
+</header>
+
+<section class="stage">
+  <svg class="map" id="map" viewBox="110 20 800 560" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Sketch of Montréal and four neighbouring health regions, with Montréal's emergency rooms"></svg>
+  <aside class="bar lay" id="lay" aria-label="Layers"></aside>
+  <div class="bar legend" id="legend"></div>
+  <aside class="bar insp" id="insp" aria-live="polite"></aside>
+</section>
+
+<section class="notes" lang="fr">
+  <div class="card">
+    <h3>Ce qui change par rapport au panneau d'aujourd'hui</h3>
+    <ul>
+      <li>L'alerte monte en haut : avec plus de lignes, elle ne doit pas finir sous le pli.</li>
+      <li>Six chiffres du relevé horaire au lieu d'un, chacun avec son écart depuis le relevé précédent.</li>
+      <li>Les durées de séjour sont à part, et dites « yesterday » : ce ne sont pas des chiffres de la dernière heure.</li>
+      <li>Chaque bloc se replie, et le panneau entier aussi (flèche à côté de la croix).</li>
+      <li>Le panneau passe de 256 à 328 pixels de large, pour loger l'écart.</li>
+      <li>Une urgence renvoie à sa région pour les chirurgies, qui ne sont publiées que par région.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>Ce qui est vrai, ce qui est un exemple</h3>
+    <ul>
+      <li><b>Vrai</b> : tous les chiffres du relevé de 17 h et les durées de la veille, pour les 21 urgences de Montréal ; la liste d'attente en chirurgie et ses 13 périodes.</li>
+      <li><b>Exemple</b> (souligné en pointillé) : les écarts depuis 16 h, les moyennes sur 30 jours et la courbe des 24 heures. Ils existeront quand le jumeau aura gardé ses propres relevés.</li>
+      <li>La carte est un croquis : l'île et les points sont placés à la main.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>Les couches, gérées depuis le logiciel</h3>
+    <ul>
+      <li>Le panneau « Layers » liste ce que la carte dessine : la mesure qui colore les points, et la couche qui teinte les régions.</li>
+      <li><b>Ajouter</b> : depuis un chiffre que le jumeau porte déjà, ou depuis un fichier comme sur la carte Scenarios.</li>
+      <li><b>Modifier</b> (le crayon) : le nom, le chiffre lu, l'unité, la couleur, la façon de combiner.</li>
+      <li><b>Retirer</b> (la corbeille) : la carte ne la dessine plus. Les chiffres restent dans l'ontologie, et la synchronisation continue de les écrire.</li>
+      <li>Les valeurs des cinq régions sont celles du fichier du ministère, période 2627-P07.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>À décider avant de coder</h3>
+    <ul>
+      <li>L'inspecteur de région n'existe que si le jumeau a des régions (issue 37). Sans elles, la ligne « Surgery waiting list » n'apparaît pas.</li>
+      <li>Le chiffre d'une région n'a pas de couleur : aucune règle d'alerte ne porte sur une région.</li>
+      <li>La durée de séjour d'une région est celle que le ministère publie, pas une moyenne des hôpitaux.</li>
+      <li>Les écarts sont en gris : une hausse n'est pas toujours une mauvaise nouvelle.</li>
+      <li>Moyenne sur 30 jours aussi pour le séjour sur civière : même calcul, à garder ou non.</li>
+    </ul>
+  </div>
+</section>
+
+<script>
+/* ---- published data, 22 Nov 2026, census of 17:00 --------------------- */
+const CENSUS = { hour: "17:00", published: "17:45", prev: "16:00", age: "1 h ago" };
+// name, functional, occupied, over 24 h, over 48 h, present, waiting, stay stretcher, stay walk-in, x, y
+const SITES = [
+  ["HÔPITAL GÉNÉRAL JUIF", 53, 111, 44, 21, 136, 35, "14:37", "5:59", 505, 335],
+  ["HÔPITAL GÉNÉRAL DU LAKESHORE", 31, 62, 43, 27, 90, 18, "35:43", "8:18", 255, 435],
+  ["HÔPITAL ROYAL VICTORIA", 33, 54, 31, 17, 100, 33, "28:13", "13:15", 545, 385],
+  ["HÔPITAL GÉNÉRAL DE MONTRÉAL", 31, 50, 25, 14, 85, 13, "24:50", "7:23", 590, 350],
+  ["HÔPITAL SANTA CABRINI", 38, 58, 26, 9, 80, 15, "22:58", "5:28", 745, 235],
+  ["L'HÔPITAL DE MONTRÉAL POUR ENFANTS", 12, 18, 2, 0, 91, 38, "8:22", "5:48", 522, 408],
+  ["CHU SAINTE-JUSTINE", 16, 23, 3, 1, 82, 26, "5:52", "5:48", 530, 300],
+  ["CENTRE HOSPITALIER DE L'UNIVERSITÉ DE MONTRÉAL", 51, 66, 19, 6, 123, 34, "18:04", "8:16", 640, 310],
+  ["HÔPITAL DE VERDUN", 26, 32, 5, 0, 58, 14, "18:12", "6:09", 575, 425],
+  ["HÔPITAL DE LACHINE", 14, 17, 10, 8, 35, 12, "48:40", "5:49", 425, 445],
+  ["HÔPITAL MAISONNEUVE-ROSEMONT", 54, 64, 20, 4, 118, 54, "19:55", "5:23", 735, 272],
+  ["HÔPITAL DE LASALLE", 15, 17, 10, 9, 34, 15, "25:27", "5:03", 488, 462],
+  ["CENTRE HOSPITALIER DE ST. MARY", 22, 23, 6, 2, 43, 12, "18:51", "6:21", 478, 322],
+  ["HÔPITAL NOTRE-DAME", 35, 36, 18, 12, 62, 22, "24:42", "5:12", 668, 282],
+  ["INSTITUT UNIVERSITAIRE EN SANTÉ MENTALE DE MONTRÉAL", 12, 7, 5, 4, 8, 0, "51:33", "2:07", 790, 215],
+  ["INSTITUT DE CARDIOLOGIE DE MONTRÉAL", 22, 9, 0, 0, 22, 8, "20:46", "6:17", 700, 232],
+  ["HÔPITAL DOUGLAS", 8, 2, 0, 0, 3, 0, "10:48", "3:17", 538, 448],
+].map(([n, f, o, h24, h48, p, w, ds, da, x, y]) => ({ n, f, o, h24, h48, p, w, ds, da, x, y }));
+SITES[0].etab = "Santé Québec Centre-Ouest-de-l'Île-de-Montréal";
+SITES[0].aqi = 19; SITES[0].linked = 572;   // from the screen this panel was drawn from
+const SILENT = [
+  ["HÔPITAL DU SACRÉ-COEUR-DE-MONTRÉAL", 455, 278], ["HÔPITAL FLEURY", 610, 215],
+  ["HÔPITAL JEAN-TALON", 600, 262], ["HÔPITAL EN SANTÉ MENTALE ALBERT-PRÉVOST", 425, 292],
+].map(([n, x, y]) => ({ n, x, y }));
+// The ministry's own regional row.
+const REGION = { n: "MONTRÉAL", code: "06", f: 473, o: 649, h24: 267, h48: 134, p: 1170, w: 349, ds: "21:35", da: "7:53" };
+
+// Chirurgie_ListeAttente.csv, RSS06. [0 to 6 months, 6 to 12 months, over 1 year], then the 2627-P06 total.
+const SPEC = [
+  ["General surgery", [4656, 849, 67], 5615], ["Orthopaedic surgery", [4170, 1826, 245], 6491],
+  ["Plastic surgery", [1770, 574, 149], 2601], ["Vascular surgery", [316, 62, 6], 373],
+  ["Neurosurgery", [477, 157, 18], 686], ["Obstetrics and gynaecology", [1982, 492, 61], 2542],
+  ["Ophthalmology", [6987, 1005, 61], 8132], ["ENT, head and neck surgery", [3216, 924, 167], 4387],
+  ["Urology", [2304, 532, 40], 2905], ["Other, under general anaesthesia", [1931, 442, 43], 2377],
+];
+const PERIODS = [
+  ["2526-P08", 31199, 8900, 1499], ["2526-P09", 31388, 8500, 1209], ["2526-P10", 31949, 9029, 1249],
+  ["2526-P11", 31796, 8069, 1043], ["2526-P12", 32121, 7749, 921], ["2526-P13", 32045, 7833, 944],
+  ["2627-P01", 31789, 7434, 963], ["2627-P02", 28176, 6552, 846], ["2627-P03", 28066, 6130, 775],
+  ["2627-P04", 28454, 6455, 822], ["2627-P05", 28038, 6768, 893], ["2627-P06", 28196, 7012, 901],
+  ["2627-P07", 27809, 6863, 857],
+];
+const BANDS = ["0 to 6 months", "6 to 12 months", "Over 1 year"];
+const BAND_FILL = ["#2a4f8f", "#4589ff", "#a6c8ff"];   // brighter is longer: the ramp of a dark ground
+
+/* ---- helpers ---------------------------------------------------------- */
+const fmt = (n) => n.toLocaleString("en-US");
+const dur = (s) => { const [h, m] = s.split(":"); return `${+h} h ${m}`; };
+const occOf = (s) => (100 * s.o) / s.f;
+const bandOf = (pc) => (pc > 100 ? "over" : pc >= 85 ? "near" : "under");
+const FILL = { over: "#fa4d56", near: "#f1c21b", under: "#42be65" };
+// Example values only: a steady number drawn from the name, so a site keeps its own.
+const seed = (s) => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 9973, 7);
+const exInt = (s, k, span) => ((seed(s) * (k + 3)) % (2 * span + 1)) - span;
+const exDur = (s, k, base) => { const [h, m] = base.split(":").map(Number); const t = Math.max(20, h * 60 + m + exInt(s, k, 28)); return `${Math.floor(t / 60)} h ${String(t % 60).padStart(2, "0")}`; };
+const chev = `<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>`;
+const arrow = `<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>`;
+
+function delta(d, example, since) {
+  const cls = example ? "dl ex" : "dl";
+  if (d === 0) return `<span class="${cls}" title="No change since ${since}">no change</span>`;
+  return `<span class="${cls}" title="${d > 0 ? "Up" : "Down"} ${fmt(Math.abs(d))} since ${since}">${d > 0 ? "▲" : "▼"} ${fmt(Math.abs(d))}</span>`;
+}
+const open = { census: true, stay: true, day: true, surgery: true, other: false, from: false, sites: true, list: true };
+function sec(key, title, meta, body) {
+  return `<section class="sec${open[key] ? "" : " shut"}" data-sec="${key}">
+    <button type="button" class="sec-h" aria-expanded="${open[key]}"><span class="sec-t">${title}</span><span class="sec-m">${meta || ""}</span>${chev}</button>
+    <div class="sec-b">${body}</div></section>`;
+}
+function head(dot, name, sub, extra) {
+  return `<div class="insp-h">${dot}<div><h2>${name}</h2><p class="sub">${sub}</p>${extra || ""}</div>
+    <div class="icon-b">
+      <button type="button" class="fold" aria-label="Fold the panel" title="Fold the panel">${chev.replace("M2.5 4.5 6 8l3.5-3.5", "M2.5 7.5 6 4l3.5 3.5")}</button>
+      <button type="button" class="close" aria-label="Close inspector" title="Close inspector"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 3 6 6M9 3 3 9" fill="none" stroke="currentColor" stroke-width="1.4"/></svg></button>
+    </div></div>`;
+}
+function gauge(pc, band) {
+  const scale = Math.max(150, pc * 1.15);
+  return `<div class="gauge" aria-hidden="true"><i class="${band}" style="width:${(100 * pc / scale).toFixed(1)}%"></i><u style="left:${(10000 / scale).toFixed(1)}%"></u></div>`;
+}
+function censusRows(name, s, plural) {
+  const since = `the census of ${CENSUS.prev}`;
+  const rows = [
+    [`People in the emergency room${plural}`, s.p, exInt(name, 1, plural ? 22 : 7)],
+    ["Waiting to see a doctor", s.w, exInt(name, 2, plural ? 12 : 4)],
+    ["Functional stretchers", s.f, 0],
+    ["Occupied stretchers", s.o, exInt(name, 4, plural ? 14 : 4)],
+    ["On a stretcher over 24 h", s.h24, exInt(name, 5, plural ? 8 : 2)],
+    ["On a stretcher over 48 h", s.h48, exInt(name, 6, plural ? 5 : 1)],
+  ];
+  return `<div class="colh"><span></span><span></span><span>since ${CENSUS.prev}</span></div>` +
+    // An example change never implies a census below zero.
+    rows.map(([l, v, d]) => `<div class="row"><span class="l">${l}</span><span class="v num">${fmt(v)}</span>${delta(Math.min(d, v), true, since)}</div>`).join("");
+}
+
+/* ---- charts ----------------------------------------------------------- */
+function dayChart(name, pc) {
+  // Example curve: 24 kept readings ending on the published value, drawn as steps.
+  const k = seed(name) % 11, vals = [];
+  for (let i = 0; i < 24; i++) vals.push(Math.max(4, Math.round(pc + 0.035 * pc * (Math.sin((i + k) * 0.55) - Math.sin((23 + k) * 0.55)) - 0.004 * pc * (23 - i))));
+  vals[23] = Math.round(pc);
+  const W = 304, H = 70, L = 26, T = 6, B = 14, top = Math.max(120, Math.max(...vals) * 1.12);
+  const x = (i) => L + (i * (W - L)) / 24, y = (v) => T + (H - T - B) * (1 - v / top);
+  let d = `M${x(0)} ${y(vals[0])}`;
+  vals.forEach((v, i) => { d += ` V${y(v).toFixed(1)} H${x(i + 1).toFixed(1)}`; });
+  const lo = Math.min(...vals), hi = Math.max(...vals);
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Occupancy over the last 24 hours, between ${lo}% and ${hi}%">
+      <line x1="${L}" x2="${W}" y1="${y(100)}" y2="${y(100)}" stroke="#a8a8a8" stroke-dasharray="3 3" stroke-width="1"/>
+      <text x="${L - 4}" y="${y(100) + 3}" text-anchor="end">100%</text>
+      <line x1="${L}" x2="${W}" y1="${y(0)}" y2="${y(0)}" stroke="#393939"/>
+      <path d="${d}" fill="none" stroke="${pc > 100 ? "#fa4d56" : "#c6c6c6"}" stroke-width="1.6"/>
+      <circle cx="${x(24)}" cy="${y(vals[23])}" r="2.5" fill="#f4f4f4"/>
+      <text x="${L}" y="${H - 2}">18:00</text><text x="${x(12)}" y="${H - 2}" text-anchor="middle">06:00</text><text x="${W}" y="${H - 2}" text-anchor="end">17:00</text>
+    </svg>
+    <p class="meta">Lowest <b class="num ex">${lo}%</b> · highest <b class="num ex">${hi}%</b> · each value holds until the next reading kept.</p>`;
+}
+function periodChart() {
+  const W = 304, H = 104, L = 26, T = 6, B = 24, top = 45000, n = PERIODS.length, step = (W - L) / n, bw = step - 4;
+  const y = (v) => T + (H - T - B) * (1 - v / top);
+  let g = "";
+  [20000, 40000].forEach((v) => { g += `<line x1="${L}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="#333333"/><text x="${L - 4}" y="${y(v) + 3}" text-anchor="end">${v / 1000}k</text>`; });
+  PERIODS.forEach(([p, a, b, c], i) => {
+    const x0 = L + i * step + 2, last = i === n - 1; let acc = 0;
+    g += `<g opacity="${last ? 1 : 0.62}"><title>${p}: ${fmt(a + b + c)} waiting (${fmt(a)} · ${fmt(b)} · ${fmt(c)})</title>`;
+    [a, b, c].forEach((v, j) => { g += `<rect x="${x0.toFixed(1)}" y="${y(acc + v).toFixed(1)}" width="${bw.toFixed(1)}" height="${(y(acc) - y(acc + v)).toFixed(1)}" fill="${BAND_FILL[j]}"/>`; acc += v; });
+    g += `</g><text x="${(x0 + bw / 2).toFixed(1)}" y="${H - 13}" text-anchor="middle"${last ? ' fill="#f4f4f4"' : ""}>${p.slice(-2)}</text>`;
+  });
+  const split = L + 6 * step;
+  g += `<line x1="${split}" x2="${split}" y1="${H - 22}" y2="${H - 2}" stroke="#525252"/><text x="${L + 2}" y="${H - 2}">2025-26</text><text x="${split + 4}" y="${H - 2}">2026-27</text><line x1="${L}" x2="${W}" y1="${y(0)}" y2="${y(0)}" stroke="#525252"/>`;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="People waiting for surgery over the last 13 financial periods, from ${fmt(41598)} to ${fmt(35529)}">${g}</svg>`;
+}
+
+/* ---- the two inspectors ----------------------------------------------- */
+function siteInspector(s) {
+  const pc = occOf(s), band = bandOf(pc);
+  const dot = `<i class="dot" style="background:${FILL[band]}"></i>`;
+  const sub = `Installation${s.etab ? " · " + s.etab : ""}`;
+  const chip = `<button type="button" class="chip" data-go="region">Region · Montréal ${arrow}</button>`;
+  const alert = band === "over" ? `<div class="alert">${s.n} — civières occupées à ${pc.toFixed(2)} % de la capacité<small>value read ${CENSUS.age}</small></div>` : "";
+  const hero = `<div class="hero">
+      <div class="hero-l"><span>Occupation des civières</span><span>alert when over 100%</span></div>
+      <div class="hero-v ${band} num">${Math.round(pc)}<small>%</small></div>${gauge(pc, band)}
+      <p class="meta"><b class="num">${s.o}</b> on stretchers for <b class="num">${s.f}</b> functional stretchers</p>
+      <p class="meta">Census of ${CENSUS.hour} · published ${CENSUS.published} · <b>read ${CENSUS.age}</b></p></div>`;
+  const stay = `
+      <div class="row two"><span class="l">Walk-in patients, waiting room</span><span class="v num">${dur(s.da)}</span></div>
+      <div class="row two sub"><span class="l">30-day average</span><span class="v num"><small class="ex">over 12 days kept</small><span class="ex">${exDur(s.n, 7, s.da)}</span></span></div>
+      <div class="row two"><span class="l">Patients on a stretcher</span><span class="v num">${dur(s.ds)}</span></div>
+      <div class="row two sub"><span class="l">30-day average</span><span class="v num"><small class="ex">over 12 days kept</small><span class="ex">${exDur(s.n, 8, s.ds)}</span></span></div>
+      <p class="note">Arrival to departure, for the people who left <b>yesterday</b>. Published once a day: not a figure of the last hour. Nothing before the first day kept is known.</p>`;
+  const surgery = `<p class="note" style="margin-top:0">Published by region, not by hospital.</p>
+      <button type="button" class="link" data-go="region" data-focus="surgery"><span><strong class="num">${fmt(35529)}</strong> waiting in Montréal · period 2627-P07</span>${arrow}</button>`;
+  const other = (s.aqi ? `<div class="row two"><span class="l">Indice de la qualité de l'air</span><span class="v num"><small>O3</small>${s.aqi}</span></div>` : "") +
+      (s.linked ? `<div class="row two"><span class="l">Linked instances</span><span class="v num">${fmt(s.linked)}</span></div>` : "") +
+      `<div class="row two"><span class="l">Reading age</span><span class="v">${CENSUS.age}</span></div>
+      <div class="row two"><span class="l">Last fetched</span><span class="v">2s ago</span></div>`;
+  const from = `<div class="row two"><span class="l" style="color:var(--ink-body)">${s.n}</span><span class="v"></span></div>
+      <p class="note">Units placed here. Anything inside one of them is already included.</p>
+      <div class="row two" style="margin-top:4px"><span class="l">Flows</span><span class="v">none</span></div>`;
+  return head(dot, s.n, sub, chip) + `<div class="insp-body">${alert}${hero}` +
+    sec("census", "Emergency room", `census of ${CENSUS.hour}`, censusRows(s.n, s, "")) +
+    sec("stay", "Length of stay", "yesterday, all day", stay) +
+    sec("day", "Occupancy, last 24 hours", "", dayChart(s.n, pc)) +
+    sec("surgery", "Surgery waiting list", "", surgery) +
+    sec("other", "Other readings", "", other) +
+    sec("from", "Counted from · 1", "", from) +
+    `<p class="note" style="padding:8px 0 10px;border-top:1px solid var(--line-soft)">Source: MSSS, Console provinciale des urgences · CC-BY 4.0. Released 45 minutes after each census. The file says neither the staff on site nor the triage priority of the people present.</p></div>
+    <div class="acts">
+      <button type="button"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M7 12.5S3 8.6 3 5.8a4 4 0 0 1 8 0c0 2.8-4 6.7-4 6.700Z" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="7" cy="5.8" r="1.4" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>Edit location</button>
+      <button type="button" class="primary"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2.5 12.500v-10h6v10M8.5 6h3v6.500M1.5 12.500h11M4.5 5h2M4.5 7.500h2M4.5 10h2" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>Open unit canvas</button>
+      <button type="button"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 7.500h2.500l1.5-3 2.5 5.5 1.5-2.500h3" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>Data health</button>
+    </div>`;
+}
+
+let showAll = false;
+function regionInspector() {
+  const r = REGION, pc = occOf(r);
+  const dot = `<svg width="10" height="10" viewBox="0 0 10 10" style="margin-top:4px;flex:none" aria-hidden="true"><path d="M5 .8 9.2 5 5 9.2.8 5Z" fill="none" stroke="#78a9ff" stroke-width="1.4"/></svg>`;
+  const hero = `<div class="hero">
+      <div class="hero-l"><span>Occupation des civières</span><span>no alert rule on a region</span></div>
+      <div class="hero-v num">${Math.round(pc)}<small>%</small></div>${gauge(pc, "")}
+      <p class="meta"><b class="num">${fmt(r.o)}</b> on stretchers for <b class="num">${fmt(r.f)}</b> functional stretchers</p>
+      <p class="meta"><b>${SITES.length} of ${SITES.length + SILENT.length}</b> emergency rooms report · census of ${CENSUS.hour} · <b>read ${CENSUS.age}</b></p></div>`;
+  const stay = `<div class="row two"><span class="l">Walk-in patients, waiting room</span><span class="v num">${dur(r.da)}</span></div>
+      <div class="row two"><span class="l">Patients on a stretcher</span><span class="v num">${dur(r.ds)}</span></div>
+      <p class="note">The region's own figure, published by the ministry for <b>yesterday</b>. It is not an average of the hospitals' averages.</p>`;
+  const ranked = [...SITES].sort((a, b) => occOf(b) - occOf(a));
+  const shown = showAll ? ranked : ranked.slice(0, 6);
+  const list = shown.map((s) => { const p = occOf(s), b = bandOf(p), sc = 250;
+      return `<button type="button" class="site" data-site="${SITES.indexOf(s)}"><span class="nm">${s.n}</span><span class="mini" aria-hidden="true"><i style="width:${Math.min(100, 100 * p / sc).toFixed(1)}%;background:${FILL[b]}"></i><u style="left:40%"></u></span><span class="pc num">${Math.round(p)}%</span></button>`; }).join("") +
+    (showAll ? SILENT.map((s) => `<div class="site mute"><span class="nm">${s.n}</span><span></span><span class="pc">no info</span></div>`).join("") : "") +
+    `<button type="button" class="more" data-all>${showAll ? "Show the six most loaded" : `Show all ${SITES.length + SILENT.length}`}</button>
+     <p class="note">${SILENT.length} emergency rooms publish “pas d'information disponible” this hour. They are counted in nothing above.</p>`;
+  const tot = PERIODS[PERIODS.length - 1], prev = PERIODS[PERIODS.length - 2];
+  const sum = (p) => p[1] + p[2] + p[3], since = "period 2627-P06";
+  const bands = BANDS.map((l, j) => `<div class="band"><span class="l">${l}</span><span class="t" aria-hidden="true"><i style="width:${(100 * tot[j + 1] / tot[1]).toFixed(1)}%;background:${BAND_FILL[j]}"></i></span><span class="v num">${fmt(tot[j + 1])}</span>${delta(tot[j + 1] - prev[j + 1], false, since)}</div>`).join("");
+  const specs = [...SPEC].sort((a, b) => b[1].reduce((x, y) => x + y) - a[1].reduce((x, y) => x + y)).map(([n, v, p]) => { const t = v[0] + v[1] + v[2], d = t - p;
+      return `<tr><td>${n}</td><td class="num">${fmt(t)}</td><td class="num m">${fmt(v[2])}</td><td class="d">${d === 0 ? "no change" : (d > 0 ? "▲ " : "▼ ") + fmt(Math.abs(d))}</td></tr>`; }).join("");
+  const surgery = `<div class="big"><span class="n num">${fmt(sum(tot))}</span><span class="u">people waiting</span>${delta(sum(tot) - sum(prev), false, since)}</div>
+      <p class="meta" style="margin-bottom:8px">Period 7 of 2026-27 (2627-P07) · change since 2627-P06</p>
+      ${bands}
+      <p class="sec-t" style="margin:12px 0 2px">Last 13 periods</p>${periodChart()}
+      <table class="sp"><thead><tr><th scope="col">By specialty</th><th scope="col">Waiting</th><th scope="col">Over 1 yr</th><th scope="col">Since P06</th></tr></thead><tbody>${specs}</tbody></table>
+      <p class="note">A count of people on the list at the end of the period, by how long they have waited. <b>Not an average wait.</b> The wait starts at the surgeon's decision to operate. By region only: the file says nothing per hospital. Cardiac surgery is only partly included.</p>
+      <p class="note">Source: MSSS, SIMASS · CC-BY 4.0 · 13 periods a year.</p>`;
+  return head(dot, r.n, `Health region ${r.code} · ${SITES.length + SILENT.length} emergency rooms`, "") + `<div class="insp-body">${hero}` +
+    sec("sites", "Emergency rooms", `census of ${CENSUS.hour}`, censusRows(r.n, r, "s")) +
+    sec("stay", "Length of stay", "yesterday, all day", stay) +
+    sec("list", "Most loaded", "occupancy", list) +
+    sec("surgery", "Surgery waiting list", "period 2627-P07", surgery) +
+    `<p class="note" style="padding:8px 0 10px;border-top:1px solid var(--line-soft)">Emergency rooms: MSSS, Console provinciale des urgences · CC-BY 4.0. The counts are the ministry's regional row, equal to the sum of the rooms that report.</p></div>
+    <div class="acts">
+      <button type="button" class="primary"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 3.500h10M2 7h10M2 10.500h10" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>Open in Units</button>
+      <button type="button"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M1.5 7.500h2.500l1.5-3 2.5 5.5 1.5-2.500h3" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>Data health</button>
+    </div>`;
+}
+
+/* ---- regions, and the layers that tint them --------------------------- */
+const ISLAND = "150,425 300,345 450,250 600,180 760,130 860,140 870,185 780,270 660,360 580,440 500,490 380,500 250,480 165,465";
+// Chirurgie_ListeAttente.csv, period 2627-P07: [0 to 6 months, 6 to 12 months, over 1 year].
+const REGIONS = [
+  { id: "15", n: "LAURENTIDES", w: [7141, 1711, 198], pts: "-2000,-2000 540,-2000 540,108 462,142 305,258 120,392 -2000,392", lx: 215, ly: 150 },
+  { id: "14", n: "LANAUDIÈRE", w: [5064, 1837, 407], pts: "560,-2000 3000,-2000 3000,60 900,100 720,82 640,78 560,100", lx: 770, ly: 50 },
+  { id: "16", n: "MONTÉRÉGIE", w: [14845, 4392, 619], pts: "-2000,600 400,575 640,480 930,320 3000,150 3000,3000 -2000,3000", lx: 775, ly: 522 },
+  { id: "13", n: "LAVAL", w: [3756, 1294, 251], pts: "330,268 480,160 640,100 705,104 612,152 470,218 362,292", lx: 512, ly: 172 },
+  { id: "06", n: "MONTRÉAL", w: [27809, 6863, 857], pts: ISLAND, lx: 335, ly: 392 },
+];
+// What a layer can read on a region. In the product each is a numeric property of the region object.
+const FIGURES = {
+  total: { name: "People waiting", unit: "people", of: (r) => r.w[0] + r.w[1] + r.w[2] },
+  y1: { name: "Waiting over 1 year", unit: "people", of: (r) => r.w[2] },
+  m6share: { name: "Share waiting over 6 months", unit: "%", of: (r) => (100 * (r.w[1] + r.w[2])) / (r.w[0] + r.w[1] + r.w[2]) },
+  m6to12: { name: "Waiting 6 to 12 months", unit: "people", of: (r) => r.w[1] },
+  m0to6: { name: "Waiting 0 to 6 months", unit: "people", of: (r) => r.w[0] },
+};
+const RAMPS = { Blue: ["#16305f", "#4589ff"], Teal: ["#0b3233", "#009d9a"] };
+let layers = [
+  { id: 1, fig: "total", label: "Surgery · people waiting", unit: "people", ramp: "Blue", agg: "Sum" },
+  { id: 2, fig: "y1", label: "Surgery · waiting over 1 year", unit: "people", ramp: "Blue", agg: "Sum" },
+  { id: 3, fig: "m6share", label: "Surgery · share waiting over 6 months", unit: "%", ramp: "Teal", agg: "Mean" },
+];
+let nextId = 4, active = 1;              // the layer that tints the regions, or null
+let layForm = { mode: null, id: null };  // "edit" | "remove" | "add"
+
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const mix = (a, b, t) => { const h = (s) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)); const A = h(a), B = h(b); return "#" + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, "0")).join(""); };
+const fv = (v, unit) => (unit === "%" ? v.toFixed(1) + "%" : fmt(Math.round(v)));
+const activeLayer = () => layers.find((l) => l.id === active) || null;
+const freeFigures = (keep) => Object.keys(FIGURES).filter((k) => k === keep || !layers.some((l) => l.fig === k));
+function tintOf(L) {
+  const vals = REGIONS.map((r) => FIGURES[L.fig].of(r)), lo = Math.min(...vals), hi = Math.max(...vals), [a, b] = RAMPS[L.ramp];
+  return { lo, hi, of: (r) => mix(a, b, hi === lo ? 1 : (FIGURES[L.fig].of(r) - lo) / (hi - lo)) };
+}
+
+const FONT = 'font-family="IBM Plex Sans,sans-serif"', HALO = 'stroke="#161616" stroke-width="4" style="paint-order:stroke"';
+function drawMap() {
+  const L = activeLayer(), tint = L && tintOf(L), regSel = state.kind === "region";
+  let g = "";
+  for (let i = -20; i <= 30; i++) g += `<line x1="${i * 100}" x2="${i * 100}" y1="-2000" y2="3000" stroke="#1d1d1d"/><line x1="-2000" x2="3000" y1="${i * 100}" y2="${i * 100}" stroke="#1d1d1d"/>`;
+  REGIONS.forEach((r) => {
+    const mtl = r.id === "06", sel = mtl && regSel;
+    const fill = tint ? tint.of(r) : sel ? "rgba(69,137,255,.14)" : mtl ? "#202020" : "#1b1b1b";
+    g += `<polygon ${mtl ? 'id="island" style="cursor:pointer"' : ""} points="${r.pts}" fill="${fill}" fill-opacity="${tint ? 0.9 : 1}" stroke="${sel ? "#78a9ff" : tint ? "#161616" : mtl ? "#393939" : "#2c2c2c"}" stroke-width="${sel ? 3 : 1.5}" stroke-linejoin="round"><title>${r.n}, health region ${r.id}${L ? " · " + esc(L.label) + ": " + fv(FIGURES[L.fig].of(r), FIGURES[L.fig].unit) : ""}${mtl ? "" : " · only Montréal opens in this mockup"}</title></polygon>`;
+  });
+  REGIONS.forEach((r) => {
+    const mtl = r.id === "06";
+    g += `<g ${mtl ? 'id="rlabel" style="cursor:pointer"' : 'style="pointer-events:none"'} text-anchor="middle" ${FONT}><text x="${r.lx}" y="${r.ly}" font-size="11.5" font-weight="600" letter-spacing="1.4" fill="${tint || (mtl && regSel) ? "#f4f4f4" : mtl ? "#a8a8a8" : "#6f6f6f"}" ${HALO}>${r.n}</text>`;
+    if (L) g += `<text x="${r.lx}" y="${r.ly + 17}" font-size="14" font-weight="600" fill="#f4f4f4" ${HALO}>${fv(FIGURES[L.fig].of(r), FIGURES[L.fig].unit)}</text>`;
+    g += `</g>`;
+  });
+  SILENT.forEach((s) => { g += `<circle cx="${s.x}" cy="${s.y}" r="5.5" fill="#6f6f6f" stroke="#161616" stroke-width="2"><title>${s.n}: no information published</title></circle>`; });
+  SITES.forEach((s, i) => {
+    const sel = state.kind === "site" && state.id === i, pc = occOf(s);
+    if (sel) g += `<circle cx="${s.x}" cy="${s.y}" r="12" fill="none" stroke="#f4f4f4" stroke-width="2"/>`;
+    g += `<circle data-site="${i}" cx="${s.x}" cy="${s.y}" r="${sel ? 7.5 : 6.5}" fill="${FILL[bandOf(pc)]}" stroke="#161616" stroke-width="2" style="cursor:pointer"><title>${s.n}: ${Math.round(pc)}%</title></circle>`;
+  });
+  if (state.kind === "site") { const s = SITES[state.id]; const left = s.x > 620;
+    g += `<text x="${s.x + (left ? -18 : 18)}" y="${s.y - 12}" text-anchor="${left ? "end" : "start"}" font-size="11" font-weight="600" fill="#f4f4f4" ${FONT} ${HALO}>${s.n} · ${Math.round(occOf(s))}%</text>`; }
+  document.getElementById("map").innerHTML = g;
+}
+function drawLegend() {
+  const L = activeLayer();
+  let h = `<div><span><b>Sites</b></span><span><i class="dot" style="background:#fa4d56"></i>over the threshold</span><span><i class="dot" style="background:#f1c21b"></i>within 15% of it</span><span><i class="dot" style="background:#42be65"></i>under</span><span><i class="dot" style="background:#6f6f6f"></i>no information published</span></div>`;
+  if (L) { const t = tintOf(L), [a, b] = RAMPS[L.ramp];
+    h += `<div><span><b>Regions</b> ${esc(L.label)}${L.unit && L.unit !== "%" ? " (" + esc(L.unit) + ")" : ""}</span><span class="num">${fv(t.lo, FIGURES[L.fig].unit)}<i class="ramp" style="background:linear-gradient(90deg,${a},${b})"></i>${fv(t.hi, FIGURES[L.fig].unit)}</span><span>a region with no figure stays untinted</span></div>`; }
+  h += `<div><span>Sketch, not to scale. Only Montréal opens an inspector here.</span></div>`;
+  document.getElementById("legend").innerHTML = h;
+}
+
+/* ---- the Layers panel: add, edit, remove ------------------------------- */
+const lay = document.getElementById("lay");
+const pencil = `<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 10l.5-2.3L8.2 2l1.8 1.8-5.7 5.700L2 10Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>`;
+const bin = `<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 3.500h7M4.5 3.500V2.200h3v1.300M3.5 3.500l.4 6.500h4.200l.4-6.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>`;
+const opts = (list, cur, text) => list.map((k) => `<option value="${k}"${k === cur ? " selected" : ""}>${text ? text(k) : k}</option>`).join("");
+function layerRow(l) {
+  if (layForm.id === l.id && layForm.mode === "edit") return `<form class="form" data-form="edit" data-id="${l.id}">
+      <h4>Edit the layer</h4>
+      <label class="fld">Name<input name="label" value="${esc(l.label)}" maxlength="80" required></label>
+      <label class="fld">Figure read on each region<select name="fig">${opts(freeFigures(l.fig), l.fig, (k) => FIGURES[k].name)}</select></label>
+      <label class="fld">Unit<input name="unit" value="${esc(l.unit)}" maxlength="24"></label>
+      <label class="fld">When several values meet on a cell<select name="agg">${opts(["Sum", "Mean", "Max"], l.agg)}</select></label>
+      <label class="fld">Colour<select name="ramp">${opts(Object.keys(RAMPS), l.ramp)}</select></label>
+      <div class="btns"><button class="btn pri" type="submit">Save</button><button class="btn" type="button" data-cancel>Cancel</button></div></form>`;
+  if (layForm.id === l.id && layForm.mode === "remove") return `<div class="form" role="alertdialog" aria-label="Remove the layer">
+      <h4>Remove “${esc(l.label)}”?</h4>
+      <p>The map stops drawing it and it leaves this list. The figures stay on the regions: the sync keeps writing them, and the layer can be added again.</p>
+      <div class="btns"><button class="btn del" type="button" data-confirm="${l.id}">Remove the layer</button><button class="btn" type="button" data-cancel>Cancel</button></div></div>`;
+  const on = active === l.id;
+  return `<div class="ly${on ? " on" : ""}"><input type="radio" name="rl" id="rl${l.id}" data-pick="${l.id}"${on ? " checked" : ""}><label for="rl${l.id}">${esc(l.label)}</label>
+      <span class="tools"><button type="button" data-edit="${l.id}" aria-label="Edit the layer ${esc(l.label)}" title="Edit">${pencil}</button><button type="button" data-remove="${l.id}" aria-label="Remove the layer ${esc(l.label)}" title="Remove">${bin}</button></span>
+      <span class="src">Region · ${FIGURES[l.fig].name.toLowerCase()} · kept by a sync, period 2627-P07</span></div>`;
+}
+function addForm() {
+  const free = freeFigures(null);
+  return `<form class="form" data-form="add">
+      <h4>Add a layer</h4>
+      <label class="fld">From<select name="from"><option value="twin">A figure the twin already holds</option><option value="file">A file (CSV, Excel)</option></select></label>
+      <div data-twin>${free.length ? `
+        <label class="fld">Object<select name="type"><option>Region</option></select></label>
+        <label class="fld">Figure<select name="fig">${opts(free, free[0], (k) => FIGURES[k].name)}</select></label>
+        <label class="fld">Name<input name="label" value="Surgery · ${FIGURES[free[0]].name.toLowerCase()}" maxlength="80" required></label>
+        <label class="fld">Colour<select name="ramp">${opts(Object.keys(RAMPS), "Blue")}</select></label>` : `<p>Every figure the regions hold is already a layer.</p>`}</div>
+      <p data-file hidden>Opens “Add data as a layer”, as on the Scenarios map: the file, the column that names the places, the column to draw.</p>
+      <div class="btns"><button class="btn pri" type="submit"${free.length ? "" : " disabled"}>Add the layer</button><button class="btn" type="button" data-cancel>Cancel</button></div></form>`;
+}
+function renderLayers() {
+  const L = activeLayer();
+  lay.innerHTML = `<button type="button" class="lay-h" aria-expanded="${!lay.classList.contains("folded")}"><b>Layers</b><span>${L ? esc(L.label) : "sites only"}</span>${chev}</button>
+    <div class="lay-b">
+      <p class="grp">Sites<small>what colours the dots</small></p>
+      <div class="ly on"><input type="radio" checked aria-label="Occupation des civières" readonly><label>Occupation des civières</label><span></span><span class="src">Measure · alert when over 100%</span></div>
+      <p class="grp">Regions<small>what tints the contours</small></p>
+      ${layers.map(layerRow).join("")}
+      <div class="ly"><input type="radio" name="rl" id="rl0" data-pick="0"${active === null ? " checked" : ""}><label for="rl0">None</label></div>
+      ${layForm.mode === "add" ? addForm() : `<button type="button" class="add" data-add><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 2v8M2 6h8" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>Add a layer</button>`}
+    </div>`;
+  drawLegend();
+  drawMap();
+}
+
+/* ---- state and wiring ------------------------------------------------- */
+const state = { kind: "site", id: 0 };
+const insp = document.getElementById("insp");
+function render(focus) {
+  insp.classList.remove("folded");
+  insp.hidden = false;
+  insp.innerHTML = state.kind === "site" ? siteInspector(SITES[state.id]) : regionInspector();
+  document.getElementById("seg-site").setAttribute("aria-pressed", state.kind === "site");
+  document.getElementById("seg-region").setAttribute("aria-pressed", state.kind === "region");
+  drawMap();
+  const body = insp.querySelector(".insp-body");
+  const target = focus && insp.querySelector(`[data-sec="${focus}"]`);
+  if (target) body.scrollTop = target.offsetTop - body.offsetTop; else if (focus !== "keep") body.scrollTop = 0;
+}
+function go(kind, id, focus) { state.kind = kind; if (id !== undefined) state.id = id; if (focus) open[focus] = true; render(focus); }
+insp.addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.classList.contains("sec-h")) { const s = b.parentElement, k = s.dataset.sec; open[k] = !open[k]; s.classList.toggle("shut", !open[k]); b.setAttribute("aria-expanded", open[k]); return; }
+  if (b.classList.contains("fold")) { insp.classList.toggle("folded"); return; }
+  if (b.classList.contains("close")) { insp.hidden = true; return; }
+  if (b.dataset.go) return go(b.dataset.go, undefined, b.dataset.focus);
+  if (b.dataset.site !== undefined) return go("site", +b.dataset.site);
+  if ("all" in b.dataset) { showAll = !showAll; const top = insp.querySelector(".insp-body").scrollTop; render("keep"); insp.querySelector(".insp-body").scrollTop = top; }
+});
+document.getElementById("map").addEventListener("click", (e) => {
+  const c = e.target.closest("[data-site]");
+  if (c) return go("site", +c.dataset.site);
+  if (e.target.id === "island" || e.target.id === "rlabel") go("region");
+});
+document.getElementById("seg-site").addEventListener("click", () => go("site"));
+document.getElementById("seg-region").addEventListener("click", () => go("region"));
+const stage = document.querySelector(".stage");
+const setForm = (mode, id) => { layForm = { mode, id: id ?? null }; renderLayers(); };
+lay.addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.classList.contains("lay-h")) { const folded = lay.classList.toggle("folded"); stage.classList.toggle("lay-open", !folded); b.setAttribute("aria-expanded", !folded); return; }
+  if (b.dataset.edit) return setForm("edit", +b.dataset.edit);
+  if (b.dataset.remove) return setForm("remove", +b.dataset.remove);
+  if ("add" in b.dataset) return setForm("add");
+  if ("cancel" in b.dataset) return setForm(null);
+  if (b.dataset.confirm) { const id = +b.dataset.confirm; layers = layers.filter((l) => l.id !== id); if (active === id) active = null; setForm(null); }
+});
+lay.addEventListener("change", (e) => {
+  const t = e.target;
+  if (t.dataset.pick !== undefined) { active = +t.dataset.pick || null; return renderLayers(); }
+  const f = t.closest('form[data-form="add"]'); if (!f) return;
+  if (t.name === "from") { const file = t.value === "file"; f.querySelector("[data-twin]").hidden = file; f.querySelector("[data-file]").hidden = !file; f.querySelector(".pri").disabled = file || !f.elements.fig; }
+  if (t.name === "fig" && !f.elements.label.dataset.typed) f.elements.label.value = "Surgery · " + FIGURES[t.value].name.toLowerCase();
+});
+lay.addEventListener("input", (e) => { if (e.target.name === "label") e.target.dataset.typed = "1"; });
+lay.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const f = e.target, v = (n) => f.elements[n].value.trim();
+  if (f.dataset.form === "edit") {
+    const l = layers.find((x) => x.id === +f.dataset.id), fig = v("fig");
+    Object.assign(l, { label: v("label") || l.label, fig, unit: fig !== l.fig && v("unit") === FIGURES[l.fig].unit ? FIGURES[fig].unit : v("unit"), agg: v("agg"), ramp: v("ramp") });
+  } else {
+    const fig = v("fig"), l = { id: nextId++, fig, label: v("label") || FIGURES[fig].name, unit: FIGURES[fig].unit, ramp: v("ramp"), agg: FIGURES[fig].unit === "%" ? "Mean" : "Sum" };
+    layers.push(l); active = l.id;
+  }
+  setForm(null);
+});
+stage.classList.add("lay-open");
+renderLayers();
+render();
+</script>
+</body>
+</html>

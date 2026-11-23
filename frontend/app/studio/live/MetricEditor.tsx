@@ -32,9 +32,10 @@ const UNITS: { value: TwinMetricUnit; label: string; hint: string }[] = [
   { value: "ratio", label: "Ratio", hint: "shown as 0.76" },
   { value: "count", label: "Count", hint: "shown as 4" },
   { value: "number", label: "Number", hint: "shown as 12.3" },
+  { value: "hours", label: "Duration", hint: "held in hours, shown as 5 h 59" },
 ];
 
-const AGGS = ["count", "sum", "mean", "min", "max"] as const;
+const AGGS = ["count", "sum", "mean", "min", "max", "only"] as const;
 
 const FIELD =
   "w-full rounded border border-line bg-surface px-2 py-1.5 text-[11.5px] text-ink focus:border-brand focus:outline-none";
@@ -383,7 +384,7 @@ function SelectorForm({
           >
             {AGGS.map((a) => (
               <option key={a} value={a}>
-                {a}
+                {a === "only" ? "only: the one value, none if several" : a}
               </option>
             ))}
           </select>

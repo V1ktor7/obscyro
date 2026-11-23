@@ -22,7 +22,16 @@ import type { DbClient } from "../lib/db.js";
 import { AppError } from "../lib/errors.js";
 import { SIM_ROLES, isInUse, type SimRole } from "./property-schema.js";
 
-export type Agg = "count" | "sum" | "mean" | "min" | "max";
+/**
+ * How the kept values become one.
+ *
+ * `only` is for a figure that is already an average when it arrives: the value
+ * of the one instance that carries it, and no value at all when several do.
+ * Two emergency rooms publishing an average stay of 4 h and 12 h do not have
+ * one of 8 h between them (the first may have seen ten times the people), and
+ * the file does not say how many each average was made from.
+ */
+export type Agg = "count" | "sum" | "mean" | "min" | "max" | "only";
 
 export interface MetricFilter {
   property: string;
@@ -56,7 +65,8 @@ export interface MetricSelector {
   property?: string | null;
 }
 
-export type MetricUnit = "percent" | "ratio" | "count" | "number";
+/** `hours` is a duration held in decimal hours, written in hours and minutes. */
+export type MetricUnit = "percent" | "ratio" | "count" | "number" | "hours";
 
 export interface MetricDef {
   key: string;
@@ -187,9 +197,42 @@ export function aggregate(
       return Math.min(...nums);
     case "max":
       return Math.max(...nums);
+    case "only":
+      return nums.length === 1 ? nums[0]! : null;
     default:
       return null;
   }
+}
+
+/** Why a measure that has something to read here gives no value. */
+export interface Withheld {
+  /**
+   * `several`: an `only` measure found more than one value, and will not
+   * average averages. `blank`: what the measure reads is here, and none of it
+   * carries a number: the source published no figure.
+   */
+  reason: "several" | "blank";
+  /** How many values (`several`) or instances (`blank`) that is about. */
+  count: number;
+}
+
+/**
+ * The reason a measure has no value at a unit, when there is one to give.
+ *
+ * "No value" covers three different things: nothing the measure reads is linked
+ * here, what it reads is here and says nothing, and it says several things that
+ * must not be merged. The first needs no sentence. The other two do, or a
+ * reader takes a withheld figure for a missing feed.
+ */
+export function withheldOf(def: MetricDef, instances: readonly MetricInstance[]): Withheld | null {
+  const sel = def.numerator;
+  if (sel.agg === "count" || !sel.property) return null;
+  const kept = instances.filter((i) => matches(i, sel));
+  if (kept.length === 0) return null;
+  const withNumber = kept.filter((i) => numberAt(i, sel.property!) !== null).length;
+  if (withNumber === 0) return { reason: "blank", count: kept.length };
+  if (sel.agg === "only" && withNumber > 1) return { reason: "several", count: withNumber };
+  return null;
 }
 
 /**

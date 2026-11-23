@@ -8,6 +8,7 @@ import { fetchSimExport, fetchTwinTree, listGeoShapes, listTwinMetrics } from "@
 
 import type { ProposedOption } from "../../analyst-api";
 import { OVERLAY_BAR, OverlayPanel } from "../../map-overlay";
+import { formatHours } from "../../twin-ui";
 import { useStudio } from "../../StudioShell";
 import { listHealthEvents, removeHealthEvent, type HealthEvent } from "../../analyst-api";
 import {
@@ -503,7 +504,8 @@ export default function HexTwinView() {
       const sites = ctx.facilities.filter((f) => f.id in m.values).map((f) => ({ lat: f.lat, lon: f.lon, value: m.values[f.id]! }));
       const values = nearestValues(grid, sites);
       const unit = m.unit === "percent" ? "%" : null;
-      const format = (v: number) => (m.unit === "percent" ? `${Math.round(v)} %` : fmtNumber(v));
+      const format = (v: number) =>
+        m.unit === "percent" ? `${Math.round(v)} %` : m.unit === "hours" ? formatHours(v) : fmtNumber(v);
       if (looksLikeOccupancy(m)) {
         return {
           name: m.label,
