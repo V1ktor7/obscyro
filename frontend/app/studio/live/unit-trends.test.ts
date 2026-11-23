@@ -56,6 +56,12 @@ describe("an hour on the clock of its source", () => {
     // 23:45 the evening before in Montréal, already the 22nd in UTC.
     expect(clockLabel("2026-11-22T04:45:00.000Z", NOW, MTL)).toBe("21 Nov 23:45");
   });
+
+  it("reads a stamp kept a fraction of a second early as the minute it is", () => {
+    // What the twin kept for a reading stamped 17:45: "now minus its age in whole seconds".
+    expect(clockLabel("2026-11-22T22:44:59.872Z", NOW, MTL)).toBe("17:45");
+    expect(clockLabel("2026-11-22T22:45:01.100Z", NOW, MTL)).toBe("17:45");
+  });
 });
 
 describe("the mean over the days kept", () => {

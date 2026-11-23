@@ -55,7 +55,10 @@ function roundsToNothing(delta: number, unit: TwinMetricUnit | undefined): boole
  * same day as now, the day and the hour otherwise.
  */
 export function clockLabel(iso: string, nowIso: string, zone?: string | null): string {
-  const at = new Date(iso);
+  // To the nearest minute. The twin keeps the hour of a reading as "now minus
+  // its age in whole seconds", so a stamp of 17:45 comes back as 17:44:59.87:
+  // cut to the minute, it would be printed 17:44. Sources stamp by the minute.
+  const at = new Date(Math.round(Date.parse(iso) / 60_000) * 60_000);
   const part = (d: Date, opts: Intl.DateTimeFormatOptions) => {
     try {
       return new Intl.DateTimeFormat("en-GB", { timeZone: zone || undefined, ...opts }).format(d);
