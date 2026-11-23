@@ -7,6 +7,11 @@ Ce qui a changé dans Obscyro, du plus récent au plus ancien. Chaque entrée di
 
 Une entrée est écrite le jour où le changement est livré, dans le même commit que le code. Depuis novembre 2026, chaque changement visible a la sienne. Les mois d'avant sont résumés. Le détail complet, commit par commit, est dans [l'historique du dépôt](https://github.com/V1ktor7/obscyro/commits/main).
 
+## 23 novembre 2026
+
+- **Modification · Studio.** Chaque chiffre que rapporte une unité porte son âge. La liste « Also reports » de la fiche d'une unité, et celle de l'inspecteur de la carte du réseau, écrivent une fois l'âge que partagent leurs valeurs (« Values read 27m ago. »). Une valeur lue à une autre heure porte le sien sur sa ligne, et un chiffre de la veille dit quand il a été publié.
+- **Modification · Jumeau.** L'écart d'une valeur se compte toujours depuis une heure d'avant. Quand une valeur est corrigée dans son heure, le jumeau garde deux relevés à la même heure : l'écart se comptait contre la première écriture. Les deux sont maintenant enjambés.
+
 ## 22 novembre 2026
 
 - **Nouvelle fonction · Studio.** La fiche d'une unité dit, pour chaque mesure, l'écart avec le relevé gardé qui précède et l'heure de ce relevé : « Up 6 pts since the reading of 16:45. ». Sans relevé d'avant, elle l'écrit ; contre un relevé sans valeur, aucun écart n'est compté. Un écart n'a pas de couleur : plus n'est pas toujours pire.

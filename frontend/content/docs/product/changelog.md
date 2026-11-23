@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "f971f6425dbfc9d5"
+translatedFrom: "2b352fe4ea082b84"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -12,6 +12,11 @@ What changed in Obscyro, from the most recent to the oldest. Each entry says wha
 - **Change**: something it already did, and now does differently, better or faster. A fix is one.
 
 An entry is written the day the change ships, in the same commit as the code. Since November 2026, every visible change has its own. The months before are summarised. The full detail, commit by commit, is in [the repository's history](https://github.com/V1ktor7/obscyro/commits/main).
+
+## 23 November 2026
+
+- **Change · Studio.** Every figure a unit reports carries its age. The “Also reports” list of a unit's sheet, and that of the inspector of the network map, write once the age their values share (“Values read 27m ago.”). A value read at another hour carries its own on its line, and a figure of the day before says when it was published.
+- **Change · Twin.** The change of a value is always counted from an earlier hour. When a value is corrected within its hour, the twin keeps two readings at the same time: the change used to be counted against the first writing. Both are now stepped over.
 
 ## 22 November 2026
 
