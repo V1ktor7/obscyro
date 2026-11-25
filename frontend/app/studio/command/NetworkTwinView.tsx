@@ -2329,11 +2329,13 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                 </button>
               </div>
           {/* The right column: the inspector of what is selected, and the analyst under it.
-              Both are overlays that fold; each scrolls inside itself when the map is short. */}
+              Both are overlays that fold; each scrolls inside itself when the map is short.
+              A folded panel is its title bar and never shrinks: with a height cap of its own,
+              the open one kept the whole column and the other's title was squeezed out of sight. */}
           <div className="flex max-h-full min-h-0 w-[328px] shrink-0 flex-col gap-2">
         {selected ? (
           <SiteInspector
-            className="min-h-0 shrink"
+            className={inspectorFolded ? "max-h-none shrink-0" : "max-h-none min-h-[6rem] shrink"}
             folded={inspectorFolded}
             onFolded={setInspectorFolded}
             site={selected}

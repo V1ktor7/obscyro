@@ -68,7 +68,8 @@ export default function NetworkAnalyst({
       open={open}
       onToggle={onToggle}
       keepMounted
-      className="min-h-0 w-full"
+      // Folded, it is its title bar and keeps its height; open, it shares the column and scrolls inside itself.
+      className={cn("max-h-none w-full", open ? "min-h-[12rem] shrink" : "shrink-0")}
     >
       {off ? (
         <p className="p-3 text-[12px] text-ink-body">

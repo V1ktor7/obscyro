@@ -319,13 +319,14 @@ export default function InvestigateTab({
             </label>
             <textarea
               id="investigate-request"
-              rows={3}
+              rows={4}
               value={draft}
               disabled={working}
               onChange={(e) => setDraft(e.target.value)}
               className="min-w-0 resize-none rounded border border-line bg-surface px-2 py-1.5 text-[12px] leading-snug text-ink focus:border-brand focus:outline-none disabled:opacity-70"
             />
-            <div className="flex items-center gap-2">
+            <p className="text-[10.5px] leading-snug text-ink-faint">It names the unit and the dates. None of its figures is sent.</p>
+            <div className="flex">
               {working ? (
                 <button type="button" onClick={stop} className="rounded border border-line px-2.5 py-1.5 text-[12px] text-ink-body hover:bg-surface-hover">
                   Stop
@@ -335,12 +336,11 @@ export default function InvestigateTab({
                   type="button"
                   disabled={draft.trim().length < 3}
                   onClick={() => void run()}
-                  className="flex items-center gap-1 rounded bg-brand px-2.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
+                  className="flex items-center gap-1 whitespace-nowrap rounded bg-brand px-2.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
                 >
                   <Search className="h-3.5 w-3.5" aria-hidden="true" /> Investigate this span
                 </button>
               )}
-              <span className="min-w-0 text-[10.5px] leading-snug text-ink-faint">It names the unit and the dates. None of its figures is sent.</span>
             </div>
           </>
         )}

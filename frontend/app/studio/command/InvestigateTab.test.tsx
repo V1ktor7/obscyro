@@ -392,6 +392,16 @@ describe("the analyst on the network map", () => {
     expect(api.investigate).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps its title bar whole when folded, and shares the column when open", () => {
+    const view = render(panel(false));
+    const section = () => screen.getByRole("button", { name: /Analyst\s*about CHUM/ }).closest("section")!;
+    // Folded, it must not shrink: an open inspector above it would squeeze its title out of sight.
+    expect(section().className).toContain("shrink-0");
+    view.rerender(panel(true));
+    expect(section().className).not.toContain("shrink-0");
+    expect(section().className).toContain("min-h-[12rem]");
+  });
+
   it("builds nothing until it is first opened", () => {
     render(panel(false));
     expect(screen.queryByRole("tab")).toBeNull();
