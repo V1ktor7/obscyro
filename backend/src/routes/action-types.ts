@@ -17,6 +17,7 @@ import {
 } from "../services/action-types.js";
 import { twinOffer } from "../services/analyst-actions.js";
 import { switchTool, toolCatalogue, toolsOff } from "../services/analyst-settings.js";
+import { listFunctionTypes } from "../services/function-types.js";
 import { recordAudit } from "../services/audit.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
 import { resolveEnvironment, type EnvironmentRow } from "../services/ontology.js";
@@ -235,7 +236,8 @@ const actionTypeRoutes: FastifyPluginAsync = async (fastify) => {
     async (req) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
-      return { tools: toolCatalogue(await toolsOff(req.db, env.id)) };
+      const [off, { types }] = await Promise.all([toolsOff(req.db, env.id), listFunctionTypes(req.db, env.id)]);
+      return { tools: toolCatalogue(off, types) };
     },
   );
 

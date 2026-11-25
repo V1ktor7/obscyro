@@ -529,8 +529,8 @@ function ToolsSection({ env, tools, onChanged }: { env: string; tools: AnalystTo
         <span className="rounded bg-line-faint px-1.5 text-[10px] text-ink-muted">{tools.filter((t) => t.on).length} of {tools.length} on</span>
       </div>
       <p className="leading-relaxed text-ink-muted">
-        The analyst&apos;s tools are code: each is tested, and every figure it returns is checked. A tool cannot be written here. A project can
-        switch one off, and the analyst is then not offered it.
+        The analyst&apos;s own tools are code: each is tested, and every figure it returns is checked. A project can switch one off, and the
+        analyst is then not offered it. A reading tool of the project&apos;s own is declared under Functions, and switched there.
       </p>
       {problem ? (
         <p role="alert" className="rounded bg-danger-soft px-2 py-1.5 text-danger-ink">{problem}</p>
@@ -546,7 +546,7 @@ function ToolsSection({ env, tools, onChanged }: { env: string; tools: AnalystTo
                 ))}
               </p>
               <p className="leading-relaxed text-ink-muted">{t.reads}</p>
-              {t.why ? <p className="text-[10.5px] leading-snug text-ink-faint">Always on. {t.why}</p> : null}
+              {t.why ? <p className="text-[10.5px] leading-snug text-ink-faint">{t.origin === "project" ? t.why : `Always on. ${t.why}`}</p> : null}
             </div>
             <div className="flex items-center gap-1.5 pt-0.5">
               <button

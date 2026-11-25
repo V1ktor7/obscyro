@@ -182,6 +182,11 @@ export class Recorded {
 
 export interface AnalystTool {
   name: string;
+  /**
+   * What the trace calls it, for a tool declared in a project: the institution's
+   * own words. A tool written in the code is labelled by the screen.
+   */
+  label?: string;
   description: string;
   input_schema: { type: "object"; properties: Record<string, unknown>; required: string[]; additionalProperties: false };
   parse: z.ZodTypeAny;

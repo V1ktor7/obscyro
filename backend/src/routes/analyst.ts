@@ -16,6 +16,7 @@ import { eventSearch, eventsClosing } from "../services/analyst-events.js";
 import { OPTION_TOOLS, benchFor, optionsClosing } from "../services/analyst-options.js";
 import type { StoredResponse } from "../services/analyst-responses.js";
 import { offered, toolsOff } from "../services/analyst-settings.js";
+import { declaredTools } from "../services/function-reads.js";
 import { READ_TOOLS, ToolError, runDigestSchema, type AnalystContext, type WorldName } from "../services/analyst-tools.js";
 import { WEB_SEARCH } from "../services/analyst-web.js";
 import { serverRun, simServiceEngine } from "../services/scenario-run.js";
@@ -299,7 +300,7 @@ const analystRoutes: FastifyPluginAsync = async (fastify) => {
       const looking = scenario ? req.body.looking : "reality";
       const ctx = contextFor(req.db, env, scenario, req.body.run);
       // The tools this project left on: one switched off is not offered at all.
-      const tools = offered(READ_TOOLS, await toolsOff(req.db, env.id));
+      const tools = offered([...READ_TOOLS, ...(await declaredTools(req.db, env)).tools], await toolsOff(req.db, env.id));
       const exchangeId = randomUUID();
 
       let focus: AskFocus | null = null;
@@ -415,7 +416,8 @@ const analystRoutes: FastifyPluginAsync = async (fastify) => {
       const types = await listActionTypes(req.db, env.id);
       ctx.actions = () => Promise.resolve(types);
       const declared = isConfigured(types);
-      const tools = offered(declared ? [...OPTION_TOOLS, listActions] : OPTION_TOOLS, await toolsOff(req.db, env.id));
+      const own = (await declaredTools(req.db, env)).tools;
+      const tools = offered([...(declared ? [...OPTION_TOOLS, listActions] : OPTION_TOOLS), ...own], await toolsOff(req.db, env.id));
       const exchangeId = randomUUID();
       const input = { objective: req.body.objective };
 

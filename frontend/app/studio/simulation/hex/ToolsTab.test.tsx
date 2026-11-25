@@ -36,7 +36,7 @@ const TOOLS = [
   tool("calculate", { group: "Calculation", does: "computes", switchable: false, why: "A figure the analyst derives has to be computed by a tool." }),
   tool("test_option", { group: "Options", does: "runs", where: ["options"] }),
   tool("web_search", { group: "The web", does: "searches", where: ["events", "investigate"], on: false }),
-  tool("ventilators_by_site", { reads: "Ventilators available at each site.", origin: "project" }),
+  tool("ventilators_by_site", { reads: "Ventilators available at each site.", origin: "project", switchable: false, why: "It is switched on or off where it is declared, under Ontology, Functions." }),
 ];
 
 async function tab(props: Partial<Parameters<typeof ToolsTab>[0]> = {}, tools = TOOLS) {
@@ -97,6 +97,23 @@ describe("what the analyst can use", () => {
     const calc = screen.getByRole("listitem", { name: "calculate" });
     fireEvent.click(within(calc).getByRole("button"));
     expect(within(calc).getByText(/Always on\. A figure the analyst derives has to be computed by a tool\./)).toBeTruthy();
+
+    // A declared tool is not "always on": it says where its switch is.
+    const own = screen.getByRole("listitem", { name: "ventilators_by_site" });
+    fireEvent.click(within(own).getByRole("button"));
+    expect(within(own).getByText("It is switched on or off where it is declared, under Ontology, Functions.")).toBeTruthy();
+    expect(within(own).getByText(/Offered in Ask, Options\. Declared in this project, from the Studio\./)).toBeTruthy();
+  });
+
+  it("reads the list again when a tool was declared beside it", async () => {
+    api.fetchAnalystTools.mockResolvedValue({ tools: TOOLS });
+    const { rerender } = render(<ToolsTab env="mtl" refresh={0} />);
+    await screen.findByText("describe_twin");
+    expect(api.fetchAnalystTools).toHaveBeenCalledTimes(1);
+    api.fetchAnalystTools.mockResolvedValue({ tools: [...TOOLS, tool("beds_closed", { origin: "project" })] });
+    rerender(<ToolsTab env="mtl" refresh={1} />);
+    await screen.findByText("beds_closed");
+    expect(api.fetchAnalystTools).toHaveBeenCalledTimes(2);
   });
 
   it("says which tools are used elsewhere than in the panel it sits in", async () => {
@@ -110,6 +127,7 @@ describe("what the analyst can use", () => {
     expect(screen.getByText(/It writes nothing: an option, an event or a decision exists when a person clicks\./)).toBeTruthy();
     expect(screen.getByText(/It reads counts and capacities, never anything about a person\./)).toBeTruthy();
     expect(screen.getByText(/A tool is switched off for this project under Ontology, Action types\./)).toBeTruthy();
+    expect(screen.getByText(/A reading tool\s+of the project.s own is declared under Ontology, Functions\./)).toBeTruthy();
   });
 
   it("says so when the list cannot be read", async () => {

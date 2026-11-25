@@ -14,6 +14,11 @@ Une entrée est écrite le jour où le changement est livré, dans le même comm
 - **Nouvelle fonction · Analyste.** Une option dit sous quel type d'action elle tombe et qui peut l'approuver, et la décision enregistrée le garde. C'est une mention : appliquer une option reste le clic d'une personne.
 - **Nouvelle fonction · Ontologie.** La même page montre les outils de l'analyste, avec ce que chacun lit, et permet d'en éteindre un pour le projet. Avec la recherche en ligne éteinte, Event finder et Investigate le disent au lieu de chercher.
 
+- **Nouvelle fonction · Ontologie.** Les types de fonction. Sous Ontology › Functions, un projet déclare lui-même ce que l'analyste peut lire, sans code : un compte ou un total sur les objets d'un type (en une valeur, par propriété, par unité ou par site), une liste d'objets, une formule, l'historique d'une mesure à une unité, ou des lignes d'un jeu de données. On choisit dans ce que le projet contient, on dit ce que l'outil reçoit (un texte, un nombre borné, une date, une valeur parmi une liste) et le nom de chaque valeur rendue. Un outil qui ne peut pas tourner le dit, avec ce qui manque.
+- **Nouvelle fonction · Ontologie.** Un outil déclaré s'essaie avant de servir. « Try » le lance une fois avec les entrées qu'on lui donne et montre ce que l'analyste lirait, ou la phrase du refus. Aucun modèle n'est appelé.
+- **Nouvelle fonction · Analyste.** L'analyste se sert des outils que le projet a déclarés, dans Ask et dans Options, comme des siens. La trace écrit leur libellé suivi de « (declared in this project) », et un chiffre qu'un outil déclaré n'a pas rendu est retiré de la réponse, comme pour les autres. Un outil éteint n'est plus offert.
+- **Modification · Ontologie.** La vue Functions et la vue Action types disent qu'un outil de lecture se déclare sous Functions, et un outil déclaré y dit où il s'allume et s'éteint.
+
 - **Nouvelle fonction · Analyste.** Ce que l'analyste peut utiliser se voit à l'écran. L'onglet « What it can use », sur les pages Scenarios et Network, liste ses outils par ce qu'ils lisent, avec une phrase pour chacun, ce qu'il reçoit, et ceux que le projet a éteints. La même liste est en tête de la vue Functions de l'ontologie.
 
 ## 24 novembre 2026

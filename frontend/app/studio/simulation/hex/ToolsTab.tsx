@@ -13,7 +13,8 @@
  * and was told not to" is not the same as "it cannot".
  *
  * It reads and shows. Switching a tool off is done under Ontology, Action
- * types; nothing here writes.
+ * types, and a project declares its own reading tools under Ontology,
+ * Functions; nothing here writes.
  */
 
 import { ChevronRight } from "lucide-react";
@@ -48,12 +49,15 @@ export default function ToolsTab({
   env,
   offeredIn,
   wide = false,
+  refresh = 0,
 }: {
   env: string;
   /** The exchanges of the panel this tab sits in: a tool offered in none of them is said to be elsewhere. */
   offeredIn?: AnalystToolLine["where"];
   /** On a page of its own rather than in a panel on a map. */
   wide?: boolean;
+  /** Read the list again when this changes: a tool was declared or switched beside it. */
+  refresh?: number;
 }) {
   const [tools, setTools] = useState<AnalystToolLine[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -69,7 +73,7 @@ export default function ToolsTab({
     return () => {
       live = false;
     };
-  }, [env]);
+  }, [env, refresh]);
 
   if (problem) {
     return (
@@ -148,7 +152,8 @@ export default function ToolsTab({
                       ) : (
                         <p className="text-ink-muted">It is given nothing: it reads what is open.</p>
                       )}
-                      {t.why ? <p className="text-ink-faint">Always on. {t.why}</p> : null}
+                      {/* A tool of the code that cannot be switched is always on; a declared one has its switch elsewhere. */}
+                      {t.why ? <p className="text-ink-faint">{t.origin === "project" ? t.why : `Always on. ${t.why}`}</p> : null}
                     </div>
                   ) : null}
                 </li>
@@ -168,7 +173,8 @@ export default function ToolsTab({
       </div>
 
       <p className={cn("leading-snug text-ink-faint", wide ? "text-[11px]" : "text-[10.5px]")}>
-        A tool is switched off for this project under Ontology, Action types. What the analyst may propose is set there too.
+        A tool is switched off for this project under Ontology, Action types. What the analyst may propose is set there too. A reading tool
+        of the project&apos;s own is declared under Ontology, Functions.
       </p>
     </div>
   );

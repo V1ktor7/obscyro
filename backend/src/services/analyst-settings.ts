@@ -76,7 +76,7 @@ const READS: Record<string, string> = {
 };
 
 /** The heading each tool is listed under, in the order the headings are shown. */
-export const TOOL_GROUPS = ["The twin", "The scenario and its run", "The network now", "Datasets", "The calendar", "Calculation", "Options", "The web"] as const;
+export const TOOL_GROUPS = ["The twin", "The scenario and its run", "The network now", "Datasets", "The calendar", "Calculation", "Options", "The web", "Declared in this project"] as const;
 const GROUP: Record<string, (typeof TOOL_GROUPS)[number]> = {
   describe_twin: "The twin",
   find_sites: "The twin",
@@ -124,12 +124,42 @@ const KEPT: Record<string, string> = {
 
 const names = (tools: readonly AnalystTool[]) => tools.map((t) => t.name);
 
-/** Every tool the analyst has, in the order its exchanges offer them. */
-export function toolCatalogue(off: ReadonlySet<string> = new Set()): ToolLine[] {
+/** A reading tool a project declared, as it is listed. Its switch is its own `active`, set where it is declared. */
+export interface DeclaredTool {
+  key: string;
+  label: string;
+  description: string;
+  active: boolean;
+  inputs: { name: string; kind: string; required: boolean; says: string }[];
+}
+
+/** Every tool the analyst has, in the order its exchanges offer them, then the ones the project declared. */
+export function toolCatalogue(off: ReadonlySet<string> = new Set(), declared: readonly DeclaredTool[] = []): ToolLine[] {
   const ask = new Set(names(READ_TOOLS));
   const options = new Set([...names(OPTION_TOOLS), listActions.name]);
   const all = [...new Set([...names(READ_TOOLS), ...names(OPTION_TOOLS), listActions.name, WEB_SEARCH])];
   const byName = new Map([...READ_TOOLS, ...OPTION_TOOLS, listActions].map((t) => [t.name, t]));
+  const own = declared
+    // A name a tool of the code has taken is the code's: the declared one is not offered.
+    .filter((d) => !byName.has(d.key) && d.key !== WEB_SEARCH)
+    .map(
+      (d): ToolLine => ({
+        name: d.key,
+        reads: `${d.label}. ${d.description}`,
+        group: "Declared in this project",
+        does: "reads",
+        origin: "project",
+        inputs: d.inputs.map((i) => ({ name: i.name, kind: i.kind, required: i.required, says: i.says })),
+        where: ["ask", "options"],
+        switchable: false,
+        why: "It is switched on or off where it is declared, under Ontology, Functions.",
+        on: d.active,
+      }),
+    );
+  return [...code(all, byName, ask, options, off), ...own];
+}
+
+function code(all: string[], byName: Map<string, AnalystTool>, ask: Set<string>, options: Set<string>, off: ReadonlySet<string>): ToolLine[] {
   return all.map((name) => {
     const where: Exchange[] = [];
     if (ask.has(name)) where.push("ask");

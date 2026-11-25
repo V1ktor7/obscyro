@@ -282,7 +282,7 @@ describe("the analyst's tools", () => {
     expect(within(search).getByText("A search of the web.")).toBeTruthy();
     expect(within(search).getByText("Event finder")).toBeTruthy();
     expect(within(search).getByText("Investigate")).toBeTruthy();
-    expect(screen.getByText(/A tool cannot be written here\. A project can\s+switch one off/)).toBeTruthy();
+    expect(screen.getByText(/A project can switch one off, and the\s+analyst is then not offered it\. A reading tool of the project.s own is declared under Functions, and switched there\./)).toBeTruthy();
   });
 
   it("switches a tool off for the project, and reads again", async () => {
@@ -297,6 +297,14 @@ describe("the analyst's tools", () => {
     const calc = screen.getByRole("listitem", { name: "calculate" });
     expect((within(calc).getByRole("switch") as HTMLButtonElement).disabled).toBe(true);
     expect(within(calc).getByText(/Always on\. A figure the analyst derives has to be computed by a tool\./)).toBeTruthy();
+  });
+
+  it("shows a tool the project declared with where its switch is, not as always on", async () => {
+    const own: AnalystToolLine = { ...line, origin: "project", group: "Declared in this project", name: "ventilators_by_site", reads: "Ventilators by site.", where: ["ask", "options"], switchable: false, why: "It is switched on or off where it is declared, under Ontology, Functions.", on: true };
+    await page(list(), [TOOLS[0]!, own]);
+    const item = screen.getByRole("listitem", { name: "ventilators_by_site" });
+    expect(within(item).getByText("It is switched on or off where it is declared, under Ontology, Functions.")).toBeTruthy();
+    expect((within(item).getByRole("switch") as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("shows a tool that is off as off", async () => {

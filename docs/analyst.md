@@ -77,6 +77,11 @@ L'onglet Event finder utilise la recherche web de l'API Claude. Elle n'a pas de 
 | `DELETE /v1/ontology/:env/action-types/:key` | Retire un type du projet, ou remet un type intégré comme il était |
 | `GET /v1/ontology/:env/analyst/tools` | Les outils de l'analyste : ce que chacun lit, ce qu'il fait (lire, calculer, lancer le moteur, chercher), d'où il vient (le code, ou le projet), ce qu'il reçoit, où il est offert, s'il est allumé |
 | `PUT /v1/ontology/:env/analyst/tools/:name` | Éteint ou rallume un outil pour le projet (`on`) |
+| `GET /v1/ontology/:env/function-types` | Les types de fonction du projet (les outils de lecture qu'il a déclarés), ce qui manque à chacun pour tourner, ceux qui ne se lisent plus, et ce que le projet contient qu'un type peut viser |
+| `POST /v1/ontology/:env/function-types` | Déclare un outil de lecture ; son nom est tiré de son libellé |
+| `PUT /v1/ontology/:env/function-types/:key` | Change un type de fonction, ou l'éteint (`active`). L'outil garde son nom |
+| `DELETE /v1/ontology/:env/function-types/:key` | Retire un type de fonction : l'analyste ne l'a plus sous la main |
+| `POST /v1/ontology/:env/function-types/:key/try` | Lance un outil déclaré une fois, avec `input`, et rend ce que l'analyste lirait (`result`) ou la phrase du refus (`refused`). N'appelle aucun modèle et n'écrit rien |
 | `POST /v1/ontology/:env/health-events` | Accepte un candidat : il entre au calendrier |
 | `GET /v1/ontology/:env/health-events` | Le calendrier du projet, du plus ancien au plus récent (`from`, `to` pour une période) |
 | `DELETE /v1/ontology/:env/health-events/:id` | Retire un événement du calendrier |
@@ -113,6 +118,8 @@ Une demande refusée avant de commencer (pas de session, analyste éteint, servi
 ## Les outils
 
 Aucun n'écrit. Quatorze lisent. Deux autres n'existent que dans l'onglet Options : `list_responses`, qui lit ce qu'une option peut contenir comme réponse enregistrée, et `test_option`, qui fait tourner le moteur. Un troisième, `list_actions`, n'y est offert que dans un projet qui a déclaré des types d'action. Un outil qu'un projet a éteint n'est offert nulle part. Deux mondes : `reality`, le jumeau tel qu'il est ; `scenario`, le même jumeau lu à travers le scénario ouvert.
+
+À ces outils du code s'ajoutent, dans Ask et dans Options, les outils de lecture que le projet a déclarés lui-même : voir « Les types de fonction ». Ils ne sont pas dans la table ci-dessous, puisque chaque projet a les siens ; l'onglet « What it can use » les liste.
 
 L'onglet Event finder est à part : il n'a aucun de ces outils. Il n'a que la recherche web de l'API (`web_search`), qui tourne chez Anthropic et non chez nous, et son outil de livraison. C'est ce qui garantit qu'une recherche ne peut rien emporter du jumeau.
 
@@ -236,7 +243,45 @@ Sur la carte d'une option, « Action type » donne le nom du type et « can be a
 
 Le prix et le délai d'une capacité viennent toujours de la liste de prix du jumeau. Un type d'action n'a pas de prix à lui ; il peut seulement fixer le mode dans lequel ses unités s'ouvrent.
 
-**Éteindre un outil.** Sous la liste des types, la même page montre les outils de l'analyste, avec ce que chacun lit et où il est offert. Les outils restent du code : on ne peut pas en écrire un depuis le Studio. On peut en éteindre un, et l'analyste ne l'a alors plus sous la main. Avec la recherche en ligne éteinte, l'onglet Event finder et l'enquête refusent de démarrer et disent pourquoi. Trois outils ne s'éteignent pas, et la page dit pourquoi : `calculate`, `test_option` et `list_actions`.
+**Éteindre un outil.** Sous la liste des types, la même page montre les outils de l'analyste, avec ce que chacun lit et où il est offert. Les outils du code restent du code : on ne peut ni les réécrire ni les retirer depuis le Studio. On peut en éteindre un, et l'analyste ne l'a alors plus sous la main. Un outil de lecture que le projet a déclaré s'allume et s'éteint là où il est déclaré, sous Functions. Avec la recherche en ligne éteinte, l'onglet Event finder et l'enquête refusent de démarrer et disent pourquoi. Trois outils ne s'éteignent pas, et la page dit pourquoi : `calculate`, `test_option` et `list_actions`.
+
+## Les types de fonction
+
+Ce que l'analyste peut lire, en plus des outils du code, se déclare dans le Studio, sous **Ontology › Functions**. Un type de fonction est un outil de lecture du projet. Le schéma complet est dans [algorithms.md](algorithms.md), section A15.
+
+Ce n'est pas du code. On choisit l'un de cinq blocs, et on le règle :
+
+| Bloc | Ce qu'il lit | Exemple |
+|---|---|---|
+| Count or total (`aggregate`) | Un compte, une somme, une moyenne, un minimum ou un maximum sur les objets d'un type, en une valeur ou par groupe : une propriété, l'unité à laquelle chaque objet est rattaché, ou son site | Les respirateurs dont l'état est « available », par site |
+| List of objects (`objects`) | Les objets d'un type, filtrés, avec les propriétés à rendre | Les vingt premiers respirateurs en maintenance, avec leur modèle |
+| Formula (`formula`) | Un calcul sur des comptes et des totaux nommés | `round(closed / (closed + staffed) * 100, 1)` |
+| History of a measure (`history`) | Les relevés que le jumeau a gardés d'une mesure à une unité, sur une fenêtre | L'occupation d'une unité sur les 72 dernières heures |
+| Rows of a dataset (`dataset`) | Des colonnes d'un jeu de données du projet, filtrées | Les admissions par jour, pour une région |
+
+Un type de fonction dit aussi :
+
+| Ce qu'il dit | À quoi ça sert |
+|---|---|
+| Son nom, en mots de l'établissement | C'est ce que la trace d'une réponse affiche. Le nom de l'outil en est tiré (`ventilators_available_by_site`) et ne change plus |
+| Ce qu'il lit, et quand s'en servir | C'est d'après cette phrase que l'analyste décide de l'appeler |
+| Ses entrées, six au plus | Un texte, un nombre avec ses bornes, une date, ou une valeur parmi une liste. Une entrée peut alimenter un filtre, le groupe d'un compte, l'unité ou la fenêtre d'un historique |
+| Le nom de chaque valeur rendue | Un résultat porte ses unités dans ses noms : `flow_litres_per_minute`, pas `flow` |
+| S'il est allumé | Éteint, il n'est plus offert à l'analyste. Il peut encore être essayé |
+
+Rien ne se tape par son nom : le type d'objet et ses propriétés, la mesure, le jeu de données et ses colonnes se choisissent dans ce que le projet contient.
+
+**Essayer avant de s'y fier.** « Try » lance l'outil une fois, avec les entrées qu'on lui donne, et montre ce que l'analyste lirait : le résultat, ou la phrase du refus. Aucun modèle n'est appelé et rien n'est gardé.
+
+**Ce que ça change pour l'analyste.** Un outil allumé lui est offert dès l'échange suivant, dans Ask et dans Options, à côté des outils du code. Il s'en sert de la même façon, et la règle des chiffres est la même : un chiffre que l'outil n'a pas rendu est retiré de la réponse. Dans la trace, l'étape porte le libellé du projet, suivi de « (declared in this project) ». Un projet qui n'a déclaré aucun type de fonction travaille exactement comme avant.
+
+**Ce qu'un outil déclaré dit de lui-même.** D'où vient ce qu'il rend (les objets d'un type, une formule, les relevés gardés, un jeu de données) ; combien d'objets il a lus et combien il en liste ; et quand une lecture a atteint son plafond, que le résultat repose sur les premiers objets et non sur tous. Un compte par unité place chaque objet à l'unité à laquelle il est rattaché, pas aux unités au-dessus, et le dit.
+
+**Ce qu'il refuse**, par une phrase que l'analyste lit : une entrée hors de ses bornes, avec la borne ; une unité qu'il ne trouve pas ; une mesure dont le jumeau ne garde pas l'historique ; une colonne que le jeu n'a pas ; une formule dont une valeur manque (rien ne la remplace) ; un résultat trop long pour être lu d'un coup, avec ce qu'il faut resserrer.
+
+**Ce qui lui manque pour tourner** s'écrit sur sa carte : un type d'objet que l'ontologie n'a pas, une propriété que le type ne déclare pas, une mesure qui n'est pas gardée, un jeu de données absent. Ce n'est pas un refus à la déclaration : un outil peut être déclaré avant que ses données arrivent.
+
+Un outil déclaré ne fait que lire. Pour ce que l'analyste peut **proposer**, voir « Les types d'action ».
 
 ## Les événements
 
@@ -394,7 +439,7 @@ Sous les chiffres, trois lignes repliées, qui s'ouvrent d'un clic : « Why this
 
 **Decisions** (`DecisionsTab.tsx`) : les décisions du scénario ouvert d'abord, puis celles des autres scénarios du projet. Chacune est une carte du même dessin : qui l'a prise, quand, l'objectif, les chiffres attendus avec l'option (l'écart est donné contre le même run sans elle), le délai et le coût gardés avec leurs lignes quand il y en avait, puis, repliés, l'attendu sans l'option, le mécanisme, sur quoi elle reposait, ce que le test ne disait pas. Le suivi se demande d'un bouton. L'onglet se lit même quand l'analyste est éteint : une décision est un enregistrement, pas une réponse.
 
-**What it can use** (`ToolsTab.tsx`) : ce que l'analyste a sous la main. Les outils sont rangés par ce qu'ils lisent (le jumeau, le scénario et son run, le réseau maintenant, les jeux de données, le calendrier, le calcul, les options, le web). Chacun porte son nom, une phrase, ce qu'il fait (« Reads », « Computes », « Runs the engine », « Searches »), et « Declared here » quand il a été déclaré dans le projet plutôt qu'écrit dans le code. Un outil que le projet a éteint est montré comme éteint, pas caché : « il pourrait, et on lui a dit non » n'est pas « il ne peut pas ». Un clic sur un outil dit ce qu'il reçoit et dans quels onglets il sert ; un outil qui sert ailleurs que dans le panneau ouvert le dit. Sous la liste, ce que l'analyste ne fait jamais : écrire, calculer de tête, lire quoi que ce soit sur une personne. L'onglet se lit sans le modèle, et la même liste est en tête de la vue « Functions » de l'ontologie.
+**What it can use** (`ToolsTab.tsx`) : ce que l'analyste a sous la main. Les outils sont rangés par ce qu'ils lisent (le jumeau, le scénario et son run, le réseau maintenant, les jeux de données, le calendrier, le calcul, les options, le web), puis ceux que le projet a déclarés. Chacun porte son nom, une phrase, ce qu'il fait (« Reads », « Computes », « Runs the engine », « Searches »), et « Declared here » quand il a été déclaré dans le projet plutôt qu'écrit dans le code. Un outil que le projet a éteint est montré comme éteint, pas caché : « il pourrait, et on lui a dit non » n'est pas « il ne peut pas ». Un clic sur un outil dit ce qu'il reçoit et dans quels onglets il sert ; un outil qui sert ailleurs que dans le panneau ouvert le dit, et un outil déclaré dit où il s'allume et s'éteint. Sous la liste, ce que l'analyste ne fait jamais : écrire, calculer de tête, lire quoi que ce soit sur une personne. L'onglet se lit sans le modèle, et la même liste est en tête de la vue « Functions » de l'ontologie.
 
 **Ask**, de haut en bas :
 
@@ -407,6 +452,8 @@ Sous les chiffres, trois lignes repliées, qui s'ouvrent d'un clic : « Why this
 - les questions à poser ensuite.
 
 **Les types d'action** (`manager/ActionTypes.tsx`, sous Ontology › Action types). En haut, une phrase qui dit si le projet a déclaré ses types ou si les quatre intégrés tiennent. Puis une carte par type : son nom, ce qu'il change, d'où il vient (intégré, intégré et changé ici, ou du projet), sa clé, ses bornes en mots, qui peut l'approuver, un interrupteur, « Edit », et « Remove » ou « Reset ». Un type que le jumeau ne permet pas de tester porte un bandeau avec ce qui manque. Le formulaire ne propose que ce que le jumeau déclare, et dit ce qu'il faut corriger avant d'envoyer. Sous la liste, « What the analyst can use » : une ligne par outil, avec son interrupteur.
+
+**Les types de fonction** (`manager/FunctionTypes.tsx`, sous Ontology › Functions, entre la liste des outils et les formules de coût). En haut, une phrase qui dit ce qu'est un type de fonction, et « Declare a tool ». Puis une carte par outil déclaré : son libellé, son bloc, le nom sous lequel l'analyste l'appelle, sa description, une phrase qui redit ce qu'il lit (« Counts the Ventilator where status is “available”, by site. »), ce qu'il reçoit, un interrupteur, « Try », « Edit » et « Remove ». Un outil qui ne peut pas tourner sur ce projet porte un bandeau avec ce qui manque ; une ligne gardée qui ne se lit plus est nommée au-dessus de la liste. Le formulaire change avec le bloc et ne propose que ce que le projet contient : ses types d'objets et leurs propriétés, les mesures que le jumeau garde, ses jeux de données et leurs colonnes. Il dit ce qu'il faut corriger avant d'envoyer, et montre la phrase du serveur quand celui-ci refuse. « Try » ouvre sous la carte une case par entrée et « Run it once » : le résultat s'affiche tel que l'analyste le lirait, avec sa durée, ou la phrase du refus. Déclarer, changer ou retirer un outil relit la liste « What the analyst can use » au-dessus.
 
 **Sur la carte du réseau** (`command/NetworkAnalyst.tsx`). Un `OverlayPanel` « Analyst » dans la colonne de droite, sous l'inspecteur du site choisi, replié à l'arrivée. L'ouvrir replie l'inspecteur. Deux onglets : **Ask**, le même que partout ailleurs, avec l'unité choisie ; **Investigate** (`InvestigateTab.tsx`) ; et « What it can use », le même que sur la page Scenarios. Le panneau n'est construit qu'à sa première ouverture, puis garde ce qu'on y a fait quand on le replie ou qu'on change d'onglet : une enquête en cours continue. De haut en bas, Investigate montre : l'unité, la mesure et le laps de temps ; la phrase, sous « The only thing that goes to the web » ; le bouton ; les enquêtes déjà gardées pour cette unité ; puis, une fois lancé, la barre d'avancement, ce qui est en cours, ce que le programme a lu de la série, les candidats sur deux lignes chacun (le titre, puis la date et la phrase qui dit comment l'événement se place), les événements déjà au calendrier, ce que l'enquête ne peut pas dire, et la trace. Un clic sur un candidat l'ouvre : ce qui est publié, ce qui est mesuré, les raisons de douter, les dates et les deux boutons. La frise du bas (`NetworkTimeline.tsx`) dessine ce que l'enquête a trouvé. Le bouton « Analyst » du cadre n'est pas montré sur cette page.
 
@@ -431,11 +478,13 @@ La maquette d'origine est `design/scenario-analyst.html`.
 
 ## Ajouter un outil
 
+Un outil de lecture qui tient dans l'un des cinq blocs (un compte ou un total sur des objets, une liste d'objets, une formule, l'historique d'une mesure, des lignes d'un jeu de données) se déclare depuis le Studio, sans code : voir « Les types de fonction ». Ce qui suit vaut pour un outil qui demande une logique nouvelle, ou qui doit lire autre chose.
+
 1. L'écrire dans `backend/src/services/analyst-tools.ts` : un nom, une description pour le modèle, un schéma d'entrée, une validation, une fonction pure qui lit. L'ajouter à `READ_TOOLS`. Un outil qui ne sert qu'aux options va dans `analyst-options.ts` et dans `OPTION_TOOLS`.
 2. Il lit, il n'écrit pas. S'il doit proposer une écriture, la validation reste un clic humain à l'écran. S'il doit rendre plus que le modèle n'a besoin de lire (des séries jour par jour, de quoi agir), il rend un `Recorded` : le résultat va au modèle, le relevé à l'écran et au journal.
 3. Ses résultats nomment les choses comme le jumeau les nomme, et portent leurs unités dans le nom des champs (`occupancy_pct`, `units_per_1000_residents`).
 4. Un cas qu'il ne sait pas traiter lève une `ToolError` qui dit quoi faire à la place.
-5. Lui donner un libellé lisible dans `stepLabel` (`frontend/app/studio/analyst-api.ts`).
+5. Lui donner un libellé lisible dans `stepLabel` (`frontend/app/studio/analyst-api.ts`). Un outil déclaré dans un projet n'en a pas besoin : son étape porte le libellé que le projet lui a donné.
 6. Le tester dans `analyst-tools.unit.test.ts`.
 7. Lui écrire sa phrase pour la page « Action types » (`READS` dans `analyst-settings.ts`) : un test échoue tant qu'elle manque.
 8. Mettre à jour la table des outils ci-dessus, et le schéma A1 si la boucle change.
@@ -497,7 +546,10 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 - L'approbateur d'un type d'action est un texte. Rien dans le produit n'attend son accord : l'écran dit qui peut approuver, pas que quelqu'un l'a fait.
 - Les bornes valent pour un changement, pas pour un total : deux options de soixante lits en font cent vingt. Et une capacité dure jusqu'à la fin du run : un type ne borne pas sa durée.
 - Un type d'action ne nomme que ce qu'un run sait changer. Rappeler du personnel ou commander un stock ne se déclare pas : le jumeau ne les contient pas.
-- Les outils de l'analyste ne se déclarent pas depuis le Studio ; on peut seulement en éteindre un ([issue 44](https://github.com/V1ktor7/obscyro/issues/44) pour les outils de lecture déclarés).
+- Un outil déclaré depuis le Studio tient dans l'un de cinq blocs. Une lecture qui demande une logique nouvelle reste un outil du code. Un outil qui écrit ne se déclare pas : ce que l'analyste peut proposer se règle par les types d'action.
+- Un filtre d'un outil déclaré ne sait que l'égalité : ni « plus grand que », ni période entre deux dates. Un compte se groupe par une seule chose, et par unité un objet n'est pas remonté aux unités au-dessus.
+- Un outil déclaré lit le jumeau tel qu'il est, jamais à travers le scénario ouvert, et n'est offert ni dans Event finder ni dans une enquête.
+- Le produit ne sait pas d'une propriété qu'elle décrit une personne. Le jumeau est fait d'objets du réseau et de valeurs agrégées ; c'est la personne qui déclare un outil qui choisit ce qu'il rend.
 - Il ne cherche en ligne que dans l'onglet Event finder et dans une enquête. Dans Ask et Options il lit les événements déjà validés, et dit quand aucun ne couvre le moment demandé.
 - Une enquête rapproche des dates, elle ne mesure pas un effet. Elle dit qu'un événement commence deux jours avant un épisode, pas qu'il l'a causé, et elle ne sépare pas la part de deux événements qui vont avec le même épisode. Un rapprochement vu une fois n'est pas répliqué.
 - Une enquête ne sait pas si un événement concerne l'unité : le lieu d'un événement est un texte, relié à aucun territoire. C'est la personne qui en juge, d'après la source.
@@ -513,7 +565,7 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 - Une recherche d'événements coûte environ 70 cents : chaque recherche lancée renvoie dix pages, près de 15 000 jetons, et aucun réglage de l'API ne permet d'en demander moins sans renoncer au plafond de recherches. Voir « Ce que coûte une recherche ».
 - Les questions de référence ne jugent que l'onglet Ask. Sur `claude-haiku-5-5`, l'onglet Options a été essayé sur un seul objectif (trois options testées, dont un transfert de patients et deux réponses enregistrées), et la recherche d'événements ne l'a pas été ; `claude-sonnet-5-5` n'a été essayé nulle part.
 - Le jumeau ne contient ni personnel ni stocks : l'analyste le dit, il ne le comble pas.
-- Le jumeau garde les relevés de ses mesures depuis le jour où l'enregistrement a commencé ([algorithms.md](algorithms.md), D11), et la page d'une unité les montre. Aucun outil de l'analyste ne les lit : dans Ask, il ne peut donc pas dire ce qui était ouvert plus tôt, ni ce qui a changé depuis ce matin, et il le dit. Dans une enquête, c'est le programme qui les lit, pas le modèle.
+- Le jumeau garde les relevés de ses mesures depuis le jour où l'enregistrement a commencé ([algorithms.md](algorithms.md), D11), et la page d'une unité les montre. Aucun outil du code ne les lit dans Ask : sans outil déclaré, l'analyste ne peut donc pas dire ce qui était ouvert plus tôt, ni ce qui a changé depuis ce matin, et il le dit. Un projet peut lui donner cette lecture en déclarant un type de fonction du bloc `history`, pour une mesure que l'organisation a définie. Dans une enquête, c'est le programme qui lit les relevés, pas le modèle.
 - L'âge d'une alerte ou d'une mesure est celui de ce que la mesure lit. L'unité a aussi le sien, la plus vieille de toutes ses sources, qui peut être plus vieux que celui d'une de ses valeurs : l'analyste reçoit les deux, et doit donner avec un chiffre l'âge de ce chiffre. Une date sans heure donne un âge au jour près.
 - Les signaux ouverts que `list_alerts` compte comprennent ceux dont l'alerte est retombée : ils peuvent être bien plus nombreux que les alertes ouvertes.
 - Le run à l'écran n'est pas gardé au rechargement de la page ; il faut relancer Run. Les options testées non plus : ce qui reste, ce sont les décisions enregistrées et le journal.
@@ -556,6 +608,11 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 | Outils éteints par un projet | `backend/src/services/analyst-settings.ts` |
 | Routes des types d'action et des outils | `backend/src/routes/action-types.ts` |
 | Vue « Action types » de l'ontologie | `frontend/app/studio/manager/ActionTypes.tsx`, `action-types.ts` |
+| Types de fonction : déclaration, les cinq blocs, traduction en outil | `backend/src/services/function-types.ts` |
+| Ce qu'un outil déclaré lit dans la base, où se tient un objet, les outils déclarés d'un échange | `backend/src/services/function-reads.ts` |
+| Routes des types de fonction, et l'essai d'un outil | `backend/src/routes/function-types.ts` |
+| Vue « Functions » de l'ontologie : déclarer, corriger, éteindre, essayer | `frontend/app/studio/manager/FunctionTypes.tsx`, `function-types.ts` |
+| Onglet « What it can use » | `frontend/app/studio/simulation/hex/ToolsTab.tsx` |
 | Clôture d'une recherche d'événements, `give_events` | `backend/src/services/analyst-events.ts` |
 | Lecture de la recherche web : requêtes, pages, passages, dates, citations | `backend/src/services/analyst-web.ts` |
 | Enquête sur une série : la série, les épisodes, les voisins, la comparaison | `backend/src/services/investigation.ts` |

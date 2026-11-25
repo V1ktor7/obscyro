@@ -3,7 +3,7 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "95bbe5d730e44561"
+translatedFrom: "9e51de233d6a68e9"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
@@ -83,6 +83,11 @@ The Event finder tab uses the web search of the Claude API. It has no variable o
 | `DELETE /v1/ontology/:env/action-types/:key` | Removes a type of the project, or resets a built-in one to what it was |
 | `GET /v1/ontology/:env/analyst/tools` | The analyst's tools: what each reads, what it does (read, compute, run the engine, search), where it comes from (the code, or the project), what it is given, where it is offered, whether it is on |
 | `PUT /v1/ontology/:env/analyst/tools/:name` | Switches a tool off or on for the project (`on`) |
+| `GET /v1/ontology/:env/function-types` | The project's function types (the reading tools it declared), what each lacks to run, those that can no longer be read, and what the project holds that a type can point at |
+| `POST /v1/ontology/:env/function-types` | Declares a reading tool; its name is made from its label |
+| `PUT /v1/ontology/:env/function-types/:key` | Changes a function type, or switches it off (`active`). The tool keeps its name |
+| `DELETE /v1/ontology/:env/function-types/:key` | Removes a function type: the analyst no longer has it at hand |
+| `POST /v1/ontology/:env/function-types/:key/try` | Runs a declared tool once, with `input`, and returns what the analyst would read (`result`) or the sentence of the refusal (`refused`). Calls no model and writes nothing |
 | `POST /v1/ontology/:env/health-events` | Accepts a candidate: it enters the calendar |
 | `GET /v1/ontology/:env/health-events` | The project's calendar, oldest to most recent (`from`, `to` for a period) |
 | `DELETE /v1/ontology/:env/health-events/:id` | Removes an event from the calendar |
@@ -119,6 +124,8 @@ A request refused before it starts (no session, analyst off, simulation service 
 ## The tools
 
 None of them writes. Fourteen read. Two more exist only in the Options tab: `list_responses`, which reads what an option can contain as a recorded response, and `test_option`, which runs the engine. A third, `list_actions`, is offered there only in a project that declared action types. A tool a project switched off is offered nowhere. Two worlds: `reality`, the twin as it is; `scenario`, the same twin read through the open scenario.
+
+To these tools of the code are added, in Ask and in Options, the reading tools the project declared itself: see “The function types”. They are not in the table below, since every project has its own; the “What it can use” tab lists them.
 
 The Event finder tab is apart: it has none of these tools. It has only the API's web search (`web_search`), which runs at Anthropic and not with us, and its delivery tool. That is what guarantees a search can take nothing from the twin with it.
 
@@ -242,7 +249,45 @@ On an option's card, “Action type” gives the type's name and “can be appro
 
 The price and the delay of capacity always come from the twin's price list. An action type has no price of its own; it can only fix the mode in which its units are opened.
 
-**Switching a tool off.** Under the list of types, the same page shows the analyst's tools, with what each reads and where it is offered. The tools stay code: one cannot be written from the Studio. One can be switched off, and the analyst then no longer has it at hand. With the web search off, the Event finder tab and the investigation refuse to start and say why. Three tools cannot be switched off, and the page says why: `calculate`, `test_option` and `list_actions`.
+**Switching a tool off.** Under the list of types, the same page shows the analyst's tools, with what each reads and where it is offered. The tools of the code stay code: they can neither be rewritten nor removed from the Studio. One can be switched off, and the analyst then no longer has it at hand. A reading tool the project declared is switched on and off where it is declared, under Functions. With the web search off, the Event finder tab and the investigation refuse to start and say why. Three tools cannot be switched off, and the page says why: `calculate`, `test_option` and `list_actions`.
+
+## The function types
+
+What the analyst can read, beyond the tools of the code, is declared in the Studio, under **Ontology › Functions**. A function type is a reading tool of the project. The full diagram is in [Algorithms](/docs/product/algorithms), section A15.
+
+It is not code. One picks one of five blocks, and sets it:
+
+| Block | What it reads | Example |
+|---|---|---|
+| Count or total (`aggregate`) | A count, a sum, a mean, a minimum or a maximum over the objects of a type, in one value or by group: a property, the unit each object is attached to, or its site | The ventilators whose status is “available”, by site |
+| List of objects (`objects`) | The objects of a type, filtered, with the properties to return | The first twenty ventilators in maintenance, with their model |
+| Formula (`formula`) | A calculation over named counts and totals | `round(closed / (closed + staffed) * 100, 1)` |
+| History of a measure (`history`) | The readings the twin kept of a measure at a unit, over a window | The occupancy of a unit over the last 72 hours |
+| Rows of a dataset (`dataset`) | Columns of a dataset of the project, filtered | The admissions by day, for one region |
+
+A function type also says:
+
+| What it says | What it is for |
+|---|---|
+| Its name, in the institution's words | It is what the trace of an answer shows. The tool's name is made from it (`ventilators_available_by_site`) and no longer changes |
+| What it reads, and when to use it | The analyst decides to call it from that sentence |
+| Its inputs, six at most | A text, a number with its bounds, a date, or one value among a list. An input can feed a filter, the group of a count, the unit or the window of a history |
+| The name of each value returned | A result carries its units in its names: `flow_litres_per_minute`, not `flow` |
+| Whether it is on | Off, it is no longer offered to the analyst. It can still be tried |
+
+Nothing is typed by its name: the object type and its properties, the measure, the dataset and its columns are picked from what the project holds.
+
+**Trying before trusting.** “Try” runs the tool once, with the inputs it is given, and shows what the analyst would read: the result, or the sentence of the refusal. No model is called and nothing is kept.
+
+**What it changes for the analyst.** A tool that is on is offered to it from the next exchange, in Ask and in Options, beside the tools of the code. It uses it the same way, and the rule of numbers is the same: a figure the tool did not return is taken out of the answer. In the trace, the step carries the project's label, followed by “(declared in this project)”. A project that declared no function type works exactly as before.
+
+**What a declared tool says of itself.** Where what it returns comes from (the objects of a type, a formula, the kept readings, a dataset); how many objects it read and how many it lists; and when a read reached its ceiling, that the result rests on the first objects and not on all. A count by unit places each object at the unit it is attached to, not at the units above, and says so.
+
+**What it refuses**, in a sentence the analyst reads: an input outside its bounds, with the bound; a unit it does not find; a measure whose history the twin does not keep; a column the dataset does not have; a formula with a value missing (nothing stands in for it); a result too long to be read at once, with what to narrow.
+
+**What it lacks to run** is written on its card: an object type the ontology does not have, a property the type does not declare, a measure that is not kept, a dataset that is absent. It is not a refusal at declaration: a tool can be declared before its data arrives.
+
+A declared tool only reads. For what the analyst may **propose**, see “The action types”.
 
 ## The events
 
@@ -400,7 +445,7 @@ Under the figures, three folded lines, which open on a click: “Why this option
 
 **Decisions** (`DecisionsTab.tsx`): the decisions of the open scenario first, then those of the project's other scenarios. Each is a card of the same design: who took it, when, the objective, the figures expected with the option (the gap is given against the same run without it), the delay and the cost kept with their lines when there were any, then, folded, what was expected without the option, the mechanism, what it rested on, what the test did not say. The follow-up is asked for with a button. The tab reads even when the analyst is off: a decision is a record, not an answer.
 
-**What it can use** (`ToolsTab.tsx`): what the analyst has at hand. The tools are filed by what they read (the twin, the scenario and its run, the network now, the datasets, the calendar, calculation, the options, the web). Each carries its name, a sentence, what it does (“Reads”, “Computes”, “Runs the engine”, “Searches”), and “Declared here” when it was declared in the project rather than written in the code. A tool the project switched off is shown as switched off, not hidden: “it could, and was told not to” is not “it cannot”. A click on a tool says what it is given and in which tabs it is used; a tool used elsewhere than in the open panel says so. Under the list, what the analyst never does: write, compute in its head, read anything about a person. The tab is read without the model, and the same list heads the “Functions” view of the ontology.
+**What it can use** (`ToolsTab.tsx`): what the analyst has at hand. The tools are filed by what they read (the twin, the scenario and its run, the network now, the datasets, the calendar, calculation, the options, the web), then those the project declared. Each carries its name, a sentence, what it does (“Reads”, “Computes”, “Runs the engine”, “Searches”), and “Declared here” when it was declared in the project rather than written in the code. A tool the project switched off is shown as switched off, not hidden: “it could, and was told not to” is not “it cannot”. A click on a tool says what it is given and in which tabs it is used; a tool used elsewhere than in the open panel says so, and a declared tool says where it is switched on and off. Under the list, what the analyst never does: write, compute in its head, read anything about a person. The tab is read without the model, and the same list heads the “Functions” view of the ontology.
 
 **Ask**, top to bottom:
 
@@ -413,6 +458,8 @@ Under the figures, three folded lines, which open on a click: “Why this option
 - the questions to ask next.
 
 **The action types** (`manager/ActionTypes.tsx`, under Ontology › Action types). At the top, a sentence that says whether the project declared its types or the four built-in ones stand. Then a card per type: its name, what it changes, where it comes from (built-in, built-in and changed here, or the project's), its key, its bounds in words, who can approve it, a switch, “Edit”, and “Remove” or “Reset”. A type the twin does not let the analyst test carries a banner with what is missing. The form offers only what the twin declares, and says what to correct before sending. Under the list, “What the analyst can use”: one line per tool, with its switch.
+
+**The function types** (`manager/FunctionTypes.tsx`, under Ontology › Functions, between the list of tools and the cost formulas). At the top, a sentence that says what a function type is, and “Declare a tool”. Then a card per declared tool: its label, its block, the name the analyst calls it by, its description, a sentence that says again what it reads (“Counts the Ventilator where status is “available”, by site.”), what it is given, a switch, “Try”, “Edit” and “Remove”. A tool that cannot run on this project carries a banner with what is missing; a kept row that can no longer be read is named above the list. The form changes with the block and offers only what the project holds: its object types and their properties, the measures the twin keeps, its datasets and their columns. It says what to correct before sending, and shows the server's sentence when the server refuses. “Try” opens under the card one box per input and “Run it once”: the result is shown as the analyst would read it, with its duration, or the sentence of the refusal. Declaring, changing or removing a tool reads again the “What the analyst can use” list above.
 
 **On the network map** (`command/NetworkAnalyst.tsx`). An “Analyst” `OverlayPanel` in the right column, under the inspector of the selected site, folded on arrival. Opening it folds the inspector. Two tabs: **Ask**, the same as everywhere else, with the selected unit; **Investigate** (`InvestigateTab.tsx`); and “What it can use”, the same as on the Scenarios page. The panel is built only when first opened, then keeps what was done in it when it is folded or the other tab is shown: an investigation under way goes on. From top to bottom, Investigate shows: the unit, the measure and the span; the sentence, under “The only thing that goes to the web”; the button; the investigations already kept for this unit; then, once started, the progress bar, what is under way, what the program read of the series, the candidates in two lines each (the title, then the date and the sentence that says how the event sits), the events already in the calendar, what the investigation cannot say, and the trace. A click on a candidate opens it: what is published, what is measured, the reasons to doubt, the dates and the two buttons. The timeline at the bottom (`NetworkTimeline.tsx`) draws what the investigation found. The “Analyst” button of the shell is not shown on this page.
 
@@ -437,11 +484,13 @@ The original mock-up is `design/scenario-analyst.html`.
 
 ## Adding a tool
 
+A reading tool that fits in one of the five blocks (a count or a total over objects, a list of objects, a formula, the history of a measure, rows of a dataset) is declared from the Studio, without code: see “The function types”. What follows is for a tool that needs new logic, or that has to read something else.
+
 1. Write it in `backend/src/services/analyst-tools.ts`: a name, a description for the model, an input schema, a validation, a pure function that reads. Add it to `READ_TOOLS`. A tool that only serves the options goes in `analyst-options.ts` and in `OPTION_TOOLS`.
 2. It reads, it does not write. If it has to propose a write, validation remains a human click on screen. If it has to return more than the model needs to read (day-by-day series, what is needed to act), it returns a `Recorded`: the result goes to the model, the record to the screen and to the journal.
 3. Its results name things the way the twin names them, and carry their units in the field names (`occupancy_pct`, `units_per_1000_residents`).
 4. A case it cannot handle throws a `ToolError` that says what to do instead.
-5. Give it a readable label in `stepLabel` (`frontend/app/studio/analyst-api.ts`).
+5. Give it a readable label in `stepLabel` (`frontend/app/studio/analyst-api.ts`). A tool declared in a project does not need one: its step carries the label the project gave it.
 6. Test it in `analyst-tools.unit.test.ts`.
 7. Write its sentence for the “Action types” page (`READS` in `analyst-settings.ts`): a test fails as long as it is missing.
 8. Update the table of tools above, and diagram A1 if the loop changes.
@@ -503,7 +552,10 @@ What is not judged: the quality of the writing. That still takes a person, who r
 - The approver of an action type is a text. Nothing in the product waits for their agreement: the screen says who can approve, not that somebody did.
 - The bounds apply to one change, not to a total: two options of sixty beds make a hundred and twenty. And capacity lasts until the end of the run: a type does not bound its duration.
 - An action type names only what a run can be made to change. Recalling staff or ordering a stock cannot be declared: the twin does not hold them.
-- The analyst's tools cannot be declared from the Studio; one can only be switched off ([issue 44](https://github.com/V1ktor7/obscyro/issues/44) for declared reading tools).
+- A tool declared from the Studio fits in one of five blocks. A read that needs new logic stays a tool of the code. A tool that writes cannot be declared: what the analyst may propose is set by the action types.
+- A filter of a declared tool knows only equality: neither “greater than”, nor a period between two dates. A count is grouped by one thing only, and by unit an object is not carried up to the units above.
+- A declared tool reads the twin as it is, never through the open scenario, and is offered neither in Event finder nor in an investigation.
+- The product does not know of a property that it describes a person. The twin is made of objects of the network and aggregated values; it is the person who declares a tool who chooses what it returns.
 - It searches online only in the Event finder tab and in an investigation. In Ask and Options it reads the events already validated, and says when none covers the moment asked about.
 - An investigation brings dates together, it does not measure an effect. It says an event starts two days before an episode, not that it caused it, and it does not separate the share of two events that go with the same episode. A pairing seen once is not replicated.
 - An investigation does not know whether an event concerns the unit: an event's place is a text, linked to no territory. The person judges it, from the source.
@@ -519,7 +571,7 @@ What is not judged: the quality of the writing. That still takes a person, who r
 - An event search costs about 70 cents: each search launched returns ten pages, close to 15,000 tokens, and no setting of the API lets you ask for fewer without giving up the cap on searches. See “What a search costs”.
 - The reference questions judge the Ask tab only. On `claude-haiku-5-5`, the Options tab has been tried on a single objective (three options tested, among them a transfer of patients and two recorded responses), and the search for events has not; `claude-sonnet-5-5` has not been tried anywhere.
 - The twin holds no staff and no stocks: the analyst says so, it does not fill the gap.
-- The twin keeps the readings of its measures since the day the recording started ([Algorithms](/docs/product/algorithms), D11), and a unit's page shows them. No tool of the analyst reads them: so in Ask it cannot say what was open earlier, or what changed since this morning, and it says so. In an investigation, it is the program that reads them, not the model.
+- The twin keeps the readings of its measures since the day the recording started ([Algorithms](/docs/product/algorithms), D11), and a unit's page shows them. No tool of the code reads them in Ask: so without a declared tool the analyst cannot say what was open earlier, or what changed since this morning, and it says so. A project can give it that read by declaring a function type of the `history` block, for a measure the organisation defined. In an investigation, it is the program that reads the readings, not the model.
 - The age of an alert or of a measure is that of what the measure reads. The unit has its own too, the oldest of all its sources, which can be older than the age of one of its values: the analyst is given both, and must give with a figure the age of that figure. A date with no hour gives an age to the day.
 - The open signals `list_alerts` counts include those whose alert has cleared: they can be far more numerous than the open alerts.
 - The run on screen is not kept when the page is reloaded; Run has to be launched again. Nor are the tested options: what remains are the recorded decisions and the journal.
@@ -562,6 +614,11 @@ What is not judged: the quality of the writing. That still takes a person, who r
 | Tools a project switched off | `backend/src/services/analyst-settings.ts` |
 | Routes of the action types and of the tools | `backend/src/routes/action-types.ts` |
 | “Action types” view of the ontology | `frontend/app/studio/manager/ActionTypes.tsx`, `action-types.ts` |
+| Function types: declaration, the five blocks, translation into a tool | `backend/src/services/function-types.ts` |
+| What a declared tool reads from the database, where an object stands, the declared tools of an exchange | `backend/src/services/function-reads.ts` |
+| Routes of the function types, and the trial of a tool | `backend/src/routes/function-types.ts` |
+| “Functions” view of the ontology: declaring, correcting, switching off, trying | `frontend/app/studio/manager/FunctionTypes.tsx`, `function-types.ts` |
+| “What it can use” tab | `frontend/app/studio/simulation/hex/ToolsTab.tsx` |
 | Closing of an event search, `give_events` | `backend/src/services/analyst-events.ts` |
 | Reading the web search: queries, pages, passages, dates, quotations | `backend/src/services/analyst-web.ts` |
 | Investigating a series: the series, the episodes, the neighbours, the comparison | `backend/src/services/investigation.ts` |

@@ -23,6 +23,7 @@ Chaque algorithme du produit a ici sa section : à quoi il sert, son schéma, se
 | [A12](#a12-prix-registre-des-coûts-et-délai-dune-option) | Prix, registre des coûts et délai d'une option | `backend/src/services/price-catalogue.ts`, `cost-ledger.ts` |
 | [A13](#a13-enquête-sur-une-série) | Enquête sur une série : des événements posés à côté de ce que le jumeau a mesuré | `backend/src/services/investigation.ts` |
 | [A14](#a14-types-daction) | Types d'action : ce que l'analyste peut proposer, et dans quelles bornes | `backend/src/services/action-types.ts` |
+| [A15](#a15-types-de-fonction) | Types de fonction : un outil de lecture déclaré depuis le Studio, et sa traduction en outil de l'analyste | `backend/src/services/function-types.ts` |
 | **B** | **Jumeau et moteur de simulation** | |
 | [B1](#b1-export-du-jumeau) | Export du jumeau vers le moteur | `backend/src/services/twin-export.ts` |
 | [B2](#b2-un-pas-du-moteur-dévénements) | Un pas du moteur d'événements | `simulation-service/app/events/dynamics.py` |
@@ -113,6 +114,7 @@ sequenceDiagram
 - Un outil peut garder, à côté de son résultat, un relevé complet (`Recorded`) : il est affiché et journalisé, jamais envoyé au modèle. Aucune phrase ne peut donc s'appuyer dessus.
 - Ce que la personne regarde arrive par identifiants (`focus` : page, unité, signal). Le serveur retrouve les noms lui-même, dans ce projet seulement, et les écrit dans le contexte de la question : aucun texte tapé par l'appelant n'entre dans les consignes.
 - Les outils lisent deux sources, et chacun dit laquelle : l'export du jumeau, qui est ce qu'un run utilise, et la lecture du direct (D9), qui est ce que les écrans montrent.
+- Les outils d'une question ou d'un objectif sont ceux du code, moins ceux que le projet a éteints (A14), plus les outils de lecture qu'il a déclarés (A15). Un outil déclaré passe par la boucle sans cas particulier ; son étape porte en plus le libellé que le projet lui a donné.
 - Un refus du modèle ne produit aucune réponse inventée.
 - Si la personne part, plus rien n'est demandé au modèle.
 - L'identifiant de l'échange est choisi avant de commencer et part avec la dernière ligne du flux : c'est lui qu'une décision nommera (A9).
@@ -838,12 +840,85 @@ flowchart LR
 - **Retirer un choix ne demande aucun type.** Sortir du scénario une capacité ou une mesure que la personne y a posée reste possible quand tout est éteint. Remplacer un choix est poser quelque chose : le remplaçant est tenu aux bornes de son type.
 - **L'option dit son type, et qui peut l'approuver.** Seulement pour un type que le projet a déclaré : son nom et son approbateur sont recopiés par le serveur dans l'option, puis dans la décision enregistrée. L'écran écrit « can be approved by », jamais « approved » : c'est un texte de l'établissement, personne n'approuve dans le produit.
 - **Aucun droit d'écrire.** Déclarer un type d'action ne fait rien écrire à l'analyste. Une option devient un tampon du scénario par un clic, et une décision par un autre.
-- **Les outils restent du code.** Chaque outil est testé et ses résultats passent le vérificateur (A2) : un projet ne peut pas en écrire un. Il peut en éteindre un, qui n'est alors plus offert au modèle. Trois ne s'éteignent pas, et l'écran dit pourquoi : `calculate` (un chiffre dérivé doit être calculé par un outil), `test_option` (une option non testée n'est pas une option), `list_actions`. Avec la recherche en ligne éteinte, la recherche d'événements (A10) et l'enquête (A13) refusent de démarrer.
+- **Les outils du code restent du code.** Chaque outil est testé et ses résultats passent le vérificateur (A2) : un projet ne peut ni en réécrire un ni en retirer un. Il peut en éteindre un, qui n'est alors plus offert au modèle. Un outil de lecture à lui se déclare à part, par un type de fonction (A15), et s'allume ou s'éteint là où il est déclaré. Trois ne s'éteignent pas, et l'écran dit pourquoi : `calculate` (un chiffre dérivé doit être calculé par un outil), `test_option` (une option non testée n'est pas une option), `list_actions`. Avec la recherche en ligne éteinte, la recherche d'événements (A10) et l'enquête (A13) refusent de démarrer.
 - **Tout est gardé au journal d'audit** : créer, changer, retirer ou remettre un type, éteindre ou rallumer un outil.
 - **Ce qui manque.** Les bornes tiennent l'analyste, pas une personne : un tampon posé à la main sur la carte n'y est pas soumis. L'approbateur est un texte, pas une étape : rien n'attend son accord. Les bornes valent pour un changement, pas pour un total : deux options de 60 lits font 120. Une capacité dure jusqu'à la fin du run : un type ne peut pas en borner la durée. Un type d'action ne porte pas de prix à lui : ce que la liste de prix ne tarife pas reste sans prix.
 
 **Code.** `backend/src/services/action-types.ts` (`DEFAULT_ACTION_TYPES`, `actionTypesOf`, `readDraft`, `actionFor`, `fitCapacity`, `fitMeasure`, `fitTransfer`, `fitResponse`, `missingFor`, `saidOf`), `analyst-actions.ts` (`twinOffer`, `describeAction`, `listActions`), `analyst-options.ts` (`testOption`, `ACTIONS_PROMPT`, `optionsClosing`), `analyst-settings.ts` (`toolCatalogue`, `toolsOff`, `switchTool`, `offered`), `decisions.ts`, routes `backend/src/routes/action-types.ts` et `analyst.ts`, migration `070_action_type.sql` ; `frontend/app/studio/manager/ActionTypes.tsx`, `action-types.ts`, `frontend/app/studio/simulation/hex/analyst-parts.tsx` (`ActionTypesOf`), `frontend/app/studio/analyst-api.ts`.
 **Tests.** `action-types.unit.test.ts` (les types intégrés, le brouillon, le type d'un changement, chaque borne, ce qui manque au jumeau), `analyst-actions.unit.test.ts` (ce que le jumeau offre, `list_actions`, un projet sans réglage inchangé, un refus avant le run, deux types d'un même effet, un effet éteint, retirer sans type), `analyst-settings.unit.test.ts`, `routes/action-types.unit.test.ts` ; `manager/action-types.test.ts`, `manager/ActionTypes.test.tsx`, `analyst-parts.test.tsx`, `analyst-api.test.ts`.
+
+## A15. Types de fonction
+
+**But.** Déclarer depuis le Studio ce que l'analyste peut lire. Ses outils de lecture étaient tous écrits dans le code : un établissement qui voulait qu'il lise autre chose (les respirateurs disponibles par site, la part de lits fermés) attendait un développeur. Un **type de fonction** est un outil de lecture que le projet déclare lui-même. Ce n'est pas du code : c'est l'un de cinq blocs que le programme sait déjà exécuter, réglé par une personne. Cette section dit comment une déclaration devient un outil de l'analyste, et ce que chaque bloc lit.
+
+```mermaid
+flowchart TD
+    A["Vue Functions du Studio : un libellé, une description,<br/>des entrées, un bloc parmi cinq, son réglage, actif ou non"] --> B{"Le brouillon se lit-il ?<br/>forme du bloc, entrées nommées une seule fois,<br/>chaque entrée utilisée existe et est de la bonne sorte,<br/>la formule s'évalue sur les noms qu'elle a"}
+    B -->|"non"| B1["Refusé, avec ce qu'il faut corriger"]
+    B -->|"oui"| C["Ligne de app.function_type, sous sa clé :<br/>le nom de l'outil, tiré du libellé,<br/>jamais celui d'un outil du code"]
+    C --> D["Liste du projet : chaque type, avec ce qui lui manque<br/>pour tourner sur ce projet"]
+    C --> T["Try : le type est lancé une fois, avec les entrées<br/>qu'une personne donne. Aucun modèle n'est appelé"]
+    C --> E{"Début d'un échange Ask ou Options :<br/>le type est-il actif, et son nom<br/>toujours libre dans le code ?"}
+    E -->|"non"| E1["Il n'est pas offert au modèle"]
+    E -->|"oui"| F["Outil de l'analyste : schéma d'entrée et validation<br/>tirés des entrées déclarées, libellé pour la trace"]
+    F --> G["Le modèle l'appelle, comme un outil du code (A1)"]
+    T --> H
+    G --> H{"Les entrées passent-elles ?<br/>sorte, bornes d'un nombre,<br/>liste d'un choix, forme d'une date"}
+    H -->|"non"| R["Refus motivé, avec la borne ou la liste"]
+    H -->|"oui"| I["Le bloc lit par les lecteurs du projet :<br/>objets d'un type, relevés gardés, lignes d'un jeu.<br/>Un de plus que le plafond, pour savoir s'il est atteint"]
+    I --> J{"Peut-il répondre ?<br/>unité trouvée, mesure gardée, colonnes présentes,<br/>aucune valeur manquante dans la formule"}
+    J -->|"non"| R
+    J -->|"oui"| K{"Le résultat tient-il<br/>en 24 000 caractères ?"}
+    K -->|"non"| R
+    K -->|"oui"| L["Résultat : les champs sous leurs noms déclarés,<br/>combien d'objets ont été lus et combien sont listés,<br/>le plafond s'il a été atteint, et d'où ça vient"]
+    L --> M["Dans un échange : une étape, sous le libellé du type.<br/>Ses chiffres entrent au registre du vérificateur (A2)"]
+    R --> M2["Dans un échange : une étape refusée, que le modèle lit.<br/>Elle ne porte aucun chiffre citable"]
+    L --> N["Dans un essai : le résultat est montré<br/>tel que l'analyste le lirait"]
+    R --> N2["Dans un essai : la phrase du refus est montrée"]
+```
+
+**Les cinq blocs, et où se tient un objet.**
+
+```mermaid
+flowchart LR
+    S["Un appel, avec ses entrées"] --> O["objects : les objets d'un type, filtrés,<br/>avec les propriétés déclarées.<br/>50 lignes au plus"]
+    S --> AG["aggregate : compte, somme, moyenne, minimum ou maximum,<br/>en une valeur ou par groupe : une propriété,<br/>l'unité de rattachement, ou le site.<br/>50 groupes au plus, le plus grand d'abord"]
+    S --> FO["formula : six agrégats nommés au plus,<br/>et les entrées numériques,<br/>passés à la calculatrice (A3)"]
+    S --> HI["history : les relevés gardés d'une mesure<br/>à une unité (D11), sur une fenêtre en heures.<br/>Les 60 derniers"]
+    S --> DS["dataset : des colonnes d'un jeu de données<br/>du projet, filtrées. 50 lignes au plus"]
+    AG --> U{"Groupé par unité<br/>ou par site ?"}
+    U -->|"unité"| U1["L'unité qui reçoit l'objet par un lien de rattachement,<br/>le premier s'il y en a plusieurs. Une unité est sa propre unité"]
+    U -->|"site"| U2["Le lieu physique où l'unité de l'objet est placée,<br/>sinon celui de l'unité au-dessus la plus proche.<br/>Un objet qui est un site est son propre site"]
+    U2 --> U3{"L'ontologie nomme-t-elle<br/>quelque chose de physique ?"}
+    U3 -->|"non"| U4["Le site est le haut de l'arbre de l'unité,<br/>comme sur la carte"]
+    U1 --> U5["Rattaché à rien : groupe « attached to no unit »<br/>ou « at no site », compté et jamais caché"]
+    U2 --> U5
+```
+
+**Règles.**
+- **Cinq blocs, et aucun autre.** `objects`, `aggregate`, `formula`, `history`, `dataset`. La table refuse tout autre nom de bloc. Rien de ce qu'une personne tape n'est exécuté comme du code : une formule est évaluée par la calculatrice (A3), qui connaît l'arithmétique et rien d'autre.
+- **Lecture seule.** Aucun bloc n'écrit, aucun n'appelle un autre service. Un outil déclaré lit le jumeau tel qu'il est, jamais à travers un scénario.
+- **Le nom de l'outil vient du libellé.** « Ventilators available by site » donne `ventilators_available_by_site` : lettres minuscules, chiffres et tirets bas, trois caractères au moins. Il ne peut pas être celui d'un outil écrit dans le code (`CODE_TOOL_NAMES`) ni celui d'un autre type du projet. Il ne change pas quand le type est corrigé : les réponses déjà gardées au journal le citent sous ce nom. Si le code prend plus tard le même nom, c'est l'outil du code qui est offert, et le type déclaré ne l'est plus.
+- **Les entrées.** Six au plus : un texte, un nombre avec ses bornes, une date (`AAAA-MM-JJ`), ou une valeur parmi une liste. Chacune dit à quoi elle sert : c'est ce que le modèle lit. Une entrée peut alimenter un filtre (n'importe quelle sorte), le groupe d'un agrégat (une valeur parmi une liste, dont les valeurs sont les propriétés permises), l'unité d'un historique (un texte ou une liste) et sa fenêtre en heures (un nombre). La déclaration est refusée si un réglage prend une entrée qui n'existe pas ou qui n'est pas de la bonne sorte.
+- **Une entrée hors bornes est refusée avec la borne.** « 200 is above the most allowed, 72 », ou la liste des valeurs permises. Le refus est une étape que le modèle lit.
+- **Un filtre est une égalité**, sans tenir compte des majuscules ni des espaces autour. Six filtres au plus. Un filtre alimenté par une entrée facultative que l'appel laisse vide ne filtre pas.
+- **Agrégat.** C'est le sélecteur des mesures du jumeau (`aggregate` dans `twin-metrics.ts`, D6) : les objets d'un type, filtrés, comptés, additionnés ou moyennés. Par groupe, un compte à zéro est une vraie réponse et reste listé ; un groupe sans valeur (la moyenne de rien) n'est pas listé plutôt que mis à zéro. Les 50 plus grands sont rendus, avec le nombre de groupes en tout. Une valeur de propriété absente forme le groupe « (not said) ».
+- **Par unité, par site : les règles du jumeau.** Un objet se tient à l'unité qui le reçoit par un lien de rattachement, quel que soit le sens dans lequel l'établissement a tracé le lien (`attaches`, `aggregationEnds`) ; s'il y en a plusieurs, le premier lu. Il est compté à cette unité, pas aux unités au-dessus, et le résultat le dit (`grouped_how`). Deux unités du même nom restent deux groupes, chacune avec l'unité au-dessus d'elle (`under`). Le site est le lieu physique où l'unité est placée, ou celui de l'unité au-dessus la plus proche qui en a un ; un objet qui est lui-même un site est son propre site ; quand l'ontologie ne nomme rien de physique, le site est le haut de l'arbre, comme sur la carte du réseau (D10). Ce qui n'est rattaché à rien forme un groupe à part, compté.
+- **Formule.** D'un à six agrégats nommés, plus les entrées numériques de l'outil. Elle est évaluée une fois à la déclaration, sur des valeurs de remplacement, pour dire tout de suite un nom qu'elle n'a pas. À l'appel, une valeur qui n'existe pas (aucun objet ne porte la propriété) fait refuser le calcul : rien ne la remplace. Le résultat donne ce dont il a été calculé (`computed_from`) et la formule.
+- **Historique.** Seules les mesures que l'organisation a définies sont gardées (D11) ; une autre est refusée, avec la liste de celles qui le sont. L'unité est retrouvée par son nom, comme le font les autres outils. La fenêtre va de 1 à 2 160 heures. Le résultat donne la valeur qui tenait au début de la fenêtre, puis les relevés, le plus bas, le plus haut, le dernier, et la date où l'historique commence. Un relevé sans valeur est un trou, pas un zéro. Les 60 derniers relevés sont listés.
+- **Jeu de données.** Retrouvé par son identifiant, son nom court ou son nom. Une colonne qu'il n'a pas fait refuser l'appel, avec la liste de ses colonnes.
+- **Un plafond se dit.** Chaque lecture de l'ontologie prend un objet de plus que son plafond (`ROLLUP_INSTANCE_CAP`) : quand il est atteint, le résultat dit qu'il repose sur les premiers objets et non sur tous (`limit`). Le plafond n'est jamais abaissé en dur. Quand plus de lignes correspondent qu'il n'en est listé, le résultat donne les deux nombres. Un résultat de plus de 24 000 caractères est refusé plutôt que coupé, avec ce qu'il faut resserrer : une table coupée sans un mot passerait pour entière.
+- **Chaque résultat dit d'où il vient** (`read_from`) : les objets d'un type du jumeau, une formule sur ces objets, les relevés que le jumeau a gardés, ou un jeu de données nommé.
+- **Un outil comme les autres.** Il est offert dans Ask et dans Options à côté des outils du code. Ce qu'il rend est une étape, ses chiffres entrent au registre, et un chiffre qu'il n'a pas rendu est retiré de la réponse (A2). La boucle (A1) ne fait aucun cas particulier : l'étape porte seulement, en plus, le libellé du type, et la trace l'écrit « Ventilators available by site (declared in this project) ».
+- **Ce qui manque se dit, sans empêcher de déclarer.** Un type d'objet que l'ontologie n'a pas, une propriété que le type ne déclare pas, une mesure qui n'est pas gardée, un jeu de données ou une colonne absents : l'écran l'écrit sur le type, avec ce qui manque (`missingForFunction`). Ce n'est pas un refus : un outil peut être déclaré avant que ses données arrivent.
+- **Une ligne qui ne se lit plus n'est pas offerte.** Elle est nommée à l'écran (`unreadable`), pas cachée.
+- **Essayer.** `POST …/function-types/:key/try` passe par la même validation et le même bloc que l'analyste. Aucun modèle n'est appelé, rien n'est gardé au journal. Un type éteint peut être essayé : c'est ainsi qu'on le vérifie avant de l'allumer.
+- **Par projet.** Un type de fonction appartient à un projet, et lit par les lecteurs de ce projet : deux projets de deux organisations ne voient rien l'un de l'autre.
+- **Tout est gardé au journal d'audit** : déclarer, changer, retirer.
+- **Ce qui manque.** Un filtre ne sait que l'égalité : ni « plus grand que », ni période entre deux dates. Un agrégat se groupe par une seule chose. Deux types d'objets ne se croisent que dans une formule. Par unité, un objet n'est pas remonté aux unités au-dessus. Le bloc `dataset` lit les lignes du jeu jusqu'au plafond de lecture, sans les trier. Un outil déclaré n'est offert ni dans Event finder ni dans Investigate, qui n'ont que la recherche en ligne. Le produit ne sait pas d'une propriété qu'elle décrit une personne : le jumeau est fait d'objets du réseau et de valeurs agrégées, et c'est la personne qui déclare un outil qui choisit ce qu'il rend.
+
+**Code.** `backend/src/services/function-types.ts` (`readFunctionDraft`, `functionKeyFrom`, `runFunction`, `inputParser`, `toolOf`, `missingForFunction`, `listFunctionTypes`, `saveFunctionType`), `function-reads.ts` (`functionReads`, `standingFrom`, `functionOffer`, `declaredTools`, `CODE_TOOL_NAMES`), `analyst-settings.ts` (`toolCatalogue`), `analyst.ts` (`Step.label`), routes `backend/src/routes/function-types.ts` et `analyst.ts`, migration `071_function_type.sql` ; `frontend/app/studio/manager/FunctionTypes.tsx`, `function-types.ts`, `ManagerView.tsx` (`FunctionsView`), `frontend/app/studio/analyst-api.ts` (`stepLabel`).
+**Tests.** `function-types.unit.test.ts` (chaque bloc sur un petit jumeau, par unité et par site, un plafond atteint, un résultat trop long, la déclaration refusée, le nom tiré du libellé, la déclaration devenue outil, une entrée hors bornes, un chiffre tenu et un chiffre retiré dans un échange, un refus lu par le modèle, ce qui manque au projet), `function-reads.unit.test.ts` (où se tient un objet ; un projet sans type de fonction inchangé ; un type éteint ou au nom pris n'est pas offert), `routes/function-types.unit.test.ts` ; `manager/function-types.test.ts`, `manager/FunctionTypes.test.tsx`, `simulation/hex/ToolsTab.test.tsx`, `analyst-api.test.ts`.
 
 ---
 

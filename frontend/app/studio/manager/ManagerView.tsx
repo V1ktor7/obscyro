@@ -103,6 +103,7 @@ import { listQualityFlags, type QualityFlag } from "../quality-api";
 import LinkBehaviourDialog from "./LinkBehaviourDialog";
 import ToolsTab from "../simulation/hex/ToolsTab";
 import { ActionTypesPage } from "./ActionTypes";
+import { FunctionTypesPage } from "./FunctionTypes";
 import { PriceListPage, TypePrices } from "./PriceList";
 import { forgetPriceLists } from "./price-list";
 import SchemaGraphCanvas from "./SchemaGraphCanvas";
@@ -1902,15 +1903,25 @@ function ResourcePages({
       />
     );
   }
-  // What the analyst can read with, then the cost formulas the ontology declares.
+  return <FunctionsView env={env} />;
+}
+
+/** What the analyst can read with, the reading tools this project declares, then the cost formulas of the ontology. */
+function FunctionsView({ env }: { env: string | null }) {
+  // A tool declared, changed or removed below is read again by the list above.
+  const [declaredVersion, setDeclaredVersion] = useState(0);
   return (
     <PageShell title="Functions">
       {env ? (
         <section aria-label="What the analyst can use" className="mb-6">
           <h3 className="mb-2 text-[13px] font-semibold text-ink">What the analyst can use</h3>
-          <ToolsTab env={env} wide />
+          <ToolsTab env={env} wide refresh={declaredVersion} />
         </section>
       ) : null}
+      <section aria-label="Tools this project declares" className="mb-6">
+        <h3 className="mb-2 text-[13px] font-semibold text-ink">Tools this project declares</h3>
+        <FunctionTypesPage env={env} onChanged={() => setDeclaredVersion((v) => v + 1)} />
+      </section>
       <h3 className="mb-2 text-[13px] font-semibold text-ink">Cost formulas</h3>
       <PriceListPage env={env} />
     </PageShell>

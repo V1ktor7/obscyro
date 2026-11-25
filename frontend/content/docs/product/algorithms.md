@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "66eed4b394b2d49e"
+translatedFrom: "d052248bdae1866a"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -29,6 +29,7 @@ Every algorithm of the product has its section here: what it is for, its diagram
 | [A12](#a12-prices-the-cost-ledger-and-the-delay-of-an-option) | Prices, the cost ledger and the delay of an option | `backend/src/services/price-catalogue.ts`, `cost-ledger.ts` |
 | [A13](#a13-investigating-a-series) | Investigating a series: events set beside what the twin measured | `backend/src/services/investigation.ts` |
 | [A14](#a14-action-types) | Action types: what the analyst may propose, and within what bounds | `backend/src/services/action-types.ts` |
+| [A15](#a15-function-types) | Function types: a reading tool declared from the Studio, and its translation into a tool of the analyst | `backend/src/services/function-types.ts` |
 | **B** | **Twin and simulation engine** | |
 | [B1](#b1-export-of-the-twin) | Export of the twin to the engine | `backend/src/services/twin-export.ts` |
 | [B2](#b2-one-step-of-the-event-engine) | One step of the event engine | `simulation-service/app/events/dynamics.py` |
@@ -119,6 +120,7 @@ sequenceDiagram
 - A tool can keep, beside its result, a full record (`Recorded`): it is shown and journalled, never sent to the model. So no sentence can rest on it.
 - What the person is looking at arrives as ids (`focus`: page, unit, signal). The server looks the names up itself, in this project only, and writes them into the context of the question: no text typed by the caller enters the instructions.
 - The tools read two sources, and each says which: the twin's export, which is what a run uses, and the live reading (D9), which is what the screens show.
+- The tools of a question or of an objective are those of the code, less those the project switched off (A14), plus the reading tools it declared (A15). A declared tool goes through the loop with no special case; its step carries in addition the label the project gave it.
 - A refusal by the model produces no invented answer.
 - If the person leaves, nothing more is asked of the model.
 - The identifier of the exchange is chosen before starting and leaves with the last line of the stream: it is what a decision will name (A9).
@@ -844,12 +846,85 @@ flowchart LR
 - **Taking a choice out asks for no type.** Removing from the scenario a capacity or a measure the person placed there stays possible when everything is off. Replacing a choice is placing something: what replaces it is held to the bounds of its type.
 - **The option says its type, and who can approve it.** Only for a type the project declared: its name and its approver are copied by the server into the option, then into the recorded decision. The screen writes “can be approved by”, never “approved”: it is a text of the institution, nobody approves in the product.
 - **No right to write.** Declaring an action type makes the analyst write nothing. An option becomes a stamp of the scenario through one click, and a decision through another.
-- **The tools stay code.** Each tool is tested and its results pass the verifier (A2): a project cannot write one. It can switch one off, and it is then no longer offered to the model. Three cannot be switched off, and the screen says why: `calculate` (a derived figure has to be computed by a tool), `test_option` (an option that was not tested is not an option), `list_actions`. With the web search off, the event search (A10) and the investigation (A13) refuse to start.
+- **The tools of the code stay code.** Each tool is tested and its results pass the verifier (A2): a project can neither rewrite one nor remove one. It can switch one off, and it is then no longer offered to the model. A reading tool of its own is declared apart, by a function type (A15), and is switched on or off where it is declared. Three cannot be switched off, and the screen says why: `calculate` (a derived figure has to be computed by a tool), `test_option` (an option that was not tested is not an option), `list_actions`. With the web search off, the event search (A10) and the investigation (A13) refuse to start.
 - **Everything is kept in the audit log**: creating, changing, removing or resetting a type, switching a tool off or on.
 - **What is missing.** The bounds hold the analyst, not a person: a stamp placed by hand on the map is not subject to them. The approver is a text, not a step: nothing waits for their agreement. The bounds apply to one change, not to a total: two options of 60 beds make 120. Capacity lasts until the end of the run: a type cannot bound its duration. An action type carries no price of its own: what the price list does not price stays unpriced.
 
 **Code.** `backend/src/services/action-types.ts` (`DEFAULT_ACTION_TYPES`, `actionTypesOf`, `readDraft`, `actionFor`, `fitCapacity`, `fitMeasure`, `fitTransfer`, `fitResponse`, `missingFor`, `saidOf`), `analyst-actions.ts` (`twinOffer`, `describeAction`, `listActions`), `analyst-options.ts` (`testOption`, `ACTIONS_PROMPT`, `optionsClosing`), `analyst-settings.ts` (`toolCatalogue`, `toolsOff`, `switchTool`, `offered`), `decisions.ts`, routes `backend/src/routes/action-types.ts` and `analyst.ts`, migration `070_action_type.sql`; `frontend/app/studio/manager/ActionTypes.tsx`, `action-types.ts`, `frontend/app/studio/simulation/hex/analyst-parts.tsx` (`ActionTypesOf`), `frontend/app/studio/analyst-api.ts`.
 **Tests.** `action-types.unit.test.ts` (the built-in types, the draft, the type of a change, each bound, what the twin lacks), `analyst-actions.unit.test.ts` (what the twin offers, `list_actions`, a project that set nothing unchanged, a refusal before the run, two types of one effect, an effect switched off, removing without a type), `analyst-settings.unit.test.ts`, `routes/action-types.unit.test.ts`; `manager/action-types.test.ts`, `manager/ActionTypes.test.tsx`, `analyst-parts.test.tsx`, `analyst-api.test.ts`.
+
+## A15. Function types
+
+**Purpose.** Declaring from the Studio what the analyst can read. Its reading tools were all written in the code: an institution that wanted it to read something else (the ventilators available by site, the share of beds closed) waited for a developer. A **function type** is a reading tool the project declares itself. It is not code: it is one of five blocks the program already knows how to run, set by a person. This section says how a declaration becomes a tool of the analyst, and what each block reads.
+
+```mermaid
+flowchart TD
+    A["Functions view of the Studio: a label, a description,<br/>inputs, one block among five, its setting, on or off"] --> B{"Can the draft be read?<br/>shape of the block, each input named once,<br/>every input used exists and is of the right kind,<br/>the formula evaluates over the names it has"}
+    B -->|"no"| B1["Refused, with what to correct"]
+    B -->|"yes"| C["Row of app.function_type, under its key:<br/>the tool's name, made from the label,<br/>never that of a tool of the code"]
+    C --> D["List of the project: each type, with what it lacks<br/>to run on this project"]
+    C --> T["Try: the type is run once, with the inputs<br/>a person gives. No model is called"]
+    C --> E{"Start of an Ask or Options exchange:<br/>is the type on, and its name<br/>still free in the code?"}
+    E -->|"no"| E1["It is not offered to the model"]
+    E -->|"yes"| F["Tool of the analyst: input schema and validation<br/>taken from the declared inputs, label for the trace"]
+    F --> G["The model calls it, like a tool of the code (A1)"]
+    T --> H
+    G --> H{"Do the inputs pass?<br/>kind, bounds of a number,<br/>list of a choice, shape of a date"}
+    H -->|"no"| R["Reasoned refusal, with the bound or the list"]
+    H -->|"yes"| I["The block reads through the project's readers:<br/>objects of a type, kept readings, rows of a dataset.<br/>One more than the ceiling, to know whether it was reached"]
+    I --> J{"Can it answer?<br/>unit found, measure kept, columns present,<br/>no value missing in the formula"}
+    J -->|"no"| R
+    J -->|"yes"| K{"Does the result fit<br/>in 24,000 characters?"}
+    K -->|"no"| R
+    K -->|"yes"| L["Result: the fields under their declared names,<br/>how many objects were read and how many are listed,<br/>the ceiling if it was reached, and where it comes from"]
+    L --> M["In an exchange: a step, under the type's label.<br/>Its figures enter the verifier's ledger (A2)"]
+    R --> M2["In an exchange: a refused step, which the model reads.<br/>It carries no citable figure"]
+    L --> N["In a trial: the result is shown<br/>as the analyst would read it"]
+    R --> N2["In a trial: the sentence of the refusal is shown"]
+```
+
+**The five blocks, and where an object stands.**
+
+```mermaid
+flowchart LR
+    S["A call, with its inputs"] --> O["objects: the objects of a type, filtered,<br/>with the declared properties.<br/>50 rows at most"]
+    S --> AG["aggregate: count, sum, mean, minimum or maximum,<br/>in one value or by group: a property,<br/>the unit of attachment, or the site.<br/>50 groups at most, the largest first"]
+    S --> FO["formula: six named aggregates at most,<br/>and the number inputs,<br/>handed to the calculator (A3)"]
+    S --> HI["history: the kept readings of a measure<br/>at a unit (D11), over a window in hours.<br/>The last 60"]
+    S --> DS["dataset: columns of a dataset<br/>of the project, filtered. 50 rows at most"]
+    AG --> U{"Grouped by unit<br/>or by site?"}
+    U -->|"unit"| U1["The unit that receives the object through an attaching link,<br/>the first when there are several. A unit is its own unit"]
+    U -->|"site"| U2["The physical place where the object's unit is placed,<br/>otherwise that of the nearest unit above.<br/>An object that is a site is its own site"]
+    U2 --> U3{"Does the ontology call<br/>anything physical?"}
+    U3 -->|"no"| U4["The site is the top of the unit's tree,<br/>as on the map"]
+    U1 --> U5["Attached to nothing: group “attached to no unit”<br/>or “at no site”, counted and never hidden"]
+    U2 --> U5
+```
+
+**Rules.**
+- **Five blocks, and no other.** `objects`, `aggregate`, `formula`, `history`, `dataset`. The table refuses any other block name. Nothing a person types is run as code: a formula is evaluated by the calculator (A3), which knows arithmetic and nothing else.
+- **Read only.** No block writes, none calls another service. A declared tool reads the twin as it is, never through a scenario.
+- **The tool's name comes from the label.** “Ventilators available by site” gives `ventilators_available_by_site`: lower-case letters, digits and underscores, three characters at least. It cannot be that of a tool written in the code (`CODE_TOOL_NAMES`) nor that of another type of the project. It does not change when the type is corrected: the answers already kept in the journal cite it under that name. If the code later takes the same name, the code's tool is the one offered, and the declared type no longer is.
+- **The inputs.** Six at most: a text, a number with its bounds, a date (`YYYY-MM-DD`), or one value among a list. Each says what it is for: that is what the model reads. An input can feed a filter (any kind), the group of an aggregate (one value among a list, whose values are the properties allowed), the unit of a history (a text or a list) and its window in hours (a number). The declaration is refused if a setting takes an input that does not exist or is not of the right kind.
+- **An input out of bounds is refused with the bound.** “200 is above the most allowed, 72”, or the list of the values allowed. The refusal is a step the model reads.
+- **A filter is an equality**, ignoring case and the spaces around. Six filters at most. A filter fed by an optional input the call leaves empty does not filter.
+- **Aggregate.** It is the selector of the twin's measures (`aggregate` in `twin-metrics.ts`, D6): the objects of a type, filtered, counted, summed or averaged. By group, a count of zero is a real answer and stays listed; a group with no value (the mean of nothing) is not listed rather than set to zero. The 50 largest are returned, with the number of groups in all. A missing property value forms the group “(not said)”.
+- **By unit, by site: the twin's rules.** An object stands at the unit that receives it through an attaching link, whichever way the institution drew the link (`attaches`, `aggregationEnds`); when there are several, the first one read. It is counted at that unit, not at the units above, and the result says so (`grouped_how`). Two units of one name stay two groups, each with the unit above it (`under`). The site is the physical place where the unit is placed, or that of the nearest unit above that has one; an object that is itself a site is its own site; when the ontology calls nothing physical, the site is the top of the tree, as on the network map (D10). What is attached to nothing forms a group of its own, counted.
+- **Formula.** From one to six named aggregates, plus the tool's number inputs. It is evaluated once at declaration, on stand-in values, to say at once a name it does not have. At the call, a value that does not exist (no object carries the property) makes the calculation refused: nothing stands in for it. The result gives what it was computed from (`computed_from`) and the formula.
+- **History.** Only the measures the organisation defined are kept (D11); another is refused, with the list of those that are. The unit is found by its name, as the other tools do. The window goes from 1 to 2,160 hours. The result gives the value that held at the start of the window, then the readings, the lowest, the highest, the latest, and the date the history starts. A reading with no value is a gap, not a zero. The last 60 readings are listed.
+- **Dataset.** Found by its identifier, its short name or its name. A column it does not have makes the call refused, with the list of its columns.
+- **A ceiling is said.** Each read of the ontology takes one object more than its ceiling (`ROLLUP_INSTANCE_CAP`): when it is reached, the result says it rests on the first objects and not on all (`limit`). The ceiling is never lowered by a literal. When more rows match than are listed, the result gives both numbers. A result of more than 24,000 characters is refused rather than cut, with what to narrow: a table cut without a word would pass for whole.
+- **Every result says where it comes from** (`read_from`): the objects of a type of the twin, a formula over those objects, the readings the twin kept, or a named dataset.
+- **A tool like the others.** It is offered in Ask and in Options beside the tools of the code. What it returns is a step, its figures enter the ledger, and a figure it did not return is taken out of the answer (A2). The loop (A1) makes no special case: the step only carries, in addition, the type's label, and the trace writes it “Ventilators available by site (declared in this project)”.
+- **What is missing is said, without preventing the declaration.** An object type the ontology does not have, a property the type does not declare, a measure that is not kept, a dataset or a column that is absent: the screen writes it on the type, with what is missing (`missingForFunction`). It is not a refusal: a tool can be declared before its data arrives.
+- **A row that can no longer be read is not offered.** It is named on screen (`unreadable`), not hidden.
+- **Trying.** `POST …/function-types/:key/try` goes through the same validation and the same block as the analyst. No model is called, nothing is kept in the journal. A type that is off can be tried: that is how it is checked before it is switched on.
+- **By project.** A function type belongs to a project, and reads through that project's readers: two projects of two organisations see nothing of each other.
+- **Everything is kept in the audit log**: declaring, changing, removing.
+- **What is missing.** A filter knows only equality: neither “greater than”, nor a period between two dates. An aggregate is grouped by one thing only. Two object types meet only in a formula. By unit, an object is not carried up to the units above. The `dataset` block reads the dataset's rows up to the read ceiling, without sorting them. A declared tool is offered neither in Event finder nor in Investigate, which only have the web search. The product does not know of a property that it describes a person: the twin is made of objects of the network and aggregated values, and it is the person who declares a tool who chooses what it returns.
+
+**Code.** `backend/src/services/function-types.ts` (`readFunctionDraft`, `functionKeyFrom`, `runFunction`, `inputParser`, `toolOf`, `missingForFunction`, `listFunctionTypes`, `saveFunctionType`), `function-reads.ts` (`functionReads`, `standingFrom`, `functionOffer`, `declaredTools`, `CODE_TOOL_NAMES`), `analyst-settings.ts` (`toolCatalogue`), `analyst.ts` (`Step.label`), routes `backend/src/routes/function-types.ts` and `analyst.ts`, migration `071_function_type.sql`; `frontend/app/studio/manager/FunctionTypes.tsx`, `function-types.ts`, `ManagerView.tsx` (`FunctionsView`), `frontend/app/studio/analyst-api.ts` (`stepLabel`).
+**Tests.** `function-types.unit.test.ts` (each block on a small twin, by unit and by site, a ceiling reached, a result too long, the declaration refused, the name made from the label, the declaration turned into a tool, an input out of bounds, a figure that holds and a figure taken out in an exchange, a refusal the model reads, what the project lacks), `function-reads.unit.test.ts` (where an object stands; a project without a function type unchanged; a type that is off or whose name is taken is not offered), `routes/function-types.unit.test.ts`; `manager/function-types.test.ts`, `manager/FunctionTypes.test.tsx`, `simulation/hex/ToolsTab.test.tsx`, `analyst-api.test.ts`.
 
 ---
 

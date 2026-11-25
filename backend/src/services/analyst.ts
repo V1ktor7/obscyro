@@ -56,6 +56,8 @@ export interface Step {
   /** The tool's result, or `{ error }` when it refused. */
   output: unknown;
   ms: number;
+  /** What a declared tool is called on screen, in the words of the project that declared it. */
+  label?: string;
   /**
    * What the tool kept beside its result (`Recorded`): the same reading, whole.
    * Shown and journalled, never sent to the model and never cited.
@@ -696,7 +698,10 @@ export async function converse<D, A, F>(
       // A refusal carries no facts: only what a tool returned can be cited.
       const ledger = new Ledger();
       if (ok) ledger.addJson(output);
-      const step = keep({ tool: use.name, input: use.input, ok, output, ms: Date.now() - started, ...(record !== undefined ? { record } : {}) }, ledger);
+      const step = keep(
+        { tool: use.name, input: use.input, ok, output, ms: Date.now() - started, ...(tool?.label ? { label: tool.label } : {}), ...(record !== undefined ? { record } : {}) },
+        ledger,
+      );
       results.push({
         type: "tool_result",
         tool_use_id: use.id,

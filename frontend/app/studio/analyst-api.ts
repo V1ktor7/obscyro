@@ -20,6 +20,8 @@ export interface AnalystStep {
   /** What the tool returned, or `{ error }` when it refused. */
   output: unknown;
   ms: number;
+  /** What a tool declared in the project is called, in that project's words. */
+  label?: string;
   /** What the tool kept beside its result, whole: read by the screen, never by the model. */
   record?: unknown;
 }
@@ -600,6 +602,130 @@ export async function findEvents(
 }
 
 // ---------------------------------------------------------------------------
+// Function types: reading tools of the analyst that a project declares.
+// ---------------------------------------------------------------------------
+
+export type FunctionBlock = "objects" | "aggregate" | "formula" | "history" | "dataset";
+/** A value written in the declaration, or taken from one of the tool's inputs. */
+export type FunctionSlot = { value: string } | { input: string };
+export type FunctionAgg = "count" | "sum" | "mean" | "min" | "max";
+/** Where an object stands in the twin: the unit it is attached to, or the site of that unit. */
+export type FunctionStanding = { of: "unit" | "site" };
+
+export interface FunctionInput {
+  name: string;
+  kind: "text" | "number" | "date" | "choice";
+  required: boolean;
+  /** What it is for: read by the model, and by a person. */
+  says: string;
+  min: number | null;
+  max: number | null;
+  choices: string[];
+}
+
+export interface FunctionFilter {
+  property: string;
+  equals: FunctionSlot;
+}
+export interface ObjectsConfig {
+  type: string;
+  where: FunctionFilter[];
+  fields: { property: string; as: string }[];
+  limit: number;
+}
+export interface AggregateConfig {
+  type: string;
+  where: FunctionFilter[];
+  agg: FunctionAgg;
+  property: string | null;
+  /** A property, written or taken from a choice input; the unit or the site each object stands at; null: one value. */
+  groupBy: FunctionSlot | FunctionStanding | null;
+  as: string;
+}
+export interface FormulaConfig {
+  values: { name: string; type: string; where: FunctionFilter[]; agg: FunctionAgg; property: string | null }[];
+  expression: string;
+  as: string;
+}
+export interface HistoryConfig {
+  metric: string;
+  unit: FunctionSlot;
+  hours: number | { input: string };
+}
+export interface DatasetConfig {
+  dataset: string;
+  columns: string[];
+  where: { column: string; equals: FunctionSlot }[];
+  limit: number;
+}
+
+interface FunctionTypeCommon {
+  /** The tool's name, as the model calls it. */
+  key: string;
+  /** What a trace shows, in the institution's words. */
+  label: string;
+  description: string;
+  inputs: FunctionInput[];
+  active: boolean;
+  /** Why it cannot run on this project; null when it can. */
+  missing: string | null;
+}
+export type FunctionType =
+  | (FunctionTypeCommon & { block: "objects"; config: ObjectsConfig })
+  | (FunctionTypeCommon & { block: "aggregate"; config: AggregateConfig })
+  | (FunctionTypeCommon & { block: "formula"; config: FormulaConfig })
+  | (FunctionTypeCommon & { block: "history"; config: HistoryConfig })
+  | (FunctionTypeCommon & { block: "dataset"; config: DatasetConfig });
+
+/** What the project holds that a function type can point at. */
+export interface FunctionOffer {
+  objectTypes: { name: string; properties: string[] }[];
+  metrics: { key: string; label: string }[];
+  datasets: { id: string; name: string; slug: string; columns: string[] }[];
+}
+
+export interface FunctionTypeDraft {
+  label: string;
+  description: string;
+  inputs: FunctionInput[];
+  block: FunctionBlock;
+  config: Record<string, unknown>;
+  active: boolean;
+}
+
+export interface FunctionTypeList {
+  types: FunctionType[];
+  /** Stored types that can no longer be read: they are not offered to the analyst. */
+  unreadable: string[];
+  offer: FunctionOffer;
+}
+
+export async function fetchFunctionTypes(env: string): Promise<FunctionTypeList> {
+  return apiFetch(`/v1/ontology/${enc(env)}/function-types`);
+}
+export async function createFunctionType(env: string, draft: FunctionTypeDraft): Promise<FunctionType> {
+  return apiFetch(`/v1/ontology/${enc(env)}/function-types`, { method: "POST", body: draft });
+}
+export async function saveFunctionType(env: string, key: string, draft: FunctionTypeDraft): Promise<FunctionType> {
+  return apiFetch(`/v1/ontology/${enc(env)}/function-types/${enc(key)}`, { method: "PUT", body: draft });
+}
+export async function removeFunctionType(env: string, key: string): Promise<void> {
+  await apiFetch(`/v1/ontology/${enc(env)}/function-types/${enc(key)}`, { method: "DELETE" });
+}
+
+/** What a declared tool returned when it was tried, or the sentence the analyst would have read. */
+export interface FunctionTrial {
+  ok: boolean;
+  result?: unknown;
+  refused?: string;
+  ms: number;
+}
+/** Run a declared tool once, without the analyst. No model is called. */
+export async function tryFunctionType(env: string, key: string, input: Record<string, unknown>): Promise<FunctionTrial> {
+  return apiFetch(`/v1/ontology/${enc(env)}/function-types/${enc(key)}/try`, { method: "POST", body: { input } });
+}
+
+// ---------------------------------------------------------------------------
 // Action types: what the analyst may propose in a project, and the tools a
 // project switched off. Set from the ontology manager.
 // ---------------------------------------------------------------------------
@@ -962,7 +1088,7 @@ export function listedEvents(step: Pick<AnalystStep, "tool" | "ok" | "record"> |
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
 /** A step, in the words a planner would use for it. */
-export function stepLabel(step: Pick<AnalystStep, "tool" | "input" | "output" | "ok">): string {
+export function stepLabel(step: Pick<AnalystStep, "tool" | "input" | "output" | "ok" | "label">): string {
   const i = step.input ?? {};
   const world = i.world === "scenario" ? "with the scenario" : "as it stands";
   switch (step.tool) {
@@ -1063,6 +1189,7 @@ export function stepLabel(step: Pick<AnalystStep, "tool" | "input" | "output" | 
       return `${str(i.label) || "Calculation"}: ${str(i.expression)}${result !== undefined ? ` = ${result}` : ""}`;
     }
     default:
-      return step.tool;
+      // A tool declared in the project carries its own label; one this screen does not know shows its name.
+      return step.label ? `${step.label} (declared in this project)` : step.tool;
   }
 }

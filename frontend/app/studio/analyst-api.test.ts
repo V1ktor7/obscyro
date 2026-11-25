@@ -30,6 +30,13 @@ describe("a step in a planner's words", () => {
     expect(label("read_series", { dataset: "INSPQ", value_column: "admissions" })).toBe("Series admissions of INSPQ");
   });
 
+  it("names a tool declared in the project by its own label, and says it is the project's", () => {
+    const step = { tool: "ventilators_available_by_site", input: { site: "CHUM" }, output: {}, ok: true };
+    expect(stepLabel({ ...step, label: "Ventilators available by site" })).toBe("Ventilators available by site (declared in this project)");
+    // A tool this screen does not know and that carries no label shows its name.
+    expect(stepLabel(step)).toBe("ventilators_available_by_site");
+  });
+
   it("shows a calculation with its result, and without one when it was refused", () => {
     const input = { label: "Share spared", expression: "round((7316 - 267) / 7316 * 100, 1)" };
     expect(label("calculate", input, { result: 96.4 })).toBe("Share spared: round((7316 - 267) / 7316 * 100, 1) = 96.4");
