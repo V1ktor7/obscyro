@@ -101,8 +101,15 @@ describe("a page is named for what it shows", () => {
     expect(hrefOf("Network")).toBe("/studio/command");
   });
 
-  it("keeps the six pages of the twin, in the order people work through them", () => {
-    expect(twin.map((i) => i.label)).toEqual(["Response", "Units", "Network", "Scenarios", "Events", "Profiles"]);
+  it("keeps the six pages of the twin, in three groups: the map, the library, the setup", () => {
+    const section = NAV_SECTIONS.find((s) => s.capability === "twin")!;
+    expect(section.groups.map((g) => [g.title ?? null, g.items.map((i) => i.label)])).toEqual([
+      [null, ["Network"]],
+      ["Library", ["Scenarios", "Events", "Profiles"]],
+      ["Setup", ["Response", "Units"]],
+    ]);
+    // The section opens on the map, where the work is done.
+    expect(section.href).toBe("/studio/command");
   });
 
   it("still lights Units when an alert's link carries a unit in the address", () => {

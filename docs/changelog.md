@@ -15,6 +15,9 @@ Une entrée est écrite le jour où le changement est livré, dans le même comm
 - **Nouvelle fonction · Studio.** La page Network porte l'analyste dans un panneau repliable, sous l'inspecteur du site choisi, avec les onglets Ask et Investigate. L'ouvrir replie l'inspecteur ; le replier ne perd pas ce qui est en cours. Le bouton « Analyst » en bas à droite n'est plus montré sur cette page.
 - **Nouvelle fonction · Studio.** La frise de la page Network trace la série de l'unité choisie : la mesure que la carte colore, en escalier, avec son seuil d'alerte. Quand une enquête est à l'écran, ses épisodes y sont des bandes et ses événements des repères, au jour où leur source les date.
 - **Modification · Studio.** La frise de la page Network offre quatre fenêtres au lieu de deux : 24 h, 72 h, 7 jours, 30 jours. C'est aussi le laps de temps d'une enquête.
+- **Nouvelle fonction · Studio.** Les alertes ouvertes sont dans l'explorateur de la page Network, sous l'onglet « Alerts », avec leur nombre. Un clic sur une alerte choisit son site sur la carte et ouvre son inspecteur ; « Situation » mène à sa fiche.
+- **Modification · Studio.** Les six pages de la section Twin sont rangées en trois groupes : Network, la carte d'où l'on travaille ; « Library » (Scenarios, Events, Profiles) ; « Setup » (Response, Units). La section s'ouvre maintenant sur Network. Aucune page n'a changé d'adresse.
+- **Nouvelle fonction · Studio.** Les deux cartes du jumeau portent la même bascule, « Live · Scenario », en tête de leur barre : elle dit sur quelle carte on est et mène à l'autre, sur le même projet.
 
 ## 23 novembre 2026
 

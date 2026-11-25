@@ -3,7 +3,7 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "4bbf3ee94f1ef7f0"
+translatedFrom: "6b611a86937d0255"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
@@ -267,7 +267,7 @@ Three rules hold the whole tab.
 - **What is brought together coincides, and nothing more.** An event is published, an episode is measured; that they have anything to do with each other is a supposition. The screen writes “goes with”, never “caused”, and the first limit of every investigation says it again.
 - **An episode is counted against a threshold that exists.** It is that of the least severe alert rule on this measure at this unit. Without a rule there is no episode: each event is set beside the means of the days around it, and the tab says so.
 
-While it works, a bar of seven segments says where things stand (series, calendar, neighbours, searches, passages, comparison, check), a line says what is under way and for how long, and the trace is open: the steps are written into it one by one. Nothing is animated that did not happen.
+While it works, a bar of seven segments says where things stand (series, calendar, neighbours, searches, passages, comparison, check), a line says what is under way and for how long, and the trace is open: the steps are written into it one by one. Nothing is animated that did not happen, and an investigation that has ended names what it did not reach: a search that cited no passage ends at six pieces out of seven, “not reached: passages”.
 
 **Accept into the calendar** brings a candidate into the calendar, as in Event finder; **Reject** sends nothing. The events already in the calendar for those days are set beside the series in the same way, under “Already in the calendar for this span”.
 

@@ -8,6 +8,7 @@ import { fetchSimExport, fetchTwinTree, listGeoShapes, listTwinMetrics } from "@
 
 import type { ProposedOption } from "../../analyst-api";
 import { OVERLAY_BAR, OverlayPanel } from "../../map-overlay";
+import WorldSwitch from "../../WorldSwitch";
 import { formatHours } from "../../twin-ui";
 import { useStudio } from "../../StudioShell";
 import { listHealthEvents, removeHealthEvent, type HealthEvent } from "../../analyst-api";
@@ -964,6 +965,7 @@ export default function HexTwinView() {
           the globe; each panel takes them back. */}
       <div className="pointer-events-none absolute inset-0 flex flex-col gap-2 p-3">
         <header className={cn(OVERLAY_BAR, "flex shrink-0 flex-wrap items-center gap-2 px-3 py-2")}>
+        <WorldSwitch world="scenario" env={env} />
         <span className={LABEL}>Scenario</span>
         {renaming !== null && scenario ? (
           <form

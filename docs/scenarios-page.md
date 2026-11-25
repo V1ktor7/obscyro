@@ -30,7 +30,7 @@ flowchart TD
 
 | Panneau | Où | Ce qu'il montre |
 |---|---|---|
-| Barre du scénario | En haut | Le scénario ouvert, l'horizon, l'activité lue, le bouton Run |
+| Barre du scénario | En haut | La bascule « Live · Scenario », qui dit sur quelle carte on est et mène à l'autre (la carte du réseau tel qu'il est, page Network) sur le même projet ; puis le scénario ouvert, l'horizon, l'activité lue, le bouton Run |
 | Outils | En haut, au centre | Inspecter, conditions de départ, éclosion, canicule, mesure, capacité |
 | Start here | À gauche | Le guide en trois étapes |
 | Layers | À gauche | Ce que la carte colore : occupation, malades, résidents, couches ajoutées |

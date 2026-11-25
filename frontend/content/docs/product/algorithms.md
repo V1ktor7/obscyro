@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "06b43447c4ce9f3e"
+translatedFrom: "c2cfc40666e2e3be"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -1387,6 +1387,7 @@ flowchart TD
 - **A click is never left without a result.** When no panel opens, the explorer writes why: the unit has no place of its own and the map shows the sites of what is under it, or no site counts it.
 - **A unit counted by several sites** opens the first, and the explorer says how many sites count it.
 - **A site nothing stands for in the explorer**, a sensor for instance, lights no line there, and the explorer cannot hide it.
+- **The open alerts are in the explorer.** The “Alerts” tab lists the project's open alerts, the most severe first, then the most recent, with their number on the tab. They are those of the alert feed every page reads. A click on an alert selects the site that counts its unit, moves the map to it and opens its inspector: the link is the same as everywhere, the list of units each site says it counts. An alert whose unit has no site says so, and keeps its link to the situation card. The list shows and points; closing a signal or setting a threshold is still done on the Response page.
 - **The line lit from the map is shown once**: the branch that hides it opens and the list scrolls to it. Folding it again afterwards is the person's choice, and a new reading of the twin does not reopen it.
 
 **The inspector of a site.** A click on a site opens a collapsible overlay, set on the map. From top to bottom: its open alerts; the measure the map paints, with its rule, its gauge, its age and its change since the reading before; what else the site reports, each figure with its change; apart, the figures of the day before (D7), with their 30-day mean; what the twin kept of the painted measure over 24 hours; then, folded, the other readings and the units counted; and last, where the figures come from. The rows are the measures the organisation defined: none is written in the code.
@@ -1414,7 +1415,7 @@ flowchart TD
 - **The analyst is under the inspector.** The right column carries two folding overlays: the inspector of the selected site, then the “Analyst” panel, with its Ask and Investigate tabs (A13). Opening the analyst folds the inspector, whose name stays in view. The panel keeps what was done in it when it is folded or the other tab is shown: an investigation under way goes on. The “Analyst” button of the Studio's shell is not shown on this page.
 - **The timeline draws the series of the selected unit.** Under the lanes of the alerts and of the feed events, a third lane draws the painted measure at the selected unit, as a staircase, over the timeline's window: 24 h, 72 h, 7 days or 30 days, the same window as an investigation's. The series is read only while the timeline is open, then read again every minute. With no site selected, the timeline asks for one; for a site that counts several units, or a measure that is not kept, there is no series.
 
-**Code.** `frontend/app/studio/command/units-tree.ts` (`isSiteHidden`, `alertsForSite`, `pickFromExplorer`, `lineOfSite`, `lineAndBelow`, `unitsAbove`), `NetworkTwinView.tsx` (`pickLine`), `SiteInspector.tsx`, `NetworkAnalyst.tsx`, `NetworkTimeline.tsx`, `series-lane.ts`, `frontend/app/studio/map-overlay.tsx` (`OverlayPanel`, `keepMounted`), `frontend/app/studio/TreeExplorer.tsx` (`pathTo`). **Tests.** `units-tree.test.ts`, `TreeExplorer.test.tsx`, `SiteInspector.test.tsx`, `NetworkTimeline.test.tsx`, `series-lane.test.ts`, `InvestigateTab.test.tsx`.
+**Code.** `frontend/app/studio/command/units-tree.ts` (`isSiteHidden`, `alertsForSite`, `pickFromExplorer`, `lineOfSite`, `lineAndBelow`, `unitsAbove`), `NetworkTwinView.tsx` (`pickLine`, `pickSite`), `AlertsList.tsx`, `SiteInspector.tsx`, `NetworkAnalyst.tsx`, `NetworkTimeline.tsx`, `series-lane.ts`, `frontend/app/studio/map-overlay.tsx` (`OverlayPanel`, `keepMounted`), `frontend/app/studio/TreeExplorer.tsx` (`pathTo`). **Tests.** `units-tree.test.ts`, `TreeExplorer.test.tsx`, `SiteInspector.test.tsx`, `AlertsList.test.tsx`, `NetworkTimeline.test.tsx`, `series-lane.test.ts`, `InvestigateTab.test.tsx`.
 
 ## D11. History of twin measures
 

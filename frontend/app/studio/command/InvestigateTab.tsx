@@ -411,7 +411,15 @@ export default function InvestigateTab({
               </ol>
               <p className="flex justify-between text-[10px] text-ink-faint">
                 <span>{stages.filter((s) => s.state === "done").length} of {stages.length} pieces of work done</span>
-                <span>{stages.find((s) => s.state === "now")?.label ?? ""}</span>
+                <span>
+                  {stages.find((s) => s.state === "now")?.label ??
+                    (!working && stages.some((s) => s.state === "todo")
+                      ? `not reached: ${stages
+                          .filter((s) => s.state === "todo")
+                          .map((s) => s.label.toLowerCase())
+                          .join(", ")}`
+                      : "")}
+                </span>
               </p>
             </div>
           ) : null}

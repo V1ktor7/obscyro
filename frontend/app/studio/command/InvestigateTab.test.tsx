@@ -197,6 +197,17 @@ describe("an investigation at work", () => {
     expect(screen.getByText("7 of 7 pieces of work done")).toBeTruthy();
   });
 
+  it("names what an ended investigation did not reach, instead of leaving a count that reads as a failure", async () => {
+    // A search that cited no passage: six pieces of work were done, and the seventh never started.
+    const steps = STEPS.filter((s) => s.tool !== "web_passage");
+    streaming([...steps.map((s): InvestigationEvent => ({ type: "step", step: s })), { type: "done", result: result({ steps }), exchangeId: "ex-3" }]);
+    tab();
+    fireEvent.click(screen.getByRole("button", { name: /Investigate this span/ }));
+    await screen.findByText("Found · 2 candidates");
+    expect(screen.getByText("6 of 7 pieces of work done")).toBeTruthy();
+    expect(screen.getByText("not reached: passages")).toBeTruthy();
+  });
+
   it("lists each candidate in two lines: what it is, and how it sits beside the series", async () => {
     await investigated1();
     const row = screen.getByRole("listitem", { name: "Curfew across Québec" });

@@ -123,6 +123,17 @@ Une section qui a plus de huit pages (Ontology) garde une liste sur le côté : 
 rangée qui défile cache les pages au-delà de son bord. Code :
 `frontend/app/studio/PlatformRail.tsx`.
 
+Une rangée peut être coupée en groupes, chacun avec son titre en petites
+capitales. La section Twin en a trois : la carte d'où l'on travaille (Network),
+puis « Library », ce qu'on prépare en temps calme (Scenarios, Events, Profiles),
+puis « Setup », les deux pages qui listent ce que la carte montre déjà
+(Response, Units). La section s'ouvre sur Network. Les groupes sont déclarés
+dans `frontend/app/studio/platform-nav.ts`.
+
+Les deux cartes du jumeau portent la même bascule en tête de leur barre,
+« Live · Scenario » (`frontend/app/studio/WorldSwitch.tsx`) : le monde où l'on
+est y est marqué, l'autre est un lien vers sa page, sur le même projet.
+
 Une page ne répète pas ces onglets. Quand ils désignent des vues d'une même
 page, comme les huit de Models, la page lit la vue dans l'adresse (`?tab=…`) et
 n'a pas de rangée à elle : deux rangées qui disent la même chose font chercher

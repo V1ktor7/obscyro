@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "7f9ca66696f6cb86"
+translatedFrom: "ca96d41abaf680e9"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -21,6 +21,9 @@ An entry is written the day the change ships, in the same commit as the code. Si
 - **New feature · Studio.** The Network page carries the analyst in a folding panel, under the inspector of the selected site, with the Ask and Investigate tabs. Opening it folds the inspector; folding it does not lose what is under way. The “Analyst” button at the bottom right is no longer shown on this page.
 - **New feature · Studio.** The timeline of the Network page draws the series of the selected unit: the measure the map paints, as a staircase, with its alert threshold. When an investigation is on screen, its episodes are bands on it and its events are marks, at the day their source dates them.
 - **Change · Studio.** The timeline of the Network page offers four windows instead of two: 24 h, 72 h, 7 days, 30 days. It is also the span of an investigation.
+- **New feature · Studio.** The open alerts are in the explorer of the Network page, under the “Alerts” tab, with their number. A click on an alert selects its site on the map and opens its inspector; “Situation” leads to its card.
+- **Change · Studio.** The six pages of the Twin section are filed in three groups: Network, the map one works from; “Library” (Scenarios, Events, Profiles); “Setup” (Response, Units). The section now opens on Network. No page changed its address.
+- **New feature · Studio.** The two maps of the twin carry the same switch, “Live · Scenario”, at the head of their bar: it says which map one is on and leads to the other, on the same project.
 
 ## 23 November 2026
 

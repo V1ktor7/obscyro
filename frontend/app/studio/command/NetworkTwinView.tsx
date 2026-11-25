@@ -101,6 +101,8 @@ import {
   siteValue,
 } from "./site-metric";
 import type { InvestigationOnPage } from "./InvestigateTab";
+import WorldSwitch from "../WorldSwitch";
+import AlertsList from "./AlertsList";
 import NetworkAnalyst from "./NetworkAnalyst";
 import NetworkTimeline, { type TimelineSeries } from "./NetworkTimeline";
 import SiteInspector, { type UnitReading } from "./SiteInspector";
@@ -345,7 +347,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     selectedRef.current = selectedId;
   }, [selectedId]);
   const [panelTab, setPanelTab] = useState<
-    "explorer" | "layers" | "views" | "replay" | "spread"
+    "explorer" | "alerts" | "layers" | "views" | "replay" | "spread"
   >("explorer");
   /**
    * The wave being painted on the boundaries, shape id → 0..1.
@@ -1418,6 +1420,15 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     }
   }
 
+  /** Select a site from a list beside the map: the map moves to it and its inspector opens. */
+  function pickSite(siteId: string) {
+    setPicked(null);
+    setSelectedId(siteId);
+    const pos = positions.get(siteId);
+    const map = mapRef.current;
+    if (pos && map) map.flyTo({ center: pos, zoom: Math.max(map.getZoom(), 11) });
+  }
+
   function toggleStyle() {
     const next = styleMode === "standard" ? "satellite" : "standard";
     setStyleMode(next);
@@ -1612,6 +1623,17 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     return { state: "read", detail: held.detail, history: held.history };
   }, [selected, readUnitId, unitHeld, badgeMetric]);
 
+  // The site that counts a unit: the site is the unit, or names it among its units.
+  // An alert is raised on a unit; the map selects sites.
+  const siteOfUnit = useMemo(() => {
+    const byUnit = new Map<string, { id: string; name: string }>();
+    for (const s of network?.sites ?? []) {
+      for (const u of s.contributingUnits ?? []) if (!byUnit.has(u.id)) byUnit.set(u.id, { id: s.id, name: s.name });
+      if (!byUnit.has(s.id)) byUnit.set(s.id, { id: s.id, name: s.name });
+    }
+    return (unitId: string) => byUnit.get(unitId) ?? null;
+  }, [network]);
+
   const missingCoords = network?.sites.filter((s) => s.latitude === null).length ?? 0;
 
   const nameOfSite = useCallback(
@@ -1661,6 +1683,7 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
           <Globe2 className="h-3.5 w-3.5" />
         </span>
         <span className="text-[13px] font-semibold text-ink">Live twin · network</span>
+        <WorldSwitch world="live" env={env} />
         <span className="rounded border border-line px-2 py-0.5 text-[11px] text-ink-body">
           {env ?? "no environment"}
         </span>
@@ -1852,6 +1875,8 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
             {(
               [
                 ["explorer", "Explorer"],
+                // The open alerts, counted on the tab: an alert is where the work often starts.
+                ["alerts", alerts.length ? `Alerts · ${alerts.length}` : "Alerts"],
                 ["layers", "Layers"],
                 ["views", "Views"],
                 ["replay", "Replay"],
@@ -1883,6 +1908,10 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
               <PanelLeftClose className="h-4 w-4" />
             </button>
           </div>
+
+          {panelTab === "alerts" ? (
+            <AlertsList alerts={alerts} siteOf={siteOfUnit} env={env} selectedSiteId={selectedId} onPick={pickSite} />
+          ) : null}
 
           {/* Named for the two tabs it holds rather than hidden from the one it
               does not. Excluding only the explorer left this box rendering

@@ -3,7 +3,7 @@
 title: "The Scenarios page"
 description: "The map is the page. Everything else floats over it in panels that fold away."
 source: "docs/scenarios-page.md"
-translatedFrom: "881adf3b996233e5"
+translatedFrom: "a01f02fe9a8089aa"
 ---
 
 The map is the page. Everything else floats over it in panels that fold away (`OverlayPanel`, `frontend/app/studio/map-overlay.tsx`): never a side panel, and on arrival everything is folded except the guide on a first visit.
@@ -36,7 +36,7 @@ flowchart TD
 
 | Panel | Where | What it shows |
 |---|---|---|
-| Scenario bar | Top | The open scenario, the horizon, the activity read, the Run button |
+| Scenario bar | Top | The “Live · Scenario” switch, which says which map one is on and leads to the other (the map of the network as it stands, the Network page) on the same project; then the open scenario, the horizon, the activity read, the Run button |
 | Tools | Top, centre | Inspect, starting conditions, outbreak, heat wave, measure, capacity |
 | Start here | Left | The three-step guide |
 | Layers | Left | What the map colours: occupancy, sick people, residents, added layers |

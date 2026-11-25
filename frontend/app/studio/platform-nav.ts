@@ -207,20 +207,34 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Twin",
     icon: "Map",
     capability: "twin",
-    href: "/studio/response",
+    // The section opens on the map: it is where the work is done. The alerts,
+    // the units, the analyst and the series of a unit are all read from it.
+    href: "/studio/command",
     groups: [
+      // Six pages in a row said nothing of how they relate. They are three
+      // things: the map one works from, what is built in calm time to be used
+      // on it, and the two pages that list what the map already shows.
       {
         items: [
-          // Three of these were reachable only by typing the URL.
-          { label: "Response", href: "/studio/response" },
           // Named for what each page shows. They were the other way round:
           // "Units" opened the globe of the network's sites, and "Network" the
           // tree of its units.
-          { label: "Units", href: "/studio/live" },
           { label: "Network", href: "/studio/command" },
+        ],
+      },
+      {
+        title: "Library",
+        items: [
           { label: "Scenarios", href: "/studio/simulation" },
           { label: "Events", href: "/studio/events" },
           { label: "Profiles", href: "/studio/profiles" },
+        ],
+      },
+      {
+        title: "Setup",
+        items: [
+          { label: "Response", href: "/studio/response" },
+          { label: "Units", href: "/studio/live" },
         ],
       },
     ],

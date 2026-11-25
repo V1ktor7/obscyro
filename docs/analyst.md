@@ -261,7 +261,7 @@ Trois règles tiennent tout l'onglet.
 - **Ce qui est rapproché coïncide, et rien de plus.** Un événement est publié, un épisode est mesuré ; qu'ils aient un rapport est une supposition. L'écran écrit « goes with », jamais « caused », et la première limite de chaque enquête le redit.
 - **Un épisode se compte contre un seuil qui existe.** C'est celui de la règle d'alerte la moins sévère sur cette mesure à cette unité. Sans règle, il n'y a pas d'épisode : chaque événement est posé à côté des moyennes des jours qui l'entourent, et l'onglet le dit.
 
-Pendant le travail, une barre de sept segments dit où l'on en est (série, calendrier, voisins, recherches, passages, comparaison, contrôle), une ligne dit ce qui est en cours et depuis combien de temps, et la trace est ouverte : les étapes s'y écrivent une à une. Rien n'est animé qui n'a pas eu lieu.
+Pendant le travail, une barre de sept segments dit où l'on en est (série, calendrier, voisins, recherches, passages, comparaison, contrôle), une ligne dit ce qui est en cours et depuis combien de temps, et la trace est ouverte : les étapes s'y écrivent une à une. Rien n'est animé qui n'a pas eu lieu, et une enquête terminée nomme ce qu'elle n'a pas atteint : une recherche qui n'a cité aucun passage finit à six morceaux sur sept, « not reached: passages ».
 
 **Accept into the calendar** fait entrer un candidat au calendrier, comme dans Event finder ; **Reject** n'envoie rien. Les événements déjà au calendrier pour ces jours sont posés à côté de la série de la même façon, sous « Already in the calendar for this span ».
 
