@@ -21,6 +21,7 @@ Chaque algorithme du produit a ici sa section : à quoi il sert, son schéma, se
 | [A10](#a10-recherche-en-ligne-et-calendrier-dévénements) | Recherche en ligne validée et calendrier d'événements | `backend/src/services/analyst-events.ts` |
 | [A11](#a11-retest-dune-réponse-préparée) | Retest d'une réponse préparée, à l'ouverture d'un signal | `backend/src/services/response-retest.ts` |
 | [A12](#a12-prix-registre-des-coûts-et-délai-dune-option) | Prix, registre des coûts et délai d'une option | `backend/src/services/price-catalogue.ts`, `cost-ledger.ts` |
+| [A13](#a13-enquête-sur-une-série) | Enquête sur une série : des événements posés à côté de ce que le jumeau a mesuré | `backend/src/services/investigation.ts` |
 | **B** | **Jumeau et moteur de simulation** | |
 | [B1](#b1-export-du-jumeau) | Export du jumeau vers le moteur | `backend/src/services/twin-export.ts` |
 | [B2](#b2-un-pas-du-moteur-dévénements) | Un pas du moteur d'événements | `simulation-service/app/events/dynamics.py` |
@@ -55,7 +56,7 @@ Chaque algorithme du produit a ici sa section : à quoi il sert, son schéma, se
 
 **But.** Répondre à une question sur le jumeau, le scénario ouvert ou le run à l'écran, en ne s'appuyant que sur ce que des outils ont renvoyé. Le modèle de langage choisit quoi lire et rédige ; il ne détient aucun fait, ne calcule pas et ne décide pas. Détail : [analyst.md](analyst.md).
 
-La même boucle sert trois sortes d'échanges. Ce qui les distingue est leur **clôture** : les consignes données au modèle, l'outil par lequel il livre, et la façon dont cette livraison est contrôlée. Une question se clôt par `give_answer` ; un objectif se clôt par `give_options`, après des tests (A8) ; une recherche d'événements se clôt par `give_events`, après des recherches en ligne (A10).
+La même boucle sert trois sortes d'échanges. Ce qui les distingue est leur **clôture** : les consignes données au modèle, l'outil par lequel il livre, et la façon dont cette livraison est contrôlée. Une question se clôt par `give_answer` ; un objectif se clôt par `give_options`, après des tests (A8) ; une recherche d'événements se clôt par `give_events`, après des recherches en ligne (A10). Une enquête (A13) n'est pas une quatrième clôture : c'est une recherche d'événements, que le programme encadre d'étapes qu'il fait lui-même.
 
 ```mermaid
 sequenceDiagram
@@ -546,7 +547,7 @@ flowchart TD
 - **Dates.** Une date tient quand un passage (ou le titre de sa page) énonce le jour et le mois, en français ou en anglais ; l'année doit y être écrite, ou être une année que les passages ou la demande nomment. « En janvier 2022 » n'énonce aucun jour. Une date introuvable est retirée et laissée vide : la personne lit la source et la saisit.
 - **Portes.** Chaque candidat dit par quelle porte il touche un réseau de santé : demande, capacité, accès, soins. C'est le modèle qui la choisit ; la personne la voit avant d'accepter.
 - **Niveau de preuve.** « Published », attribué par le programme. Un événement validé n'est jamais présenté comme mesuré par le jumeau ni comme le résultat d'un run.
-- **Validation.** Accepter envoie l'identifiant de l'échange, celui du candidat et les dates validées, rien d'autre : le serveur recopie le reste de l'échange journalisé (`app.analyst_exchange`, sorte `events`), comme pour une décision (A9). Un candidat que la recherche n'a pas livré ne s'accepte pas ; le même candidat ne s'accepte pas deux fois. Les dates proposées par l'analyste sont gardées à côté des dates validées.
+- **Validation.** Accepter envoie l'identifiant de l'échange, celui du candidat et les dates validées, rien d'autre : le serveur recopie le reste de l'échange journalisé (`app.analyst_exchange`, sorte `events`, ou `investigation` quand le candidat vient d'une enquête, A13), comme pour une décision (A9). Un candidat que la recherche n'a pas livré ne s'accepte pas ; le même candidat ne s'accepte pas deux fois. Les dates proposées par l'analyste sont gardées à côté des dates validées.
 - **Refus.** Il n'existe aucune route pour refuser : un candidat refusé n'entre dans aucune table d'événements, et ni `list_events` ni la frise ne le voient. Il reste, comme tout ce que l'analyste a écrit, dans le journal de l'échange où il a été proposé, qu'aucun outil ne relit.
 - **Retrait.** Un événement accepté se retire du calendrier sur un clic confirmé, gardé au journal d'audit.
 - **Sur la frise.** Le couloir « Context » place chaque événement d'après la date que le scénario donne à son jour 0 (réglage « reality »). Sans cette date, rien n'est dessiné et le couloir dit pourquoi. Les événements y sont en contour, pas en aplat : ce ne sont pas des tampons, le moteur ne les reçoit jamais.
@@ -554,10 +555,6 @@ flowchart TD
 
 **Code.** `backend/src/services/analyst-events.ts` (`eventsClosing`, `handoff`, `EVENTS_PROMPT`), la boucle `converse` de `analyst.ts` (`Closing.handoff`, `usage.byRequest`), `analyst-web.ts` (`webSearchTool`, `WebReader`, `statedDates`, `dateStated`, `quotedFrom`), `web-sources.ts`, `health-events.ts` (`eventFromExchange`), outil `listEvents` dans `analyst-tools.ts`, route `POST /v1/ontology/:env/analyst/events` dans `backend/src/routes/analyst.ts`, `backend/src/routes/health-events.ts`, migration `062_health_event.sql` ; `frontend/app/studio/simulation/hex/EventFinderTab.tsx`, `ContextLane.tsx`, `context-lane.ts`, `WebChip` dans `analyst-parts.tsx`.
 **Tests.** `analyst-events.unit.test.ts`, `analyst-web.unit.test.ts`, `web-sources.unit.test.ts`, `health-events.unit.test.ts`, `analyst-tools.unit.test.ts` (`list_events`), `routes/health-events.unit.test.ts`, `routes/analyst.unit.test.ts` ; `EventFinderTab.test.tsx`, `ContextLane.test.tsx`, `context-lane.test.ts`, `AnalystPanel.test.tsx`, `HexTwinView.test.tsx`.
-
----
-
-# B. Jumeau et moteur de simulation
 
 ## A11. Retest d'une réponse préparée
 
@@ -705,6 +702,90 @@ flowchart TD
 
 **Code.** `backend/src/services/price-catalogue.ts` (`catalogueOf`, `modesFor`, `priceFor`, `priceListOf`, `fold`, `OPERATION_NAMES`), `cost-ledger.ts` (`ledgerOf`, `linesOf`, `formatCents`), `analyst-options.ts` (`settleMode`, `withPriceList`, `priceBasis`, `priceLines`), `analyst-tools.ts` (`list_prices`), `analyst-calc.ts` (`evaluate`), `property-schema.ts` (`PRICE_MECHANICS`), `twin-export.ts` (`priced_at`), `decisions.ts`, route `GET /v1/ontology/:env/twin/prices` dans `backend/src/routes/twin.ts` ; `simulation-service/app/events/mechanics.py` (`PRICE_MECHANICS`) ; `frontend/app/studio/simulation/hex/option-cards.tsx` (`CostLine`, `DelayLine`, `DemoPrice`, `weighOptions`), `OptionsTab.tsx`, `DecisionsTab.tsx`, `frontend/app/studio/manager/PriceList.tsx`, `price-list.ts`, `frontend/lib/money.ts`, `frontend/lib/property-schema.ts`.
 **Tests.** `cost-ledger.unit.test.ts` (le calcul à la main, la formule, la valeur absente, le prix d'un site, la fourchette), `analyst-options.unit.test.ts` (le mode et son délai, sans liste de prix rien ne change, le montant inventé retiré, la décision garde le coût), `twin-figures.unit.test.ts`, `tests/test_events_mechanics.py` ; `option-cards.test.tsx`, `OptionsTab.test.tsx`, `DecisionsTab.test.tsx`, `manager/PriceList.test.tsx`, `PropertyRowsEditor.test.tsx`.
+
+## A13. Enquête sur une série
+
+**But.** Quand la série d'une mesure bouge à une unité, dire ce qui se passait autour, et poser chaque événement trouvé à côté de ce que le jumeau a mesuré. Deux choses travaillent, et restent séparées : le programme lit la série, ses épisodes, le calendrier et les unités voisines, puis compare ; le modèle cherche des événements dans les sources permises, comme en A10, à partir de la seule phrase de la personne. C'est un premier morceau de l'étape « Effets mesurés » de la [boucle](decision-loop.md) : il dit ce qui coïncide, pas ce qui cause.
+
+**La démarche, étape par étape.**
+
+```mermaid
+flowchart TD
+    A["La personne, sur la carte du réseau : une unité choisie,<br/>la mesure que la carte colore, un laps de temps, une phrase"] --> B["p1 twin_series : les relevés gardés sur le laps de temps (D11),<br/>en escalier, et le seuil : la règle d'alerte la moins sévère<br/>qui couvre cette mesure à cette unité"]
+    B --> C{"Au moins une valeur<br/>sur le laps de temps ?"}
+    C -->|"non"| C1["Fin. Aucune recherche n'est faite,<br/>et l'écran dit où commence l'historique"]
+    C -->|"oui"| D["Épisodes : du premier relevé au-delà du seuil<br/>au premier relevé revenu en deçà, ou sans valeur.<br/>Deux passages à moins de 24 h n'en font qu'un"]
+    D --> E["p2 calendar_events : les événements validés<br/>du calendrier sur ces jours (A10)"]
+    E --> F{"Un seuil, et au moins un épisode ?"}
+    F -->|"non"| F1["p3 nearest_units : rien n'est lu,<br/>et l'étape dit pourquoi"]
+    F -->|"oui"| F2["p3 nearest_units : les 3 unités les plus proches<br/>qui rapportent la même mesure,<br/>leur série et leurs épisodes au même seuil"]
+    F1 --> G["p4 search_brief : ce qui part vers le web<br/>(la phrase, les sources, 8 recherches au plus)<br/>et ce qui reste ici"]
+    F2 --> G
+    G --> H["La recherche d'événements de A10, inchangée :<br/>le modèle ne reçoit que la phrase.<br/>Étapes s1, s2, … : recherches et passages"]
+    H --> I{"Des candidats livrés ?"}
+    I -->|"non"| I1["Fin. Ce qui a été lu reste dans les étapes,<br/>aucune comparaison"]
+    I -->|"oui"| J["p5 events_beside_series : chaque candidat,<br/>et chaque événement du calendrier,<br/>posé à côté de la série"]
+    J --> K["p6 search_check : ce que le contrôle<br/>de la recherche a retiré"]
+    K --> L["Dernière ligne du flux : les candidats,<br/>et le bloc investigation à côté"]
+    L --> M["Journal : tout l'échange, étapes comprises,<br/>sous la sorte investigation"]
+    L --> N["Page Network : onglet Investigate du panneau Analyst,<br/>et la frise, qui dessine la série,<br/>les épisodes et les événements"]
+    N --> O{"La personne"}
+    O -->|"Accept"| P["Le candidat entre au calendrier comme en A10 :<br/>le serveur le recopie du journal"]
+    O -->|"Reject"| Q["Rien n'est envoyé ni enregistré"]
+```
+
+**Un événement à côté de la série.**
+
+```mermaid
+flowchart TD
+    A["Un événement : son premier jour, ou aucun"] --> B{"A-t-il une date ?"}
+    B -->|"non"| B1["Non placé. Doute : no_date"]
+    B -->|"oui"| C{"Son premier jour est-il<br/>dans le laps de temps ?"}
+    C -->|"non"| C1["Non placé. Doute : outside_span,<br/>avant ou après"]
+    C -->|"oui"| D["Deux moyennes de la série :<br/>les 3 jours avant son premier jour,<br/>les 3 jours à partir de ce jour.<br/>Chacune dit sur combien de jours elle repose"]
+    D --> E{"Un épisode commence-t-il de 0 à 7 jours après lui,<br/>ou l'événement commence-t-il pendant un épisode ?"}
+    E -->|"aucun"| F["Ne va avec aucun épisode"]
+    E -->|"un ou plusieurs"| G["Le plus proche en jours.<br/>À égalité, celui que l'événement précède"]
+    G --> H{"L'épisode avait-il déjà commencé ?"}
+    H -->|"oui"| H1["Doute : starts_after,<br/>avec le nombre de jours"]
+    H -->|"non"| H2["Écart en jours : l'événement commence avant,<br/>ou le même jour"]
+    F --> I{"Un côté sans aucun jour<br/>qui ait une valeur ?"}
+    H1 --> I
+    H2 --> I
+    I -->|"oui"| I1["Doute : nothing_before ou nothing_after.<br/>Aucun écart n'est calculé"]
+    I -->|"non"| I2["Écart : la moyenne d'après moins celle d'avant"]
+    I1 --> J{"D'autres événements vont-ils<br/>avec le même épisode ?"}
+    I2 --> J
+    J -->|"oui"| J1["Doute : shared, avec leurs références"]
+    J -->|"non"| K["Comparaison rendue"]
+    J1 --> K
+```
+
+**Règles.**
+- **Rien de ce que le programme lit n'atteint le modèle.** La recherche est celle de A10 : un échange sans outil de lecture, qui ne reçoit que la phrase, la liste des sources et la date du jour. La série, le seuil, le calendrier et les voisins ne sont mis dans aucun message. Un test le tient : aucun chiffre de la série, aucun nom d'unité n'apparaît dans ce qui est envoyé au modèle.
+- **La phrase est celle de la personne.** L'écran en propose une, qui nomme l'unité et les deux dates du laps de temps, et rien de ce que le jumeau y a mesuré. La personne la lit, la change si elle veut, et l'envoie : c'est la seule chose qui part dans une recherche. L'étape `search_brief` l'écrit avant que la recherche parte.
+- **Un épisode se compte contre un seuil qui existe.** Le seuil est celui d'une règle d'alerte du projet : la moins sévère de celles qui couvrent la mesure à cette unité, parce que c'est là qu'une alerte commence. Sans règle, il n'y a aucun épisode, et le résultat le dit : chaque événement n'est alors posé qu'à côté des moyennes des jours qui l'entourent. Aucun seuil n'est inventé, et « l'habituel » d'une unité n'est pas calculé.
+- **La série est un escalier**, comme sur la fiche d'une unité (D11) : un relevé est placé à l'heure de sa source, ou à l'heure où il a été noté quand la source ne le dit pas, et tient jusqu'au suivant. Le relevé en vigueur à l'ouverture du laps de temps en est le premier point.
+- **Une valeur par jour.** La valeur d'un jour est la moyenne des relevés datés de ce jour. Un jour sans relevé garde la valeur en vigueur quand il a commencé. Rien n'est comblé avant le premier relevé, et un jour où la mesure n'avait pas de valeur n'en a pas : un trou n'est pas un zéro.
+- **« Va avec » a un sens précis.** Un événement va avec un épisode quand il commence au plus 7 jours avant lui, ou pendant lui. Au-delà de 7 jours, rien n'est dit. Un événement qui commence après le début de l'épisode ne peut pas l'avoir déclenché : c'est écrit sur lui, comme un doute.
+- **Les doutes sont comptés par le programme.** Pas de date ; hors du laps de temps ; aucun relevé avant, ou après ; l'épisode avait déjà commencé ; d'autres événements vont avec le même épisode. Le modèle n'en écrit aucun.
+- **Les voisins disent si l'épisode est propre à l'unité.** Les trois unités les plus proches qui rapportent la même mesure sont lues au même seuil ; un épisode nomme celles qui en avaient un sur les mêmes jours. Les unités sont placées comme la carte du réseau les place : un site qui compte une seule unité est la place de cette unité. Une unité sans coordonnées n'a pas de voisins, et le résultat le dit.
+- **Ce n'est pas une cause.** Un événement est publié par une source, un épisode est mesuré par le jumeau, et leur rapprochement est une supposition. La première limite du résultat le dit dans tous les cas, l'écran écrit « goes with » et jamais « caused », et les trois niveaux restent séparés sur chaque événement : Published, Measured, et les raisons de douter.
+- **Sans série, pas de recherche.** Si le laps de temps ne contient aucune valeur, l'enquête s'arrête après la première étape : rien n'est cherché ni payé, et le message dit quel jour l'historique commence.
+- **Chaque étape est écrite.** Celles du programme sont numérotées `p1`, `p2`, … ; celles de la recherche gardent `s1`, `s2`, …, que les candidats citent. Elles arrivent dans le flux une à une, dans l'ordre où le travail est fait, et l'écran les montre pendant qu'elles arrivent. Une lecture qui échoue (le calendrier, les voisins) est une étape manquée et une limite écrite, pas une enquête arrêtée.
+- **La trace se relit.** L'échange entier est gardé au journal sous la sorte `investigation` : la phrase, les étapes, la série lue (dans le relevé de l'étape `twin_series`), les candidats et la comparaison. `GET /analyst/investigations` liste les enquêtes d'un projet ou d'une unité, `GET /analyst/investigations/:id` en rend une telle qu'elle a été livrée. Rien n'est recalculé à la relecture.
+- **Un candidat s'accepte comme en A10.** Le serveur le recopie du journal de l'enquête ; un candidat refusé n'est enregistré nulle part.
+- **Sur la frise.** La frise de la page Network dessine la série de l'unité choisie sur sa propre fenêtre, la même que celle de l'enquête (24 h, 72 h, 7 jours, 30 jours). Quand une enquête de cette unité et de cette mesure est à l'écran, ses épisodes sont des bandes sous la série et ses événements des repères au jour où leur source les date : en pointillé pour un candidat, pleins pour un événement du calendrier. Un épisode dessiné est un épisode que l'enquête a compté, jamais un épisode deviné sur le trait. Le seuil n'est tracé que s'il est proche de ce qui a été lu, et l'écran le dit quand il ne l'est pas.
+- **Bornes.** Un laps de temps de 366 jours au plus, 2 000 relevés par série (au-delà, les plus anciens sont laissés de côté et le résultat le dit). Les jours se comptent sur l'horloge que la page envoie, celle du navigateur ; UTC quand aucune n'est envoyée.
+- **Ce qui manque.** Un seul facteur à la fois : aucun modèle ne sépare la part de deux événements qui vont avec le même épisode. Aucune réplication : un événement vu avant un épisode a été vu une fois (les briques qui répliquent un décalage sur plusieurs vagues sont en C3, et ne sont pas reliées). Le lieu d'un événement est un texte, il n'est relié à aucun territoire : l'enquête ne sait pas si l'événement concerne l'unité. L'historique commence le jour où l'enregistreur a démarré (D11).
+- Une enquête lit une unité et des valeurs agrégées, jamais une personne.
+
+**Code.** `backend/src/services/investigation.ts` (`investigate`, `seriesOf`, `dailyOf`, `lineFor`, `episodesOf`, `nearestTo`, `shareEpisodes`, `compareEvents`), `investigation-journal.ts` (`listInvestigations`, `readInvestigation`), `twin-history.ts` (`readReadingsBetween`), la recherche de A10 (`eventsClosing`, `converse`), `health-events.ts` (`eventFromExchange`), routes `POST /v1/ontology/:env/analyst/investigate`, `GET /v1/ontology/:env/analyst/investigations` et `/:id` dans `backend/src/routes/analyst.ts`, migration `069_analyst_investigation.sql` ; `frontend/app/studio/command/InvestigateTab.tsx`, `NetworkAnalyst.tsx`, `investigation.ts` (`stagesOf`, `verdictOf`, `doubtText`, `measuredLines`, `proposedRequest`), `NetworkTimeline.tsx`, `series-lane.ts` (`seriesLane`), `frontend/app/studio/analyst-api.ts` (`investigate`, `stepLabel`).
+**Tests.** `investigation.unit.test.ts` (la série, les jours, les épisodes, les voisins, la comparaison, l'enquête de bout en bout avec un modèle simulé, rien de la série envoyé au modèle, pas de recherche sans série), `health-events.unit.test.ts` (un candidat d'enquête s'accepte) ; `command/investigation.test.ts`, `InvestigateTab.test.tsx`, `series-lane.test.ts`, `NetworkTimeline.test.tsx`, `analyst-api.test.ts`.
+
+---
+
+# B. Jumeau et moteur de simulation
 
 ## B1. Export du jumeau
 
@@ -1315,13 +1396,19 @@ flowchart TD
     V --> P
     N --> P
     Z --> P
+    D --> T["Frise, quand elle est ouverte : la série de la mesure colorée<br/>sur la fenêtre de la frise (GET /twin/units/:id/history)"]
+    T --> I{"Une enquête de cette unité<br/>et de cette mesure est à l'écran ?"}
+    I -->|"oui"| I1["Ses épisodes en bandes,<br/>ses événements en repères (A13)"]
+    I -->|"non"| I2["La série seule, et son seuil d'alerte<br/>quand il est proche de ce qui a été lu"]
 ```
 
 - **Ce qui a été gardé l'est par unité** (D11). Un site qui compte une seule unité lit la sienne, et la relit chaque minute. Un site qui en compte plusieurs ne les additionne pas : des historiques qui n'ont pas été gardés ensemble ne font pas un historique.
 - **Les alertes viennent en tête.** Le panneau s'est allongé, et une alerte ouverte ne doit pas finir sous le pli.
 - **La source est un texte du jumeau.** « About these figures » imprime la description que l'organisation a écrite sur les types d'objets que les mesures lisent (`typeNotes`) : la source, sa licence, ses limites. Aucun écran ne nomme une source.
+- **L'analyste est sous l'inspecteur.** La colonne de droite porte deux overlays repliables : l'inspecteur du site choisi, puis le panneau « Analyst », avec ses onglets Ask et Investigate (A13). Ouvrir l'analyste replie l'inspecteur, dont le nom reste en vue. Le panneau garde ce qu'on y a fait quand on le replie ou qu'on change d'onglet : une enquête en cours continue. Le bouton « Analyst » du cadre du Studio n'est pas montré sur cette page.
+- **La frise dessine la série de l'unité choisie.** Sous les couloirs des alertes et des arrivées de données, un troisième couloir trace la mesure colorée à l'unité choisie, en escalier, sur la fenêtre de la frise : 24 h, 72 h, 7 jours ou 30 jours, la même fenêtre que celle d'une enquête. La série n'est lue que quand la frise est ouverte, puis relue chaque minute. Sans site choisi, la frise le demande ; pour un site qui compte plusieurs unités, ou une mesure qui n'est pas gardée, il n'y a pas de série.
 
-**Code.** `frontend/app/studio/command/units-tree.ts` (`isSiteHidden`, `alertsForSite`, `pickFromExplorer`, `lineOfSite`, `lineAndBelow`, `unitsAbove`), `NetworkTwinView.tsx` (`pickLine`), `SiteInspector.tsx`, `frontend/app/studio/TreeExplorer.tsx` (`pathTo`). **Tests.** `units-tree.test.ts`, `TreeExplorer.test.tsx`, `SiteInspector.test.tsx`.
+**Code.** `frontend/app/studio/command/units-tree.ts` (`isSiteHidden`, `alertsForSite`, `pickFromExplorer`, `lineOfSite`, `lineAndBelow`, `unitsAbove`), `NetworkTwinView.tsx` (`pickLine`), `SiteInspector.tsx`, `NetworkAnalyst.tsx`, `NetworkTimeline.tsx`, `series-lane.ts`, `frontend/app/studio/map-overlay.tsx` (`OverlayPanel`, `keepMounted`), `frontend/app/studio/TreeExplorer.tsx` (`pathTo`). **Tests.** `units-tree.test.ts`, `TreeExplorer.test.tsx`, `SiteInspector.test.tsx`, `NetworkTimeline.test.tsx`, `series-lane.test.ts`, `InvestigateTab.test.tsx`.
 
 ## D11. Historique des mesures du jumeau
 
@@ -1369,7 +1456,7 @@ flowchart TD
 - **Cadence.** Une passe toutes les cinq minutes, jamais deux à la fois : la suivante part cinq minutes après la fin de la précédente. Un changement est donc noté au plus cinq minutes après s'être produit, avec l'heure de sa source. L'échec d'un projet ne coûte pas leur relevé aux autres. `TWIN_HISTORY_DISABLED=1` arrête l'enregistrement ; ce qui a été gardé reste.
 - **Une lecture bornée.** 48 heures par défaut, 90 jours au plus, 2 000 relevés par réponse. Quand la période en contient plus, les plus anciens sont laissés de côté et la réponse le dit (`cut`).
 - **Une unité retirée ne perd pas son passé.** Les relevés ne sont pas liés à l'objet par une clé étrangère : l'historique raconte ce qui a été, pas ce qui est encore là. Un projet supprimé emporte les siens.
-- **Ce qui n'est pas gardé.** Les objets eux-mêmes, leurs liens et les capacités à une date passée : on ne peut pas encore relire tout le jumeau tel qu'il était. La fiche de situation ne lit de l'historique que la mesure qui a levé son signal, depuis sa levée (A9). Les outils de l'analyste ne le lisent pas : ils le disent, et renvoient à la page de l'unité.
+- **Ce qui n'est pas gardé.** Les objets eux-mêmes, leurs liens et les capacités à une date passée : on ne peut pas encore relire tout le jumeau tel qu'il était. La fiche de situation ne lit de l'historique que la mesure qui a levé son signal, depuis sa levée (A9). Les outils de l'analyste ne le lisent pas : ils le disent, et renvoient à la page de l'unité. Une enquête (A13) le lit, mais c'est le programme qui le lit et non le modèle.
 - Un relevé est une unité et une valeur agrégée, jamais une personne.
 
 - **L'écart avec le relevé d'avant.** Pour chaque mesure qui a une valeur, la fiche d'une unité et l'inspecteur d'un site donnent l'écart avec le relevé gardé qui précède, et l'heure de ce relevé. Le calcul est fait par le serveur (`changeOf`), en une lecture pour toutes les mesures de l'unité (`readUnitTrends`) ; l'écran ne soustrait rien. Le dernier relevé gardé est le plus souvent la valeur à l'écran elle-même, notée il y a quelques minutes : il est reconnu à son heure, à 90 secondes près, ou à sa valeur quand la source ne donne pas d'heure, et c'est celui d'avant qui sert. Une valeur corrigée dans son heure laisse deux relevés à la même heure : aucun des deux n'est le relevé d'avant, et l'écart se compte depuis l'heure précédente. Si l'enregistreur n'a pas encore noté la valeur à l'écran, le dernier gardé est déjà le relevé d'avant.

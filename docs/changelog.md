@@ -7,6 +7,15 @@ Ce qui a changé dans Obscyro, du plus récent au plus ancien. Chaque entrée di
 
 Une entrée est écrite le jour où le changement est livré, dans le même commit que le code. Depuis novembre 2026, chaque changement visible a la sienne. Les mois d'avant sont résumés. Le détail complet, commit par commit, est dans [l'historique du dépôt](https://github.com/V1ktor7/obscyro/commits/main).
 
+## 24 novembre 2026
+
+- **Nouvelle fonction · Analyste.** Enquêter sur la série d'une unité. Sur la page Network, on choisit un site, et l'onglet Investigate cherche dans les sources officielles ce qui se passait autour sur 24 heures, 72 heures, 7 jours ou 30 jours. Chaque événement trouvé est posé à côté de la série que le jumeau a gardée : l'épisode de dépassement du seuil d'alerte avec lequel il va, à combien de jours, la moyenne des trois jours avant et des trois jours à partir de son début, et les raisons de douter. Les événements déjà au calendrier sont comparés de la même façon. Un rapprochement est une coïncidence dans le temps : l'écran écrit « goes with », jamais « caused ».
+- **Nouvelle fonction · Analyste.** On voit l'enquête travailler, et elle laisse sa trace. Chaque étape s'écrit à l'écran quand elle se termine : la série lue, le calendrier, les unités voisines, ce qui part vers le web, chaque recherche, chaque passage cité, la comparaison, le contrôle. Une barre dit où l'on en est. Tout est gardé au journal, et une enquête passée se rouvre telle qu'elle a été livrée.
+- **Nouvelle fonction · Analyste.** Seule la phrase part dans une recherche. L'onglet en propose une, qui nomme l'unité et les dates et aucun de ses chiffres ; on peut la changer avant de l'envoyer. La série, le seuil et les voisins sont lus par le serveur et ne sont jamais envoyés au modèle. Sans relevé sur le laps de temps, aucune recherche n'est faite.
+- **Nouvelle fonction · Studio.** La page Network porte l'analyste dans un panneau repliable, sous l'inspecteur du site choisi, avec les onglets Ask et Investigate. L'ouvrir replie l'inspecteur ; le replier ne perd pas ce qui est en cours. Le bouton « Analyst » en bas à droite n'est plus montré sur cette page.
+- **Nouvelle fonction · Studio.** La frise de la page Network trace la série de l'unité choisie : la mesure que la carte colore, en escalier, avec son seuil d'alerte. Quand une enquête est à l'écran, ses épisodes y sont des bandes et ses événements des repères, au jour où leur source les date.
+- **Modification · Studio.** La frise de la page Network offre quatre fenêtres au lieu de deux : 24 h, 72 h, 7 jours, 30 jours. C'est aussi le laps de temps d'une enquête.
+
 ## 23 novembre 2026
 
 - **Modification · Studio.** Chaque chiffre que rapporte une unité porte son âge. La liste « Also reports » de la fiche d'une unité, et celle de l'inspecteur de la carte du réseau, écrivent une fois l'âge que partagent leurs valeurs (« Values read 27m ago. »). Une valeur lue à une autre heure porte le sien sur sa ligne, et un chiffre de la veille dit quand il a été publié.

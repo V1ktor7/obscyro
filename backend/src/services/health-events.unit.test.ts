@@ -84,6 +84,14 @@ test("a candidate whose date was left blank is accepted on the date the person e
   assert.equal(draft.sourceTitle, null);
 });
 
+test("a candidate of an investigation is accepted like one of a search", () => {
+  // What an investigation journals: the search's proposal, and what was measured beside it.
+  const investigated = journalled({ kind: "investigation", answer: { ...proposal, investigation: { compared: [] } } });
+  const draft = eventFromExchange(investigated, "c1", { startsOn: "2021-12-31", endsOn: null });
+  assert.equal(draft.candidate, "c1");
+  assert.equal(draft.title, proposal.candidates[0]!.title);
+});
+
 test("only a candidate that a search delivered can be accepted", () => {
   const dates = { startsOn: "2021-12-31", endsOn: null };
   assert.throws(() => eventFromExchange(journalled(), "c9", dates), refused("NOT_A_CANDIDATE"));

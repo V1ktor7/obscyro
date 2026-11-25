@@ -10,9 +10,11 @@
  * person has in front of them: the page, and the unit or the signal they have
  * selected (`useAnalystFocus`).
  *
- * Two pages do without it, because they already hold the analyst where the
+ * Three pages do without it, because they already hold the analyst where the
  * work is: the scenario map, whose panel also has the scenario, the run and
- * the options; and the situation card, where it sits under the figures.
+ * the options; the situation card, where it sits under the figures; and the
+ * network map, whose Analyst panel also investigates the series of the unit
+ * selected on it.
  *
  * It only reads. What it is told about the page is ids: the server looks the
  * names up itself.
@@ -77,7 +79,7 @@ export function useAnalystFocus(focus: PageFocus): void {
 }
 
 /** The pages that hold the analyst themselves. */
-const OWN_ANALYST = new Set(["simulation", "situation"]);
+const OWN_ANALYST = new Set(["simulation", "situation", "command"]);
 
 /** The Studio page an address is on: "/studio/live" is "live". */
 export function pageOf(pathname: string): string {

@@ -184,6 +184,16 @@ describe("the inspector of a site on the network map", () => {
     expect(props.onClose).toHaveBeenCalled();
   });
 
+  it("is folded by the page when the page says so, and tells it when the person unfolds it", () => {
+    const onFolded = vi.fn();
+    inspector({ folded: true, onFolded });
+    // Folded from outside: the title stays, the body is gone.
+    expect(screen.getByText("HÔPITAL GÉNÉRAL JUIF")).toBeTruthy();
+    expect(screen.queryByText("Open unit canvas")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Unfold the inspector" }));
+    expect(onFolded).toHaveBeenCalledWith(false);
+  });
+
   it("keeps the other readings folded until asked", () => {
     inspector();
     expect(screen.queryByText("Linked instances")).toBeNull();

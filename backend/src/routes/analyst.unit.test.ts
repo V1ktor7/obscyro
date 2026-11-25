@@ -98,6 +98,39 @@ test("a search for events needs a request, and never takes the twin's data from 
   await app.close();
 });
 
+test("an investigation needs a unit, a measure, a span and a sentence before anything is read", async () => {
+  const app = await server();
+  assert.ok(app.hasRoute({ method: "POST", url: "/v1/ontology/:env/analyst/investigate" }));
+  assert.ok(app.hasRoute({ method: "GET", url: "/v1/ontology/:env/analyst/investigations" }));
+  assert.ok(app.hasRoute({ method: "GET", url: "/v1/ontology/:env/analyst/investigations/:id" }));
+  const post = (payload: object) => app.inject({ method: "POST", url: "/v1/ontology/mtl/analyst/investigate", payload });
+  const body = {
+    unitId: "11111111-1111-4111-8111-111111111111",
+    metric: "occupancy",
+    from: "2026-11-21T18:00:00.000Z",
+    to: "2026-11-24T18:00:00.000Z",
+    request: "What was reported around CHUM between 2026-11-21 and 2026-11-24?",
+  };
+
+  assert.equal((await post({ ...body, unitId: "chum" })).statusCode, 400);
+  assert.equal((await post({ ...body, metric: "" })).statusCode, 400);
+  assert.equal((await post({ ...body, from: "last week" })).statusCode, 400);
+  assert.equal((await post({ ...body, to: undefined })).statusCode, 400);
+  assert.equal((await post({ ...body, request: "?" })).statusCode, 400);
+  // Well formed, with or without a clock: it stops at the door, for want of a key.
+  assert.equal((await post(body)).statusCode, 401);
+  assert.equal((await post({ ...body, zone: "America/Toronto" })).statusCode, 401);
+  // The series is the server's to read: one sent by the caller is not part of the request, and is dropped.
+  assert.equal((await post({ ...body, series: [141.3], threshold: 100 })).statusCode, 401);
+
+  // The journal is read by its project's members only, and by a real id.
+  assert.equal((await app.inject({ method: "GET", url: "/v1/ontology/mtl/analyst/investigations" })).statusCode, 401);
+  assert.equal((await app.inject({ method: "GET", url: "/v1/ontology/mtl/analyst/investigations?unitId=chum" })).statusCode, 400);
+  assert.equal((await app.inject({ method: "GET", url: "/v1/ontology/mtl/analyst/investigations?limit=500" })).statusCode, 400);
+  assert.equal((await app.inject({ method: "GET", url: "/v1/ontology/mtl/analyst/investigations/not-an-id" })).statusCode, 400);
+  await app.close();
+});
+
 test("an account out of credit is said as such, not as something to try again", () => {
   // What the API answered on 2026-11-20, in the middle of a replay: a 400, with this message.
   const body = { type: "error", error: { type: "invalid_request_error", message: "Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits." } };

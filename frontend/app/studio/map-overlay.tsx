@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
 
@@ -25,6 +25,7 @@ export function OverlayPanel({
   children,
   className,
   bodyClassName,
+  keepMounted = false,
 }: {
   title: ReactNode;
   /** A short line beside the title, read even when the panel is folded. */
@@ -34,7 +35,18 @@ export function OverlayPanel({
   children: ReactNode;
   className?: string;
   bodyClassName?: string;
+  /**
+   * Keep the body in the page while the panel is folded, hidden. For a panel
+   * whose work goes on when it is folded: an exchange with the analyst must
+   * not be lost because the person wanted to see the map. The body is still
+   * built only when the panel is first opened.
+   */
+  keepMounted?: boolean;
 }) {
+  const [built, setBuilt] = useState(open);
+  useEffect(() => {
+    if (open) setBuilt(true);
+  }, [open]);
   return (
     <section
       className={cn(
@@ -55,8 +67,10 @@ export function OverlayPanel({
           aria-hidden="true"
         />
       </button>
-      {open ? (
-        <div className={cn("min-h-0 overflow-y-auto border-t border-line-soft", bodyClassName)}>{children}</div>
+      {open || (keepMounted && built) ? (
+        <div hidden={!open} className={cn("min-h-0 overflow-y-auto border-t border-line-soft", bodyClassName)}>
+          {children}
+        </div>
       ) : null}
     </section>
   );

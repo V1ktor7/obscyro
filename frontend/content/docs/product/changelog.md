@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "2b352fe4ea082b84"
+translatedFrom: "7f9ca66696f6cb86"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -12,6 +12,15 @@ What changed in Obscyro, from the most recent to the oldest. Each entry says wha
 - **Change**: something it already did, and now does differently, better or faster. A fix is one.
 
 An entry is written the day the change ships, in the same commit as the code. Since November 2026, every visible change has its own. The months before are summarised. The full detail, commit by commit, is in [the repository's history](https://github.com/V1ktor7/obscyro/commits/main).
+
+## 24 November 2026
+
+- **New feature · Analyst.** Investigating the series of a unit. On the Network page, one selects a site, and the Investigate tab searches official sources for what was going on around it over 24 hours, 72 hours, 7 days or 30 days. Each event found is set beside the series the twin kept: the episode beyond the alert threshold it goes with, how many days apart, the mean of the three days before and of the three days from its start, and the reasons to doubt. The events already in the calendar are compared in the same way. A pairing is a coincidence in time: the screen writes “goes with”, never “caused”.
+- **New feature · Analyst.** One sees the investigation work, and it leaves its trace. Each step is written on screen when it ends: the series read, the calendar, the neighbouring units, what goes to the web, each search, each passage cited, the comparison, the check. A bar says where things stand. Everything is kept in the journal, and a past investigation reopens as it was delivered.
+- **New feature · Analyst.** Only the sentence goes into a search. The tab proposes one, which names the unit and the dates and none of its figures; it can be changed before it is sent. The series, the threshold and the neighbours are read by the server and are never sent to the model. Without a reading over the span, no search is made.
+- **New feature · Studio.** The Network page carries the analyst in a folding panel, under the inspector of the selected site, with the Ask and Investigate tabs. Opening it folds the inspector; folding it does not lose what is under way. The “Analyst” button at the bottom right is no longer shown on this page.
+- **New feature · Studio.** The timeline of the Network page draws the series of the selected unit: the measure the map paints, as a staircase, with its alert threshold. When an investigation is on screen, its episodes are bands on it and its events are marks, at the day their source dates them.
+- **Change · Studio.** The timeline of the Network page offers four windows instead of two: 24 h, 72 h, 7 days, 30 days. It is also the span of an investigation.
 
 ## 23 November 2026
 

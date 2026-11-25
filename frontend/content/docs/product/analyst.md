@@ -3,12 +3,14 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "c9366186041065ee"
+translatedFrom: "4bbf3ee94f1ef7f0"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
 
 It is also one click away on the other pages of the Studio, through the “Analyst” button at the bottom right, and in the situation card that opens from an alert. There it answers about the network as it stands now: what is open, and the live figures of a unit, each with its age.
+
+On the network map (the Network page), it has a panel of its own, under the inspector of the selected site. One asks a question there, and one investigates the series of a unit: the **Investigate** tab searches for what was going on around it, and sets each event found beside what the twin measured (see “The investigations”). It is a first piece of the “Measured effects” step of the loop.
 
 The panel has four tabs, which cover five steps of the [decision loop](/docs/product/decision-loop):
 
@@ -19,7 +21,7 @@ The panel has four tabs, which cover five steps of the [decision loop](/docs/pro
 | Options | Tested options, Recommendation | State an objective, see up to three options tested by the engine beside the scenario as it is |
 | Decisions | Follow-up | Read back what was retained, what was expected of it, and the gap with what was observed |
 
-The diagrams of the loop, the verifier and the calculator are in [Algorithms](/docs/product/algorithms), sections A1 to A3; those of the tested options and the decisions, sections A8 and A9; that of the online search and the calendar, section A10; those of the price list, the cost ledger and the delay of an option, section A12.
+The diagrams of the loop, the verifier and the calculator are in [Algorithms](/docs/product/algorithms), sections A1 to A3; those of the tested options and the decisions, sections A8 and A9; that of the online search and the calendar, section A10; those of the price list, the cost ledger and the delay of an option, section A12; those of the investigation of a series, section A13.
 
 ## What it does, and what it does not
 
@@ -62,6 +64,9 @@ The Event finder tab uses the web search of the Claude API. It has no variable o
 | `POST /v1/ontology/:env/analyst/ask` | A stream, one JSON line per event: a question and its answer |
 | `POST /v1/ontology/:env/analyst/options` | The same stream: an objective and the tested options |
 | `POST /v1/ontology/:env/analyst/events` | The same stream: a request and the candidate events found online |
+| `POST /v1/ontology/:env/analyst/investigate` | The same stream: the series of a unit over a span, the events found online, and each one set beside the series |
+| `GET /v1/ontology/:env/analyst/investigations` | The investigations kept in the journal, most recent first (`unitId` for a single unit) |
+| `GET /v1/ontology/:env/analyst/investigations/:id` | One investigation as it was delivered, steps included. Nothing is recomputed |
 | `POST /v1/ontology/:env/analyst/run` | A shorter stream: the scenario run by the server the way Run does it, and its digest, in the shape `ask` and `options` accept as `run`. Calls no model and writes nothing |
 | `POST /v1/ontology/:env/decisions` | Records a decision from a tested option |
 | `GET /v1/ontology/:env/decisions` | The project's decisions, most recent first (`scenarioId` for a single scenario) |
@@ -87,14 +92,16 @@ Body of a prepared response: `exchangeId`, `step`, `signalTypeId`, and if needed
 
 Body of an event search: `request`, and `scenarioId` (or `null`), which only tells the journal where the request was made from. Neither the run nor anything from the twin is part of it.
 
-Body of an acceptance: `exchangeId`, `candidate` (`c1`, `c2`…), `startsOn` and `endsOn` (or `null`). The title, the link and the passage are copied by the server from its journal.
+Body of an investigation: `unitId`, `metric`, `from` and `to` (two instants), `request` (the sentence, the only thing that goes into a search) and `zone` (the clock days are counted on, the browser's; `null` for UTC). The span is 366 days at most.
+
+Body of an acceptance: `exchangeId` (of a search or of an investigation), `candidate` (`c1`, `c2`…), `startsOn` and `endsOn` (or `null`). The title, the link and the passage are copied by the server from its journal.
 
 Lines of the stream:
 
 | `type` | Content |
 |---|---|
 | `status` | What is being done |
-| `step` | A tool call: its number (`s1`, `s2`…), its input, its result or its refusal, and the record the tool kept for the screen if it keeps one |
+| `step` | A tool call: its number (`s1`, `s2`…), its input, its result or its refusal, and the record the tool kept for the screen if it keeps one. In an investigation, the steps the program does itself are numbered `p1`, `p2`… |
 | `done` | The answer or the proposal, the figures removed, the steps, the model, the tokens, and `exchangeId`, the identifier of the exchange in the journal |
 | `failed` | The model or the engine could not be reached, or the Claude account has no credit left; replaces `done` |
 | `ping` | Nothing: keeps the connection open |
@@ -231,6 +238,47 @@ What is not done, and why:
 - **Turning the cache off for this exchange.** Writing the pages to the cache costs a quarter more than simply reading them. But if the model launches a search after the others, everything before it is read again, and without the cache that reading would cost twenty times more. The cache stays, as an insurance.
 - **Lowering the cap of eight searches.** The cap is a limit, not a target.
 
+## The investigations
+
+On the network map, one sees that a unit is doing badly: its measure went past its threshold, twice this week. The **Investigate** tab of the “Analyst” panel of the Network page answers the question that follows: what was going on around it? It searches official sources for events, then sets each one beside the series the twin kept at that unit. The full diagram is in [Algorithms](/docs/product/algorithms), section A13.
+
+One selects a site on the map, the measure the map paints, and a span (24 h, 72 h, 7 days, 30 days, the same as the timeline's). The tab proposes a sentence, which names the unit and the two dates. One reads it, changes it if one wishes, and clicks “Investigate this span”.
+
+Two things then work, and the screen shows both while they work:
+
+| Who | What it does | Its steps |
+|---|---|---|
+| The program | Reads the series kept over the span, marks in it the episodes where the measure was beyond its alert threshold, reads the calendar of validated events and the three nearest units that report the same measure. At the end, sets each event beside the series | `p1`, `p2`, … |
+| The model | Searches the allowed sources for events, exactly as the Event finder tab does, from the sentence and nothing else | `s1`, `s2`, … |
+
+What each event found carries, and where it comes from:
+
+| On screen | Where it comes from |
+|---|---|
+| The title, the link, the quotation, the dates, the door: level “Published” | The search, checked as in Event finder (see “The events”) |
+| “Goes with episode 2: it starts 2 days before.” | The program: the event starts at most 7 days before the episode, or during it |
+| The means of the 3 days before and of the 3 days from its start, and the change: level “Measured” | The program, on the readings kept; each mean says how many days it rests on |
+| “Reasons to doubt” | The program: no date, outside the span, no reading before or after, the episode had already begun, other events go with the same episode |
+| “What this cannot say” | The program, then the limits the search wrote |
+
+Three rules hold the whole tab.
+
+- **Only the sentence goes into a search.** The series, the threshold, the calendar and the neighbours are read by the server and enter no message to the model. The proposed sentence names the unit and the dates, none of its figures; the step “What goes to the web” writes it in the trace before the search leaves.
+- **What is brought together coincides, and nothing more.** An event is published, an episode is measured; that they have anything to do with each other is a supposition. The screen writes “goes with”, never “caused”, and the first limit of every investigation says it again.
+- **An episode is counted against a threshold that exists.** It is that of the least severe alert rule on this measure at this unit. Without a rule there is no episode: each event is set beside the means of the days around it, and the tab says so.
+
+While it works, a bar of seven segments says where things stand (series, calendar, neighbours, searches, passages, comparison, check), a line says what is under way and for how long, and the trace is open: the steps are written into it one by one. Nothing is animated that did not happen.
+
+**Accept into the calendar** brings a candidate into the calendar, as in Event finder; **Reject** sends nothing. The events already in the calendar for those days are set beside the series in the same way, under “Already in the calendar for this span”.
+
+Every investigation is kept in the journal, steps included. “Kept in the journal” lists those of the selected unit; a click reopens one as it was delivered, with nothing recomputed, and a candidate can still be accepted from it.
+
+When an investigation is on screen, the timeline at the bottom draws it: the series as a staircase, its episodes as bands, each event as a mark at the day its source dates it (dashed for a candidate, solid for an event of the calendar).
+
+No series, no search: if nothing was kept of this measure over the span, the investigation stops at its first step, costs nothing, and says which day the history starts.
+
+An investigation costs what its search costs (see “What a search costs”): the program's reads call no model.
+
 ## The decisions
 
 “Record decision” keeps the option retained with what is expected of it. The browser sends only the identifier of the exchange and the step of the test; the server copies everything else from its journal: the objective, the stamps, the figures of the tested run with and without the option, the arrivals day by day, the levels of evidence, the source steps. So only an option the engine tested can be recorded.
@@ -272,7 +320,7 @@ What the rule guarantees: no figure shown was invented, or taken from another si
 
 ## The journal
 
-Each exchange is kept in `app.analyst_exchange` (migration 059): the question or the objective, the world looked at, each step with its input, its result and its record, what was shown, the figures removed, the model and the tokens. The `kind` column says whether it is a question (`ask`), an objective (`options`, migration 060) or an event search (`events`, migration 062). For a search, the world looked at is `web`, and the steps are the queries, the pages returned and the passages quoted. Nothing is modified after insertion.
+Each exchange is kept in `app.analyst_exchange` (migration 059): the question or the objective, the world looked at, each step with its input, its result and its record, what was shown, the figures removed, the model and the tokens. The `kind` column says whether it is a question (`ask`), an objective (`options`, migration 060) an event search (`events`, migration 062) or an investigation (`investigation`, migration 069). For a search, the world looked at is `web`, and the steps are the queries, the pages returned and the passages quoted. An investigation also keeps the program's steps, among them the series read, in the record of its first step: that is what lets it be read again as it was delivered. Nothing is modified after insertion.
 
 Tokens are kept request by request (`usage.byRequest`) and per price: what was read at full price (`input`), what was written to the cache (`cacheWrite`), what was read back from the cache (`cacheRead`), what was written by the model (`output`), and the web searches launched in the request. An exchange costs little or a lot depending on the share of each request that is read back from the cache: that is what this detail makes it possible to check afterwards, instead of assuming it. The total shown on screen remains the sum of all tokens, whatever their price.
 
@@ -311,6 +359,8 @@ Under the figures, three folded lines, which open on a click: “Why this option
 - what is assumed, what the answer cannot say;
 - the sites the answer talks about, which point the map at them;
 - the questions to ask next.
+
+**On the network map** (`command/NetworkAnalyst.tsx`). An “Analyst” `OverlayPanel` in the right column, under the inspector of the selected site, folded on arrival. Opening it folds the inspector. Two tabs: **Ask**, the same as everywhere else, with the selected unit; and **Investigate** (`InvestigateTab.tsx`). The panel is built only when first opened, then keeps what was done in it when it is folded or the other tab is shown: an investigation under way goes on. From top to bottom, Investigate shows: the unit, the measure and the span; the sentence, under “The only thing that goes to the web”; the button; the investigations already kept for this unit; then, once started, the progress bar, what is under way, what the program read of the series, the candidates in two lines each (the title, then the date and the sentence that says how the event sits), the events already in the calendar, what the investigation cannot say, and the trace. A click on a candidate opens it: what is published, what is measured, the reasons to doubt, the dates and the two buttons. The timeline at the bottom (`NetworkTimeline.tsx`) draws what the investigation found. The “Analyst” button of the shell is not shown on this page.
 
 **Elsewhere than on the scenario map** (`AnalystDock.tsx`). The Studio's shell carries an “Analyst” button, at the bottom right of every page. It opens the Ask tab alone, on the network as it stands now. The question goes with what the person has in front of them: the page, and the unit selected on Units or the signal open on Response. The suggested questions follow: “What is open right now, and where?”, plus one about the unit or the signal when there is one. The panel keeps what was asked when it is closed and opened again. Two pages do not have this button, because they already hold the analyst where the work is done: Scenarios, whose panel also has the scenario, the run and the options, and the situation card.
 
@@ -394,7 +444,12 @@ What is not judged: the quality of the writing. That still takes a person, who r
 ## Known limits
 
 - Each question, each objective is independent: the analyst does not remember the previous one.
-- It searches online only in the Event finder tab. In Ask and Options it reads the events already validated, and says when none covers the moment asked about.
+- It searches online only in the Event finder tab and in an investigation. In Ask and Options it reads the events already validated, and says when none covers the moment asked about.
+- An investigation brings dates together, it does not measure an effect. It says an event starts two days before an episode, not that it caused it, and it does not separate the share of two events that go with the same episode. A pairing seen once is not replicated.
+- An investigation does not know whether an event concerns the unit: an event's place is a text, linked to no territory. The person judges it, from the source.
+- An investigation has episodes only if an alert rule covers the measure at that unit. What is usual for a unit at a given hour is not computed.
+- An investigation reads only what the twin kept, and the history starts the day the recording started: over an older span there is no series, and no search is made.
+- The Investigate tab is offered only for a site that counts a single unit and for a measure the organisation defined: those are the only series kept.
 - A search sees only what the authorised sources publish and what the API's search engine retained of it. An event absent from the candidates is not an event that did not happen.
 - The server holds of a web page only the quoted passage, 150 characters at most. A date the page gives elsewhere than in that passage stays empty: the source has to be opened and the date entered.
 - What is verified about a candidate: its link, its quotation, its dates. Whether the passage really says what the title takes from it, and whether the gate is the right one, is for the person to judge when accepting.
@@ -404,7 +459,7 @@ What is not judged: the quality of the writing. That still takes a person, who r
 - An event search costs about 70 cents: each search launched returns ten pages, close to 15,000 tokens, and no setting of the API lets you ask for fewer without giving up the cap on searches. See “What a search costs”.
 - The reference questions judge the Ask tab only. On `claude-haiku-5-5`, the Options tab has been tried on a single objective (three options tested, among them a transfer of patients and two recorded responses), and the search for events has not; `claude-sonnet-5-5` has not been tried anywhere.
 - The twin holds no staff and no stocks: the analyst says so, it does not fill the gap.
-- The twin keeps the readings of its measures since the day the recording started ([Algorithms](/docs/product/algorithms), D11), and a unit's page shows them. No tool of the analyst reads them: so it cannot say what was open earlier, or what changed since this morning, and it says so.
+- The twin keeps the readings of its measures since the day the recording started ([Algorithms](/docs/product/algorithms), D11), and a unit's page shows them. No tool of the analyst reads them: so in Ask it cannot say what was open earlier, or what changed since this morning, and it says so. In an investigation, it is the program that reads them, not the model.
 - The age of an alert or of a measure is that of what the measure reads. The unit has its own too, the oldest of all its sources, which can be older than the age of one of its values: the analyst is given both, and must give with a figure the age of that figure. A date with no hour gives an age to the day.
 - The open signals `list_alerts` counts include those whose alert has cleared: they can be far more numerous than the open alerts.
 - The run on screen is not kept when the page is reloaded; Run has to be launched again. Nor are the tested options: what remains are the recorded decisions and the journal.
@@ -444,6 +499,8 @@ What is not judged: the quality of the writing. That still takes a person, who r
 | The price list in the ontology: the “Functions” view, the prices of a type | `frontend/app/studio/manager/PriceList.tsx`, `price-list.ts` |
 | Closing of an event search, `give_events` | `backend/src/services/analyst-events.ts` |
 | Reading the web search: queries, pages, passages, dates, quotations | `backend/src/services/analyst-web.ts` |
+| Investigating a series: the series, the episodes, the neighbours, the comparison | `backend/src/services/investigation.ts` |
+| Investigations read again from the journal | `backend/src/services/investigation-journal.ts` |
 | A project's authorised sources | `backend/src/services/web-sources.ts` |
 | Calendar of accepted events | `backend/src/services/health-events.ts` |
 | Run of a scenario on the server | `backend/src/services/scenario-run.ts`, `scenario-stamps.ts` |
@@ -454,11 +511,13 @@ What is not judged: the quality of the writing. That still takes a person, who r
 | The decisions' routes | `backend/src/routes/decisions.ts` |
 | Routes of the calendar and the sources | `backend/src/routes/health-events.ts` |
 | Streamed response | `backend/src/lib/ndjson.ts` |
-| Journal, decisions, calendar | `backend/scripts/migrations/059_analyst_exchange.sql`, `060_analyst_exchange_kind.sql`, `061_decision.sql`, `062_health_event.sql` |
+| Journal, decisions, calendar | `backend/scripts/migrations/059_analyst_exchange.sql`, `060_analyst_exchange_kind.sql`, `061_decision.sql`, `062_health_event.sql`, `069_analyst_investigation.sql` |
 | Calls and labels on the screen side | `frontend/app/studio/analyst-api.ts` |
 | Panel and Ask tab | `frontend/app/studio/simulation/hex/AnalystPanel.tsx` |
 | Options and Decisions tabs | `frontend/app/studio/simulation/hex/OptionsTab.tsx`, `DecisionsTab.tsx` |
 | Event finder tab | `frontend/app/studio/simulation/hex/EventFinderTab.tsx` |
+| Analyst panel of the network map, Investigate tab | `frontend/app/studio/command/NetworkAnalyst.tsx`, `InvestigateTab.tsx`, `investigation.ts` |
+| Timeline of the network map: series, episodes, events | `frontend/app/studio/command/NetworkTimeline.tsx`, `series-lane.ts` |
 | Context lane of the timeline | `frontend/app/studio/simulation/hex/ContextLane.tsx`, `context-lane.ts` |
 | Parts shared by the tabs | `frontend/app/studio/simulation/hex/analyst-parts.tsx` |
 | Card of an option or a decision: drawn figures, gap, levels of evidence, folded lines | `frontend/app/studio/simulation/hex/option-cards.tsx`, tests `option-cards.test.tsx` |

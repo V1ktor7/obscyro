@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "c887481fff59700f"
+translatedFrom: "06b43447c4ce9f3e"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -27,6 +27,7 @@ Every algorithm of the product has its section here: what it is for, its diagram
 | [A10](#a10-online-search-and-calendar-of-events) | Validated online search and calendar of events | `backend/src/services/analyst-events.ts` |
 | [A11](#a11-retest-of-a-prepared-response) | Retest of a prepared response, when a signal opens | `backend/src/services/response-retest.ts` |
 | [A12](#a12-prices-the-cost-ledger-and-the-delay-of-an-option) | Prices, the cost ledger and the delay of an option | `backend/src/services/price-catalogue.ts`, `cost-ledger.ts` |
+| [A13](#a13-investigating-a-series) | Investigating a series: events set beside what the twin measured | `backend/src/services/investigation.ts` |
 | **B** | **Twin and simulation engine** | |
 | [B1](#b1-export-of-the-twin) | Export of the twin to the engine | `backend/src/services/twin-export.ts` |
 | [B2](#b2-one-step-of-the-event-engine) | One step of the event engine | `simulation-service/app/events/dynamics.py` |
@@ -61,7 +62,7 @@ Every algorithm of the product has its section here: what it is for, its diagram
 
 **Purpose.** Answer a question about the twin, the open scenario or the run on screen, relying only on what tools returned. The language model chooses what to read and writes; it holds no fact, does no arithmetic and does not decide. Detail: [The analyst](/docs/product/analyst).
 
-The same loop serves three kinds of exchange. What tells them apart is their **closing**: the instructions given to the model, the tool through which it delivers, and the way that delivery is checked. A question closes with `give_answer`; an objective closes with `give_options`, after tests (A8); an event search closes with `give_events`, after online searches (A10).
+The same loop serves three kinds of exchange. What tells them apart is their **closing**: the instructions given to the model, the tool through which it delivers, and the way that delivery is checked. A question closes with `give_answer`; an objective closes with `give_options`, after tests (A8); an event search closes with `give_events`, after online searches (A10). An investigation (A13) is not a fourth closing: it is an event search, which the program frames with steps it does itself.
 
 ```mermaid
 sequenceDiagram
@@ -552,7 +553,7 @@ flowchart TD
 - **Dates.** A date holds when a passage (or the title of its page) states the day and the month, in French or in English; the year must be written there, or be a year the passages or the request name. “In January 2022” states no day. A date that cannot be found is removed and left empty: the person reads the source and enters it.
 - **Gates.** Each candidate says through which gate it touches a health network: demand, capacity, access, care. The model chooses it; the person sees it before accepting.
 - **Level of evidence.** “Published”, assigned by the program. A validated event is never presented as measured by the twin or as the result of a run.
-- **Validation.** Accepting sends the identifier of the exchange, that of the candidate and the validated dates, nothing else: the server copies the rest from the journalled exchange (`app.analyst_exchange`, kind `events`), as for a decision (A9). A candidate the search did not deliver cannot be accepted; the same candidate cannot be accepted twice. The dates proposed by the analyst are kept beside the validated dates.
+- **Validation.** Accepting sends the identifier of the exchange, that of the candidate and the validated dates, nothing else: the server copies the rest from the journalled exchange (`app.analyst_exchange`, kind `events`, or `investigation` when the candidate comes from an investigation, A13), as for a decision (A9). A candidate the search did not deliver cannot be accepted; the same candidate cannot be accepted twice. The dates proposed by the analyst are kept beside the validated dates.
 - **Rejection.** There is no route for rejecting: a rejected candidate enters no table of events, and neither `list_events` nor the timeline sees it. It stays, like everything the analyst wrote, in the journal of the exchange where it was proposed, which no tool reads back.
 - **Removal.** An accepted event is removed from the calendar on a confirmed click, kept in the audit log.
 - **On the timeline.** The “Context” lane places each event from the date the scenario gives to its day 0 (the “reality” setting). Without that date, nothing is drawn and the lane says why. Events there are outlined, not filled: they are not stamps, the engine never receives them.
@@ -560,10 +561,6 @@ flowchart TD
 
 **Code.** `backend/src/services/analyst-events.ts` (`eventsClosing`, `handoff`, `EVENTS_PROMPT`), the `converse` loop of `analyst.ts` (`Closing.handoff`, `usage.byRequest`), `analyst-web.ts` (`webSearchTool`, `WebReader`, `statedDates`, `dateStated`, `quotedFrom`), `web-sources.ts`, `health-events.ts` (`eventFromExchange`), the `listEvents` tool in `analyst-tools.ts`, route `POST /v1/ontology/:env/analyst/events` in `backend/src/routes/analyst.ts`, `backend/src/routes/health-events.ts`, migration `062_health_event.sql`; `frontend/app/studio/simulation/hex/EventFinderTab.tsx`, `ContextLane.tsx`, `context-lane.ts`, `WebChip` in `analyst-parts.tsx`.
 **Tests.** `analyst-events.unit.test.ts`, `analyst-web.unit.test.ts`, `web-sources.unit.test.ts`, `health-events.unit.test.ts`, `analyst-tools.unit.test.ts` (`list_events`), `routes/health-events.unit.test.ts`, `routes/analyst.unit.test.ts`; `EventFinderTab.test.tsx`, `ContextLane.test.tsx`, `context-lane.test.ts`, `AnalystPanel.test.tsx`, `HexTwinView.test.tsx`.
-
----
-
-# B. Twin and simulation engine
 
 ## A11. Retest of a prepared response
 
@@ -711,6 +708,90 @@ flowchart TD
 
 **Code.** `backend/src/services/price-catalogue.ts` (`catalogueOf`, `modesFor`, `priceFor`, `priceListOf`, `fold`, `OPERATION_NAMES`), `cost-ledger.ts` (`ledgerOf`, `linesOf`, `formatCents`), `analyst-options.ts` (`settleMode`, `withPriceList`, `priceBasis`, `priceLines`), `analyst-tools.ts` (`list_prices`), `analyst-calc.ts` (`evaluate`), `property-schema.ts` (`PRICE_MECHANICS`), `twin-export.ts` (`priced_at`), `decisions.ts`, route `GET /v1/ontology/:env/twin/prices` in `backend/src/routes/twin.ts`; `simulation-service/app/events/mechanics.py` (`PRICE_MECHANICS`); `frontend/app/studio/simulation/hex/option-cards.tsx` (`CostLine`, `DelayLine`, `DemoPrice`, `weighOptions`), `OptionsTab.tsx`, `DecisionsTab.tsx`, `frontend/app/studio/manager/PriceList.tsx`, `price-list.ts`, `frontend/lib/money.ts`, `frontend/lib/property-schema.ts`.
 **Tests.** `cost-ledger.unit.test.ts` (the calculation by hand, the formula, the missing value, a site's price, the range), `analyst-options.unit.test.ts` (the mode and its delay, nothing changes without a price list, the invented amount struck, the decision keeps the cost), `twin-figures.unit.test.ts`, `tests/test_events_mechanics.py`; `option-cards.test.tsx`, `OptionsTab.test.tsx`, `DecisionsTab.test.tsx`, `manager/PriceList.test.tsx`, `PropertyRowsEditor.test.tsx`.
+
+## A13. Investigating a series
+
+**Purpose.** When the series of a measure moves at a unit, say what was going on around it, and set each event found beside what the twin measured. Two things work, and stay apart: the program reads the series, its episodes, the calendar and the neighbouring units, then compares; the model searches the allowed sources for events, as in A10, from the person's sentence and nothing else. It is a first piece of the “Measured effects” step of the [loop](/docs/product/decision-loop): it says what coincides, not what causes.
+
+**The work, step by step.**
+
+```mermaid
+flowchart TD
+    A["The person, on the network map: a unit selected,<br/>the measure the map paints, a span, a sentence"] --> B["p1 twin_series: the readings kept over the span (D11),<br/>as a staircase, and the threshold: the least severe alert rule<br/>that covers this measure at this unit"]
+    B --> C{"At least one value<br/>over the span?"}
+    C -->|"no"| C1["End. No search is made,<br/>and the screen says where the history starts"]
+    C -->|"yes"| D["Episodes: from the first reading beyond the threshold<br/>to the first reading back within it, or with no value.<br/>Two stretches less than 24 h apart are one"]
+    D --> E["p2 calendar_events: the validated events<br/>of the calendar over those days (A10)"]
+    E --> F{"A threshold, and at least one episode?"}
+    F -->|"no"| F1["p3 nearest_units: nothing is read,<br/>and the step says why"]
+    F -->|"yes"| F2["p3 nearest_units: the 3 nearest units<br/>that report the same measure,<br/>their series and their episodes at the same threshold"]
+    F1 --> G["p4 search_brief: what goes to the web<br/>(the sentence, the sources, 8 searches at most)<br/>and what stays here"]
+    F2 --> G
+    G --> H["The event search of A10, unchanged:<br/>the model receives the sentence only.<br/>Steps s1, s2, …: searches and passages"]
+    H --> I{"Candidates delivered?"}
+    I -->|"no"| I1["End. What was read stays in the steps,<br/>no comparison"]
+    I -->|"yes"| J["p5 events_beside_series: each candidate,<br/>and each event of the calendar,<br/>set beside the series"]
+    J --> K["p6 search_check: what the check<br/>of the search took out"]
+    K --> L["Last line of the stream: the candidates,<br/>and the investigation block beside them"]
+    L --> M["Journal: the whole exchange, steps included,<br/>under the kind investigation"]
+    L --> N["Network page: Investigate tab of the Analyst panel,<br/>and the timeline, which draws the series,<br/>the episodes and the events"]
+    N --> O{"The person"}
+    O -->|"Accept"| P["The candidate enters the calendar as in A10:<br/>the server copies it from the journal"]
+    O -->|"Reject"| Q["Nothing is sent or recorded"]
+```
+
+**An event beside the series.**
+
+```mermaid
+flowchart TD
+    A["An event: its first day, or none"] --> B{"Does it have a date?"}
+    B -->|"no"| B1["Not placed. Doubt: no_date"]
+    B -->|"yes"| C{"Is its first day<br/>within the span?"}
+    C -->|"no"| C1["Not placed. Doubt: outside_span,<br/>before or after"]
+    C -->|"yes"| D["Two means of the series:<br/>the 3 days before its first day,<br/>the 3 days from that day.<br/>Each says how many days it rests on"]
+    D --> E{"Does an episode start 0 to 7 days after it,<br/>or does the event start during an episode?"}
+    E -->|"none"| F["Goes with no episode"]
+    E -->|"one or several"| G["The nearest in days.<br/>At the same distance, the one the event comes before"]
+    G --> H{"Had the episode already begun?"}
+    H -->|"yes"| H1["Doubt: starts_after,<br/>with the number of days"]
+    H -->|"no"| H2["Days apart: the event starts before,<br/>or the same day"]
+    F --> I{"A side with no day<br/>that has a value?"}
+    H1 --> I
+    H2 --> I
+    I -->|"yes"| I1["Doubt: nothing_before or nothing_after.<br/>No change is computed"]
+    I -->|"no"| I2["Change: the mean after minus the mean before"]
+    I1 --> J{"Do other events go<br/>with the same episode?"}
+    I2 --> J
+    J -->|"yes"| J1["Doubt: shared, with their references"]
+    J -->|"no"| K["Comparison returned"]
+    J1 --> K
+```
+
+**Rules.**
+- **Nothing the program reads reaches the model.** The search is that of A10: an exchange with no reading tool, which receives only the sentence, the list of sources and today's date. The series, the threshold, the calendar and the neighbours are put in no message. A test holds it: no figure of the series and no unit name appears in what is sent to the model.
+- **The sentence is the person's.** The screen proposes one, which names the unit and the two dates of the span, and nothing the twin measured there. The person reads it, changes it if they wish, and sends it: it is the only thing that goes into a search. The `search_brief` step writes it down before the search leaves.
+- **An episode is counted against a threshold that exists.** The threshold is that of an alert rule of the project: the least severe of those that cover the measure at this unit, because that is where an alert begins. Without a rule there is no episode, and the result says so: each event is then set beside the means of the days around it only. No threshold is made up, and what is “usual” for a unit is not computed.
+- **The series is a staircase**, as on a unit's sheet (D11): a reading stands at the time its source gives, or at the time it was written down when the source does not say, and holds until the next one. The reading in force when the span opens is its first point.
+- **One value a day.** A day's value is the mean of the readings dated that day. A day with no reading keeps the value in force when it began. Nothing is filled in before the first reading, and a day when the measure had no value has none: a gap is not a zero.
+- **“Goes with” has a precise meaning.** An event goes with an episode when it starts at most 7 days before it, or during it. Beyond 7 days, nothing is said. An event that starts after the episode began cannot have set it off: that is written on it, as a doubt.
+- **The doubts are counted by the program.** No date; outside the span; no reading before, or after; the episode had already begun; other events go with the same episode. The model writes none of them.
+- **The neighbours say whether the episode is peculiar to the unit.** The three nearest units that report the same measure are read at the same threshold; an episode names those that had one over the same days. Units are placed as the network map places them: a site that counts a single unit is that unit's place. A unit without coordinates has no neighbours, and the result says so.
+- **It is not a cause.** An event is published by a source, an episode is measured by the twin, and bringing them together is a supposition. The first limit of the result says so in every case, the screen writes “goes with” and never “caused”, and the three levels stay apart on every event: Published, Measured, and the reasons to doubt.
+- **No series, no search.** If the span holds no value, the investigation stops after the first step: nothing is searched or paid for, and the message says which day the history starts.
+- **Every step is written down.** The program's are numbered `p1`, `p2`, …; the search's keep `s1`, `s2`, …, which the candidates cite. They arrive in the stream one by one, in the order the work is done, and the screen shows them as they arrive. A read that fails (the calendar, the neighbours) is a failed step and a written limit, not a stopped investigation.
+- **The trace can be read again.** The whole exchange is kept in the journal under the kind `investigation`: the sentence, the steps, the series read (in the record of the `twin_series` step), the candidates and the comparison. `GET /analyst/investigations` lists the investigations of a project or of a unit, `GET /analyst/investigations/:id` returns one as it was delivered. Nothing is recomputed when it is read again.
+- **A candidate is accepted as in A10.** The server copies it from the investigation's journal; a rejected candidate is recorded nowhere.
+- **On the timeline.** The timeline of the Network page draws the series of the selected unit over its own window, the same as the investigation's (24 h, 72 h, 7 days, 30 days). When an investigation of that unit and that measure is on screen, its episodes are bands under the series and its events are marks at the day their source dates them: dashed for a candidate, solid for an event of the calendar. An episode drawn is one the investigation counted, never one guessed from the line. The threshold is drawn only when it is near what was read, and the screen says so when it is not.
+- **Bounds.** A span of 366 days at most, 2,000 readings a series (beyond that, the oldest are left out and the result says so). Days are counted on the clock the page sends, the browser's; UTC when none is sent.
+- **What is missing.** One factor at a time: no model separates the share of two events that go with the same episode. No replication: an event seen before an episode has been seen once (the pieces that replicate a lag across several waves are in C3, and are not connected). An event's place is a text, linked to no territory: the investigation does not know whether the event concerns the unit. The history starts the day the recorder started (D11).
+- An investigation reads a unit and aggregate values, never a person.
+
+**Code.** `backend/src/services/investigation.ts` (`investigate`, `seriesOf`, `dailyOf`, `lineFor`, `episodesOf`, `nearestTo`, `shareEpisodes`, `compareEvents`), `investigation-journal.ts` (`listInvestigations`, `readInvestigation`), `twin-history.ts` (`readReadingsBetween`), the search of A10 (`eventsClosing`, `converse`), `health-events.ts` (`eventFromExchange`), routes `POST /v1/ontology/:env/analyst/investigate`, `GET /v1/ontology/:env/analyst/investigations` and `/:id` in `backend/src/routes/analyst.ts`, migration `069_analyst_investigation.sql`; `frontend/app/studio/command/InvestigateTab.tsx`, `NetworkAnalyst.tsx`, `investigation.ts` (`stagesOf`, `verdictOf`, `doubtText`, `measuredLines`, `proposedRequest`), `NetworkTimeline.tsx`, `series-lane.ts` (`seriesLane`), `frontend/app/studio/analyst-api.ts` (`investigate`, `stepLabel`).
+**Tests.** `investigation.unit.test.ts` (the series, the days, the episodes, the neighbours, the comparison, the investigation end to end with a simulated model, nothing of the series sent to the model, no search without a series), `health-events.unit.test.ts` (a candidate of an investigation is accepted); `command/investigation.test.ts`, `InvestigateTab.test.tsx`, `series-lane.test.ts`, `NetworkTimeline.test.tsx`, `analyst-api.test.ts`.
+
+---
+
+# B. Twin and simulation engine
 
 ## B1. Export of the twin
 
@@ -1321,13 +1402,19 @@ flowchart TD
     V --> P
     N --> P
     Z --> P
+    D --> T["Timeline, when it is open: the series of the painted measure<br/>over the timeline's window (GET /twin/units/:id/history)"]
+    T --> I{"Is an investigation of this unit<br/>and this measure on screen?"}
+    I -->|"yes"| I1["Its episodes as bands,<br/>its events as marks (A13)"]
+    I -->|"no"| I2["The series alone, and its alert threshold<br/>when it is near what was read"]
 ```
 
 - **What was kept is kept by unit** (D11). A site that counts a single unit reads that unit's, and reads it again every minute. A site that counts several does not add them up: histories that were not kept together do not make one history.
 - **Alerts come first.** The panel grew longer, and an open alert must not end up below the fold.
 - **The source is a text of the twin.** “About these figures” prints the description the organisation wrote on the object types the measures read (`typeNotes`): the source, its licence, its limits. No screen names a source.
+- **The analyst is under the inspector.** The right column carries two folding overlays: the inspector of the selected site, then the “Analyst” panel, with its Ask and Investigate tabs (A13). Opening the analyst folds the inspector, whose name stays in view. The panel keeps what was done in it when it is folded or the other tab is shown: an investigation under way goes on. The “Analyst” button of the Studio's shell is not shown on this page.
+- **The timeline draws the series of the selected unit.** Under the lanes of the alerts and of the feed events, a third lane draws the painted measure at the selected unit, as a staircase, over the timeline's window: 24 h, 72 h, 7 days or 30 days, the same window as an investigation's. The series is read only while the timeline is open, then read again every minute. With no site selected, the timeline asks for one; for a site that counts several units, or a measure that is not kept, there is no series.
 
-**Code.** `frontend/app/studio/command/units-tree.ts` (`isSiteHidden`, `alertsForSite`, `pickFromExplorer`, `lineOfSite`, `lineAndBelow`, `unitsAbove`), `NetworkTwinView.tsx` (`pickLine`), `SiteInspector.tsx`, `frontend/app/studio/TreeExplorer.tsx` (`pathTo`). **Tests.** `units-tree.test.ts`, `TreeExplorer.test.tsx`, `SiteInspector.test.tsx`.
+**Code.** `frontend/app/studio/command/units-tree.ts` (`isSiteHidden`, `alertsForSite`, `pickFromExplorer`, `lineOfSite`, `lineAndBelow`, `unitsAbove`), `NetworkTwinView.tsx` (`pickLine`), `SiteInspector.tsx`, `NetworkAnalyst.tsx`, `NetworkTimeline.tsx`, `series-lane.ts`, `frontend/app/studio/map-overlay.tsx` (`OverlayPanel`, `keepMounted`), `frontend/app/studio/TreeExplorer.tsx` (`pathTo`). **Tests.** `units-tree.test.ts`, `TreeExplorer.test.tsx`, `SiteInspector.test.tsx`, `NetworkTimeline.test.tsx`, `series-lane.test.ts`, `InvestigateTab.test.tsx`.
 
 ## D11. History of twin measures
 
@@ -1375,7 +1462,7 @@ flowchart TD
 - **Cadence.** One pass every five minutes, never two at once: the next starts five minutes after the previous one ended. So a change is written down at most five minutes after it happened, with its source's time. One project's failure does not cost the others their reading. `TWIN_HISTORY_DISABLED=1` stops the recording; what was kept stays.
 - **A bounded read.** 48 hours by default, 90 days at most, 2,000 readings per answer. When the period holds more, the oldest are left out and the answer says so (`cut`).
 - **A unit that is removed does not lose its past.** Readings are not tied to the object by a foreign key: the history tells what was, not what is still there. A deleted project takes its own with it.
-- **What is not kept.** The objects themselves, their links and the capacities at a past date: the whole twin cannot yet be read as it was. The situation card reads of the history only the measure that raised its signal, since it was raised (A9). The analyst's tools do not read it: they say so, and point to the unit's page.
+- **What is not kept.** The objects themselves, their links and the capacities at a past date: the whole twin cannot yet be read as it was. The situation card reads of the history only the measure that raised its signal, since it was raised (A9). The analyst's tools do not read it: they say so, and point to the unit's page. An investigation (A13) reads it, but it is the program that reads it and not the model.
 - A reading is a unit and an aggregated value, never a person.
 
 - **The change since the reading before.** For each measure that has a value, a unit's sheet and a site's inspector give the change since the reading kept before, and the hour of that reading. The arithmetic is done by the server (`changeOf`), in one read for every measure of the unit (`readUnitTrends`); the screen subtracts nothing. The last reading kept is most often the value on screen itself, written down a few minutes ago: it is recognised by its hour, within 90 seconds, or by its value when the source gives no time, and the one before it is used. A value corrected within its hour leaves two readings at the same time: neither is the reading before, and the change is counted from the hour before. If the recorder has not yet written down the value on screen, the last one kept already is the reading before.

@@ -18,12 +18,16 @@ import { serverRun, simServiceEngine } from "../services/scenario-run.js";
 import { Ledger } from "../services/analyst-verify.js";
 import { listDatasets, previewRows, type DatasetRow } from "../services/datasets.js";
 import { listHealthEvents, type HealthEvent } from "../services/health-events.js";
+import { SPAN_MAX_DAYS, investigate, type InvestigationEvent, type InvestigationReads, type PlacedUnit } from "../services/investigation.js";
+import { investigationLine, listInvestigations, readInvestigation } from "../services/investigation-journal.js";
 import { listSimPolicies } from "../services/sim-policies.js";
 import { readLive, signalsById, type LiveReading } from "../services/live-reading.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
 import { resolveEnvironment, type EnvironmentRow } from "../services/ontology.js";
 import { getOverlayScenario, listOverrides } from "../services/scenario-overrides.js";
+import { getTwinNetwork, getUnitTree, listAlertRules, metricValue } from "../services/twin.js";
 import { buildTwinExport, type SimExport } from "../services/twin-export.js";
+import { readReadingsBetween } from "../services/twin-history.js";
 import { getWebSources } from "../services/web-sources.js";
 
 // ---------------------------------------------------------------------------
@@ -118,7 +122,7 @@ async function record(
   db: DbClient,
   row: {
     id: string;
-    kind: "ask" | "options" | "events";
+    kind: "ask" | "options" | "events" | "investigation";
     projectId: string;
     scenarioId: string | null;
     userId: string;
@@ -175,6 +179,17 @@ export function failureMessage(err: unknown): string {
     return "The engine took too long to run an option and was cut off, so the test is not shown. Try a shorter run.";
   }
   return "The analyst stopped on an error of ours before answering. Nothing was made up in its place.";
+}
+
+/** The clock days are counted on: the one named, when it is a real one; UTC when none is. */
+function clockNamed(zone: string | null): string {
+  if (!zone) return "UTC";
+  try {
+    new Intl.DateTimeFormat("en-CA", { timeZone: zone });
+    return zone;
+  } catch {
+    throw BadRequest("ZONE_INVALID", `"${zone}" is not a clock this server knows. Send an IANA name such as America/Toronto, or none.`);
+  }
 }
 
 /** The journal's id travels with the last line, so a decision can name the exchange it rests on. */
@@ -547,6 +562,170 @@ const analystRoutes: FastifyPluginAsync = async (fastify) => {
           failure,
         }).catch((err) => req.log.error({ err }, "analyst exchange not recorded"));
       });
+    },
+  );
+  app.post(
+    "/ontology/:env/analyst/investigate",
+    {
+      schema: {
+        summary: "Investigate the series of a unit: search official sources for events over its span, and set each one beside the series",
+        description:
+          "The person looks at one measure of one unit over a span (`unitId`, `metric`, `from`, `to`) and sends a " +
+          "sentence (`request`) naming a place, a period and a kind of event. Two things then work, and the stream " +
+          "shows both as they go. The program reads the series the twin kept over the span, marks the episodes where " +
+          "the measure sat beyond its alert threshold (the least severe alert rule that covers the measure at this " +
+          "unit; none, no episode), reads the validated events of the calendar for those days and the three nearest " +
+          "units that report the same measure. The model searches the project's allowed web sources exactly as " +
+          "`/analyst/events` does, from `request` and nothing else: it has no tool that reads the twin, and nothing " +
+          "the program read is put in its messages, so nothing of the organisation's can go into a search. The " +
+          "program then sets each candidate, and each validated event of the span, beside the series: the episode it " +
+          "goes with (it starts at most 7 days before the episode, or during it), the days between the two, the mean " +
+          "of the 3 days before its first day and of the 3 days from it, and the reasons to doubt the pairing (no " +
+          "date, outside the span, no reading before or after, the episode had already begun, other events before " +
+          "the same episode). Streams like `/analyst/ask`: `status` lines, a `step` line for each piece of work as " +
+          "it ends (the program's are `p1`, `p2`, …: `twin_series`, `calendar_events`, `nearest_units`, " +
+          "`search_brief`, `events_beside_series`, `search_check`; the search's are `s1`, `s2`, …), then `done` with the result " +
+          "and `exchangeId`. The result is the search's proposal (`candidates`, `notFound`, `limits`) with an " +
+          "`investigation` block beside it: `series`, `line`, `episodes`, `neighbours`, `calendar`, `compared`, and " +
+          "`limits`, the sentences that say what the comparison cannot establish. What is paired is a coincidence in " +
+          "time between what a source published and what the twin measured; nothing is presented as a cause. Days " +
+          "are counted on the clock named by `zone` (an IANA name, the browser's), UTC when none is sent. When the " +
+          "span holds no reading of the measure, no search is made and `done` says where the history starts. The " +
+          "whole exchange is kept in the journal as an investigation, steps included, and can be read again " +
+          "(`/analyst/investigations`). Nothing is written to the calendar: a candidate becomes an event only " +
+          "through `POST /health-events`.",
+        tags: ["analyst"],
+        params: z.object({ env: z.string().min(1) }),
+        body: z.object({
+          unitId: z.string().uuid(),
+          metric: z.string().trim().min(1).max(200),
+          from: z.string().datetime({ offset: true }),
+          to: z.string().datetime({ offset: true }),
+          request: z.string().trim().min(3).max(2000),
+          zone: z.string().trim().min(1).max(64).nullable().default(null),
+        }),
+        // No response schema: the 200 is a stream of lines, not one document.
+      },
+    },
+    async (req, reply) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      if (!client) throw notConfigured();
+      const { domains } = await getWebSources(req.db, env.id);
+      if (domains.length === 0) {
+        throw BadRequest("NO_WEB_SOURCES", "This project allows no web source, so there is nowhere to search. Add at least one under Sources.");
+      }
+      const from = new Date(req.body.from);
+      const to = new Date(req.body.to);
+      if (!(to.getTime() > from.getTime())) throw BadRequest("SPAN_INVALID", "The span ends before it starts. Give its start, then its end.");
+      if (to.getTime() - from.getTime() > SPAN_MAX_DAYS * 86_400_000) {
+        throw BadRequest("SPAN_TOO_LONG", `An investigation reads at most ${SPAN_MAX_DAYS} days of a series. Shorten the span.`);
+      }
+      const zone = clockNamed(req.body.zone);
+      const { nodes } = await getUnitTree(req.db, env.id);
+      const unit = nodes.find((n) => n.id === req.body.unitId);
+      if (!unit) throw NotFound("UNIT_NOT_FOUND", "That unit is not in this environment.");
+      const metric = req.body.metric;
+
+      const reads: InvestigationReads = {
+        series: (unitId) => readReadingsBetween(req.db, env.id, unitId, metric, from, to),
+        rules: () => listAlertRules(req.db, env.id),
+        calendar: (fromDay, toDay) => listHealthEvents(req.db, env.id, { from: fromDay, to: toDay }),
+        // The units as the network map places them: a site that holds one unit is that unit's place.
+        async placed() {
+          const { sites } = await getTwinNetwork(req.db, env.id);
+          return sites.flatMap((s): PlacedUnit[] => {
+            const only = s.contributingUnits.length === 1 ? s.contributingUnits[0]! : null;
+            return only ? [{ id: only.id, name: only.name, latitude: s.latitude, longitude: s.longitude, measures: metricValue(s.metrics, metric) !== null }] : [];
+          });
+        },
+      };
+      // A context with nothing open and no tool to read it with: the search
+      // cannot be handed the twin, the series or a dataset.
+      const ctx = contextFor(req.db, env, null, null);
+      const exchangeId = randomUUID();
+      const closing = eventsClosing({ request: req.body.request, domains, today: new Date().toISOString().slice(0, 10) });
+
+      return streamLines<Line<InvestigationEvent>>(reply, async (write, gone) => {
+        let result: Exchange | null = null;
+        let failure: string | null = null;
+        try {
+          result = await investigate(
+            { unit: { id: unit.id, name: unit.name, kind: unit.kind }, metric, from, to, zone, request: req.body.request, domains },
+            reads,
+            (onEvent) => converse(anthropicModel(client), ctx, closing, onEvent, [], gone, eventSearch(domains)),
+            withExchange(write, exchangeId),
+          );
+        } catch (err) {
+          req.log.error({ err }, "analyst investigation failed");
+          failure = failureMessage(err);
+          write({ type: "failed", message: failure });
+        }
+        await record(req.db, {
+          id: exchangeId,
+          kind: "investigation",
+          projectId: env.id,
+          scenarioId: null,
+          userId,
+          question: req.body.request,
+          looking: "web",
+          result,
+          failure,
+        }).catch((err) => req.log.error({ err }, "analyst exchange not recorded"));
+      });
+    },
+  );
+
+  app.get(
+    "/ontology/:env/analyst/investigations",
+    {
+      schema: {
+        summary: "The investigations kept in the journal, most recent first",
+        description:
+          "One line per investigation made in this project (`/analyst/investigate`), whatever its outcome: `id` " +
+          "(the journal's, the `exchangeId` an acceptance names), `askedAt`, the sentence sent (`request`), " +
+          "`status` (`answered`, `declined`, `incomplete`, `failed`) with `message` when there is no answer, the " +
+          "unit, the measure and the span it read, and how many candidates and episodes it delivered. `unitId` " +
+          "keeps the investigations of one unit. Reads only; the whole of one investigation, steps included, is " +
+          "read with `/analyst/investigations/{id}`.",
+        tags: ["analyst"],
+        params: z.object({ env: z.string().min(1) }),
+        querystring: z.object({
+          unitId: z.string().uuid().optional(),
+          limit: z.coerce.number().int().min(1).max(50).default(20),
+        }),
+        response: { 200: z.object({ investigations: z.array(investigationLine) }), 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      return { investigations: await listInvestigations(req.db, env.id, req.query.unitId ?? null, req.query.limit) };
+    },
+  );
+
+  app.get(
+    "/ontology/:env/analyst/investigations/:id",
+    {
+      schema: {
+        summary: "One investigation, read again from the journal with every step",
+        description:
+          "What `/analyst/investigate` delivered with its `done` line, as the journal kept it: `result` holds the " +
+          "status, the answer (the candidates and the `investigation` block), the steps of the program and of the " +
+          "search in the order the work was done, and what the check struck. `exchangeId` is the investigation's " +
+          "own id: a candidate is accepted into the calendar by naming it. Nothing is recomputed: this is what the " +
+          "person saw, not what the series says today.",
+        tags: ["analyst"],
+        params: z.object({ env: z.string().min(1), id: z.string().uuid() }),
+        response: { 200: z.record(z.unknown()), 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const found = await readInvestigation(req.db, env.id, req.params.id);
+      if (!found) throw NotFound("INVESTIGATION_NOT_FOUND", "That investigation is not in this project's journal.");
+      return found;
     },
   );
 };

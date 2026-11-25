@@ -597,6 +597,152 @@ export async function findEvents(
   return streamExchange<EventsResult>(`/v1/ontology/${enc(env)}/analyst/events`, body, onEvent, signal);
 }
 
+// ---------------------------------------------------------------------------
+// An investigation: the series of one measure at one unit, the events a search
+// found over its span, and each event set beside the series by the program.
+// ---------------------------------------------------------------------------
+
+/** The alert threshold an episode is counted against. */
+export interface AlertLine {
+  ruleId: string;
+  op: string;
+  threshold: number;
+  severity: "info" | "warn" | "critical";
+}
+
+/** A stretch of the series beyond its alert threshold. */
+export interface SeriesEpisode {
+  /** "e1", "e2", …, oldest first. */
+  id: string;
+  startsAt: string;
+  /** Null when the measure is still beyond the threshold where the span ends. */
+  endsAt: string | null;
+  startDay: string;
+  endDay: string;
+  peak: number;
+  peakAt: string;
+  readings: number;
+  /** Neighbouring units that were in an episode of their own over the same days. */
+  sharedWith: string[];
+}
+
+export interface NeighbourReading {
+  id: string;
+  name: string;
+  km: number;
+  readings: number;
+  episodes: Pick<SeriesEpisode, "startsAt" | "endsAt" | "startDay" | "endDay" | "peak">[];
+}
+
+/** The mean of the days on one side of an event, and how many days it is made of. */
+export interface Around {
+  mean: number | null;
+  days: number;
+}
+
+/** A reason, found by the program, not to read too much into a pairing. */
+export type Doubt =
+  | { kind: "no_date" }
+  | { kind: "outside_span"; side: "before" | "after" }
+  | { kind: "nothing_before" }
+  | { kind: "nothing_after" }
+  | { kind: "starts_after"; days: number }
+  | { kind: "shared"; with: string[] };
+
+/** One event beside the series. */
+export interface Comparison {
+  /** A candidate of the search ("c1"), or a validated event of the calendar ("h:<id>"). */
+  ref: string;
+  from: "candidate" | "calendar";
+  title: string;
+  startsOn: string | null;
+  endsOn: string | null;
+  /** The episode it goes with, when there is one. */
+  episode: string | null;
+  /** The episode's first day minus the event's: positive when the event starts first. */
+  leadDays: number | null;
+  before: Around | null;
+  after: Around | null;
+  delta: number | null;
+  doubts: Doubt[];
+}
+
+export interface Investigated {
+  unit: { id: string; name: string };
+  metric: string;
+  from: string;
+  to: string;
+  /** The clock days are counted on. */
+  zone: string;
+  series: { readings: number; valued: number; low: number | null; high: number | null; firstDay: string | null; since: string | null; cut: boolean };
+  /** Null when no alert rule covers the measure: there are then no episodes. */
+  line: AlertLine | null;
+  episodes: SeriesEpisode[];
+  neighbours: NeighbourReading[];
+  calendar: { id: string; title: string; startsOn: string; endsOn: string | null; url: string }[];
+  compared: Comparison[];
+  /** What the comparison cannot establish, written by the program. */
+  limits: string[];
+}
+
+/** The search's candidates, and what the program measured beside them. */
+export interface Investigation extends EventsProposal {
+  investigation: Investigated;
+}
+
+export interface InvestigationResult {
+  status: "answered" | "declined" | "incomplete" | "failed";
+  answer: Investigation | null;
+  verified: boolean;
+  struck: EventsFinding[];
+  steps: AnalystStep[];
+  message: string | null;
+  model: string;
+  usage: Usage;
+}
+
+export type InvestigationEvent = StreamEvent<InvestigationResult>;
+
+/**
+ * Investigate a span of a unit's series, and hear each piece of work as it ends.
+ *
+ * `request` is the only thing the search is given. The unit, the measure and
+ * the span tell the server what to read itself; none of it goes to the web.
+ */
+export async function investigate(
+  env: string,
+  body: { unitId: string; metric: string; from: string; to: string; request: string; zone: string | null },
+  onEvent: (e: InvestigationEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  return streamExchange<InvestigationResult>(`/v1/ontology/${enc(env)}/analyst/investigate`, body, onEvent, signal);
+}
+
+/** One line of the list of past investigations. */
+export interface InvestigationLine {
+  id: string;
+  askedAt: string;
+  request: string;
+  status: string;
+  message: string | null;
+  unit: { id: string; name: string } | null;
+  metric: string | null;
+  from: string | null;
+  to: string | null;
+  candidates: number;
+  episodes: number;
+}
+
+export async function listInvestigations(env: string, unitId?: string | null): Promise<{ investigations: InvestigationLine[] }> {
+  const qs = unitId ? `?unitId=${enc(unitId)}` : "";
+  return apiFetch(`/v1/ontology/${enc(env)}/analyst/investigations${qs}`);
+}
+
+/** One investigation as the journal kept it: what the person saw, not what the series says today. */
+export async function readInvestigation(env: string, id: string): Promise<{ exchangeId: string; askedAt: string; request: string; result: InvestigationResult }> {
+  return apiFetch(`/v1/ontology/${enc(env)}/analyst/investigations/${enc(id)}`);
+}
+
 /** An event of the calendar: a candidate a person accepted. */
 export interface HealthEvent {
   id: string;
@@ -750,6 +896,42 @@ export function stepLabel(step: Pick<AnalystStep, "tool" | "input" | "output" | 
     }
     case "web_passage":
       return `Passage cited from ${hostOf(str(i.url))}`;
+    // The program's own steps in an investigation (p1, p2, …).
+    case "twin_series": {
+      const o = (step.output ?? {}) as { valued?: number; episodes?: unknown[]; alert_threshold?: unknown };
+      const n = o.valued ?? 0;
+      const e = o.episodes?.length ?? 0;
+      const episodes = o.alert_threshold ? ` · ${e} episode${e === 1 ? "" : "s"} beyond the alert threshold` : " · no alert threshold on this measure";
+      return `Series kept by the twin: ${str(i.measure)} at ${str(i.unit)}${step.ok ? ` · ${n} reading${n === 1 ? "" : "s"}${episodes}` : ""}`;
+    }
+    case "calendar_events": {
+      const n = step.ok ? ((step.output as { events?: number } | null)?.events ?? 0) : 0;
+      return `Calendar of validated events, ${str(i.from)} to ${str(i.to)}${step.ok ? `: ${n}` : ""}`;
+    }
+    case "nearest_units": {
+      const o = (step.output ?? {}) as { neighbours?: { name: string }[]; why?: string; placed?: boolean };
+      if (!step.ok) return "Nearest units reporting the same measure";
+      if (o.why) return `Nearest units: not read. ${o.why}`;
+      if (o.placed === false) return "Nearest units: this unit has no place on the map";
+      const names = (o.neighbours ?? []).map((n) => n.name);
+      return names.length ? `Nearest units reporting the same measure: ${names.join(", ")}` : "Nearest units: none reports this measure";
+    }
+    case "search_brief": {
+      const sent = (step.output as { sent?: { sources?: unknown[]; searches_allowed?: number } } | null)?.sent;
+      const n = sent?.sources?.length ?? 0;
+      return `What goes to the web: your sentence, to ${n} allowed source${n === 1 ? "" : "s"}, in at most ${sent?.searches_allowed ?? 0} searches. The series stays here`;
+    }
+    case "events_beside_series": {
+      const compared = step.ok ? ((step.output as { compared?: { episode: string | null }[] } | null)?.compared ?? []) : [];
+      const paired = compared.filter((c) => c.episode !== null).length;
+      return `Each event set beside the series${step.ok ? `: ${compared.length} event${compared.length === 1 ? "" : "s"}, ${paired} with an episode` : ""}`;
+    }
+    case "search_check": {
+      const o = (step.output ?? {}) as { candidates?: number; struck?: number };
+      const n = o.candidates ?? 0;
+      const s = o.struck ?? 0;
+      return `Check of what the search delivered: ${n} candidate${n === 1 ? "" : "s"}, ${s === 0 ? "nothing taken out" : `${s} thing${s === 1 ? "" : "s"} taken out`}`;
+    }
     case "calculate": {
       const result = step.ok ? (step.output as { result?: number } | null)?.result : undefined;
       return `${str(i.label) || "Calculation"}: ${str(i.expression)}${result !== undefined ? ` = ${result}` : ""}`;

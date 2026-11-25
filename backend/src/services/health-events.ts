@@ -85,7 +85,8 @@ const realDay = (iso: string): boolean => {
  * Everything but the dates is read from the journal.
  */
 export function eventFromExchange(exchange: JournalledSearch, candidateId: string, dates: { startsOn: string; endsOn: string | null }): HealthEventDraft {
-  if (exchange.kind !== "events" || exchange.status !== "answered") {
+  // A search and an investigation deliver the same candidates: an investigation is a search with the series beside it.
+  if ((exchange.kind !== "events" && exchange.kind !== "investigation") || exchange.status !== "answered") {
     throw BadRequest("NOT_AN_EVENTS_EXCHANGE", "An event is accepted from a search that delivered candidates. This exchange is not one.");
   }
   const proposal = journalledProposal.safeParse(exchange.answer);

@@ -54,6 +54,29 @@ describe("a step in a planner's words", () => {
     expect(label("list_prices", { world: "scenario" }, { error: "no" }, false)).toBe("The twin’s price list, with the scenario");
   });
 
+  it("says each piece of an investigation's own work, with what it found", () => {
+    const at = { unit: "CHUM", measure: "occupancy" };
+    expect(label("twin_series", at, { valued: 4, episodes: [{}], alert_threshold: { op: ">", threshold: 100 } })).toBe(
+      "Series kept by the twin: occupancy at CHUM · 4 readings · 1 episode beyond the alert threshold",
+    );
+    expect(label("twin_series", at, { valued: 1, episodes: [], alert_threshold: null })).toBe("Series kept by the twin: occupancy at CHUM · 1 reading · no alert threshold on this measure");
+    expect(label("twin_series", at, { error: "no" }, false)).toBe("Series kept by the twin: occupancy at CHUM");
+    expect(label("calendar_events", { from: "2021-12-20", to: "2022-01-10" }, { events: 2 })).toBe("Calendar of validated events, 2021-12-20 to 2022-01-10: 2");
+    expect(label("nearest_units", {}, { placed: true, neighbours: [{ name: "Notre-Dame" }, { name: "Verdun" }] })).toBe("Nearest units reporting the same measure: Notre-Dame, Verdun");
+    expect(label("nearest_units", {}, { placed: false, neighbours: [] })).toBe("Nearest units: this unit has no place on the map");
+    expect(label("nearest_units", {}, { placed: true, neighbours: [] })).toBe("Nearest units: none reports this measure");
+    expect(label("nearest_units", {}, { neighbours: [], why: "The series has no episode over the span." })).toBe("Nearest units: not read. The series has no episode over the span.");
+    // What leaves for the web is said in the trace, before it leaves.
+    expect(label("search_brief", {}, { sent: { request: "x", sources: ["quebec.ca", "inspq.qc.ca"], searches_allowed: 8 } })).toBe(
+      "What goes to the web: your sentence, to 2 allowed sources, in at most 8 searches. The series stays here",
+    );
+    expect(label("events_beside_series", {}, { compared: [{ episode: "e1" }, { episode: null }] })).toBe("Each event set beside the series: 2 events, 1 with an episode");
+    expect(label("search_check", {}, { candidates: 3, struck: 2 })).toBe("Check of what the search delivered: 3 candidates, 2 things taken out");
+    expect(label("search_check", {}, { candidates: 1, struck: 0 })).toBe("Check of what the search delivered: 1 candidate, nothing taken out");
+    // A dataset's column, read by the ask loop, keeps its own label.
+    expect(label("read_series", { dataset: "INSPQ", value_column: "admissions" })).toBe("Series admissions of INSPQ");
+  });
+
   it("falls back to the tool's name for one it does not know", () => {
     expect(label("something_new", {})).toBe("something_new");
   });

@@ -67,6 +67,9 @@ export default function SiteInspector({
   onClose,
   onEditLocation,
   onDrillIn,
+  folded: foldedBy,
+  onFolded,
+  className,
 }: {
   site: TwinNetworkSite;
   /** The measures the organisation defined. */
@@ -82,8 +85,19 @@ export default function SiteInspector({
   onClose: () => void;
   onEditLocation: () => void;
   onDrillIn: () => void;
+  /** Folded or not, when the page decides: it folds the inspector to make room for the analyst. */
+  folded?: boolean;
+  onFolded?: (folded: boolean) => void;
+  /** How it sits in its column. Alone, it keeps its width and does not shrink. */
+  className?: string;
 }) {
-  const [folded, setFolded] = useState(false);
+  const [foldedHere, setFoldedHere] = useState(false);
+  const folded = foldedBy ?? foldedHere;
+  const setFolded = (next: (f: boolean) => boolean) => {
+    const value = next(folded);
+    setFoldedHere(value);
+    onFolded?.(value);
+  };
   const [open, setOpen] = useState<Record<string, boolean>>({ reports: true, daily: true, day: true, other: false, from: false });
   const toggle = (key: string) => setOpen((o) => ({ ...o, [key]: !o[key] }));
 
@@ -107,7 +121,7 @@ export default function SiteInspector({
   const notes = sourceNotes(metricDefs, new Set(lines.map((l) => l.key)), reading.detail?.typeNotes);
 
   return (
-    <aside className={cn(OVERLAY_BAR, "flex max-h-full w-[328px] shrink-0 flex-col")} aria-label={`${site.name}, inspector`}>
+    <aside className={cn(OVERLAY_BAR, "flex max-h-full w-[328px] flex-col", className ?? "shrink-0")} aria-label={`${site.name}, inspector`}>
       <div className="flex items-start gap-2 px-3 pb-2 pt-2.5">
         <span
           className={cn(

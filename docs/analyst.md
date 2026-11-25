@@ -4,6 +4,8 @@ L'analyste est le panneau repliable « Analyst » de la page Scenarios. On lui p
 
 Il est aussi à un clic sur les autres pages du Studio, par le bouton « Analyst » en bas à droite, et dans la fiche de situation qui s'ouvre depuis une alerte. Là il répond sur le réseau tel qu'il est maintenant : ce qui est ouvert, et les chiffres en direct d'une unité, chacun avec son âge.
 
+Sur la carte du réseau (page Network), il a son propre panneau, sous l'inspecteur du site choisi. On y pose une question, et on y enquête sur la série d'une unité : l'onglet **Investigate** cherche ce qui se passait autour, et pose chaque événement trouvé à côté de ce que le jumeau a mesuré (voir « Les enquêtes »). C'est un premier morceau de l'étape « Effets mesurés » de la boucle.
+
 Le panneau a quatre onglets, qui couvrent cinq étapes de la [boucle d'aide à la décision](decision-loop.md) :
 
 | Onglet | Étape de la boucle | Ce qu'on y fait |
@@ -13,7 +15,7 @@ Le panneau a quatre onglets, qui couvrent cinq étapes de la [boucle d'aide à l
 | Options | Options testées, Recommandation | Dire un objectif, voir jusqu'à trois options testées par le moteur à côté du scénario tel quel |
 | Decisions | Suivi | Relire ce qui a été retenu, ce qu'on en attendait, et l'écart avec ce qui a été observé |
 
-Les schémas de la boucle, du vérificateur et de la calculatrice sont dans [algorithms.md](algorithms.md), sections A1 à A3 ; ceux des options testées et des décisions, sections A8 et A9 ; celui de la recherche en ligne et du calendrier, section A10 ; ceux de la liste de prix, du registre des coûts et du délai d'une option, section A12.
+Les schémas de la boucle, du vérificateur et de la calculatrice sont dans [algorithms.md](algorithms.md), sections A1 à A3 ; ceux des options testées et des décisions, sections A8 et A9 ; celui de la recherche en ligne et du calendrier, section A10 ; ceux de la liste de prix, du registre des coûts et du délai d'une option, section A12 ; ceux de l'enquête sur une série, section A13.
 
 ## Ce qu'il fait, et ce qu'il ne fait pas
 
@@ -56,6 +58,9 @@ L'onglet Event finder utilise la recherche web de l'API Claude. Elle n'a pas de 
 | `POST /v1/ontology/:env/analyst/ask` | Un flux, une ligne JSON par événement : une question et sa réponse |
 | `POST /v1/ontology/:env/analyst/options` | Le même flux : un objectif et les options testées |
 | `POST /v1/ontology/:env/analyst/events` | Le même flux : une demande et les événements candidats trouvés en ligne |
+| `POST /v1/ontology/:env/analyst/investigate` | Le même flux : la série d'une unité sur un laps de temps, les événements trouvés en ligne, et chacun posé à côté de la série |
+| `GET /v1/ontology/:env/analyst/investigations` | Les enquêtes gardées au journal, les plus récentes d'abord (`unitId` pour une seule unité) |
+| `GET /v1/ontology/:env/analyst/investigations/:id` | Une enquête telle qu'elle a été livrée, étapes comprises. Rien n'est recalculé |
 | `POST /v1/ontology/:env/analyst/run` | Un flux plus court : le scénario tourné par le serveur comme le fait Run, et son résumé, dans la forme que `ask` et `options` acceptent comme `run`. N'appelle aucun modèle et n'écrit rien |
 | `POST /v1/ontology/:env/decisions` | Enregistre une décision à partir d'une option testée |
 | `GET /v1/ontology/:env/decisions` | Les décisions du projet, les plus récentes d'abord (`scenarioId` pour un seul scénario) |
@@ -81,14 +86,16 @@ Corps d'une réponse préparée : `exchangeId`, `step`, `signalTypeId`, et au be
 
 Corps d'une recherche d'événements : `request`, et `scenarioId` (ou `null`), qui ne sert qu'à dire au journal d'où la demande a été faite. Ni le run ni rien du jumeau n'en fait partie.
 
-Corps d'une acceptation : `exchangeId`, `candidate` (`c1`, `c2`…), `startsOn` et `endsOn` (ou `null`). Le titre, le lien et le passage sont recopiés par le serveur depuis son journal.
+Corps d'une enquête : `unitId`, `metric`, `from` et `to` (deux instants), `request` (la phrase, seule chose qui parte dans une recherche) et `zone` (l'horloge sur laquelle les jours se comptent, celle du navigateur ; `null` pour UTC). Le laps de temps fait 366 jours au plus.
+
+Corps d'une acceptation : `exchangeId` (d'une recherche ou d'une enquête), `candidate` (`c1`, `c2`…), `startsOn` et `endsOn` (ou `null`). Le titre, le lien et le passage sont recopiés par le serveur depuis son journal.
 
 Lignes du flux :
 
 | `type` | Contenu |
 |---|---|
 | `status` | Ce qui est en train d'être fait |
-| `step` | Un appel d'outil : son numéro (`s1`, `s2`…), son entrée, son résultat ou son refus, et le relevé que l'outil a gardé pour l'écran s'il en garde un |
+| `step` | Un appel d'outil : son numéro (`s1`, `s2`…), son entrée, son résultat ou son refus, et le relevé que l'outil a gardé pour l'écran s'il en garde un. Dans une enquête, les étapes que le programme fait lui-même sont numérotées `p1`, `p2`… |
 | `done` | La réponse ou la proposition, les chiffres retirés, les étapes, le modèle, les jetons, et `exchangeId`, l'identifiant de l'échange dans le journal |
 | `failed` | Le modèle ou le moteur n'a pas pu être joint, ou le compte Claude n'a plus de crédit ; remplace `done` |
 | `ping` | Rien : garde la connexion ouverte |
@@ -225,6 +232,47 @@ Ce qui n'est pas fait, et pourquoi :
 - **Couper le cache pour cet échange.** Écrire les pages au cache coûte un quart de plus que de les lire simplement. Mais si le modèle lance une recherche après les autres, tout ce qui précède est relu, et sans cache cette relecture coûterait vingt fois plus. Le cache reste, comme une assurance.
 - **Baisser le plafond de huit recherches.** Le plafond est une limite, pas une cible.
 
+## Les enquêtes
+
+Sur la carte du réseau, on voit qu'une unité va mal : sa mesure a dépassé son seuil, deux fois cette semaine. L'onglet **Investigate** du panneau « Analyst » de la page Network répond à la question qui suit : que se passait-il autour ? Il cherche des événements dans les sources officielles, puis pose chacun à côté de la série que le jumeau a gardée à cette unité. Le schéma complet est dans [algorithms.md](algorithms.md), section A13.
+
+On choisit un site sur la carte, la mesure que la carte colore, et un laps de temps (24 h, 72 h, 7 jours, 30 jours, le même que celui de la frise). L'onglet propose une phrase, qui nomme l'unité et les deux dates. On la lit, on la change si on veut, et on clique « Investigate this span ».
+
+Deux choses travaillent alors, et l'écran montre les deux pendant qu'elles travaillent :
+
+| Qui | Ce qu'il fait | Ses étapes |
+|---|---|---|
+| Le programme | Lit la série gardée sur le laps de temps, y marque les épisodes où la mesure dépassait son seuil d'alerte, lit le calendrier des événements validés et les trois unités les plus proches qui rapportent la même mesure. À la fin, pose chaque événement à côté de la série | `p1`, `p2`, … |
+| Le modèle | Cherche des événements dans les sources permises, exactement comme l'onglet Event finder, à partir de la phrase et de rien d'autre | `s1`, `s2`, … |
+
+Ce que chaque événement trouvé porte, et d'où ça vient :
+
+| À l'écran | D'où ça vient |
+|---|---|
+| Le titre, le lien, la citation, les dates, la porte : niveau « Published » | La recherche, contrôlée comme dans Event finder (voir « Les événements ») |
+| « Goes with episode 2: it starts 2 days before. » | Le programme : l'événement commence au plus 7 jours avant l'épisode, ou pendant lui |
+| Les moyennes des 3 jours avant et des 3 jours à partir de son début, et l'écart : niveau « Measured » | Le programme, sur les relevés gardés ; chaque moyenne dit sur combien de jours elle repose |
+| « Reasons to doubt » | Le programme : pas de date, hors du laps de temps, aucun relevé avant ou après, l'épisode avait déjà commencé, d'autres événements vont avec le même épisode |
+| « What this cannot say » | Le programme, puis les limites que la recherche a écrites |
+
+Trois règles tiennent tout l'onglet.
+
+- **Seule la phrase part dans une recherche.** La série, le seuil, le calendrier et les voisins sont lus par le serveur et n'entrent dans aucun message au modèle. La phrase proposée nomme l'unité et les dates, aucun de ses chiffres ; l'étape « What goes to the web » l'écrit dans la trace avant que la recherche parte.
+- **Ce qui est rapproché coïncide, et rien de plus.** Un événement est publié, un épisode est mesuré ; qu'ils aient un rapport est une supposition. L'écran écrit « goes with », jamais « caused », et la première limite de chaque enquête le redit.
+- **Un épisode se compte contre un seuil qui existe.** C'est celui de la règle d'alerte la moins sévère sur cette mesure à cette unité. Sans règle, il n'y a pas d'épisode : chaque événement est posé à côté des moyennes des jours qui l'entourent, et l'onglet le dit.
+
+Pendant le travail, une barre de sept segments dit où l'on en est (série, calendrier, voisins, recherches, passages, comparaison, contrôle), une ligne dit ce qui est en cours et depuis combien de temps, et la trace est ouverte : les étapes s'y écrivent une à une. Rien n'est animé qui n'a pas eu lieu.
+
+**Accept into the calendar** fait entrer un candidat au calendrier, comme dans Event finder ; **Reject** n'envoie rien. Les événements déjà au calendrier pour ces jours sont posés à côté de la série de la même façon, sous « Already in the calendar for this span ».
+
+Chaque enquête est gardée au journal, étapes comprises. « Kept in the journal » liste celles de l'unité choisie ; un clic en rouvre une telle qu'elle a été livrée, sans rien recalculer, et un candidat peut encore en être accepté.
+
+Quand une enquête est à l'écran, la frise du bas la dessine : la série en escalier, ses épisodes en bandes, chaque événement en repère au jour où sa source le date (en pointillé pour un candidat, plein pour un événement du calendrier).
+
+Sans série, pas de recherche : si rien n'a été gardé de cette mesure sur le laps de temps, l'enquête s'arrête à sa première étape, ne coûte rien, et dit quel jour l'historique commence.
+
+Une enquête coûte ce que coûte sa recherche (voir « Ce que coûte une recherche ») : les lectures du programme n'appellent aucun modèle.
+
 ## Les décisions
 
 « Record decision » garde l'option retenue avec ce qu'on en attend. Le navigateur n'envoie que l'identifiant de l'échange et l'étape du test ; le serveur recopie tout le reste depuis son journal : l'objectif, les tampons, les chiffres du run testé avec et sans l'option, les arrivées jour par jour, les niveaux de preuve, les étapes sources. On ne peut donc enregistrer qu'une option que le moteur a testée.
@@ -266,7 +314,7 @@ Ce que la règle garantit : aucun chiffre affiché n'a été inventé, ni pris d
 
 ## Le journal
 
-Chaque échange est gardé dans `app.analyst_exchange` (migration 059) : la question ou l'objectif, le monde regardé, chaque étape avec son entrée, son résultat et son relevé, ce qui a été affiché, les chiffres retirés, le modèle et les jetons. La colonne `kind` dit si c'est une question (`ask`), un objectif (`options`, migration 060) ou une recherche d'événements (`events`, migration 062). Pour une recherche, le monde regardé est `web`, et les étapes sont les requêtes, les pages rendues et les passages cités. Rien n'est modifié après l'insertion.
+Chaque échange est gardé dans `app.analyst_exchange` (migration 059) : la question ou l'objectif, le monde regardé, chaque étape avec son entrée, son résultat et son relevé, ce qui a été affiché, les chiffres retirés, le modèle et les jetons. La colonne `kind` dit si c'est une question (`ask`), un objectif (`options`, migration 060) une recherche d'événements (`events`, migration 062) ou une enquête (`investigation`, migration 069). Pour une recherche, le monde regardé est `web`, et les étapes sont les requêtes, les pages rendues et les passages cités. Une enquête garde en plus les étapes du programme, dont la série lue, dans le relevé de sa première étape : c'est ce qui permet de la relire telle qu'elle a été livrée. Rien n'est modifié après l'insertion.
 
 Les jetons sont gardés requête par requête (`usage.byRequest`) et par prix : ce qui a été lu au plein tarif (`input`), ce qui a été écrit au cache (`cacheWrite`), ce qui a été relu du cache (`cacheRead`), ce qui a été écrit par le modèle (`output`), et les recherches web lancées dans la requête. Un échange coûte peu ou cher selon la part de chaque requête qui est relue du cache : c'est ce que ce détail permet de vérifier après coup, au lieu de le supposer. Le total affiché à l'écran reste la somme de tous les jetons, quel que soit leur prix.
 
@@ -305,6 +353,8 @@ Sous les chiffres, trois lignes repliées, qui s'ouvrent d'un clic : « Why this
 - ce qui est supposé, ce que la réponse ne peut pas dire ;
 - les sites dont parle la réponse, qui pointent la carte dessus ;
 - les questions à poser ensuite.
+
+**Sur la carte du réseau** (`command/NetworkAnalyst.tsx`). Un `OverlayPanel` « Analyst » dans la colonne de droite, sous l'inspecteur du site choisi, replié à l'arrivée. L'ouvrir replie l'inspecteur. Deux onglets : **Ask**, le même que partout ailleurs, avec l'unité choisie ; et **Investigate** (`InvestigateTab.tsx`). Le panneau n'est construit qu'à sa première ouverture, puis garde ce qu'on y a fait quand on le replie ou qu'on change d'onglet : une enquête en cours continue. De haut en bas, Investigate montre : l'unité, la mesure et le laps de temps ; la phrase, sous « The only thing that goes to the web » ; le bouton ; les enquêtes déjà gardées pour cette unité ; puis, une fois lancé, la barre d'avancement, ce qui est en cours, ce que le programme a lu de la série, les candidats sur deux lignes chacun (le titre, puis la date et la phrase qui dit comment l'événement se place), les événements déjà au calendrier, ce que l'enquête ne peut pas dire, et la trace. Un clic sur un candidat l'ouvre : ce qui est publié, ce qui est mesuré, les raisons de douter, les dates et les deux boutons. La frise du bas (`NetworkTimeline.tsx`) dessine ce que l'enquête a trouvé. Le bouton « Analyst » du cadre n'est pas montré sur cette page.
 
 **Ailleurs que sur la carte des scénarios** (`AnalystDock.tsx`). Le cadre du Studio porte un bouton « Analyst », en bas à droite de chaque page. Il ouvre l'onglet Ask seul, sur le réseau tel qu'il est maintenant. La question part avec ce que la personne a sous les yeux : la page, et l'unité sélectionnée sur Units ou le signal ouvert sur Response. Les questions suggérées suivent : « What is open right now, and where? », plus une sur l'unité ou le signal quand il y en a un. Le panneau garde ce qui a été demandé quand on le ferme et le rouvre. Deux pages n'ont pas ce bouton, parce qu'elles tiennent déjà l'analyste là où se fait le travail : Scenarios, dont le panneau a aussi le scénario, le run et les options, et la fiche de situation.
 
@@ -388,7 +438,12 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 ## Limites connues
 
 - Chaque question, chaque objectif est indépendant : l'analyste ne se souvient pas du précédent.
-- Il ne cherche en ligne que dans l'onglet Event finder. Dans Ask et Options il lit les événements déjà validés, et dit quand aucun ne couvre le moment demandé.
+- Il ne cherche en ligne que dans l'onglet Event finder et dans une enquête. Dans Ask et Options il lit les événements déjà validés, et dit quand aucun ne couvre le moment demandé.
+- Une enquête rapproche des dates, elle ne mesure pas un effet. Elle dit qu'un événement commence deux jours avant un épisode, pas qu'il l'a causé, et elle ne sépare pas la part de deux événements qui vont avec le même épisode. Un rapprochement vu une fois n'est pas répliqué.
+- Une enquête ne sait pas si un événement concerne l'unité : le lieu d'un événement est un texte, relié à aucun territoire. C'est la personne qui en juge, d'après la source.
+- Une enquête n'a d'épisodes que si une règle d'alerte couvre la mesure à cette unité. Ce qui est habituel pour une unité à une heure donnée n'est pas calculé.
+- Une enquête ne lit que ce que le jumeau a gardé, et l'historique commence le jour où l'enregistrement a commencé : sur un laps de temps plus ancien, il n'y a pas de série, et aucune recherche n'est faite.
+- L'onglet Investigate n'est offert que pour un site qui compte une seule unité et pour une mesure que l'organisation a définie : ce sont les seules séries gardées.
 - Une recherche ne voit que ce que les sources autorisées publient et que le moteur de recherche de l'API en a retenu. Un événement absent des candidats n'est pas un événement qui n'a pas eu lieu.
 - Le serveur ne détient d'une page web que le passage cité, 150 caractères au plus. Une date que la page donne ailleurs que dans ce passage reste vide : il faut ouvrir la source et la saisir.
 - Ce qui est vérifié d'un candidat : son lien, sa citation, ses dates. Que le passage dise bien ce que le titre en retient, et que la porte soit la bonne, c'est la personne qui le juge en acceptant.
@@ -398,7 +453,7 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 - Une recherche d'événements coûte environ 70 cents : chaque recherche lancée renvoie dix pages, près de 15 000 jetons, et aucun réglage de l'API ne permet d'en demander moins sans renoncer au plafond de recherches. Voir « Ce que coûte une recherche ».
 - Les questions de référence ne jugent que l'onglet Ask. Sur `claude-haiku-5-5`, l'onglet Options a été essayé sur un seul objectif (trois options testées, dont un transfert de patients et deux réponses enregistrées), et la recherche d'événements ne l'a pas été ; `claude-sonnet-5-5` n'a été essayé nulle part.
 - Le jumeau ne contient ni personnel ni stocks : l'analyste le dit, il ne le comble pas.
-- Le jumeau garde les relevés de ses mesures depuis le jour où l'enregistrement a commencé ([algorithms.md](algorithms.md), D11), et la page d'une unité les montre. Aucun outil de l'analyste ne les lit : il ne peut donc pas dire ce qui était ouvert plus tôt, ni ce qui a changé depuis ce matin, et il le dit.
+- Le jumeau garde les relevés de ses mesures depuis le jour où l'enregistrement a commencé ([algorithms.md](algorithms.md), D11), et la page d'une unité les montre. Aucun outil de l'analyste ne les lit : dans Ask, il ne peut donc pas dire ce qui était ouvert plus tôt, ni ce qui a changé depuis ce matin, et il le dit. Dans une enquête, c'est le programme qui les lit, pas le modèle.
 - L'âge d'une alerte ou d'une mesure est celui de ce que la mesure lit. L'unité a aussi le sien, la plus vieille de toutes ses sources, qui peut être plus vieux que celui d'une de ses valeurs : l'analyste reçoit les deux, et doit donner avec un chiffre l'âge de ce chiffre. Une date sans heure donne un âge au jour près.
 - Les signaux ouverts que `list_alerts` compte comprennent ceux dont l'alerte est retombée : ils peuvent être bien plus nombreux que les alertes ouvertes.
 - Le run à l'écran n'est pas gardé au rechargement de la page ; il faut relancer Run. Les options testées non plus : ce qui reste, ce sont les décisions enregistrées et le journal.
@@ -438,6 +493,8 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 | La liste de prix dans l'ontologie : vue « Functions », prix d'un type | `frontend/app/studio/manager/PriceList.tsx`, `price-list.ts` |
 | Clôture d'une recherche d'événements, `give_events` | `backend/src/services/analyst-events.ts` |
 | Lecture de la recherche web : requêtes, pages, passages, dates, citations | `backend/src/services/analyst-web.ts` |
+| Enquête sur une série : la série, les épisodes, les voisins, la comparaison | `backend/src/services/investigation.ts` |
+| Enquêtes relues du journal | `backend/src/services/investigation-journal.ts` |
 | Sources autorisées d'un projet | `backend/src/services/web-sources.ts` |
 | Calendrier des événements acceptés | `backend/src/services/health-events.ts` |
 | Run d'un scénario sur le serveur | `backend/src/services/scenario-run.ts`, `scenario-stamps.ts` |
@@ -448,11 +505,13 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 | Routes des décisions | `backend/src/routes/decisions.ts` |
 | Routes du calendrier et des sources | `backend/src/routes/health-events.ts` |
 | Réponse en flux | `backend/src/lib/ndjson.ts` |
-| Journal, décisions, calendrier | `backend/scripts/migrations/059_analyst_exchange.sql`, `060_analyst_exchange_kind.sql`, `061_decision.sql`, `062_health_event.sql` |
+| Journal, décisions, calendrier | `backend/scripts/migrations/059_analyst_exchange.sql`, `060_analyst_exchange_kind.sql`, `061_decision.sql`, `062_health_event.sql`, `069_analyst_investigation.sql` |
 | Appels et libellés côté écran | `frontend/app/studio/analyst-api.ts` |
 | Panneau et onglet Ask | `frontend/app/studio/simulation/hex/AnalystPanel.tsx` |
 | Onglets Options et Decisions | `frontend/app/studio/simulation/hex/OptionsTab.tsx`, `DecisionsTab.tsx` |
 | Onglet Event finder | `frontend/app/studio/simulation/hex/EventFinderTab.tsx` |
+| Panneau Analyst de la carte du réseau, onglet Investigate | `frontend/app/studio/command/NetworkAnalyst.tsx`, `InvestigateTab.tsx`, `investigation.ts` |
+| Frise de la carte du réseau : série, épisodes, événements | `frontend/app/studio/command/NetworkTimeline.tsx`, `series-lane.ts` |
 | Couloir Context de la frise | `frontend/app/studio/simulation/hex/ContextLane.tsx`, `context-lane.ts` |
 | Pièces communes aux onglets | `frontend/app/studio/simulation/hex/analyst-parts.tsx` |
 | Carte d'une option ou d'une décision : chiffres dessinés, écart, niveaux de preuve, lignes repliées | `frontend/app/studio/simulation/hex/option-cards.tsx`, tests `option-cards.test.tsx` |

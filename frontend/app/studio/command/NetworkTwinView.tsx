@@ -19,7 +19,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Map as MapboxMap, Marker } from "mapbox-gl";
 
 import {
-  ChevronDown,
   Earth,
   Eye,
   Globe2,
@@ -68,6 +67,7 @@ import {
   type GeoCapability,
   type InstanceShape,
   type TwinAlert,
+  type TwinUnitHistory,
   type TwinTreeSnapshot,
   type TwinNetworkSite,
   type TwinNetworkSnapshot,
@@ -100,6 +100,9 @@ import {
   ruleForMetric,
   siteValue,
 } from "./site-metric";
+import type { InvestigationOnPage } from "./InvestigateTab";
+import NetworkAnalyst from "./NetworkAnalyst";
+import NetworkTimeline, { type TimelineSeries } from "./NetworkTimeline";
 import SiteInspector, { type UnitReading } from "./SiteInspector";
 import type { HistoryState } from "../live/unit-history";
 import {
@@ -375,6 +378,12 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   const [styleMode, setStyleMode] = useState<"standard" | "satellite">("standard");
   const [savedViews, setSavedViews] = useState<SavedView[]>([]);
   const [windowHours, setWindowHours] = useState(72);
+  // The analyst's panel, under the inspector. Opening it folds the inspector.
+  const [analystOpen, setAnalystOpen] = useState(false);
+  const [inspectorFolded, setInspectorFolded] = useState(false);
+  // The timeline under the map, and the investigation whose findings it draws.
+  const [timelineOpen, setTimelineOpen] = useState(false);
+  const [investigation, setInvestigation] = useState<InvestigationOnPage | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
@@ -1559,6 +1568,40 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
     };
   }, [env, readUnitId, badgeMetric, keptOverTime]);
 
+  const [laneHeld, setLaneHeld] = useState<{ key: string; history: TwinUnitHistory | null } | null>(null);
+  const laneKey = readUnitId && keptOverTime ? `${readUnitId}|${badgeMetric}|${windowHours}` : null;
+  useEffect(() => {
+    if (!env || !readUnitId || !laneKey || !timelineOpen) return;
+    let cancelled = false;
+    const read = () =>
+      fetchTwinUnitHistory(env, readUnitId, badgeMetric, windowHours)
+        .then((history) => !cancelled && setLaneHeld({ key: laneKey, history }))
+        .catch(() => !cancelled && setLaneHeld({ key: laneKey, history: null }));
+    void read();
+    const again = setInterval(() => void read(), INSPECTOR_EVERY_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(again);
+    };
+  }, [env, readUnitId, badgeMetric, windowHours, laneKey, timelineOpen]);
+
+  const timelineSeries: TimelineSeries | null = useMemo(() => {
+    if (!selected || !laneKey) return null;
+    // Kept with what it was read for: one unit's series never shows under another's name.
+    const held = laneHeld && laneHeld.key === laneKey ? laneHeld : null;
+    return {
+      unitName: selected.contributingUnits[0]?.name || selected.name,
+      label: badgeLabel,
+      unit: badgeUnit ?? "number",
+      threshold: badgeRule?.threshold ?? null,
+      state: !held ? "reading" : held.history ? "read" : "failed",
+      history: held?.history ?? null,
+    };
+  }, [selected, laneKey, laneHeld, badgeLabel, badgeUnit, badgeRule]);
+  // An investigation is drawn only on the series it was made of.
+  const investigationHere =
+    investigation && investigation.unitId === readUnitId && investigation.metric === badgeMetric ? (investigation.result.answer?.investigation ?? null) : null;
+
   const unitReading: UnitReading = useMemo(() => {
     if (!selected || selected.contributingUnits.length === 0) return { state: "none", detail: null, history: null };
     if (selected.contributingUnits.length > 1) return { state: "several", detail: null, history: null };
@@ -2285,9 +2328,14 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                   <Scan className="h-4 w-4" />
                 </button>
               </div>
-          {/* Inspector */}
+          {/* The right column: the inspector of what is selected, and the analyst under it.
+              Both are overlays that fold; each scrolls inside itself when the map is short. */}
+          <div className="flex max-h-full min-h-0 w-[328px] shrink-0 flex-col gap-2">
         {selected ? (
           <SiteInspector
+            className="min-h-0 shrink"
+            folded={inspectorFolded}
+            onFolded={setInspectorFolded}
             site={selected}
             metricDefs={twinMetrics}
             badgeMetric={badgeMetric}
@@ -2304,6 +2352,29 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
             onDrillIn={onDrillIn}
           />
         ) : null}
+        {env ? (
+          <NetworkAnalyst
+            env={env}
+            open={analystOpen}
+            onToggle={() => {
+              // Opening the analyst folds the inspector: the investigation needs the height, and the site's name stays in view.
+              if (!analystOpen) setInspectorFolded(true);
+              setAnalystOpen((o) => !o);
+            }}
+            unit={readUnitId && selected ? { id: readUnitId, name: selected.contributingUnits[0]!.name || selected.name } : null}
+            several={!!selected && selected.contributingUnits.length > 1}
+            metric={{ key: badgeMetric, label: badgeLabel, unit: badgeUnit ?? "number" }}
+            kept={keptOverTime}
+            hours={windowHours}
+            onHours={setWindowHours}
+            onInvestigation={(shown) => {
+              setInvestigation(shown);
+              // What was found is drawn on the series: the timeline opens to show it.
+              if (shown) setTimelineOpen(true);
+            }}
+          />
+        ) : null}
+          </div>
           </div>
         </div>
 
@@ -2329,12 +2400,16 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
                   </span>
                 ) : null}
               </div>
-          <EventTimeline
+          <NetworkTimeline
           className="min-w-0 flex-1"
         alerts={alerts}
         feedEvents={feedEvents}
         windowHours={windowHours}
         onWindow={setWindowHours}
+        open={timelineOpen}
+        onOpen={setTimelineOpen}
+        series={timelineSeries}
+        investigation={investigationHere}
       />
         </div>
       </div>
@@ -2353,119 +2428,6 @@ export default function NetworkTwinView({ onDrillIn }: { onDrillIn: () => void }
   );
 }
 
-
-// ---------------------------------------------------------------------------
-// Multi-lane event timeline (alerts + feed activity)
-// ---------------------------------------------------------------------------
-
-function EventTimeline({
-  alerts,
-  feedEvents,
-  windowHours,
-  onWindow,
-  className,
-}: {
-  alerts: TwinAlert[];
-  feedEvents: { id: string; receivedAt: string }[];
-  windowHours: number;
-  onWindow: (h: number) => void;
-  className?: string;
-}) {
-  // Folded to its counts on arrival; the lanes open on demand.
-  const [open, setOpen] = useState(false);
-  const now = Date.now();
-  const start = now - windowHours * 3_600_000;
-  const W = 900;
-  const x = (iso: string) => {
-    const t = new Date(iso).getTime();
-    return 70 + ((W - 80) * Math.max(0, Math.min(1, (t - start) / (now - start))));
-  };
-
-  const alertEvents = alerts
-    .filter((a) => a.createdAt && new Date(a.createdAt).getTime() >= start)
-    .slice(0, 60);
-  const feeds = feedEvents.filter((e) => new Date(e.receivedAt).getTime() >= start);
-
-  return (
-    <div className={cn(OVERLAY_BAR, "px-3 py-1.5", className)}>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          aria-expanded={open}
-          onClick={() => setOpen((o) => !o)}
-          className="flex items-center gap-1 text-[11px] font-semibold text-ink hover:text-brand"
-        >
-          Event timeline
-          <ChevronDown className={cn("h-3.5 w-3.5 text-ink-faint transition-transform", open && "rotate-180")} aria-hidden="true" />
-        </button>
-        {[24, 72].map((h) => (
-          <button
-            key={h}
-            type="button"
-            onClick={() => onWindow(h)}
-            className={cn(
-              "rounded px-2 py-0.5 text-[10.5px]",
-              windowHours === h
-                ? "bg-brand-soft font-medium text-brand-deep"
-                : "border border-line text-ink-faint",
-            )}
-          >
-            {h} h
-          </button>
-        ))}
-        <span className="ml-auto text-[10.5px] text-ink-faint">
-          {alertEvents.length} alerts · {feeds.length} feed events in window
-        </span>
-      </div>
-      {open ? (
-      <svg
-        viewBox={`0 0 ${W} 64`}
-        className="mt-1 w-full"
-        role="img"
-        aria-label="Timeline lanes for alerts and feed events"
-      >
-        <line x1={70} y1={18} x2={W - 10} y2={18} stroke="#333333" strokeWidth="1" />
-        <line x1={70} y1={46} x2={W - 10} y2={46} stroke="#333333" strokeWidth="1" />
-        <text x={4} y={21} fontSize="9" fill="#a8a8a8">
-          ALERTS
-        </text>
-        <text x={4} y={49} fontSize="9" fill="#a8a8a8">
-          FEEDS
-        </text>
-        <text x={70} y={62} fontSize="8.5" fill="#a8a8a8">
-          −{windowHours} h
-        </text>
-        <text x={W - 10} y={62} textAnchor="end" fontSize="8.5" fill="#a8a8a8">
-          now
-        </text>
-        {alertEvents.map((a) => (
-          <circle
-            key={a.id}
-            cx={x(a.createdAt!)}
-            cy={18}
-            r={a.severity === "critical" ? 5 : 4}
-            fill={
-              a.severity === "critical"
-                ? "#fa4d56"
-                : a.severity === "warn"
-                  ? "#f1c21b"
-                  : "#4589ff"
-            }
-            opacity="0.85"
-          >
-            <title>{a.message}</title>
-          </circle>
-        ))}
-        {feeds.map((e) => (
-          <rect key={e.id} x={x(e.receivedAt) - 1} y={41} width={2} height={10} fill="#4589ff" opacity="0.6">
-            <title>ingest event · {new Date(e.receivedAt).toLocaleString()}</title>
-          </rect>
-        ))}
-      </svg>
-      ) : null}
-    </div>
-  );
-}
 
 /**
  * Confirm a flow between two sites.

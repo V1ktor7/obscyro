@@ -73,7 +73,8 @@ const healthEventRoutes: FastifyPluginAsync = async (fastify) => {
         summary: "Accept a candidate event into the calendar",
         description:
           "Records that the person asking accepted one of the candidates a search delivered. The body names the " +
-          "journalled search (`exchangeId`, sent with the `done` line of `/analyst/events`), the candidate (`c1`, " +
+          "journalled search (`exchangeId`, sent with the `done` line of `/analyst/events` or of " +
+          "`/analyst/investigate`), the candidate (`c1`, " +
           "`c2`, …) and the dates the person validated, which they may have corrected. The title, the place, the " +
           "door, the link and the quoted passage are copied by the server from that search: the caller sends none, " +
           "and a candidate the search did not deliver is refused. Accepting the same candidate twice is refused " +

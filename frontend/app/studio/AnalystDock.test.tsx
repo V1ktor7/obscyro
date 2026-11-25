@@ -92,6 +92,12 @@ describe("the analyst in the shell", () => {
     expect(screen.queryByRole("button", { name: "Analyst" })).toBeNull();
     b.unmount();
 
+    // The network map has its own Analyst panel, under the inspector.
+    where.path = "/studio/command";
+    const c = render(shell());
+    expect(screen.queryByRole("button", { name: "Analyst" })).toBeNull();
+    c.unmount();
+
     where.path = "/studio/response";
     render(shell({}, null));
     expect(screen.queryByRole("button", { name: "Analyst" })).toBeNull();
