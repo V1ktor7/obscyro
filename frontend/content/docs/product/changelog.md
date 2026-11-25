@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "ca96d41abaf680e9"
+translatedFrom: "55516fd8e89f8fa5"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -12,6 +12,13 @@ What changed in Obscyro, from the most recent to the oldest. Each entry says wha
 - **Change**: something it already did, and now does differently, better or faster. A fix is one.
 
 An entry is written the day the change ships, in the same commit as the code. Since November 2026, every visible change has its own. The months before are summarised. The full detail, commit by commit, is in [the repository's history](https://github.com/V1ktor7/obscyro/commits/main).
+
+## 25 November 2026
+
+- **New feature · Ontology.** Action types. Under Ontology › Action types, a project declares what the analyst may propose: a name in the institution's words, what the type changes (capacity, a measure, a transfer, a recorded response), its bounds (a range of units, sites, layers and their factor, days, patients a day), the days it takes before it can apply, and who can approve it. The activity, the sites and the layers are picked from what the twin declares. A type the twin does not let the analyst test says so, with what is missing.
+- **New feature · Analyst.** The analyst keeps to the project's action types. It reads the list before proposing, a proposal out of bounds is refused before it runs in the engine and is not shown, and an idea no type covers goes in the limits of its answer. Four built-in types, unbounded, cover what it already proposed: a project that sets nothing works exactly as before.
+- **New feature · Analyst.** An option says which action type it falls under and who can approve it, and the recorded decision keeps it. It is a mention: applying an option stays a person's click.
+- **New feature · Ontology.** The same page shows the analyst's tools, with what each reads, and lets one be switched off for the project. With the web search off, Event finder and Investigate say so instead of searching.
 
 ## 24 November 2026
 

@@ -10,10 +10,14 @@ import type { DbClient } from "../lib/db.js";
 import { AppError, BadRequest, NotFound } from "../lib/errors.js";
 import { streamLines } from "../lib/ndjson.js";
 import { ANALYST_MODEL, anthropicModel, ask, converse, type AskFocus, type LoopEvent, type LoopResult } from "../services/analyst.js";
+import { isConfigured, listActionTypes } from "../services/action-types.js";
+import { listActions } from "../services/analyst-actions.js";
 import { eventSearch, eventsClosing } from "../services/analyst-events.js";
 import { OPTION_TOOLS, benchFor, optionsClosing } from "../services/analyst-options.js";
 import type { StoredResponse } from "../services/analyst-responses.js";
-import { ToolError, runDigestSchema, type AnalystContext, type WorldName } from "../services/analyst-tools.js";
+import { offered, toolsOff } from "../services/analyst-settings.js";
+import { READ_TOOLS, ToolError, runDigestSchema, type AnalystContext, type WorldName } from "../services/analyst-tools.js";
+import { WEB_SEARCH } from "../services/analyst-web.js";
 import { serverRun, simServiceEngine } from "../services/scenario-run.js";
 import { Ledger } from "../services/analyst-verify.js";
 import { listDatasets, previewRows, type DatasetRow } from "../services/datasets.js";
@@ -207,6 +211,8 @@ const analystRoutes: FastifyPluginAsync = async (fastify) => {
   const client = off === null ? new Anthropic({ apiKey: config.anthropicApiKey }) : null;
   if (off?.reason === "unknown_model") fastify.log.warn({ asked: config.analystModel.refused }, off.says);
   const notConfigured = () => new AppError("ANALYST_NOT_CONFIGURED", off?.says ?? "The analyst is not switched on for this server.", 503);
+  const webSearchOff = () =>
+    BadRequest("WEB_SEARCH_OFF", "The web search is switched off for this project, so there is nothing to search with. It is switched on again in the Studio, under Ontology, Action types.");
 
   app.get(
     "/ontology/:env/analyst",
@@ -292,6 +298,8 @@ const analystRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const looking = scenario ? req.body.looking : "reality";
       const ctx = contextFor(req.db, env, scenario, req.body.run);
+      // The tools this project left on: one switched off is not offered at all.
+      const tools = offered(READ_TOOLS, await toolsOff(req.db, env.id));
       const exchangeId = randomUUID();
 
       let focus: AskFocus | null = null;
@@ -313,7 +321,7 @@ const analystRoutes: FastifyPluginAsync = async (fastify) => {
         let result: Exchange | null = null;
         let failure: string | null = null;
         try {
-          result = await ask(anthropicModel(client), ctx, { question: req.body.question, looking, focus }, withExchange(write, exchangeId), undefined, gone);
+          result = await ask(anthropicModel(client), ctx, { question: req.body.question, looking, focus }, withExchange(write, exchangeId), tools, gone);
         } catch (err) {
           req.log.error({ err }, "analyst failed");
           failure = failureMessage(err);
@@ -360,6 +368,12 @@ const analystRoutes: FastifyPluginAsync = async (fastify) => {
           "engine evaluates at every step, written as a `response` stamp and tested by the same run. Each option " +
           "then carries `cost`: what the engine counted (the cost each rule declares, each time it fired), whether " +
           "that is the whole cost of the option, and a sentence saying so; capacity and measures carry no price. " +
+          "What an option may contain is the project's to set: its action types (`/action-types`) say what each kind " +
+          "of change is, within what bounds, in how long and who can approve it. A change outside the bounds of its " +
+          "action type is refused before anything runs, and is not shown; a change under a type the project declared " +
+          "carries it in `changes[].action` (its key, its name, who can approve it). A project that declared none " +
+          "has four built-in types, unbounded, and behaves as before. A tool the project switched off " +
+          "(`/analyst/tools`) is not offered. " +
           "The figures of the comparison come from the runs, never from the model's text, and the model's " +
           "text is checked against the steps like any answer. Nothing is written: the scenario is unchanged until " +
           "the person adds an option themselves. A run is the result of a model under stated conditions, not a forecast.",
@@ -396,6 +410,12 @@ const analystRoutes: FastifyPluginAsync = async (fastify) => {
         activity: req.body.activity,
         world: (name) => ctx.world(name),
       });
+      // What this project lets an option contain. In a project that declared nothing, the four
+      // built-in types stand, and the analyst is told nothing new and offered no new tool.
+      const types = await listActionTypes(req.db, env.id);
+      ctx.actions = () => Promise.resolve(types);
+      const declared = isConfigured(types);
+      const tools = offered(declared ? [...OPTION_TOOLS, listActions] : OPTION_TOOLS, await toolsOff(req.db, env.id));
       const exchangeId = randomUUID();
       const input = { objective: req.body.objective };
 
@@ -403,7 +423,7 @@ const analystRoutes: FastifyPluginAsync = async (fastify) => {
         let result: Exchange | null = null;
         let failure: string | null = null;
         try {
-          result = await converse(anthropicModel(client), ctx, optionsClosing(ctx, input), withExchange(write, exchangeId), OPTION_TOOLS, gone);
+          result = await converse(anthropicModel(client), ctx, optionsClosing(ctx, input, { actionTypes: declared }), withExchange(write, exchangeId), tools, gone);
         } catch (err) {
           req.log.error({ err }, "analyst options failed");
           failure = failureMessage(err);
@@ -528,6 +548,7 @@ const analystRoutes: FastifyPluginAsync = async (fastify) => {
       if (domains.length === 0) {
         throw BadRequest("NO_WEB_SOURCES", "This project allows no web source, so there is nowhere to search. Add at least one under Sources.");
       }
+      if ((await toolsOff(req.db, env.id)).has(WEB_SEARCH)) throw webSearchOff();
       let scenarioId: string | null = null;
       if (req.body.scenarioId) {
         const s = await getOverlayScenario(req.db, req.body.scenarioId);
@@ -615,6 +636,7 @@ const analystRoutes: FastifyPluginAsync = async (fastify) => {
       if (domains.length === 0) {
         throw BadRequest("NO_WEB_SOURCES", "This project allows no web source, so there is nowhere to search. Add at least one under Sources.");
       }
+      if ((await toolsOff(req.db, env.id)).has(WEB_SEARCH)) throw webSearchOff();
       const from = new Date(req.body.from);
       const to = new Date(req.body.to);
       if (!(to.getTime() > from.getTime())) throw BadRequest("SPAN_INVALID", "The span ends before it starts. Give its start, then its end.");

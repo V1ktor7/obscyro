@@ -77,6 +77,12 @@ describe("a step in a planner's words", () => {
     expect(label("read_series", { dataset: "INSPQ", value_column: "admissions" })).toBe("Series admissions of INSPQ");
   });
 
+  it("says the project's action types were read, and how many are switched off", () => {
+    expect(label("list_actions", {}, { action_types: [{}, {}, {}], switched_off_in_this_project: ["Measures"] })).toBe("What this project lets it propose: 3 action types, 1 switched off");
+    expect(label("list_actions", {}, { action_types: [{}] })).toBe("What this project lets it propose: 1 action type");
+    expect(label("list_actions", {}, { error: "no" }, false)).toBe("What this project lets it propose");
+  });
+
   it("falls back to the tool's name for one it does not know", () => {
     expect(label("something_new", {})).toBe("something_new");
   });

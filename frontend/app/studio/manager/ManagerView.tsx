@@ -32,7 +32,6 @@ import {
   Star,
   Stethoscope,
   User,
-  Zap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -102,6 +101,7 @@ import {
 } from "@/lib/property-schema";
 import { listQualityFlags, type QualityFlag } from "../quality-api";
 import LinkBehaviourDialog from "./LinkBehaviourDialog";
+import { ActionTypesPage } from "./ActionTypes";
 import { PriceListPage, TypePrices } from "./PriceList";
 import { forgetPriceLists } from "./price-list";
 import SchemaGraphCanvas from "./SchemaGraphCanvas";
@@ -1884,13 +1884,12 @@ function ResourcePages({
       />
     );
   }
+  // What the analyst may propose in this project, and the tools it may use.
   if (view === "actionTypes") {
     return (
-      <PlaceholderPage
-        title="Action types"
-        icon={Zap}
-        body="Reusable actions over the ontology — extract, normalize, translate, and simulation triggers — will be catalogued here. Today these run from Studio pipelines."
-      />
+      <PageShell title="Action types">
+        <ActionTypesPage env={env} />
+      </PageShell>
     );
   }
   if (view === "valueSets") {

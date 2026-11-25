@@ -2,6 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 
 import { formatCents, ledgerOf, type CostLedger } from "./cost-ledger.js";
+import { DEFAULT_ACTION_TYPES, actionFor, fitCapacity, fitMeasure, fitResponse, fitTransfer, saidOf, type ActionType, type ChangeAction } from "./action-types.js";
 import { catalogueOf, modesFor, priceFor, type PriceCatalogue } from "./price-catalogue.js";
 import { AppError } from "../lib/errors.js";
 import type { Closing, Step } from "./analyst.js";
@@ -222,6 +223,12 @@ export interface OptionChange {
   now: string | null;
   /** The scenario's choice it takes out; null for an addition. */
   was: string | null;
+  /**
+   * The action type it falls under, when the project declared it: its name and
+   * who can approve it. Absent for a removal, and in a project that declared
+   * no action type.
+   */
+  action?: ChangeAction;
 }
 
 /**
@@ -523,12 +530,15 @@ export function scenarioBasis(stamps: Stamp[], ctx: TwinContext, activity: strin
 // ---------------------------------------------------------------------------
 
 const choiceRef = z.string().trim().min(1).max(60);
+/** The action type a change falls under, by the ref list_actions gives. Left out, it is the one type of its kind. */
+const actionRef = z.string().trim().min(1).max(80).optional();
 // With `replaces`, a change says only what differs from the choice it takes
 // the place of, so every field of the stamp is optional here and required,
 // for a plain addition, where the stamp is written.
 const change = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("capacity"),
+    action: actionRef,
     replaces: choiceRef.optional(),
     site: z.string().min(1).max(300).optional(),
     activity: z.string().min(1).max(120).optional(),
@@ -539,6 +549,7 @@ const change = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("measure"),
+    action: actionRef,
     replaces: choiceRef.optional(),
     name: z.string().trim().min(1).max(120).optional(),
     layers: z.array(z.object({ layer: z.string().min(1).max(120), factor: z.number().min(0).max(5) })).min(1).max(8).optional(),
@@ -548,10 +559,11 @@ const change = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("remove"), ref: choiceRef }),
   // A recorded response, by the ref list_responses gives it.
-  z.object({ kind: z.literal("response"), response: z.string().trim().min(1).max(200), from_day: z.number().int().min(0).optional() }),
+  z.object({ kind: z.literal("response"), action: actionRef, response: z.string().trim().min(1).max(200), from_day: z.number().int().min(0).optional() }),
   // Waiting patients sent from one site to another, along a route the twin holds.
   z.object({
     kind: z.literal("transfer"),
+    action: actionRef,
     from: z.string().min(1).max(300),
     to: z.string().min(1).max(300),
     patients_per_day: z.number().int().min(1),
@@ -802,6 +814,11 @@ export const testOption: AnalystTool = {
               enum: ["capacity", "measure", "transfer", "response", "remove"],
               description: "capacity, measure, transfer or response: something placed. remove: a choice of the scenario taken out, named by ref.",
             },
+            action: {
+              type: "string",
+              description:
+                "capacity, measure, transfer or response: the ref of the action type this change falls under, as list_actions gives it. Needed when the project has several action types of that kind; it may be left out when it has one.",
+            },
             response: { type: "string", description: "response: the ref of a recorded response, as list_responses gives it." },
             from: { type: "string", description: "transfer: the id or name of the site whose waiting patients are sent away." },
             to: { type: "string", description: "transfer: the id or name of the site they are sent to. A transfer route must go from the first to this one, and it must provide the activity." },
@@ -863,12 +880,14 @@ export const testOption: AnalystTool = {
     // The price list the twin declares, read through the scenario. Empty in a twin that declares none.
     const catalogue = catalogueOf(open.system);
     const listed = catalogue.entries.length > 0 || catalogue.problems.length > 0;
+    // What the project lets an option contain. Undeclared, the four built-in types: everything, unbounded.
+    const types: readonly ActionType[] = (await ctx.actions?.()) ?? DEFAULT_ACTION_TYPES;
     // The mode each capacity stamp of the option uses, by the stamp's id.
     const modes = new Map<string, string | null>();
     // What the option writes, and what it takes out of the scenario.
     const option: ChoiceStamp[] = [];
     const retired: { old: ChoiceStamp; replacedBy: number | null }[] = [];
-    const moves: { does: OptionChange["does"]; now: ChoiceStamp | null; was: ChoiceStamp | null }[] = [];
+    const moves: { does: OptionChange["does"]; now: ChoiceStamp | null; was: ChoiceStamp | null; action?: ChangeAction | null }[] = [];
     const transfers: Extract<Change, { kind: "transfer" }>[] = [];
     const recorded: Extract<Change, { kind: "response" }>[] = [];
     input.changes.forEach((c, i) => {
@@ -889,10 +908,17 @@ export const testOption: AnalystTool = {
       if (old && sameChoice(old, stamp)) {
         throw new ToolError(`This replaces ${named} with itself (${choiceLine(old, runner.ctx)}), which changes nothing. Say what differs: the units, the day, the duration.`);
       }
-      // Refused here, before anything runs: a mode the list does not have, or a day its delay does not allow.
-      if (stamp.kind === "capacity") modes.set(stamp.id, settleMode(c.kind === "capacity" ? c.mode : undefined, stamp, catalogue, runner.ctx));
+      // Refused here, before anything runs: a change outside what its action type allows,
+      // a mode the list does not have, or a day its delay does not allow.
+      const type = actionFor(types, c.kind, c.action);
+      if (stamp.kind === "capacity" && type.effect === "capacity") {
+        const mode = fitCapacity(type, { facility: stamp.facility, activity: stamp.activity, amount: stamp.amount, start: stamp.start, mode: c.kind === "capacity" ? c.mode : undefined }, runner.ctx);
+        modes.set(stamp.id, settleMode(mode, stamp, catalogue, runner.ctx));
+      } else if (stamp.kind === "measure" && type.effect === "measure") {
+        fitMeasure(type, { layers: stamp.layers, populations: stamp.populations, start: stamp.start, days: stamp.days }, runner.ctx);
+      }
       if (old) retired.push({ old, replacedBy: option.length });
-      moves.push({ does: old ? "replaces" : "adds", now: stamp, was: old });
+      moves.push({ does: old ? "replaces" : "adds", now: stamp, was: old, action: saidOf(type) });
       option.push(stamp);
     });
     if (recorded.length + (transfers.length ? 1 : 0) > 1) {
@@ -902,7 +928,28 @@ export const testOption: AnalystTool = {
     }
     if (recorded.length || transfers.length) {
       const id = `option-${bench.tested.length + 1}-response`;
+      // Each transfer against its action type, before the stamp is written: a refusal names the bound.
+      const sending = transfers.map((c) => {
+        const type = actionFor(types, "transfer", c.action);
+        if (type.effect === "transfer") {
+          fitTransfer(
+            type,
+            { source: pick(runner.ctx.facilities, c.from, "site").id, target: pick(runner.ctx.facilities, c.to, "site").id, perDay: c.patients_per_day, start: c.from_day },
+            runner.ctx,
+          );
+        }
+        return type;
+      });
       const placed = recorded.length ? await responseStamp(recorded[0]!, ctx, open, bench, id) : transfersStamp(transfers, open, bench, id);
+      let under = sending[0] ?? null;
+      if (recorded.length) {
+        const type = actionFor(types, "response", recorded[0]!.action);
+        if (type.effect === "response") {
+          const known = listedResponses((await ctx.responses?.()) ?? [], open.system).map((r) => ({ id: r.stampRef, name: r.name }));
+          fitResponse(type, { ref: placed.ref, name: placed.name, start: placed.start }, known);
+        }
+        under = type;
+      }
       const held = open.stamps.find((s): s is ResponseStamp => s.kind === "response" && !retired.some((r) => r.old.id === s.id));
       if (held) {
         const ref = [...open.choices].find(([, s]) => s.id === held.id)?.[0] ?? held.id;
@@ -910,7 +957,7 @@ export const testOption: AnalystTool = {
           `The scenario already follows a recorded response (${ref}: ${choiceLine(held, runner.ctx)}), and a run follows one at a time. Take it out in the same option, with a change of kind "remove" and its ref, to test this one in its place.`,
         );
       }
-      moves.push({ does: "adds", now: placed, was: null });
+      moves.push({ does: "adds", now: placed, was: null, action: under ? saidOf(under) : null });
       option.push(placed);
     }
     const key = JSON.stringify({ writes: option.map(bodyOf), retires: retired.map((r) => [r.old.id, r.replacedBy]) });
@@ -974,6 +1021,7 @@ export const testOption: AnalystTool = {
         does: m.does,
         now: m.now ? choiceLine(m.now, runner.ctx) : null,
         was: m.was ? choiceLine(m.was, runner.ctx) : null,
+        ...(m.action ? { action: m.action } : {}),
       })),
       horizon: bench.horizon,
       activity: bench.activity,
@@ -991,13 +1039,15 @@ export const testOption: AnalystTool = {
     return new Recorded(
       {
         option: input.label,
-        changes: moves.map((m) =>
-          m.does === "adds"
-            ? { does: "adds", ...describeChange(m.now!, runner.ctx) }
+        changes: moves.map((m) => {
+          // Said only for a type the project declared: who approves is theirs to have written.
+          const under = m.action ? { action_type: m.action.name, ...(m.action.approver ? { approved_by: m.action.approver } : {}) } : {};
+          return m.does === "adds"
+            ? { does: "adds", ...describeChange(m.now!, runner.ctx), ...under }
             : m.does === "replaces"
-              ? { does: "replaces", ...describeChange(m.now!, runner.ctx), instead_of: describeChange(m.was!, runner.ctx) }
-              : { does: "removes", ...describeChange(m.was!, runner.ctx) },
-        ),
+              ? { does: "replaces", ...describeChange(m.now!, runner.ctx), ...under, instead_of: describeChange(m.was!, runner.ctx) }
+              : { does: "removes", ...describeChange(m.was!, runner.ctx) };
+        }),
         tested_over: { days: bench.horizon, activity: bench.activity },
         scenario_as_it_is: { ...summariseVariant(asItIs.figures), ...costLine(asItIsCost, open.stamps) },
         with_this_option: {
@@ -1086,6 +1136,25 @@ Most objectives take two to five reads and two or three tests. Do not call a too
 - You follow the system, not people. The twin holds counts and capacities, never a person's record.
 
 Write in the language the person wrote in, in plain words. Name sites and catchments as the twin names them.`;
+
+/**
+ * What is added to the instructions in a project that declared action types.
+ *
+ * A project that declared none is told nothing new and is offered no new tool:
+ * its four built-in types cover everything the analyst could already propose,
+ * so it works exactly as it did.
+ */
+export const ACTIONS_PROMPT = `
+
+# What this project lets you propose
+
+This project declared its action types: the kinds of change an option may contain here, each with its bounds, the days it takes before it can apply, and who can approve it. Read them with list_actions before you think of options.
+
+- Propose only what an action type covers, inside its bounds. Give each change of test_option its action type ("action": the ref list_actions gives).
+- A test outside a bound is refused, with the bound. Read it and stay inside: do not ask for the same thing again.
+- An idea no action type covers is not an option, however good. Put it in limits, and say that no action type of this project covers it.
+- An action type that is switched off, or that list_actions says cannot be tested, is not to be proposed. Say so in limits, with what it is missing.
+- An action type says what may be proposed and who can approve it. It decides nothing: the person still chooses, and still applies the option themselves.`;
 
 const GIVE_OPTIONS: Anthropic.Beta.BetaTool = {
   name: "give_options",
@@ -1261,9 +1330,9 @@ function describeFindings(findings: OptionsFinding[]): string {
  * comparison — the figures, the stamps, the levels of evidence — is taken here
  * from the records of the tests, and the words are checked against the steps.
  */
-export function optionsClosing(ctx: AnalystContext, input: OptionsAsk): Closing<OptionsInput, OptionsProposal, OptionsFinding> {
+export function optionsClosing(ctx: AnalystContext, input: OptionsAsk, declared: { actionTypes: boolean } = { actionTypes: false }): Closing<OptionsInput, OptionsProposal, OptionsFinding> {
   return {
-    system: OPTIONS_PROMPT,
+    system: declared.actionTypes ? OPTIONS_PROMPT + ACTIONS_PROMPT : OPTIONS_PROMPT,
     tool: GIVE_OPTIONS,
     opening: openingFor(ctx, input),
     asked: input.objective,

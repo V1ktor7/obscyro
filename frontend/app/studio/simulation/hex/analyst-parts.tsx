@@ -50,6 +50,33 @@ export function OptionChanges({ changes, heading }: { changes: OptionChange[] | 
   );
 }
 
+/**
+ * The action types an option falls under, and who can approve each.
+ *
+ * Shown only in a project that declared its action types: the name and the
+ * approver are the institution's own words, copied by the server. It says who
+ * can approve, not that anybody has: applying the option is still the person's
+ * click.
+ */
+export function ActionTypesOf({ changes }: { changes: OptionChange[] | undefined }) {
+  const seen = new Map<string, { name: string; approver: string }>();
+  for (const c of changes ?? []) if (c.action && !seen.has(c.action.key)) seen.set(c.action.key, c.action);
+  if (seen.size === 0) return null;
+  return (
+    <>
+      <span className={LABEL}>Action type{seen.size === 1 ? "" : "s"}</span>
+      <ul className="flex flex-col gap-0.5 text-[11.5px] text-ink-body">
+        {Array.from(seen).map(([key, a]) => (
+          <li key={key}>
+            <span className="font-semibold text-ink">{a.name}</span>
+            {a.approver ? <span className="text-ink-muted"> · can be approved by {a.approver}</span> : <span className="text-ink-faint"> · no approver declared</span>}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
 /** A duration as a person says it: "42 s", then "2 min 05 s". */
 export function elapsedText(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds));

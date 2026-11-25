@@ -15,7 +15,7 @@ Le panneau a quatre onglets, qui couvrent cinq étapes de la [boucle d'aide à l
 | Options | Options testées, Recommandation | Dire un objectif, voir jusqu'à trois options testées par le moteur à côté du scénario tel quel |
 | Decisions | Suivi | Relire ce qui a été retenu, ce qu'on en attendait, et l'écart avec ce qui a été observé |
 
-Les schémas de la boucle, du vérificateur et de la calculatrice sont dans [algorithms.md](algorithms.md), sections A1 à A3 ; ceux des options testées et des décisions, sections A8 et A9 ; celui de la recherche en ligne et du calendrier, section A10 ; ceux de la liste de prix, du registre des coûts et du délai d'une option, section A12 ; ceux de l'enquête sur une série, section A13.
+Les schémas de la boucle, du vérificateur et de la calculatrice sont dans [algorithms.md](algorithms.md), sections A1 à A3 ; ceux des options testées et des décisions, sections A8 et A9 ; celui de la recherche en ligne et du calendrier, section A10 ; ceux de la liste de prix, du registre des coûts et du délai d'une option, section A12 ; ceux de l'enquête sur une série, section A13 ; ceux des types d'action, section A14.
 
 ## Ce qu'il fait, et ce qu'il ne fait pas
 
@@ -69,6 +69,12 @@ L'onglet Event finder utilise la recherche web de l'API Claude. Elle n'a pas de 
 | `GET /v1/ontology/:env/prepared-responses` | Les réponses préparées du projet, dans l'ordre où elles ont été gardées (`signalTypeId` pour un seul type de signal) |
 | `DELETE /v1/ontology/:env/prepared-responses/:id` | Retire une réponse préparée : elle n'est plus proposée, sans être effacée |
 | `POST /v1/ontology/:env/signals/:id/engage` | Engage une réponse préparée sur un signal : enregistre la décision, l'inscrit au journal du signal, et fait avancer le signal d'une étape |
+| `GET /v1/ontology/:env/action-types` | Les types d'action du projet, ce que le jumeau offre à un type, et pour chacun ce qui lui manque pour être testé |
+| `POST /v1/ontology/:env/action-types` | Ajoute un type d'action ; sa clé est tirée de son nom |
+| `PUT /v1/ontology/:env/action-types/:key` | Change un type, ou ce que le projet change d'un type intégré |
+| `DELETE /v1/ontology/:env/action-types/:key` | Retire un type du projet, ou remet un type intégré comme il était |
+| `GET /v1/ontology/:env/analyst/tools` | Les outils de l'analyste : ce que chacun lit, où il est offert, s'il est allumé |
+| `PUT /v1/ontology/:env/analyst/tools/:name` | Éteint ou rallume un outil pour le projet (`on`) |
 | `POST /v1/ontology/:env/health-events` | Accepte un candidat : il entre au calendrier |
 | `GET /v1/ontology/:env/health-events` | Le calendrier du projet, du plus ancien au plus récent (`from`, `to` pour une période) |
 | `DELETE /v1/ontology/:env/health-events/:id` | Retire un événement du calendrier |
@@ -104,7 +110,7 @@ Une demande refusée avant de commencer (pas de session, analyste éteint, servi
 
 ## Les outils
 
-Aucun n'écrit. Quatorze lisent. Deux autres n'existent que dans l'onglet Options : `list_responses`, qui lit ce qu'une option peut contenir comme réponse enregistrée, et `test_option`, qui fait tourner le moteur. Deux mondes : `reality`, le jumeau tel qu'il est ; `scenario`, le même jumeau lu à travers le scénario ouvert.
+Aucun n'écrit. Quatorze lisent. Deux autres n'existent que dans l'onglet Options : `list_responses`, qui lit ce qu'une option peut contenir comme réponse enregistrée, et `test_option`, qui fait tourner le moteur. Un troisième, `list_actions`, n'y est offert que dans un projet qui a déclaré des types d'action. Un outil qu'un projet a éteint n'est offert nulle part. Deux mondes : `reality`, le jumeau tel qu'il est ; `scenario`, le même jumeau lu à travers le scénario ouvert.
 
 L'onglet Event finder est à part : il n'a aucun de ces outils. Il n'a que la recherche web de l'API (`web_search`), qui tourne chez Anthropic et non chez nous, et son outil de livraison. C'est ce qui garantit qu'une recherche ne peut rien emporter du jumeau.
 
@@ -125,6 +131,7 @@ L'onglet Event finder est à part : il n'a aucun de ces outils. Il n'a que la re
 | `unit_now` | Les chiffres en direct d'une unité, tels que sa page les montre : chaque mesure définie par l'organisation avec l'âge de sa propre valeur, ce qui est sous l'unité par type, l'âge de l'unité entière (ou qu'il est inconnu, et pourquoi), ses alertes ouvertes ; une mesure dit quand elle est un chiffre de la veille (`covers`), comment une durée s'écrit (`written_as`) et, quand il y a une raison, pourquoi elle n'a pas de valeur (`no_value_because`) |
 | `calculate` | Un calcul, sur des nombres déjà lus ou donnés dans la question |
 | `list_responses` | Onglet Options seulement. Les réponses enregistrées qu'une option peut contenir : celles de la bibliothèque de l'organisation (page Events) et celles que le moteur écrit lui-même, chacune sous un nom, avec ce que font ses règles et si elles déclarent un coût. Avec `routes_from`, les sites vers lesquels les patients qui attendent à un site peuvent être transférés |
+| `list_actions` | Onglet Options seulement, et seulement dans un projet qui a déclaré des types d'action. Les types actifs, chacun avec ce qu'il change, ses bornes, les jours avant de pouvoir s'appliquer, qui peut l'approuver, et s'il peut être testé sur ce jumeau |
 | `test_option` | Onglet Options seulement. Ajoute une option au scénario ouvert, le temps d'un run sur le serveur, et rend le scénario tel quel à côté du scénario avec l'option, avec ce que le moteur a compté comme coût quand une réponse enregistrée est dans l'un des deux runs. Quand le jumeau déclare une liste de prix, il rend aussi ce qu'elle donne pour la capacité ouverte : le total, le total par catégorie, chaque ligne, ce qui est sans prix, et le jour où chaque changement est disponible |
 
 Un outil qui ne peut pas répondre (nom inconnu, deux sites pour un nom, pas de run à l'écran, table qui contient plusieurs séries, option qu'on ne peut pas tester) le dit par un refus motivé que le modèle lit. Il ne devine jamais.
@@ -187,6 +194,47 @@ Ce qui vient du modèle et ce qui n'en vient pas :
 Ce que l'onglet ne fait pas, par construction : classer les options (elles restent dans l'ordre des tests, et aucune carte n'est marquée comme la meilleure), en lister une qui n'a pas été testée, en cacher une qui l'a été, écrire dans le scénario. Les arbitrages de valeur sont présentés à part, sous « Yours to weigh ». Une seule chose est dite d'une option par rapport à une autre : qu'elle est dominée, quand l'autre coûte autant ou moins et laisse autant ou moins d'attente. Cela reste vrai quelle que soit la valeur qu'on donne à un jour-patient d'attente, donc ce n'est pas un arbitrage ; entre deux options dont aucune ne domine l'autre, l'onglet ne choisit pas. Avec une liste de prix, il marque seulement celles qu'aucune autre ne bat (« Not beaten »), qui peuvent être plusieurs : la plus rapide et plus chère, la plus lente et moins chère. Aucun score ne mélange l'attente et l'argent.
 
 Coût et durée sont bornés : trois tests au plus par objectif, et le scénario tel quel n'est lancé qu'une fois pour les trois, en une seule passe du moteur. Trois options font quatre passes. Pendant un test, l'onglet dit depuis combien de temps il tourne.
+
+## Les types d'action
+
+Ce que l'analyste peut proposer se règle dans le Studio, sous **Ontology › Action types**. Le schéma complet est dans [algorithms.md](algorithms.md), section A14.
+
+Un type d'action dit, en mots de l'établissement :
+
+| Ce qu'il dit | Exemple |
+|---|---|
+| Son nom | « Ouvrir des lits de débordement » |
+| Ce qu'il change, parmi les quatre choses qu'un run sait changer | De la capacité |
+| Sur quoi, et dans quelles bornes | L'activité « lit », de 10 à 60 unités, à Lakeshore et à Nord seulement |
+| En combien de temps | Deux jours avant de pouvoir s'appliquer, comptés depuis la décision |
+| Qui peut l'approuver | « La direction des soins infirmiers » |
+| S'il est actif | Éteint, il n'est plus proposé |
+
+Les quatre choses qu'un run sait changer, et ce qu'un type peut y borner :
+
+| Effet | Bornes |
+|---|---|
+| Capacité | L'activité ; une plage d'unités (négatif : des unités fermées) ; les sites ; le mode de la liste de prix dans lequel les unités s'ouvrent |
+| Mesure | Les couches de contact, avec la plage de leur facteur ; le nombre de jours au plus ; les territoires |
+| Transfert | Les patients par jour au plus ; les sites de départ ; les sites d'arrivée |
+| Réponse enregistrée | Les réponses permises |
+
+Une borne laissée vide n'est pas une borne à zéro : rien ne limite de ce côté. Rien ne se tape par son nom : l'activité, les couches, les sites, les territoires, les modes et les réponses se choisissent dans ce que le jumeau déclare.
+
+**Les quatre types intégrés.** Chaque projet part avec un type par effet, sans borne et actif : ce que l'analyste pouvait déjà proposer. Tant qu'un projet n'en change aucun et n'en ajoute aucun, l'analyste travaille exactement comme avant : mêmes consignes, mêmes outils, mêmes options. Pour qu'un genre de changement ne soit plus proposé du tout, on éteint son type intégré. Pour le borner, on le modifie, ou on ajoute un type à soi.
+
+**Ce que ça change pour l'analyste**, dès qu'un projet a déclaré quelque chose :
+
+- il lit la liste avant de proposer (`list_actions`), avec les bornes, le délai et l'approbateur de chaque type ;
+- chaque changement d'une option dit sous quel type il tombe. Hors bornes, le test est refusé avant de tourner, avec la borne dépassée, et la proposition n'est pas affichée ;
+- une idée qu'aucun type ne couvre n'est pas une option : elle va dans les limites de la réponse, avec la mention qu'aucun type d'action du projet ne la couvre ;
+- un type que le jumeau ne permet pas de tester (une activité qu'aucun site n'offre, une couche qu'il ne déclare pas) est dit comme tel, à l'écran et à l'analyste, avec ce qui manque.
+
+Sur la carte d'une option, « Action type » donne le nom du type et « can be approved by … ». C'est gardé avec la décision. L'écran dit qui *peut* approuver : personne n'approuve dans le produit, et appliquer l'option reste un clic de la personne.
+
+Le prix et le délai d'une capacité viennent toujours de la liste de prix du jumeau. Un type d'action n'a pas de prix à lui ; il peut seulement fixer le mode dans lequel ses unités s'ouvrent.
+
+**Éteindre un outil.** Sous la liste des types, la même page montre les outils de l'analyste, avec ce que chacun lit et où il est offert. Les outils restent du code : on ne peut pas en écrire un depuis le Studio. On peut en éteindre un, et l'analyste ne l'a alors plus sous la main. Avec la recherche en ligne éteinte, l'onglet Event finder et l'enquête refusent de démarrer et disent pourquoi. Trois outils ne s'éteignent pas, et la page dit pourquoi : `calculate`, `test_option` et `list_actions`.
 
 ## Les événements
 
@@ -354,6 +402,8 @@ Sous les chiffres, trois lignes repliées, qui s'ouvrent d'un clic : « Why this
 - les sites dont parle la réponse, qui pointent la carte dessus ;
 - les questions à poser ensuite.
 
+**Les types d'action** (`manager/ActionTypes.tsx`, sous Ontology › Action types). En haut, une phrase qui dit si le projet a déclaré ses types ou si les quatre intégrés tiennent. Puis une carte par type : son nom, ce qu'il change, d'où il vient (intégré, intégré et changé ici, ou du projet), sa clé, ses bornes en mots, qui peut l'approuver, un interrupteur, « Edit », et « Remove » ou « Reset ». Un type que le jumeau ne permet pas de tester porte un bandeau avec ce qui manque. Le formulaire ne propose que ce que le jumeau déclare, et dit ce qu'il faut corriger avant d'envoyer. Sous la liste, « What the analyst can use » : une ligne par outil, avec son interrupteur.
+
 **Sur la carte du réseau** (`command/NetworkAnalyst.tsx`). Un `OverlayPanel` « Analyst » dans la colonne de droite, sous l'inspecteur du site choisi, replié à l'arrivée. L'ouvrir replie l'inspecteur. Deux onglets : **Ask**, le même que partout ailleurs, avec l'unité choisie ; et **Investigate** (`InvestigateTab.tsx`). Le panneau n'est construit qu'à sa première ouverture, puis garde ce qu'on y a fait quand on le replie ou qu'on change d'onglet : une enquête en cours continue. De haut en bas, Investigate montre : l'unité, la mesure et le laps de temps ; la phrase, sous « The only thing that goes to the web » ; le bouton ; les enquêtes déjà gardées pour cette unité ; puis, une fois lancé, la barre d'avancement, ce qui est en cours, ce que le programme a lu de la série, les candidats sur deux lignes chacun (le titre, puis la date et la phrase qui dit comment l'événement se place), les événements déjà au calendrier, ce que l'enquête ne peut pas dire, et la trace. Un clic sur un candidat l'ouvre : ce qui est publié, ce qui est mesuré, les raisons de douter, les dates et les deux boutons. La frise du bas (`NetworkTimeline.tsx`) dessine ce que l'enquête a trouvé. Le bouton « Analyst » du cadre n'est pas montré sur cette page.
 
 **Ailleurs que sur la carte des scénarios** (`AnalystDock.tsx`). Le cadre du Studio porte un bouton « Analyst », en bas à droite de chaque page. Il ouvre l'onglet Ask seul, sur le réseau tel qu'il est maintenant. La question part avec ce que la personne a sous les yeux : la page, et l'unité sélectionnée sur Units ou le signal ouvert sur Response. Les questions suggérées suivent : « What is open right now, and where? », plus une sur l'unité ou le signal quand il y en a un. Le panneau garde ce qui a été demandé quand on le ferme et le rouvre. Deux pages n'ont pas ce bouton, parce qu'elles tiennent déjà l'analyste là où se fait le travail : Scenarios, dont le panneau a aussi le scénario, le run et les options, et la fiche de situation.
@@ -383,7 +433,8 @@ La maquette d'origine est `design/scenario-analyst.html`. Elle montre aussi un o
 4. Un cas qu'il ne sait pas traiter lève une `ToolError` qui dit quoi faire à la place.
 5. Lui donner un libellé lisible dans `stepLabel` (`frontend/app/studio/analyst-api.ts`).
 6. Le tester dans `analyst-tools.unit.test.ts`.
-7. Mettre à jour la table des outils ci-dessus, et le schéma A1 si la boucle change.
+7. Lui écrire sa phrase pour la page « Action types » (`READS` dans `analyst-settings.ts`) : un test échoue tant qu'elle manque.
+8. Mettre à jour la table des outils ci-dessus, et le schéma A1 si la boucle change.
 
 ## Les questions de référence
 
@@ -438,6 +489,11 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 ## Limites connues
 
 - Chaque question, chaque objectif est indépendant : l'analyste ne se souvient pas du précédent.
+- Les bornes d'un type d'action tiennent l'analyste, pas une personne : un tampon posé à la main sur la carte n'y est pas soumis.
+- L'approbateur d'un type d'action est un texte. Rien dans le produit n'attend son accord : l'écran dit qui peut approuver, pas que quelqu'un l'a fait.
+- Les bornes valent pour un changement, pas pour un total : deux options de soixante lits en font cent vingt. Et une capacité dure jusqu'à la fin du run : un type ne borne pas sa durée.
+- Un type d'action ne nomme que ce qu'un run sait changer. Rappeler du personnel ou commander un stock ne se déclare pas : le jumeau ne les contient pas.
+- Les outils de l'analyste ne se déclarent pas depuis le Studio ; on peut seulement en éteindre un ([issue 44](https://github.com/V1ktor7/obscyro/issues/44) pour les outils de lecture déclarés).
 - Il ne cherche en ligne que dans l'onglet Event finder et dans une enquête. Dans Ask et Options il lit les événements déjà validés, et dit quand aucun ne couvre le moment demandé.
 - Une enquête rapproche des dates, elle ne mesure pas un effet. Elle dit qu'un événement commence deux jours avant un épisode, pas qu'il l'a causé, et elle ne sépare pas la part de deux événements qui vont avec le même épisode. Un rapprochement vu une fois n'est pas répliqué.
 - Une enquête ne sait pas si un événement concerne l'unité : le lieu d'un événement est un texte, relié à aucun territoire. C'est la personne qui en juge, d'après la source.
@@ -491,6 +547,11 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 | Outil `list_responses`, réponses enregistrées, règle d'un transfert | `backend/src/services/analyst-responses.ts` |
 | Liste de prix du jumeau, registre des coûts d'une option, outil `list_prices` | `backend/src/services/price-catalogue.ts`, `cost-ledger.ts`, `analyst-tools.ts` |
 | La liste de prix dans l'ontologie : vue « Functions », prix d'un type | `frontend/app/studio/manager/PriceList.tsx`, `price-list.ts` |
+| Types d'action : déclaration, bornes, vérification d'un changement | `backend/src/services/action-types.ts` |
+| Outil `list_actions`, ce que le jumeau offre à un type | `backend/src/services/analyst-actions.ts` |
+| Outils éteints par un projet | `backend/src/services/analyst-settings.ts` |
+| Routes des types d'action et des outils | `backend/src/routes/action-types.ts` |
+| Vue « Action types » de l'ontologie | `frontend/app/studio/manager/ActionTypes.tsx`, `action-types.ts` |
 | Clôture d'une recherche d'événements, `give_events` | `backend/src/services/analyst-events.ts` |
 | Lecture de la recherche web : requêtes, pages, passages, dates, citations | `backend/src/services/analyst-web.ts` |
 | Enquête sur une série : la série, les épisodes, les voisins, la comparaison | `backend/src/services/investigation.ts` |
@@ -505,7 +566,7 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 | Routes des décisions | `backend/src/routes/decisions.ts` |
 | Routes du calendrier et des sources | `backend/src/routes/health-events.ts` |
 | Réponse en flux | `backend/src/lib/ndjson.ts` |
-| Journal, décisions, calendrier | `backend/scripts/migrations/059_analyst_exchange.sql`, `060_analyst_exchange_kind.sql`, `061_decision.sql`, `062_health_event.sql`, `069_analyst_investigation.sql` |
+| Journal, décisions, calendrier | `backend/scripts/migrations/059_analyst_exchange.sql`, `060_analyst_exchange_kind.sql`, `061_decision.sql`, `062_health_event.sql`, `069_analyst_investigation.sql`, `070_action_type.sql` |
 | Appels et libellés côté écran | `frontend/app/studio/analyst-api.ts` |
 | Panneau et onglet Ask | `frontend/app/studio/simulation/hex/AnalystPanel.tsx` |
 | Onglets Options et Decisions | `frontend/app/studio/simulation/hex/OptionsTab.tsx`, `DecisionsTab.tsx` |

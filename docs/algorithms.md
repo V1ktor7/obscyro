@@ -22,6 +22,7 @@ Chaque algorithme du produit a ici sa section : à quoi il sert, son schéma, se
 | [A11](#a11-retest-dune-réponse-préparée) | Retest d'une réponse préparée, à l'ouverture d'un signal | `backend/src/services/response-retest.ts` |
 | [A12](#a12-prix-registre-des-coûts-et-délai-dune-option) | Prix, registre des coûts et délai d'une option | `backend/src/services/price-catalogue.ts`, `cost-ledger.ts` |
 | [A13](#a13-enquête-sur-une-série) | Enquête sur une série : des événements posés à côté de ce que le jumeau a mesuré | `backend/src/services/investigation.ts` |
+| [A14](#a14-types-daction) | Types d'action : ce que l'analyste peut proposer, et dans quelles bornes | `backend/src/services/action-types.ts` |
 | **B** | **Jumeau et moteur de simulation** | |
 | [B1](#b1-export-du-jumeau) | Export du jumeau vers le moteur | `backend/src/services/twin-export.ts` |
 | [B2](#b2-un-pas-du-moteur-dévénements) | Un pas du moteur d'événements | `simulation-service/app/events/dynamics.py` |
@@ -330,7 +331,7 @@ flowchart TD
 
 ## A8. Options testées par le moteur
 
-**But.** Une recommandation qui ne repose sur aucun run est une opinion. La personne dit son objectif ; l'analyste propose jusqu'à trois options, et chacune passe dans le moteur avant d'être montrée, à côté du scénario tel quel. Le modèle écrit des phrases ; les chiffres du tableau, les tampons et les niveaux de preuve viennent du programme.
+**But.** Une recommandation qui ne repose sur aucun run est une opinion. La personne dit son objectif ; l'analyste propose jusqu'à trois options, et chacune passe dans le moteur avant d'être montrée, à côté du scénario tel quel. Le modèle écrit des phrases ; les chiffres du tableau, les tampons et les niveaux de preuve viennent du programme. Ce qu'une option peut contenir, et dans quelles bornes, se règle par projet : ce sont les types d'action (A14).
 
 ```mermaid
 flowchart TD
@@ -782,6 +783,67 @@ flowchart TD
 
 **Code.** `backend/src/services/investigation.ts` (`investigate`, `seriesOf`, `dailyOf`, `lineFor`, `episodesOf`, `nearestTo`, `shareEpisodes`, `compareEvents`), `investigation-journal.ts` (`listInvestigations`, `readInvestigation`), `twin-history.ts` (`readReadingsBetween`), la recherche de A10 (`eventsClosing`, `converse`), `health-events.ts` (`eventFromExchange`), routes `POST /v1/ontology/:env/analyst/investigate`, `GET /v1/ontology/:env/analyst/investigations` et `/:id` dans `backend/src/routes/analyst.ts`, migration `069_analyst_investigation.sql` ; `frontend/app/studio/command/InvestigateTab.tsx`, `NetworkAnalyst.tsx`, `investigation.ts` (`stagesOf`, `verdictOf`, `doubtText`, `measuredLines`, `proposedRequest`), `NetworkTimeline.tsx`, `series-lane.ts` (`seriesLane`), `frontend/app/studio/analyst-api.ts` (`investigate`, `stepLabel`).
 **Tests.** `investigation.unit.test.ts` (la série, les jours, les épisodes, les voisins, la comparaison, l'enquête de bout en bout avec un modèle simulé, rien de la série envoyé au modèle, pas de recherche sans série), `health-events.unit.test.ts` (un candidat d'enquête s'accepte) ; `command/investigation.test.ts`, `InvestigateTab.test.tsx`, `series-lane.test.ts`, `NetworkTimeline.test.tsx`, `analyst-api.test.ts`.
+
+## A14. Types d'action
+
+**But.** Régler depuis le Studio ce que l'analyste peut proposer. Ce qu'une option pouvait contenir était une liste fixe dans le code : de la capacité, une mesure, un transfert, une réponse enregistrée. Un projet déclare maintenant ses **types d'action** : ce que chacun change, dans quelles bornes, en combien de temps, et qui peut l'approuver. L'analyste lit la liste et ne propose que ce qu'elle contient ; chaque proposition passe toujours par le moteur (A8), et c'est toujours une personne qui l'applique.
+
+```mermaid
+flowchart TD
+    A["Vue Action types du Studio : un nom, ce que le type change,<br/>ses bornes, son délai, qui approuve, actif ou non"] --> B{"Le brouillon se lit-il ?<br/>bornes dans l'ordre, pas plus de patients par jour<br/>qu'une route n'en porte dans un run"}
+    B -->|"non"| B1["Refusé, avec ce qu'il faut corriger"]
+    B -->|"oui"| C["Ligne de app.action_type, sous sa clé"]
+    C --> D["Liste du projet : les quatre types intégrés,<br/>chacun tel que le projet l'a changé, puis les siens"]
+    D --> E{"Le projet a-t-il déclaré<br/>quelque chose ?"}
+    E -->|"non"| E1["Rien de nouveau n'est dit à l'analyste :<br/>mêmes consignes, mêmes outils"]
+    E -->|"oui"| E2["Consignes ajoutées, et outil list_actions :<br/>les types actifs avec leurs bornes,<br/>et ceux que le jumeau ne permet pas de tester"]
+    E1 --> F["test_option : pour chaque changement<br/>qui pose quelque chose"]
+    E2 --> F
+    F --> G{"Le changement nomme-t-il<br/>son type d'action ?"}
+    G -->|"oui"| G1{"Le type existe, est actif,<br/>et change ce genre de chose ?"}
+    G -->|"non"| G2{"Combien de types actifs<br/>pour ce genre de changement ?"}
+    G1 -->|"non"| R["Refus motivé, que le modèle lit.<br/>Rien ne tourne, et le test ne compte pas"]
+    G2 -->|"aucun, ou plusieurs"| R
+    G1 -->|"oui"| H{"Dans les bornes du type ?<br/>unités, sites, activité, mode ; couches, facteur, jours, territoires ;<br/>patients par jour et les deux bouts ; réponse permise ;<br/>jours avant de pouvoir s'appliquer"}
+    G2 -->|"un seul"| H
+    H -->|"non"| R
+    H -->|"oui"| I["Le tampon est écrit comme avant,<br/>et le run le teste (A8)"]
+    I --> J{"Le type a-t-il été déclaré<br/>par le projet ?"}
+    J -->|"oui"| J1["L'option dit sous quel type elle tombe<br/>et qui peut l'approuver"]
+    J -->|"non"| J2["Rien n'est ajouté à l'option"]
+    K["Retirer un choix du scénario"] --> K1["Aucun type d'action n'est demandé"]
+```
+
+**Les outils qu'un projet éteint.**
+
+```mermaid
+flowchart LR
+    T["Interrupteur d'un outil,<br/>vue Action types"] --> U{"L'outil peut-il<br/>être éteint ?"}
+    U -->|"non : calculate, test_option, list_actions"| U1["Refusé, avec la raison"]
+    U -->|"oui"| V["Ligne de app.project_analyst_tool_off"]
+    V --> W["Échange suivant : l'outil n'est pas<br/>offert au modèle"]
+    V --> X["Recherche en ligne éteinte : Event finder et Investigate<br/>refusent de démarrer, et le disent"]
+```
+
+**Règles.**
+- **Quatre effets, ceux qu'un run sait appliquer.** `capacity` (des unités d'une activité ajoutées ou fermées à un site), `measure` (des couches de contact multipliées dans des territoires pendant des jours), `transfer` (des patients en attente envoyés d'un site à un autre le long d'une route), `response` (une réponse enregistrée que le run suit). Un type d'action ne peut rien nommer d'autre : le personnel et les stocks ne sont pas dans le jumeau, et l'analyste les range dans les limites.
+- **Rien n'est reconnu par son nom.** L'activité, les couches, les sites, les territoires et les réponses d'un type sont choisis parmi ce que le jumeau déclare (`twinOffer`), jamais tapés. Les sites et les territoires sont gardés par leur identifiant, une réponse par celui qu'un tampon garde.
+- **Les bornes, par effet.** Capacité : une activité, une plage d'unités signée (négatif : des unités fermées), des sites, un mode de la liste de prix. Mesure : les couches permises avec la plage de leur facteur, un nombre de jours au plus, des territoires. Transfert : des patients par jour au plus (jamais plus que ce qu'une route porte dans un run), les sites de départ, les sites d'arrivée. Réponse : les réponses permises. Et pour tous, les jours qu'il faut avant de pouvoir s'appliquer, comptés depuis la décision, le jour 0 du run.
+- **Une borne absente n'est pas une borne à zéro.** Rien ne limite de ce côté, et l'analyste lit « n'importe quel site » plutôt qu'un chiffre que personne n'a déclaré.
+- **Quatre types intégrés, et un projet sans réglage inchangé.** Chaque projet part avec un type par effet, sans borne et actif : ce que l'analyste pouvait proposer avant. Ils ne sont pas écrits en base. Dans un projet qui n'a rien déclaré, les consignes de l'analyste sont les mêmes au mot près, l'outil `list_actions` n'est pas offert, `test_option` accepte ce qu'il acceptait et l'option enregistrée ne porte rien de plus : c'est tenu par un test. Une ligne sous la clé d'un type intégré est ce que le projet y a changé ; la retirer le rend tel qu'il était. Un type intégré garde ce qu'il change.
+- **Le type sous lequel un changement tombe.** Un changement le nomme par sa clé (`action`). Sans nom, c'est le seul type actif de son effet, quand il n'y en a qu'un. Aucun type actif : le changement est refusé, et le refus dit de le ranger dans les limites. Plusieurs : il faut dire lequel.
+- **Un refus vient avant le run.** Hors bornes, type éteint, type inconnu : rien n'est envoyé au moteur, le refus nomme la borne dépassée (« allows from 10 to 60 units: 80 is outside that »), le modèle le lit, et ce test ne compte pas dans les trois de l'objectif. Une proposition refusée n'est jamais affichée.
+- **Le prix et le délai viennent de la liste de prix.** Un type d'action ne porte aucun prix. Pour une capacité, il peut fixer le mode dans lequel les unités s'ouvrent : le prix et le délai sont alors ceux de ce mode dans la liste (A12), et un autre mode est refusé. Son propre délai (`leadDays`) s'ajoute comme une borne de plus : le plus long des deux s'applique.
+- **Un type qui ne peut pas être testé le dit.** Une activité qu'aucun site n'offre, une couche que le jumeau ne déclare pas, aucune route de transfert, un mode que la liste de prix ne contient pas, des sites ou des réponses qui ne sont plus là : l'écran l'écrit sur le type, avec ce qui manque, et `list_actions` le dit à l'analyste, qui ne le propose pas.
+- **Retirer un choix ne demande aucun type.** Sortir du scénario une capacité ou une mesure que la personne y a posée reste possible quand tout est éteint. Remplacer un choix est poser quelque chose : le remplaçant est tenu aux bornes de son type.
+- **L'option dit son type, et qui peut l'approuver.** Seulement pour un type que le projet a déclaré : son nom et son approbateur sont recopiés par le serveur dans l'option, puis dans la décision enregistrée. L'écran écrit « can be approved by », jamais « approved » : c'est un texte de l'établissement, personne n'approuve dans le produit.
+- **Aucun droit d'écrire.** Déclarer un type d'action ne fait rien écrire à l'analyste. Une option devient un tampon du scénario par un clic, et une décision par un autre.
+- **Les outils restent du code.** Chaque outil est testé et ses résultats passent le vérificateur (A2) : un projet ne peut pas en écrire un. Il peut en éteindre un, qui n'est alors plus offert au modèle. Trois ne s'éteignent pas, et l'écran dit pourquoi : `calculate` (un chiffre dérivé doit être calculé par un outil), `test_option` (une option non testée n'est pas une option), `list_actions`. Avec la recherche en ligne éteinte, la recherche d'événements (A10) et l'enquête (A13) refusent de démarrer.
+- **Tout est gardé au journal d'audit** : créer, changer, retirer ou remettre un type, éteindre ou rallumer un outil.
+- **Ce qui manque.** Les bornes tiennent l'analyste, pas une personne : un tampon posé à la main sur la carte n'y est pas soumis. L'approbateur est un texte, pas une étape : rien n'attend son accord. Les bornes valent pour un changement, pas pour un total : deux options de 60 lits font 120. Une capacité dure jusqu'à la fin du run : un type ne peut pas en borner la durée. Un type d'action ne porte pas de prix à lui : ce que la liste de prix ne tarife pas reste sans prix.
+
+**Code.** `backend/src/services/action-types.ts` (`DEFAULT_ACTION_TYPES`, `actionTypesOf`, `readDraft`, `actionFor`, `fitCapacity`, `fitMeasure`, `fitTransfer`, `fitResponse`, `missingFor`, `saidOf`), `analyst-actions.ts` (`twinOffer`, `describeAction`, `listActions`), `analyst-options.ts` (`testOption`, `ACTIONS_PROMPT`, `optionsClosing`), `analyst-settings.ts` (`toolCatalogue`, `toolsOff`, `switchTool`, `offered`), `decisions.ts`, routes `backend/src/routes/action-types.ts` et `analyst.ts`, migration `070_action_type.sql` ; `frontend/app/studio/manager/ActionTypes.tsx`, `action-types.ts`, `frontend/app/studio/simulation/hex/analyst-parts.tsx` (`ActionTypesOf`), `frontend/app/studio/analyst-api.ts`.
+**Tests.** `action-types.unit.test.ts` (les types intégrés, le brouillon, le type d'un changement, chaque borne, ce qui manque au jumeau), `analyst-actions.unit.test.ts` (ce que le jumeau offre, `list_actions`, un projet sans réglage inchangé, un refus avant le run, deux types d'un même effet, un effet éteint, retirer sans type), `analyst-settings.unit.test.ts`, `routes/action-types.unit.test.ts` ; `manager/action-types.test.ts`, `manager/ActionTypes.test.tsx`, `analyst-parts.test.tsx`, `analyst-api.test.ts`.
 
 ---
 

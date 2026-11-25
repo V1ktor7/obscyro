@@ -50,7 +50,7 @@ import {
   type ProposedOption,
   type RunDigest,
 } from "../../analyst-api";
-import { Elapsed, LABEL, OptionChanges, STRUCK, Text, Trace } from "./analyst-parts";
+import { ActionTypesOf, Elapsed, LABEL, OptionChanges, STRUCK, Text, Trace } from "./analyst-parts";
 import KeepPrepared from "./KeepPrepared";
 import { BasisList, CostLine, DelayLine, EvidenceMeter, Figures, Fold, hasPriceList, Outcome, placesResponse, waitingScale, weighOptions } from "./option-cards";
 import { takesOut } from "./option-write";
@@ -473,6 +473,7 @@ export default function OptionsTab({
                         <Text text={o.mechanism} />
                       </p>
                       <OptionChanges changes={o.changes} heading="What it does to the scenario" />
+                      <ActionTypesOf changes={o.changes} />
                       <button
                         type="button"
                         onClick={() => cite(o.step)}

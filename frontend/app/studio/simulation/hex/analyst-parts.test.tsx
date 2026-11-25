@@ -3,7 +3,7 @@
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Elapsed, elapsedText } from "./analyst-parts";
+import { ActionTypesOf, Elapsed, elapsedText } from "./analyst-parts";
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -47,5 +47,27 @@ describe("how long a step has been going on", () => {
     expect(container.textContent).toBe("");
     act(() => void vi.advanceTimersByTime(4000));
     expect(container.textContent).toBe("· 4 s");
+  });
+});
+
+describe("the action types an option falls under", () => {
+  const change = (action?: { key: string; name: string; approver: string }) => ({ does: "adds" as const, now: "6 lit at Lakeshore from day 5", was: null, ...(action ? { action } : {}) });
+
+  it("says nothing in a project that declared no action type", () => {
+    expect(render(<ActionTypesOf changes={[change()]} />).container.textContent).toBe("");
+    expect(render(<ActionTypesOf changes={undefined} />).container.textContent).toBe("");
+  });
+
+  it("names each action type once, with who can approve it", () => {
+    const beds = { key: "overflow-beds", name: "Open overflow beds", approver: "Director of nursing" };
+    const { container } = render(<ActionTypesOf changes={[change(beds), change(beds), change({ key: "divert", name: "Divert to Nord", approver: "" })]} />);
+    expect(container.textContent).toBe("Action typesOpen overflow beds · can be approved by Director of nursingDivert to Nord · no approver declared");
+    expect(container.querySelectorAll("li")).toHaveLength(2);
+  });
+
+  it("says who can approve, never that anybody has", () => {
+    const { container } = render(<ActionTypesOf changes={[change({ key: "k", name: "Open overflow beds", approver: "Director of nursing" })]} />);
+    expect(container.textContent).toMatch(/^Action typeOpen overflow beds · can be approved by/);
+    expect(container.textContent).not.toMatch(/was approved|has approved|· approved by/);
   });
 });

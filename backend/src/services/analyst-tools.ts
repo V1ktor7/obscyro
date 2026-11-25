@@ -137,6 +137,12 @@ export interface AnalystContext {
    * where nothing tests an option: only a test reads them.
    */
   responses?(): Promise<import("./analyst-responses.js").StoredResponse[]>;
+  /**
+   * The project's action types: what an option may contain here, and within
+   * what bounds. Absent where nothing tests an option, and in a test that
+   * declares none: the four built-in types then stand.
+   */
+  actions?(): Promise<import("./action-types.js").ActionType[]>;
   /** The question and everything read so far: what `calculate` may build on. */
   known: Ledger;
   /**

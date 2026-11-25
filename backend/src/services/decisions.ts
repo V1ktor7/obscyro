@@ -118,7 +118,17 @@ const journalledProposal = z.object({
       stamps: z.array(journalledStamp),
       // Absent from exchanges journalled before an option could replace or remove a choice.
       retires: z.array(z.object({ id: z.string(), stamp: journalledStamp, text: z.string(), replacedBy: z.number().int().nullable() })).default([]),
-      changes: z.array(z.object({ does: z.enum(["adds", "replaces", "removes"]), now: z.string().nullable(), was: z.string().nullable() })).default([]),
+      changes: z
+        .array(
+          z.object({
+            does: z.enum(["adds", "replaces", "removes"]),
+            now: z.string().nullable(),
+            was: z.string().nullable(),
+            // The action type the change fell under, when the project declared one: kept with the decision, with who can approve it.
+            action: z.object({ key: z.string(), name: z.string(), approver: z.string() }).optional(),
+          }),
+        )
+        .default([]),
       figures,
       sites: z.array(z.record(z.unknown())),
       basis: z.array(basis),

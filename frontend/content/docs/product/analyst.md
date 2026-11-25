@@ -3,7 +3,7 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "6b611a86937d0255"
+translatedFrom: "6d51a574c33ddc1f"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
@@ -21,7 +21,7 @@ The panel has four tabs, which cover five steps of the [decision loop](/docs/pro
 | Options | Tested options, Recommendation | State an objective, see up to three options tested by the engine beside the scenario as it is |
 | Decisions | Follow-up | Read back what was retained, what was expected of it, and the gap with what was observed |
 
-The diagrams of the loop, the verifier and the calculator are in [Algorithms](/docs/product/algorithms), sections A1 to A3; those of the tested options and the decisions, sections A8 and A9; that of the online search and the calendar, section A10; those of the price list, the cost ledger and the delay of an option, section A12; those of the investigation of a series, section A13.
+The diagrams of the loop, the verifier and the calculator are in [Algorithms](/docs/product/algorithms), sections A1 to A3; those of the tested options and the decisions, sections A8 and A9; that of the online search and the calendar, section A10; those of the price list, the cost ledger and the delay of an option, section A12; those of the investigation of a series, section A13; those of the action types, section A14.
 
 ## What it does, and what it does not
 
@@ -75,6 +75,12 @@ The Event finder tab uses the web search of the Claude API. It has no variable o
 | `GET /v1/ontology/:env/prepared-responses` | The project's prepared responses, in the order they were kept (`signalTypeId` for a single kind of signal) |
 | `DELETE /v1/ontology/:env/prepared-responses/:id` | Retires a prepared response: it is no longer offered, without being erased |
 | `POST /v1/ontology/:env/signals/:id/engage` | Engages a prepared response on a signal: records the decision, writes it on the signal's trail, and moves the signal one stage forward |
+| `GET /v1/ontology/:env/action-types` | The project's action types, what the twin offers a type, and for each what it lacks to be tested |
+| `POST /v1/ontology/:env/action-types` | Adds an action type; its key is made from its name |
+| `PUT /v1/ontology/:env/action-types/:key` | Changes a type, or what the project changes of a built-in one |
+| `DELETE /v1/ontology/:env/action-types/:key` | Removes a type of the project, or resets a built-in one to what it was |
+| `GET /v1/ontology/:env/analyst/tools` | The analyst's tools: what each reads, where it is offered, whether it is on |
+| `PUT /v1/ontology/:env/analyst/tools/:name` | Switches a tool off or on for the project (`on`) |
 | `POST /v1/ontology/:env/health-events` | Accepts a candidate: it enters the calendar |
 | `GET /v1/ontology/:env/health-events` | The project's calendar, oldest to most recent (`from`, `to` for a period) |
 | `DELETE /v1/ontology/:env/health-events/:id` | Removes an event from the calendar |
@@ -110,7 +116,7 @@ A request refused before it starts (no session, analyst off, simulation service 
 
 ## The tools
 
-None of them writes. Fourteen read. Two more exist only in the Options tab: `list_responses`, which reads what an option can contain as a recorded response, and `test_option`, which runs the engine. Two worlds: `reality`, the twin as it is; `scenario`, the same twin read through the open scenario.
+None of them writes. Fourteen read. Two more exist only in the Options tab: `list_responses`, which reads what an option can contain as a recorded response, and `test_option`, which runs the engine. A third, `list_actions`, is offered there only in a project that declared action types. A tool a project switched off is offered nowhere. Two worlds: `reality`, the twin as it is; `scenario`, the same twin read through the open scenario.
 
 The Event finder tab is apart: it has none of these tools. It has only the API's web search (`web_search`), which runs at Anthropic and not with us, and its delivery tool. That is what guarantees a search can take nothing from the twin with it.
 
@@ -131,6 +137,7 @@ The Event finder tab is apart: it has none of these tools. It has only the API's
 | `unit_now` | The live figures of a unit, as its page shows them: each measure the organisation defined with the age of its own value, what stands under the unit by type, the age of the whole unit (or that it is unknown, and why), its open alerts; a measure says when it is a figure of the day before (`covers`), how a duration is written (`written_as`) and, when there is a reason, why it has no value (`no_value_because`) |
 | `calculate` | A calculation, on numbers already read or given in the question |
 | `list_responses` | Options tab only. The recorded responses an option can contain: those of the organisation's library (Events page) and those the engine writes itself, each under a name, with what its rules do and whether they declare a cost. With `routes_from`, the sites to which the patients waiting at a site can be transferred |
+| `list_actions` | Options tab only, and only in a project that declared action types. The active types, each with what it changes, its bounds, the days before it can apply, who can approve it, and whether it can be tested on this twin |
 | `test_option` | Options tab only. Adds an option to the open scenario, for the time of a run on the server, and returns the scenario as it is beside the scenario with the option, with what the engine counted as cost when a recorded response is in one of the two runs. When the twin declares a price list, it also returns what the list gives for the capacity opened: the total, the total by category, each line, what is unpriced, and the day each change is available |
 
 A tool that cannot answer (unknown name, two sites for one name, no run on screen, a table that holds several series, an option that cannot be tested) says so with a reasoned refusal that the model reads. It never guesses.
@@ -193,6 +200,47 @@ What comes from the model and what does not:
 What the tab does not do, by construction: rank the options (they stay in the order of the tests, and no card is marked as the best), list one that was not tested, hide one that was, write to the scenario. Trade-offs of values are presented apart, under “Yours to weigh”. One thing only is said of an option against another: that it is dominated, when the other costs as much or less and leaves as much or less waiting. That stays true whatever value one gives a patient-day of waiting, so it is not a trade-off; between two options neither of which dominates the other, the tab does not choose. With a price list, it only marks those no other beats (“Not beaten”), which can be several: the faster and dearer one, the slower and cheaper one. No score mixes waiting and money.
 
 Cost and duration are bounded: three tests at most per objective, and the scenario as it is runs only once for the three, in a single pass of the engine. Three options make four passes. During a test, the tab says how long it has been running.
+
+## The action types
+
+What the analyst may propose is set in the Studio, under **Ontology › Action types**. The full diagram is in [Algorithms](/docs/product/algorithms), section A14.
+
+An action type says, in the institution's words:
+
+| What it says | Example |
+|---|---|
+| Its name | “Open overflow beds” |
+| What it changes, among the four things a run can be made to change | Capacity |
+| On what, and within what bounds | The activity “lit”, from 10 to 60 units, at Lakeshore and Nord only |
+| In how long | Two days before it can apply, counted from the decision |
+| Who can approve it | “The director of nursing” |
+| Whether it is on | Switched off, it is no longer proposed |
+
+The four things a run can be made to change, and what a type can bound in each:
+
+| Effect | Bounds |
+|---|---|
+| Capacity | The activity; a range of units (negative: units closed); the sites; the mode of the price list the units are opened in |
+| Measure | The contact layers, with the range of their factor; the number of days at most; the catchments |
+| Transfer | The patients a day at most; the sites of departure; the sites of arrival |
+| Recorded response | The responses allowed |
+
+A bound left empty is not a bound at zero: nothing limits on that side. Nothing is typed by its name: the activity, the layers, the sites, the catchments, the modes and the responses are picked from what the twin declares.
+
+**The four built-in types.** Every project starts with one type per effect, unbounded and on: what the analyst could already propose. As long as a project changes none and adds none, the analyst works exactly as before: same instructions, same tools, same options. To stop a kind of change from being proposed at all, its built-in type is switched off. To bound it, it is changed, or a type of the project's own is added.
+
+**What it changes for the analyst**, once a project declared something:
+
+- it reads the list before proposing (`list_actions`), with the bounds, the delay and the approver of each type;
+- each change of an option says which type it falls under. Out of bounds, the test is refused before it runs, with the bound that was passed, and the proposal is not shown;
+- an idea no type covers is not an option: it goes in the limits of the answer, with the mention that no action type of the project covers it;
+- a type the twin does not let it test (an activity no site provides, a layer it does not declare) is said as such, on screen and to the analyst, with what is missing.
+
+On an option's card, “Action type” gives the type's name and “can be approved by …”. It is kept with the decision. The screen says who *can* approve: nobody approves in the product, and applying the option stays a click of the person.
+
+The price and the delay of capacity always come from the twin's price list. An action type has no price of its own; it can only fix the mode in which its units are opened.
+
+**Switching a tool off.** Under the list of types, the same page shows the analyst's tools, with what each reads and where it is offered. The tools stay code: one cannot be written from the Studio. One can be switched off, and the analyst then no longer has it at hand. With the web search off, the Event finder tab and the investigation refuse to start and say why. Three tools cannot be switched off, and the page says why: `calculate`, `test_option` and `list_actions`.
 
 ## The events
 
@@ -360,6 +408,8 @@ Under the figures, three folded lines, which open on a click: “Why this option
 - the sites the answer talks about, which point the map at them;
 - the questions to ask next.
 
+**The action types** (`manager/ActionTypes.tsx`, under Ontology › Action types). At the top, a sentence that says whether the project declared its types or the four built-in ones stand. Then a card per type: its name, what it changes, where it comes from (built-in, built-in and changed here, or the project's), its key, its bounds in words, who can approve it, a switch, “Edit”, and “Remove” or “Reset”. A type the twin does not let the analyst test carries a banner with what is missing. The form offers only what the twin declares, and says what to correct before sending. Under the list, “What the analyst can use”: one line per tool, with its switch.
+
 **On the network map** (`command/NetworkAnalyst.tsx`). An “Analyst” `OverlayPanel` in the right column, under the inspector of the selected site, folded on arrival. Opening it folds the inspector. Two tabs: **Ask**, the same as everywhere else, with the selected unit; and **Investigate** (`InvestigateTab.tsx`). The panel is built only when first opened, then keeps what was done in it when it is folded or the other tab is shown: an investigation under way goes on. From top to bottom, Investigate shows: the unit, the measure and the span; the sentence, under “The only thing that goes to the web”; the button; the investigations already kept for this unit; then, once started, the progress bar, what is under way, what the program read of the series, the candidates in two lines each (the title, then the date and the sentence that says how the event sits), the events already in the calendar, what the investigation cannot say, and the trace. A click on a candidate opens it: what is published, what is measured, the reasons to doubt, the dates and the two buttons. The timeline at the bottom (`NetworkTimeline.tsx`) draws what the investigation found. The “Analyst” button of the shell is not shown on this page.
 
 **Elsewhere than on the scenario map** (`AnalystDock.tsx`). The Studio's shell carries an “Analyst” button, at the bottom right of every page. It opens the Ask tab alone, on the network as it stands now. The question goes with what the person has in front of them: the page, and the unit selected on Units or the signal open on Response. The suggested questions follow: “What is open right now, and where?”, plus one about the unit or the signal when there is one. The panel keeps what was asked when it is closed and opened again. Two pages do not have this button, because they already hold the analyst where the work is done: Scenarios, whose panel also has the scenario, the run and the options, and the situation card.
@@ -389,7 +439,8 @@ The original mock-up is `design/scenario-analyst.html`. It also shows a tab that
 4. A case it cannot handle throws a `ToolError` that says what to do instead.
 5. Give it a readable label in `stepLabel` (`frontend/app/studio/analyst-api.ts`).
 6. Test it in `analyst-tools.unit.test.ts`.
-7. Update the table of tools above, and diagram A1 if the loop changes.
+7. Write its sentence for the “Action types” page (`READS` in `analyst-settings.ts`): a test fails as long as it is missing.
+8. Update the table of tools above, and diagram A1 if the loop changes.
 
 ## The reference questions
 
@@ -444,6 +495,11 @@ What is not judged: the quality of the writing. That still takes a person, who r
 ## Known limits
 
 - Each question, each objective is independent: the analyst does not remember the previous one.
+- The bounds of an action type hold the analyst, not a person: a stamp placed by hand on the map is not subject to them.
+- The approver of an action type is a text. Nothing in the product waits for their agreement: the screen says who can approve, not that somebody did.
+- The bounds apply to one change, not to a total: two options of sixty beds make a hundred and twenty. And capacity lasts until the end of the run: a type does not bound its duration.
+- An action type names only what a run can be made to change. Recalling staff or ordering a stock cannot be declared: the twin does not hold them.
+- The analyst's tools cannot be declared from the Studio; one can only be switched off ([issue 44](https://github.com/V1ktor7/obscyro/issues/44) for declared reading tools).
 - It searches online only in the Event finder tab and in an investigation. In Ask and Options it reads the events already validated, and says when none covers the moment asked about.
 - An investigation brings dates together, it does not measure an effect. It says an event starts two days before an episode, not that it caused it, and it does not separate the share of two events that go with the same episode. A pairing seen once is not replicated.
 - An investigation does not know whether an event concerns the unit: an event's place is a text, linked to no territory. The person judges it, from the source.
@@ -497,6 +553,11 @@ What is not judged: the quality of the writing. That still takes a person, who r
 | The `list_responses` tool, recorded responses, the rule of a transfer | `backend/src/services/analyst-responses.ts` |
 | The twin's price list, the cost ledger of an option, the `list_prices` tool | `backend/src/services/price-catalogue.ts`, `cost-ledger.ts`, `analyst-tools.ts` |
 | The price list in the ontology: the “Functions” view, the prices of a type | `frontend/app/studio/manager/PriceList.tsx`, `price-list.ts` |
+| Action types: declaration, bounds, checking a change | `backend/src/services/action-types.ts` |
+| The `list_actions` tool, what the twin offers a type | `backend/src/services/analyst-actions.ts` |
+| Tools a project switched off | `backend/src/services/analyst-settings.ts` |
+| Routes of the action types and of the tools | `backend/src/routes/action-types.ts` |
+| “Action types” view of the ontology | `frontend/app/studio/manager/ActionTypes.tsx`, `action-types.ts` |
 | Closing of an event search, `give_events` | `backend/src/services/analyst-events.ts` |
 | Reading the web search: queries, pages, passages, dates, quotations | `backend/src/services/analyst-web.ts` |
 | Investigating a series: the series, the episodes, the neighbours, the comparison | `backend/src/services/investigation.ts` |
@@ -511,7 +572,7 @@ What is not judged: the quality of the writing. That still takes a person, who r
 | The decisions' routes | `backend/src/routes/decisions.ts` |
 | Routes of the calendar and the sources | `backend/src/routes/health-events.ts` |
 | Streamed response | `backend/src/lib/ndjson.ts` |
-| Journal, decisions, calendar | `backend/scripts/migrations/059_analyst_exchange.sql`, `060_analyst_exchange_kind.sql`, `061_decision.sql`, `062_health_event.sql`, `069_analyst_investigation.sql` |
+| Journal, decisions, calendar | `backend/scripts/migrations/059_analyst_exchange.sql`, `060_analyst_exchange_kind.sql`, `061_decision.sql`, `062_health_event.sql`, `069_analyst_investigation.sql`, `070_action_type.sql` |
 | Calls and labels on the screen side | `frontend/app/studio/analyst-api.ts` |
 | Panel and Ask tab | `frontend/app/studio/simulation/hex/AnalystPanel.tsx` |
 | Options and Decisions tabs | `frontend/app/studio/simulation/hex/OptionsTab.tsx`, `DecisionsTab.tsx` |

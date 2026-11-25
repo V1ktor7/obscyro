@@ -20,7 +20,7 @@ import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 
 import { fetchFollowUp, listDecisions, type Decision, type FollowUp } from "../../analyst-api";
-import { LABEL, OptionChanges, Text } from "./analyst-parts";
+import { ActionTypesOf, LABEL, OptionChanges, Text } from "./analyst-parts";
 import { BasisList, CostLine, DelayLine, EvidenceMeter, Figures, Fold, hasPriceList, placesResponse, waitingScale, waitingText } from "./option-cards";
 import { people } from "./results";
 
@@ -163,6 +163,7 @@ function DecisionCard({ env, d, here }: { env: string; d: Decision; here: boolea
           </p>
         ) : null}
         <OptionChanges changes={d.expected.changes} heading="What it did to the scenario" />
+        <ActionTypesOf changes={d.expected.changes} />
       </div>
 
       <Fold title="Expected without it">

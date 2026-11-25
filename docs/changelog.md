@@ -7,6 +7,13 @@ Ce qui a changé dans Obscyro, du plus récent au plus ancien. Chaque entrée di
 
 Une entrée est écrite le jour où le changement est livré, dans le même commit que le code. Depuis novembre 2026, chaque changement visible a la sienne. Les mois d'avant sont résumés. Le détail complet, commit par commit, est dans [l'historique du dépôt](https://github.com/V1ktor7/obscyro/commits/main).
 
+## 25 novembre 2026
+
+- **Nouvelle fonction · Ontologie.** Les types d'action. Sous Ontology › Action types, un projet déclare ce que l'analyste peut proposer : un nom en mots de l'établissement, ce que le type change (capacité, mesure, transfert, réponse enregistrée), ses bornes (une plage d'unités, des sites, des couches et leur facteur, des jours, des patients par jour), les jours qu'il faut avant de pouvoir l'appliquer, et qui peut l'approuver. L'activité, les sites et les couches se choisissent dans ce que le jumeau déclare. Un type que le jumeau ne permet pas de tester le dit, avec ce qui manque.
+- **Nouvelle fonction · Analyste.** L'analyste s'en tient aux types d'action du projet. Il lit la liste avant de proposer, une proposition hors bornes est refusée avant de tourner dans le moteur et n'est pas affichée, et une idée qu'aucun type ne couvre va dans les limites de sa réponse. Quatre types intégrés, sans borne, couvrent ce qu'il proposait déjà : un projet qui ne règle rien travaille exactement comme avant.
+- **Nouvelle fonction · Analyste.** Une option dit sous quel type d'action elle tombe et qui peut l'approuver, et la décision enregistrée le garde. C'est une mention : appliquer une option reste le clic d'une personne.
+- **Nouvelle fonction · Ontologie.** La même page montre les outils de l'analyste, avec ce que chacun lit, et permet d'en éteindre un pour le projet. Avec la recherche en ligne éteinte, Event finder et Investigate le disent au lieu de chercher.
+
 ## 24 novembre 2026
 
 - **Nouvelle fonction · Analyste.** Enquêter sur la série d'une unité. Sur la page Network, on choisit un site, et l'onglet Investigate cherche dans les sources officielles ce qui se passait autour sur 24 heures, 72 heures, 7 jours ou 30 jours. Chaque événement trouvé est posé à côté de la série que le jumeau a gardée : l'épisode de dépassement du seuil d'alerte avec lequel il va, à combien de jours, la moyenne des trois jours avant et des trois jours à partir de son début, et les raisons de douter. Les événements déjà au calendrier sont comparés de la même façon. Un rapprochement est une coïncidence dans le temps : l'écran écrit « goes with », jamais « caused ».

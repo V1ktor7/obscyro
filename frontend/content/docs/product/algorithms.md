@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "c2cfc40666e2e3be"
+translatedFrom: "6daf767204a78640"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -28,6 +28,7 @@ Every algorithm of the product has its section here: what it is for, its diagram
 | [A11](#a11-retest-of-a-prepared-response) | Retest of a prepared response, when a signal opens | `backend/src/services/response-retest.ts` |
 | [A12](#a12-prices-the-cost-ledger-and-the-delay-of-an-option) | Prices, the cost ledger and the delay of an option | `backend/src/services/price-catalogue.ts`, `cost-ledger.ts` |
 | [A13](#a13-investigating-a-series) | Investigating a series: events set beside what the twin measured | `backend/src/services/investigation.ts` |
+| [A14](#a14-action-types) | Action types: what the analyst may propose, and within what bounds | `backend/src/services/action-types.ts` |
 | **B** | **Twin and simulation engine** | |
 | [B1](#b1-export-of-the-twin) | Export of the twin to the engine | `backend/src/services/twin-export.ts` |
 | [B2](#b2-one-step-of-the-event-engine) | One step of the event engine | `simulation-service/app/events/dynamics.py` |
@@ -336,7 +337,7 @@ flowchart TD
 
 ## A8. Options tested by the engine
 
-**Purpose.** A recommendation that rests on no run is an opinion. The person states their objective; the analyst proposes up to three options, and each goes through the engine before being shown, beside the scenario as it is. The model writes sentences; the figures of the table, the stamps and the levels of evidence come from the program.
+**Purpose.** A recommendation that rests on no run is an opinion. The person states their objective; the analyst proposes up to three options, and each goes through the engine before being shown, beside the scenario as it is. The model writes sentences; the figures of the table, the stamps and the levels of evidence come from the program. What an option may contain, and within what bounds, is set by project: those are the action types (A14).
 
 ```mermaid
 flowchart TD
@@ -788,6 +789,67 @@ flowchart TD
 
 **Code.** `backend/src/services/investigation.ts` (`investigate`, `seriesOf`, `dailyOf`, `lineFor`, `episodesOf`, `nearestTo`, `shareEpisodes`, `compareEvents`), `investigation-journal.ts` (`listInvestigations`, `readInvestigation`), `twin-history.ts` (`readReadingsBetween`), the search of A10 (`eventsClosing`, `converse`), `health-events.ts` (`eventFromExchange`), routes `POST /v1/ontology/:env/analyst/investigate`, `GET /v1/ontology/:env/analyst/investigations` and `/:id` in `backend/src/routes/analyst.ts`, migration `069_analyst_investigation.sql`; `frontend/app/studio/command/InvestigateTab.tsx`, `NetworkAnalyst.tsx`, `investigation.ts` (`stagesOf`, `verdictOf`, `doubtText`, `measuredLines`, `proposedRequest`), `NetworkTimeline.tsx`, `series-lane.ts` (`seriesLane`), `frontend/app/studio/analyst-api.ts` (`investigate`, `stepLabel`).
 **Tests.** `investigation.unit.test.ts` (the series, the days, the episodes, the neighbours, the comparison, the investigation end to end with a simulated model, nothing of the series sent to the model, no search without a series), `health-events.unit.test.ts` (a candidate of an investigation is accepted); `command/investigation.test.ts`, `InvestigateTab.test.tsx`, `series-lane.test.ts`, `NetworkTimeline.test.tsx`, `analyst-api.test.ts`.
+
+## A14. Action types
+
+**Purpose.** Setting from the Studio what the analyst may propose. What an option could contain was a fixed list in the code: capacity, a measure, a transfer, a recorded response. A project now declares its **action types**: what each one changes, within what bounds, in how long, and who can approve it. The analyst reads the list and proposes only what it holds; every proposal still goes through the engine (A8), and it is still a person who applies it.
+
+```mermaid
+flowchart TD
+    A["Action types view of the Studio: a name, what the type changes,<br/>its bounds, its delay, who approves, on or off"] --> B{"Can the draft be read?<br/>bounds in order, no more patients a day<br/>than a route carries in a run"}
+    B -->|"no"| B1["Refused, with what to correct"]
+    B -->|"yes"| C["Row of app.action_type, under its key"]
+    C --> D["The project's list: the four built-in types,<br/>each as the project changed it, then its own"]
+    D --> E{"Did the project declare<br/>anything?"}
+    E -->|"no"| E1["The analyst is told nothing new:<br/>same instructions, same tools"]
+    E -->|"yes"| E2["Instructions added, and the tool list_actions:<br/>the active types with their bounds,<br/>and those the twin does not let it test"]
+    E1 --> F["test_option: for each change<br/>that places something"]
+    E2 --> F
+    F --> G{"Does the change name<br/>its action type?"}
+    G -->|"yes"| G1{"Does the type exist, is it on,<br/>and does it change that kind of thing?"}
+    G -->|"no"| G2{"How many active types<br/>for that kind of change?"}
+    G1 -->|"no"| R["A refusal with its reason, which the model reads.<br/>Nothing runs, and the test does not count"]
+    G2 -->|"none, or several"| R
+    G1 -->|"yes"| H{"Within the type's bounds?<br/>units, sites, activity, mode; layers, factor, days, catchments;<br/>patients a day and the two ends; response allowed;<br/>days before it can apply"}
+    G2 -->|"exactly one"| H
+    H -->|"no"| R
+    H -->|"yes"| I["The stamp is written as before,<br/>and the run tests it (A8)"]
+    I --> J{"Was the type declared<br/>by the project?"}
+    J -->|"yes"| J1["The option says which type it falls under<br/>and who can approve it"]
+    J -->|"no"| J2["Nothing is added to the option"]
+    K["Taking a choice out of the scenario"] --> K1["No action type is asked for"]
+```
+
+**The tools a project switches off.**
+
+```mermaid
+flowchart LR
+    T["A tool's switch,<br/>Action types view"] --> U{"Can the tool<br/>be switched off?"}
+    U -->|"no: calculate, test_option, list_actions"| U1["Refused, with the reason"]
+    U -->|"yes"| V["Row of app.project_analyst_tool_off"]
+    V --> W["Next exchange: the tool is not<br/>offered to the model"]
+    V --> X["Web search off: Event finder and Investigate<br/>refuse to start, and say so"]
+```
+
+**Rules.**
+- **Four effects, those a run knows how to apply.** `capacity` (units of an activity added or closed at a site), `measure` (contact layers scaled in catchments for some days), `transfer` (waiting patients sent from one site to another along a route), `response` (a recorded response the run follows). An action type can name nothing else: staff and stocks are not in the twin, and the analyst puts them in the limits.
+- **Nothing is recognised by its name.** The activity, the layers, the sites, the catchments and the responses of a type are picked from what the twin declares (`twinOffer`), never typed. Sites and catchments are kept by their identifier, a response by the one a stamp keeps.
+- **The bounds, by effect.** Capacity: an activity, a signed range of units (negative: units closed), sites, a mode of the price list. Measure: the layers allowed with the range of their factor, a number of days at most, catchments. Transfer: patients a day at most (never more than a route carries in a run), the sites of departure, the sites of arrival. Response: the responses allowed. And for all, the days it takes before it can apply, counted from the decision, day 0 of the run.
+- **A bound left out is not a bound at zero.** Nothing limits on that side, and the analyst reads “any site” rather than a figure nobody declared.
+- **Four built-in types, and a project that set nothing unchanged.** Every project starts with one type per effect, unbounded and on: what the analyst could propose before. They are not written in the database. In a project that declared nothing, the analyst's instructions are the same word for word, the `list_actions` tool is not offered, `test_option` accepts what it accepted and the recorded option carries nothing more: a test holds it. A row under the key of a built-in type is what the project changed of it; removing it makes the type as it was. A built-in type keeps what it changes.
+- **The type a change falls under.** A change names it by its key (`action`). Unnamed, it is the one active type of its effect, when there is only one. No active type: the change is refused, and the refusal says to put it in the limits. Several: it has to say which.
+- **A refusal comes before the run.** Out of bounds, a type switched off, an unknown type: nothing is sent to the engine, the refusal names the bound that was passed (“allows from 10 to 60 units: 80 is outside that”), the model reads it, and that test does not count among the three of the objective. A refused proposal is never shown.
+- **The price and the delay come from the price list.** An action type carries no price. For capacity, it can fix the mode in which the units are opened: the price and the delay are then those of that mode in the list (A12), and another mode is refused. Its own delay (`leadDays`) is one more bound: the longer of the two applies.
+- **A type that cannot be tested says so.** An activity no site provides, a layer the twin does not declare, no transfer route, a mode the price list does not hold, sites or responses that are no longer there: the screen writes it on the type, with what is missing, and `list_actions` tells the analyst, which does not propose it.
+- **Taking a choice out asks for no type.** Removing from the scenario a capacity or a measure the person placed there stays possible when everything is off. Replacing a choice is placing something: what replaces it is held to the bounds of its type.
+- **The option says its type, and who can approve it.** Only for a type the project declared: its name and its approver are copied by the server into the option, then into the recorded decision. The screen writes “can be approved by”, never “approved”: it is a text of the institution, nobody approves in the product.
+- **No right to write.** Declaring an action type makes the analyst write nothing. An option becomes a stamp of the scenario through one click, and a decision through another.
+- **The tools stay code.** Each tool is tested and its results pass the verifier (A2): a project cannot write one. It can switch one off, and it is then no longer offered to the model. Three cannot be switched off, and the screen says why: `calculate` (a derived figure has to be computed by a tool), `test_option` (an option that was not tested is not an option), `list_actions`. With the web search off, the event search (A10) and the investigation (A13) refuse to start.
+- **Everything is kept in the audit log**: creating, changing, removing or resetting a type, switching a tool off or on.
+- **What is missing.** The bounds hold the analyst, not a person: a stamp placed by hand on the map is not subject to them. The approver is a text, not a step: nothing waits for their agreement. The bounds apply to one change, not to a total: two options of 60 beds make 120. Capacity lasts until the end of the run: a type cannot bound its duration. An action type carries no price of its own: what the price list does not price stays unpriced.
+
+**Code.** `backend/src/services/action-types.ts` (`DEFAULT_ACTION_TYPES`, `actionTypesOf`, `readDraft`, `actionFor`, `fitCapacity`, `fitMeasure`, `fitTransfer`, `fitResponse`, `missingFor`, `saidOf`), `analyst-actions.ts` (`twinOffer`, `describeAction`, `listActions`), `analyst-options.ts` (`testOption`, `ACTIONS_PROMPT`, `optionsClosing`), `analyst-settings.ts` (`toolCatalogue`, `toolsOff`, `switchTool`, `offered`), `decisions.ts`, routes `backend/src/routes/action-types.ts` and `analyst.ts`, migration `070_action_type.sql`; `frontend/app/studio/manager/ActionTypes.tsx`, `action-types.ts`, `frontend/app/studio/simulation/hex/analyst-parts.tsx` (`ActionTypesOf`), `frontend/app/studio/analyst-api.ts`.
+**Tests.** `action-types.unit.test.ts` (the built-in types, the draft, the type of a change, each bound, what the twin lacks), `analyst-actions.unit.test.ts` (what the twin offers, `list_actions`, a project that set nothing unchanged, a refusal before the run, two types of one effect, an effect switched off, removing without a type), `analyst-settings.unit.test.ts`, `routes/action-types.unit.test.ts`; `manager/action-types.test.ts`, `manager/ActionTypes.test.tsx`, `analyst-parts.test.tsx`, `analyst-api.test.ts`.
 
 ---
 

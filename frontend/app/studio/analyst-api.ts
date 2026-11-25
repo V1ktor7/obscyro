@@ -262,6 +262,8 @@ export interface OptionChange {
   now: string | null;
   /** The scenario's choice it takes out; null for an addition. */
   was: string | null;
+  /** The action type it falls under, when the project declared one: its name and who can approve it. */
+  action?: { key: string; name: string; approver: string };
 }
 
 /**
@@ -598,6 +600,117 @@ export async function findEvents(
 }
 
 // ---------------------------------------------------------------------------
+// Action types: what the analyst may propose in a project, and the tools a
+// project switched off. Set from the ontology manager.
+// ---------------------------------------------------------------------------
+
+export type ActionEffect = "capacity" | "measure" | "transfer" | "response";
+
+export interface CapacityBounds {
+  /** The one activity it changes; null: any a site provides. */
+  activity: string | null;
+  /** Units, signed: negative closes. Null: no bound on that side. */
+  minUnits: number | null;
+  maxUnits: number | null;
+  /** Site ids; null: any site that provides the activity. */
+  sites: string[] | null;
+  /** The mode of the price list it opens units in; null: any. */
+  mode: string | null;
+}
+export interface MeasureBounds {
+  layers: { layer: string; minFactor: number; maxFactor: number }[] | null;
+  maxDays: number | null;
+  catchments: string[] | null;
+}
+export interface TransferBounds {
+  maxPerDay: number | null;
+  from: string[] | null;
+  to: string[] | null;
+}
+export interface ResponseBounds {
+  responses: string[] | null;
+}
+
+interface ActionTypeCommon {
+  /** What the analyst names in a test. */
+  key: string;
+  name: string;
+  description: string;
+  /** Days before it can apply, counted from the decision (day 0 of a run). */
+  leadDays: number | null;
+  approver: string;
+  active: boolean;
+  /** One of the four every project starts with. */
+  builtIn: boolean;
+  /** Written by the project: its own, or a built-in it changed. */
+  declared: boolean;
+  /** Why it cannot be tested on this twin; null when it can, or when the twin could not be read. */
+  missing: string | null;
+}
+export type ActionType =
+  | (ActionTypeCommon & { effect: "capacity"; bounds: CapacityBounds })
+  | (ActionTypeCommon & { effect: "measure"; bounds: MeasureBounds })
+  | (ActionTypeCommon & { effect: "transfer"; bounds: TransferBounds })
+  | (ActionTypeCommon & { effect: "response"; bounds: ResponseBounds });
+
+/** What the twin declares that an action type can point at. */
+export interface TwinOffer {
+  activities: string[];
+  layers: string[];
+  sites: { id: string; name: string; activities: string[] }[];
+  catchments: { id: string; name: string }[];
+  routes: { source: string; target: string }[];
+  responses: { id: string; name: string }[];
+  modes: Record<string, { mode: string; leadDays: number }[]>;
+}
+
+export interface ActionTypeDraft {
+  name: string;
+  description: string;
+  effect: ActionEffect;
+  bounds: Record<string, unknown>;
+  leadDays: number | null;
+  approver: string;
+  active: boolean;
+}
+
+export interface ActionTypeList {
+  types: ActionType[];
+  offer: TwinOffer | null;
+  offerProblem: string | null;
+}
+
+export async function fetchActionTypes(env: string): Promise<ActionTypeList> {
+  return apiFetch(`/v1/ontology/${enc(env)}/action-types`);
+}
+export async function createActionType(env: string, draft: ActionTypeDraft): Promise<ActionType> {
+  return apiFetch(`/v1/ontology/${enc(env)}/action-types`, { method: "POST", body: draft });
+}
+export async function saveActionType(env: string, key: string, draft: ActionTypeDraft): Promise<ActionType> {
+  return apiFetch(`/v1/ontology/${enc(env)}/action-types/${enc(key)}`, { method: "PUT", body: draft });
+}
+/** Removes a type of the project's own, or resets a built-in one to what every project starts with. */
+export async function removeActionType(env: string, key: string): Promise<void> {
+  await apiFetch(`/v1/ontology/${enc(env)}/action-types/${enc(key)}`, { method: "DELETE" });
+}
+
+/** One of the analyst's tools, as a person reads it. */
+export interface AnalystToolLine {
+  name: string;
+  reads: string;
+  where: ("ask" | "options" | "events" | "investigate")[];
+  switchable: boolean;
+  why: string | null;
+  on: boolean;
+}
+export async function fetchAnalystTools(env: string): Promise<{ tools: AnalystToolLine[] }> {
+  return apiFetch(`/v1/ontology/${enc(env)}/analyst/tools`);
+}
+export async function switchAnalystTool(env: string, name: string, on: boolean): Promise<{ name: string; on: boolean }> {
+  return apiFetch(`/v1/ontology/${enc(env)}/analyst/tools/${enc(name)}`, { method: "PUT", body: { on } });
+}
+
+// ---------------------------------------------------------------------------
 // An investigation: the series of one measure at one unit, the events a search
 // found over its span, and each event set beside the series by the program.
 // ---------------------------------------------------------------------------
@@ -896,6 +1009,12 @@ export function stepLabel(step: Pick<AnalystStep, "tool" | "input" | "output" | 
     }
     case "web_passage":
       return `Passage cited from ${hostOf(str(i.url))}`;
+    case "list_actions": {
+      const o = (step.output ?? {}) as { action_types?: unknown[]; switched_off_in_this_project?: unknown[] };
+      const n = o.action_types?.length ?? 0;
+      const off = o.switched_off_in_this_project?.length ?? 0;
+      return `What this project lets it propose${step.ok ? `: ${n} action type${n === 1 ? "" : "s"}${off ? `, ${off} switched off` : ""}` : ""}`;
+    }
     // The program's own steps in an investigation (p1, p2, …).
     case "twin_series": {
       const o = (step.output ?? {}) as { valued?: number; episodes?: unknown[]; alert_threshold?: unknown };
