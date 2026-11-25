@@ -6,7 +6,9 @@ Il est aussi à un clic sur les autres pages du Studio, par le bouton « Analyst
 
 Sur la carte du réseau (page Network), il a son propre panneau, sous l'inspecteur du site choisi. On y pose une question, et on y enquête sur la série d'une unité : l'onglet **Investigate** cherche ce qui se passait autour, et pose chaque événement trouvé à côté de ce que le jumeau a mesuré (voir « Les enquêtes »). C'est un premier morceau de l'étape « Effets mesurés » de la boucle.
 
-Le panneau a quatre onglets, qui couvrent cinq étapes de la [boucle d'aide à la décision](decision-loop.md) :
+Un cinquième onglet, « What it can use », ne fait rien faire à l'analyste : il liste ses outils.
+
+Le panneau a quatre onglets de travail, qui couvrent cinq étapes de la [boucle d'aide à la décision](decision-loop.md) :
 
 | Onglet | Étape de la boucle | Ce qu'on y fait |
 |---|---|---|
@@ -73,7 +75,7 @@ L'onglet Event finder utilise la recherche web de l'API Claude. Elle n'a pas de 
 | `POST /v1/ontology/:env/action-types` | Ajoute un type d'action ; sa clé est tirée de son nom |
 | `PUT /v1/ontology/:env/action-types/:key` | Change un type, ou ce que le projet change d'un type intégré |
 | `DELETE /v1/ontology/:env/action-types/:key` | Retire un type du projet, ou remet un type intégré comme il était |
-| `GET /v1/ontology/:env/analyst/tools` | Les outils de l'analyste : ce que chacun lit, où il est offert, s'il est allumé |
+| `GET /v1/ontology/:env/analyst/tools` | Les outils de l'analyste : ce que chacun lit, ce qu'il fait (lire, calculer, lancer le moteur, chercher), d'où il vient (le code, ou le projet), ce qu'il reçoit, où il est offert, s'il est allumé |
 | `PUT /v1/ontology/:env/analyst/tools/:name` | Éteint ou rallume un outil pour le projet (`on`) |
 | `POST /v1/ontology/:env/health-events` | Accepte un candidat : il entre au calendrier |
 | `GET /v1/ontology/:env/health-events` | Le calendrier du projet, du plus ancien au plus récent (`from`, `to` pour une période) |
@@ -372,7 +374,7 @@ Les décisions sont dans `app.decision` (migration 061). Les événements accept
 
 ## L'écran
 
-`AnalystPanel.tsx`, dans un `OverlayPanel` sous « Layers », replié à l'arrivée. Quatre onglets, dans l'ordre de la boucle ; chacun n'est construit qu'à sa première ouverture, puis garde ce qu'on y a fait.
+`AnalystPanel.tsx`, dans un `OverlayPanel` sous « Layers », replié à l'arrivée. Quatre onglets, dans l'ordre de la boucle, puis « What it can use » ; chacun n'est construit qu'à sa première ouverture, puis garde ce qu'on y a fait.
 
 **Event finder** (`EventFinderTab.tsx`), de haut en bas : la demande, et des demandes suggérées sur les dates du scénario, où il reste à écrire le lieu ; les sources cherchées et de quoi les changer ; les recherches, qui s'affichent pendant qu'elles tournent ; un bandeau qui dit si tout a été trouvé dans les passages ; une carte par candidat (porte, niveau « Published », puce WEB, titre, lieu, citation et lien, les passages sur lesquels il repose, qui ouvrent l'étape où le passage se lit en entier, dates à corriger, Accept, Reject) ; ce qui n'a pas été trouvé ; les limites ; les étapes. Un candidat refusé se replie en une ligne, avec de quoi revenir dessus : le refus n'a rien écrit nulle part.
 
@@ -392,6 +394,8 @@ Sous les chiffres, trois lignes repliées, qui s'ouvrent d'un clic : « Why this
 
 **Decisions** (`DecisionsTab.tsx`) : les décisions du scénario ouvert d'abord, puis celles des autres scénarios du projet. Chacune est une carte du même dessin : qui l'a prise, quand, l'objectif, les chiffres attendus avec l'option (l'écart est donné contre le même run sans elle), le délai et le coût gardés avec leurs lignes quand il y en avait, puis, repliés, l'attendu sans l'option, le mécanisme, sur quoi elle reposait, ce que le test ne disait pas. Le suivi se demande d'un bouton. L'onglet se lit même quand l'analyste est éteint : une décision est un enregistrement, pas une réponse.
 
+**What it can use** (`ToolsTab.tsx`) : ce que l'analyste a sous la main. Les outils sont rangés par ce qu'ils lisent (le jumeau, le scénario et son run, le réseau maintenant, les jeux de données, le calendrier, le calcul, les options, le web). Chacun porte son nom, une phrase, ce qu'il fait (« Reads », « Computes », « Runs the engine », « Searches »), et « Declared here » quand il a été déclaré dans le projet plutôt qu'écrit dans le code. Un outil que le projet a éteint est montré comme éteint, pas caché : « il pourrait, et on lui a dit non » n'est pas « il ne peut pas ». Un clic sur un outil dit ce qu'il reçoit et dans quels onglets il sert ; un outil qui sert ailleurs que dans le panneau ouvert le dit. Sous la liste, ce que l'analyste ne fait jamais : écrire, calculer de tête, lire quoi que ce soit sur une personne. L'onglet se lit sans le modèle, et la même liste est en tête de la vue « Functions » de l'ontologie.
+
 **Ask**, de haut en bas :
 
 - ce qu'il va lire (le scénario ou la réalité, et le run s'il y en a un) ;
@@ -404,7 +408,7 @@ Sous les chiffres, trois lignes repliées, qui s'ouvrent d'un clic : « Why this
 
 **Les types d'action** (`manager/ActionTypes.tsx`, sous Ontology › Action types). En haut, une phrase qui dit si le projet a déclaré ses types ou si les quatre intégrés tiennent. Puis une carte par type : son nom, ce qu'il change, d'où il vient (intégré, intégré et changé ici, ou du projet), sa clé, ses bornes en mots, qui peut l'approuver, un interrupteur, « Edit », et « Remove » ou « Reset ». Un type que le jumeau ne permet pas de tester porte un bandeau avec ce qui manque. Le formulaire ne propose que ce que le jumeau déclare, et dit ce qu'il faut corriger avant d'envoyer. Sous la liste, « What the analyst can use » : une ligne par outil, avec son interrupteur.
 
-**Sur la carte du réseau** (`command/NetworkAnalyst.tsx`). Un `OverlayPanel` « Analyst » dans la colonne de droite, sous l'inspecteur du site choisi, replié à l'arrivée. L'ouvrir replie l'inspecteur. Deux onglets : **Ask**, le même que partout ailleurs, avec l'unité choisie ; et **Investigate** (`InvestigateTab.tsx`). Le panneau n'est construit qu'à sa première ouverture, puis garde ce qu'on y a fait quand on le replie ou qu'on change d'onglet : une enquête en cours continue. De haut en bas, Investigate montre : l'unité, la mesure et le laps de temps ; la phrase, sous « The only thing that goes to the web » ; le bouton ; les enquêtes déjà gardées pour cette unité ; puis, une fois lancé, la barre d'avancement, ce qui est en cours, ce que le programme a lu de la série, les candidats sur deux lignes chacun (le titre, puis la date et la phrase qui dit comment l'événement se place), les événements déjà au calendrier, ce que l'enquête ne peut pas dire, et la trace. Un clic sur un candidat l'ouvre : ce qui est publié, ce qui est mesuré, les raisons de douter, les dates et les deux boutons. La frise du bas (`NetworkTimeline.tsx`) dessine ce que l'enquête a trouvé. Le bouton « Analyst » du cadre n'est pas montré sur cette page.
+**Sur la carte du réseau** (`command/NetworkAnalyst.tsx`). Un `OverlayPanel` « Analyst » dans la colonne de droite, sous l'inspecteur du site choisi, replié à l'arrivée. L'ouvrir replie l'inspecteur. Deux onglets : **Ask**, le même que partout ailleurs, avec l'unité choisie ; **Investigate** (`InvestigateTab.tsx`) ; et « What it can use », le même que sur la page Scenarios. Le panneau n'est construit qu'à sa première ouverture, puis garde ce qu'on y a fait quand on le replie ou qu'on change d'onglet : une enquête en cours continue. De haut en bas, Investigate montre : l'unité, la mesure et le laps de temps ; la phrase, sous « The only thing that goes to the web » ; le bouton ; les enquêtes déjà gardées pour cette unité ; puis, une fois lancé, la barre d'avancement, ce qui est en cours, ce que le programme a lu de la série, les candidats sur deux lignes chacun (le titre, puis la date et la phrase qui dit comment l'événement se place), les événements déjà au calendrier, ce que l'enquête ne peut pas dire, et la trace. Un clic sur un candidat l'ouvre : ce qui est publié, ce qui est mesuré, les raisons de douter, les dates et les deux boutons. La frise du bas (`NetworkTimeline.tsx`) dessine ce que l'enquête a trouvé. Le bouton « Analyst » du cadre n'est pas montré sur cette page.
 
 **Ailleurs que sur la carte des scénarios** (`AnalystDock.tsx`). Le cadre du Studio porte un bouton « Analyst », en bas à droite de chaque page. Il ouvre l'onglet Ask seul, sur le réseau tel qu'il est maintenant. La question part avec ce que la personne a sous les yeux : la page, et l'unité sélectionnée sur Units ou le signal ouvert sur Response. Les questions suggérées suivent : « What is open right now, and where? », plus une sur l'unité ou le signal quand il y en a un. Le panneau garde ce qui a été demandé quand on le ferme et le rouvre. Deux pages n'ont pas ce bouton, parce qu'elles tiennent déjà l'analyste là où se fait le travail : Scenarios, dont le panneau a aussi le scénario, le run et les options, et la fiche de situation.
 
@@ -423,7 +427,7 @@ Sous les chiffres, trois lignes repliées, qui s'ouvrent d'un clic : « Why this
 
 La fiche se relit toutes les trente secondes, et toutes les cinq secondes tant qu'une réponse préparée est en cours de retest. Si une lecture échoue, la dernière reste à l'écran, dite comme n'étant plus à jour. Tout ce qui est au-dessus de l'analyste se lit sans lui : quand il est éteint, la fiche est entière et le dit.
 
-La maquette d'origine est `design/scenario-analyst.html`. Elle montre aussi un onglet qui n'est pas encore construit : « What it can use ».
+La maquette d'origine est `design/scenario-analyst.html`.
 
 ## Ajouter un outil
 
@@ -571,6 +575,7 @@ Ce qui n'est pas jugé : la qualité de la rédaction. Il faut encore une person
 | Panneau et onglet Ask | `frontend/app/studio/simulation/hex/AnalystPanel.tsx` |
 | Onglets Options et Decisions | `frontend/app/studio/simulation/hex/OptionsTab.tsx`, `DecisionsTab.tsx` |
 | Onglet Event finder | `frontend/app/studio/simulation/hex/EventFinderTab.tsx` |
+| Onglet « What it can use », et la même liste dans la vue Functions | `frontend/app/studio/simulation/hex/ToolsTab.tsx` |
 | Panneau Analyst de la carte du réseau, onglet Investigate | `frontend/app/studio/command/NetworkAnalyst.tsx`, `InvestigateTab.tsx`, `investigation.ts` |
 | Frise de la carte du réseau : série, épisodes, événements | `frontend/app/studio/command/NetworkTimeline.tsx`, `series-lane.ts` |
 | Couloir Context de la frise | `frontend/app/studio/simulation/hex/ContextLane.tsx`, `context-lane.ts` |

@@ -14,6 +14,8 @@ Une entrée est écrite le jour où le changement est livré, dans le même comm
 - **Nouvelle fonction · Analyste.** Une option dit sous quel type d'action elle tombe et qui peut l'approuver, et la décision enregistrée le garde. C'est une mention : appliquer une option reste le clic d'une personne.
 - **Nouvelle fonction · Ontologie.** La même page montre les outils de l'analyste, avec ce que chacun lit, et permet d'en éteindre un pour le projet. Avec la recherche en ligne éteinte, Event finder et Investigate le disent au lieu de chercher.
 
+- **Nouvelle fonction · Analyste.** Ce que l'analyste peut utiliser se voit à l'écran. L'onglet « What it can use », sur les pages Scenarios et Network, liste ses outils par ce qu'ils lisent, avec une phrase pour chacun, ce qu'il reçoit, et ceux que le projet a éteints. La même liste est en tête de la vue Functions de l'ontologie.
+
 ## 24 novembre 2026
 
 - **Nouvelle fonction · Analyste.** Enquêter sur la série d'une unité. Sur la page Network, on choisit un site, et l'onglet Investigate cherche dans les sources officielles ce qui se passait autour sur 24 heures, 72 heures, 7 jours ou 30 jours. Chaque événement trouvé est posé à côté de la série que le jumeau a gardée : l'épisode de dépassement du seuil d'alerte avec lequel il va, à combien de jours, la moyenne des trois jours avant et des trois jours à partir de son début, et les raisons de douter. Les événements déjà au calendrier sont comparés de la même façon. Un rapprochement est une coïncidence dans le temps : l'écran écrit « goes with », jamais « caused ».

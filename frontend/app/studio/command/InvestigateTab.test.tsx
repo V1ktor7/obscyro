@@ -7,7 +7,7 @@ import { ApiError } from "@/lib/auth";
 
 import type { AnalystStep, EventCandidate, Investigated, InvestigationEvent, InvestigationLine, InvestigationResult } from "../analyst-api";
 
-const api = vi.hoisted(() => ({ investigate: vi.fn(), listInvestigations: vi.fn(), readInvestigation: vi.fn(), acceptEvent: vi.fn(), askAnalyst: vi.fn() }));
+const api = vi.hoisted(() => ({ investigate: vi.fn(), listInvestigations: vi.fn(), readInvestigation: vi.fn(), acceptEvent: vi.fn(), askAnalyst: vi.fn(), fetchAnalystTools: vi.fn() }));
 vi.mock("../analyst-api", async (orig) => ({ ...(await orig<typeof import("../analyst-api")>()), ...api }));
 
 import InvestigateTab from "./InvestigateTab";
@@ -378,10 +378,10 @@ describe("the analyst on the network map", () => {
     <NetworkAnalyst env="mtl" open={open} onToggle={toggle} unit={UNIT} several={false} metric={METRIC} kept hours={72} onHours={hours} />
   );
 
-  it("is one folding panel with two tabs, and opens on Investigate", () => {
+  it("is one folding panel with three tabs, and opens on Investigate", () => {
     render(panel(true));
     expect(screen.getByRole("button", { name: /Analyst\s*about CHUM/ }).getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Ask", "Investigate"]);
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Ask", "Investigate", "What it can use"]);
     expect(screen.getByRole("tab", { name: "Investigate" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("button", { name: /Investigate this span/ })).toBeTruthy();
   });
@@ -411,6 +411,23 @@ describe("the analyst on the network map", () => {
     view.rerender(panel(true));
     expect(section().className).not.toContain("shrink-0");
     expect(section().className).toContain("min-h-[12rem]");
+  });
+
+  it("lists what the analyst can use, and says which tools are used elsewhere than on this map", async () => {
+    const tool = { group: "The twin", does: "reads" as const, origin: "code" as const, inputs: [], switchable: true, why: null, on: true };
+    api.fetchAnalystTools.mockResolvedValue({
+      tools: [
+        { ...tool, name: "describe_twin", reads: "An overview of the twin.", where: ["ask", "options"] },
+        { ...tool, name: "test_option", reads: "Runs an option.", group: "Options", does: "runs" as const, where: ["options"] },
+      ],
+    });
+    render(panel(true));
+    expect(api.fetchAnalystTools).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("tab", { name: "What it can use" }));
+    expect(await screen.findByText("An overview of the twin.")).toBeTruthy();
+    // The network map has no Options tab: the tool is listed, and said to be used there.
+    expect(within(screen.getByRole("listitem", { name: "test_option" })).getByText("Not offered in this panel: it is used in Options.")).toBeTruthy();
+    expect(within(screen.getByRole("listitem", { name: "describe_twin" })).queryByText(/Not offered in this panel/)).toBeNull();
   });
 
   it("builds nothing until it is first opened", () => {

@@ -698,6 +698,13 @@ export async function removeActionType(env: string, key: string): Promise<void> 
 export interface AnalystToolLine {
   name: string;
   reads: string;
+  /** The heading it is listed under. */
+  group: string;
+  does: "reads" | "computes" | "runs" | "searches";
+  /** Written in the code, or declared in the project from the Studio. */
+  origin: "code" | "project";
+  /** What it is given when it is called. */
+  inputs: { name: string; kind: string; required: boolean; says: string }[];
   where: ("ask" | "options" | "events" | "investigate")[];
   switchable: boolean;
   why: string | null;

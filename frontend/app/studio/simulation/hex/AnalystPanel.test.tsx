@@ -7,7 +7,7 @@ import { ApiError } from "@/lib/auth";
 
 import type { AnalystEvent, AnalystResult, AnalystStep } from "../../analyst-api";
 
-const api = vi.hoisted(() => ({ fetchAnalyst: vi.fn(), askAnalyst: vi.fn(), listDecisions: vi.fn(), fetchWebSources: vi.fn() }));
+const api = vi.hoisted(() => ({ fetchAnalyst: vi.fn(), askAnalyst: vi.fn(), listDecisions: vi.fn(), fetchWebSources: vi.fn(), fetchAnalystTools: vi.fn() }));
 vi.mock("../../analyst-api", async (orig) => ({ ...(await orig<typeof import("../../analyst-api")>()), ...api }));
 
 import AnalystPanel from "./AnalystPanel";
@@ -259,17 +259,28 @@ describe("the analyst's tabs", () => {
   it("opens on Ask, and keeps what was asked when another tab is visited", async () => {
     answering([{ type: "done", result: result() }]);
     panel();
-    expect(tabs()).toEqual([["Ask", "true"], ["Event finder", "false"], ["Options", "false"], ["Decisions", "false"]]);
+    expect(tabs()).toEqual([["Ask", "true"], ["Event finder", "false"], ["Options", "false"], ["Decisions", "false"], ["What it can use", "false"]]);
     fireEvent.click(await screen.findByRole("button", { name: "What does this scenario assume?" }));
     await screen.findByText(/West has 1.04 beds/);
 
     fireEvent.click(screen.getByRole("tab", { name: "Options" }));
-    expect(tabs()).toEqual([["Ask", "false"], ["Event finder", "false"], ["Options", "true"], ["Decisions", "false"]]);
+    expect(tabs()).toEqual([["Ask", "false"], ["Event finder", "false"], ["Options", "true"], ["Decisions", "false"], ["What it can use", "false"]]);
     expect(screen.getByLabelText("Objective for the options")).toBeTruthy();
     expect(screen.getByText(/Tested on “Omicron” over 60 days/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("tab", { name: "Ask" }));
     expect(screen.getByText(/West has 1.04 beds/)).toBeTruthy();
+  });
+
+  it("lists what the analyst can use, read only when its tab is opened", async () => {
+    api.fetchAnalystTools.mockResolvedValue({
+      tools: [{ name: "describe_twin", reads: "An overview of the twin.", group: "The twin", does: "reads", origin: "code", inputs: [], where: ["ask", "options"], switchable: true, why: null, on: true }],
+    });
+    panel();
+    expect(api.fetchAnalystTools).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("tab", { name: "What it can use" }));
+    expect(await screen.findByText("An overview of the twin.")).toBeTruthy();
+    expect(api.fetchAnalystTools).toHaveBeenCalledWith("mtl");
   });
 
   it("offers a search of official sources over the scenario's own dates", async () => {

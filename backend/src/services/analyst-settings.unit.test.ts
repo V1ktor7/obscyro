@@ -18,6 +18,22 @@ test("every tool the analyst has is on the list, each with a sentence a person c
   }
 });
 
+test("each tool says what it does, where it comes from and what it is given", () => {
+  const by = Object.fromEntries(toolCatalogue().map((l) => [l.name, l]));
+  assert.equal(by.describe_twin!.does, "reads");
+  assert.equal(by.calculate!.does, "computes");
+  assert.equal(by.test_option!.does, "runs");
+  assert.equal(by.web_search!.does, "searches");
+  assert.ok(toolCatalogue().every((l) => l.origin === "code"));
+  // What a tool is given is read from the schema the model is shown, not written twice.
+  assert.deepEqual(by.get_site!.inputs.map((i) => [i.name, i.required]), Object.keys(READ_TOOLS.find((t) => t.name === "get_site")!.input_schema.properties).map((n) => [n, READ_TOOLS.find((t) => t.name === "get_site")!.input_schema.required.includes(n)]));
+  assert.ok(by.get_site!.inputs.every((i) => i.says.length > 0 && i.kind.length > 0));
+  assert.deepEqual(by.web_search!.inputs.map((i) => i.name), ["query"]);
+  // Every tool falls under a heading the screen knows.
+  const groups = new Set(["The twin", "The scenario and its run", "The network now", "Datasets", "The calendar", "Calculation", "Options", "The web"]);
+  for (const l of toolCatalogue()) assert.ok(groups.has(l.group), `${l.name} is under "${l.group}"`);
+});
+
 test("the list says where each tool is offered", () => {
   const where = Object.fromEntries(toolCatalogue().map((l) => [l.name, l.where]));
   assert.deepEqual(where.describe_twin, ["ask", "options"]);

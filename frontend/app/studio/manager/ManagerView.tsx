@@ -101,6 +101,7 @@ import {
 } from "@/lib/property-schema";
 import { listQualityFlags, type QualityFlag } from "../quality-api";
 import LinkBehaviourDialog from "./LinkBehaviourDialog";
+import ToolsTab from "../simulation/hex/ToolsTab";
 import { ActionTypesPage } from "./ActionTypes";
 import { PriceListPage, TypePrices } from "./PriceList";
 import { forgetPriceLists } from "./price-list";
@@ -1901,9 +1902,16 @@ function ResourcePages({
       />
     );
   }
-  // The cost formulas the ontology declares, with the price list they belong to.
+  // What the analyst can read with, then the cost formulas the ontology declares.
   return (
     <PageShell title="Functions">
+      {env ? (
+        <section aria-label="What the analyst can use" className="mb-6">
+          <h3 className="mb-2 text-[13px] font-semibold text-ink">What the analyst can use</h3>
+          <ToolsTab env={env} wide />
+        </section>
+      ) : null}
+      <h3 className="mb-2 text-[13px] font-semibold text-ink">Cost formulas</h3>
       <PriceListPage env={env} />
     </PageShell>
   );

@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "55516fd8e89f8fa5"
+translatedFrom: "9f71c3437581d20a"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -19,6 +19,8 @@ An entry is written the day the change ships, in the same commit as the code. Si
 - **New feature · Analyst.** The analyst keeps to the project's action types. It reads the list before proposing, a proposal out of bounds is refused before it runs in the engine and is not shown, and an idea no type covers goes in the limits of its answer. Four built-in types, unbounded, cover what it already proposed: a project that sets nothing works exactly as before.
 - **New feature · Analyst.** An option says which action type it falls under and who can approve it, and the recorded decision keeps it. It is a mention: applying an option stays a person's click.
 - **New feature · Ontology.** The same page shows the analyst's tools, with what each reads, and lets one be switched off for the project. With the web search off, Event finder and Investigate say so instead of searching.
+
+- **New feature · Analyst.** What the analyst can use is shown on screen. The “What it can use” tab, on the Scenarios and Network pages, lists its tools by what they read, with a sentence for each, what it is given, and those the project switched off. The same list heads the Functions view of the ontology.
 
 ## 24 November 2026
 

@@ -13,8 +13,12 @@
  *                moved: a search of official sources, each event set beside
  *                the series the twin kept.
  *
- * Both stay in the page while the panel is folded or the other tab is shown:
- * an exchange that is running goes on, and its answer is there on return.
+ *   What it can  the tools those two rest on, each with what it reads.
+ *   use
+ *
+ * Ask and Investigate stay in the page while the panel is folded or another
+ * tab is shown: an exchange that is running goes on, and its answer is there
+ * on return.
  */
 
 import { useState } from "react";
@@ -23,12 +27,14 @@ import { cn } from "@/lib/cn";
 
 import { OverlayPanel } from "../map-overlay";
 import { AskTab } from "../simulation/hex/AnalystPanel";
+import ToolsTab from "../simulation/hex/ToolsTab";
 import InvestigateTab, { type InvestigationOnPage } from "./InvestigateTab";
 
-type Tab = "ask" | "investigate";
+type Tab = "ask" | "investigate" | "tools";
 const TABS: { key: Tab; label: string }[] = [
   { key: "ask", label: "Ask" },
   { key: "investigate", label: "Investigate" },
+  { key: "tools", label: "What it can use" },
 ];
 
 export default function NetworkAnalyst({
@@ -60,6 +66,8 @@ export default function NetworkAnalyst({
 }) {
   const [tab, setTab] = useState<Tab>("investigate");
   const [off, setOff] = useState(false);
+  // The list is read the first time its tab is opened, and kept after.
+  const [toolsOpened, setToolsOpened] = useState(false);
 
   return (
     <OverlayPanel
@@ -86,7 +94,10 @@ export default function NetworkAnalyst({
                 id={`network-analyst-tab-${t.key}`}
                 aria-selected={tab === t.key}
                 aria-controls={`network-analyst-${t.key}`}
-                onClick={() => setTab(t.key)}
+                onClick={() => {
+                  if (t.key === "tools") setToolsOpened(true);
+                  setTab(t.key);
+                }}
                 className={cn(
                   "-mb-px border-b-2 px-2 pb-1.5 text-[12px]",
                   tab === t.key ? "border-brand font-semibold text-ink" : "border-transparent text-ink-muted hover:text-ink-body",
@@ -122,6 +133,11 @@ export default function NetworkAnalyst({
               onInvestigation={onInvestigation}
             />
           </div>
+          {toolsOpened ? (
+            <div role="tabpanel" id="network-analyst-tools" aria-labelledby="network-analyst-tab-tools" hidden={tab !== "tools"}>
+              <ToolsTab env={env} offeredIn={["ask", "investigate"]} />
+            </div>
+          ) : null}
         </>
       )}
     </OverlayPanel>

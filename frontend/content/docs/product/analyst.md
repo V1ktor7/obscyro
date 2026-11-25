@@ -3,7 +3,7 @@
 title: "The analyst"
 description: "The analyst is the folding “Analyst” panel of the Scenarios page: you ask it a question, and it answers from what its reading tools returned, showing everything it read."
 source: "docs/analyst.md"
-translatedFrom: "6d51a574c33ddc1f"
+translatedFrom: "95bbe5d730e44561"
 ---
 
 The analyst is the folding “Analyst” panel of the Scenarios page. You ask it a question about the twin, the open scenario or the run on screen; it answers relying only on what its reading tools returned, and shows everything it read.
@@ -12,7 +12,9 @@ It is also one click away on the other pages of the Studio, through the “Analy
 
 On the network map (the Network page), it has a panel of its own, under the inspector of the selected site. One asks a question there, and one investigates the series of a unit: the **Investigate** tab searches for what was going on around it, and sets each event found beside what the twin measured (see “The investigations”). It is a first piece of the “Measured effects” step of the loop.
 
-The panel has four tabs, which cover five steps of the [decision loop](/docs/product/decision-loop):
+A fifth tab, “What it can use”, makes the analyst do nothing: it lists its tools.
+
+The panel has four working tabs, which cover five steps of the [decision loop](/docs/product/decision-loop):
 
 | Tab | Step of the loop | What you do there |
 |---|---|---|
@@ -79,7 +81,7 @@ The Event finder tab uses the web search of the Claude API. It has no variable o
 | `POST /v1/ontology/:env/action-types` | Adds an action type; its key is made from its name |
 | `PUT /v1/ontology/:env/action-types/:key` | Changes a type, or what the project changes of a built-in one |
 | `DELETE /v1/ontology/:env/action-types/:key` | Removes a type of the project, or resets a built-in one to what it was |
-| `GET /v1/ontology/:env/analyst/tools` | The analyst's tools: what each reads, where it is offered, whether it is on |
+| `GET /v1/ontology/:env/analyst/tools` | The analyst's tools: what each reads, what it does (read, compute, run the engine, search), where it comes from (the code, or the project), what it is given, where it is offered, whether it is on |
 | `PUT /v1/ontology/:env/analyst/tools/:name` | Switches a tool off or on for the project (`on`) |
 | `POST /v1/ontology/:env/health-events` | Accepts a candidate: it enters the calendar |
 | `GET /v1/ontology/:env/health-events` | The project's calendar, oldest to most recent (`from`, `to` for a period) |
@@ -378,7 +380,7 @@ Decisions are in `app.decision` (migration 061). Accepted events are in `app.hea
 
 ## The screen
 
-`AnalystPanel.tsx`, in an `OverlayPanel` under “Layers”, folded on arrival. Four tabs, in the order of the loop; each is built only when first opened, then keeps what was done in it.
+`AnalystPanel.tsx`, in an `OverlayPanel` under “Layers”, folded on arrival. Four tabs, in the order of the loop, then “What it can use”; each is built only when first opened, then keeps what was done in it.
 
 **Event finder** (`EventFinderTab.tsx`), top to bottom: the request, and suggested requests on the scenario's dates, where the place remains to be written; the sources searched and the means to change them; the searches, shown while they run; a banner that says whether everything was found in the passages; one card per candidate (gate, “Published” level, WEB chip, title, place, quotation and link, the passages it rests on, which open the step where the passage reads in full, dates to correct, Accept, Reject); what was not found; the limits; the steps. A rejected candidate folds into one line, with the means to come back to it: the rejection wrote nothing anywhere.
 
@@ -398,6 +400,8 @@ Under the figures, three folded lines, which open on a click: “Why this option
 
 **Decisions** (`DecisionsTab.tsx`): the decisions of the open scenario first, then those of the project's other scenarios. Each is a card of the same design: who took it, when, the objective, the figures expected with the option (the gap is given against the same run without it), the delay and the cost kept with their lines when there were any, then, folded, what was expected without the option, the mechanism, what it rested on, what the test did not say. The follow-up is asked for with a button. The tab reads even when the analyst is off: a decision is a record, not an answer.
 
+**What it can use** (`ToolsTab.tsx`): what the analyst has at hand. The tools are filed by what they read (the twin, the scenario and its run, the network now, the datasets, the calendar, calculation, the options, the web). Each carries its name, a sentence, what it does (“Reads”, “Computes”, “Runs the engine”, “Searches”), and “Declared here” when it was declared in the project rather than written in the code. A tool the project switched off is shown as switched off, not hidden: “it could, and was told not to” is not “it cannot”. A click on a tool says what it is given and in which tabs it is used; a tool used elsewhere than in the open panel says so. Under the list, what the analyst never does: write, compute in its head, read anything about a person. The tab is read without the model, and the same list heads the “Functions” view of the ontology.
+
 **Ask**, top to bottom:
 
 - what it will read (the scenario or reality, and the run if there is one);
@@ -410,7 +414,7 @@ Under the figures, three folded lines, which open on a click: “Why this option
 
 **The action types** (`manager/ActionTypes.tsx`, under Ontology › Action types). At the top, a sentence that says whether the project declared its types or the four built-in ones stand. Then a card per type: its name, what it changes, where it comes from (built-in, built-in and changed here, or the project's), its key, its bounds in words, who can approve it, a switch, “Edit”, and “Remove” or “Reset”. A type the twin does not let the analyst test carries a banner with what is missing. The form offers only what the twin declares, and says what to correct before sending. Under the list, “What the analyst can use”: one line per tool, with its switch.
 
-**On the network map** (`command/NetworkAnalyst.tsx`). An “Analyst” `OverlayPanel` in the right column, under the inspector of the selected site, folded on arrival. Opening it folds the inspector. Two tabs: **Ask**, the same as everywhere else, with the selected unit; and **Investigate** (`InvestigateTab.tsx`). The panel is built only when first opened, then keeps what was done in it when it is folded or the other tab is shown: an investigation under way goes on. From top to bottom, Investigate shows: the unit, the measure and the span; the sentence, under “The only thing that goes to the web”; the button; the investigations already kept for this unit; then, once started, the progress bar, what is under way, what the program read of the series, the candidates in two lines each (the title, then the date and the sentence that says how the event sits), the events already in the calendar, what the investigation cannot say, and the trace. A click on a candidate opens it: what is published, what is measured, the reasons to doubt, the dates and the two buttons. The timeline at the bottom (`NetworkTimeline.tsx`) draws what the investigation found. The “Analyst” button of the shell is not shown on this page.
+**On the network map** (`command/NetworkAnalyst.tsx`). An “Analyst” `OverlayPanel` in the right column, under the inspector of the selected site, folded on arrival. Opening it folds the inspector. Two tabs: **Ask**, the same as everywhere else, with the selected unit; **Investigate** (`InvestigateTab.tsx`); and “What it can use”, the same as on the Scenarios page. The panel is built only when first opened, then keeps what was done in it when it is folded or the other tab is shown: an investigation under way goes on. From top to bottom, Investigate shows: the unit, the measure and the span; the sentence, under “The only thing that goes to the web”; the button; the investigations already kept for this unit; then, once started, the progress bar, what is under way, what the program read of the series, the candidates in two lines each (the title, then the date and the sentence that says how the event sits), the events already in the calendar, what the investigation cannot say, and the trace. A click on a candidate opens it: what is published, what is measured, the reasons to doubt, the dates and the two buttons. The timeline at the bottom (`NetworkTimeline.tsx`) draws what the investigation found. The “Analyst” button of the shell is not shown on this page.
 
 **Elsewhere than on the scenario map** (`AnalystDock.tsx`). The Studio's shell carries an “Analyst” button, at the bottom right of every page. It opens the Ask tab alone, on the network as it stands now. The question goes with what the person has in front of them: the page, and the unit selected on Units or the signal open on Response. The suggested questions follow: “What is open right now, and where?”, plus one about the unit or the signal when there is one. The panel keeps what was asked when it is closed and opened again. Two pages do not have this button, because they already hold the analyst where the work is done: Scenarios, whose panel also has the scenario, the run and the options, and the situation card.
 
@@ -429,7 +433,7 @@ Under the figures, three folded lines, which open on a click: “Why this option
 
 The card reads itself again every thirty seconds, and every five seconds while a prepared response is being retested. If a reading fails, the last one stays on screen, said to be no longer up to date. Everything above the analyst reads without it: when it is switched off, the card is whole and says so.
 
-The original mock-up is `design/scenario-analyst.html`. It also shows a tab that is not built yet: “What it can use”.
+The original mock-up is `design/scenario-analyst.html`.
 
 ## Adding a tool
 
@@ -577,6 +581,7 @@ What is not judged: the quality of the writing. That still takes a person, who r
 | Panel and Ask tab | `frontend/app/studio/simulation/hex/AnalystPanel.tsx` |
 | Options and Decisions tabs | `frontend/app/studio/simulation/hex/OptionsTab.tsx`, `DecisionsTab.tsx` |
 | Event finder tab | `frontend/app/studio/simulation/hex/EventFinderTab.tsx` |
+| “What it can use” tab, and the same list in the Functions view | `frontend/app/studio/simulation/hex/ToolsTab.tsx` |
 | Analyst panel of the network map, Investigate tab | `frontend/app/studio/command/NetworkAnalyst.tsx`, `InvestigateTab.tsx`, `investigation.ts` |
 | Timeline of the network map: series, episodes, events | `frontend/app/studio/command/NetworkTimeline.tsx`, `series-lane.ts` |
 | Context lane of the timeline | `frontend/app/studio/simulation/hex/ContextLane.tsx`, `context-lane.ts` |

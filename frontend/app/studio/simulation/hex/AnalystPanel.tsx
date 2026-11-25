@@ -45,6 +45,7 @@ import { EvidenceBadge, LABEL, Text, Trace, WebChip } from "./analyst-parts";
 import DecisionsTab from "./DecisionsTab";
 import EventFinderTab from "./EventFinderTab";
 import OptionsTab from "./OptionsTab";
+import ToolsTab from "./ToolsTab";
 
 type Looking = "reality" | "scenario";
 
@@ -58,7 +59,7 @@ function suggestions(hasScenario: boolean, hasRun: boolean, looking: Looking): s
   return ["Which catchment is least provided for?", "Which sites hold the most capacity?", "What is the twin missing for a run?"];
 }
 
-type Tab = "ask" | "events" | "options" | "decisions";
+type Tab = "ask" | "events" | "options" | "decisions" | "tools";
 // In the order of the decision loop: the situation, what was happening around
 // it, the options, what was retained.
 const TABS: { key: Tab; label: string }[] = [
@@ -66,6 +67,8 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "events", label: "Event finder" },
   { key: "options", label: "Options" },
   { key: "decisions", label: "Decisions" },
+  // Not a step of the loop: what the four others are made of.
+  { key: "tools", label: "What it can use" },
 ];
 
 /** How many published events a paragraph shows a link for before it says how many more its steps hold. */
@@ -212,6 +215,12 @@ export default function AnalystPanel({
         // Readable without the model: a decision is a record, not an answer.
         <div role="tabpanel" id="analyst-panel-decisions" aria-labelledby="analyst-tab-decisions" hidden={tab !== "decisions"}>
           <DecisionsTab env={env} scenario={scenario} refresh={decisionsVersion} />
+        </div>
+      ) : null}
+      {opened.includes("tools") ? (
+        // Readable without the model too: it is a list, not an exchange.
+        <div role="tabpanel" id="analyst-panel-tools" aria-labelledby="analyst-tab-tools" hidden={tab !== "tools"}>
+          <ToolsTab env={env} offeredIn={["ask", "options", "events"]} />
         </div>
       ) : null}
     </div>

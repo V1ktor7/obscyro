@@ -58,10 +58,11 @@ const OVERFLOW: ActionType = {
   builtIn: false,
   declared: true,
 };
+const line = { group: "The twin", does: "reads" as const, origin: "code" as const, inputs: [] };
 const TOOLS: AnalystToolLine[] = [
-  { name: "describe_twin", reads: "An overview of the twin.", where: ["ask", "options"], switchable: true, why: null, on: true },
-  { name: "calculate", reads: "A calculation.", where: ["ask", "options"], switchable: false, why: "A figure the analyst derives has to be computed by a tool.", on: true },
-  { name: "web_search", reads: "A search of the web.", where: ["events", "investigate"], switchable: true, why: null, on: true },
+  { ...line, name: "describe_twin", reads: "An overview of the twin.", where: ["ask", "options"], switchable: true, why: null, on: true },
+  { ...line, name: "calculate", reads: "A calculation.", where: ["ask", "options"], switchable: false, why: "A figure the analyst derives has to be computed by a tool.", on: true },
+  { ...line, name: "web_search", reads: "A search of the web.", where: ["events", "investigate"], switchable: true, why: null, on: true },
 ];
 
 const list = (types: ActionType[] = BUILT_IN, over: Partial<ActionTypeList> = {}): ActionTypeList => ({ types, offer: OFFER, offerProblem: null, ...over });

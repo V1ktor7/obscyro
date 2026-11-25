@@ -201,7 +201,10 @@ const actionTypeRoutes: FastifyPluginAsync = async (fastify) => {
       schema: {
         summary: "The tools the analyst has, and which ones this project switched off",
         description:
-          "One line per tool: its `name`, what it `reads` in a sentence, `where` it is offered (`ask`, `options`, " +
+          "One line per tool: its `name`, what it `reads` in a sentence, the `group` it is listed under, what it " +
+          "`does` (`reads`, `computes`, `runs` the engine, `searches` the web), its `origin` (`code`, or `project` " +
+          "for one declared from the Studio), its `inputs` (each with its name, its kind, whether it is required and " +
+          "what it is for), `where` it is offered (`ask`, `options`, " +
           "`events`, `investigate`), whether it is `on` in this project, and whether it is `switchable`. The tools " +
           "are code: a project cannot write one. It can switch one off, and the analyst is then not offered it. " +
           "`calculate`, `test_option` and `list_actions` cannot be switched off, and `why` says why. With the web " +
@@ -211,7 +214,18 @@ const actionTypeRoutes: FastifyPluginAsync = async (fastify) => {
         response: {
           200: z.object({
             tools: z.array(
-              z.object({ name: z.string(), reads: z.string(), where: z.array(z.string()), switchable: z.boolean(), why: z.string().nullable(), on: z.boolean() }),
+              z.object({
+                name: z.string(),
+                reads: z.string(),
+                group: z.string(),
+                does: z.string(),
+                origin: z.enum(["code", "project"]),
+                inputs: z.array(z.object({ name: z.string(), kind: z.string(), required: z.boolean(), says: z.string() })),
+                where: z.array(z.string()),
+                switchable: z.boolean(),
+                why: z.string().nullable(),
+                on: z.boolean(),
+              }),
             ),
           }),
           404: errorEnvelope,

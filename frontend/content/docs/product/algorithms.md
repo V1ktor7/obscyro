@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "6daf767204a78640"
+translatedFrom: "66eed4b394b2d49e"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -1474,7 +1474,7 @@ flowchart TD
 - **What was kept is kept by unit** (D11). A site that counts a single unit reads that unit's, and reads it again every minute. A site that counts several does not add them up: histories that were not kept together do not make one history.
 - **Alerts come first.** The panel grew longer, and an open alert must not end up below the fold.
 - **The source is a text of the twin.** “About these figures” prints the description the organisation wrote on the object types the measures read (`typeNotes`): the source, its licence, its limits. No screen names a source.
-- **The analyst is under the inspector.** The right column carries two folding overlays: the inspector of the selected site, then the “Analyst” panel, with its Ask and Investigate tabs (A13). Opening the analyst folds the inspector, whose name stays in view. The panel keeps what was done in it when it is folded or the other tab is shown: an investigation under way goes on. The “Analyst” button of the Studio's shell is not shown on this page.
+- **The analyst is under the inspector.** The right column carries two folding overlays: the inspector of the selected site, then the “Analyst” panel, with its Ask and Investigate tabs (A13), and “What it can use”, the list of its tools. Opening the analyst folds the inspector, whose name stays in view. The panel keeps what was done in it when it is folded or the other tab is shown: an investigation under way goes on. The “Analyst” button of the Studio's shell is not shown on this page.
 - **The timeline draws the series of the selected unit.** Under the lanes of the alerts and of the feed events, a third lane draws the painted measure at the selected unit, as a staircase, over the timeline's window: 24 h, 72 h, 7 days or 30 days, the same window as an investigation's. The series is read only while the timeline is open, then read again every minute. With no site selected, the timeline asks for one; for a site that counts several units, or a measure that is not kept, there is no series.
 
 **Code.** `frontend/app/studio/command/units-tree.ts` (`isSiteHidden`, `alertsForSite`, `pickFromExplorer`, `lineOfSite`, `lineAndBelow`, `unitsAbove`), `NetworkTwinView.tsx` (`pickLine`, `pickSite`), `AlertsList.tsx`, `SiteInspector.tsx`, `NetworkAnalyst.tsx`, `NetworkTimeline.tsx`, `series-lane.ts`, `frontend/app/studio/map-overlay.tsx` (`OverlayPanel`, `keepMounted`), `frontend/app/studio/TreeExplorer.tsx` (`pathTo`). **Tests.** `units-tree.test.ts`, `TreeExplorer.test.tsx`, `SiteInspector.test.tsx`, `AlertsList.test.tsx`, `NetworkTimeline.test.tsx`, `series-lane.test.ts`, `InvestigateTab.test.tsx`.

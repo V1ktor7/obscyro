@@ -22,10 +22,29 @@ import { WEB_SEARCH } from "./analyst-web.js";
 /** Where a tool is offered. */
 export type Exchange = "ask" | "options" | "events" | "investigate";
 
+/** What a tool does, in one word a screen can show beside its name. */
+export type ToolDoes = "reads" | "computes" | "runs" | "searches";
+
+/** One thing a tool is given when it is called. */
+export interface ToolInput {
+  name: string;
+  /** "text", "number", "list"…: the JSON type its schema declares. */
+  kind: string;
+  required: boolean;
+  /** What it is for, in the words the model is given. */
+  says: string;
+}
+
 export interface ToolLine {
   name: string;
   /** What it reads, in a sentence a person can read. */
   reads: string;
+  /** The heading it is listed under. */
+  group: string;
+  does: ToolDoes;
+  /** Written in the code, or declared in the project from the Studio. */
+  origin: "code" | "project";
+  inputs: ToolInput[];
   where: Exchange[];
   /** False for a tool an exchange cannot do without. */
   switchable: boolean;
@@ -56,6 +75,46 @@ const READS: Record<string, string> = {
   [WEB_SEARCH]: "A search of the web, restricted to the sources the project allows. It runs at the model's provider, not on this server.",
 };
 
+/** The heading each tool is listed under, in the order the headings are shown. */
+export const TOOL_GROUPS = ["The twin", "The scenario and its run", "The network now", "Datasets", "The calendar", "Calculation", "Options", "The web"] as const;
+const GROUP: Record<string, (typeof TOOL_GROUPS)[number]> = {
+  describe_twin: "The twin",
+  find_sites: "The twin",
+  get_site: "The twin",
+  compare_catchments: "The twin",
+  list_prices: "The twin",
+  scenario_recipe: "The scenario and its run",
+  read_run: "The scenario and its run",
+  list_alerts: "The network now",
+  unit_now: "The network now",
+  list_datasets: "Datasets",
+  preview_dataset: "Datasets",
+  read_series: "Datasets",
+  list_events: "The calendar",
+  calculate: "Calculation",
+  list_responses: "Options",
+  list_actions: "Options",
+  test_option: "Options",
+  [WEB_SEARCH]: "The web",
+};
+const DOES: Record<string, ToolDoes> = { calculate: "computes", test_option: "runs", [WEB_SEARCH]: "searches" };
+
+const KIND: Record<string, string> = { string: "text", integer: "whole number", number: "number", boolean: "yes or no", array: "list", object: "group" };
+
+/** What a tool is given, read from the schema the model is shown. */
+function inputsOf(tool: AnalystTool): ToolInput[] {
+  const required = new Set(tool.input_schema.required);
+  return Object.entries(tool.input_schema.properties).map(([name, raw]) => {
+    const p = (raw ?? {}) as { type?: string; description?: string; enum?: unknown[] };
+    return {
+      name,
+      kind: Array.isArray(p.enum) ? `one of ${p.enum.join(", ")}` : (KIND[p.type ?? ""] ?? p.type ?? "value"),
+      required: required.has(name),
+      says: p.description ?? "",
+    };
+  });
+}
+
 /** Tools an exchange cannot do without, and why. */
 const KEPT: Record<string, string> = {
   calculate: "A figure the analyst derives has to be computed by a tool, or it is taken out of the answer.",
@@ -70,13 +129,27 @@ export function toolCatalogue(off: ReadonlySet<string> = new Set()): ToolLine[] 
   const ask = new Set(names(READ_TOOLS));
   const options = new Set([...names(OPTION_TOOLS), listActions.name]);
   const all = [...new Set([...names(READ_TOOLS), ...names(OPTION_TOOLS), listActions.name, WEB_SEARCH])];
+  const byName = new Map([...READ_TOOLS, ...OPTION_TOOLS, listActions].map((t) => [t.name, t]));
   return all.map((name) => {
     const where: Exchange[] = [];
     if (ask.has(name)) where.push("ask");
     if (options.has(name)) where.push("options");
     if (name === WEB_SEARCH) where.push("events", "investigate");
     const why = KEPT[name] ?? null;
-    return { name, reads: READS[name] ?? name, where, switchable: why === null, why, on: why !== null || !off.has(name) };
+    const tool = byName.get(name);
+    return {
+      name,
+      reads: READS[name] ?? name,
+      group: GROUP[name] ?? "The twin",
+      does: DOES[name] ?? "reads",
+      origin: "code" as const,
+      // The web search is the provider's own tool: it is given a query, and nothing of the twin.
+      inputs: tool ? inputsOf(tool) : [{ name: "query", kind: "text", required: true, says: "What to search for. It is written from the sentence the person sent, and nothing else." }],
+      where,
+      switchable: why === null,
+      why,
+      on: why !== null || !off.has(name),
+    };
   });
 }
 
