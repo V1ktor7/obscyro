@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "7dd224e79901b2ba"
+translatedFrom: "9847c9eb0f8ccc1a"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -12,6 +12,10 @@ What changed in Obscyro, from the most recent to the oldest. Each entry says wha
 - **Change**: something it already did, and now does differently, better or faster. A fix is one.
 
 An entry is written the day the change ships, in the same commit as the code. Since November 2026, every visible change has its own. The months before are summarised. The full detail, commit by commit, is in [the repository's history](https://github.com/V1ktor7/obscyro/commits/main).
+
+## 26 November 2026
+
+- **Change · Studio.** The “Analyst” panel of the frame really closes. Its cross, the Escape key and the “Analyst” button left it drawn over the page, where it hid what was underneath. Closed, it still keeps what was asked.
 
 ## 25 November 2026
 

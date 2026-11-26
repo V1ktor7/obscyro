@@ -128,7 +128,12 @@ export function AnalystDock({ env }: { env: string | null }) {
           role="dialog"
           aria-label="Analyst"
           hidden={!open}
-          className="pointer-events-auto flex max-h-[72vh] w-[430px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-md border border-line bg-surface shadow-lg"
+          // The `hidden` attribute alone does not hide it: a display class on the same element wins over it,
+          // and the panel stayed on screen, over the page, after its cross was clicked.
+          className={cn(
+            "pointer-events-auto max-h-[72vh] w-[430px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-md border border-line bg-surface shadow-lg",
+            open ? "flex" : "hidden",
+          )}
         >
           <div className="flex items-start gap-2 border-b border-line-soft px-3 py-2">
             <div className="min-w-0 flex-1">

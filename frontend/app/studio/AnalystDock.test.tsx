@@ -75,7 +75,13 @@ describe("the analyst in the shell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Close the analyst" }));
     expect(screen.queryByRole("dialog", { name: "Analyst" })).toBeNull();
+    // Closed, it takes no room on the page: the attribute alone left it drawn, because a display class beat it.
+    const closed = screen.getByRole("dialog", { hidden: true });
+    expect(closed.classList.contains("hidden")).toBe(true);
+    expect(closed.classList.contains("flex")).toBe(false);
     fireEvent.click(toggle);
+    expect(screen.getByRole("dialog", { name: "Analyst" }).classList.contains("flex")).toBe(true);
+    expect(screen.getByRole("dialog", { name: "Analyst" }).classList.contains("hidden")).toBe(false);
     // The question asked is still on the panel: reopening did not start it over.
     expect(within(screen.getByRole("dialog", { name: "Analyst" })).getAllByText("What is open right now, and where?").length).toBeGreaterThan(0);
     expect(analyst.askAnalyst).toHaveBeenCalledTimes(1);

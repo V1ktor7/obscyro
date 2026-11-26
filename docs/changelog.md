@@ -7,6 +7,10 @@ Ce qui a changé dans Obscyro, du plus récent au plus ancien. Chaque entrée di
 
 Une entrée est écrite le jour où le changement est livré, dans le même commit que le code. Depuis novembre 2026, chaque changement visible a la sienne. Les mois d'avant sont résumés. Le détail complet, commit par commit, est dans [l'historique du dépôt](https://github.com/V1ktor7/obscyro/commits/main).
 
+## 26 novembre 2026
+
+- **Modification · Studio.** Le panneau « Analyst » du cadre se ferme vraiment. Sa croix, la touche Échap et le bouton « Analyst » le laissaient affiché par-dessus la page, où il cachait ce qui se trouvait dessous. Fermé, il garde toujours ce qui a été demandé.
+
 ## 25 novembre 2026
 
 - **Nouvelle fonction · Ontologie.** Les types d'action. Sous Ontology › Action types, un projet déclare ce que l'analyste peut proposer : un nom en mots de l'établissement, ce que le type change (capacité, mesure, transfert, réponse enregistrée), ses bornes (une plage d'unités, des sites, des couches et leur facteur, des jours, des patients par jour), les jours qu'il faut avant de pouvoir l'appliquer, et qui peut l'approuver. L'activité, les sites et les couches se choisissent dans ce que le jumeau déclare. Un type que le jumeau ne permet pas de tester le dit, avec ce qui manque.
