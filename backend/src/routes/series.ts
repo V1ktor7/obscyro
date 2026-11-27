@@ -110,7 +110,8 @@ const seriesRoutes: FastifyPluginAsync = async (fastify) => {
           "is run through that pipeline as it is today, in memory, and the measure is computed as it is defined " +
           "today, over today's units. Nothing is written in the ontology: no object, no link, no type. When " +
           "`datasetId` is not one of the pipeline's inputs, `inPlaceOf` names the input its copies are read in place " +
-          "of; the pipeline's other inputs are read as they were when each copy was taken. Only what changes is " +
+          "of; the pipeline's other inputs are read as they were when each copy was taken, and a copy taken before " +
+          "one of them had any copy is left out rather than measured with a later one. Only what changes is " +
           "written, and everything written is marked as caught up, with the time the source gave and the time the " +
           "copy was taken. An object the twin holds today keeps the place it has today; one it does not hold is " +
           "placed by the pipeline's link rules, and counted in `rowsUnattached` when none finds a place. A row that " +

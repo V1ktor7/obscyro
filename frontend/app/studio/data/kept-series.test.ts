@@ -19,6 +19,7 @@ import {
   progressText,
   sourcesOf,
   sparkPaths,
+  standsFor,
   stepText,
   type SeriesForm,
 } from "./kept-series";
@@ -201,11 +202,16 @@ describe("catching up from kept copies", () => {
     expect(missingColumns(FULL, FULL)).toEqual([]);
   });
 
-  it("proposes a pipeline's own input first, and another dataset only when no input has an older copy", () => {
-    // The permit table is an input with older copies: it comes first, however few they are.
-    expect(firstPick(TWIN)).toEqual({ pipelineId: "p-urg", datasetId: "d-xw", inPlaceOf: null });
-    const none = { ...TWIN, paths: [{ ...TWIN.paths[0]!, inputs: [FULL] }] };
-    expect(firstPick(none)).toEqual({ pipelineId: "p-urg", datasetId: "d-old", inPlaceOf: "d-full" });
+  it("proposes first the dataset with the most older copies, in place of the input it shares the most columns with", () => {
+    // The old emergency file holds three months of copies; the permit table, an input, holds four from one day.
+    expect(firstPick(TWIN)).toEqual({ pipelineId: "p-urg", datasetId: "d-old", inPlaceOf: "d-full" });
+    // It shares three columns with the full file and none with the permit table: it stands for the full file.
+    expect(standsFor(TWIN.paths[0]!, OLD)).toBe("d-full");
+    expect(standsFor({ inputs: [TABLE, FULL] }, OLD)).toBe("d-full");
+    expect(standsFor({ inputs: [] }, OLD)).toBeNull();
+    // At equal count, the dataset the pipeline reads today comes first.
+    const few = { ...TWIN, standIns: [{ ...OLD, copies: 4 }, TABLE] };
+    expect(firstPick(few)).toEqual({ pipelineId: "p-urg", datasetId: "d-xw", inPlaceOf: null });
     expect(firstPick({ paths: [], standIns: [OLD] })).toBeNull();
     expect(firstPick({ paths: [{ pipelineId: "p", pipelineName: "P", inputs: [FULL] }], standIns: [] })).toBeNull();
   });

@@ -466,7 +466,7 @@ const instanceRow = (id: string, type: string, properties: Record<string, unknow
   updated_at: UNTIL,
 });
 
-const twinRoutes = (readings: unknown[][], pipeline: Record<string, unknown> = PIPELINE_ROW): [RegExp, (params: unknown[]) => unknown[]][] => [
+const twinRoutes = (readings: unknown[][], pipeline: Record<string, unknown> = PIPELINE_ROW, xwSince = "2026-08-01T00:00:00.000Z"): [RegExp, (params: unknown[]) => unknown[]][] => [
   [/FROM app\.twin_metric WHERE organization_id/, () => [{ id: "m1", organization_id: "o1", key: "occupied", label: "Occupied stretchers", object_type: "OrgUnit", unit: "count", numerator: OCCUPIED.numerator, denominator: null, qualified_by: null, active: true }]],
   [/FROM app\.ontology_object_types WHERE organization_id = \$1/, () => [
     { id: "t-Census", name: "Census", sim_role: null, property_schema: SCHEMA, identity_properties: ["permit"] },
@@ -486,8 +486,8 @@ const twinRoutes = (readings: unknown[][], pipeline: Record<string, unknown> = P
     { id: "l1", link_type_name: "census_of", aggregates: "metrics", aggregate_toward: "target", transitive: false, from_instance_id: "inst-1001", to_instance_id: "u-a", from_type_name: "Census", to_type_name: "OrgUnit" },
   ]],
   [/FROM app\.ontology_link_types WHERE organization_id = \$1/, () => [{ name: "census_of", aggregates: "metrics", aggregate_toward: "target", transitive: false }]],
-  // The pipeline's other input, as it was when each copy was taken.
-  [/UNION ALL/, (p) => (p[0] === D_XW ? [{ id: "xw-1" }] : [])],
+  // The pipeline's other input, as it was when each copy was taken: the permit table was first kept on 1 September at noon.
+  [/SELECT id FROM app\.dataset_version WHERE dataset_id = \$1 AND created_at <= \$2 ORDER BY version DESC LIMIT 1/, (p) => (p[0] === D_XW && String(p[1]) >= xwSince ? [{ id: "xw-1" }] : [])],
   [
     /INSERT INTO app\.twin_reading/,
     (p) => {
@@ -564,6 +564,19 @@ test("a copy the pipeline cannot run on is stepped over and said, and the catch-
   assert.deepEqual([out.state.read, out.state.done, out.state.copiesLeftOut], [3, true, 1]);
   assert.match(out.state.note ?? "", /The pipeline could not run on the copy of 2026-09-02 10:20 UTC: the rows of that copy are gone\. That copy was left out\./);
   assert.equal(readings.length, 2);
+});
+
+test("a copy older than the first copy of the pipeline's other input is left out, never measured with a later one", async () => {
+  const readings: unknown[][] = [];
+  const rows = { "copy-1": [{ No_permis: "1001", Occupees: 12 }], "copy-2": [{ No_permis: "1001", Occupees: 13 }], "copy-3": [{ No_permis: "1001", Occupees: 14 }], "xw-1": [{ permis: "1001", code: "A" }] };
+  // The permit table was first kept on 2 September at noon: the old file's first two copies are older than it.
+  const w = world(rows, twinRoutes(readings, PIPELINE_ROW, "2026-09-02T12:00:00.000Z"));
+  const out = await runCatchup(w.db, PROJECT, null, { key: "twin:occupied", datasetId: D_OLD, pipelineId: PIPE, inPlaceOf: D_NEW });
+  assert.deepEqual([out.state.read, out.state.done, out.state.copiesLeftOut], [3, true, 2]);
+  assert.match(out.state.note ?? "", /“Permit table” had no copy yet when the copy of 2026-09-02 10:20 UTC was taken.*That copy was left out, rather than measured with a later one\./);
+  // Only the third copy was measured, and the first two were never read at all.
+  assert.deepEqual(readings.map((p) => p[7]), ["2026-09-03T10:20:00.000Z"]);
+  assert.deepEqual(w.calls.filter((c) => /SELECT data FROM app\.dataset_row/.test(c.sql)).map((c) => c.params[0]), ["copy-3", "xw-1"]);
 });
 
 // --- what can be caught up, and forgetting it -------------------------------------------------

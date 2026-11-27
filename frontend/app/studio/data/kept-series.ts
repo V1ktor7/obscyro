@@ -193,25 +193,39 @@ export interface CatchupPick {
 }
 
 /**
+ * The input of a pipeline a dataset is first proposed in place of: the one it
+ * shares the most columns with. Only a first proposal, shown in a list the
+ * person changes: the screen names the columns that are missing either way.
+ */
+export function standsFor(path: Pick<CatchupPath, "inputs">, source: Pick<CopiesOf, "columns">): string | null {
+  let best: { id: string; shared: number } | null = null;
+  for (const input of path.inputs) {
+    const shared = input.columns.length - missingColumns(input, source).length;
+    if (!best || shared > best.shared) best = { id: input.datasetId, shared };
+  }
+  return best?.id ?? null;
+}
+
+/**
  * The first thing an offer lets a person catch up, or null when it offers nothing.
  *
- * A pipeline's own input comes first. Another dataset is only proposed when no
- * input has an older copy, and then in place of the first input: the person
- * says which one it really stands for.
+ * The dataset with the most older copies, whether the pipeline reads it today
+ * or it would stand in for one of its inputs: that is where the past is. At
+ * equal count, the pipeline's own input comes first.
  */
 export function firstPick(offer: Pick<CatchupOffer, "paths" | "standIns">): CatchupPick | null {
+  let best: { pick: CatchupPick; copies: number } | null = null;
   for (const path of offer.paths) {
-    const { own } = sourcesOf(path, offer.standIns);
-    const best = [...own].sort((a, b) => b.copies - a.copies)[0];
-    if (best) return { pipelineId: path.pipelineId, datasetId: best.datasetId, inPlaceOf: null };
+    const { own, others } = sourcesOf(path, offer.standIns);
+    for (const s of own) {
+      if (!best || s.copies > best.copies) best = { pick: { pipelineId: path.pipelineId, datasetId: s.datasetId, inPlaceOf: null }, copies: s.copies };
+    }
+    for (const s of others) {
+      const inPlaceOf = standsFor(path, s);
+      if (inPlaceOf && (!best || s.copies > best.copies)) best = { pick: { pipelineId: path.pipelineId, datasetId: s.datasetId, inPlaceOf }, copies: s.copies };
+    }
   }
-  for (const path of offer.paths) {
-    const { others } = sourcesOf(path, offer.standIns);
-    const best = [...others].sort((a, b) => b.copies - a.copies)[0];
-    const input = path.inputs[0];
-    if (best && input) return { pipelineId: path.pipelineId, datasetId: best.datasetId, inPlaceOf: input.datasetId };
-  }
-  return null;
+  return best?.pick ?? null;
 }
 
 /** What a pick will do, said before anything is read. Null when the pick does not hold together. */

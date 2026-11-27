@@ -451,14 +451,14 @@ async function rowsOfCopy(db: DbClient, versionId: string, limit?: number): Prom
   return rows.map((r) => r.data);
 }
 
-/** The copy of a dataset as it was at an instant: the last one taken by then; when none had been, the first one kept. */
+/**
+ * The copy of a dataset as it was at an instant: the last one taken by then.
+ * Null when none had been taken yet. A later copy never stands in: read with
+ * it, an old copy would be measured against figures that did not exist yet.
+ */
 async function copyAsOf(db: DbClient, datasetId: string, at: Date): Promise<string | null> {
   const { rows } = await db.query<{ id: string }>(
-    `(SELECT id, 0 AS pick, version FROM app.dataset_version WHERE dataset_id = $1 AND created_at <= $2 ORDER BY version DESC LIMIT 1)
-     UNION ALL
-     (SELECT id, 1 AS pick, version FROM app.dataset_version WHERE dataset_id = $1 ORDER BY version ASC LIMIT 1)
-     ORDER BY pick ASC
-     LIMIT 1`,
+    `SELECT id FROM app.dataset_version WHERE dataset_id = $1 AND created_at <= $2 ORDER BY version DESC LIMIT 1`,
     [datasetId, at.toISOString()],
   );
   return rows[0]?.id ?? null;
@@ -846,6 +846,8 @@ export async function runCatchup(db: DbClient, project: Project, userId: string 
   let pipeline: Pipeline | null = null;
   const replaced = row.in_place_of ?? row.dataset_id;
   const otherRows = new Map<string, Row[]>();
+  /** The pipeline's other inputs, by dataset, with their names. */
+  let others: { id: string; name: string }[] = [];
   if (twin) {
     pipeline = plan!.pipelines.find((p) => p.id === row!.pipeline_id) ?? null;
     if (!pipeline) throw refused(plan!.reasons[0] ?? "The pipeline this catch-up went through no longer writes this measure's objects. Forget what was caught up and start again.");
@@ -853,6 +855,10 @@ export async function runCatchup(db: DbClient, project: Project, userId: string 
     const problems = validate(pipeline);
     if (problems.length > 0) throw refused(`“${pipeline.name}” has problems a run would refuse: ${problems.map((i) => i.message).join(" ")}`);
     structure = await readStructure(db, project, pipeline, plan!.def, plan!.looked);
+    const nameOf = new Map((await tablesOf(db, project.id)).map((t) => [t.id, t.name]));
+    others = inputDatasets(pipeline)
+      .filter((id) => id !== replaced)
+      .map((id) => ({ id, name: nameOf.get(id) ?? "a dataset that is no longer there" }));
   }
 
   for (const copy of copies) {
@@ -863,6 +869,24 @@ export async function runCatchup(db: DbClient, project: Project, userId: string 
       tally.written += captured.written;
       tally.rowsLeftOut += captured.leftOut;
     } else {
+      // The pipeline's other inputs, as they were when this copy was taken.
+      const then = new Map<string, string>();
+      let missing: string | null = null;
+      for (const other of others) {
+        const versionId = await copyAsOf(db, other.id, copy.created_at);
+        if (!versionId) {
+          missing = other.name;
+          break;
+        }
+        then.set(other.id, versionId);
+      }
+      if (missing !== null) {
+        tally.copiesLeftOut += 1;
+        tally.note = `“${missing}” had no copy yet when the copy of ${dayOf(copy.created_at)} was taken: the pipeline's other input cannot be read as it was then. That copy was left out, rather than measured with a later one.`;
+        tally.read += 1;
+        tally.through = copy.version;
+        continue;
+      }
       const rowsByNode = new Map<string, Row[]>();
       const result = await execute(db, pipeline!, {
         preview: true,
@@ -870,7 +894,7 @@ export async function runCatchup(db: DbClient, project: Project, userId: string 
         readInput: async (datasetId, limit) => {
           // One more than the ceiling, so that a copy too long for a run is seen as cut and not taken for whole.
           if (datasetId === replaced) return rowsOfCopy(db, copy.id, limit + 1);
-          const versionId = await copyAsOf(db, datasetId, copy.created_at);
+          const versionId = then.get(datasetId);
           if (!versionId) return [];
           let rows = otherRows.get(versionId);
           if (!rows) {

@@ -60,6 +60,7 @@ import {
   progressText,
   sourcesOf,
   sparkPaths,
+  standsFor,
   stepText,
   type CatchupPick,
   type SeriesForm,
@@ -588,7 +589,8 @@ function CatchupPanel({ env, line, onChanged }: { env: string; line: SeriesLine;
                 disabled={busy}
                 onChange={(e) => {
                   const [kind, datasetId] = [e.target.value.slice(0, e.target.value.indexOf(":")), e.target.value.slice(e.target.value.indexOf(":") + 1)];
-                  setPick({ pipelineId: pick.pipelineId, datasetId, inPlaceOf: kind === "other" ? (pick.inPlaceOf ?? path.inputs[0]?.datasetId ?? null) : null });
+                  const source = sources.others.find((s) => s.datasetId === datasetId);
+                  setPick({ pipelineId: pick.pipelineId, datasetId, inPlaceOf: kind === "other" && source ? standsFor(path, source) : null });
                 }}
                 className={cn(FIELD, "max-w-full")}
               >

@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "628677b70b1e74d1"
+translatedFrom: "6d01acf395c99451"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -1679,7 +1679,7 @@ flowchart TD
     I --> J{"Which series?"}
     J -->|"dataset series"| K["The rows of the copy become points,<br/>as at a write of the dataset"]
     J -->|"measure of the twin"| L["The copy goes through today's pipeline, in memory.<br/>Its other inputs are read as they were then"]
-    L --> L0{"Does the pipeline run,<br/>without cutting the copy?"}
+    L --> L0{"Did its other inputs already have a copy,<br/>and does the pipeline run without cutting the copy?"}
     L0 -->|"no"| L1["Copy left out,<br/>counted, with the reason"]
     L0 -->|"yes"| M{"Is the object of a row<br/>in the twin today?"}
     M -->|"yes, same identity"| N["It keeps the place<br/>it has today"]
@@ -1724,7 +1724,8 @@ flowchart TD
 - **A dataset series reads its own copies again.** Each copy is read the way a write of the dataset is read today: the same columns, and the same rules as above.
 - **A measure of the twin goes through today's pipeline again, in memory.** It takes a pipeline that writes today, and not a draft, every object type the measure reads. Each copy goes through it, and the measure is computed by the twin's own computation (D11), as it is defined today, over today's units. Nothing is written in the ontology: no object, no link, no type, no pipeline run.
 - **Today's definitions, not those of the time.** The pipeline, the measure, the units and the place of each object are the ones of now. An object the twin holds today, recognised by its identity, keeps the place it has today, with all its links. One it does not hold is placed by the pipeline's link rules, read against today's twin. An object carries only what its copy said: a property the old file did not have is absent, never today's value. The screen says so before anything is started.
-- **When the source changed file.** The dataset the pipeline reads today does not always have the old copies. A person can have the copies of another dataset of the project read in place of one of the pipeline's inputs: they pick the dataset and the input, nothing is recognised by its name. The screen names the columns that dataset lacks: what the pipeline makes from them will be empty. The pipeline's other inputs, a lookup table for instance, are read as they were when the copy was taken: their last copy of that time, or the first one kept if there was none yet.
+- **When the source changed file.** The dataset the pipeline reads today does not always have the old copies. A person can have the copies of another dataset of the project read in place of one of the pipeline's inputs: they pick the dataset and the input. The screen proposes a first choice, the dataset with the most older copies, in place of the input it shares the most columns with; nothing is started without the person. The screen names the columns that dataset lacks: what the pipeline makes from them will be empty.
+- **The other inputs, as they were then.** The pipeline's other inputs, a lookup table for instance, are read in their last copy taken by the time of the copy being replayed. A copy taken before one of them had any copy is left out and counted: read with a later one, it would be measured against figures that did not exist yet.
 - **Marked, with its two times.** Everything a catch-up writes down is marked as caught up. A caught-up point carries the time its source gave and the time its copy was taken, not the time of the catch-up: read “as known at”, it appears at the moment the platform really held the copy.
 - **A caught-up reading is held against the past.** It is compared with the last reading written down at the time of its copy or before, not with the most recent one. A copy re-read unchanged writes nothing. A unit that has no value and never had one starts no series; a unit that loses its value has that absence written down.
 - **Nothing is placed by guess.** A row that cannot be made into an object (a value that cannot be read, a required property missing, no identity), an object that names no place the twin holds, a copy the pipeline fails on or that is longer than a run reads (150,000 rows): left out, counted, and said on the series.
