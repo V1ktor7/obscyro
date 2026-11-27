@@ -17,6 +17,7 @@ import {
   missingColumns,
   planOf,
   progressText,
+  resembles,
   sourcesOf,
   sparkPaths,
   standsFor,
@@ -209,6 +210,12 @@ describe("catching up from kept copies", () => {
     expect(standsFor(TWIN.paths[0]!, OLD)).toBe("d-full");
     expect(standsFor({ inputs: [TABLE, FULL] }, OLD)).toBe("d-full");
     expect(standsFor({ inputs: [] }, OLD)).toBeNull();
+    // An air quality file shares no column with an emergency file: however many copies it has, it is never proposed in its place.
+    expect(resembles(FULL, OLD)).toBe(true);
+    expect(resembles(FULL, AIR)).toBe(false);
+    expect(resembles(FULL, { columns: [] })).toBe(false);
+    expect(firstPick({ ...TWIN, standIns: [OLD, TABLE, { ...AIR, copies: 9000 }] })).toEqual({ pipelineId: "p-urg", datasetId: "d-old", inPlaceOf: "d-full" });
+    expect(firstPick({ ...TWIN, standIns: [TABLE, { ...AIR, copies: 9000 }] })).toEqual({ pipelineId: "p-urg", datasetId: "d-xw", inPlaceOf: null });
     // At equal count, the dataset the pipeline reads today comes first.
     const few = { ...TWIN, standIns: [{ ...OLD, copies: 4 }, TABLE] };
     expect(firstPick(few)).toEqual({ pipelineId: "p-urg", datasetId: "d-xw", inPlaceOf: null });

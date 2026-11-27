@@ -207,11 +207,25 @@ export function standsFor(path: Pick<CatchupPath, "inputs">, source: Pick<Copies
 }
 
 /**
+ * Whether a dataset looks like an earlier form of a pipeline's input: most of
+ * its own columns are also the input's. The emergency file the source used to
+ * publish has nine columns, eight of which the file it publishes now still
+ * has; an air quality file shares none with either.
+ */
+export function resembles(input: Pick<CopiesOf, "columns">, source: Pick<CopiesOf, "columns">): boolean {
+  const has = new Set(input.columns);
+  const shared = source.columns.filter((c) => has.has(c)).length;
+  return shared * 2 > source.columns.length;
+}
+
+/**
  * The first thing an offer lets a person catch up, or null when it offers nothing.
  *
- * The dataset with the most older copies, whether the pipeline reads it today
- * or it would stand in for one of its inputs: that is where the past is. At
- * equal count, the pipeline's own input comes first.
+ * The dataset with the most older copies, among those the pipeline reads
+ * today and those that resemble one of its inputs, proposed in its place:
+ * that is where the past is. At equal count, the pipeline's own input comes
+ * first. A dataset that resembles no input is never proposed: it stays in the
+ * list, for a person who knows better.
  */
 export function firstPick(offer: Pick<CatchupOffer, "paths" | "standIns">): CatchupPick | null {
   let best: { pick: CatchupPick; copies: number } | null = null;
@@ -222,7 +236,9 @@ export function firstPick(offer: Pick<CatchupOffer, "paths" | "standIns">): Catc
     }
     for (const s of others) {
       const inPlaceOf = standsFor(path, s);
-      if (inPlaceOf && (!best || s.copies > best.copies)) best = { pick: { pipelineId: path.pipelineId, datasetId: s.datasetId, inPlaceOf }, copies: s.copies };
+      const input = path.inputs.find((i) => i.datasetId === inPlaceOf);
+      if (!input || !resembles(input, s)) continue;
+      if (!best || s.copies > best.copies) best = { pick: { pipelineId: path.pipelineId, datasetId: s.datasetId, inPlaceOf: input.datasetId }, copies: s.copies };
     }
   }
   return best?.pick ?? null;
