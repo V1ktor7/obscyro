@@ -274,8 +274,9 @@ interface Held {
 }
 
 /** A project whose dataset has three older copies, and the state of one catch-up. */
-function world(copyRows: Record<string, Record<string, unknown>[]>, extra: [RegExp, (params: unknown[]) => unknown[] | { rows: unknown[]; rowCount: number }][] = []) {
-  const copies = [1, 2, 3].map((v) => ({ id: `copy-${v}`, version: v, created_at: new Date(Date.UTC(2026, 8, v, 10, 20)), row_count: (copyRows[`copy-${v}`] ?? []).length }));
+function world(copyRows: Record<string, Record<string, unknown>[]>, extra: [RegExp, (params: unknown[]) => unknown[] | { rows: unknown[]; rowCount: number }][] = [], big?: number) {
+  // The count of rows comes back as the driver gives a BIGINT: as text.
+  const copies = [1, 2, 3].map((v) => ({ id: `copy-${v}`, version: v, created_at: new Date(Date.UTC(2026, 8, v, 10, 20)), row_count: String(big ?? (copyRows[`copy-${v}`] ?? []).length) }));
   let held: Held | null = null;
   const remaining = () => copies.filter((c) => c.version > (held?.through_version ?? 0)).length;
   const routed = routedDb([
@@ -398,6 +399,19 @@ test("a batch is bounded, and the next one resumes where it stopped", async () =
   assert.deepEqual(points.map((p) => p[5]), ["copy-1", "copy-2", "copy-3"], "no copy is read twice, none is skipped");
   // Time and rows bound a batch; the count is a ceiling high enough that small copies do not mean a call a second.
   assert.ok(BATCH_COPIES >= 100);
+});
+
+test("the rows of a batch are added up as numbers: a count the database hands over as text does not end the batch early", async () => {
+  const points: unknown[][] = [];
+  const rows = { "copy-1": [{ No_permis: "1001", Occupees: 1, Mise_a_jour: "2026-09-01T10:00:00Z" }], "copy-2": [{ No_permis: "1001", Occupees: 2, Mise_a_jour: "2026-09-02T10:00:00Z" }], "copy-3": [{ No_permis: "1001", Occupees: 3, Mise_a_jour: "2026-09-03T10:00:00Z" }] };
+  // Three copies said to hold 120,000 rows each: 360,000 in all, under the bound. As text they would read "120000120000".
+  const w = world(rows, seriesRoutes(points), 120_000);
+  const out = await runCatchup(w.db, PROJECT, null, { key: "occupied_by_room", datasetId: D_OLD, pipelineId: null, inPlaceOf: null });
+  assert.deepEqual([out.read, out.state.done], [3, true]);
+  // A fourth would pass the bound: 150,000 rows each, and the batch stops after two.
+  const heavy = world(rows, seriesRoutes([]), 150_000);
+  const first = await runCatchup(heavy.db, PROJECT, null, { key: "occupied_by_room", datasetId: D_OLD, pipelineId: null, inPlaceOf: null });
+  assert.deepEqual([first.read, first.state.done], [2, false]);
 });
 
 test("a catch-up is refused with its reason when there is nothing older, or the dataset is not the series' own", async () => {

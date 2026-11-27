@@ -445,7 +445,9 @@ async function nextCopies(db: DbClient, datasetId: string, through: number | nul
       LIMIT $4`,
     [datasetId, through ?? 0, until.toISOString(), limit],
   );
-  return rows;
+  // `row_count` is a BIGINT, which the driver hands over as text. Added up as text, "120" and "120" make
+  // "120120": the row bound of a batch looked reached after three copies, and a batch read three.
+  return rows.map((r) => ({ ...r, version: Number(r.version), row_count: Number(r.row_count) || 0 }));
 }
 
 async function rowsOfCopy(db: DbClient, versionId: string, limit?: number): Promise<Row[]> {
