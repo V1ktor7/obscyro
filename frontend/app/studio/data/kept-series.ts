@@ -291,6 +291,24 @@ export function catchupText(c: CatchupState): string {
   return `Caught up from ${count(c.copies, "copy", "copies")} of ${from}${since}: ${count(c.written, "point")} written down.`;
 }
 
+/**
+ * How a catch-up is paced from the screen. The API limits how many requests a
+ * key makes in a minute, and the rest of the Studio shares that key: a batch
+ * is not asked for the instant the one before ends.
+ */
+export const catchupPacing = { betweenMs: 2000, slowDownMs: 30_000 };
+
+/**
+ * How long to wait when the API says it is asked too fast; null for any other
+ * failure. The API says for how long (`ttlSeconds`), and a second is added.
+ */
+export function slowDownOf(error: unknown): number | null {
+  const e = error as { status?: number; code?: string; details?: unknown } | null;
+  if (!e || (e.status !== 429 && e.code !== "RATE_LIMITED")) return null;
+  const ttl = (e.details as { ttlSeconds?: unknown } | undefined)?.ttlSeconds;
+  return typeof ttl === "number" && Number.isFinite(ttl) && ttl > 0 ? (ttl + 1) * 1000 : catchupPacing.slowDownMs;
+}
+
 /** A catch-up while it runs: "312 of 1,523 copies read · 4,210 points written down". */
 export function progressText(c: Pick<CatchupState, "read" | "copies" | "written">): string {
   return `${c.read.toLocaleString("en-CA")} of ${count(c.copies, "copy", "copies")} read · ${count(c.written, "point")} written down`;

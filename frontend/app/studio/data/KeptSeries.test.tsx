@@ -22,6 +22,14 @@ const studio = vi.hoisted(() => ({ hasKey: true, selectedEnv: "mtl" as string | 
 vi.mock("../StudioShell", () => ({ useStudio: () => studio }));
 
 import KeptSeriesView from "./KeptSeries";
+import { catchupPacing } from "./kept-series";
+
+// No pause between two batches here: what is tested is the order of things, not the clock.
+const PACING = { ...catchupPacing };
+beforeEach(() => {
+  catchupPacing.betweenMs = 0;
+  catchupPacing.slowDownMs = PACING.slowDownMs;
+});
 
 afterEach(() => {
   cleanup();
@@ -419,6 +427,35 @@ describe("catching a series up from kept copies", () => {
     fireEvent.click(p.getByRole("button", { name: "Resume" }));
     await waitFor(() => expect(api.runCatchup).toHaveBeenCalledTimes(2));
     expect(api.runCatchup.mock.calls[1]).toEqual(["mtl", { key: "twin:occupancy", datasetId: "d-old", pipelineId: "p-urg", inPlaceOf: "d-full" }]);
+  });
+
+  it("waits and asks again when the API says it is asked too fast, instead of stopping", async () => {
+    const p = await panel(TWIN_OFFER);
+    const done = state({ read: 1523, written: 41210, done: true });
+    api.runCatchup
+      .mockResolvedValueOnce({ state: state({ read: 140, written: 3300 }), began: true, read: 140, written: 3300 })
+      .mockRejectedValueOnce(new ApiError(429, "RATE_LIMITED", "Rate limit exceeded. Retry in 1 second.", { limit: 100, ttlSeconds: 0.05 }))
+      .mockResolvedValueOnce({ state: done, began: false, read: 140, written: 3300 });
+    api.fetchCatchupOffer.mockResolvedValue({ ...TWIN_OFFER, begun: [done] });
+    fireEvent.click(await p.findByRole("button", { name: "Catch up 1,523 copies" }));
+    // The wait is said, with where the catch-up stands; then the same request is made again.
+    expect((await p.findByText(/The API limits how fast it is asked: waiting 2 s before the next copies\. 140 of 1,523 copies read/)).textContent).toMatch(/3,300 points written down\.$/);
+    await waitFor(() => expect(api.runCatchup).toHaveBeenCalledTimes(3), { timeout: 4000 });
+    expect(p.queryByRole("alert")).toBeNull();
+    await p.findByRole("button", { name: "Already caught up" });
+  });
+
+  it("keeps the list on screen when reading it again fails", async () => {
+    const p = await panel(TWIN_OFFER);
+    const done = state({ read: 1523, written: 41210, done: true });
+    api.runCatchup.mockResolvedValueOnce({ state: done, began: true, read: 1523, written: 41210 });
+    api.fetchCatchupOffer.mockResolvedValue({ ...TWIN_OFFER, begun: [done] });
+    api.fetchSeries.mockRejectedValue(new ApiError(429, "RATE_LIMITED", "Rate limit exceeded. Retry in 25 seconds."));
+    fireEvent.click(await p.findByRole("button", { name: "Catch up 1,523 copies" }));
+    expect(await screen.findByText("The list could not be read again: Rate limit exceeded. Retry in 25 seconds.")).toBeTruthy();
+    // The series, and the panel that was open on one of them, are still there.
+    expect(card("Stretcher occupancy")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Catch up Stretcher occupancy" })).toBeTruthy();
   });
 
   it("says why when nothing can be caught up, or when the server refuses", async () => {

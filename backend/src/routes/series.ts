@@ -116,7 +116,8 @@ const seriesRoutes: FastifyPluginAsync = async (fastify) => {
           "copy was taken. An object the twin holds today keeps the place it has today; one it does not hold is " +
           "placed by the pipeline's link rules, and counted in `rowsUnattached` when none finds a place. A row that " +
           "cannot be read is counted in `rowsLeftOut`, a copy that cannot be replayed in `copiesLeftOut`; nothing is " +
-          "guessed. One call reads 25 copies at most and stops earlier past 12 seconds or 400,000 rows. The answer " +
+          "guessed. One call stops taking new copies past 12 seconds or 400,000 rows (500 copies at most), and " +
+          "always reads at least one. Ask for the next batch no faster than the API's rate limit allows. The answer " +
           "says where the catch-up stands (`state.read` of `state.copies`, `state.done`): call again to resume. " +
           "Refused with the reason when nothing can be caught up. The first call is kept in the audit log.",
         tags: ["series"],

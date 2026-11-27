@@ -18,6 +18,7 @@ import {
   planOf,
   progressText,
   resembles,
+  slowDownOf,
   sourcesOf,
   sparkPaths,
   standsFor,
@@ -252,6 +253,15 @@ describe("catching up from kept copies", () => {
     const plan = planOf(offer, firstPick(offer)!)!;
     expect(plan.request).toEqual({ key: "virus", datasetId: "d-v", pipelineId: null, inPlaceOf: null });
     expect(plan.said[1]).toBe("Each copy is read the way a write of the dataset is read today: only what changed from one copy to the next is written down.");
+  });
+
+  it("waits as long as the API says when it is asked too fast, and for nothing else", () => {
+    expect(slowDownOf({ status: 429, code: "RATE_LIMITED", details: { limit: 100, ttlSeconds: 25 } })).toBe(26_000);
+    // With no delay given, half a minute: the window of the limit is a minute.
+    expect(slowDownOf({ status: 429, code: "RATE_LIMITED" })).toBe(30_000);
+    expect(slowDownOf({ status: 400, code: "CATCHUP_REFUSED" })).toBeNull();
+    expect(slowDownOf(new Error("offline"))).toBeNull();
+    expect(slowDownOf(null)).toBeNull();
   });
 
   it("says where a catch-up stands, and what it left out", () => {

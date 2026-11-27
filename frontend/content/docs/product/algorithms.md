@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "557893920d48a2db"
+translatedFrom: "1804ecfa30f11d75"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -1674,7 +1674,7 @@ flowchart TD
     E -->|"yes"| F["The datasets that pipeline reads, with their older copies.<br/>Or another dataset of the project, read in place of an input"]
     D --> G["The screen says how many copies will be read,<br/>of which dataset, through which pipeline.<br/>A person starts it"]
     F --> G
-    G --> H["POST /series/catchup: one batch.<br/>25 copies at most, 12 s, 400,000 rows"]
+    G --> H["POST /series/catchup: one batch.<br/>12 s or 400,000 rows at most"]
     H --> I["The next copies, from the oldest<br/>to the newest, after the last one read"]
     I --> J{"Which series?"}
     J -->|"dataset series"| K["The rows of the copy become points,<br/>as at a write of the dataset"]
@@ -1729,7 +1729,7 @@ flowchart TD
 - **Marked, with its two times.** Everything a catch-up writes down is marked as caught up. A caught-up point carries the time its source gave and the time its copy was taken, not the time of the catch-up: read “as known at”, it appears at the moment the platform really held the copy.
 - **A caught-up reading is held against the past.** It is compared with the last reading written down at the time of its copy or before, not with the most recent one. A copy re-read unchanged writes nothing. A unit that has no value and never had one starts no series; a unit that loses its value has that absence written down.
 - **Nothing is placed by guess.** A row that cannot be made into an object (a value that cannot be read, a required property missing, no identity), an object that names no place the twin holds, a copy the pipeline fails on or that is longer than a run reads (150,000 rows): left out, counted, and said on the series.
-- **In bounded batches, and resumed.** One call reads 25 copies at most, and stops earlier past 12 seconds or 400,000 rows; it always reads at least one. The screen says before it starts how many copies will be read, asks for another batch as long as some are left, and stops when asked. Where the catch-up stands stays written: it resumes from there. A finished catch-up, started again, reads nothing.
+- **In bounded batches, and resumed.** One call takes no new copy past 12 seconds or 400,000 rows (500 copies at most), and always reads at least one. The screen says before it starts how many copies will be read, asks for another batch as long as some are left, and stops when asked. It leaves two seconds between two batches, and when the API answers that it is asked too much in a minute, it waits the delay the API gives and then asks for the same batch again: the other pages of the Studio share the same limit. Where the catch-up stands stays written: it resumes from there. A finished catch-up, started again, reads nothing.
 - **Refused with the reason.** No older copy; a measure that has no reading yet; a measure that counts every object of a unit, or that reads types written by several pipelines; a draft pipeline, a pipeline that calls the extraction service, a pipeline a run would refuse.
 - **Forgetting what was caught up.** Removes what the catch-ups of a series wrote down, and those catch-ups with it. Only what is marked: a reading taken live and a point written by a sync are never touched, and neither are the copies. So the catch-up can be done again. The start of a catch-up and its forgetting are kept in the audit log.
 - **What is missing.** A caught-up reading is not what the twin showed at the time: it is what today's measure would have read in the copy. A measure that reads types written by several pipelines is not caught up. The first point written down live can say again the last value caught up: the read is not changed by it. A file that carries its own history has all its points written down the day of its oldest copy read: read “as known at” a day before, they are not there. A source that stops publishing leaves its last value in force: for a dataset series, the read does not tell “unchanged” from “not re-read”. The grid moves by fixed steps from its start: a day is 24 hours on it, even on the day the clocks change. A stream is not kept as a series.

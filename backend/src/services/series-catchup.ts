@@ -47,8 +47,13 @@ import { listTwinMetrics, type MetricDef, type MetricSelector } from "./twin-met
 /** The prefix of a twin measure's key. Kept here too, so this file does not import `series.ts`. */
 const TWIN_PREFIX = "twin:";
 
-/** The most copies one call reads. */
-export const BATCH_COPIES = 25;
+/**
+ * The most copies one call reads. Time and rows are what bound a call; this is
+ * only a ceiling. It was 25 at first: an hourly file of 120 rows replays in a
+ * few hundredths of a second, so a screen asked for a batch every second or
+ * so, and the API's own rate limit stopped it, and the rest of the Studio with it.
+ */
+export const BATCH_COPIES = 500;
 /** A call stops taking new copies once it has run this long. It always reads at least one. */
 export const BATCH_MS = 12_000;
 /** A call stops taking new copies once it has read this many rows. It always reads at least one. */

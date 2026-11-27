@@ -45,6 +45,7 @@ import { useStudio } from "../StudioShell";
 import {
   ENTITY_COLUMNS_MAX,
   blankSeriesForm,
+  catchupPacing,
   catchupText,
   columnsOf,
   copiesText,
@@ -58,6 +59,7 @@ import {
   lookWindow,
   planOf,
   progressText,
+  slowDownOf,
   sourcesOf,
   sparkPaths,
   standsFor,
@@ -92,7 +94,13 @@ export default function KeptSeriesView() {
     let stale = false;
     fetchSeries(env).then(
       (list) => !stale && setRead({ state: "read", list }),
-      (e: unknown) => !stale && setRead({ state: "failed", why: why(e, "Check the connection and read again.") }),
+      (e: unknown) => {
+        if (stale) return;
+        const said = why(e, "Check the connection and read again.");
+        // A list already on screen stays there: a read that fails takes nothing away from what was read.
+        setRead((cur) => (cur.state === "read" ? cur : { state: "failed", why: said }));
+        setProblem(`The list could not be read again: ${said}`);
+      },
     );
     return () => {
       stale = true;
@@ -467,6 +475,8 @@ function CatchupPanel({ env, line, onChanged }: { env: string; line: SeriesLine;
   const [offer, setOffer] = useState<CatchupOffer | null>(null);
   const [pick, setPick] = useState<CatchupPick | null>(null);
   const [running, setRunning] = useState<CatchupState | null>(null);
+  /** Seconds the catch-up waits because the API said it is asked too fast; null when it is not waiting. */
+  const [waiting, setWaiting] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [told, setTold] = useState<string | null>(null);
@@ -498,12 +508,29 @@ function CatchupPanel({ env, line, onChanged }: { env: string; line: SeriesLine;
     setBusy(true);
     setProblem(null);
     setTold(null);
+    const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
     try {
       for (;;) {
-        const out = await runCatchup(env, request);
+        let out;
+        try {
+          out = await runCatchup(env, request);
+        } catch (e) {
+          // Asked too fast: the API says for how long. Wait, then ask for the same batch again.
+          const wait = slowDownOf(e);
+          if (wait === null) throw e;
+          if (gone.current || stop.current) break;
+          setWaiting(Math.ceil(wait / 1000));
+          await pause(wait);
+          setWaiting(null);
+          if (gone.current || stop.current) break;
+          continue;
+        }
         if (gone.current) return;
         setRunning(out.state);
         if (out.state.done || stop.current) break;
+        // The rest of the Studio shares the key's requests: the next batch is not asked for at once.
+        await pause(catchupPacing.betweenMs);
+        if (gone.current || stop.current) break;
       }
     } catch (e) {
       if (!gone.current) setProblem(why(e, "The catch-up stopped before its end. What it read is kept: resume it."));
@@ -511,6 +538,7 @@ function CatchupPanel({ env, line, onChanged }: { env: string; line: SeriesLine;
       if (!gone.current) {
         setBusy(false);
         setRunning(null);
+        setWaiting(null);
         await readOffer();
         onChanged();
       }
@@ -647,7 +675,11 @@ function CatchupPanel({ env, line, onChanged }: { env: string; line: SeriesLine;
               <>
                 <p role="status" className="flex items-center gap-1.5 text-xs text-ink-body">
                   <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-                  {running ? progressText(running) : "Reading the first copies…"}
+                  {waiting !== null
+                    ? `The API limits how fast it is asked: waiting ${waiting} s before the next copies.${running ? ` ${progressText(running)}.` : ""}`
+                    : running
+                      ? progressText(running)
+                      : "Reading the first copies…"}
                 </p>
                 <button
                   type="button"

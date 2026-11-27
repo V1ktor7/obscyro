@@ -396,7 +396,8 @@ test("a batch is bounded, and the next one resumes where it stopped", async () =
   const third = await runCatchup(w.db, PROJECT, null, req, slow);
   assert.deepEqual([third.state.read, third.state.done, third.state.written], [3, true, 3]);
   assert.deepEqual(points.map((p) => p[5]), ["copy-1", "copy-2", "copy-3"], "no copy is read twice, none is skipped");
-  assert.ok(BATCH_COPIES >= 1);
+  // Time and rows bound a batch; the count is a ceiling high enough that small copies do not mean a call a second.
+  assert.ok(BATCH_COPIES >= 100);
 });
 
 test("a catch-up is refused with its reason when there is nothing older, or the dataset is not the series' own", async () => {
