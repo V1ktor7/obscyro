@@ -241,7 +241,9 @@ const seriesRoutes: FastifyPluginAsync = async (fastify) => {
           "the step ends). A step with nothing in force is null: a gap, never a zero, and nothing is known before an " +
           "entity's first point (`firstAt`). With `asOf`, only what had been written down by that instant is used, and " +
           "the stretch cannot end after it: that is how a past forecast is replayed with what was known then. A value " +
-          "its source corrected is read as it was known at `asOf`. One read returns 3,000 steps and 300 entities at " +
+          "its source corrected is read as it was known at `asOf`. With `holdHours`, a value stops holding that many " +
+          "hours after the instant it is about when no newer point came, and the steps after it are gaps: a source " +
+          "that was not read for a month did not say the same thing for a month. One read returns 3,000 steps and 300 entities at " +
           "most, and a longer one is refused with what to narrow. Reads only.",
         tags: ["series"],
         params: z.object({ env: z.string().min(1) }),

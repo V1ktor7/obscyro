@@ -53,6 +53,7 @@ import {
   draftOfSeries,
   firstPick,
   gapsText,
+  holdHoursOf,
   holdsText,
   lastKnown,
   leftOutText,
@@ -266,14 +267,14 @@ function LookPanel({ env, line }: { env: string; line: SeriesLine }) {
     let stale = false;
     setAnswer(null);
     setProblem(null);
-    readSeriesGrid(env, { key: line.key, ...lookWindow(step, new Date()), step, agg: "mean" }).then(
+    readSeriesGrid(env, { key: line.key, ...lookWindow(step, new Date()), step, agg: "mean", holdHours: holdHoursOf(line.step) }).then(
       (a) => !stale && setAnswer(a),
       (e: unknown) => !stale && setProblem(why(e, "The series could not be read. Check the connection and try again.")),
     );
     return () => {
       stale = true;
     };
-  }, [env, line.key, step]);
+  }, [env, line.key, line.step, step]);
 
   return (
     <div aria-label={`Look at ${line.label}`} role="region" className="mt-2 flex flex-col gap-2 rounded border border-line-soft bg-canvas p-2">

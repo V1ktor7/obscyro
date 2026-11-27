@@ -151,6 +151,24 @@ test("over a wider step: the mean is weighted by time, the max is the highest in
   assert.deepEqual(onGrid(half, day, 2, STEP_MS.day, "mean"), [80, 80]);
 });
 
+test("with a bound on how long a value holds, a source nobody read for a while leaves gaps, not a flat line", () => {
+  // One reading at 10:00, then nothing for a day. Read by the hour, a value holding three hours at most.
+  const pts = [point("2026-10-06T10:00:00Z", 120), point("2026-10-07T10:00:00Z", 90)];
+  const from = at("2026-10-06T10:00:00Z");
+  assert.deepEqual(onGrid(pts, from, 6, HOUR, "mean", 3 * HOUR), [120, 120, 120, null, null, null], "three hours of the value, then nothing is known");
+  assert.deepEqual(onGrid(pts, from, 6, HOUR, "last", 3 * HOUR), [120, 120, 120, null, null, null]);
+  assert.deepEqual(onGrid(pts, from, 6, HOUR, "max", 3 * HOUR), [120, 120, 120, null, null, null]);
+  // Without the bound, the rule of the twin: a value holds until the next point.
+  assert.deepEqual(onGrid(pts, from, 6, HOUR, "mean"), [120, 120, 120, 120, 120, 120]);
+  // A step the value covers in part is averaged over that part, and has no "last": it had gone stale by the end.
+  assert.deepEqual(onGrid(pts, from, 2, 2 * HOUR, "mean", 3 * HOUR), [120, 120]);
+  assert.deepEqual(onGrid(pts, from, 2, 2 * HOUR, "last", 3 * HOUR), [120, null]);
+  // The next point starts a new stretch.
+  assert.deepEqual(onGrid(pts, at("2026-10-07T08:00:00Z"), 4, HOUR, "mean", 3 * HOUR), [null, null, 90, 90]);
+  // The point in force before the grid began holds from its own instant, not from the start of the grid.
+  assert.deepEqual(onGrid(pts, at("2026-10-06T12:00:00Z"), 3, HOUR, "mean", 3 * HOUR), [120, null, null]);
+});
+
 test("a weekly value read by the day holds for its week", () => {
   const points = [point("2026-11-16T00:00:00Z", 3.2), point("2026-11-23T00:00:00Z", 4.1)];
   assert.deepEqual(onGrid(points, at("2026-11-21T00:00:00Z"), 4, STEP_MS.day, "last"), [3.2, 3.2, 4.1, 4.1]);

@@ -116,6 +116,21 @@ export function lookWindow(step: GridStep, now: Date): { from: string; to: strin
 }
 
 /**
+ * How long a value is let hold when a series is looked at, in hours; null for
+ * until the next point.
+ *
+ * A dataset series says how often its source publishes: a value holds for two
+ * of those steps, so one publication missed does not break the line and a
+ * source that went quiet does not draw a flat one. A measure of the twin is
+ * written down when it changes and says nothing of how often its source
+ * publishes: nothing bounds it here, and a read that needs a bound gives one.
+ */
+export function holdHoursOf(step: SeriesLine["step"]): number | null {
+  if (step === "change") return null;
+  return 2 * (step === "hour" ? 1 : step === "day" ? 24 : 168);
+}
+
+/**
  * A line of values as SVG paths in a box of `width` by `height`.
  *
  * A gap breaks the line: two stretches with nothing between them are two
@@ -287,7 +302,8 @@ export function catchupText(c: CatchupState): string {
   const through = c.pipelineName ? `, through “${c.pipelineName}”${c.inPlaceOf ? ` in place of “${c.inPlaceOf.datasetName}”` : ""}` : "";
   const from = `“${c.datasetName}”${through}`;
   if (!c.done) return `Catch-up stopped at ${c.read.toLocaleString("en-CA")} of ${count(c.copies, "copy", "copies")} of ${from}. Resume it to read the rest.`;
-  const since = c.firstCopyAt ? `, back to ${dayText(c.firstCopyAt)}` : "";
+  // When the copies were taken, not how far back the points go: a copy can be left out.
+  const since = c.firstCopyAt ? `, the oldest taken on ${dayText(c.firstCopyAt)}` : "";
   return `Caught up from ${count(c.copies, "copy", "copies")} of ${from}${since}: ${count(c.written, "point")} written down.`;
 }
 

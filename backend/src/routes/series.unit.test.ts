@@ -77,6 +77,10 @@ test("a read is validated before anything is read", async () => {
   // An instant says its zone: "27 November" does not say where.
   assert.equal((await read({ ...READ, from: "2026-11-27" })).statusCode, 400);
   assert.equal((await read({ ...READ, asOf: "yesterday" })).statusCode, 400);
+  // How long a value holds is a number of hours, more than none.
+  assert.equal((await read({ ...READ, holdHours: 0 })).statusCode, 400);
+  assert.equal((await read({ ...READ, holdHours: "a day" })).statusCode, 400);
+  assert.equal((await read({ ...READ, holdHours: 3 })).statusCode, 401);
   assert.equal((await read({ ...READ, entities: Array.from({ length: 301 }, (_, i) => `e${i}`) })).statusCode, 400);
   assert.equal((await read(READ)).statusCode, 401);
   assert.equal((await read({ ...READ, asOf: "2026-11-28T00:00:00Z", agg: "last", entities: ["x"] })).statusCode, 401);

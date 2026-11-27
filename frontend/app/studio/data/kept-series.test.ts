@@ -10,6 +10,7 @@ import {
   draftOfSeries,
   firstPick,
   gapsText,
+  holdHoursOf,
   holdsText,
   lastKnown,
   leftOutText,
@@ -142,6 +143,14 @@ describe("looking at a series", () => {
     expect(sparkPaths([], 100, 10)).toEqual([]);
   });
 
+  it("lets a value of a dataset series hold for two of its source's steps, and bounds nothing for a twin measure", () => {
+    expect(holdHoursOf("hour")).toBe(2);
+    expect(holdHoursOf("day")).toBe(48);
+    expect(holdHoursOf("week")).toBe(336);
+    // Written down when it changes: how often its source publishes is not known here.
+    expect(holdHoursOf("change")).toBeNull();
+  });
+
   it("finds the last value that was read, and how far back it sits", () => {
     expect(lastKnown([1, 2, 3])).toEqual({ value: 3, stepsAgo: 0 });
     expect(lastKnown([1, 2, null, null])).toEqual({ value: 2, stepsAgo: 2 });
@@ -266,13 +275,13 @@ describe("catching up from kept copies", () => {
 
   it("says where a catch-up stands, and what it left out", () => {
     expect(catchupText(state())).toBe(
-      "Caught up from 1,523 copies of “Emergency file, Montréal”, through “Urgences → Relevé d'urgence” in place of “Emergency file, full”, back to 25 Aug 2026: 41,210 points written down.",
+      "Caught up from 1,523 copies of “Emergency file, Montréal”, through “Urgences → Relevé d'urgence” in place of “Emergency file, full”, the oldest taken on 25 Aug 2026: 41,210 points written down.",
     );
     expect(catchupText(state({ done: false, read: 312 }))).toBe(
       "Catch-up stopped at 312 of 1,523 copies of “Emergency file, Montréal”, through “Urgences → Relevé d'urgence” in place of “Emergency file, full”. Resume it to read the rest.",
     );
     expect(catchupText(state({ pipelineId: null, pipelineName: null, inPlaceOf: null, datasetName: "Virus detections", copies: 54, written: 1 }))).toBe(
-      "Caught up from 54 copies of “Virus detections”, back to 25 Aug 2026: 1 point written down.",
+      "Caught up from 54 copies of “Virus detections”, the oldest taken on 25 Aug 2026: 1 point written down.",
     );
     expect(progressText(state({ read: 312, written: 4210 }))).toBe("312 of 1,523 copies read · 4,210 points written down");
 

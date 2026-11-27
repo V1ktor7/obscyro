@@ -162,6 +162,8 @@ export interface GridAnswer {
   from: string;
   to: string;
   asOf: string | null;
+  /** How long a value was let hold with no newer point, in hours; null for until the next point. */
+  holdHours?: number | null;
   /** The start of each step. */
   grid: string[];
   series: GridSeries[];
@@ -181,7 +183,7 @@ export async function removeSeries(env: string, key: string): Promise<void> {
 }
 export async function readSeriesGrid(
   env: string,
-  body: { key: string; from: string; to: string; step: GridStep; agg?: GridAgg; entities?: string[]; asOf?: string | null },
+  body: { key: string; from: string; to: string; step: GridStep; agg?: GridAgg; entities?: string[]; asOf?: string | null; holdHours?: number | null },
 ): Promise<GridAnswer> {
   return apiFetch(`/v1/ontology/${enc(env)}/series/read`, { method: "POST", body });
 }

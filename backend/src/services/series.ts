@@ -96,8 +96,13 @@ const round = (v: number): number => Math.round(v * 10_000) / 10_000;
  * `points` are those known (see `knownAsOf`), oldest first, and may start
  * before `from`: the last one before it is what was in force when the grid
  * begins.
+ *
+ * With `holdMs`, a value stops holding that long after the instant it is
+ * about, when no newer point came: a source nobody read for a month did not
+ * say the same thing for a month. Without it, a value holds until the next
+ * point, however far that is.
  */
-export function onGrid(points: readonly KeptPoint[], from: Date, buckets: number, stepMs: number, agg: GridAgg): (number | null)[] {
+export function onGrid(points: readonly KeptPoint[], from: Date, buckets: number, stepMs: number, agg: GridAgg, holdMs: number | null = null): (number | null)[] {
   const out: (number | null)[] = [];
   let next = 0;
   let inForce: KeptPoint | null = null;
@@ -112,9 +117,11 @@ export function onGrid(points: readonly KeptPoint[], from: Date, buckets: number
     let known = 0;
     let max: number | null = null;
     const close = (until: number) => {
-      if (cur && cur.value !== null) {
-        weighted += cur.value * (until - t);
-        known += until - t;
+      // Where the value in force stops holding: at the next point, or once it has gone stale.
+      const holds = cur && holdMs !== null ? Math.min(until, cur.at.getTime() + holdMs) : until;
+      if (cur && cur.value !== null && holds > t) {
+        weighted += cur.value * (holds - t);
+        known += holds - t;
         max = max === null ? cur.value : Math.max(max, cur.value);
       }
       t = until;
@@ -126,7 +133,8 @@ export function onGrid(points: readonly KeptPoint[], from: Date, buckets: number
     close(end);
     inForce = cur;
 
-    const last = cur && cur.value !== null ? cur.value : null;
+    const stale = cur !== null && holdMs !== null && cur.at.getTime() + holdMs < end;
+    const last = cur && cur.value !== null && !stale ? cur.value : null;
     const v = agg === "last" ? last : agg === "max" ? max : known > 0 ? weighted / known : null;
     out.push(v === null ? null : round(v));
   }
@@ -376,6 +384,16 @@ export const gridRequest = z.object({
   agg: z.enum(GRID_AGGS).default("mean"),
   /** Read as known at this instant; null for everything that was kept. */
   asOf: z.string().datetime({ offset: true }).nullable().default(null),
+  /**
+   * How long a value holds when no newer point comes, in hours; null for until the next point.
+   * Past it, the steps are gaps: a source that was not read for a while did not repeat itself.
+   */
+  holdHours: z
+    .number()
+    .positive()
+    .max(24 * 400)
+    .nullable()
+    .default(null),
 });
 export type GridRequest = z.infer<typeof gridRequest>;
 
@@ -404,11 +422,17 @@ export interface GridAnswer {
   from: string;
   to: string;
   asOf: string | null;
+  /** How long a value was let hold with no newer point, in hours; null for until the next point. */
+  holdHours: number | null;
   /** The start of each step. */
   grid: string[];
   series: GridSeries[];
   howToRead: string;
 }
+
+/** What is said in place of the first sentence when the read bounds how long a value holds. */
+const howToReadHeld = (hours: number): string =>
+  HOW_TO_READ.replace("Each value holds until the next point.", `Each value holds until the next point, and for ${hours} h at most: past that with nothing newer, the steps are gaps.`);
 
 export const HOW_TO_READ =
   "Each value holds until the next point. A step with no value is null: a gap, not a zero. Nothing is known before an entity's first point. Read as of an instant, only what had been written down by then is used.";
@@ -450,6 +474,7 @@ function linesOf(
   firsts: ReadonlyMap<string, Date>,
   g: ReturnType<typeof gridOf>,
   agg: GridAgg,
+  holdMs: number | null = null,
 ): GridSeries[] {
   const byEntity = new Map<string, (KeptPoint & { replayed: boolean })[]>();
   const add = (r: PointRow) => {
@@ -462,7 +487,7 @@ function linesOf(
   return entities.map((entity) => {
     const known = knownAsOf(byEntity.get(entity) ?? [], g.asOf);
     const inside = known.filter((p) => p.at.getTime() >= g.from.getTime());
-    const values = onGrid(known, g.from, g.buckets, g.stepMs, agg);
+    const values = onGrid(known, g.from, g.buckets, g.stepMs, agg, holdMs);
     return {
       entity,
       label: labelOf(entity),
@@ -495,10 +520,12 @@ export async function readGrid(db: DbClient, project: Project, req: GridRequest)
     from: g.from.toISOString(),
     to: g.to.toISOString(),
     asOf: iso(g.asOf),
+    holdHours: req.holdHours ?? null,
     grid,
     series,
-    howToRead: HOW_TO_READ,
+    howToRead: req.holdHours ? howToReadHeld(req.holdHours) : HOW_TO_READ,
   });
+  const holdMs = req.holdHours ? req.holdHours * 3_600_000 : null;
 
   if (req.key.startsWith(TWIN_PREFIX)) {
     const metric = req.key.slice(TWIN_PREFIX.length);
@@ -534,7 +561,7 @@ export async function readGrid(db: DbClient, project: Project, req: GridRequest)
       def?.label ?? metric,
       "twin",
       def?.unit ?? null,
-      linesOf(entities, (e) => nameOf.get(e) ?? "A unit that is no longer in the twin", rows.rows, openings.rows, new Map(firsts.rows.map((r) => [r.entity, r.first_at])), g, req.agg),
+      linesOf(entities, (e) => nameOf.get(e) ?? "A unit that is no longer in the twin", rows.rows, openings.rows, new Map(firsts.rows.map((r) => [r.entity, r.first_at])), g, req.agg, holdMs),
     );
   }
 
@@ -562,6 +589,6 @@ export async function readGrid(db: DbClient, project: Project, req: GridRequest)
     def.label,
     "dataset",
     def.unit,
-    linesOf(entities, (e) => (e === WHOLE ? def.label : e), rows.rows, openings.rows, new Map(firsts.rows.map((r) => [r.entity, r.first_at])), g, req.agg),
+    linesOf(entities, (e) => (e === WHOLE ? def.label : e), rows.rows, openings.rows, new Map(firsts.rows.map((r) => [r.entity, r.first_at])), g, req.agg, holdMs),
   );
 }

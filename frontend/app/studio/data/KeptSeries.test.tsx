@@ -295,7 +295,7 @@ describe("looking at a series", () => {
     // A twin measure is read by the hour first; the read asks for a mean over whole hours.
     const sent = api.readSeriesGrid.mock.calls[0]!;
     expect(sent[0]).toBe("mtl");
-    expect(sent[1]).toMatchObject({ key: "twin:occupancy", step: "hour", agg: "mean" });
+    expect(sent[1]).toMatchObject({ key: "twin:occupancy", step: "hour", agg: "mean", holdHours: null });
     expect(new Date(sent[1].to).getTime() - new Date(sent[1].from).getTime()).toBe(48 * 3_600_000);
   });
 
@@ -304,7 +304,8 @@ describe("looking at a series", () => {
     api.readSeriesGrid.mockResolvedValue(answer({ key: VIRUS.key, step: "day" }));
     fireEvent.click(within(card("Respiratory virus detections")).getByRole("button", { name: "Look" }));
     await waitFor(() => expect(api.readSeriesGrid).toHaveBeenCalledTimes(1));
-    expect(api.readSeriesGrid.mock.calls[0]![1]).toMatchObject({ key: "respiratory_virus_detections", step: "day" });
+    // A weekly source: a value holds two weeks at most, so a week missed does not break the line and a silent source does not draw a flat one.
+    expect(api.readSeriesGrid.mock.calls[0]![1]).toMatchObject({ key: "respiratory_virus_detections", step: "day", holdHours: 336 });
 
     fireEvent.click(await screen.findByRole("button", { name: "Last 48 hours, by the hour" }));
     await waitFor(() => expect(api.readSeriesGrid).toHaveBeenCalledTimes(2));
@@ -401,7 +402,7 @@ describe("catching a series up from kept copies", () => {
     await waitFor(() => expect(api.runCatchup).toHaveBeenCalledTimes(3));
     expect(api.runCatchup).toHaveBeenCalledWith("mtl", { key: "twin:occupancy", datasetId: "d-old", pipelineId: "p-urg", inPlaceOf: "d-full" });
     // What was caught up is then said on the line itself, and in the panel.
-    const said = "Caught up from 1,523 copies of “Emergency file, Montréal”, through “Urgences” in place of “Emergency file, full”, back to 25 Aug 2026: 41,210 points written down.";
+    const said = "Caught up from 1,523 copies of “Emergency file, Montréal”, through “Urgences” in place of “Emergency file, full”, the oldest taken on 25 Aug 2026: 41,210 points written down.";
     await waitFor(() => expect(within(card("Stretcher occupancy")).getAllByText(said)).toHaveLength(2));
     expect(within(card("Stretcher occupancy")).getByText("41,210 points caught up from kept copies.")).toBeTruthy();
     expect((p.getByRole("button", { name: "Already caught up" }) as HTMLButtonElement).disabled).toBe(true);

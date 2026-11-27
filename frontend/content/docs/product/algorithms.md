@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "1804ecfa30f11d75"
+translatedFrom: "a189ded8a823f534"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -1654,7 +1654,7 @@ flowchart TD
     D --> F["Keep only what had been written down at “as known at”.<br/>For one instant, the last one written down"]
     E --> F
     F --> G["Plus the last point before the stretch:<br/>it is the one in force when the stretch opens"]
-    G --> H["Each step covers from its start to its start plus one step.<br/>A value holds until the next point"]
+    G --> H["Each step covers from its start to its start plus one step.<br/>A value holds until the next point,<br/>or for holdHours at most when the read asks for it"]
     H --> I{"Was anything in force<br/>during that step?"}
     I -->|"no"| J["null: a gap, never a zero"]
     I -->|"yes"| K["mean: average weighted by the time known<br/>max: the highest value in force<br/>last: the one in force when the step ends"]
@@ -1714,6 +1714,7 @@ flowchart TD
 - **A write never fails because of a series.** What a series could not read (unreadable times, ambiguous rows, a column that went away) is written on its line, and the screen shows it. The dataset already has its copy.
 - **On declaration, the latest copy is read.** Its points are dated at when that copy was taken: that is since when the platform has held them. Older copies are read only when asked for: that is a catch-up. A dataset never written is declared all the same, and waits for its first write.
 - **A value holds until the next point.** Over a step, `mean` is the average of what was in force, weighted by how long; `max` is the highest value in force at some moment of the step; `last` is the one in force when the step ends. A mean counts only the time known: a day half known is averaged over that half.
+- **A value does not hold for ever.** A source nobody read for a month did not repeat its last figure for a month. With `holdHours`, a value stops holding that many hours after the instant it is about when no newer point came: the steps after it are gaps. Without that setting, it holds until the next point, however far that is. “Look” sets it at two steps of the source for a dataset series, which declares its step; a measure of the twin does not say how often its source publishes, and it is the read that gives the bound.
 - **A gap stays a gap.** A step during which nothing was in force is `null`, never zero. Nothing is known before an entity's first point, and the answer gives the date of that first point.
 - **“As known at”.** With `asOf`, the read uses only what had been written down at that instant, and the stretch cannot end after it: nothing was known of what came next. A corrected value is read as it was known that day.
 - **A bounded read, refused rather than cut.** 3,000 steps and 300 entities at most per read. Beyond that the read is refused with what to narrow: a series cut without a word would pass for whole.

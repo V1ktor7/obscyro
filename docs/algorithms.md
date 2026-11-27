@@ -1648,7 +1648,7 @@ flowchart TD
     D --> F["Ne garder que ce qui était noté à « tel que connu à ».<br/>Pour un même instant, le dernier noté"]
     E --> F
     F --> G["Plus le dernier point d'avant la période :<br/>c'est lui qui est en vigueur quand elle s'ouvre"]
-    G --> H["Chaque pas couvre de son début à son début plus un pas.<br/>Une valeur tient jusqu'au point suivant"]
+    G --> H["Chaque pas couvre de son début à son début plus un pas.<br/>Une valeur tient jusqu'au point suivant,<br/>ou pendant holdHours au plus quand la lecture le demande"]
     H --> I{"Quelque chose était-il en vigueur<br/>pendant ce pas ?"}
     I -->|"non"| J["null : un trou, jamais un zéro"]
     I -->|"oui"| K["mean : moyenne pondérée par la durée connue<br/>max : la plus haute valeur en vigueur<br/>last : celle en vigueur à la fin du pas"]
@@ -1708,6 +1708,7 @@ flowchart TD
 - **Une écriture n'échoue jamais à cause d'une série.** Ce qu'une série n'a pas pu lire (heures illisibles, lignes ambiguës, colonne disparue) est écrit sur sa ligne, et l'écran l'affiche. Le jeu, lui, a déjà sa copie.
 - **À la déclaration, la dernière copie est lue.** Ses points sont datés de l'heure où cette copie a été prise : c'est depuis ce moment-là que la plateforme les détient. Les copies plus anciennes ne sont lues que si on le demande : c'est un rattrapage. Un jeu jamais écrit est déclaré quand même, et attend sa première écriture.
 - **Une valeur tient jusqu'au point suivant.** Sur un pas, `mean` est la moyenne de ce qui était en vigueur, pondérée par la durée ; `max` est la plus haute valeur en vigueur à un moment du pas ; `last` est celle en vigueur quand le pas finit. Une moyenne ne compte que le temps connu : un jour connu à moitié est moyenné sur cette moitié.
+- **Une valeur ne tient pas pour toujours.** Une source qu'on a cessé de lire pendant un mois n'a pas répété son dernier chiffre pendant un mois. Avec `holdHours`, une valeur cesse de tenir ce nombre d'heures après l'instant qu'elle décrit quand aucun point plus récent n'est venu : les pas suivants sont des trous. Sans ce réglage, elle tient jusqu'au point suivant, si loin soit-il. « Look » le règle à deux pas de la source pour une série de jeu, qui déclare son pas ; une mesure du jumeau ne dit pas à quelle cadence sa source publie, et c'est la lecture qui donne la borne.
 - **Un trou reste un trou.** Un pas pendant lequel rien n'était en vigueur vaut `null`, jamais zéro. Rien n'est connu avant le premier point d'une entité, et la réponse donne la date de ce premier point.
 - **« Tel que connu à ».** Avec `asOf`, la lecture n'utilise que ce qui avait été noté à cet instant, et la période ne peut pas finir après lui : rien n'était connu de la suite. Une valeur corrigée est lue telle qu'elle était connue ce jour-là.
 - **Une lecture bornée, et refusée plutôt que coupée.** 3 000 pas et 300 entités au plus par lecture. Au-delà, la lecture est refusée avec ce qu'il faut resserrer : une série coupée sans un mot passerait pour entière.
