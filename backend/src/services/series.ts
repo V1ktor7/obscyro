@@ -186,7 +186,8 @@ export function seriesKeyFrom(label: string, taken: ReadonlySet<string>): string
       .replace(/[^a-z0-9]+/g, "_")
       .replace(/^[_0-9]+|_+$/g, "")
       .slice(0, 40) || "series";
-  const start = base.length < 3 ? `${base}_series` : base;
+  // `read` and `catchup` are routes beside the series: a series cannot answer to their name.
+  const start = base.length < 3 || base === "read" || base === "catchup" ? `${base}_series` : base;
   if (!taken.has(start)) return start;
   for (let n = 2; ; n++) if (!taken.has(`${start}_${n}`)) return `${start}_${n}`;
 }
@@ -209,7 +210,8 @@ async function latestCopy(db: DbClient, datasetId: string): Promise<{ versionId:
  * Declare a series on a dataset, and read the dataset's latest copy into it.
  *
  * The points of that copy are dated at when the copy was taken: that is when
- * the platform first held them. Older copies are a catch-up, asked for apart.
+ * the platform first held them. Older copies are a catch-up, asked for apart
+ * (`series-catchup.ts`).
  */
 export async function declareSeries(db: DbClient, projectId: string, userId: string, draft: SeriesDraft): Promise<{ series: SeriesDef; captured: CaptureResult | null }> {
   const dataset = await getDataset(db, draft.datasetId);
@@ -231,6 +233,8 @@ export async function declareSeries(db: DbClient, projectId: string, userId: str
 export async function removeSeries(db: DbClient, projectId: string, key: string): Promise<void> {
   const { rowCount } = await db.query(`DELETE FROM app.kept_series WHERE project_id = $1 AND key = $2`, [projectId, key]);
   if (!rowCount) throw NotFound("SERIES_NOT_FOUND", "That series is not declared in this project. A measure of the twin is not removed here: it is a series as long as the twin keeps it.");
+  // Its points went with it; where its catch-ups stood goes too.
+  await db.query(`DELETE FROM app.series_catchup WHERE project_id = $1 AND series_key = $2`, [projectId, key]);
 }
 
 // --- what is kept -------------------------------------------------------------------

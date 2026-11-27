@@ -12,17 +12,58 @@
  *
  * "Look" reads a series the way a model would be handed it: a regular grid
  * where each value holds until the next and a gap stays a gap.
+ *
+ * "Catch up" reads the copies of a dataset that were kept before the series
+ * started: it says how many there are before reading any, runs a few at a
+ * time, and can be stopped and resumed. What it writes is marked as caught up.
  */
 
-import { Eye, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Eye, History, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 
-import { declareSeries, fetchSeries, readSeriesGrid, removeSeries, type GridAnswer, type GridStep, type SeriesLine, type SeriesList, type SeriesOffer } from "../series-api";
+import {
+  declareSeries,
+  fetchCatchupOffer,
+  fetchSeries,
+  forgetCatchup,
+  readSeriesGrid,
+  removeSeries,
+  runCatchup,
+  type CatchupOffer,
+  type CatchupRequest,
+  type CatchupState,
+  type GridAnswer,
+  type GridStep,
+  type SeriesLine,
+  type SeriesList,
+  type SeriesOffer,
+} from "../series-api";
 import { useStudio } from "../StudioShell";
-import { ENTITY_COLUMNS_MAX, blankSeriesForm, columnsOf, coversText, draftOfSeries, gapsText, holdsText, lastKnown, lookWindow, sparkPaths, stepText, type SeriesForm } from "./kept-series";
+import {
+  ENTITY_COLUMNS_MAX,
+  blankSeriesForm,
+  catchupText,
+  columnsOf,
+  copiesText,
+  coversText,
+  draftOfSeries,
+  firstPick,
+  gapsText,
+  holdsText,
+  lastKnown,
+  leftOutText,
+  lookWindow,
+  planOf,
+  progressText,
+  sourcesOf,
+  sparkPaths,
+  stepText,
+  type CatchupPick,
+  type SeriesForm,
+} from "./kept-series";
 
 const LABEL = "text-[10px] font-medium uppercase tracking-wide text-ink-faint";
 const FIELD = "rounded border border-line bg-surface px-2 py-1 text-xs text-ink focus:border-brand focus:outline-none disabled:opacity-60";
@@ -39,6 +80,7 @@ export default function KeptSeriesView() {
   const [read, setRead] = useState<Read>({ state: "loading" });
   const [adding, setAdding] = useState(false);
   const [looking, setLooking] = useState<string | null>(null);
+  const [catching, setCatching] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [told, setTold] = useState<string | null>(null);
@@ -78,6 +120,7 @@ export default function KeptSeriesView() {
     try {
       await removeSeries(env, line.key);
       if (looking === line.key) setLooking(null);
+      if (catching === line.key) setCatching(null);
       load();
     } catch (e) {
       setProblem(why(e, "The series could not be removed. Check the connection and try again."));
@@ -105,6 +148,10 @@ export default function KeptSeriesView() {
                   <Eye className="h-3 w-3" aria-hidden="true" />
                   Look
                 </button>
+                <button type="button" aria-expanded={catching === line.key} onClick={() => setCatching(catching === line.key ? null : line.key)} className={BUTTON}>
+                  <History className="h-3 w-3" aria-hidden="true" />
+                  Catch up
+                </button>
                 {line.origin === "dataset" ? (
                   <button type="button" disabled={busy !== null} onClick={() => void remove(line)} className={BUTTON}>
                     {busy === line.key ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : <Trash2 className="h-3 w-3" aria-hidden="true" />}
@@ -122,12 +169,20 @@ export default function KeptSeriesView() {
             {gapsText(line).map((g) => (
               <p key={g} className="mt-0.5 text-ink-muted">{g}</p>
             ))}
+            {(list.catchups ?? [])
+              .filter((c) => c.key === line.key)
+              .map((c) => (
+                <p key={c.datasetId} className={cn("mt-0.5", c.done ? "text-ink-muted" : "text-warn-ink")}>
+                  {[catchupText(c), ...leftOutText(c)].join(" ")}
+                </p>
+              ))}
             {line.note ? (
               <p role="alert" className="mt-1.5 rounded bg-warn-soft px-2 py-1 text-[11px] text-warn-ink">
                 The last write was not read whole. {line.note}
               </p>
             ) : null}
             {looking === line.key ? <LookPanel env={env} line={line} /> : null}
+            {catching === line.key ? <CatchupPanel env={env} line={line} onChanged={load} /> : null}
           </li>
         ))}
       </ul>
@@ -382,7 +437,8 @@ function SeriesFormPanel({ env, offer, onCancel, onDeclared }: { env: string; of
       ) : null}
 
       <p className="text-[10.5px] leading-snug text-ink-faint">
-        The dataset&apos;s latest copy is read at once, and every write after it. Its older copies are not read by this.
+        The dataset&apos;s latest copy is read at once, and every write after it. Its older copies are read when you ask for them: “Catch up”, on the
+        series.
       </p>
 
       <div className="flex gap-2">
@@ -395,5 +451,232 @@ function SeriesFormPanel({ env, offer, onCancel, onDeclared }: { env: string; of
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Catching a series up from the copies kept before it started.
+ *
+ * Nothing is read until a person asks: the panel first says how many copies
+ * there are, of which dataset, and through what. A catch-up runs a few copies
+ * at a time; each answer says where it stands, so it can be stopped here and
+ * resumed later.
+ */
+function CatchupPanel({ env, line, onChanged }: { env: string; line: SeriesLine; onChanged: () => void }) {
+  const [offer, setOffer] = useState<CatchupOffer | null>(null);
+  const [pick, setPick] = useState<CatchupPick | null>(null);
+  const [running, setRunning] = useState<CatchupState | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [told, setTold] = useState<string | null>(null);
+  // Asked to stop, or gone from the screen: the batch under way ends, and no other is asked for.
+  const stop = useRef(false);
+  const gone = useRef(false);
+
+  const readOffer = useCallback(async () => {
+    try {
+      const o = await fetchCatchupOffer(env, line.key);
+      if (gone.current) return;
+      setOffer(o);
+      setPick((cur) => cur ?? firstPick(o));
+    } catch (e) {
+      if (!gone.current) setProblem(why(e, "What was kept could not be read. Check the connection and try again."));
+    }
+  }, [env, line.key]);
+
+  useEffect(() => {
+    gone.current = false;
+    void readOffer();
+    return () => {
+      gone.current = true;
+    };
+  }, [readOffer]);
+
+  async function run(request: CatchupRequest) {
+    stop.current = false;
+    setBusy(true);
+    setProblem(null);
+    setTold(null);
+    try {
+      for (;;) {
+        const out = await runCatchup(env, request);
+        if (gone.current) return;
+        setRunning(out.state);
+        if (out.state.done || stop.current) break;
+      }
+    } catch (e) {
+      if (!gone.current) setProblem(why(e, "The catch-up stopped before its end. What it read is kept: resume it."));
+    } finally {
+      if (!gone.current) {
+        setBusy(false);
+        setRunning(null);
+        await readOffer();
+        onChanged();
+      }
+    }
+  }
+
+  async function forget() {
+    if (!window.confirm(`Forget what was caught up for “${line.label}”? Only what a catch-up wrote is removed: nothing the platform read live. The copies stay, so it can be caught up again.`)) return;
+    setBusy(true);
+    setProblem(null);
+    try {
+      const out = await forgetCatchup(env, line.key);
+      setTold(`${out.removed.toLocaleString("en-CA")} point${out.removed === 1 ? "" : "s"} caught up ${out.removed === 1 ? "was" : "were"} removed.`);
+      await readOffer();
+      onChanged();
+    } catch (e) {
+      setProblem(why(e, "What was caught up could not be removed. Check the connection and try again."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const path = offer && pick ? offer.paths.find((p) => p.pipelineId === pick.pipelineId) : undefined;
+  const sources = offer && path ? sourcesOf(path, offer.standIns) : { own: [], others: [] };
+  const plan = offer && pick ? planOf(offer, pick) : null;
+  const begunHere = offer && plan ? offer.begun.find((b) => b.datasetId === plan.request.datasetId) : undefined;
+
+  return (
+    <div aria-label={`Catch up ${line.label}`} role="region" className="mt-2 flex flex-col gap-2 rounded border border-line-soft bg-canvas p-2">
+      <span className={LABEL}>Catch up from kept copies</span>
+      {!offer && !problem ? <p className="text-xs text-ink-muted">Reading what was kept…</p> : null}
+
+      {offer?.begun.map((c) => (
+        <div key={c.datasetId} className="flex flex-wrap items-start gap-2 text-[11.5px]">
+          <p className={cn("min-w-0 flex-1", c.done ? "text-ink-body" : "text-warn-ink")}>{[catchupText(c), ...leftOutText(c)].join(" ")}</p>
+          {!c.done ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void run({ key: line.key, datasetId: c.datasetId, pipelineId: c.pipelineId, inPlaceOf: c.inPlaceOf?.datasetId ?? null })}
+              className={BUTTON}
+            >
+              Resume
+            </button>
+          ) : null}
+        </div>
+      ))}
+
+      {offer && offer.paths.length === 0 && offer.why ? <p className="text-xs text-ink-muted">{offer.why}</p> : null}
+      {offer && offer.paths.length > 0 && !pick ? <p className="text-xs text-ink-muted">{offer.why ?? "No copy was taken before this series started being kept: there is nothing older to read."}</p> : null}
+
+      {offer && pick && path ? (
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap gap-3">
+            {offer.origin === "twin" && offer.paths.length > 1 ? (
+              <label className="flex flex-col gap-1">
+                <span className={LABEL}>Through the pipeline</span>
+                <select
+                  value={pick.pipelineId ?? ""}
+                  disabled={busy}
+                  onChange={(e) => setPick(firstPick({ paths: offer.paths.filter((p) => p.pipelineId === e.target.value), standIns: offer.standIns }))}
+                  className={FIELD}
+                >
+                  {offer.paths.map((p) => (
+                    <option key={p.pipelineId} value={p.pipelineId ?? ""}>
+                      {p.pipelineName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <label className="flex min-w-0 flex-col gap-1">
+              <span className={LABEL}>Copies of</span>
+              <select
+                value={`${pick.inPlaceOf ? "other" : "own"}:${pick.datasetId}`}
+                disabled={busy}
+                onChange={(e) => {
+                  const [kind, datasetId] = [e.target.value.slice(0, e.target.value.indexOf(":")), e.target.value.slice(e.target.value.indexOf(":") + 1)];
+                  setPick({ pipelineId: pick.pipelineId, datasetId, inPlaceOf: kind === "other" ? (pick.inPlaceOf ?? path.inputs[0]?.datasetId ?? null) : null });
+                }}
+                className={cn(FIELD, "max-w-full")}
+              >
+                {sources.own.map((s) => (
+                  <option key={s.datasetId} value={`own:${s.datasetId}`}>
+                    {s.datasetName} · {copiesText(s)}
+                  </option>
+                ))}
+                {sources.others.length > 0 ? (
+                  <optgroup label="Another dataset, read in place of an input">
+                    {sources.others.map((s) => (
+                      <option key={s.datasetId} value={`other:${s.datasetId}`}>
+                        {s.datasetName} · {copiesText(s)}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+              </select>
+            </label>
+            {pick.inPlaceOf ? (
+              <label className="flex min-w-0 flex-col gap-1">
+                <span className={LABEL}>In place of</span>
+                <select value={pick.inPlaceOf} disabled={busy} onChange={(e) => setPick({ ...pick, inPlaceOf: e.target.value })} className={cn(FIELD, "max-w-full")}>
+                  {path.inputs.map((i) => (
+                    <option key={i.datasetId} value={i.datasetId}>
+                      {i.datasetName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+          </div>
+
+          {plan ? (
+            <ul className="flex flex-col gap-0.5 text-[11.5px] leading-snug text-ink-body">
+              {plan.said.map((s) => (
+                <li key={s}>{s}</li>
+              ))}
+            </ul>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-2">
+            {plan && !busy ? (
+              <button
+                type="button"
+                disabled={begunHere?.done === true}
+                onClick={() => void run(plan.request)}
+                className="flex items-center gap-1 rounded bg-brand px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-deep disabled:opacity-60"
+              >
+                {begunHere?.done ? "Already caught up" : begunHere ? `Resume, ${(begunHere.copies - begunHere.read).toLocaleString("en-CA")} copies left` : `Catch up ${plan.copies.toLocaleString("en-CA")} ${plan.copies === 1 ? "copy" : "copies"}`}
+              </button>
+            ) : null}
+            {busy ? (
+              <>
+                <p role="status" className="flex items-center gap-1.5 text-xs text-ink-body">
+                  <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                  {running ? progressText(running) : "Reading the first copies…"}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    stop.current = true;
+                  }}
+                  className={BUTTON}
+                >
+                  Stop
+                </button>
+              </>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {problem ? (
+        <p role="alert" className="rounded bg-danger-soft px-2 py-1 text-xs text-danger-ink">{problem}</p>
+      ) : null}
+      {told ? (
+        <p role="status" className="rounded bg-ok-soft px-2 py-1 text-xs text-ok-ink">{told}</p>
+      ) : null}
+
+      {offer && (offer.begun.length > 0 || line.replayed > 0) ? (
+        <div>
+          <button type="button" disabled={busy} onClick={() => void forget()} className={BUTTON}>
+            <Trash2 className="h-3 w-3" aria-hidden="true" />
+            Forget what was caught up
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }

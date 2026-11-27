@@ -38,6 +38,24 @@ describe("what is said of a value's history", () => {
     expect([view.low, view.high, view.count]).toEqual([96, 143, 3]);
   });
 
+  it("says which readings were caught up from kept copies, and when the history goes back to one", () => {
+    const caught = (hoursAgo: number, value: number): TwinReading => ({ ...reading(hoursAgo, value), replayed: true });
+    const mixed = historyView(history([caught(40, 96), caught(30, 110), reading(2, 118)], { since: ago(2200), sinceCaughtUp: true }), pct);
+    expect(mixed.lines).toEqual([
+      "3 readings · lowest 96% · highest 118%",
+      "2 of these 3 readings were caught up afterwards from kept copies of the source: the twin did not show them at the time.",
+      "The oldest reading comes from a copy of the source kept 92 d ago, caught up afterwards. Nothing earlier is known.",
+      "Each value holds until the next reading. The twin is read every 5 min.",
+    ]);
+    // Drawn like the others: the same staircase, one line.
+    expect(mixed.segments).toHaveLength(1);
+
+    const one = historyView(history([caught(40, 96), reading(2, 118)], { since: ago(40), sinceCaughtUp: true }), pct);
+    expect(one.lines[1]).toBe("1 of these 2 readings was caught up afterwards from kept copies of the source: the twin did not show it at the time.");
+    const all = historyView(history([caught(40, 96), caught(30, 110)], { since: ago(40), sinceCaughtUp: true }), pct);
+    expect(all.lines[1]).toBe("These readings were caught up afterwards from kept copies of the source: the twin did not show them at the time.");
+  });
+
   it("says that nothing was kept yet, which is not the same as nothing changed", () => {
     const view = historyView(history([]), pct);
     expect(view.lines).toEqual([

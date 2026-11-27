@@ -508,3 +508,12 @@ test("a search that delivers nothing ends the investigation with what was read, 
   assert.deepEqual(out.steps.filter((s) => s.id.startsWith("p")).map((s) => s.tool), ["twin_series", "calendar_events", "nearest_units", "search_brief"]);
   assert.equal(events.filter((e) => e.type === "done").length, 1);
 });
+
+test("a series made of readings caught up from kept copies says so, as a limit", async () => {
+  const caught = (day: string, value: number): KeptReading => ({ ...kept(day, value), replayed: true });
+  const series = between([caught("2021-12-22", 93.7), caught("2022-01-02", 118.4), kept("2022-01-03", 141.3), kept("2022-01-07", 96.2)]);
+  const out = await investigate(INPUT, reads({ series: async () => series }), searchWith(scripted([researched(), delivered()])), () => undefined);
+  const first = out.steps[0]!;
+  assert.equal((first.output as { caughtUp?: number }).caughtUp, 2);
+  assert.match(out.answer!.investigation!.limits.join(" "), /2 of the 4 readings of the series were caught up afterwards from kept copies of the source, with the measure as it is defined today: the twin did not show them at the time\./);
+});

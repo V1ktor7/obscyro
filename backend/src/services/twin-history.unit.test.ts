@@ -195,5 +195,18 @@ test("a window that holds more than the list says it was cut, and keeps the newe
 test("nothing kept is said as nothing kept, not as nothing changed", async () => {
   const { db } = scriptDb([[], [], [{ since: null }]]);
   const h = await readUnitHistory(db, "p1", "u1", "occupancy", 48, NOW);
-  assert.deepEqual([h.readings, h.since, h.cut], [[], null, false]);
+  assert.deepEqual([h.readings, h.since, h.sinceCaughtUp, h.cut], [[], null, false, false]);
+});
+
+test("a reading caught up from a kept copy says so, and so does a history that starts with one", async () => {
+  const caught = { ...row(30, 118), replayed: true };
+  const { db, sql } = scriptDb([[{ ...row(1, 133), replayed: false }, caught], [], [{ since: row(2000, 90).recorded_at, replayed: true }]]);
+  const h = await readUnitHistory(db, "p1", "u1", "occupancy", 48, NOW);
+  // Marked only where it is true: a reading the twin took carries no mark at all.
+  assert.deepEqual(h.readings.map((r) => r.replayed), [true, undefined]);
+  assert.ok(!("replayed" in h.readings[1]!));
+  assert.equal(h.sinceCaughtUp, true, "the history goes back to a copy, not to a reading the twin took");
+  assert.match(sql[0]!, /^SELECT value, observed_at, observed_basis, recorded_at, replayed FROM app\.twin_reading/);
+  // The first reading ever, with whether it was caught up.
+  assert.match(sql[2]!, /^SELECT recorded_at AS since, replayed FROM app\.twin_reading WHERE project_id = \$1 AND unit_instance_id = \$2 AND metric = \$3 ORDER BY recorded_at ASC LIMIT 1$/);
 });

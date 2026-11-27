@@ -1316,7 +1316,10 @@ export interface TwinReading {
   /** When the value was true, from the timestamp its source published; null when the source does not say. */
   observedAt: string | null;
   observedBasis: FreshnessBasis | null;
+  /** When it was written down. For a reading caught up, when the copy it comes from was taken. */
   recordedAt: string;
+  /** Present, and true, on a reading caught up afterwards from a kept copy of its source: the twin did not show it at the time. */
+  replayed?: true;
 }
 
 /** The readings kept for one measure of one unit, over a window. */
@@ -1328,6 +1331,8 @@ export interface TwinUnitHistory {
   hours: number;
   /** When the first reading of this measure at this unit was kept, in the whole history. Null when none ever was. */
   since: string | null;
+  /** True when that first reading was caught up from a kept copy rather than taken by the twin. */
+  sinceCaughtUp?: boolean;
   /** Oldest first. The reading in force when the window opens comes first, when there is one. */
   readings: TwinReading[];
   /** True when the window held more readings than the list. */

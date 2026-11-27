@@ -243,6 +243,13 @@ export function signalFollowUp(input: {
     if (change !== null) says.push(`Measured change over that stretch: ${printChange(change, unit)}.`);
   }
   if (kept.cut) says.push("More readings were written down than are counted here: the oldest of the stretch are left out.");
+  // A reading caught up afterwards from a kept copy (D12) was not on anybody's screen at the time.
+  const caughtUp = during.filter((r) => r.replayed).length;
+  if (caughtUp > 0) {
+    says.push(
+      `${caughtUp} of ${during.length === 1 ? "this reading" : `these ${during.length} readings`} ${caughtUp === 1 ? "was" : "were"} caught up afterwards from kept copies of the source: the twin did not show ${caughtUp === 1 ? "it" : "them"} at the time.`,
+    );
+  }
 
   const state = facts.alert ? ({ open: "holds", ack: "acknowledged", resolved: "cleared" } as const)[facts.alert.status] : "unknown";
   const clearedAt = facts.alert?.status === "resolved" ? facts.alert.resolvedAt : null;

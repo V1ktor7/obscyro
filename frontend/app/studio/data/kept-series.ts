@@ -1,4 +1,4 @@
-import type { GridStep, SeriesDraft, SeriesLine, SeriesOffer, SeriesStep } from "../series-api";
+import type { CatchupOffer, CatchupPath, CatchupRequest, CatchupState, CopiesOf, GridStep, SeriesDraft, SeriesLine, SeriesOffer, SeriesStep } from "../series-api";
 
 // ---------------------------------------------------------------------------
 // Kept series, as the Data section words them. No screen here.
@@ -151,4 +151,117 @@ export function lastKnown(values: readonly (number | null)[]): { value: number; 
     if (v !== null && v !== undefined) return { value: v, stepsAgo: values.length - 1 - i };
   }
   return null;
+}
+
+// --- catching up from kept copies --------------------------------------------------
+
+/** "1,523 copies, taken from 25 Aug 2026 to 23 Nov 2026". */
+export function copiesText(c: Pick<CopiesOf, "copies" | "firstAt" | "lastAt">): string {
+  if (c.copies === 0) return "no older copy";
+  return `${count(c.copies, "copy", "copies")}${takenText(c)}`;
+}
+
+/** ", taken from 25 Aug 2026 to 23 Nov 2026", or nothing when the dates are not known. */
+function takenText(c: Pick<CopiesOf, "firstAt" | "lastAt">): string {
+  if (!c.firstAt || !c.lastAt) return "";
+  return dayText(c.firstAt) === dayText(c.lastAt) ? `, taken on ${dayText(c.firstAt)}` : `, taken from ${dayText(c.firstAt)} to ${dayText(c.lastAt)}`;
+}
+
+/**
+ * What a catch-up of a twin measure can read through one pipeline.
+ *
+ * `own`: the datasets the pipeline reads, that have older copies.
+ * `others`: the project's other tables that have some, which can be read in
+ * place of one of the pipeline's inputs when the source changed file.
+ */
+export function sourcesOf(path: CatchupPath, standIns: readonly CopiesOf[]): { own: CopiesOf[]; others: CopiesOf[] } {
+  const inputs = new Set(path.inputs.map((i) => i.datasetId));
+  return { own: path.inputs.filter((i) => i.copies > 0), others: standIns.filter((s) => !inputs.has(s.datasetId)) };
+}
+
+/** The columns of a pipeline's input that a dataset read in its place does not have. What they fed will be empty. */
+export function missingColumns(input: Pick<CopiesOf, "columns">, standIn: Pick<CopiesOf, "columns">): string[] {
+  const has = new Set(standIn.columns);
+  return input.columns.filter((c) => !has.has(c));
+}
+
+/** What the panel has picked: through which pipeline, the copies of which dataset, in place of which input. */
+export interface CatchupPick {
+  pipelineId: string | null;
+  datasetId: string;
+  inPlaceOf: string | null;
+}
+
+/**
+ * The first thing an offer lets a person catch up, or null when it offers nothing.
+ *
+ * A pipeline's own input comes first. Another dataset is only proposed when no
+ * input has an older copy, and then in place of the first input: the person
+ * says which one it really stands for.
+ */
+export function firstPick(offer: Pick<CatchupOffer, "paths" | "standIns">): CatchupPick | null {
+  for (const path of offer.paths) {
+    const { own } = sourcesOf(path, offer.standIns);
+    const best = [...own].sort((a, b) => b.copies - a.copies)[0];
+    if (best) return { pipelineId: path.pipelineId, datasetId: best.datasetId, inPlaceOf: null };
+  }
+  for (const path of offer.paths) {
+    const { others } = sourcesOf(path, offer.standIns);
+    const best = [...others].sort((a, b) => b.copies - a.copies)[0];
+    const input = path.inputs[0];
+    if (best && input) return { pipelineId: path.pipelineId, datasetId: best.datasetId, inPlaceOf: input.datasetId };
+  }
+  return null;
+}
+
+/** What a pick will do, said before anything is read. Null when the pick does not hold together. */
+export function planOf(offer: CatchupOffer, pick: CatchupPick): { request: CatchupRequest; copies: number; said: string[] } | null {
+  const path = offer.paths.find((p) => p.pipelineId === pick.pipelineId);
+  if (!path) return null;
+  const { own, others } = sourcesOf(path, offer.standIns);
+  const source = pick.inPlaceOf ? others.find((s) => s.datasetId === pick.datasetId) : own.find((s) => s.datasetId === pick.datasetId);
+  if (!source || source.copies === 0) return null;
+  const input = pick.inPlaceOf ? path.inputs.find((i) => i.datasetId === pick.inPlaceOf) : null;
+  if (pick.inPlaceOf && !input) return null;
+
+  const before = offer.until ? `: all from before this series started being kept, on ${dayText(offer.until)}` : "";
+  const said = [`${count(source.copies, "copy", "copies")} of “${source.datasetName}”${takenText(source)}${before}.`];
+  if (offer.origin === "dataset") {
+    said.push("Each copy is read the way a write of the dataset is read today: only what changed from one copy to the next is written down.");
+  } else {
+    said.push(
+      `Each copy goes through “${path.pipelineName}” as it is today${input ? `, in place of “${input.datasetName}”` : ""}, and is measured as the measure is defined today, over today's units. Nothing is written in the ontology.`,
+    );
+    if (input) {
+      const missing = missingColumns(input, source);
+      if (missing.length > 0) {
+        said.push(`“${source.datasetName}” does not have ${missing.length === 1 ? "the column" : "the columns"} ${missing.join(", ")} that “${input.datasetName}” has: what the pipeline makes from ${missing.length === 1 ? "it" : "them"} will be empty.`);
+      }
+    }
+  }
+  said.push("What is written down is marked as caught up, and carries the time its source gave and the time its copy was taken. A row that cannot be placed is left out and counted.");
+  return { request: { key: offer.key, datasetId: source.datasetId, pipelineId: path.pipelineId, inPlaceOf: input ? input.datasetId : null }, copies: source.copies, said };
+}
+
+/** What a catch-up left out, each as a sentence; empty when it read everything. */
+export function leftOutText(c: Pick<CatchupState, "copiesLeftOut" | "rowsLeftOut" | "rowsUnattached" | "note">): string[] {
+  const out: string[] = [];
+  if (c.copiesLeftOut > 0) out.push(`${count(c.copiesLeftOut, "copy", "copies")} could not be replayed.${c.note ? ` ${c.note}` : ""}`);
+  if (c.rowsLeftOut > 0) out.push(`${count(c.rowsLeftOut, "row")} could not be read into a point.`);
+  if (c.rowsUnattached > 0) out.push(`${count(c.rowsUnattached, "row")} named a place the twin does not hold, and ${c.rowsUnattached === 1 ? "was" : "were"} left out rather than placed by guess.`);
+  return out;
+}
+
+/** Where a catch-up stands, as one sentence of the list. */
+export function catchupText(c: CatchupState): string {
+  const through = c.pipelineName ? `, through “${c.pipelineName}”${c.inPlaceOf ? ` in place of “${c.inPlaceOf.datasetName}”` : ""}` : "";
+  const from = `“${c.datasetName}”${through}`;
+  if (!c.done) return `Catch-up stopped at ${c.read.toLocaleString("en-CA")} of ${count(c.copies, "copy", "copies")} of ${from}. Resume it to read the rest.`;
+  const since = c.firstCopyAt ? `, back to ${dayText(c.firstCopyAt)}` : "";
+  return `Caught up from ${count(c.copies, "copy", "copies")} of ${from}${since}: ${count(c.written, "point")} written down.`;
+}
+
+/** A catch-up while it runs: "312 of 1,523 copies read · 4,210 points written down". */
+export function progressText(c: Pick<CatchupState, "read" | "copies" | "written">): string {
+  return `${c.read.toLocaleString("en-CA")} of ${count(c.copies, "copy", "copies")} read · ${count(c.written, "point")} written down`;
 }

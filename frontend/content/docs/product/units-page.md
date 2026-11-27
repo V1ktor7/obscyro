@@ -3,7 +3,7 @@
 title: "The Units page"
 description: "Every unit of the twin, live, ranked on one measure: the ones in alert first, and the sheet of the unit you pick beside the list."
 source: "docs/units-page.md"
-translatedFrom: "dddb47a7e952ff4b"
+translatedFrom: "cec1085b7608bf4c"
 ---
 
 Every unit of the twin, live, ranked on one measure. The page answers one question: which unit to read first. The ones in alert come first, the ones that report nothing for the measure chosen are folded away, and the sheet of the unit you pick stays beside the list.
@@ -69,7 +69,7 @@ From top to bottom: the name, where the unit stands against its threshold, its v
 - **A figure of the day before does not have the age of the last hour.** A measure whose value describes the day before, such as an average length of stay republished every hour, is written “Yesterday's average, published 14m ago”. Its mean follows: “30-day average”, or “Average over 12 days kept” while the history is younger than thirty days (D7, D11).
 - **A withheld value says why.** A measure that has something to read and gives nothing writes it: several units under this one each publish their own average, and averages are not averaged again; or its source published no figure in the latest reading. It is neither a zero nor a feed that stopped (D6).
 - **Where the figures come from.** “About these figures” prints what the organisation wrote on the object types the measures read: the source, its licence, its limits. The text is set in the ontology, on the type; no screen names a source.
-- **The history of the value shown.** The twin writes its measures down every five minutes, when they change ([Algorithms](/docs/product/algorithms), D11). The sheet shows the last 48 hours of them: a staircase line, where each value holds until the next reading, the lowest and the highest written like the value above, and the date of the first reading kept (“The first reading of this value was kept 3 h ago. Nothing earlier is known.”). The line breaks where the measure had no value. As long as no reading is kept, the sheet writes so instead of drawing an empty chart. The counts every twin has are not kept, and the sheet says so. A history that cannot be read takes nothing away from the rest of the sheet.
+- **The history of the value shown.** The twin writes its measures down every five minutes, when they change ([Algorithms](/docs/product/algorithms), D11). The sheet shows the last 48 hours of them: a staircase line, where each value holds until the next reading, the lowest and the highest written like the value above, and the date of the first reading kept (“The first reading of this value was kept 3 h ago. Nothing earlier is known.”). The line breaks where the measure had no value. A reading caught up afterwards from a kept copy of the source ([Algorithms](/docs/product/algorithms), D12) is drawn like the others and said apart (“2 of these 3 readings were caught up afterwards from kept copies of the source: the twin did not show them at the time.”); when the history goes back to such a copy, the sheet writes it (“The oldest reading comes from a copy of the source kept 92 d ago, caught up afterwards.”). As long as no reading is kept, the sheet writes so instead of drawing an empty chart. The counts every twin has are not kept, and the sheet says so. A history that cannot be read takes nothing away from the rest of the sheet.
 - **An alert is handled from here.** “Open the situation” opens its situation card, “Acknowledge” acknowledges it. A unit with no alert keeps a link to its situation card.
 - **“Ask the analyst”** opens the analyst with this unit: the question is about it.
 - **Two readings.** The name, the value and the bar come from the list, and are on screen at the click. The rest is read for this unit alone, and read again at each new reading of the twin; meanwhile, the sheet writes “Reading this unit…”. It never shows one unit's alerts under another's name.
@@ -84,7 +84,7 @@ From top to bottom: the name, where the unit stands against its threshold, its v
 ## Limits
 
 - The ranking is on one measure at a time.
-- The list and the tiles show the present state. The history is on the sheet, for the value shown only and over 48 hours. It starts the day the twin started writing its measures down: nothing earlier is known.
+- The list and the tiles show the present state. The history is on the sheet, for the value shown only and over 48 hours. It starts the day the twin started writing its measures down, or at the oldest copy of the source that was caught up since: nothing earlier is known.
 - The list and the tiles do not show the age of each value: it is read on the unit's sheet. The “age of the data” measure of the Measure menu is the age of the whole unit.
 - A date with no hour gives an age to the day: it can be too large by a day at most, never too small.
 - The measure and the kind chosen are kept per project, in the browser. The order, the view and the search are not.

@@ -525,6 +525,7 @@ export async function investigate(
     const line = lineFor(await reads.rules(), input.metric, input.unit.kind);
     const episodes = line ? episodesOf(points, line, input.to, input.zone) : [];
     const firstValued = points.find((p) => p.value !== null);
+    const caught = kept.readings.filter((r) => r.replayed).length;
     const series = {
       readings: kept.readings.length,
       valued: values.length,
@@ -533,7 +534,9 @@ export async function investigate(
       firstDay: firstValued ? dayOn(new Date(firstValued.at), input.zone) : null,
       since: kept.since,
       cut: kept.cut,
-    };
+      // Readings caught up afterwards from kept copies (D12). Listed only when there are some.
+      ...(caught > 0 ? { caughtUp: caught } : {}),
+    } as { readings: number; valued: number; low: number | null; high: number | null; firstDay: string | null; since: string | null; cut: boolean; caughtUp?: number };
     return {
       output: {
         ...series,
@@ -671,6 +674,12 @@ export async function investigate(
     limits.push(`The series starts on ${read.series.firstDay}. Nothing is known of the days of the span before it.`);
   }
   if (read.series.cut) limits.push("The span holds more readings than were read: the oldest are left out of the series.");
+  const caughtUp = read.series.caughtUp ?? 0;
+  if (caughtUp > 0) {
+    limits.push(
+      `${caughtUp} of the ${read.series.readings} readings of the series ${caughtUp === 1 ? "was" : "were"} caught up afterwards from kept copies of the source, with the measure as it is defined today: the twin did not show ${caughtUp === 1 ? "it" : "them"} at the time.`,
+    );
+  }
   if (calendar === null) limits.push("The calendar could not be read, so the events already validated are missing from the comparison.");
   if (around === null) limits.push("The nearest units could not be read, so no episode is said to be shared.");
   else if (!around.placed) limits.push("This unit has no place on the map, so its neighbours could not be named.");

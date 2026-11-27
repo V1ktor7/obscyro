@@ -43,6 +43,82 @@ export interface SeriesOffer {
 export interface SeriesList {
   series: SeriesLine[];
   offer: SeriesOffer;
+  /** Every catch-up from kept copies, by series key: what was caught up and where each one stands. */
+  catchups: CatchupState[];
+}
+
+/** Where a catch-up from kept copies stands. */
+export interface CatchupState {
+  key: string;
+  datasetId: string;
+  datasetName: string;
+  /** The pipeline the copies go through; null for a dataset series. */
+  pipelineId: string | null;
+  pipelineName: string | null;
+  /** The pipeline input these copies are read in place of, when they are another dataset's. */
+  inPlaceOf: { datasetId: string; datasetName: string } | null;
+  /** Copies taken before this instant are the ones read: when the series started being kept. */
+  until: string;
+  firstCopyAt: string | null;
+  copies: number;
+  read: number;
+  /** Points written down. */
+  written: number;
+  /** Copies that could not be replayed at all. */
+  copiesLeftOut: number;
+  /** Rows that made no object or no point. */
+  rowsLeftOut: number;
+  /** Objects that could not be placed under anything the twin holds. */
+  rowsUnattached: number;
+  /** The last thing that went wrong, in a sentence. */
+  note: string | null;
+  done: boolean;
+  startedAt: string;
+  updatedAt: string;
+}
+
+/** A dataset and the copies of it taken before a series started being kept. */
+export interface CopiesOf {
+  datasetId: string;
+  datasetName: string;
+  copies: number;
+  firstAt: string | null;
+  lastAt: string | null;
+  columns: string[];
+}
+
+export interface CatchupPath {
+  /** Null for a dataset series: its copies are read as they are. */
+  pipelineId: string | null;
+  pipelineName: string | null;
+  inputs: CopiesOf[];
+}
+
+export interface CatchupOffer {
+  key: string;
+  origin: "twin" | "dataset";
+  until: string | null;
+  paths: CatchupPath[];
+  /** For a twin measure: other tables of the project that have older copies, readable in place of a pipeline's input. */
+  standIns: CopiesOf[];
+  /** Why nothing can be caught up, when `paths` is empty. */
+  why: string | null;
+  begun: CatchupState[];
+}
+
+export interface CatchupRequest {
+  key: string;
+  datasetId: string;
+  pipelineId: string | null;
+  inPlaceOf: string | null;
+}
+
+export interface CatchupBatch {
+  state: CatchupState;
+  began: boolean;
+  /** Copies read by this call, and what it wrote. */
+  read: number;
+  written: number;
 }
 
 export interface SeriesDraft {
@@ -108,4 +184,17 @@ export async function readSeriesGrid(
   body: { key: string; from: string; to: string; step: GridStep; agg?: GridAgg; entities?: string[]; asOf?: string | null },
 ): Promise<GridAnswer> {
   return apiFetch(`/v1/ontology/${enc(env)}/series/read`, { method: "POST", body });
+}
+
+/** What a series could be caught up from: the copies taken before it started being kept. Reads only. */
+export async function fetchCatchupOffer(env: string, key: string): Promise<CatchupOffer> {
+  return apiFetch(`/v1/ontology/${enc(env)}/series/catchup?key=${enc(key)}`);
+}
+/** One bounded batch of a catch-up. Call again until `state.done`. */
+export async function runCatchup(env: string, body: CatchupRequest): Promise<CatchupBatch> {
+  return apiFetch(`/v1/ontology/${enc(env)}/series/catchup`, { method: "POST", body });
+}
+/** Removes what the catch-ups of a series wrote. Never a point taken live. */
+export async function forgetCatchup(env: string, key: string): Promise<{ removed: number }> {
+  return apiFetch(`/v1/ontology/${enc(env)}/series/catchup?key=${enc(key)}`, { method: "DELETE" });
 }

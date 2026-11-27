@@ -8,6 +8,7 @@ import { recordAudit } from "../services/audit.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
 import { resolveEnvironment } from "../services/ontology.js";
 import { declareSeries, gridRequest, listSeries, readGrid, removeSeries, seriesDraft, seriesOffer } from "../services/series.js";
+import { catchupOffer, catchupRequest, forgetCatchup, listCatchups, runCatchup } from "../services/series-catchup.js";
 
 // ---------------------------------------------------------------------------
 // Kept series: the history a model can read.
@@ -26,6 +27,8 @@ async function requireUserId(req: { apiKey?: { id: string } | null; db: DbClient
 }
 
 const key = z.string().regex(/^[a-z][a-z0-9_]{2,47}$/);
+/** A declared key, or a measure of the twin: `twin:occupancy`. */
+const anyKey = z.string().trim().min(1).max(120);
 const record = z.record(z.unknown());
 
 const seriesRoutes: FastifyPluginAsync = async (fastify) => {
@@ -45,17 +48,122 @@ const seriesRoutes: FastifyPluginAsync = async (fastify) => {
           "with no value (`emptyPoints`: an absence that was seen, not a zero), how many were caught up afterwards from " +
           "a kept copy (`replayed`), the earliest and latest instants the points are about (`firstAt`, `lastAt`), when " +
           "the first one was written down here (`keptSince`), and what the last write could not read (`note`). " +
-          "`offer` lists the tables a series can be declared on, with their columns. Reads only.",
+          "`offer` lists the tables a series can be declared on, with their columns. `catchups` lists every catch-up " +
+          "from kept copies, by series `key`: the dataset whose copies are read, the pipeline they go through for a " +
+          "twin measure, how many copies there are and how many were read, what was written, what was left out, and " +
+          "whether it is `done`. Reads only.",
         tags: ["series"],
         params: z.object({ env: z.string().min(1) }),
-        response: { 200: z.object({ series: z.array(record), offer: record }), 404: errorEnvelope },
+        response: { 200: z.object({ series: z.array(record), offer: record, catchups: z.array(record) }), 404: errorEnvelope },
       },
     },
     async (req) => {
       const userId = await requireUserId(req);
       const env = await resolveEnvironment(req.db, userId, req.params.env);
-      const [series, offer] = await Promise.all([listSeries(req.db, env), seriesOffer(req.db, env.id)]);
-      return { series: series as unknown as Record<string, unknown>[], offer: offer as unknown as Record<string, unknown> };
+      const [series, offer, catchups] = await Promise.all([listSeries(req.db, env), seriesOffer(req.db, env.id), listCatchups(req.db, env.id)]);
+      return {
+        series: series as unknown as Record<string, unknown>[],
+        offer: offer as unknown as Record<string, unknown>,
+        catchups: catchups as unknown as Record<string, unknown>[],
+      };
+    },
+  );
+
+  app.get(
+    "/ontology/:env/series/catchup",
+    {
+      schema: {
+        summary: "What a series could be caught up from",
+        description:
+          "A series starts the day it started being kept. The copies of a dataset taken before that day hold what it " +
+          "would have written down. This says what a catch-up of the series `key` could read. `until` is when the " +
+          "series started being kept: only copies taken before it are read. For a dataset series, `paths` holds its " +
+          "own dataset with its older `copies`. For a twin measure (`twin:<measure>`), `paths` lists each pipeline " +
+          "that writes today every object type the measure reads, with the datasets it reads and their older copies; " +
+          "`standIns` lists the project's other tables that have older copies, which can be read in place of one of a " +
+          "pipeline's inputs when the source changed file. `columns` are given so the columns a stand-in lacks can be " +
+          "shown. `why` says why nothing can be caught up when `paths` is empty: no reading yet, a measure that counts " +
+          "every object, a measure made from types written by several pipelines, a draft pipeline, a pipeline that " +
+          "calls the extraction service. `begun` lists the catch-ups already begun for this series. Reads only.",
+        tags: ["series"],
+        params: z.object({ env: z.string().min(1) }),
+        querystring: z.object({ key: anyKey }),
+        response: { 200: record, 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      return (await catchupOffer(req.db, env, req.query.key)) as unknown as Record<string, unknown>;
+    },
+  );
+
+  app.post(
+    "/ontology/:env/series/catchup",
+    {
+      schema: {
+        summary: "Catch a series up from kept copies, one bounded batch",
+        description:
+          "Reads the next copies of `datasetId` taken before the series `key` started being kept, oldest first, and " +
+          "writes down what they hold. A dataset series reads the copies of its own dataset: each one gives points, " +
+          "dated at when that copy was taken. A twin measure names the `pipelineId` its copies go through: each copy " +
+          "is run through that pipeline as it is today, in memory, and the measure is computed as it is defined " +
+          "today, over today's units. Nothing is written in the ontology: no object, no link, no type. When " +
+          "`datasetId` is not one of the pipeline's inputs, `inPlaceOf` names the input its copies are read in place " +
+          "of; the pipeline's other inputs are read as they were when each copy was taken. Only what changes is " +
+          "written, and everything written is marked as caught up, with the time the source gave and the time the " +
+          "copy was taken. An object the twin holds today keeps the place it has today; one it does not hold is " +
+          "placed by the pipeline's link rules, and counted in `rowsUnattached` when none finds a place. A row that " +
+          "cannot be read is counted in `rowsLeftOut`, a copy that cannot be replayed in `copiesLeftOut`; nothing is " +
+          "guessed. One call reads 25 copies at most and stops earlier past 12 seconds or 400,000 rows. The answer " +
+          "says where the catch-up stands (`state.read` of `state.copies`, `state.done`): call again to resume. " +
+          "Refused with the reason when nothing can be caught up. The first call is kept in the audit log.",
+        tags: ["series"],
+        params: z.object({ env: z.string().min(1) }),
+        body: catchupRequest,
+        response: { 200: record, 400: errorEnvelope, 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const out = await runCatchup(req.db, env, userId, req.body);
+      if (out.began) {
+        await recordAudit(req.db, {
+          actorUserId: userId,
+          projectId: env.id,
+          action: "series.catchup",
+          resourceType: "series",
+          resourceId: req.body.key,
+          metadata: { datasetId: out.state.datasetId, pipelineId: out.state.pipelineId, inPlaceOf: out.state.inPlaceOf?.datasetId ?? null, copies: out.state.copies },
+        });
+      }
+      return out as unknown as Record<string, unknown>;
+    },
+  );
+
+  app.delete(
+    "/ontology/:env/series/catchup",
+    {
+      schema: {
+        summary: "Forget what was caught up for a series",
+        description:
+          "Removes the points or readings the catch-ups of the series `key` wrote, and the catch-ups themselves. Only " +
+          "what is marked as caught up is removed: a reading the twin took live and a point a sync wrote are never " +
+          "touched, and neither are the copies, so the catch-up can be run again. `removed` is how many points or " +
+          "readings went. Kept in the audit log.",
+        tags: ["series"],
+        params: z.object({ env: z.string().min(1) }),
+        querystring: z.object({ key: anyKey }),
+        response: { 200: z.object({ removed: z.number() }), 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const out = await forgetCatchup(req.db, env, req.query.key);
+      await recordAudit(req.db, { actorUserId: userId, projectId: env.id, action: "series.catchup.forget", resourceType: "series", resourceId: req.query.key, metadata: { removed: out.removed } });
+      return out;
     },
   );
 

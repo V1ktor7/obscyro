@@ -25,8 +25,11 @@ import { getUnitTree, rollupAllUnits, type UnitMetrics } from "./twin.js";
 //                  having none. A gap in the readings is not a zero.
 //   reality only   the twin is read with no lens. A reading made through a
 //                  scenario describes a world that is not there.
-//   no backfill    the history starts the day this started. Nothing before is
-//                  made up, and the screen says when it starts.
+//   nothing made   the history starts the day this started. What is older
+//   up             comes only from a copy of the source that was really kept,
+//                  replayed afterwards (`series-catchup.ts`, D12): such a
+//                  reading is marked as caught up, and the screen says so.
+//                  Nothing else is ever filled in.
 //
 // Nothing here is about a person: a unit and an aggregate value.
 // ---------------------------------------------------------------------------
@@ -179,7 +182,13 @@ export interface KeptReading {
   value: number | null;
   observedAt: string | null;
   observedBasis: FreshnessBasis | null;
+  /** When it was written down. For a reading caught up, when the copy it comes from was taken. */
   recordedAt: string;
+  /**
+   * Present, and true, on a reading caught up afterwards from a kept copy of
+   * its source: the twin did not show it at the time.
+   */
+  replayed?: true;
 }
 
 export interface UnitHistory {
@@ -195,6 +204,8 @@ export interface UnitHistory {
    * nothing can be said of earlier, and that is not the same as "no change".
    */
   since: string | null;
+  /** True when that first reading was caught up from a kept copy rather than taken by the twin. */
+  sinceCaughtUp: boolean;
   /** Oldest first. */
   readings: KeptReading[];
   /** True when the window held more than the list: the oldest readings of the window are missing from it. */
@@ -208,6 +219,7 @@ interface ReadingRow {
   observed_at: Date | null;
   observed_basis: FreshnessBasis | null;
   recorded_at: Date;
+  replayed?: boolean | null;
 }
 
 const kept = (r: ReadingRow): KeptReading => ({
@@ -215,6 +227,7 @@ const kept = (r: ReadingRow): KeptReading => ({
   observedAt: r.observed_at ? r.observed_at.toISOString() : null,
   observedBasis: r.observed_basis,
   recordedAt: r.recorded_at.toISOString(),
+  ...(r.replayed ? { replayed: true as const } : {}),
 });
 
 /**
@@ -236,7 +249,7 @@ export async function readUnitHistory(
   const from = new Date(now.getTime() - hours * 3_600_000);
   const [inWindow, before, first] = await Promise.all([
     db.query<ReadingRow>(
-      `SELECT value, observed_at, observed_basis, recorded_at
+      `SELECT value, observed_at, observed_basis, recorded_at, replayed
          FROM app.twin_reading
         WHERE project_id = $1 AND unit_instance_id = $2 AND metric = $3 AND recorded_at >= $4
         ORDER BY recorded_at DESC
@@ -244,15 +257,18 @@ export async function readUnitHistory(
       [projectId, unitId, metric, from, limit + 1],
     ),
     db.query<ReadingRow>(
-      `SELECT value, observed_at, observed_basis, recorded_at
+      `SELECT value, observed_at, observed_basis, recorded_at, replayed
          FROM app.twin_reading
         WHERE project_id = $1 AND unit_instance_id = $2 AND metric = $3 AND recorded_at < $4
         ORDER BY recorded_at DESC
         LIMIT 1`,
       [projectId, unitId, metric, from],
     ),
-    db.query<{ since: Date | null }>(
-      `SELECT min(recorded_at) AS since FROM app.twin_reading WHERE project_id = $1 AND unit_instance_id = $2 AND metric = $3`,
+    db.query<{ since: Date | null; replayed: boolean | null }>(
+      `SELECT recorded_at AS since, replayed FROM app.twin_reading
+        WHERE project_id = $1 AND unit_instance_id = $2 AND metric = $3
+        ORDER BY recorded_at ASC
+        LIMIT 1`,
       [projectId, unitId, metric],
     ),
   ]);
@@ -266,6 +282,7 @@ export async function readUnitHistory(
     metric,
     hours,
     since: first.rows[0]?.since ? first.rows[0].since.toISOString() : null,
+    sinceCaughtUp: first.rows[0]?.replayed === true,
     readings: [...opening, ...listed].map(kept),
     cut,
     everySeconds: RECORD_EVERY_MS / 1000,
@@ -288,7 +305,9 @@ export interface ReadingsBetween {
  *
  * "Between" is counted on when a reading was written down, not on when its
  * source says it was true: what is asked is what the twin showed at the time,
- * to a person who was looking at it.
+ * to a person who was looking at it. A reading caught up afterwards from a
+ * kept copy is listed too, at the time its copy was taken, and says so
+ * (`replayed`): the twin did not show that one.
  */
 export async function readReadingsBetween(
   db: DbClient,
@@ -301,7 +320,7 @@ export async function readReadingsBetween(
 ): Promise<ReadingsBetween> {
   const [during, before, first] = await Promise.all([
     db.query<ReadingRow>(
-      `SELECT value, observed_at, observed_basis, recorded_at
+      `SELECT value, observed_at, observed_basis, recorded_at, replayed
          FROM app.twin_reading
         WHERE project_id = $1 AND unit_instance_id = $2 AND metric = $3 AND recorded_at >= $4 AND recorded_at <= $5
         ORDER BY recorded_at DESC
@@ -309,7 +328,7 @@ export async function readReadingsBetween(
       [projectId, unitId, metric, from, to, limit + 1],
     ),
     db.query<ReadingRow>(
-      `SELECT value, observed_at, observed_basis, recorded_at
+      `SELECT value, observed_at, observed_basis, recorded_at, replayed
          FROM app.twin_reading
         WHERE project_id = $1 AND unit_instance_id = $2 AND metric = $3 AND recorded_at < $4
         ORDER BY recorded_at DESC

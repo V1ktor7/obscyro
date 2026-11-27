@@ -1,7 +1,27 @@
 import { describe, expect, it } from "vitest";
 
-import type { SeriesLine, SeriesOffer } from "../series-api";
-import { blankSeriesForm, columnsOf, coversText, draftOfSeries, gapsText, holdsText, lastKnown, lookWindow, sparkPaths, stepText, type SeriesForm } from "./kept-series";
+import type { CatchupOffer, CatchupState, CopiesOf, SeriesLine, SeriesOffer } from "../series-api";
+import {
+  blankSeriesForm,
+  catchupText,
+  columnsOf,
+  copiesText,
+  coversText,
+  draftOfSeries,
+  firstPick,
+  gapsText,
+  holdsText,
+  lastKnown,
+  leftOutText,
+  lookWindow,
+  missingColumns,
+  planOf,
+  progressText,
+  sourcesOf,
+  sparkPaths,
+  stepText,
+  type SeriesForm,
+} from "./kept-series";
 
 const line = (over: Partial<SeriesLine> = {}): SeriesLine => ({
   key: "twin:occupancy",
@@ -125,5 +145,119 @@ describe("looking at a series", () => {
     // A zero is a value.
     expect(lastKnown([5, 0])).toEqual({ value: 0, stepsAgo: 0 });
     expect(lastKnown([null, null])).toBeNull();
+  });
+});
+
+describe("catching up from kept copies", () => {
+  const copies = (over: Partial<CopiesOf>): CopiesOf => ({ datasetId: "d", datasetName: "A dataset", copies: 0, firstAt: null, lastAt: null, columns: [], ...over });
+  const FULL = copies({ datasetId: "d-full", datasetName: "Emergency file, full", copies: 0, columns: ["No_permis", "Occupees", "Mise_a_jour", "Region", "DMS"] });
+  const TABLE = copies({ datasetId: "d-xw", datasetName: "Permit table", copies: 4, firstAt: "2026-09-09T14:42:00.000Z", lastAt: "2026-09-09T15:24:00.000Z", columns: ["permis", "code"] });
+  const OLD = copies({ datasetId: "d-old", datasetName: "Emergency file, Montréal", copies: 1523, firstAt: "2026-08-25T21:25:00.000Z", lastAt: "2026-11-23T15:11:00.000Z", columns: ["No_permis", "Occupees", "Mise_a_jour"] });
+  const AIR = copies({ datasetId: "d-air", datasetName: "Air quality", copies: 1100, firstAt: "2026-09-09T17:38:00.000Z", lastAt: "2026-11-22T21:30:00.000Z", columns: ["stationId", "valeur"] });
+  const TWIN: CatchupOffer = {
+    key: "twin:occupancy",
+    origin: "twin",
+    until: "2026-11-23T15:13:00.000Z",
+    paths: [{ pipelineId: "p-urg", pipelineName: "Urgences → Relevé d'urgence", inputs: [FULL, TABLE] }],
+    standIns: [OLD, TABLE, AIR],
+    why: null,
+    begun: [],
+  };
+  const state = (over: Partial<CatchupState> = {}): CatchupState => ({
+    key: "twin:occupancy",
+    datasetId: "d-old",
+    datasetName: "Emergency file, Montréal",
+    pipelineId: "p-urg",
+    pipelineName: "Urgences → Relevé d'urgence",
+    inPlaceOf: { datasetId: "d-full", datasetName: "Emergency file, full" },
+    until: "2026-11-23T15:13:00.000Z",
+    firstCopyAt: "2026-08-25T21:25:00.000Z",
+    copies: 1523,
+    read: 1523,
+    written: 41210,
+    copiesLeftOut: 0,
+    rowsLeftOut: 0,
+    rowsUnattached: 0,
+    note: null,
+    done: true,
+    startedAt: "2026-11-27T21:00:00.000Z",
+    updatedAt: "2026-11-27T21:30:00.000Z",
+    ...over,
+  });
+
+  it("says how many copies there are and when they were taken", () => {
+    expect(copiesText(OLD)).toBe("1,523 copies, taken from 25 Aug 2026 to 23 Nov 2026");
+    expect(copiesText(TABLE)).toBe("4 copies, taken on 9 Sep 2026");
+    expect(copiesText(copies({ copies: 1, firstAt: "2026-11-23T15:01:00.000Z", lastAt: "2026-11-23T15:01:00.000Z" }))).toBe("1 copy, taken on 23 Nov 2026");
+    expect(copiesText(FULL)).toBe("no older copy");
+  });
+
+  it("tells a pipeline's own inputs from the datasets that could stand in for one", () => {
+    const { own, others } = sourcesOf(TWIN.paths[0]!, TWIN.standIns);
+    // The full file has no copy that old; the permit table is an input, and is not offered twice.
+    expect(own.map((s) => s.datasetName)).toEqual(["Permit table"]);
+    expect(others.map((s) => s.datasetName)).toEqual(["Emergency file, Montréal", "Air quality"]);
+    expect(missingColumns(FULL, OLD)).toEqual(["Region", "DMS"]);
+    expect(missingColumns(FULL, FULL)).toEqual([]);
+  });
+
+  it("proposes a pipeline's own input first, and another dataset only when no input has an older copy", () => {
+    // The permit table is an input with older copies: it comes first, however few they are.
+    expect(firstPick(TWIN)).toEqual({ pipelineId: "p-urg", datasetId: "d-xw", inPlaceOf: null });
+    const none = { ...TWIN, paths: [{ ...TWIN.paths[0]!, inputs: [FULL] }] };
+    expect(firstPick(none)).toEqual({ pipelineId: "p-urg", datasetId: "d-old", inPlaceOf: "d-full" });
+    expect(firstPick({ paths: [], standIns: [OLD] })).toBeNull();
+    expect(firstPick({ paths: [{ pipelineId: "p", pipelineName: "P", inputs: [FULL] }], standIns: [] })).toBeNull();
+  });
+
+  it("says, before anything is read, what a catch-up will read and what it will not do", () => {
+    const plan = planOf(TWIN, { pipelineId: "p-urg", datasetId: "d-old", inPlaceOf: "d-full" })!;
+    expect(plan.request).toEqual({ key: "twin:occupancy", datasetId: "d-old", pipelineId: "p-urg", inPlaceOf: "d-full" });
+    expect(plan.copies).toBe(1523);
+    expect(plan.said).toEqual([
+      "1,523 copies of “Emergency file, Montréal”, taken from 25 Aug 2026 to 23 Nov 2026: all from before this series started being kept, on 23 Nov 2026.",
+      "Each copy goes through “Urgences → Relevé d'urgence” as it is today, in place of “Emergency file, full”, and is measured as the measure is defined today, over today's units. Nothing is written in the ontology.",
+      "“Emergency file, Montréal” does not have the columns Region, DMS that “Emergency file, full” has: what the pipeline makes from them will be empty.",
+      "What is written down is marked as caught up, and carries the time its source gave and the time its copy was taken. A row that cannot be placed is left out and counted.",
+    ]);
+
+    // An input of the pipeline stands in place of nothing, and lacks nothing.
+    const own = planOf(TWIN, { pipelineId: "p-urg", datasetId: "d-xw", inPlaceOf: null })!;
+    expect(own.request.inPlaceOf).toBeNull();
+    expect(own.said[1]).toBe("Each copy goes through “Urgences → Relevé d'urgence” as it is today, and is measured as the measure is defined today, over today's units. Nothing is written in the ontology.");
+    expect(own.said).toHaveLength(3);
+
+    // A pick that does not hold together plans nothing.
+    expect(planOf(TWIN, { pipelineId: "p-other", datasetId: "d-old", inPlaceOf: "d-full" })).toBeNull();
+    expect(planOf(TWIN, { pipelineId: "p-urg", datasetId: "d-full", inPlaceOf: null })).toBeNull();
+    expect(planOf(TWIN, { pipelineId: "p-urg", datasetId: "d-old", inPlaceOf: "d-air" })).toBeNull();
+  });
+
+  it("plans a dataset series from the copies of its own dataset", () => {
+    const offer: CatchupOffer = { key: "virus", origin: "dataset", until: "2026-11-27T20:00:00.000Z", paths: [{ pipelineId: null, pipelineName: null, inputs: [copies({ datasetId: "d-v", datasetName: "Virus detections", copies: 54, firstAt: "2026-09-07T15:36:00.000Z", lastAt: "2026-11-26T12:51:00.000Z" })] }], standIns: [], why: null, begun: [] };
+    expect(firstPick(offer)).toEqual({ pipelineId: null, datasetId: "d-v", inPlaceOf: null });
+    const plan = planOf(offer, firstPick(offer)!)!;
+    expect(plan.request).toEqual({ key: "virus", datasetId: "d-v", pipelineId: null, inPlaceOf: null });
+    expect(plan.said[1]).toBe("Each copy is read the way a write of the dataset is read today: only what changed from one copy to the next is written down.");
+  });
+
+  it("says where a catch-up stands, and what it left out", () => {
+    expect(catchupText(state())).toBe(
+      "Caught up from 1,523 copies of “Emergency file, Montréal”, through “Urgences → Relevé d'urgence” in place of “Emergency file, full”, back to 25 Aug 2026: 41,210 points written down.",
+    );
+    expect(catchupText(state({ done: false, read: 312 }))).toBe(
+      "Catch-up stopped at 312 of 1,523 copies of “Emergency file, Montréal”, through “Urgences → Relevé d'urgence” in place of “Emergency file, full”. Resume it to read the rest.",
+    );
+    expect(catchupText(state({ pipelineId: null, pipelineName: null, inPlaceOf: null, datasetName: "Virus detections", copies: 54, written: 1 }))).toBe(
+      "Caught up from 54 copies of “Virus detections”, back to 25 Aug 2026: 1 point written down.",
+    );
+    expect(progressText(state({ read: 312, written: 4210 }))).toBe("312 of 1,523 copies read · 4,210 points written down");
+
+    expect(leftOutText(state())).toEqual([]);
+    expect(leftOutText(state({ copiesLeftOut: 1, rowsLeftOut: 12, rowsUnattached: 1, note: "The pipeline could not run on the copy of 2026-09-02 10:20 UTC: it failed. That copy was left out." }))).toEqual([
+      "1 copy could not be replayed. The pipeline could not run on the copy of 2026-09-02 10:20 UTC: it failed. That copy was left out.",
+      "12 rows could not be read into a point.",
+      "1 row named a place the twin does not hold, and was left out rather than placed by guess.",
+    ]);
   });
 });

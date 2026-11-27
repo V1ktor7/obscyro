@@ -5,13 +5,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/lib/auth";
 
-import type { GridAnswer, SeriesLine, SeriesList, SeriesOffer } from "../series-api";
+import type { CatchupOffer, CatchupState, CopiesOf, GridAnswer, SeriesLine, SeriesList, SeriesOffer } from "../series-api";
 
 const api = vi.hoisted(() => ({
   fetchSeries: vi.fn(),
   declareSeries: vi.fn(),
   removeSeries: vi.fn(),
   readSeriesGrid: vi.fn(),
+  fetchCatchupOffer: vi.fn(),
+  runCatchup: vi.fn(),
+  forgetCatchup: vi.fn(),
 }));
 vi.mock("../series-api", async (orig) => ({ ...(await orig<typeof import("../series-api")>()), ...api }));
 
@@ -70,7 +73,7 @@ const VIRUS: SeriesLine = {
   declared: { datasetId: "d-virus", timeColumn: "date", timeZone: "America/Toronto", valueColumn: "detections", entityColumns: ["province", "virus"] },
 };
 
-const list = (series: SeriesLine[] = [OCCUPANCY, VIRUS]): SeriesList => ({ series, offer: OFFER });
+const list = (series: SeriesLine[] = [OCCUPANCY, VIRUS], catchups: CatchupState[] = []): SeriesList => ({ series, offer: OFFER, catchups });
 async function page(l: SeriesList = list()) {
   api.fetchSeries.mockResolvedValue(l);
   render(<KeptSeriesView />);
@@ -318,5 +321,132 @@ describe("looking at a series", () => {
     fireEvent.click(within(card("Stretcher occupancy")).getByRole("button", { name: "Look" }));
     const look = within(await screen.findByRole("region", { name: "Look at Stretcher occupancy" }));
     expect((await look.findByRole("alert")).textContent).toBe("107 units carry this measure: name the units to read.");
+  });
+});
+
+describe("catching a series up from kept copies", () => {
+  const copies = (over: Partial<CopiesOf>): CopiesOf => ({ datasetId: "d", datasetName: "A dataset", copies: 0, firstAt: null, lastAt: null, columns: [], ...over });
+  const FULL = copies({ datasetId: "d-full", datasetName: "Emergency file, full", columns: ["No_permis", "Occupees", "Region"] });
+  const OLD = copies({ datasetId: "d-old", datasetName: "Emergency file, Montréal", copies: 1523, firstAt: "2026-08-25T21:25:00.000Z", lastAt: "2026-11-22T21:11:00.000Z", columns: ["No_permis", "Occupees"] });
+  const TWIN_OFFER: CatchupOffer = {
+    key: "twin:occupancy",
+    origin: "twin",
+    until: "2026-11-22T21:43:00.000Z",
+    paths: [{ pipelineId: "p-urg", pipelineName: "Urgences", inputs: [FULL] }],
+    standIns: [OLD],
+    why: null,
+    begun: [],
+  };
+  const state = (over: Partial<CatchupState> = {}): CatchupState => ({
+    key: "twin:occupancy",
+    datasetId: "d-old",
+    datasetName: "Emergency file, Montréal",
+    pipelineId: "p-urg",
+    pipelineName: "Urgences",
+    inPlaceOf: { datasetId: "d-full", datasetName: "Emergency file, full" },
+    until: "2026-11-22T21:43:00.000Z",
+    firstCopyAt: "2026-08-25T21:25:00.000Z",
+    copies: 1523,
+    read: 25,
+    written: 610,
+    copiesLeftOut: 0,
+    rowsLeftOut: 0,
+    rowsUnattached: 0,
+    note: null,
+    done: false,
+    startedAt: "2026-11-27T21:00:00.000Z",
+    updatedAt: "2026-11-27T21:01:00.000Z",
+    ...over,
+  });
+  async function panel(offer: CatchupOffer, l: SeriesList = list()) {
+    api.fetchCatchupOffer.mockResolvedValue(offer);
+    await page(l);
+    fireEvent.click(within(card("Stretcher occupancy")).getByRole("button", { name: "Catch up" }));
+    const region = await screen.findByRole("region", { name: "Catch up Stretcher occupancy" });
+    return within(region);
+  }
+
+  it("says how many copies it will read, through what, before reading any", async () => {
+    const p = await panel(TWIN_OFFER);
+    expect(api.fetchCatchupOffer).toHaveBeenCalledWith("mtl", "twin:occupancy");
+    // The old file is not what the pipeline reads today: it is offered in place of its input, and the person sees which.
+    await p.findByText("1,523 copies of “Emergency file, Montréal”, taken from 25 Aug 2026 to 22 Nov 2026: all from before this series started being kept, on 22 Nov 2026.");
+    expect((p.getByLabelText("Copies of") as HTMLSelectElement).value).toBe("other:d-old");
+    expect((p.getByLabelText("In place of") as HTMLSelectElement).value).toBe("d-full");
+    expect(p.getByText(/Each copy goes through “Urgences” as it is today, in place of “Emergency file, full”.*Nothing is written in the ontology\./)).toBeTruthy();
+    expect(p.getByText("“Emergency file, Montréal” does not have the column Region that “Emergency file, full” has: what the pipeline makes from it will be empty.")).toBeTruthy();
+    expect(p.getByRole("button", { name: "Catch up 1,523 copies" })).toBeTruthy();
+    expect(api.runCatchup).not.toHaveBeenCalled();
+  });
+
+  it("runs batch after batch until the copies are read, then reads the list again", async () => {
+    const p = await panel(TWIN_OFFER);
+    api.runCatchup
+      .mockResolvedValueOnce({ state: state({ read: 25, written: 610 }), began: true, read: 25, written: 610 })
+      .mockResolvedValueOnce({ state: state({ read: 50, written: 1190 }), began: false, read: 25, written: 580 })
+      .mockResolvedValueOnce({ state: state({ read: 1523, written: 41210, done: true }), began: false, read: 25, written: 300 });
+    const done = state({ read: 1523, written: 41210, done: true });
+    api.fetchCatchupOffer.mockResolvedValue({ ...TWIN_OFFER, begun: [done] });
+    api.fetchSeries.mockResolvedValue(list([{ ...OCCUPANCY, replayed: 41210 }, VIRUS], [done]));
+
+    fireEvent.click(await p.findByRole("button", { name: "Catch up 1,523 copies" }));
+    await waitFor(() => expect(api.runCatchup).toHaveBeenCalledTimes(3));
+    expect(api.runCatchup).toHaveBeenCalledWith("mtl", { key: "twin:occupancy", datasetId: "d-old", pipelineId: "p-urg", inPlaceOf: "d-full" });
+    // What was caught up is then said on the line itself, and in the panel.
+    const said = "Caught up from 1,523 copies of “Emergency file, Montréal”, through “Urgences” in place of “Emergency file, full”, back to 25 Aug 2026: 41,210 points written down.";
+    await waitFor(() => expect(within(card("Stretcher occupancy")).getAllByText(said)).toHaveLength(2));
+    expect(within(card("Stretcher occupancy")).getByText("41,210 points caught up from kept copies.")).toBeTruthy();
+    expect((p.getByRole("button", { name: "Already caught up" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("stops when asked, says where it stopped, and resumes from there", async () => {
+    const p = await panel(TWIN_OFFER);
+    let release: (v: unknown) => void = () => undefined;
+    api.runCatchup.mockImplementationOnce(() => new Promise((resolve) => (release = resolve)));
+    fireEvent.click(await p.findByRole("button", { name: "Catch up 1,523 copies" }));
+    expect((await p.findByRole("status")).textContent).toBe("Reading the first copies…");
+
+    // Asked to stop while a batch is under way: that batch ends, and no other is asked for.
+    const stopped = state({ read: 25, written: 610 });
+    api.fetchCatchupOffer.mockResolvedValue({ ...TWIN_OFFER, begun: [stopped] });
+    fireEvent.click(p.getByRole("button", { name: "Stop" }));
+    release({ state: stopped, began: true, read: 25, written: 610 });
+    await p.findByText("Catch-up stopped at 25 of 1,523 copies of “Emergency file, Montréal”, through “Urgences” in place of “Emergency file, full”. Resume it to read the rest.");
+    expect(api.runCatchup).toHaveBeenCalledTimes(1);
+    expect(p.getByRole("button", { name: "Resume, 1,498 copies left" })).toBeTruthy();
+
+    api.runCatchup.mockResolvedValueOnce({ state: state({ read: 1523, written: 41210, done: true }), began: false, read: 25, written: 300 });
+    fireEvent.click(p.getByRole("button", { name: "Resume" }));
+    await waitFor(() => expect(api.runCatchup).toHaveBeenCalledTimes(2));
+    expect(api.runCatchup.mock.calls[1]).toEqual(["mtl", { key: "twin:occupancy", datasetId: "d-old", pipelineId: "p-urg", inPlaceOf: "d-full" }]);
+  });
+
+  it("says why when nothing can be caught up, or when the server refuses", async () => {
+    const p = await panel({ ...TWIN_OFFER, paths: [], standIns: [], why: "“Urgences” is a draft: it does not write the twin today." });
+    expect(await p.findByText("“Urgences” is a draft: it does not write the twin today.")).toBeTruthy();
+    expect(p.queryByRole("button", { name: /Catch up/ })).toBeNull();
+    cleanup();
+
+    const q = await panel(TWIN_OFFER);
+    api.runCatchup.mockRejectedValue(new ApiError(400, "CATCHUP_REFUSED", "“Urgences” has problems a run would refuse: Nothing feeds this node."));
+    fireEvent.click(await q.findByRole("button", { name: "Catch up 1,523 copies" }));
+    expect((await q.findByRole("alert")).textContent).toBe("“Urgences” has problems a run would refuse: Nothing feeds this node.");
+  });
+
+  it("forgets what was caught up only once a person confirmed", async () => {
+    const done = state({ read: 1523, written: 41210, done: true });
+    const p = await panel({ ...TWIN_OFFER, begun: [done] }, list([{ ...OCCUPANCY, replayed: 41210 }, VIRUS], [done]));
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    fireEvent.click(await p.findByRole("button", { name: "Forget what was caught up" }));
+    expect(confirm.mock.calls[0]![0]).toBe("Forget what was caught up for “Stretcher occupancy”? Only what a catch-up wrote is removed: nothing the platform read live. The copies stay, so it can be caught up again.");
+    expect(api.forgetCatchup).not.toHaveBeenCalled();
+
+    confirm.mockReturnValue(true);
+    api.forgetCatchup.mockResolvedValue({ removed: 41210 });
+    api.fetchCatchupOffer.mockResolvedValue(TWIN_OFFER);
+    fireEvent.click(p.getByRole("button", { name: "Forget what was caught up" }));
+    await waitFor(() => expect(api.forgetCatchup).toHaveBeenCalledWith("mtl", "twin:occupancy"));
+    expect((await p.findByRole("status")).textContent).toBe("41,210 points caught up were removed.");
+    await waitFor(() => expect(api.fetchSeries).toHaveBeenCalledTimes(2));
   });
 });

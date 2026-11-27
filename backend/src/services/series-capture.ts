@@ -236,6 +236,8 @@ export interface CaptureResult {
   key: string;
   written: number;
   note: string | null;
+  /** Rows that made no point: a time that could not be placed, or rows that contradict each other. */
+  leftOut: number;
 }
 
 /** One copy read into one series, and what could not be read said on the series. */
@@ -254,7 +256,7 @@ export async function captureInto(
   if (!replayed) {
     await db.query(`UPDATE app.kept_series SET last_note = $2, last_written_at = $3, updated_at = NOW() WHERE id = $1`, [def.id, note, seenAt.toISOString()]);
   }
-  return { key: def.key, written, note };
+  return { key: def.key, written, note, leftOut: extracted.unreadableTime + extracted.zoneUnknown + extracted.ambiguous };
 }
 
 /**
@@ -285,7 +287,7 @@ export async function captureForDataset(
     } catch (err) {
       const note = `The last write of the dataset could not be read into this series: ${(err as Error).message}`;
       await db.query(`UPDATE app.kept_series SET last_note = $2, updated_at = NOW() WHERE id = $1`, [def.id, note]).catch(() => undefined);
-      out.push({ key: def.key, written: 0, note });
+      out.push({ key: def.key, written: 0, note, leftOut: rows.length });
     }
   }
   return out;

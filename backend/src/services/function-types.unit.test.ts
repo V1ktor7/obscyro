@@ -274,6 +274,28 @@ test("a history is read for a unit named in the call, over the window declared",
   assert.match(out.how_to_read as string, /A reading with no value is a gap, not a zero/);
 });
 
+test("a history says how many of its readings were caught up from kept copies, and only when some were", async () => {
+  const t = declare("occupancy_history", { inputs: [{ name: "unit", kind: "text", says: "The unit's name." }], block: "history", config: { metric: "occupancy", unit: { input: "unit" }, hours: 24 } });
+  const plain = await runFunction(t, { unit: "chum" }, reads(), NOW);
+  assert.ok(!("readings_caught_up" in plain) && !("caught_up" in plain));
+
+  const caught = reads({
+    history: async () => ({
+      opening: null,
+      readings: [
+        { value: 124, observedAt: "2026-11-25T10:00:00.000Z", observedBasis: null, recordedAt: "2026-11-25T10:04:00.000Z", replayed: true },
+        { value: 131, observedAt: "2026-11-25T11:00:00.000Z", observedBasis: null, recordedAt: "2026-11-25T11:04:00.000Z", replayed: true },
+        { value: 137, observedAt: "2026-11-25T16:00:00.000Z", observedBasis: null, recordedAt: "2026-11-25T16:04:00.000Z" },
+      ],
+      cut: false,
+      since: "2026-11-25T10:04:00.000Z",
+    }),
+  });
+  const out = await runFunction(t, { unit: "chum" }, caught, NOW);
+  assert.deepEqual([out.readings_kept, out.readings_caught_up], [3, 2]);
+  assert.match(out.caught_up as string, /caught up afterwards from kept copies of the source.*The twin did not show them at the time/);
+});
+
 test("a history says what cannot be read: a unit it does not find, a measure the twin does not keep", async () => {
   const t = declare("occupancy_history", { inputs: [{ name: "unit", kind: "text", says: "The unit's name." }], block: "history", config: { metric: "occupancy", unit: { input: "unit" }, hours: 24 } });
   await assert.rejects(runFunction(t, { unit: "Verdun" }, reads(), NOW), refused(/Verdun/));

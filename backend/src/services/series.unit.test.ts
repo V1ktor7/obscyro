@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { extractPoints, noteOf, numberOf, type Extracted } from "./series-capture.js";
-import { GRID_MAX, STEP_MS, checkDraft, gridOf, knownAsOf, onGrid, seriesDraft, seriesKeyFrom, type KeptPoint } from "./series.js";
+import type { DbClient } from "../lib/db.js";
+import { GRID_MAX, STEP_MS, checkDraft, gridOf, knownAsOf, onGrid, removeSeries, seriesDraft, seriesKeyFrom, type KeptPoint } from "./series.js";
 
 /**
  * A history a model can read.
@@ -237,4 +238,25 @@ test("a series key is made from its label, and never taken twice", () => {
   assert.equal(seriesKeyFrom("Météo", new Set(["meteo"])), "meteo_2");
   assert.equal(seriesKeyFrom("7 j", none), "j_series");
   assert.equal(seriesKeyFrom("???", none), "series");
+  // `read` and `catchup` are routes beside the series: no series answers to their name.
+  assert.equal(seriesKeyFrom("Catchup", none), "catchup_series");
+  assert.equal(seriesKeyFrom("Read", none), "read_series");
+});
+
+test("removing a series removes where its catch-ups stood, and says when there was no such series", async () => {
+  const sql: string[] = [];
+  const db = (rowCount: number) =>
+    ({
+      query: async (q: string) => {
+        sql.push(q.replace(/\s+/g, " ").trim());
+        return { rows: [], rowCount };
+      },
+    }) as unknown as DbClient;
+  await removeSeries(db(1), "p1", "virus_detections");
+  assert.deepEqual(sql, [
+    "DELETE FROM app.kept_series WHERE project_id = $1 AND key = $2",
+    "DELETE FROM app.series_catchup WHERE project_id = $1 AND series_key = $2",
+  ]);
+  await assert.rejects(removeSeries(db(0), "p1", "twin:occupancy"), (err: unknown) => (err as { code?: string }).code === "SERIES_NOT_FOUND");
+  assert.equal(sql.length, 3, "nothing else is removed for a series that is not there");
 });

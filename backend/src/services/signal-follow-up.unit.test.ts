@@ -271,3 +271,14 @@ test("each rule counts the signals it raised, and tells a dismissal from a batch
   // The three ways to close stay three: the prefixes are the ones the closes write.
   assert.deepEqual(params[0], ["p1", "false positive: %", "alert cleared: %"]);
 });
+
+test("readings caught up afterwards from kept copies are counted, and said for what they are", () => {
+  const caught = (iso: string, value: number): KeptReading => ({ ...reading(iso, value), replayed: true });
+  const f = follow({ kept: kept({ readings: [reading(at("11:50"), 150), caught(at("13:00"), 131), reading(at("15:00"), 96)] }) });
+  assert.ok(f.followed);
+  assert.equal(f.measured.readings, 2);
+  assert.equal(f.measured.says[f.measured.says.length - 1], "1 of these 2 readings was caught up afterwards from kept copies of the source: the twin did not show it at the time.");
+  // Nothing is said when none was: the sentence is about what happened, not a standing warning.
+  const plain = follow();
+  assert.ok(plain.followed && !plain.measured.says.some((s) => /caught up/.test(s)));
+});

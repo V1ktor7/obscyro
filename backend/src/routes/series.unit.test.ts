@@ -40,6 +40,9 @@ test("the series routes register and compile", async () => {
     ["POST", "/v1/ontology/:env/series"],
     ["DELETE", "/v1/ontology/:env/series/:key"],
     ["POST", "/v1/ontology/:env/series/read"],
+    ["GET", "/v1/ontology/:env/series/catchup"],
+    ["POST", "/v1/ontology/:env/series/catchup"],
+    ["DELETE", "/v1/ontology/:env/series/catchup"],
   ] as const) {
     assert.ok(app.hasRoute({ method, url }), `${method} ${url}`);
   }
@@ -77,5 +80,28 @@ test("a read is validated before anything is read", async () => {
   assert.equal((await read({ ...READ, entities: Array.from({ length: 301 }, (_, i) => `e${i}`) })).statusCode, 400);
   assert.equal((await read(READ)).statusCode, 401);
   assert.equal((await read({ ...READ, asOf: "2026-11-28T00:00:00Z", agg: "last", entities: ["x"] })).statusCode, 401);
+  await app.close();
+});
+
+test("a catch-up is validated before anything is read or written", async () => {
+  const app = await server();
+  const CATCHUP = { key: "twin:occupancy", datasetId: "5f0c1a3e-8b1d-4c56-9a44-0b6d2f1e7a90" };
+  const run = (payload: object) => app.inject({ method: "POST", url: "/v1/ontology/mtl/series/catchup", payload });
+
+  // The copies are those of a dataset, named by its identifier.
+  assert.equal((await run({ key: "twin:occupancy" })).statusCode, 400);
+  assert.equal((await run({ ...CATCHUP, datasetId: "the old emergency file" })).statusCode, 400);
+  assert.equal((await run({ ...CATCHUP, pipelineId: "urgences" })).statusCode, 400);
+  assert.equal((await run({ ...CATCHUP, inPlaceOf: "the full file" })).statusCode, 400);
+  // Well formed: it stops at the door, for want of a key.
+  assert.equal((await run(CATCHUP)).statusCode, 401);
+  assert.equal((await run({ ...CATCHUP, pipelineId: "5f0c1a3e-8b1d-4c56-9a44-0b6d2f1e7a91", inPlaceOf: "5f0c1a3e-8b1d-4c56-9a44-0b6d2f1e7a92" })).statusCode, 401);
+
+  // An offer and a forgetting name the series they are about.
+  assert.equal((await app.inject({ method: "GET", url: "/v1/ontology/mtl/series/catchup" })).statusCode, 400);
+  assert.equal((await app.inject({ method: "GET", url: "/v1/ontology/mtl/series/catchup?key=twin:occupancy" })).statusCode, 401);
+  assert.equal((await app.inject({ method: "DELETE", url: "/v1/ontology/mtl/series/catchup" })).statusCode, 400);
+  // Not the route that removes a series: `catchup` is never taken for a series key.
+  assert.equal((await app.inject({ method: "DELETE", url: "/v1/ontology/mtl/series/catchup?key=virus_detections" })).statusCode, 401);
   await app.close();
 });

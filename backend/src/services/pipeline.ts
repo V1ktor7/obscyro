@@ -169,7 +169,7 @@ const PREVIEW_ROWS = 25;
 // The cut is not the danger on its own; the danger is that it happened in
 // silence, so a run could serve last month's figures the day the current week
 // fell past the ceiling and nothing would say so.
-const MAX_ROWS = 150_000;
+export const MAX_ROWS = 150_000;
 
 export interface NodeMeta {
   kind: NodeKind;
@@ -1204,6 +1204,18 @@ export interface RunOptions {
   preview?: boolean;
   limit?: number;
   trigger?: "manual" | "preview" | "stream" | "schedule";
+  /**
+   * Where a dataset input reads its rows, in place of the dataset's latest
+   * copy. A catch-up hands an older copy this way (D12). Preview only: a run
+   * that writes always reads what the dataset holds now.
+   */
+  readInput?: (datasetId: string, limit: number) => Promise<Row[]>;
+  /**
+   * Handed the rows that reach each object output, in place of writing them.
+   * With it, a preview does not look at the ontology at all: no type is
+   * resolved, no link type is looked up or made. Preview only.
+   */
+  onObjectRows?: (node: PipelineNode, rows: Row[]) => void;
 }
 
 export async function execute(
@@ -1253,7 +1265,8 @@ export async function execute(
 
       switch (node.kind) {
         case "dataset_input": {
-          out = (await previewRows(db, String(node.config.datasetId), limit)) as Row[];
+          const datasetId = String(node.config.datasetId);
+          out = preview && opts.readInput ? await opts.readInput(datasetId, limit) : ((await previewRows(db, datasetId, limit)) as Row[]);
           rowsIn += out.length;
           break;
         }
@@ -1322,6 +1335,11 @@ export async function execute(
           break;
         }
         case "object_output": {
+          if (preview && opts.onObjectRows) {
+            opts.onObjectRows(node, inRows);
+            out = inRows;
+            break;
+          }
           // A run cut at the ceiling anywhere upstream is not the complete set,
           // and an output that retires what it did not write has to know.
           const truncatedUpstream = Object.values(nodeStats).some((st) => (st.truncated ?? 0) > 0);

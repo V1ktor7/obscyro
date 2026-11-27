@@ -409,11 +409,16 @@ async function runHistory(c: HistoryConfig, given: Given, reads: FunctionReads, 
   const read = await reads.history(unit.id, c.metric, from, now);
   const points = [...(read.opening ? [{ at: from.toISOString(), value: read.opening.value }] : []), ...read.readings.map((r) => ({ at: r.observedAt ?? r.recordedAt, value: r.value }))];
   const valued = points.flatMap((p) => (p.value === null ? [] : [p.value]));
+  // Readings caught up afterwards from kept copies (D12): the twin did not show them at the time.
+  const caughtUp = read.readings.filter((r) => r.replayed).length;
   return {
     unit: unit.name,
     measure: metric.label,
     over_the_last_hours: hours,
     readings_kept: read.readings.length,
+    ...(caughtUp > 0
+      ? { readings_caught_up: caughtUp, caught_up: "Readings caught up afterwards from kept copies of the source, with the measure as it is defined today. The twin did not show them at the time." }
+      : {}),
     lowest: valued.length ? Math.min(...valued) : null,
     highest: valued.length ? Math.max(...valued) : null,
     latest: valued.length ? valued[valued.length - 1] : null,

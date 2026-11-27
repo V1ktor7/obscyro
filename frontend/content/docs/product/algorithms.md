@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "3f1f40029030e7fd"
+translatedFrom: "628677b70b1e74d1"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -55,7 +55,7 @@ Every algorithm of the product has its section here: what it is for, its diagram
 | [D9](#d9-live-reading-and-situation-card) | Live reading and situation card | `backend/src/services/live-reading.ts`, `situation.ts` |
 | [D10](#d10-sites-and-units-on-the-network-map) | Sites and units on the network map, and the inspector of a site | `frontend/app/studio/command/units-tree.ts` |
 | [D11](#d11-history-of-twin-measures) | History of twin measures | `backend/src/services/twin-history.ts` |
-| [D12](#d12-kept-series) | Kept series: a history a model can read, on a regular grid | `backend/src/services/series.ts` |
+| [D12](#d12-kept-series) | Kept series: a history a model can read, on a regular grid, and caught up from kept copies | `backend/src/services/series.ts`, `series-catchup.ts` |
 
 ---
 
@@ -470,6 +470,7 @@ flowchart TD
 - **The delay is written twice.** It is computed from two recorded times, the signal's and the decision's, and it is also written on the signal's log when the response is engaged (`secondsSinceRaised`), a log nothing modifies afterwards.
 - **What the twin showed.** The value “at the decision” is the last reading written down at that moment: what the person had in front of them, not what the source published later for the same hour.
 - **No new reading is not no change.** When nothing was written down since the decision, the card writes so, and gives no change. A measure that lost its value says so instead of showing a figure.
+- **A caught-up reading is said.** When readings counted over the stretch were caught up afterwards from a kept copy of the source (D12), the card writes how many: the twin did not show them at the time.
 - **A change after a decision is not its effect.** Other things changed at the same time, and this follow-up does not tell them apart. The card says so, and does not conclude.
 - **A closed signal** is followed until its closing, and the card keeps how it was closed.
 - **What is not followed.** A signal no alert raised has no measure. Neither does a signal raised on a built-in count: the twin keeps only the measures the organisation defined. A signal older than the history has no readings before the day it started. Each case is written on the card.
@@ -787,6 +788,7 @@ flowchart TD
 - **A candidate is accepted as in A10.** The server copies it from the investigation's journal; a rejected candidate is recorded nowhere.
 - **On the timeline.** The timeline of the Network page draws the series of the selected unit over its own window, the same as the investigation's (24 h, 72 h, 7 days, 30 days). When an investigation of that unit and that measure is on screen, its episodes are bands under the series and its events are marks at the day their source dates them: dashed for a candidate, solid for an event of the calendar. An episode drawn is one the investigation counted, never one guessed from the line. The threshold is drawn only when it is near what was read, and the screen says so when it is not.
 - **Bounds.** A span of 366 days at most, 2,000 readings a series (beyond that, the oldest are left out and the result says so). Days are counted on the clock the page sends, the browser's; UTC when none is sent.
+- **A caught-up series is said.** When the series holds readings caught up from kept copies (D12), the step that reads it gives their number (`caughtUp`) and a limit of the result writes it: they are what today's measure would have read in the copy, not what the twin showed.
 - **What is missing.** One factor at a time: no model separates the share of two events that go with the same episode. No replication: an event seen before an episode has been seen once (the pieces that replicate a lag across several waves are in C3, and are not connected). An event's place is a text, linked to no territory: the investigation does not know whether the event concerns the unit. The history starts the day the recorder started (D11).
 - An investigation reads a unit and aggregate values, never a person.
 
@@ -913,6 +915,7 @@ flowchart LR
 - **By unit, by site: the twin's rules.** An object stands at the unit that receives it through an attaching link, whichever way the institution drew the link (`attaches`, `aggregationEnds`); when there are several, the first one read. It is counted at that unit, not at the units above, and the result says so (`grouped_how`). Two units of one name stay two groups, each with the unit above it (`under`). The site is the physical place where the unit is placed, or that of the nearest unit above that has one; an object that is itself a site is its own site; when the ontology calls nothing physical, the site is the top of the tree, as on the network map (D10). What is attached to nothing forms a group of its own, counted.
 - **Formula.** From one to six named aggregates, plus the tool's number inputs. It is evaluated once at declaration, on stand-in values, to say at once a name it does not have. At the call, a value that does not exist (no object carries the property) makes the calculation refused: nothing stands in for it. The result gives what it was computed from (`computed_from`) and the formula.
 - **History.** Only the measures the organisation defined are kept (D11); another is refused, with the list of those that are. The unit is found by its name, as the other tools do. The window goes from 1 to 2,160 hours. The result gives the value that held at the start of the window, then the readings, the lowest, the highest, the latest, and the date the history starts. A reading with no value is a gap, not a zero. The last 60 readings are listed.
+- **A caught-up reading is said.** When the window of a `history` block holds readings caught up from kept copies (D12), the result gives their number (`readings_caught_up`) with a sentence saying what they are. With no caught-up reading, those two fields are not there.
 - **Dataset.** Found by its identifier, its short name or its name. A column it does not have makes the call refused, with the list of its columns.
 - **A ceiling is said.** Each read of the ontology takes one object more than its ceiling (`ROLLUP_INSTANCE_CAP`): when it is reached, the result says it rests on the first objects and not on all (`limit`). The ceiling is never lowered by a literal. When more rows match than are listed, the result gives both numbers. A result of more than 24,000 characters is refused rather than cut, with what to narrow: a table cut without a word would pass for whole.
 - **Every result says where it comes from** (`read_from`): the objects of a type of the twin, a formula over those objects, the readings the twin kept, or a named dataset.
@@ -1573,12 +1576,14 @@ flowchart TD
     F -->|"same value, same time"| H["Nothing is written"]
     F -->|"no reading yet, and no value"| H
     G --> I["app.twin_reading: unit, measure, value,<br/>the source's time and what it is worth,<br/>the time we wrote it down"]
+    X["Catch-up from kept copies (D12):<br/>readings marked, dated at their copy"] --> I
     I --> J["GET /twin/units/:id/history:<br/>the readings of a measure over a period"]
     J --> K["The reading in force when the period opens<br/>is put first"]
     K --> L["The unit's sheet: a staircase,<br/>each value holds until the next reading"]
     L --> M{"A reading with no value?"}
     M -->|"yes"| N["The line breaks:<br/>a gap is not a zero"]
     M -->|"no"| O["The lowest, the highest,<br/>and the date of the first reading kept"]
+    O --> O2["Caught-up readings are drawn like the others<br/>and said apart: the twin did not show them"]
     I --> P["GET /twin/units/:id, trends:<br/>one read for every measure of the unit"]
     P --> Q{"Does the value describe a day (D7)?"}
     Q -->|"no"| R["Reading before: the last one kept<br/>that is not the one on screen"]
@@ -1591,11 +1596,11 @@ flowchart TD
 
 **Rules.**
 - **Only what changes.** A reading is written down when the value differs from the last reading kept, or when the same value is read at a new time. An hourly file read twelve times in the hour gives one reading, not twelve. An identical value read an hour later gives a second one: “still 143% at 3 pm” is information.
-- **Two times, which do not say the same thing.** `observed_at`: when the value was true, according to the source's timestamp, counted on what the measure reads (D7); empty when the source does not say. `recorded_at`: when we wrote it down. `observed_basis` keeps what the first one is worth: an age that is only a floor stays a floor.
+- **Two times, which do not say the same thing.** `observed_at`: when the value was true, according to the source's timestamp, counted on what the measure reads (D7); empty when the source does not say. `recorded_at`: when we wrote it down; for a caught-up reading, when the copy it comes from was taken. `observed_basis` keeps what the first one is worth: an age that is only a floor stays a floor.
 - **A tolerance of 90 seconds.** The twin gives a value's age in whole seconds; so the same source time comes back one or two seconds apart from one pass to the next. Two times less than 90 seconds apart are the same reading. Sources publish by the hour or by the day: that margin hides no reading.
 - **Absence shows.** A measure that no longer has a value is written down with an empty value, once. A gap in the readings is not a zero. A measure that never had a value starts no history.
 - **Reality only.** The twin is read with no lens. A reading made through a scenario describes a world that does not exist.
-- **No invented past.** The history starts the day the recorder started. Nothing from before is reconstructed, and the route returns the date of the first reading kept (`since`): the screen writes it. An empty list with an empty `since` means “nothing was kept”, not “nothing changed”.
+- **Nothing is invented.** The history starts the day the recorder started. What is older can only come from a copy of the source that was really kept, replayed afterwards (D12). Such a reading is marked as caught up (`replayed`): it carries the time the source gave and the time the copy was taken, and the screen says so, because the twin did not show it at the time. Nothing else is reconstructed. The route returns the date of the first reading kept (`since`) and says whether it was caught up (`sinceCaughtUp`): the screen writes it. An empty list with an empty `since` means “nothing was kept”, not “nothing changed”.
 - **The measures the organisation defined, not the built-in counts.** The number of linked objects, the age of the data and the counts by type are computed on the spot and are not kept. The sheet says so for those measures instead of showing an empty history.
 - **A staircase.** Between two readings kept, the twin showed the first: the recorder passes every five minutes and writes down any change. So the line holds flat until the next reading, and nothing is drawn between two readings that was not read. A reading is placed at its source's time; when the source declares none, at the time it was written down.
 - **Cadence.** One pass every five minutes, never two at once: the next starts five minutes after the previous one ended. So a change is written down at most five minutes after it happened, with its source's time. One project's failure does not cost the others their reading. `TWIN_HISTORY_DISABLED=1` stops the recording; what was kept stays.
@@ -1609,7 +1614,7 @@ flowchart TD
 - **A figure of the day before is compared with the day before's.** Republished every hour, it is not compared with itself an hour earlier: its reading before is the last one kept on an earlier day, counted on the clock of its source (D7).
 - **The 30-day mean.** For a figure of the day before, the mean of one value a day, the last one written down that day, over 30 days at most (`meanOfDays`). It says how many days it rests on (“average over 12 days kept”) while there are fewer than thirty. A day with no reading is not filled in.
 - **A change has no colour.** Twelve more people waiting is worse; twelve more stretchers is better. The sign says “more”, and nothing else.
-**Code.** `backend/src/services/twin-history.ts` (`readingsNow`, `recordReadings`, `recordProject`, `recordAllProjects`, `readUnitHistory`, `changeOf`, `meanOfDays`, `readUnitTrends`, `startTwinHistory`), route `GET /v1/ontology/:env/twin/units/:id/history` in `backend/src/routes/twin.ts`, migration `067_twin_reading.sql`; `frontend/app/studio/live/unit-history.ts` (`historyView`), `unit-trends.ts`, `UnitSheet.tsx`, `UnitsView.tsx`, `command/SiteInspector.tsx`.
+**Code.** `backend/src/services/twin-history.ts` (`readingsNow`, `recordReadings`, `recordProject`, `recordAllProjects`, `readUnitHistory`, `changeOf`, `meanOfDays`, `readUnitTrends`, `startTwinHistory`), `series-catchup.ts` (`recordReplayed`), route `GET /v1/ontology/:env/twin/units/:id/history` in `backend/src/routes/twin.ts`, migrations `067_twin_reading.sql` and `072_kept_series.sql` (the `replayed` mark); `frontend/app/studio/live/unit-history.ts` (`historyView`), `unit-trends.ts`, `UnitSheet.tsx`, `UnitsView.tsx`, `command/SiteInspector.tsx`.
 **Tests.** `twin-history.unit.test.ts`, `twin-daily-figures.unit.test.ts`; `live/unit-history.test.ts`, `live/unit-trends.test.ts`, `live/UnitSheet.test.tsx`, `live/UnitsView.test.tsx`.
 
 ## D12. Kept series
@@ -1657,6 +1662,47 @@ flowchart TD
     K --> L
 ```
 
+**The catch-up from kept copies.**
+
+```mermaid
+flowchart TD
+    A["Kept series screen: “Catch up” on a series"] --> B["GET /series/catchup: the copies taken<br/>before the series started being kept"]
+    B --> C{"A measure of the twin<br/>or a dataset series?"}
+    C -->|"dataset series"| D["The copies of its own dataset"]
+    C -->|"measure of the twin"| E{"Does a pipeline write today<br/>every object type the measure reads?"}
+    E -->|"no: a draft, several pipelines,<br/>a measure that counts everything"| E1["Nothing is offered, with the reason"]
+    E -->|"yes"| F["The datasets that pipeline reads, with their older copies.<br/>Or another dataset of the project, read in place of an input"]
+    D --> G["The screen says how many copies will be read,<br/>of which dataset, through which pipeline.<br/>A person starts it"]
+    F --> G
+    G --> H["POST /series/catchup: one batch.<br/>25 copies at most, 12 s, 400,000 rows"]
+    H --> I["The next copies, from the oldest<br/>to the newest, after the last one read"]
+    I --> J{"Which series?"}
+    J -->|"dataset series"| K["The rows of the copy become points,<br/>as at a write of the dataset"]
+    J -->|"measure of the twin"| L["The copy goes through today's pipeline, in memory.<br/>Its other inputs are read as they were then"]
+    L --> L0{"Does the pipeline run,<br/>without cutting the copy?"}
+    L0 -->|"no"| L1["Copy left out,<br/>counted, with the reason"]
+    L0 -->|"yes"| M{"Is the object of a row<br/>in the twin today?"}
+    M -->|"yes, same identity"| N["It keeps the place<br/>it has today"]
+    M -->|"no"| O{"Does a link rule of the pipeline<br/>find it a place?"}
+    O -->|"yes"| N2["Placed by that rule"]
+    O -->|"no"| O1["Left out, counted"]
+    N --> P["The measure, as defined today,<br/>over today's units,<br/>at the time the copy was taken"]
+    N2 --> P
+    K --> Q{"Against what was written down<br/>when the copy was taken"}
+    P --> Q
+    Q -->|"a new or different value"| R["Written down, marked “caught up”:<br/>the source's time,<br/>and the time the copy was taken"]
+    Q -->|"the same value"| S["Nothing is written down"]
+    Q -->|"no value,<br/>and never had one"| S
+    R --> T["app.series_catchup:<br/>where the catch-up stands"]
+    S --> T
+    L1 --> T
+    O1 --> T
+    T --> U{"Are there copies left?"}
+    U -->|"yes"| V["The screen asks for another batch,<br/>or a person stops and will resume"]
+    V --> H
+    U -->|"no"| W["Done: the series says what was caught up<br/>and what was left out"]
+```
+
 **Rules.**
 - **Two kinds of series, a single read.** A measure of the twin is a series with nothing to declare: its key is `twin:` followed by the measure, a unit is an entity, and its points are the readings of D11. A dataset series is declared from the Studio. What differs is where the points are, never how a grid is made from them.
 - **Nothing is recognised by its name.** The column of the time, the one of the value and those of the entity (four at most) are picked from the dataset's schema. The dataset has to be a table of the project: every write of a table is a whole copy to read, which a stream is not. The key is made from the label.
@@ -1666,15 +1712,26 @@ flowchart TD
 - **The time of a file.** An instant that carries its zone is read as it stands. One that carries none (`2026-11-27T12:50`) does not say which city's clock it is: it is read only if the series declares a time zone, as in D7. A date with no hour is the start of that day. With no zone declared, those rows are not placed, and the series says so.
 - **Two rows that contradict each other do not make a point.** Same entity, same instant, two values: a column is missing from the entity. The rows are left out and counted, never averaged nor picked from.
 - **A write never fails because of a series.** What a series could not read (unreadable times, ambiguous rows, a column that went away) is written on its line, and the screen shows it. The dataset already has its copy.
-- **On declaration, the latest copy is read.** Its points are dated at when that copy was taken: that is since when the platform has held them. A dataset never written is declared all the same, and waits for its first write.
+- **On declaration, the latest copy is read.** Its points are dated at when that copy was taken: that is since when the platform has held them. Older copies are read only when asked for: that is a catch-up. A dataset never written is declared all the same, and waits for its first write.
 - **A value holds until the next point.** Over a step, `mean` is the average of what was in force, weighted by how long; `max` is the highest value in force at some moment of the step; `last` is the one in force when the step ends. A mean counts only the time known: a day half known is averaged over that half.
 - **A gap stays a gap.** A step during which nothing was in force is `null`, never zero. Nothing is known before an entity's first point, and the answer gives the date of that first point.
 - **“As known at”.** With `asOf`, the read uses only what had been written down at that instant, and the stretch cannot end after it: nothing was known of what came next. A corrected value is read as it was known that day.
 - **A bounded read, refused rather than cut.** 3,000 steps and 300 entities at most per read. Beyond that the read is refused with what to narrow: a series cut without a word would pass for whole.
 - **By project.** A series belongs to a project; another project does not see it.
-- **Removing a series removes its points, not the copies.** The dataset's versions are not touched: declaring the series again reads the latest one. A measure of the twin is not removed here.
+- **Removing a series removes its points, not the copies.** The dataset's versions are not touched: declaring the series again reads the latest one. Its catch-ups are removed with it. A measure of the twin is not removed here.
 - **Declaring and removing are kept in the audit log.**
-- **What is missing.** Copies older than the declaration are not read. A file that carries its own history has all its points written down the day it is first read: read “as known at” a day before, they are not there. A source that stops publishing leaves its last value in force: for a dataset series, the read does not tell “unchanged” from “not re-read”. The grid moves by fixed steps from its start: a day is 24 hours on it, even on the day the clocks change. A stream is not kept as a series.
+- **Catching up is reading again what was kept.** A series starts the day it started being kept: the first reading of a measure of the twin, the first copy read of a dataset series. But every sync was already keeping a whole copy of its file. A catch-up reads the copies taken before that day, from the oldest to the newest, and writes down what they hold. No copy, no point: nothing is invented.
+- **A dataset series reads its own copies again.** Each copy is read the way a write of the dataset is read today: the same columns, and the same rules as above.
+- **A measure of the twin goes through today's pipeline again, in memory.** It takes a pipeline that writes today, and not a draft, every object type the measure reads. Each copy goes through it, and the measure is computed by the twin's own computation (D11), as it is defined today, over today's units. Nothing is written in the ontology: no object, no link, no type, no pipeline run.
+- **Today's definitions, not those of the time.** The pipeline, the measure, the units and the place of each object are the ones of now. An object the twin holds today, recognised by its identity, keeps the place it has today, with all its links. One it does not hold is placed by the pipeline's link rules, read against today's twin. An object carries only what its copy said: a property the old file did not have is absent, never today's value. The screen says so before anything is started.
+- **When the source changed file.** The dataset the pipeline reads today does not always have the old copies. A person can have the copies of another dataset of the project read in place of one of the pipeline's inputs: they pick the dataset and the input, nothing is recognised by its name. The screen names the columns that dataset lacks: what the pipeline makes from them will be empty. The pipeline's other inputs, a lookup table for instance, are read as they were when the copy was taken: their last copy of that time, or the first one kept if there was none yet.
+- **Marked, with its two times.** Everything a catch-up writes down is marked as caught up. A caught-up point carries the time its source gave and the time its copy was taken, not the time of the catch-up: read “as known at”, it appears at the moment the platform really held the copy.
+- **A caught-up reading is held against the past.** It is compared with the last reading written down at the time of its copy or before, not with the most recent one. A copy re-read unchanged writes nothing. A unit that has no value and never had one starts no series; a unit that loses its value has that absence written down.
+- **Nothing is placed by guess.** A row that cannot be made into an object (a value that cannot be read, a required property missing, no identity), an object that names no place the twin holds, a copy the pipeline fails on or that is longer than a run reads (150,000 rows): left out, counted, and said on the series.
+- **In bounded batches, and resumed.** One call reads 25 copies at most, and stops earlier past 12 seconds or 400,000 rows; it always reads at least one. The screen says before it starts how many copies will be read, asks for another batch as long as some are left, and stops when asked. Where the catch-up stands stays written: it resumes from there. A finished catch-up, started again, reads nothing.
+- **Refused with the reason.** No older copy; a measure that has no reading yet; a measure that counts every object of a unit, or that reads types written by several pipelines; a draft pipeline, a pipeline that calls the extraction service, a pipeline a run would refuse.
+- **Forgetting what was caught up.** Removes what the catch-ups of a series wrote down, and those catch-ups with it. Only what is marked: a reading taken live and a point written by a sync are never touched, and neither are the copies. So the catch-up can be done again. The start of a catch-up and its forgetting are kept in the audit log.
+- **What is missing.** A caught-up reading is not what the twin showed at the time: it is what today's measure would have read in the copy. A measure that reads types written by several pipelines is not caught up. The first point written down live can say again the last value caught up: the read is not changed by it. A file that carries its own history has all its points written down the day of its oldest copy read: read “as known at” a day before, they are not there. A source that stops publishing leaves its last value in force: for a dataset series, the read does not tell “unchanged” from “not re-read”. The grid moves by fixed steps from its start: a day is 24 hours on it, even on the day the clocks change. A stream is not kept as a series.
 
-**Code.** `backend/src/services/series.ts` (`knownAsOf`, `onGrid`, `gridOf`, `readGrid`, `checkDraft`, `declareSeries`, `listSeries`), `series-capture.ts` (`extractPoints`, `noteOf`, `writePoints`, `captureForDataset`), `datasets.ts` (`loadTableVersion`), routes `backend/src/routes/series.ts`, migration `072_kept_series.sql`; `frontend/app/studio/data/KeptSeries.tsx`, `kept-series.ts`, `DataSection.tsx`, `frontend/app/studio/series-api.ts`.
-**Tests.** `series.unit.test.ts` (the rows of a copy turned into points, a time with no zone, ambiguous rows, the grid, gaps, “as known at”, a corrected value, the declaration refused), `routes/series.unit.test.ts`; `data/kept-series.test.ts`, `data/KeptSeries.test.tsx`.
+**Code.** `backend/src/services/series.ts` (`knownAsOf`, `onGrid`, `gridOf`, `readGrid`, `checkDraft`, `declareSeries`, `listSeries`), `series-capture.ts` (`extractPoints`, `noteOf`, `writePoints`, `captureInto`, `captureForDataset`), `series-catchup.ts` (`catchupOffer`, `runCatchup`, `typesLookedAt`, `whyNotThrough`, `readStructure`, `replayObjects`, `replayReadings`, `recordReplayed`, `forgetCatchup`, `listCatchups`), `pipeline.ts` (`execute`, options `readInput` and `onObjectRows`), `datasets.ts` (`loadTableVersion`), routes `backend/src/routes/series.ts`, migrations `072_kept_series.sql` and `073_series_catchup.sql`; `frontend/app/studio/data/KeptSeries.tsx`, `kept-series.ts`, `DataSection.tsx`, `frontend/app/studio/series-api.ts`.
+**Tests.** `series.unit.test.ts` (the rows of a copy turned into points, a time with no zone, ambiguous rows, the grid, gaps, “as known at”, a corrected value, the declaration refused), `series-catchup.unit.test.ts` (two rows for one identity, a copy with no time, an identity that changes from one file to the next, a row with no place, a unit with no value, the batches and the resuming, nothing written in the ontology, the forgetting), `routes/series.unit.test.ts`; `data/kept-series.test.ts`, `data/KeptSeries.test.tsx`.

@@ -9,6 +9,10 @@ import type { TwinUnitHistory } from "@/lib/platform-api";
 // next reading, and nothing is drawn between two readings that was not read.
 //
 // A reading with no value breaks the line. A gap is not a zero.
+//
+// A reading can also have been caught up afterwards, from a copy of the source
+// that was kept before the twin started writing this measure down. It is drawn
+// like the others, and said apart: the twin did not show it at the time.
 // ---------------------------------------------------------------------------
 
 /** What the sheet knows of a value's history. */
@@ -84,8 +88,20 @@ export function historyView(h: TwinUnitHistory, format: (value: number) => strin
     lines.push(`${valued.length} readings · lowest ${format(low!)} · highest ${format(high!)}`);
   }
   if (h.cut) lines.push("The window holds more readings than are drawn: the oldest are left out.");
+  const caughtUp = h.readings.filter((r) => r.replayed).length;
+  if (caughtUp > 0) {
+    lines.push(
+      caughtUp === h.readings.length
+        ? "These readings were caught up afterwards from kept copies of the source: the twin did not show them at the time."
+        : `${caughtUp} of these ${h.readings.length} readings ${caughtUp === 1 ? "was" : "were"} caught up afterwards from kept copies of the source: the twin did not show ${caughtUp === 1 ? "it" : "them"} at the time.`,
+    );
+  }
   if (h.since !== null) {
-    lines.push(`The first reading of this value was kept ${agoLabel(seconds(h.since, h.at))}. Nothing earlier is known.`);
+    lines.push(
+      h.sinceCaughtUp
+        ? `The oldest reading comes from a copy of the source kept ${agoLabel(seconds(h.since, h.at))}, caught up afterwards. Nothing earlier is known.`
+        : `The first reading of this value was kept ${agoLabel(seconds(h.since, h.at))}. Nothing earlier is known.`,
+    );
   }
   if (valued.length > 1) {
     lines.push(`Each value holds until the next reading. The twin is read every ${everyLabel(h.everySeconds)}.`);

@@ -49,7 +49,7 @@ Chaque algorithme du produit a ici sa section : à quoi il sert, son schéma, se
 | [D9](#d9-lecture-du-direct-et-fiche-de-situation) | Lecture du direct et fiche de situation | `backend/src/services/live-reading.ts`, `situation.ts` |
 | [D10](#d10-sites-et-unités-sur-la-carte-du-réseau) | Sites et unités sur la carte du réseau, et l'inspecteur d'un site | `frontend/app/studio/command/units-tree.ts` |
 | [D11](#d11-historique-des-mesures-du-jumeau) | Historique des mesures du jumeau | `backend/src/services/twin-history.ts` |
-| [D12](#d12-séries-gardées) | Séries gardées : un historique qu'un modèle peut lire, sur une grille régulière | `backend/src/services/series.ts` |
+| [D12](#d12-séries-gardées) | Séries gardées : un historique qu'un modèle peut lire, sur une grille régulière, et rattrapé depuis les copies gardées | `backend/src/services/series.ts`, `series-catchup.ts` |
 
 ---
 
@@ -464,6 +464,7 @@ flowchart TD
 - **Le délai est écrit deux fois.** Il se calcule à partir de deux heures enregistrées, celle du signal et celle de la décision, et il est aussi écrit au journal du signal quand la réponse est engagée (`secondsSinceRaised`), journal que rien ne modifie ensuite.
 - **Ce que le jumeau montrait.** La valeur « à la décision » est le dernier relevé noté à ce moment-là : ce que la personne avait sous les yeux, pas ce que la source a publié plus tard pour la même heure.
 - **Aucun nouveau relevé n'est pas aucun changement.** Quand rien n'a été noté depuis la décision, la fiche l'écrit, et ne donne pas de changement. Une mesure qui a perdu sa valeur le dit au lieu d'afficher un chiffre.
+- **Un relevé rattrapé est dit.** Quand des relevés comptés sur la période ont été rattrapés après coup depuis une copie gardée de la source (D12), la fiche écrit combien : le jumeau ne les affichait pas à l'époque.
 - **Un changement après une décision n'est pas son effet.** D'autres choses ont changé en même temps, et ce suivi ne les distingue pas. La fiche le dit, et ne conclut pas.
 - **Un signal clos** est suivi jusqu'à sa clôture, et la fiche garde la façon dont il a été clos.
 - **Ce qui ne se suit pas.** Un signal qu'aucune alerte n'a levé n'a pas de mesure. Un signal levé sur un compte intégré non plus : le jumeau ne garde que les mesures que l'organisation a définies. Un signal plus ancien que l'historique n'a pas de relevés avant le jour où il a commencé. Chaque cas est écrit sur la fiche.
@@ -781,6 +782,7 @@ flowchart TD
 - **Un candidat s'accepte comme en A10.** Le serveur le recopie du journal de l'enquête ; un candidat refusé n'est enregistré nulle part.
 - **Sur la frise.** La frise de la page Network dessine la série de l'unité choisie sur sa propre fenêtre, la même que celle de l'enquête (24 h, 72 h, 7 jours, 30 jours). Quand une enquête de cette unité et de cette mesure est à l'écran, ses épisodes sont des bandes sous la série et ses événements des repères au jour où leur source les date : en pointillé pour un candidat, pleins pour un événement du calendrier. Un épisode dessiné est un épisode que l'enquête a compté, jamais un épisode deviné sur le trait. Le seuil n'est tracé que s'il est proche de ce qui a été lu, et l'écran le dit quand il ne l'est pas.
 - **Bornes.** Un laps de temps de 366 jours au plus, 2 000 relevés par série (au-delà, les plus anciens sont laissés de côté et le résultat le dit). Les jours se comptent sur l'horloge que la page envoie, celle du navigateur ; UTC quand aucune n'est envoyée.
+- **Une série rattrapée est dite.** Quand la série contient des relevés rattrapés depuis des copies gardées (D12), l'étape qui la lit en donne le nombre (`caughtUp`) et une limite du résultat l'écrit : ils sont ce que la mesure d'aujourd'hui aurait lu dans la copie, pas ce que le jumeau affichait.
 - **Ce qui manque.** Un seul facteur à la fois : aucun modèle ne sépare la part de deux événements qui vont avec le même épisode. Aucune réplication : un événement vu avant un épisode a été vu une fois (les briques qui répliquent un décalage sur plusieurs vagues sont en C3, et ne sont pas reliées). Le lieu d'un événement est un texte, il n'est relié à aucun territoire : l'enquête ne sait pas si l'événement concerne l'unité. L'historique commence le jour où l'enregistreur a démarré (D11).
 - Une enquête lit une unité et des valeurs agrégées, jamais une personne.
 
@@ -907,6 +909,7 @@ flowchart LR
 - **Par unité, par site : les règles du jumeau.** Un objet se tient à l'unité qui le reçoit par un lien de rattachement, quel que soit le sens dans lequel l'établissement a tracé le lien (`attaches`, `aggregationEnds`) ; s'il y en a plusieurs, le premier lu. Il est compté à cette unité, pas aux unités au-dessus, et le résultat le dit (`grouped_how`). Deux unités du même nom restent deux groupes, chacune avec l'unité au-dessus d'elle (`under`). Le site est le lieu physique où l'unité est placée, ou celui de l'unité au-dessus la plus proche qui en a un ; un objet qui est lui-même un site est son propre site ; quand l'ontologie ne nomme rien de physique, le site est le haut de l'arbre, comme sur la carte du réseau (D10). Ce qui n'est rattaché à rien forme un groupe à part, compté.
 - **Formule.** D'un à six agrégats nommés, plus les entrées numériques de l'outil. Elle est évaluée une fois à la déclaration, sur des valeurs de remplacement, pour dire tout de suite un nom qu'elle n'a pas. À l'appel, une valeur qui n'existe pas (aucun objet ne porte la propriété) fait refuser le calcul : rien ne la remplace. Le résultat donne ce dont il a été calculé (`computed_from`) et la formule.
 - **Historique.** Seules les mesures que l'organisation a définies sont gardées (D11) ; une autre est refusée, avec la liste de celles qui le sont. L'unité est retrouvée par son nom, comme le font les autres outils. La fenêtre va de 1 à 2 160 heures. Le résultat donne la valeur qui tenait au début de la fenêtre, puis les relevés, le plus bas, le plus haut, le dernier, et la date où l'historique commence. Un relevé sans valeur est un trou, pas un zéro. Les 60 derniers relevés sont listés.
+- **Un relevé rattrapé est dit.** Quand la fenêtre d'un bloc `history` contient des relevés rattrapés depuis des copies gardées (D12), le résultat en donne le nombre (`readings_caught_up`) avec une phrase qui dit ce qu'ils sont. Sans relevé rattrapé, ces deux champs n'y sont pas.
 - **Jeu de données.** Retrouvé par son identifiant, son nom court ou son nom. Une colonne qu'il n'a pas fait refuser l'appel, avec la liste de ses colonnes.
 - **Un plafond se dit.** Chaque lecture de l'ontologie prend un objet de plus que son plafond (`ROLLUP_INSTANCE_CAP`) : quand il est atteint, le résultat dit qu'il repose sur les premiers objets et non sur tous (`limit`). Le plafond n'est jamais abaissé en dur. Quand plus de lignes correspondent qu'il n'en est listé, le résultat donne les deux nombres. Un résultat de plus de 24 000 caractères est refusé plutôt que coupé, avec ce qu'il faut resserrer : une table coupée sans un mot passerait pour entière.
 - **Chaque résultat dit d'où il vient** (`read_from`) : les objets d'un type du jumeau, une formule sur ces objets, les relevés que le jumeau a gardés, ou un jeu de données nommé.
@@ -1567,12 +1570,14 @@ flowchart TD
     F -->|"même valeur, même heure"| H["Rien n'est noté"]
     F -->|"aucun relevé encore, et pas de valeur"| H
     G --> I["app.twin_reading : unité, mesure, valeur,<br/>heure de la source et ce qu'elle vaut,<br/>heure où nous l'avons notée"]
+    X["Rattrapage depuis les copies gardées (D12) :<br/>relevés marqués, datés de leur copie"] --> I
     I --> J["GET /twin/units/:id/history :<br/>les relevés d'une mesure sur une période"]
     J --> K["Le relevé en vigueur à l'ouverture de la période<br/>est mis en tête"]
     K --> L["Fiche de l'unité : un escalier,<br/>chaque valeur tient jusqu'au relevé suivant"]
     L --> M{"Un relevé sans valeur ?"}
     M -->|"oui"| N["Le trait s'interrompt :<br/>un trou n'est pas un zéro"]
     M -->|"non"| O["Le plus bas, le plus haut,<br/>et la date du premier relevé gardé"]
+    O --> O2["Les relevés rattrapés sont tracés comme les autres<br/>et dits à part : le jumeau ne les affichait pas"]
     I --> P["GET /twin/units/:id, trends :<br/>une lecture pour toutes les mesures de l'unité"]
     P --> Q{"La valeur décrit-elle un jour (D7) ?"}
     Q -->|"non"| R["Relevé d'avant : le dernier gardé<br/>qui n'est pas celui à l'écran"]
@@ -1585,11 +1590,11 @@ flowchart TD
 
 **Règles.**
 - **Seulement ce qui change.** Un relevé est noté quand la valeur diffère du dernier relevé gardé, ou quand la même valeur est relue à une nouvelle heure. Un fichier horaire relu douze fois dans l'heure donne un relevé, pas douze. Une valeur identique relue une heure plus tard en donne un second : « toujours 143 % à 15 h » est une information.
-- **Deux heures, qui ne disent pas la même chose.** `observed_at` : quand la valeur était vraie, d'après l'horodatage de la source, compté sur ce que la mesure lit (D7) ; vide quand la source ne le dit pas. `recorded_at` : quand nous l'avons notée. `observed_basis` garde ce que vaut la première : un âge qui n'est qu'un plancher reste un plancher.
+- **Deux heures, qui ne disent pas la même chose.** `observed_at` : quand la valeur était vraie, d'après l'horodatage de la source, compté sur ce que la mesure lit (D7) ; vide quand la source ne le dit pas. `recorded_at` : quand nous l'avons notée ; pour un relevé rattrapé, quand la copie dont il vient a été prise. `observed_basis` garde ce que vaut la première : un âge qui n'est qu'un plancher reste un plancher.
 - **Une tolérance de 90 secondes.** Le jumeau donne l'âge d'une valeur en secondes entières ; la même heure de source revient donc à une ou deux secondes près d'une passe à l'autre. Deux heures à moins de 90 secondes l'une de l'autre sont le même relevé. Les sources publient à l'heure ou au jour : cette marge ne cache aucun relevé.
 - **L'absence se voit.** Une mesure qui n'a plus de valeur est notée avec une valeur vide, une fois. Un trou dans les relevés n'est pas un zéro. Une mesure qui n'a jamais eu de valeur ne commence aucun historique.
 - **Seule la réalité.** Le jumeau est lu sans lentille. Une lecture faite à travers un scénario décrit un monde qui n'existe pas.
-- **Aucun passé inventé.** L'historique commence le jour où l'enregistreur a démarré. Rien d'avant n'est reconstitué, et la route rend la date du premier relevé gardé (`since`) : l'écran l'écrit. Une liste vide avec `since` vide veut dire « rien n'a été gardé », pas « rien n'a changé ».
+- **Rien n'est inventé.** L'historique commence le jour où l'enregistreur a démarré. Ce qui est plus ancien ne peut venir que d'une copie de la source réellement gardée, rejouée après coup (D12). Un tel relevé est marqué comme rattrapé (`replayed`) : il porte l'heure que la source donnait et l'heure où la copie a été prise, et l'écran le dit, parce que le jumeau ne l'affichait pas à l'époque. Rien d'autre n'est reconstitué. La route rend la date du premier relevé gardé (`since`) et dit s'il a été rattrapé (`sinceCaughtUp`) : l'écran l'écrit. Une liste vide avec `since` vide veut dire « rien n'a été gardé », pas « rien n'a changé ».
 - **Les mesures définies par l'organisation, pas les comptes intégrés.** Le nombre d'objets liés, l'âge de la donnée et les comptes par type sont calculés sur le moment et ne sont pas gardés. La fiche le dit pour ces mesures au lieu de montrer un historique vide.
 - **Un escalier.** Entre deux relevés gardés, le jumeau montrait le premier : l'enregistreur passe toutes les cinq minutes et note tout changement. Le trait tient donc à l'horizontale jusqu'au relevé suivant, et rien n'est tracé entre deux relevés qui n'a pas été lu. Un relevé est placé à l'heure de sa source ; quand elle n'en déclare pas, à l'heure où il a été noté.
 - **Cadence.** Une passe toutes les cinq minutes, jamais deux à la fois : la suivante part cinq minutes après la fin de la précédente. Un changement est donc noté au plus cinq minutes après s'être produit, avec l'heure de sa source. L'échec d'un projet ne coûte pas leur relevé aux autres. `TWIN_HISTORY_DISABLED=1` arrête l'enregistrement ; ce qui a été gardé reste.
@@ -1603,7 +1608,7 @@ flowchart TD
 - **Un chiffre de la veille se compare au jour d'avant.** Republié d'heure en heure, il ne se compare pas à lui-même une heure plus tôt : son relevé d'avant est le dernier gardé d'un jour précédent, compté sur l'horloge de sa source (D7).
 - **La moyenne sur 30 jours.** Pour un chiffre de la veille, la moyenne d'une valeur par jour, la dernière notée ce jour-là, sur 30 jours au plus (`meanOfDays`). Elle dit sur combien de jours elle repose (« average over 12 days kept ») tant qu'il y en a moins de trente. Un jour sans relevé n'est pas comblé.
 - **Un écart n'a pas de couleur.** Douze personnes de plus en attente, c'est pire ; douze civières de plus, c'est mieux. Le signe dit « plus », rien d'autre.
-**Code.** `backend/src/services/twin-history.ts` (`readingsNow`, `recordReadings`, `recordProject`, `recordAllProjects`, `readUnitHistory`, `changeOf`, `meanOfDays`, `readUnitTrends`, `startTwinHistory`), route `GET /v1/ontology/:env/twin/units/:id/history` dans `backend/src/routes/twin.ts`, migration `067_twin_reading.sql` ; `frontend/app/studio/live/unit-history.ts` (`historyView`), `unit-trends.ts`, `UnitSheet.tsx`, `UnitsView.tsx`, `command/SiteInspector.tsx`.
+**Code.** `backend/src/services/twin-history.ts` (`readingsNow`, `recordReadings`, `recordProject`, `recordAllProjects`, `readUnitHistory`, `changeOf`, `meanOfDays`, `readUnitTrends`, `startTwinHistory`), `series-catchup.ts` (`recordReplayed`), route `GET /v1/ontology/:env/twin/units/:id/history` dans `backend/src/routes/twin.ts`, migrations `067_twin_reading.sql` et `072_kept_series.sql` (la marque `replayed`) ; `frontend/app/studio/live/unit-history.ts` (`historyView`), `unit-trends.ts`, `UnitSheet.tsx`, `UnitsView.tsx`, `command/SiteInspector.tsx`.
 **Tests.** `twin-history.unit.test.ts`, `twin-daily-figures.unit.test.ts` ; `live/unit-history.test.ts`, `live/unit-trends.test.ts`, `live/UnitSheet.test.tsx`, `live/UnitsView.test.tsx`.
 
 ## D12. Séries gardées
@@ -1651,6 +1656,47 @@ flowchart TD
     K --> L
 ```
 
+**Le rattrapage depuis les copies gardées.**
+
+```mermaid
+flowchart TD
+    A["Écran Kept series : « Catch up » sur une série"] --> B["GET /series/catchup : les copies prises<br/>avant que la série commence à être gardée"]
+    B --> C{"Mesure du jumeau<br/>ou série de jeu de données ?"}
+    C -->|"série de jeu"| D["Les copies de son propre jeu"]
+    C -->|"mesure du jumeau"| E{"Un pipeline écrit-il aujourd'hui<br/>tous les types d'objets que la mesure lit ?"}
+    E -->|"non : brouillon, plusieurs pipelines,<br/>mesure qui compte tout"| E1["Rien n'est proposé, avec la raison"]
+    E -->|"oui"| F["Les jeux que ce pipeline lit, avec leurs copies plus anciennes.<br/>Ou un autre jeu du projet, lu à la place d'une entrée"]
+    D --> G["L'écran dit combien de copies seront lues,<br/>de quel jeu, par quel pipeline.<br/>Une personne lance"]
+    F --> G
+    G --> H["POST /series/catchup : un lot.<br/>25 copies au plus, 12 s, 400 000 lignes"]
+    H --> I["Les copies suivantes, de la plus ancienne<br/>à la plus récente, depuis la dernière relue"]
+    I --> J{"Quelle série ?"}
+    J -->|"série de jeu"| K["Les lignes de la copie deviennent des points,<br/>comme à une écriture du jeu"]
+    J -->|"mesure du jumeau"| L["La copie passe par le pipeline d'aujourd'hui, en mémoire.<br/>Ses autres entrées sont lues telles qu'elles étaient alors"]
+    L --> L0{"Le pipeline tourne-t-il,<br/>sans couper la copie ?"}
+    L0 -->|"non"| L1["Copie laissée de côté,<br/>comptée, avec la raison"]
+    L0 -->|"oui"| M{"L'objet d'une ligne est-il<br/>dans le jumeau aujourd'hui ?"}
+    M -->|"oui, même identité"| N["Il garde la place<br/>qu'il a aujourd'hui"]
+    M -->|"non"| O{"Une règle de lien du pipeline<br/>lui trouve-t-elle une place ?"}
+    O -->|"oui"| N2["Placé par cette règle"]
+    O -->|"non"| O1["Laissé de côté, compté"]
+    N --> P["La mesure, telle que définie aujourd'hui,<br/>sur les unités d'aujourd'hui,<br/>à l'heure où la copie a été prise"]
+    N2 --> P
+    K --> Q{"Par rapport à ce qui était noté<br/>quand la copie a été prise"}
+    P --> Q
+    Q -->|"valeur nouvelle ou différente"| R["Noté, marqué « rattrapé » :<br/>l'heure de la source,<br/>et l'heure où la copie a été prise"]
+    Q -->|"même valeur"| S["Rien n'est noté"]
+    Q -->|"pas de valeur,<br/>et jamais eu"| S
+    R --> T["app.series_catchup :<br/>où le rattrapage en est"]
+    S --> T
+    L1 --> T
+    O1 --> T
+    T --> U{"Reste-t-il des copies ?"}
+    U -->|"oui"| V["L'écran relance un lot,<br/>ou une personne arrête et reprendra"]
+    V --> H
+    U -->|"non"| W["Terminé : la série dit ce qui a été rattrapé<br/>et ce qui a été laissé de côté"]
+```
+
 **Règles.**
 - **Deux sortes de séries, une seule lecture.** Une mesure du jumeau est une série sans rien avoir à déclarer : sa clé est `twin:` suivi de la mesure, une unité est une entité, et ses points sont les relevés de D11. Une série de jeu de données se déclare depuis le Studio. Ce qui diffère est l'endroit où sont les points, jamais la façon d'en faire une grille.
 - **Rien n'est reconnu par son nom.** La colonne du temps, celle de la valeur et celles de l'entité (quatre au plus) se choisissent dans le schéma du jeu. Le jeu doit être une table du projet : chaque écriture d'une table est une copie entière à lire, ce qu'un flux n'est pas. La clé est tirée du libellé.
@@ -1660,15 +1706,26 @@ flowchart TD
 - **L'heure d'un fichier.** Un instant qui porte son fuseau est lu tel quel. Un instant qui n'en porte pas (`2026-11-27T12:50`) ne dit pas de quelle ville est l'horloge : il n'est lu que si la série déclare un fuseau, comme en D7. Une date sans heure est le début de ce jour. Sans fuseau déclaré, ces lignes ne sont pas placées, et la série le dit.
 - **Deux lignes qui se contredisent ne font pas un point.** Même entité, même instant, deux valeurs : il manque une colonne à l'entité. Les lignes sont laissées de côté et comptées, jamais moyennées ni choisies.
 - **Une écriture n'échoue jamais à cause d'une série.** Ce qu'une série n'a pas pu lire (heures illisibles, lignes ambiguës, colonne disparue) est écrit sur sa ligne, et l'écran l'affiche. Le jeu, lui, a déjà sa copie.
-- **À la déclaration, la dernière copie est lue.** Ses points sont datés de l'heure où cette copie a été prise : c'est depuis ce moment-là que la plateforme les détient. Un jeu jamais écrit est déclaré quand même, et attend sa première écriture.
+- **À la déclaration, la dernière copie est lue.** Ses points sont datés de l'heure où cette copie a été prise : c'est depuis ce moment-là que la plateforme les détient. Les copies plus anciennes ne sont lues que si on le demande : c'est un rattrapage. Un jeu jamais écrit est déclaré quand même, et attend sa première écriture.
 - **Une valeur tient jusqu'au point suivant.** Sur un pas, `mean` est la moyenne de ce qui était en vigueur, pondérée par la durée ; `max` est la plus haute valeur en vigueur à un moment du pas ; `last` est celle en vigueur quand le pas finit. Une moyenne ne compte que le temps connu : un jour connu à moitié est moyenné sur cette moitié.
 - **Un trou reste un trou.** Un pas pendant lequel rien n'était en vigueur vaut `null`, jamais zéro. Rien n'est connu avant le premier point d'une entité, et la réponse donne la date de ce premier point.
 - **« Tel que connu à ».** Avec `asOf`, la lecture n'utilise que ce qui avait été noté à cet instant, et la période ne peut pas finir après lui : rien n'était connu de la suite. Une valeur corrigée est lue telle qu'elle était connue ce jour-là.
 - **Une lecture bornée, et refusée plutôt que coupée.** 3 000 pas et 300 entités au plus par lecture. Au-delà, la lecture est refusée avec ce qu'il faut resserrer : une série coupée sans un mot passerait pour entière.
 - **Par projet.** Une série appartient à un projet ; un autre projet ne la voit pas.
-- **Retirer une série retire ses points, pas les copies.** Les versions du jeu ne sont pas touchées : déclarer la série de nouveau relit la dernière. Une mesure du jumeau ne se retire pas ici.
+- **Retirer une série retire ses points, pas les copies.** Les versions du jeu ne sont pas touchées : déclarer la série de nouveau relit la dernière. Ses rattrapages sont retirés avec elle. Une mesure du jumeau ne se retire pas ici.
 - **Déclarer et retirer sont gardés au journal d'audit.**
-- **Ce qui manque.** Les copies plus anciennes que la déclaration ne sont pas lues. Un fichier qui porte sa propre histoire a tous ses points notés le jour de sa première lecture : lu « tel que connu à » un jour d'avant, ils n'y sont pas. Une source qui cesse de publier laisse sa dernière valeur en vigueur : pour une série de jeu, la lecture ne distingue pas « inchangé » de « pas relu ». La grille avance par pas fixes depuis son début : un jour y fait 24 heures, même le jour d'un changement d'heure. Un flux ne se garde pas comme série.
+- **Rattraper, c'est relire ce qui a été gardé.** Une série commence le jour où on a commencé à la garder : le premier relevé d'une mesure du jumeau, la première copie lue d'une série de jeu. Mais chaque synchronisation gardait déjà une copie entière de son fichier. Un rattrapage lit les copies prises avant ce jour, de la plus ancienne à la plus récente, et note ce qu'elles contiennent. Sans copie, pas de point : rien n'est inventé.
+- **Une série de jeu de données relit ses propres copies.** Chaque copie est lue comme une écriture du jeu l'est aujourd'hui : les mêmes colonnes, et les mêmes règles que plus haut.
+- **Une mesure du jumeau repasse par le pipeline d'aujourd'hui, en mémoire.** Il faut un pipeline qui écrit aujourd'hui, et non un brouillon, tous les types d'objets que la mesure lit. Chaque copie le traverse, et la mesure est calculée par le calcul du jumeau (D11), telle qu'elle est définie aujourd'hui, sur les unités d'aujourd'hui. Rien n'est écrit dans l'ontologie : ni objet, ni lien, ni type, ni exécution de pipeline.
+- **Les définitions d'aujourd'hui, pas celles de l'époque.** Le pipeline, la mesure, les unités et la place de chaque objet sont ceux de maintenant. Un objet que le jumeau contient aujourd'hui, reconnu à son identité, garde la place qu'il a aujourd'hui, avec tous ses liens. Un objet qu'il ne contient pas est placé par les règles de lien du pipeline, lues sur le jumeau d'aujourd'hui. Un objet ne porte que ce que sa copie disait : une propriété que l'ancien fichier n'avait pas est absente, jamais la valeur d'aujourd'hui. L'écran le dit avant de lancer.
+- **Quand la source a changé de fichier.** Le jeu que le pipeline lit aujourd'hui n'a pas toujours les copies anciennes. Une personne peut faire lire les copies d'un autre jeu du projet à la place d'une entrée du pipeline : elle choisit le jeu et l'entrée, rien n'est reconnu par son nom. L'écran nomme les colonnes que ce jeu n'a pas : ce que le pipeline en tire sera vide. Les autres entrées du pipeline, une table de correspondance par exemple, sont lues telles qu'elles étaient quand la copie a été prise : leur dernière copie d'alors, ou la première gardée s'il n'y en avait pas encore.
+- **Marqué, avec ses deux heures.** Tout ce qu'un rattrapage note est marqué comme rattrapé. Un point rattrapé porte l'heure que la source donnait et l'heure où sa copie a été prise, pas l'heure du rattrapage : lu « tel que connu à », il apparaît au moment où la plateforme détenait vraiment la copie.
+- **Un relevé rattrapé se compare au passé.** Il est tenu contre le dernier relevé noté à l'heure de sa copie ou avant, pas contre le plus récent. Une copie relue sans changement ne note rien. Une unité qui n'a pas de valeur et n'en a jamais eu ne commence aucune série ; une unité qui perd la sienne voit cette absence notée.
+- **Rien n'est placé au jugé.** Une ligne dont on ne peut pas faire un objet (une valeur illisible, une propriété obligatoire absente, pas d'identité), un objet qui ne nomme aucun endroit que le jumeau contient, une copie sur laquelle le pipeline échoue ou qui dépasse ce qu'une exécution lit (150 000 lignes) : laissés de côté, comptés, et dits sur la série.
+- **Par lots bornés, et repris.** Un appel lit 25 copies au plus, et s'arrête plus tôt passé 12 secondes ou 400 000 lignes ; il en lit toujours au moins une. L'écran dit avant de commencer combien de copies seront lues, relance un lot tant qu'il en reste, et s'arrête quand on le lui demande. Où le rattrapage en est reste écrit : il reprend de là. Un rattrapage terminé, relancé, ne lit rien.
+- **Refusé avec la raison.** Aucune copie plus ancienne ; une mesure qui n'a encore aucun relevé ; une mesure qui compte tous les objets d'une unité, ou qui lit des types écrits par plusieurs pipelines ; un pipeline en brouillon, un pipeline qui appelle le service d'extraction, un pipeline qu'une exécution refuserait.
+- **Oublier ce qui a été rattrapé.** Retire ce que les rattrapages d'une série ont noté, et ces rattrapages avec. Seulement ce qui est marqué : un relevé pris en direct et un point noté par une synchronisation ne sont jamais touchés, les copies non plus. Le rattrapage peut donc être refait. Le début d'un rattrapage et son oubli sont gardés au journal d'audit.
+- **Ce qui manque.** Un relevé rattrapé n'est pas ce que le jumeau affichait à l'époque : c'est ce que la mesure d'aujourd'hui aurait lu dans la copie. Une mesure qui lit des types écrits par plusieurs pipelines ne se rattrape pas. Le premier point noté en direct peut redire la dernière valeur rattrapée : la lecture n'en est pas changée. Un fichier qui porte sa propre histoire a tous ses points notés le jour de sa plus ancienne copie lue : lu « tel que connu à » un jour d'avant, ils n'y sont pas. Une source qui cesse de publier laisse sa dernière valeur en vigueur : pour une série de jeu, la lecture ne distingue pas « inchangé » de « pas relu ». La grille avance par pas fixes depuis son début : un jour y fait 24 heures, même le jour d'un changement d'heure. Un flux ne se garde pas comme série.
 
-**Code.** `backend/src/services/series.ts` (`knownAsOf`, `onGrid`, `gridOf`, `readGrid`, `checkDraft`, `declareSeries`, `listSeries`), `series-capture.ts` (`extractPoints`, `noteOf`, `writePoints`, `captureForDataset`), `datasets.ts` (`loadTableVersion`), routes `backend/src/routes/series.ts`, migration `072_kept_series.sql` ; `frontend/app/studio/data/KeptSeries.tsx`, `kept-series.ts`, `DataSection.tsx`, `frontend/app/studio/series-api.ts`.
-**Tests.** `series.unit.test.ts` (les lignes d'une copie devenues des points, l'heure sans fuseau, les lignes ambiguës, la grille, les trous, « tel que connu à », une valeur corrigée, la déclaration refusée), `routes/series.unit.test.ts` ; `data/kept-series.test.ts`, `data/KeptSeries.test.tsx`.
+**Code.** `backend/src/services/series.ts` (`knownAsOf`, `onGrid`, `gridOf`, `readGrid`, `checkDraft`, `declareSeries`, `listSeries`), `series-capture.ts` (`extractPoints`, `noteOf`, `writePoints`, `captureInto`, `captureForDataset`), `series-catchup.ts` (`catchupOffer`, `runCatchup`, `typesLookedAt`, `whyNotThrough`, `readStructure`, `replayObjects`, `replayReadings`, `recordReplayed`, `forgetCatchup`, `listCatchups`), `pipeline.ts` (`execute`, options `readInput` et `onObjectRows`), `datasets.ts` (`loadTableVersion`), routes `backend/src/routes/series.ts`, migrations `072_kept_series.sql` et `073_series_catchup.sql` ; `frontend/app/studio/data/KeptSeries.tsx`, `kept-series.ts`, `DataSection.tsx`, `frontend/app/studio/series-api.ts`.
+**Tests.** `series.unit.test.ts` (les lignes d'une copie devenues des points, l'heure sans fuseau, les lignes ambiguës, la grille, les trous, « tel que connu à », une valeur corrigée, la déclaration refusée), `series-catchup.unit.test.ts` (deux lignes pour une identité, une copie sans heure, une identité qui change d'un fichier à l'autre, une ligne sans endroit, une unité sans valeur, les lots et la reprise, rien d'écrit dans l'ontologie, l'oubli), `routes/series.unit.test.ts` ; `data/kept-series.test.ts`, `data/KeptSeries.test.tsx`.
