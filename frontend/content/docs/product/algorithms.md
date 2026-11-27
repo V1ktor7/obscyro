@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "d052248bdae1866a"
+translatedFrom: "3f1f40029030e7fd"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -55,6 +55,7 @@ Every algorithm of the product has its section here: what it is for, its diagram
 | [D9](#d9-live-reading-and-situation-card) | Live reading and situation card | `backend/src/services/live-reading.ts`, `situation.ts` |
 | [D10](#d10-sites-and-units-on-the-network-map) | Sites and units on the network map, and the inspector of a site | `frontend/app/studio/command/units-tree.ts` |
 | [D11](#d11-history-of-twin-measures) | History of twin measures | `backend/src/services/twin-history.ts` |
+| [D12](#d12-kept-series) | Kept series: a history a model can read, on a regular grid | `backend/src/services/series.ts` |
 
 ---
 
@@ -1610,3 +1611,70 @@ flowchart TD
 - **A change has no colour.** Twelve more people waiting is worse; twelve more stretchers is better. The sign says “more”, and nothing else.
 **Code.** `backend/src/services/twin-history.ts` (`readingsNow`, `recordReadings`, `recordProject`, `recordAllProjects`, `readUnitHistory`, `changeOf`, `meanOfDays`, `readUnitTrends`, `startTwinHistory`), route `GET /v1/ontology/:env/twin/units/:id/history` in `backend/src/routes/twin.ts`, migration `067_twin_reading.sql`; `frontend/app/studio/live/unit-history.ts` (`historyView`), `unit-trends.ts`, `UnitSheet.tsx`, `UnitsView.tsx`, `command/SiteInspector.tsx`.
 **Tests.** `twin-history.unit.test.ts`, `twin-daily-figures.unit.test.ts`; `live/unit-history.test.ts`, `live/unit-trends.test.ts`, `live/UnitSheet.test.tsx`, `live/UnitsView.test.tsx`.
+
+## D12. Kept series
+
+**Purpose.** Giving a forecasting model a past it can read. A model only knows what it is shown. The platform kept that past in two shapes: the twin's readings (D11), one line when a measure changes, and the copies of the datasets, a whole file per sync. Neither answers “this measure, at this place, from this day to that one, hour by hour”. A **series** is that answer: a value followed over time, for one or several entities, read on a regular grid.
+
+```mermaid
+flowchart TD
+    A["Kept series screen: on a table dataset,<br/>the column of the time, the one of the value,<br/>those that name the entity, the step, the time zone"] --> B{"Are the columns those of the dataset,<br/>distinct, and the time zone known?"}
+    B -->|"no"| B1["Refused, with what to correct"]
+    B -->|"yes"| C["Row of app.kept_series, under its key"]
+    C --> D["The dataset's latest copy is read at once,<br/>dated at when that copy was taken"]
+    W["Every write of the dataset: a sync,<br/>an upload, the output of a pipeline"] --> E["For each series declared on that dataset"]
+    D --> F["Each row: the instant, the entity, the value"]
+    E --> F
+    F --> G{"Can the instant be read?"}
+    G -->|"no, or with no zone<br/>and none declared"| G1["Row left out, counted"]
+    G -->|"yes"| H{"Two rows for the same entity<br/>at the same instant, with different values?"}
+    H -->|"yes"| H1["Left out, counted:<br/>a column is missing from the entity"]
+    H -->|"no"| I{"Against the last point written down<br/>for that entity at that instant"}
+    I -->|"none yet"| J["Point written down: entity, instant, value,<br/>the time we saw it"]
+    I -->|"a different value,<br/>having none included"| J
+    I -->|"the same value"| K["Nothing is written down"]
+    G1 --> N["What could not be read is written on the series.<br/>The dataset's write never fails because of it"]
+    H1 --> N
+```
+
+**The read on a grid.**
+
+```mermaid
+flowchart TD
+    A["POST /series/read: a series, entities,<br/>from, to, the step, the rule, “as known at”"] --> B{"Does the stretch end after it starts,<br/>not after “as known at”,<br/>and in 3,000 steps at most?"}
+    B -->|"no"| B1["Refused, with what to narrow"]
+    B -->|"yes"| C{"Where does the series come from?"}
+    C -->|"twin:measure"| D["Readings of the twin (D11), by unit.<br/>The instant is the source's time,<br/>else the time the reading was written down"]
+    C -->|"a declared key"| E["Points of the series, by entity"]
+    D --> F["Keep only what had been written down at “as known at”.<br/>For one instant, the last one written down"]
+    E --> F
+    F --> G["Plus the last point before the stretch:<br/>it is the one in force when the stretch opens"]
+    G --> H["Each step covers from its start to its start plus one step.<br/>A value holds until the next point"]
+    H --> I{"Was anything in force<br/>during that step?"}
+    I -->|"no"| J["null: a gap, never a zero"]
+    I -->|"yes"| K["mean: average weighted by the time known<br/>max: the highest value in force<br/>last: the one in force when the step ends"]
+    J --> L["By entity: its values, its first point,<br/>its steps with no value, its points caught up"]
+    K --> L
+```
+
+**Rules.**
+- **Two kinds of series, a single read.** A measure of the twin is a series with nothing to declare: its key is `twin:` followed by the measure, a unit is an entity, and its points are the readings of D11. A dataset series is declared from the Studio. What differs is where the points are, never how a grid is made from them.
+- **Nothing is recognised by its name.** The column of the time, the one of the value and those of the entity (four at most) are picked from the dataset's schema. The dataset has to be a table of the project: every write of a table is a whole copy to read, which a stream is not. The key is made from the label.
+- **Two times per point.** `at`: the instant the value is about. `seen_at`: the instant we first saw it. Both are kept, because the second is what lets a past forecast be replayed.
+- **Only what changes.** A point is written down when nothing was written for its entity at its instant, or when the last value written differs. A file re-read unchanged writes nothing. A value its source corrects afterwards keeps both, the old one and the new one, each with the time it was read.
+- **An absent value is kept as an absence.** A cell that is not a number (“pas d'information disponible”) gives a point with no value: a gap that was seen, not a zero. A decimal comma is read; a thousands separator is not, rather than guessed.
+- **The time of a file.** An instant that carries its zone is read as it stands. One that carries none (`2026-11-27T12:50`) does not say which city's clock it is: it is read only if the series declares a time zone, as in D7. A date with no hour is the start of that day. With no zone declared, those rows are not placed, and the series says so.
+- **Two rows that contradict each other do not make a point.** Same entity, same instant, two values: a column is missing from the entity. The rows are left out and counted, never averaged nor picked from.
+- **A write never fails because of a series.** What a series could not read (unreadable times, ambiguous rows, a column that went away) is written on its line, and the screen shows it. The dataset already has its copy.
+- **On declaration, the latest copy is read.** Its points are dated at when that copy was taken: that is since when the platform has held them. A dataset never written is declared all the same, and waits for its first write.
+- **A value holds until the next point.** Over a step, `mean` is the average of what was in force, weighted by how long; `max` is the highest value in force at some moment of the step; `last` is the one in force when the step ends. A mean counts only the time known: a day half known is averaged over that half.
+- **A gap stays a gap.** A step during which nothing was in force is `null`, never zero. Nothing is known before an entity's first point, and the answer gives the date of that first point.
+- **“As known at”.** With `asOf`, the read uses only what had been written down at that instant, and the stretch cannot end after it: nothing was known of what came next. A corrected value is read as it was known that day.
+- **A bounded read, refused rather than cut.** 3,000 steps and 300 entities at most per read. Beyond that the read is refused with what to narrow: a series cut without a word would pass for whole.
+- **By project.** A series belongs to a project; another project does not see it.
+- **Removing a series removes its points, not the copies.** The dataset's versions are not touched: declaring the series again reads the latest one. A measure of the twin is not removed here.
+- **Declaring and removing are kept in the audit log.**
+- **What is missing.** Copies older than the declaration are not read. A file that carries its own history has all its points written down the day it is first read: read “as known at” a day before, they are not there. A source that stops publishing leaves its last value in force: for a dataset series, the read does not tell “unchanged” from “not re-read”. The grid moves by fixed steps from its start: a day is 24 hours on it, even on the day the clocks change. A stream is not kept as a series.
+
+**Code.** `backend/src/services/series.ts` (`knownAsOf`, `onGrid`, `gridOf`, `readGrid`, `checkDraft`, `declareSeries`, `listSeries`), `series-capture.ts` (`extractPoints`, `noteOf`, `writePoints`, `captureForDataset`), `datasets.ts` (`loadTableVersion`), routes `backend/src/routes/series.ts`, migration `072_kept_series.sql`; `frontend/app/studio/data/KeptSeries.tsx`, `kept-series.ts`, `DataSection.tsx`, `frontend/app/studio/series-api.ts`.
+**Tests.** `series.unit.test.ts` (the rows of a copy turned into points, a time with no zone, ambiguous rows, the grid, gaps, “as known at”, a corrected value, the declaration refused), `routes/series.unit.test.ts`; `data/kept-series.test.ts`, `data/KeptSeries.test.tsx`.

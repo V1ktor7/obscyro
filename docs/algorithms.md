@@ -49,6 +49,7 @@ Chaque algorithme du produit a ici sa section : à quoi il sert, son schéma, se
 | [D9](#d9-lecture-du-direct-et-fiche-de-situation) | Lecture du direct et fiche de situation | `backend/src/services/live-reading.ts`, `situation.ts` |
 | [D10](#d10-sites-et-unités-sur-la-carte-du-réseau) | Sites et unités sur la carte du réseau, et l'inspecteur d'un site | `frontend/app/studio/command/units-tree.ts` |
 | [D11](#d11-historique-des-mesures-du-jumeau) | Historique des mesures du jumeau | `backend/src/services/twin-history.ts` |
+| [D12](#d12-séries-gardées) | Séries gardées : un historique qu'un modèle peut lire, sur une grille régulière | `backend/src/services/series.ts` |
 
 ---
 
@@ -1604,3 +1605,70 @@ flowchart TD
 - **Un écart n'a pas de couleur.** Douze personnes de plus en attente, c'est pire ; douze civières de plus, c'est mieux. Le signe dit « plus », rien d'autre.
 **Code.** `backend/src/services/twin-history.ts` (`readingsNow`, `recordReadings`, `recordProject`, `recordAllProjects`, `readUnitHistory`, `changeOf`, `meanOfDays`, `readUnitTrends`, `startTwinHistory`), route `GET /v1/ontology/:env/twin/units/:id/history` dans `backend/src/routes/twin.ts`, migration `067_twin_reading.sql` ; `frontend/app/studio/live/unit-history.ts` (`historyView`), `unit-trends.ts`, `UnitSheet.tsx`, `UnitsView.tsx`, `command/SiteInspector.tsx`.
 **Tests.** `twin-history.unit.test.ts`, `twin-daily-figures.unit.test.ts` ; `live/unit-history.test.ts`, `live/unit-trends.test.ts`, `live/UnitSheet.test.tsx`, `live/UnitsView.test.tsx`.
+
+## D12. Séries gardées
+
+**But.** Donner à un modèle de prévision un passé qu'il peut lire. Un modèle ne sait que ce qu'on lui montre. La plateforme gardait ce passé sous deux formes : les relevés du jumeau (D11), une ligne quand une mesure change, et les copies des jeux de données, un fichier entier par synchronisation. Aucune des deux ne répond à « telle mesure, à tel endroit, de telle date à telle date, heure par heure ». Une **série** est cette réponse : une valeur suivie dans le temps, pour une ou plusieurs entités, lue sur une grille régulière.
+
+```mermaid
+flowchart TD
+    A["Écran Kept series : sur un jeu de type table,<br/>la colonne du temps, celle de la valeur,<br/>celles qui nomment l'entité, le pas, le fuseau"] --> B{"Les colonnes sont-elles celles du jeu,<br/>distinctes, et le fuseau connu ?"}
+    B -->|"non"| B1["Refusé, avec ce qu'il faut corriger"]
+    B -->|"oui"| C["Ligne de app.kept_series, sous sa clé"]
+    C --> D["La dernière copie du jeu est lue tout de suite,<br/>datée de l'heure où cette copie a été prise"]
+    W["Chaque écriture du jeu : synchronisation,<br/>téléversement, sortie d'un pipeline"] --> E["Pour chaque série déclarée sur ce jeu"]
+    D --> F["Chaque ligne : l'instant, l'entité, la valeur"]
+    E --> F
+    F --> G{"L'instant se lit-il ?"}
+    G -->|"non, ou sans fuseau<br/>et aucun déclaré"| G1["Ligne laissée de côté, comptée"]
+    G -->|"oui"| H{"Deux lignes pour la même entité<br/>au même instant, de valeurs différentes ?"}
+    H -->|"oui"| H1["Laissées de côté, comptées :<br/>il manque une colonne à l'entité"]
+    H -->|"non"| I{"Par rapport au dernier point noté<br/>pour cette entité à cet instant"}
+    I -->|"aucun encore"| J["Point noté : entité, instant, valeur,<br/>heure où nous l'avons vu"]
+    I -->|"valeur différente,<br/>y compris plus de valeur"| J
+    I -->|"même valeur"| K["Rien n'est noté"]
+    G1 --> N["Ce qui n'a pas pu être lu est écrit sur la série.<br/>L'écriture du jeu n'échoue jamais pour ça"]
+    H1 --> N
+```
+
+**La lecture sur une grille.**
+
+```mermaid
+flowchart TD
+    A["POST /series/read : une série, des entités,<br/>de, à, le pas, la règle, « tel que connu à »"] --> B{"La période finit-elle après son début,<br/>pas après « tel que connu à »,<br/>et en 3 000 pas au plus ?"}
+    B -->|"non"| B1["Refusé, avec ce qu'il faut resserrer"]
+    B -->|"oui"| C{"D'où vient la série ?"}
+    C -->|"twin:mesure"| D["Relevés du jumeau (D11), par unité.<br/>L'instant est l'heure de la source,<br/>sinon l'heure où le relevé a été noté"]
+    C -->|"clé déclarée"| E["Points de la série, par entité"]
+    D --> F["Ne garder que ce qui était noté à « tel que connu à ».<br/>Pour un même instant, le dernier noté"]
+    E --> F
+    F --> G["Plus le dernier point d'avant la période :<br/>c'est lui qui est en vigueur quand elle s'ouvre"]
+    G --> H["Chaque pas couvre de son début à son début plus un pas.<br/>Une valeur tient jusqu'au point suivant"]
+    H --> I{"Quelque chose était-il en vigueur<br/>pendant ce pas ?"}
+    I -->|"non"| J["null : un trou, jamais un zéro"]
+    I -->|"oui"| K["mean : moyenne pondérée par la durée connue<br/>max : la plus haute valeur en vigueur<br/>last : celle en vigueur à la fin du pas"]
+    J --> L["Par entité : ses valeurs, son premier point,<br/>ses pas sans valeur, ses points rattrapés"]
+    K --> L
+```
+
+**Règles.**
+- **Deux sortes de séries, une seule lecture.** Une mesure du jumeau est une série sans rien avoir à déclarer : sa clé est `twin:` suivi de la mesure, une unité est une entité, et ses points sont les relevés de D11. Une série de jeu de données se déclare depuis le Studio. Ce qui diffère est l'endroit où sont les points, jamais la façon d'en faire une grille.
+- **Rien n'est reconnu par son nom.** La colonne du temps, celle de la valeur et celles de l'entité (quatre au plus) se choisissent dans le schéma du jeu. Le jeu doit être une table du projet : chaque écriture d'une table est une copie entière à lire, ce qu'un flux n'est pas. La clé est tirée du libellé.
+- **Deux heures par point.** `at` : l'instant que la valeur décrit. `seen_at` : l'instant où nous l'avons vue pour la première fois. Les deux sont gardées, parce que la seconde est ce qui permet de rejouer une prévision passée.
+- **Seulement ce qui change.** Un point est noté quand rien n'était noté pour son entité à son instant, ou quand la dernière valeur notée diffère. Un fichier relu sans changement ne note rien. Une valeur que la source corrige après coup garde les deux, l'ancienne et la nouvelle, chacune avec l'heure où elle a été lue.
+- **Une valeur absente est gardée comme une absence.** Une cellule qui n'est pas un nombre (« pas d'information disponible ») donne un point sans valeur : un trou qui a été vu, pas un zéro. Une virgule décimale est lue ; un séparateur de milliers ne l'est pas, plutôt que deviné.
+- **L'heure d'un fichier.** Un instant qui porte son fuseau est lu tel quel. Un instant qui n'en porte pas (`2026-11-27T12:50`) ne dit pas de quelle ville est l'horloge : il n'est lu que si la série déclare un fuseau, comme en D7. Une date sans heure est le début de ce jour. Sans fuseau déclaré, ces lignes ne sont pas placées, et la série le dit.
+- **Deux lignes qui se contredisent ne font pas un point.** Même entité, même instant, deux valeurs : il manque une colonne à l'entité. Les lignes sont laissées de côté et comptées, jamais moyennées ni choisies.
+- **Une écriture n'échoue jamais à cause d'une série.** Ce qu'une série n'a pas pu lire (heures illisibles, lignes ambiguës, colonne disparue) est écrit sur sa ligne, et l'écran l'affiche. Le jeu, lui, a déjà sa copie.
+- **À la déclaration, la dernière copie est lue.** Ses points sont datés de l'heure où cette copie a été prise : c'est depuis ce moment-là que la plateforme les détient. Un jeu jamais écrit est déclaré quand même, et attend sa première écriture.
+- **Une valeur tient jusqu'au point suivant.** Sur un pas, `mean` est la moyenne de ce qui était en vigueur, pondérée par la durée ; `max` est la plus haute valeur en vigueur à un moment du pas ; `last` est celle en vigueur quand le pas finit. Une moyenne ne compte que le temps connu : un jour connu à moitié est moyenné sur cette moitié.
+- **Un trou reste un trou.** Un pas pendant lequel rien n'était en vigueur vaut `null`, jamais zéro. Rien n'est connu avant le premier point d'une entité, et la réponse donne la date de ce premier point.
+- **« Tel que connu à ».** Avec `asOf`, la lecture n'utilise que ce qui avait été noté à cet instant, et la période ne peut pas finir après lui : rien n'était connu de la suite. Une valeur corrigée est lue telle qu'elle était connue ce jour-là.
+- **Une lecture bornée, et refusée plutôt que coupée.** 3 000 pas et 300 entités au plus par lecture. Au-delà, la lecture est refusée avec ce qu'il faut resserrer : une série coupée sans un mot passerait pour entière.
+- **Par projet.** Une série appartient à un projet ; un autre projet ne la voit pas.
+- **Retirer une série retire ses points, pas les copies.** Les versions du jeu ne sont pas touchées : déclarer la série de nouveau relit la dernière. Une mesure du jumeau ne se retire pas ici.
+- **Déclarer et retirer sont gardés au journal d'audit.**
+- **Ce qui manque.** Les copies plus anciennes que la déclaration ne sont pas lues. Un fichier qui porte sa propre histoire a tous ses points notés le jour de sa première lecture : lu « tel que connu à » un jour d'avant, ils n'y sont pas. Une source qui cesse de publier laisse sa dernière valeur en vigueur : pour une série de jeu, la lecture ne distingue pas « inchangé » de « pas relu ». La grille avance par pas fixes depuis son début : un jour y fait 24 heures, même le jour d'un changement d'heure. Un flux ne se garde pas comme série.
+
+**Code.** `backend/src/services/series.ts` (`knownAsOf`, `onGrid`, `gridOf`, `readGrid`, `checkDraft`, `declareSeries`, `listSeries`), `series-capture.ts` (`extractPoints`, `noteOf`, `writePoints`, `captureForDataset`), `datasets.ts` (`loadTableVersion`), routes `backend/src/routes/series.ts`, migration `072_kept_series.sql` ; `frontend/app/studio/data/KeptSeries.tsx`, `kept-series.ts`, `DataSection.tsx`, `frontend/app/studio/series-api.ts`.
+**Tests.** `series.unit.test.ts` (les lignes d'une copie devenues des points, l'heure sans fuseau, les lignes ambiguës, la grille, les trous, « tel que connu à », une valeur corrigée, la déclaration refusée), `routes/series.unit.test.ts` ; `data/kept-series.test.ts`, `data/KeptSeries.test.tsx`.

@@ -7,6 +7,12 @@ Ce qui a changé dans Obscyro, du plus récent au plus ancien. Chaque entrée di
 
 Une entrée est écrite le jour où le changement est livré, dans le même commit que le code. Depuis novembre 2026, chaque changement visible a la sienne. Les mois d'avant sont résumés. Le détail complet, commit par commit, est dans [l'historique du dépôt](https://github.com/V1ktor7/obscyro/commits/main).
 
+## 27 novembre 2026
+
+- **Nouvelle fonction · Données.** Les séries gardées. Sous Data › Kept series, on voit tout ce que la plateforme peut montrer du passé à un modèle : les mesures du jumeau, unité par unité, et les jeux de données gardés comme séries. Chaque ligne dit sur quelle période elle porte, depuis quand elle est gardée, combien de points elle a, pour combien d'unités ou d'entités, et ce qui manque.
+- **Nouvelle fonction · Données.** Garder un jeu de données comme série. On choisit, dans les colonnes du jeu, celle du temps, celle de la valeur et celles qui nomment l'entité (une région, un site, un virus). À partir de là, chaque écriture du jeu est lue et seul ce qui change est noté. Une valeur que la source corrige garde l'ancienne et la nouvelle. Ce qu'une écriture n'a pas pu lire est écrit sur la série.
+- **Nouvelle fonction · Données.** « Look » montre une série telle qu'un modèle la recevrait : une grille régulière, sur 48 heures par heure ou 30 jours par jour. Une valeur tient jusqu'à la suivante, et un trou reste un trou, jamais un zéro.
+
 ## 26 novembre 2026
 
 - **Modification · Studio.** Le panneau « Analyst » du cadre se ferme vraiment. Sa croix, la touche Échap et le bouton « Analyst » le laissaient affiché par-dessus la page, où il cachait ce qui se trouvait dessous. Fermé, il garde toujours ce qui a été demandé.

@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "9847c9eb0f8ccc1a"
+translatedFrom: "1c1695fbd9e24e18"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -12,6 +12,12 @@ What changed in Obscyro, from the most recent to the oldest. Each entry says wha
 - **Change**: something it already did, and now does differently, better or faster. A fix is one.
 
 An entry is written the day the change ships, in the same commit as the code. Since November 2026, every visible change has its own. The months before are summarised. The full detail, commit by commit, is in [the repository's history](https://github.com/V1ktor7/obscyro/commits/main).
+
+## 27 November 2026
+
+- **New feature · Data.** Kept series. Under Data › Kept series, one sees everything the platform can show a model of the past: the twin's measures, unit by unit, and the datasets kept as series. Each line says which stretch it is about, since when it is kept, how many points it has, for how many units or entities, and what is missing.
+- **New feature · Data.** Keeping a dataset as a series. One picks, among the dataset's columns, the one of the time, the one of the value and those that name the entity (a region, a site, a virus). From then on every write of the dataset is read, and only what changes is written down. A value its source corrects keeps the old one and the new one. What a write could not read is written on the series.
+- **New feature · Data.** “Look” shows a series as a model would be handed it: a regular grid, over 48 hours by the hour or 30 days by the day. A value holds until the next one, and a gap stays a gap, never a zero.
 
 ## 26 November 2026
 

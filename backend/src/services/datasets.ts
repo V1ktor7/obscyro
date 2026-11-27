@@ -1,5 +1,6 @@
 import type { DbClient } from "../lib/db.js";
 import { BadRequest, NotFound } from "../lib/errors.js";
+import { captureForDataset } from "./series-capture.js";
 
 // ---------------------------------------------------------------------------
 // Datasets — the layer between a source and the ontology.
@@ -259,6 +260,9 @@ export async function loadTableVersion(
       WHERE id = $1`,
     [datasetId, rows.length, JSON.stringify(schema)],
   );
+  // Every series declared on this dataset reads the copy that was just written.
+  // It never fails the write: what a series could not read is said on the series.
+  await captureForDataset(db, datasetId, versionId, rows);
   return { version, rowCount: rows.length, columnSchema: schema };
 }
 

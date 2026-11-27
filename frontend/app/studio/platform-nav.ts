@@ -93,7 +93,11 @@ export const NAV_SECTIONS: NavSection[] = [
     groups: [
       {
         title: "Workspace",
-        items: [{ label: "Projects & datasets", href: "/studio/data" }],
+        items: [
+          { label: "Projects & datasets", href: "/studio/data" },
+          // What a model can be shown of the past: the twin's measures, and the datasets kept as series.
+          { label: "Kept series", href: "/studio/data?view=series", view: "series" },
+        ],
       },
       {
         title: "Connect",
