@@ -6,6 +6,7 @@ import type { DbClient } from "../lib/db.js";
 import { AppError, NotFound } from "../lib/errors.js";
 import { recordAudit } from "../services/audit.js";
 import { BACKTEST_DAYS, BACKTEST_DAYS_MAX, backtestModel, getModel, importModel, listModels, modelDraft, modelOffer, removeModel, verifyModel } from "../services/forecast-models.js";
+import { DISPLAY_MIN_STEPS, DISPLAY_WINDOW_DAYS, TRIAL_AFTER_MINUTES, TRIAL_LATE_MINUTES, TRIAL_RHYTHMS, computeStanding, nextRunAt, runTrial, setTrial, shownForecasts } from "../services/forecast-trial.js";
 import { resolveUserIdForApiKey } from "../services/login.js";
 import { resolveEnvironment } from "../services/ontology.js";
 
@@ -198,6 +199,84 @@ const forecastModelRoutes: FastifyPluginAsync = async (fastify) => {
         metadata: { days: out.backtest.days, origins: out.backtest.origins.length, n: out.backtest.overall.n, partial: out.backtest.partial },
       });
       return { model: asRecord(out.model), backtest: asRecord(out.backtest) };
+    },
+  );
+
+  app.post(
+    "/ontology/:env/forecast-models/:key/trial",
+    {
+      schema: {
+        summary: "Put a model on trial, or take it off",
+        description:
+          "On trial, a model runs at fixed hours and each of its forecasts is frozen: written once, with when it was " +
+          "made and what the model said of itself, and never modified afterwards (the database refuses any update of " +
+          "a frozen forecast). What the two rules said at the same instant, “the same hour a week before” and “the " +
+          "last value holds”, is frozen beside it. `on: true` puts the model on trial; it has to have been replayed " +
+          `on the past first. \`everyHours\` is its rhythm (${TRIAL_RHYTHMS.join(", ")}; 6 by default): origins are counted from midnight UTC, ` +
+          `and a run happens ${TRIAL_AFTER_MINUTES} minutes after its origin, once the hour's data has arrived. A forecast is never made ` +
+          `late: past ${TRIAL_LATE_MINUTES} minutes after an origin it is not made at all, since it would have seen the start of its own ` +
+          "horizon; `run.missed` says so, and `nextRunAt` says when the next one is due. `on: false` takes the model " +
+          "off trial: what it forecast stays frozen, and it makes no more. `standing` is what the display rule says " +
+          `of the model now: its frozen forecasts of the last ${DISPLAY_WINDOW_DAYS} days held against what the twin measured since, the ` +
+          `three errors over the same steps, and \`shown\`, true only when the model is on trial, at least ${DISPLAY_MIN_STEPS} of its steps ` +
+          "have been measured and its error is strictly under the better of the two rules. The reference is never " +
+          "shown as a forecast. Kept in the audit log.",
+        tags: ["forecast-models"],
+        params: z.object({ env: z.string().min(1), key }),
+        body: z.object({ on: z.boolean(), everyHours: z.number().int().min(1).max(24).optional() }),
+        response: { 200: z.object({ model: record, run: record.nullable(), standing: record, nextRunAt: z.string().nullable() }), 400: errorEnvelope, 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      const before = await getModel(req.db, env.id, req.params.key);
+      let model = await setTrial(req.db, env, before, req.body.on, req.body.everyHours);
+      // On trial at once: the forecast for the origin that is due is made now, when it can still be made honestly.
+      const run = req.body.on ? await runTrial(req.db, env, model) : null;
+      const standing = await computeStanding(req.db, env, model);
+      model = await getModel(req.db, env.id, req.params.key);
+      await recordAudit(req.db, {
+        actorUserId: userId,
+        projectId: env.id,
+        action: req.body.on ? "forecast_model.trial_on" : "forecast_model.trial_off",
+        resourceType: "forecast_model",
+        resourceId: model.key,
+        metadata: { everyHours: model.trialEveryHours, frozen: run?.frozen ?? 0 },
+      });
+      return {
+        model: asRecord(model),
+        run: run ? asRecord(run) : null,
+        standing: asRecord(standing),
+        nextRunAt: req.body.on ? nextRunAt(new Date(), model.step, model.trialEveryHours).toISOString() : null,
+      };
+    },
+  );
+
+  app.get(
+    "/ontology/:env/forecasts",
+    {
+      schema: {
+        summary: "The forecasts a screen may show for a unit",
+        description:
+          "For the unit `unit`, the latest frozen forecast of each model the display rule lets through, and nothing " +
+          "for any other. A forecast is not a measurement: each one says which model made it (`model`), when " +
+          "(`issuedAt`), for which instant (`origin` is the start of the first step; `low`, `likely` and `high` have " +
+          "one value per step after it) and what its record is (`record.overall`: the model's error beside the two " +
+          "rules' over the last days, and `record.why`, the sentence of the rule). A model that is not on trial, has " +
+          "too few of its forecasts measured, or does not do strictly better than the better of the two rules gives " +
+          "nothing here, and neither does the reference: an empty list means no model has earned its place, not " +
+          "that nothing is expected to change. Reads only. Aggregate values about a unit, never about a person.",
+        tags: ["forecast-models"],
+        params: z.object({ env: z.string().min(1) }),
+        querystring: z.object({ unit: z.string().uuid() }),
+        response: { 200: z.object({ forecasts: z.array(record) }), 404: errorEnvelope },
+      },
+    },
+    async (req) => {
+      const userId = await requireUserId(req);
+      const env = await resolveEnvironment(req.db, userId, req.params.env);
+      return { forecasts: (await shownForecasts(req.db, env, req.query.unit)).map(asRecord) };
     },
   );
 };

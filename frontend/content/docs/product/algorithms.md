@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "0098419838c96f23"
+translatedFrom: "c6322b04adbfce48"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -41,7 +41,7 @@ Every algorithm of the product has its section here: what it is for, its diagram
 | [C1](#c1-daily-forecast-loop) | Daily forecast loop | `backend/src/services/forecast-loops.ts` |
 | [C2](#c2-forecasting-a-series-and-learning-on-a-table) | Forecasting a series, learning on a table | `simulation-service/app/lab/timeseries.py` |
 | [C3](#c3-leading-signals) | Leading signals: lag and replication | `backend/src/services/lag-scan.ts` |
-| [C4](#c4-imported-forecasting-models) | Imported forecasting models: the contract, the reference, the replay on the past | `backend/src/services/forecast-models.ts`, `forecast-contract.ts` |
+| [C4](#c4-imported-forecasting-models) | Imported forecasting models: the contract, the reference, the replay on the past, the trial, the display rule | `backend/src/services/forecast-models.ts`, `forecast-contract.ts`, `forecast-trial.ts` |
 | [C4](#c4-causal-lab) | Causal lab | `backend/src/services/causal-lab.ts` |
 | [C5](#c5-hybrid-simulation) | Hybrid simulation, graph of models | `simulation-service/app/runner.py` |
 | **D** | **Data** | |
@@ -1251,6 +1251,27 @@ flowchart TD
     L1 --> S["During a replay: it stops at that origin,<br/>and the model is not counted as tried"]
 ```
 
+**The trial and the display rule.**
+
+```mermaid
+flowchart TD
+    A["A model replayed on the past is put on trial,<br/>at a rhythm: every 1, 3, 6, 12 or 24 hours"] --> B["The clock passes every 5 minutes<br/>over each model on trial"]
+    B --> C{"Is the origin that is due (the latest slot,<br/>25 minutes after its hour)<br/>less than 90 minutes old?"}
+    C -->|"no"| C1["Origin missed: no forecast<br/>is made afterwards"]
+    C -->|"yes"| D{"Already frozen for this model<br/>and this origin?"}
+    D -->|"yes"| D1["Nothing is done again"]
+    D -->|"no"| E["The model is sent what is known now,<br/>through the contract of the schema above"]
+    E --> F{"Does it answer, keeping the contract?"}
+    F -->|"no"| F1["Nothing is frozen. The reason is kept<br/>on the model, and the trial goes on"]
+    F -->|"yes"| G["app.forecast_issued, one row per unit:<br/>the forecast, what the two rules said<br/>at the same instant, the time it was made"]
+    G --> H["Written once. The database refuses<br/>any update of the table"]
+    H --> I["Where the model stands: its frozen forecasts<br/>of the last 14 days, held against<br/>what the twin measured since"]
+    I --> J{"On trial, at least 200 steps measured,<br/>and an error under the better<br/>of the two rules?"}
+    J -->|"no"| K["Not shown.<br/>The sentence of the rule says why"]
+    J -->|"yes"| L["Shown: GET /forecasts gives its latest<br/>frozen forecast for a unit"]
+    R["The reference, even on trial"] --> K
+```
+
 **The contract, version 1.** One format for every model. What a model is sent, then what it sends back:
 
 ```json
@@ -1299,12 +1320,21 @@ flowchart TD
 - **Beating the better of the two rules, strictly.** A model has earned its place only if its error is under the lower of the two. Tying a rule a person applies by hand is not enough. The sentence of the verdict names the rule that is the bar. With nothing compared, nothing is concluded. The reference itself is not compared with itself.
 - **A broken contract stops the replay.** If the model does not answer or breaks the contract at an origin, the replay stops there and the model is not counted as tried: a score over the forecasts it got right alone would flatter it. A replay that runs past two minutes stops and says how far it got.
 - **A replay is not a forecast.** Nothing a replay computes is kept as a forecast or shown on the network: its result is written on the model, and nothing else.
-- **The states.** Imported, verified, tried, on trial. “Shown” is not a stored state: it is a rule fixed in advance, applied to frozen forecasts.
-- **Importing, verifying, replaying and removing are kept in the audit log**, with what left and to where.
-- **What is missing.** The trial (a forecast frozen at a fixed hour, then scored), the display rule, the import screen, the forecast on the Network page and the model service itself are not there yet: a model is imported, verified and replayed through the API. One origin a day only. A single measure of error. No companion series known ahead other than the calendar: no holidays, no forecast weather. What the twin does not hold (ward beds, staff, calls to 811) cannot be shown to a model.
+- **A replay on the past is not enough.** It can be run again until the result pleases. A trial happens in the present: the model runs at fixed hours, and each forecast is written once, with the time it was made. A model goes on trial only after it was verified and replayed on the past.
+- **At fixed hours, after the data arrives.** A rhythm among 1, 3, 6, 12 or 24 hours (6 by default). Origins are counted from midnight UTC, and a forecast is made 25 minutes after its origin: the time the hour's data takes to arrive. The clock passes every five minutes; `FORECAST_TRIALS_DISABLED=1` stops it, and what is frozen stays.
+- **No forecast is made late.** Past 90 minutes after an origin, its forecast is not made at all: it would have seen the start of its own horizon. An origin that was missed, because the server was down or the model did not answer, stays missed.
+- **A frozen forecast is never modified.** One row per model, per unit and per origin. A second write for the same origin is ignored, and the database refuses any update of the table: it is not a habit of the code, it is a trigger. A forecast only goes away with its model.
+- **The two rules are frozen with it.** What “the week before” and “the last value” said at that origin, with what was known then, is kept beside the forecast. Recomputed later, with readings that arrived or were corrected since, the bar would move after the fact.
+- **A model that fails freezes nothing.** If it does not answer or breaks the contract, nothing is written, the reason is kept on it, and the trial goes on at the next origin.
+- **Shown is a rule, not a box.** Fixed in advance, the same for every model: it is on trial; at least 200 steps of its frozen forecasts of the last 14 days have been measured; its error is strictly under the better of the two rules. Nobody ticks “shown”: the rule is recomputed after each forecast and at least every hour, and gives the same answer at every read. The last computation is kept on the model (`standing`) so that a screen does not have to redo it.
+- **The reference is never shown as a forecast.** It can be imported, verified, replayed and put on trial: that is how everything works without a model service. But it is the bar, not a model that cleared it.
+- **What a screen is given.** `GET /forecasts?unit=` gives, for a unit, the latest frozen forecast of each model the rule lets through: the model and what it says of itself, the time it was made, the origin, the three values per step, and its record (the three errors, the sentence of the rule). An empty list means no model has earned its place, not that nothing is going to change.
+- **The states.** Imported, verified, tried, on trial. “Shown” is not a stored state: it is the rule above.
+- **Importing, verifying, replaying, putting on trial and removing are kept in the audit log**, with what left and to where.
+- **What is missing.** The import screen, the forecast on the Network page and the model service itself are not there yet: a model is imported, verified, replayed and put on trial through the API. A replay on the past has one origin a day only. A single measure of error, the mean absolute gap, pulled up by small units where one stretcher moves the percentage a lot. No companion series known ahead other than the calendar: no holidays, no forecast weather. What the twin does not hold (ward beds, staff, calls to 811) cannot be shown to a model.
 
-**Code.** `backend/src/services/forecast-contract.ts` (`checkForecast`, `checkRequest`, `boundsOf`, `referenceOf`, `referenceForecast`, `tallyInto`, `scoreOf`, `beatsReference`), `forecast-models.ts` (`checkModelDraft`, `importModel`, `buildRequest`, `askModel`, `sentTo`, `verifyModel`, `originsOf`, `backtestModel`, `modelOffer`), routes `backend/src/routes/forecast-models.ts`, migration `074_forecast_model.sql`.
-**Tests.** `forecast-contract.unit.test.ts` (the contract accepted and refused with its reason, the reference, the scoring), `forecast-models.unit.test.ts` (what is declared, the key, where the request goes, the opaque labels, a unit with too short a history, the replay that sees nothing after the origin, the two errors, a broken contract), `routes/forecast-models.unit.test.ts`.
+**Code.** `backend/src/services/forecast-contract.ts` (`checkForecast`, `checkRequest`, `boundsOf`, `referenceOf`, `referenceForecast`, `tallyInto`, `scoreOf`, `beatsReference`), `forecast-models.ts` (`checkModelDraft`, `importModel`, `buildRequest`, `askModel`, `sentTo`, `verifyModel`, `originsOf`, `backtestModel`, `modelOffer`), `forecast-trial.ts` (`dueOrigin`, `setTrial`, `runTrial`, `displayRule`, `scoreFrozen`, `computeStanding`, `shownForecasts`, `runAllTrials`, `startForecastTrials`), routes `backend/src/routes/forecast-models.ts`, migrations `074_forecast_model.sql` and `075_forecast_issued.sql`.
+**Tests.** `forecast-contract.unit.test.ts` (the contract accepted and refused with its reason, the reference, the last value, the scoring), `forecast-models.unit.test.ts` (what is declared, the key, where the request goes, the opaque labels, a unit with too short a history, the replay that sees nothing after the origin, the three errors, a broken contract), `forecast-trial.unit.test.ts` (the origin that is due, a forecast frozen once and never modified, no forecast made late, the display rule, the reference never shown, what a screen is given), `routes/forecast-models.unit.test.ts`.
 
 ## D1. Clinical extraction
 

@@ -29,6 +29,7 @@ import { startPipelineScheduler } from "./services/pipeline.js";
 import { startForecastLoopScheduler } from "./services/forecast-loops.js";
 import { startTwinAlertScheduler } from "./services/twin-alert-scheduler.js";
 import { startTwinHistory } from "./services/twin-history.js";
+import { startForecastTrials } from "./services/forecast-trial.js";
 import authRoutes from "./routes/auth.js";
 import batchRoutes from "./routes/batch.js";
 import channelsRoutes, { reviewRoutes } from "./routes/channels.js";
@@ -232,6 +233,7 @@ startTwinAlertScheduler(pool, app.log, () => runAlertBridge(pool as unknown as P
 startAlertBridge(pool, app.log);
 // The twin writes down what it measures, every few minutes: without it, it can only say "now".
 startTwinHistory(pool, app.log);
+startForecastTrials(pool, app.log);
 // A signal that opens has the responses prepared for its kind tested again, one run at a time per project.
 void startRetests(pool, simServiceEngine, app.log);
   startChannelJobWorker(pool, app.log);

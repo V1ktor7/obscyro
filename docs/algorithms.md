@@ -35,7 +35,7 @@ Chaque algorithme du produit a ici sa section : à quoi il sert, son schéma, se
 | [C1](#c1-boucle-de-prévision-quotidienne) | Boucle de prévision quotidienne | `backend/src/services/forecast-loops.ts` |
 | [C2](#c2-prévision-dune-série-et-apprentissage-sur-table) | Prévision d'une série, apprentissage sur table | `simulation-service/app/lab/timeseries.py` |
 | [C3](#c3-signaux-précurseurs) | Signaux précurseurs : décalage et réplication | `backend/src/services/lag-scan.ts` |
-| [C4](#c4-modèles-de-prévision-importés) | Modèles de prévision importés : le contrat, la référence, l'essai sur le passé | `backend/src/services/forecast-models.ts`, `forecast-contract.ts` |
+| [C4](#c4-modèles-de-prévision-importés) | Modèles de prévision importés : le contrat, la référence, l'essai sur le passé, la mise à l'essai, la règle d'affichage | `backend/src/services/forecast-models.ts`, `forecast-contract.ts`, `forecast-trial.ts` |
 | [C4](#c4-laboratoire-causal) | Laboratoire causal | `backend/src/services/causal-lab.ts` |
 | [C5](#c5-simulation-hybride) | Simulation hybride, graphe de modèles | `simulation-service/app/runner.py` |
 | **D** | **Données** | |
@@ -1245,6 +1245,27 @@ flowchart TD
     L1 --> S["Pendant un essai : il s'arrête à cette origine,<br/>et le modèle n'est pas compté comme essayé"]
 ```
 
+**La mise à l'essai et la règle d'affichage.**
+
+```mermaid
+flowchart TD
+    A["Un modèle essayé sur le passé est mis à l'essai,<br/>à un rythme : toutes les 1, 3, 6, 12 ou 24 heures"] --> B["L'horloge passe toutes les 5 minutes<br/>sur chaque modèle à l'essai"]
+    B --> C{"L'origine due (le dernier créneau,<br/>25 minutes après son heure)<br/>a-t-elle moins de 90 minutes ?"}
+    C -->|"non"| C1["Origine manquée : aucune prévision<br/>n'est faite après coup"]
+    C -->|"oui"| D{"Déjà figée pour ce modèle<br/>et cette origine ?"}
+    D -->|"oui"| D1["Rien n'est refait"]
+    D -->|"non"| E["Le modèle reçoit ce qui est connu maintenant,<br/>par le contrat du schéma précédent"]
+    E --> F{"Répond-il, en tenant le contrat ?"}
+    F -->|"non"| F1["Rien n'est figé. La raison est gardée<br/>sur le modèle, et l'essai continue"]
+    F -->|"oui"| G["app.forecast_issued, une ligne par unité :<br/>la prévision, ce que disaient les deux règles<br/>au même instant, l'heure où elle est faite"]
+    G --> H["Écrite une fois. La base refuse<br/>toute mise à jour de la table"]
+    H --> I["Où en est le modèle : ses prévisions figées<br/>des 14 derniers jours, tenues contre<br/>ce que le jumeau a mesuré depuis"]
+    I --> J{"À l'essai, au moins 200 pas mesurés,<br/>et une erreur sous la meilleure<br/>des deux règles ?"}
+    J -->|"non"| K["Pas montré.<br/>La phrase de la règle dit pourquoi"]
+    J -->|"oui"| L["Montré : GET /forecasts rend sa dernière<br/>prévision figée pour une unité"]
+    R["La référence, même à l'essai"] --> K
+```
+
 **Le contrat, version 1.** Un seul format pour tout modèle. Ce qu'un modèle reçoit, puis ce qu'il rend :
 
 ```json
@@ -1293,12 +1314,21 @@ flowchart TD
 - **Battre la meilleure des deux règles, strictement.** Un modèle n'a gagné sa place que si son erreur est sous la plus basse des deux. Faire jeu égal avec une règle qu'une personne applique à la main ne suffit pas. La phrase du verdict nomme la règle qui sert de barre. Sans rien de comparé, rien n'est conclu. La référence, elle, n'est pas comparée à elle-même.
 - **Un contrat rompu arrête l'essai.** Si le modèle ne répond pas ou rompt le contrat à une origine, l'essai s'arrête là et le modèle n'est pas compté comme essayé : une note sur les seules prévisions réussies le flatterait. Un essai qui dépasse deux minutes s'arrête et dit jusqu'où il est allé.
 - **Un essai n'est pas une prévision.** Rien de ce qu'un essai calcule n'est gardé comme prévision ni montré sur le réseau : son résultat est écrit sur le modèle, et rien d'autre.
-- **Les états.** Importé, vérifié, essayé, à l'essai. « Montré » n'est pas un état rangé : c'est une règle fixée d'avance, appliquée à des prévisions figées.
-- **Importer, vérifier, essayer et retirer sont gardés au journal d'audit**, avec ce qui est parti et vers où.
-- **Ce qui manque.** La mise à l'essai (une prévision figée à heure fixe, puis notée), la règle d'affichage, l'écran d'import, la prévision sur la page Network et le service de modèle lui-même ne sont pas encore là : un modèle s'importe, se vérifie et s'essaie par l'API. Une origine par jour seulement. Une seule mesure d'erreur. Aucune série compagne connue d'avance en dehors du calendrier : ni jours fériés, ni météo prévue. Ce que le jumeau ne contient pas (les lits d'étage, le personnel, les appels au 811) ne peut pas être montré à un modèle.
+- **Un essai sur le passé ne suffit pas.** On peut le refaire jusqu'à ce que le résultat plaise. Une mise à l'essai se passe au présent : le modèle tourne à heure fixe, et chaque prévision est écrite une fois, avec l'heure où elle a été faite. Un modèle ne se met à l'essai qu'après avoir été vérifié et essayé sur le passé.
+- **À heure fixe, après l'arrivée des données.** Un rythme parmi 1, 3, 6, 12 ou 24 heures (6 par défaut). Les origines se comptent depuis minuit UTC, et une prévision est faite 25 minutes après son origine : le temps que la donnée de l'heure arrive. L'horloge passe toutes les cinq minutes ; `FORECAST_TRIALS_DISABLED=1` l'arrête, et ce qui est figé reste.
+- **Aucune prévision n'est faite en retard.** Passé 90 minutes après une origine, sa prévision n'est plus faite du tout : elle aurait vu le début de son propre horizon. Une origine manquée, parce que le serveur était arrêté ou que le modèle n'a pas répondu, reste manquée.
+- **Une prévision figée ne se modifie pas.** Une ligne par modèle, par unité et par origine. Une seconde écriture pour la même origine est ignorée, et la base refuse toute mise à jour de la table : ce n'est pas une habitude du code, c'est un déclencheur. Une prévision ne disparaît qu'avec son modèle.
+- **Les deux règles sont figées avec elle.** Ce que disaient « la semaine passée » et « la dernière valeur » à cette origine, avec ce qu'on savait alors, est gardé à côté de la prévision. Les recalculer plus tard, avec des relevés arrivés ou corrigés depuis, déplacerait la barre après coup.
+- **Un modèle qui échoue ne fige rien.** S'il ne répond pas ou rompt le contrat, rien n'est écrit, la raison est gardée sur lui, et l'essai continue à l'origine suivante.
+- **Montré est une règle, pas une case.** Fixée d'avance, la même pour tout modèle : il est à l'essai ; au moins 200 pas de ses prévisions figées des 14 derniers jours ont été mesurés ; son erreur est strictement sous la meilleure des deux règles. Personne ne coche « montré » : la règle est recalculée après chaque prévision et au moins toutes les heures, et donne la même réponse à chaque lecture. Le dernier calcul est gardé sur le modèle (`standing`) pour qu'un écran n'ait pas à le refaire.
+- **La référence n'est jamais montrée comme une prévision.** Elle peut être importée, vérifiée, essayée et mise à l'essai : c'est ainsi que tout fonctionne sans service de modèle. Mais elle est la barre, pas un modèle qui l'a franchie.
+- **Ce qu'un écran reçoit.** `GET /forecasts?unit=` rend, pour une unité, la dernière prévision figée de chaque modèle que la règle laisse passer : le modèle et ce qu'il dit de lui-même, l'heure où elle a été faite, l'origine, les trois valeurs par pas, et son bilan (les trois erreurs, la phrase de la règle). Une liste vide veut dire qu'aucun modèle n'a gagné sa place, pas que rien ne va changer.
+- **Les états.** Importé, vérifié, essayé, à l'essai. « Montré » n'est pas un état rangé : c'est la règle ci-dessus.
+- **Importer, vérifier, essayer, mettre à l'essai et retirer sont gardés au journal d'audit**, avec ce qui est parti et vers où.
+- **Ce qui manque.** L'écran d'import, la prévision sur la page Network et le service de modèle lui-même ne sont pas encore là : un modèle s'importe, se vérifie, s'essaie et se met à l'essai par l'API. Un essai sur le passé a une origine par jour seulement. Une seule mesure d'erreur, l'écart absolu moyen, tirée vers le haut par les petites unités où une civière déplace beaucoup le pourcentage. Aucune série compagne connue d'avance en dehors du calendrier : ni jours fériés, ni météo prévue. Ce que le jumeau ne contient pas (les lits d'étage, le personnel, les appels au 811) ne peut pas être montré à un modèle.
 
-**Code.** `backend/src/services/forecast-contract.ts` (`checkForecast`, `checkRequest`, `boundsOf`, `referenceOf`, `referenceForecast`, `tallyInto`, `scoreOf`, `beatsReference`), `forecast-models.ts` (`checkModelDraft`, `importModel`, `buildRequest`, `askModel`, `sentTo`, `verifyModel`, `originsOf`, `backtestModel`, `modelOffer`), routes `backend/src/routes/forecast-models.ts`, migration `074_forecast_model.sql`.
-**Tests.** `forecast-contract.unit.test.ts` (le contrat accepté et refusé avec sa raison, la référence, la notation), `forecast-models.unit.test.ts` (ce qui est déclaré, la clé, où part la requête, les étiquettes opaques, une unité à l'historique trop court, l'essai qui ne voit rien d'après l'origine, les deux erreurs, un contrat rompu), `routes/forecast-models.unit.test.ts`.
+**Code.** `backend/src/services/forecast-contract.ts` (`checkForecast`, `checkRequest`, `boundsOf`, `referenceOf`, `referenceForecast`, `tallyInto`, `scoreOf`, `beatsReference`), `forecast-models.ts` (`checkModelDraft`, `importModel`, `buildRequest`, `askModel`, `sentTo`, `verifyModel`, `originsOf`, `backtestModel`, `modelOffer`), `forecast-trial.ts` (`dueOrigin`, `setTrial`, `runTrial`, `displayRule`, `scoreFrozen`, `computeStanding`, `shownForecasts`, `runAllTrials`, `startForecastTrials`), routes `backend/src/routes/forecast-models.ts`, migrations `074_forecast_model.sql` et `075_forecast_issued.sql`.
+**Tests.** `forecast-contract.unit.test.ts` (le contrat accepté et refusé avec sa raison, la référence, la dernière valeur, la notation), `forecast-models.unit.test.ts` (ce qui est déclaré, la clé, où part la requête, les étiquettes opaques, une unité à l'historique trop court, l'essai qui ne voit rien d'après l'origine, les trois erreurs, un contrat rompu), `forecast-trial.unit.test.ts` (l'origine due, une prévision figée une fois et jamais modifiée, aucune prévision en retard, la règle d'affichage, la référence jamais montrée, ce qu'un écran reçoit), `routes/forecast-models.unit.test.ts`.
 
 ## D1. Extraction clinique
 

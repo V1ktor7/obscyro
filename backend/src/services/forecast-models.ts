@@ -134,6 +134,12 @@ export interface ForecastModel extends ModelDraft {
   triedAt: string | null;
   backtest: Backtest | null;
   lastError: string | null;
+  /** On trial: how often it runs, since when, and when it last did. */
+  trialEveryHours: number;
+  trialStartedAt: string | null;
+  lastRunAt: string | null;
+  /** The last time its frozen forecasts were held against the two rules (`forecast-trial.ts`). A cache: the rule is recomputed, never set. */
+  standing: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -228,17 +234,23 @@ interface ModelRow {
   tried_at: Date | null;
   backtest: Backtest | null;
   last_error: string | null;
+  trial_every_hours: number | null;
+  trial_started_at: Date | null;
+  last_run_at: Date | null;
+  standing: Record<string, unknown> | null;
   created_at: Date;
   updated_at: Date;
 }
 
-const COLUMNS = `id, project_id, key, label, source, service_model, endpoint_url, endpoint_key_env, metric, units, step,
+export type { ModelRow };
+
+export const COLUMNS = `id, project_id, key, label, source, service_model, endpoint_url, endpoint_key_env, metric, units, step,
   history_steps, horizon_steps, hold_hours, min_history_days, companions, time_zone, state, verified_at, tried_at,
-  backtest, last_error, created_at, updated_at`;
+  backtest, last_error, trial_every_hours, trial_started_at, last_run_at, standing, created_at, updated_at`;
 
 const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
 
-function modelOf(r: ModelRow): ForecastModel {
+export function modelOf(r: ModelRow): ForecastModel {
   return {
     id: r.id,
     projectId: r.project_id,
@@ -262,6 +274,10 @@ function modelOf(r: ModelRow): ForecastModel {
     triedAt: iso(r.tried_at),
     backtest: r.backtest,
     lastError: r.last_error,
+    trialEveryHours: r.trial_every_hours ?? 6,
+    trialStartedAt: iso(r.trial_started_at ?? null),
+    lastRunAt: iso(r.last_run_at ?? null),
+    standing: r.standing ?? null,
     createdAt: r.created_at.toISOString(),
     updatedAt: r.updated_at.toISOString(),
   };
@@ -365,7 +381,7 @@ const days = (ms: number): string => {
   return d < 1 ? "less than a day" : d === 1 ? "1 day" : `${d} days`;
 };
 
-async function unitsOf(db: DbClient, project: Project, model: Pick<ForecastModel, "metric" | "units">): Promise<string[]> {
+export async function unitsOf(db: DbClient, project: Project, model: Pick<ForecastModel, "metric" | "units">): Promise<string[]> {
   if (model.units) return model.units;
   const { rows } = await db.query<{ unit: string }>(
     `SELECT DISTINCT unit_instance_id AS unit FROM app.twin_reading WHERE project_id = $1 AND metric = $2 ORDER BY 1`,
@@ -375,7 +391,7 @@ async function unitsOf(db: DbClient, project: Project, model: Pick<ForecastModel
 }
 
 /** A grid read for many entities, a bounded number at a time. */
-async function gridFor(db: DbClient, project: Project, key: string, entities: string[], from: Date, to: Date, step: ForecastStep, asOf: Date | null, holdHours: number | null): Promise<GridAnswer["series"]> {
+export async function gridFor(db: DbClient, project: Project, key: string, entities: string[], from: Date, to: Date, step: ForecastStep, asOf: Date | null, holdHours: number | null): Promise<GridAnswer["series"]> {
   const out: GridAnswer["series"] = [];
   for (let i = 0; i < entities.length; i += ENTITIES_MAX) {
     const answer = await readGrid(db, project, {
@@ -590,7 +606,7 @@ export interface Verification {
   ms: number | null;
 }
 
-async function unitOf(db: DbClient, project: Project, metric: string): Promise<string | null> {
+export async function unitOf(db: DbClient, project: Project, metric: string): Promise<string | null> {
   return (await listTwinMetrics(db, project.organizationId)).find((m) => m.key === metric)?.unit ?? null;
 }
 

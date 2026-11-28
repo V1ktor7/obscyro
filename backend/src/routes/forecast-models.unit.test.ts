@@ -32,6 +32,8 @@ test("the forecast model routes register and compile", async () => {
     ["DELETE", "/v1/ontology/:env/forecast-models/:key"],
     ["POST", "/v1/ontology/:env/forecast-models/:key/verify"],
     ["POST", "/v1/ontology/:env/forecast-models/:key/backtest"],
+    ["POST", "/v1/ontology/:env/forecast-models/:key/trial"],
+    ["GET", "/v1/ontology/:env/forecasts"],
   ] as const) {
     assert.ok(app.hasRoute({ method, url }), `${method} ${url}`);
   }
@@ -68,5 +70,15 @@ test("a model is named by its key, and a replay goes back a bounded number of da
   assert.equal((await call("POST", "chronos_2/backtest", { days: 14 })).statusCode, 401);
   assert.equal((await call("POST", "chronos_2/backtest", { days: 0 })).statusCode, 400);
   assert.equal((await call("POST", "chronos_2/backtest", { days: 61 })).statusCode, 400);
+  // A trial is turned on or off, and says so: there is no default to guess.
+  assert.equal((await call("POST", "chronos_2/trial", {})).statusCode, 400);
+  assert.equal((await call("POST", "chronos_2/trial", { on: "yes" })).statusCode, 400);
+  assert.equal((await call("POST", "chronos_2/trial", { on: true, everyHours: 48 })).statusCode, 400);
+  assert.equal((await call("POST", "chronos_2/trial", { on: true, everyHours: 6 })).statusCode, 401);
+  assert.equal((await call("POST", "chronos_2/trial", { on: false })).statusCode, 401);
+  // What a screen may show is asked for one unit, by its identifier.
+  assert.equal((await app.inject({ method: "GET", url: "/v1/ontology/mtl/forecasts" })).statusCode, 400);
+  assert.equal((await app.inject({ method: "GET", url: "/v1/ontology/mtl/forecasts?unit=the-chum" })).statusCode, 400);
+  assert.equal((await app.inject({ method: "GET", url: "/v1/ontology/mtl/forecasts?unit=5f0c1a3e-8b1d-4c56-9a44-0b6d2f1e7a90" })).statusCode, 401);
   await app.close();
 });
