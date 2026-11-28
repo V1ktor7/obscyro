@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "4054bde4d3785c78"
+translatedFrom: "84a29b3e5632e494"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -17,6 +17,7 @@ An entry is written the day the change ships, in the same commit as the code. Si
 
 - **New feature · Data.** Catching a series up from kept copies. A series starts the day it started being kept, but every sync was already keeping a whole copy of its file. On a series, “Catch up” says how many older copies there are, then reads them from the oldest to the newest, in batches, and can be stopped and resumed. For a measure of the twin, each copy goes through today's pipeline and today's measure again, in memory: nothing is written in the ontology. When the source changed file, the copies of the old dataset can be read in place of the pipeline's input. What is written down this way is marked as caught up; what cannot be placed is left out and counted. “Forget what was caught up” removes what was caught up, and nothing else.
 - **Change · Units.** A unit's sheet says which readings of the history were caught up from a kept copy: the twin did not show them at the time.
+- **Change · Data.** A value no longer holds for ever. When a source stops being read for days, “Look” no longer stretches its last figure into a flat line: for a dataset series, a value holds two steps of the source at most, then it is a gap. A read made for a model sets that length itself.
 - **New feature · Data.** Kept series. Under Data › Kept series, one sees everything the platform can show a model of the past: the twin's measures, unit by unit, and the datasets kept as series. Each line says which stretch it is about, since when it is kept, how many points it has, for how many units or entities, and what is missing.
 - **New feature · Data.** Keeping a dataset as a series. One picks, among the dataset's columns, the one of the time, the one of the value and those that name the entity (a region, a site, a virus). From then on every write of the dataset is read, and only what changes is written down. A value its source corrects keeps the old one and the new one. What a write could not read is written on the series.
 - **New feature · Data.** “Look” shows a series as a model would be handed it: a regular grid, over 48 hours by the hour or 30 days by the day. A value holds until the next one, and a gap stays a gap, never a zero.
