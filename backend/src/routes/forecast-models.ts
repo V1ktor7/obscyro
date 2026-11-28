@@ -169,11 +169,12 @@ const forecastModelRoutes: FastifyPluginAsync = async (fastify) => {
           `Replays the model over the last \`days\` days (${BACKTEST_DAYS} by default, ${BACKTEST_DAYS_MAX} at most): one origin a day, at ` +
           "the hour of the last whole step. At each origin the model is sent only what was known at that instant " +
           "(the “as known at” read of the kept series), and its forecast is held against what was measured since, " +
-          "beside the reference's over the very same steps. `backtest.overall` gives the mean absolute error of the " +
-          "model and of the reference, in the measure's own unit, the number of steps compared (`n`: only steps " +
-          "where the model, the reference and the measure all have a value) and the share of measures that fell " +
-          "inside the model's range (`inside`); `byHorizon` gives the same for each step of the horizon, and " +
-          "`origins` for each origin. `verdict` says whether the model does strictly better than the reference. " +
+          "beside two rules over the very same steps. `backtest.overall` gives the mean absolute error of the " +
+          "model (`model`), of “the same hour a week before” (`reference`) and of “the last value holds” (`held`), " +
+          "in the measure's own unit, the number of steps compared (`n`: only steps where the model, both rules " +
+          "and the measure all have a value) and the share of measures that fell inside the model's range " +
+          "(`inside`); `byHorizon` gives the same for each step of the horizon, and `origins` for each origin. " +
+          "`verdict` says whether the model does strictly better than the better of the two rules. " +
           "Nothing is trained, and nothing is kept as a forecast: this is a trial run on the past. A model that " +
           "cannot be reached or breaks the contract stops the replay there (`stopped`) and is not counted as tried; " +
           "a replay that runs past two minutes stops and says how far it got (`partial`). Kept in the audit log.",

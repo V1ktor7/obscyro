@@ -23,7 +23,13 @@
 //
 // The reference is "the same hour, a week before" (a day before, when there is
 // less than a week of history). It is built in, calls no model and can always
-// be computed. A model is shown only while it does better than that.
+// be computed.
+//
+// A model is held against two rules, and has to beat the better of them: that
+// reference, and "the last value holds", which is what a person reads off the
+// screen with no rule at all. Replayed on a fortnight of stretcher occupancy,
+// the week before was off by 29 points on average and the last value by 8 an
+// hour ahead: a model that only beat the first could do worse than nothing.
 //
 // No database here: everything in this file is checked without one.
 // ---------------------------------------------------------------------------
@@ -253,6 +259,21 @@ export function referenceOf(target: readonly Cell[], horizon: number, step: Fore
   return out;
 }
 
+/** The two rules a model is held against, as a screen names them. */
+export const RULE_WEEK = "the same hour a week before";
+export const RULE_HELD = "the last value holds";
+
+/**
+ * "The last value holds": the last value kept in the history, flat over the
+ * horizon. What a person does with the screen as it is, and no rule at all.
+ * Null over the whole horizon when the history holds no value.
+ */
+export function lastValueOf(target: readonly Cell[], horizon: number): Cell[] {
+  let last: Cell = null;
+  for (let i = target.length - 1; i >= 0 && last === null; i--) last = target[i] ?? null;
+  return Array.from({ length: horizon }, () => last);
+}
+
 /** The reference for every series of a request. Built in: no model is called. */
 export function referenceForecast(request: Pick<ForecastRequest, "series" | "horizon" | "step">): ReferenceSeries[] {
   return request.series.map((s) => ({ id: s.id, ...referenceOf(s.target, request.horizon, request.step) }));
@@ -261,12 +282,14 @@ export function referenceForecast(request: Pick<ForecastRequest, "series" | "hor
 // --- scoring ------------------------------------------------------------------------------
 
 export interface Score {
-  /** Steps where the forecast, the reference and what was measured all have a value. */
+  /** Steps where the forecast, both rules and what was measured all have a value. */
   n: number;
   /** Mean absolute error of the model's likely value, in the measure's own unit. Null when nothing could be compared. */
   model: number | null;
-  /** The reference's, over the very same steps. */
+  /** The error of "the same hour a week before", over the very same steps. */
   reference: number | null;
+  /** The error of "the last value holds", over the very same steps. */
+  held: number | null;
   /** The share of measured values that fell inside the model's range, 0 to 1. */
   inside: number | null;
 }
@@ -275,31 +298,34 @@ export interface Tally {
   n: number;
   model: number;
   reference: number;
+  held: number;
   inside: number;
 }
 
-export const emptyTally = (): Tally => ({ n: 0, model: 0, reference: 0, inside: 0 });
+export const emptyTally = (): Tally => ({ n: 0, model: 0, reference: 0, held: 0, inside: 0 });
 
 /**
  * One forecast added to a tally, step by step of the horizon.
  *
- * A step counts only when the model, the reference and the measure all have a
- * value: the two errors are then over the very same steps, and neither is
- * flattered by a gap the other had to answer for.
+ * A step counts only when the model, both rules and the measure all have a
+ * value: the three errors are then over the very same steps, and none is
+ * flattered by a gap another had to answer for.
  */
 export function tallyInto(
   byHorizon: Tally[],
   forecast: { low: readonly Cell[]; likely: readonly Cell[]; high: readonly Cell[] },
   reference: { likely: readonly Cell[] },
+  held: readonly Cell[],
   measured: readonly Cell[],
 ): void {
   for (let h = 0; h < byHorizon.length; h++) {
-    const [f, r, m] = [forecast.likely[h], reference.likely[h], measured[h]];
-    if (f === null || f === undefined || r === null || r === undefined || m === null || m === undefined) continue;
+    const [f, r, k, m] = [forecast.likely[h], reference.likely[h], held[h], measured[h]];
+    if (f === null || f === undefined || r === null || r === undefined || k === null || k === undefined || m === null || m === undefined) continue;
     const t = byHorizon[h]!;
     t.n += 1;
     t.model += Math.abs(f - m);
     t.reference += Math.abs(r - m);
+    t.held += Math.abs(k - m);
     const [low, high] = [forecast.low[h], forecast.high[h]];
     if (low !== null && low !== undefined && high !== null && high !== undefined && m >= low && m <= high) t.inside += 1;
   }
@@ -308,24 +334,30 @@ export function tallyInto(
 const round = (v: number): number => Math.round(v * 1000) / 1000;
 
 export function scoreOf(tallies: readonly Tally[]): Score {
-  const sum = tallies.reduce((a, t) => ({ n: a.n + t.n, model: a.model + t.model, reference: a.reference + t.reference, inside: a.inside + t.inside }), emptyTally());
-  if (sum.n === 0) return { n: 0, model: null, reference: null, inside: null };
-  return { n: sum.n, model: round(sum.model / sum.n), reference: round(sum.reference / sum.n), inside: round(sum.inside / sum.n) };
+  const sum = tallies.reduce(
+    (a, t) => ({ n: a.n + t.n, model: a.model + t.model, reference: a.reference + t.reference, held: a.held + t.held, inside: a.inside + t.inside }),
+    emptyTally(),
+  );
+  if (sum.n === 0) return { n: 0, model: null, reference: null, held: null, inside: null };
+  return { n: sum.n, model: round(sum.model / sum.n), reference: round(sum.reference / sum.n), held: round(sum.held / sum.n), inside: round(sum.inside / sum.n) };
 }
 
 /**
- * Whether a model does better than the reference, and the sentence that says so.
+ * Whether a model does better than both rules, and the sentence that says so.
  *
- * Strictly better: a model that only ties the rule a person could apply by
- * hand has not earned its place on a screen. With nothing compared, nothing is
- * concluded.
+ * Strictly better than the better of the two: a model that only ties a rule a
+ * person could apply by hand has not earned its place on a screen, and one
+ * that beats the week before while losing to the last value does worse than
+ * the screen as it is. With nothing compared, nothing is concluded.
  */
 export function beatsReference(score: Score): { beats: boolean | null; why: string } {
-  if (score.n === 0 || score.model === null || score.reference === null) {
-    return { beats: null, why: "Nothing could be compared yet: no step has a forecast, a reference and a measure." };
+  if (score.n === 0 || score.model === null || score.reference === null || score.held === null) {
+    return { beats: null, why: "Nothing could be compared yet: no step has a forecast, both rules and a measure." };
   }
-  if (score.model < score.reference) {
-    return { beats: true, why: `Its error is ${score.model} against ${score.reference} for the reference, over ${score.n.toLocaleString("en-CA")} steps.` };
+  const steps = `over ${score.n.toLocaleString("en-CA")} steps`;
+  const [bar, which] = score.held <= score.reference ? [score.held, RULE_HELD] : [score.reference, RULE_WEEK];
+  if (score.model < bar) {
+    return { beats: true, why: `Its error is ${score.model}, under both rules: ${score.held} for “${RULE_HELD}” and ${score.reference} for “${RULE_WEEK}”, ${steps}.` };
   }
-  return { beats: false, why: `Its error is ${score.model}, which is not under the reference's ${score.reference}, over ${score.n.toLocaleString("en-CA")} steps.` };
+  return { beats: false, why: `Its error is ${score.model}, which is not under ${bar} for “${which}”, the better of the two rules, ${steps}.` };
 }

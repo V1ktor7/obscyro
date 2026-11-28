@@ -9,6 +9,7 @@ import {
   checkForecast,
   checkRequest,
   emptyTally,
+  lastValueOf,
   referenceForecast,
   referenceOf,
   scoreOf,
@@ -185,27 +186,45 @@ test("the reference is computed for every series of a request, with no model", (
 
 // --- scoring -----------------------------------------------------------------------------------
 
-test("a step is scored only where the model, the reference and the measure all have a value", () => {
-  const tallies = [emptyTally(), emptyTally(), emptyTally(), emptyTally()];
-  tallyInto(
-    tallies,
-    { low: [90, 90, 90, 90], likely: [100, 100, 100, 100], high: [110, 110, 110, 110] },
-    { likely: [104, null, 104, 104] },
-    [102, 102, null, 130],
-  );
-  // Step 2 has no reference and step 3 no measure: neither counts, for either side.
-  assert.deepEqual(tallies.map((t) => t.n), [1, 0, 0, 1]);
-  const all = scoreOf(tallies);
-  assert.deepEqual(all, { n: 2, model: 16, reference: 14, inside: 0.5 });
-  assert.deepEqual(scoreOf([tallies[0]!]), { n: 1, model: 2, reference: 2, inside: 1 });
-  assert.deepEqual(scoreOf([]), { n: 0, model: null, reference: null, inside: null });
+test("the last value holds: the last value kept, flat over the horizon, and nothing when there is none", () => {
+  assert.deepEqual(lastValueOf([100, 110, 120], 3), [120, 120, 120]);
+  // A gap at the end does not erase what a person last read off the screen.
+  assert.deepEqual(lastValueOf([100, 110, null, null], 2), [110, 110]);
+  assert.deepEqual(lastValueOf([null, null], 2), [null, null]);
+  assert.deepEqual(lastValueOf([], 1), [null]);
 });
 
-test("a model is shown only when it does strictly better than the reference", () => {
-  assert.deepEqual(beatsReference({ n: 400, model: 6.2, reference: 9.1, inside: 0.8 }), { beats: true, why: "Its error is 6.2 against 9.1 for the reference, over 400 steps." });
-  // A tie is not better: the rule a person could apply by hand does as well.
-  assert.equal(beatsReference({ n: 400, model: 9.1, reference: 9.1, inside: 0.8 }).beats, false);
-  assert.match(beatsReference({ n: 1200, model: 11, reference: 9.1, inside: 0.5 }).why, /Its error is 11, which is not under the reference's 9.1, over 1,200 steps/);
+test("a step is scored only where the model, both rules and the measure all have a value", () => {
+  const tallies = [emptyTally(), emptyTally(), emptyTally(), emptyTally(), emptyTally()];
+  tallyInto(
+    tallies,
+    { low: [90, 90, 90, 90, 90], likely: [100, 100, 100, 100, 100], high: [110, 110, 110, 110, 110] },
+    { likely: [104, null, 104, 104, 104] },
+    [101, 101, 101, 101, null],
+    [102, 102, null, 130, 102],
+  );
+  // Step 2 has no week rule, step 3 no measure, step 5 no last value: none counts, for any side.
+  assert.deepEqual(tallies.map((t) => t.n), [1, 0, 0, 1, 0]);
+  const all = scoreOf(tallies);
+  assert.deepEqual(all, { n: 2, model: 16, reference: 14, held: 15, inside: 0.5 });
+  assert.deepEqual(scoreOf([tallies[0]!]), { n: 1, model: 2, reference: 2, held: 1, inside: 1 });
+  assert.deepEqual(scoreOf([]), { n: 0, model: null, reference: null, held: null, inside: null });
+});
+
+test("a model is shown only when it does strictly better than the better of the two rules", () => {
+  assert.deepEqual(beatsReference({ n: 400, model: 6.2, reference: 29.4, held: 8.3, inside: 0.8 }), {
+    beats: true,
+    why: "Its error is 6.2, under both rules: 8.3 for “the last value holds” and 29.4 for “the same hour a week before”, over 400 steps.",
+  });
+  // Better than the week before, worse than doing nothing: it does worse than the screen as it is.
+  assert.deepEqual(beatsReference({ n: 1200, model: 12, reference: 29.4, held: 8.3, inside: 0.5 }), {
+    beats: false,
+    why: "Its error is 12, which is not under 8.3 for “the last value holds”, the better of the two rules, over 1,200 steps.",
+  });
+  // Further ahead the week before can be the harder rule: it is then the bar.
+  assert.match(beatsReference({ n: 90, model: 21, reference: 20, held: 26, inside: 0.5 }).why, /not under 20 for “the same hour a week before”, the better of the two rules/);
+  // A tie is not better: a rule a person could apply by hand does as well.
+  assert.equal(beatsReference({ n: 400, model: 8.3, reference: 29.4, held: 8.3, inside: 0.8 }).beats, false);
   // With nothing compared, nothing is concluded.
-  assert.deepEqual(beatsReference({ n: 0, model: null, reference: null, inside: null }).beats, null);
+  assert.deepEqual(beatsReference({ n: 0, model: null, reference: null, held: null, inside: null }).beats, null);
 });

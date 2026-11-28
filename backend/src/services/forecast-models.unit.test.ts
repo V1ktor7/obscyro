@@ -421,17 +421,22 @@ test("a replay gives the model's error beside the reference's, over the very sam
   assert.deepEqual(backtest.said, { name: "acme", version: "3" });
   // Four origins, two rooms, 24 hours each, all measured since: 192 steps.
   assert.equal(backtest.overall.n, 192);
-  // The reference repeats last week and misses the rise: 16.8 an hour. The model does not.
+  // The week before repeats last week and misses the rise: 16.8 an hour. The model does not.
   assert.deepEqual([backtest.overall.model, backtest.overall.reference, backtest.overall.inside], [0, 16.8, 1]);
   assert.equal(backtest.byHorizon.length, 24);
-  assert.deepEqual(backtest.byHorizon[0], { n: 8, model: 0, reference: 16.8, inside: 1 });
+  // An hour ahead, the last value is off by one hour of the weekly shape and of the rise: 0.6.
+  assert.deepEqual(backtest.byHorizon[0], { n: 8, model: 0, reference: 16.8, held: 0.6, inside: 1 });
+  // Further ahead it drifts: the last value is the harder rule close by, and loses its edge with the hours.
+  assert.ok(backtest.byHorizon[23]!.held! > backtest.byHorizon[0]!.held!);
+  assert.ok(backtest.overall.held! > 0 && backtest.overall.held! < backtest.overall.reference!);
   assert.deepEqual(backtest.origins.map((o) => [o.origin.slice(0, 13), o.series, o.leftOut, o.score.n]), [
     ["2026-11-23T12", 2, 1, 48],
     ["2026-11-24T12", 2, 1, 48],
     ["2026-11-25T12", 2, 1, 48],
     ["2026-11-26T12", 2, 1, 48],
   ]);
-  assert.deepEqual(backtest.verdict, { beats: true, why: "Its error is 0 against 16.8 for the reference, over 192 steps." });
+  assert.equal(backtest.verdict.beats, true);
+  assert.match(backtest.verdict.why, /^Its error is 0, under both rules: [\d.]+ for “the last value holds” and 16.8 for “the same hour a week before”, over 192 steps\.$/);
   const update = calls.find((c) => /^UPDATE app\.forecast_model/.test(c.sql))!;
   assert.match(update.sql, /SET state = CASE WHEN \$4 AND state IN \('imported', 'verified'\) THEN 'tried' ELSE state END/);
   assert.deepEqual([update.params[3], update.params[4]], [true, null]);

@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "f4256e5f67f027a7"
+translatedFrom: "0098419838c96f23"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -1222,7 +1222,7 @@ flowchart TD
 
 ## C4. Imported forecasting models
 
-**Purpose.** Plugging in a forecasting model that is already trained, instead of training one. Open models exist and do better than a model trained on a few weeks of data. The platform shows them the history it keeps (D12), takes their forecast, holds it against a simple rule, and only then relies on it. First target: the stretcher occupancy of each emergency room, over the next 72 hours, with a range.
+**Purpose.** Plugging in a forecasting model that is already trained, instead of training one. Open models exist and do better than a model trained on a few weeks of data. The platform shows them the history it keeps (D12), takes their forecast, holds it against two simple rules, and only then relies on it. First target: the stretcher occupancy of each emergency room, over the next 72 hours, with a range.
 
 ```mermaid
 flowchart TD
@@ -1246,7 +1246,7 @@ flowchart TD
     I --> M
     M -->|"verification"| N["State “verified”.<br/>The screen is told what left, and to where"]
     M -->|"replay"| O["What was measured since,<br/>read with everything known today"]
-    O --> P["The model's error and the reference's<br/>over the same steps: those where the model,<br/>the reference and the measure all have a value"]
+    O --> P["The model's error and the errors of two rules<br/>(the week before, the last value)<br/>over the same steps: those where all have a value"]
     P --> Q["In all, by step of the horizon, by origin.<br/>State “tried”.<br/>Nothing is kept as a forecast"]
     L1 --> S["During a replay: it stops at that origin,<br/>and the model is not counted as tried"]
 ```
@@ -1287,15 +1287,16 @@ flowchart TD
 - **Refused, never repaired.** An answer is refused with its reason, the first one found: another version of the contract; a series missing, extra or twice; a number of values that is not the horizon; a value that is not a number; a range out of order; a value the measure cannot take. A range out of order is not sorted, a negative value is not raised to zero. A field the contract does not name is ignored.
 - **What a measure can be.** A count, a duration and a rate never go below zero. An occupancy can pass 100%: stretchers in corridors are what the measure is there to show. A number with no unit has no bound.
 - **The reference.** “The same hour, a week before.” For each step of the horizon, the value kept at the same hour one week earlier; if that hour was a gap, two weeks earlier, up to four. When no week gives a value (less than a week of history, a silent source), the same hour the day before, up to seven days back. When nothing gives a value, the reference says nothing for that step: it does not invent. By the day: the same weekday of the week before, then the day before. Its range is not a model's: the lowest and the highest value kept at that hour over those four weeks.
-- **The reference asks for no model.** It is computed on the server and always runs. It is the rule every model has to beat.
+- **The reference asks for no model.** It is computed on the server and always runs.
+- **Two rules to beat.** A model is held against the reference and against “the last value holds”: the last value kept in the history, flat over the whole horizon. It is what a person does with the screen as it is, with no rule at all. The second one was added after a replay over fourteen days of stretcher occupancy: the week before was off by 29 points on average, the last value by 8 points an hour ahead and by 25 a day ahead. A model that only beat the first could do worse than computing nothing.
 - **Three sources.** `reference`: the built-in rule. `service`: an open model served by the model service, a service of its own that never touches the database. `endpoint`: an address that speaks the contract. Without a model service (`MODEL_SERVICE_URL` empty), everything works with the reference, and the answer says so.
 - **No key is typed, kept or shown.** An address that asks for a key names an environment variable an administrator set on the API. That name has to start with `MODEL_KEY_`: no other variable of the server can be sent. Without that variable, the call stops before anything leaves. The address is `https`, cannot point at the platform's internal network, and a redirect is refused. Of the address, the screen only receives the host.
 - **What the model is shown.** The history of the measure, read on a regular grid up to the origin (D12), with its gaps and the model's `holdHours` bound. A unit whose history is shorter than the threshold (14 days by default, adjustable) is left out with its reason, rather than sent with a history padded out; so is a unit with no value at all over the stretch. 300 series at most per request, 2,160 steps of history, 336 steps of horizon.
 - **Companion series.** Of the past: another measure of the twin, read at the same unit, or one entity of a declared series (D12), the same for every unit. Known ahead: the calendar, the hour of the day or the day of the week, read on a declared time zone and given over the horizon too. Nothing is recognised by its name: a companion series has to be kept by the project.
 - **Verifying on a sample.** Three units, as they stand now. It is the first time anything leaves for the model. The answer says what left and to where (the number of series, the history, the horizon, the companion series, the size), the units left out, and the first steps of a forecast. A model that keeps the contract becomes “verified”; otherwise it stays where it was, and the reason is kept on it.
 - **The replay on the past.** One origin a day, at the hour of the last whole step, over 14 days by default (60 at most); the most recent is a day old, so that part of its horizon has been measured. At each origin, the model receives only what had been written down by that instant: the “as known at” read of D12. Nothing is trained.
-- **The two errors, over the same steps.** The error is the mean absolute gap between the likely value and what was measured, in the measure's unit. A step counts only if the model, the reference and the measure all have a value: neither error is flattered by a gap. They are given in all, by step of the horizon and by origin, with the number of steps compared and the share of measures that fell inside the model's range.
-- **Beating the reference, strictly.** A model that ties a rule a person applies by hand has not earned its place. With nothing compared, nothing is concluded. The reference itself is not compared with itself.
+- **Three errors, over the same steps.** The error is the mean absolute gap between the likely value and what was measured, in the measure's unit. The model's, the week before's (`reference`) and the last value's (`held`) are counted over the same steps: a step counts only if all three and the measure have a value, so that none is flattered by a gap. They are given in all, by step of the horizon and by origin, with the number of steps compared and the share of measures that fell inside the model's range.
+- **Beating the better of the two rules, strictly.** A model has earned its place only if its error is under the lower of the two. Tying a rule a person applies by hand is not enough. The sentence of the verdict names the rule that is the bar. With nothing compared, nothing is concluded. The reference itself is not compared with itself.
 - **A broken contract stops the replay.** If the model does not answer or breaks the contract at an origin, the replay stops there and the model is not counted as tried: a score over the forecasts it got right alone would flatter it. A replay that runs past two minutes stops and says how far it got.
 - **A replay is not a forecast.** Nothing a replay computes is kept as a forecast or shown on the network: its result is written on the model, and nothing else.
 - **The states.** Imported, verified, tried, on trial. “Shown” is not a stored state: it is a rule fixed in advance, applied to frozen forecasts.

@@ -15,6 +15,7 @@ import {
   checkForecast,
   checkRequest,
   emptyTally,
+  lastValueOf,
   referenceForecast,
   scoreOf,
   tallyInto,
@@ -693,7 +694,8 @@ export function measuredOver(values: readonly Cell[], gridStart: number, stepMs:
  *
  * At each origin the model is sent what was known at that instant and nothing
  * after it (the "as known at" read of D12). Its forecast is then held against
- * what was measured since, beside the reference's over the very same steps.
+ * what was measured since, beside two rules over the very same steps: the same
+ * hour a week before, and the last value held.
  * Nothing is trained, and nothing here is kept as a forecast: this is a trial
  * run on the past, and its result says so.
  *
@@ -749,14 +751,18 @@ export async function backtestModel(
     const reference = new Map(referenceForecast(built.request).map((r) => [r.id, r]));
     const forecasts = new Map(asked.series.map((f) => [f.id, f]));
     const here: Tally[] = Array.from({ length: model.horizonSteps }, emptyTally);
+    const sentBy = new Map(built.request.series.map((s) => [s.id, s]));
     for (const u of built.units) {
       const f = forecasts.get(u.label);
       const r = reference.get(u.label);
       const m = measuredBy.get(u.unitId);
-      if (!f || !r || !m) continue;
+      const sent = sentBy.get(u.label);
+      if (!f || !r || !m || !sent) continue;
       const over = measuredOver(m, gridStart, stepMs, origin, model.horizonSteps);
-      tallyInto(here, f, r, over);
-      tallyInto(byHorizon, f, r, over);
+      // The last value known at the origin, held: the second rule a model has to beat.
+      const held = lastValueOf(sent.target, model.horizonSteps);
+      tallyInto(here, f, r, held, over);
+      tallyInto(byHorizon, f, r, held, over);
     }
     lines.push({ origin: origin.toISOString(), series: built.units.length, leftOut: built.leftOut.length, score: scoreOf(here) });
   }
