@@ -56,6 +56,7 @@ import {
   holdHoursOf,
   holdsText,
   lastKnown,
+  leftOutShort,
   leftOutText,
   lookWindow,
   planOf,
@@ -183,7 +184,8 @@ export default function KeptSeriesView() {
               .filter((c) => c.key === line.key)
               .map((c) => (
                 <p key={c.datasetId} className={cn("mt-0.5", c.done ? "text-ink-muted" : "text-warn-ink")}>
-                  {[catchupText(c), ...leftOutText(c)].join(" ")}
+                  {/* One sentence here; why each copy or row was left out is said in the panel. */}
+                  {[catchupText(c), leftOutShort(c)].filter(Boolean).join(" ")}
                 </p>
               ))}
             {line.note ? (
@@ -200,6 +202,9 @@ export default function KeptSeriesView() {
   );
 
   return (
+    // The page scrolls inside the shell: without its own scroll area the list ran past the screen and
+    // dragged the Studio's bottom bar up into the middle of it.
+    <div aria-label="Kept series" role="region" className="min-h-0 flex-1 overflow-y-auto">
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 p-6">
       <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
@@ -253,6 +258,7 @@ export default function KeptSeriesView() {
         declared,
         "No dataset is kept as a series yet. Its copies are kept, but nothing in them is filed by place and by time.",
       )}
+    </div>
     </div>
   );
 }

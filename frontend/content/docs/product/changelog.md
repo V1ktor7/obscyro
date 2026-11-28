@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "84a29b3e5632e494"
+translatedFrom: "9fd28879926015ca"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -15,6 +15,7 @@ An entry is written the day the change ships, in the same commit as the code. Si
 
 ## 27 November 2026
 
+- **Change · Data.** The Kept series page scrolls inside the Studio's frame. The list ran past the screen and pulled the Studio's bottom bar up into the middle of the page. On each series, what a catch-up left out now takes a few words; the detail is read in “Catch up”.
 - **New feature · Data.** Catching a series up from kept copies. A series starts the day it started being kept, but every sync was already keeping a whole copy of its file. On a series, “Catch up” says how many older copies there are, then reads them from the oldest to the newest, in batches, and can be stopped and resumed. For a measure of the twin, each copy goes through today's pipeline and today's measure again, in memory: nothing is written in the ontology. When the source changed file, the copies of the old dataset can be read in place of the pipeline's input. What is written down this way is marked as caught up; what cannot be placed is left out and counted. “Forget what was caught up” removes what was caught up, and nothing else.
 - **Change · Units.** A unit's sheet says which readings of the history were caught up from a kept copy: the twin did not show them at the time.
 - **Change · Data.** A value no longer holds for ever. When a source stops being read for days, “Look” no longer stretches its last figure into a flat line: for a dataset series, a value holds two steps of the source at most, then it is a gap. A read made for a model sets that length itself.

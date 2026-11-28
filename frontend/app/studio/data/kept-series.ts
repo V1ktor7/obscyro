@@ -297,6 +297,19 @@ export function leftOutText(c: Pick<CatchupState, "copiesLeftOut" | "rowsLeftOut
   return out;
 }
 
+/**
+ * What a catch-up left out, in a few words for the list; null when it read
+ * everything. The reasons are long, and the panel is where they are said.
+ */
+export function leftOutShort(c: Pick<CatchupState, "copiesLeftOut" | "rowsLeftOut" | "rowsUnattached">): string | null {
+  const parts: string[] = [];
+  if (c.copiesLeftOut > 0) parts.push(count(c.copiesLeftOut, "copy", "copies"));
+  const rows = c.rowsLeftOut + c.rowsUnattached;
+  if (rows > 0) parts.push(count(rows, "row"));
+  if (parts.length === 0) return null;
+  return `${parts.join(" and ")} left out: “Catch up” says why.`;
+}
+
 /** Where a catch-up stands, as one sentence of the list. */
 export function catchupText(c: CatchupState): string {
   const through = c.pipelineName ? `, through “${c.pipelineName}”${c.inPlaceOf ? ` in place of “${c.inPlaceOf.datasetName}”` : ""}` : "";

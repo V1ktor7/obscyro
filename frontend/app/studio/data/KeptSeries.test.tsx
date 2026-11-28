@@ -118,6 +118,16 @@ describe("what the project keeps", () => {
     expect(virus.getByRole("button", { name: "Remove" })).toBeTruthy();
   });
 
+  it("scrolls inside the Studio's frame, so the frame's bottom bar stays at the bottom", async () => {
+    await page();
+    // The shell is one screen high. A page with no scroll area of its own grows past it and drags the bar up.
+    const scroller = screen.getByRole("region", { name: "Kept series" });
+    expect(scroller.className).toContain("overflow-y-auto");
+    expect(scroller.className).toContain("min-h-0");
+    expect(scroller.className).toContain("flex-1");
+    expect(within(scroller).getByRole("region", { name: "Measures of the twin" })).toBeTruthy();
+  });
+
   it("says so when nothing is kept, in each of the two groups", async () => {
     await page(list([]));
     expect(screen.getByText(/The twin kept no reading in this project yet/)).toBeTruthy();
@@ -469,6 +479,17 @@ describe("catching a series up from kept copies", () => {
     api.runCatchup.mockRejectedValue(new ApiError(400, "CATCHUP_REFUSED", "“Urgences” has problems a run would refuse: Nothing feeds this node."));
     fireEvent.click(await q.findByRole("button", { name: "Catch up 1,523 copies" }));
     expect((await q.findByRole("alert")).textContent).toBe("“Urgences” has problems a run would refuse: Nothing feeds this node.");
+  });
+
+  it("says on the line how much was left out in a few words, and why in the panel", async () => {
+    const note = "“Permit table” had no copy yet when the copy of 2026-09-09 14:16 UTC was taken: the pipeline's other input cannot be read as it was then. That copy was left out, rather than measured with a later one.";
+    const done = state({ read: 1523, written: 41210, done: true, copiesLeftOut: 309, rowsUnattached: 24, note });
+    const p = await panel({ ...TWIN_OFFER, begun: [done] }, list([{ ...OCCUPANCY, replayed: 41210 }, VIRUS], [done]));
+    const line = within(card("Stretcher occupancy"));
+    expect(line.getByText(/41,210 points written down\. 309 copies and 24 rows left out: “Catch up” says why\.$/)).toBeTruthy();
+    // The reasons are long: they are said once, where a person went to look for them.
+    expect(await p.findByText(/309 copies could not be replayed\. “Permit table” had no copy yet/)).toBeTruthy();
+    expect(line.getAllByText(/had no copy yet/)).toHaveLength(1);
   });
 
   it("forgets what was caught up only once a person confirmed", async () => {

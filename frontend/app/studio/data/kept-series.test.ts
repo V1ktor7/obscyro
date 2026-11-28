@@ -13,6 +13,7 @@ import {
   holdHoursOf,
   holdsText,
   lastKnown,
+  leftOutShort,
   leftOutText,
   lookWindow,
   missingColumns,
@@ -262,6 +263,14 @@ describe("catching up from kept copies", () => {
     const plan = planOf(offer, firstPick(offer)!)!;
     expect(plan.request).toEqual({ key: "virus", datasetId: "d-v", pipelineId: null, inPlaceOf: null });
     expect(plan.said[1]).toBe("Each copy is read the way a write of the dataset is read today: only what changed from one copy to the next is written down.");
+  });
+
+  it("says in a few words, on the list, how much a catch-up left out", () => {
+    expect(leftOutShort(state())).toBeNull();
+    expect(leftOutShort(state({ copiesLeftOut: 309, rowsUnattached: 24 }))).toBe("309 copies and 24 rows left out: “Catch up” says why.");
+    expect(leftOutShort(state({ copiesLeftOut: 1 }))).toBe("1 copy left out: “Catch up” says why.");
+    // Rows that made no point and rows that named no place are both rows left out.
+    expect(leftOutShort(state({ rowsLeftOut: 2, rowsUnattached: 1 }))).toBe("3 rows left out: “Catch up” says why.");
   });
 
   it("waits as long as the API says when it is asked too fast, and for nothing else", () => {
