@@ -35,6 +35,7 @@ Chaque algorithme du produit a ici sa section : à quoi il sert, son schéma, se
 | [C1](#c1-boucle-de-prévision-quotidienne) | Boucle de prévision quotidienne | `backend/src/services/forecast-loops.ts` |
 | [C2](#c2-prévision-dune-série-et-apprentissage-sur-table) | Prévision d'une série, apprentissage sur table | `simulation-service/app/lab/timeseries.py` |
 | [C3](#c3-signaux-précurseurs) | Signaux précurseurs : décalage et réplication | `backend/src/services/lag-scan.ts` |
+| [C4](#c4-modèles-de-prévision-importés) | Modèles de prévision importés : le contrat, la référence, l'essai sur le passé | `backend/src/services/forecast-models.ts`, `forecast-contract.ts` |
 | [C4](#c4-laboratoire-causal) | Laboratoire causal | `backend/src/services/causal-lab.ts` |
 | [C5](#c5-simulation-hybride) | Simulation hybride, graphe de modèles | `simulation-service/app/runner.py` |
 | **D** | **Données** | |
@@ -1212,6 +1213,91 @@ flowchart TD
 ---
 
 # D. Données
+
+## C4. Modèles de prévision importés
+
+**But.** Brancher un modèle de prévision déjà entraîné, au lieu d'en entraîner un. Des modèles ouverts existent et font mieux qu'un modèle entraîné sur quelques semaines de données. La plateforme leur montre l'historique qu'elle garde (D12), reçoit leur prévision, la tient contre une règle simple, et ne s'y fie qu'ensuite. Première cible : l'occupation des civières de chaque urgence, sur les 72 heures à venir, avec une fourchette.
+
+```mermaid
+flowchart TD
+    A["Import : un libellé, une source, une mesure du jumeau,<br/>le pas, l'historique montré, l'horizon, les séries compagnes"] --> B{"La mesure et les séries compagnes<br/>sont-elles gardées par le projet ?<br/>La clé est-elle nommée par une variable MODEL_KEY_ ?"}
+    B -->|"non"| B1["Refusé, avec ce qu'il faut corriger"]
+    B -->|"oui"| C["app.forecast_model, état « importé ».<br/>Rien n'est encore parti"]
+    C --> D["Vérifier : un échantillon de 3 unités,<br/>telles qu'elles sont maintenant"]
+    R["Essai sur le passé : une origine par jour,<br/>14 jours, la plus récente vieille d'un jour"] --> E
+    D --> E["Pour une origine : l'historique de la mesure<br/>sur une grille régulière (D12), trous compris,<br/>tel que connu à cet instant"]
+    E --> F{"L'unité a-t-elle assez d'historique<br/>(14 jours par défaut) et au moins une valeur ?"}
+    F -->|"non"| F1["Laissée de côté, avec la raison"]
+    F -->|"oui"| G["Une série sous une étiquette opaque (s1, s2…),<br/>ses séries compagnes,<br/>le calendrier donné aussi sur l'horizon"]
+    G --> H{"D'où vient le modèle ?"}
+    H -->|"la référence"| I["Même heure, la semaine passée ;<br/>la veille s'il n'y a pas une semaine.<br/>Aucun appel"]
+    H -->|"le service de modèle"| J["Au service : le modèle nommé<br/>et la requête"]
+    H -->|"une adresse"| K["À l'adresse : la requête seule.<br/>La clé est lue dans une variable MODEL_KEY_"]
+    J --> L{"La réponse tient-elle le contrat ?<br/>Toutes les séries, une valeur par pas,<br/>basse, probable, haute dans l'ordre,<br/>une valeur que la mesure peut prendre"}
+    K --> L
+    L -->|"non"| L1["Refusée, avec la raison.<br/>Rien n'est réparé"]
+    L -->|"oui"| M{"Vérification ou essai ?"}
+    I --> M
+    M -->|"vérification"| N["État « vérifié ».<br/>L'écran reçoit ce qui est parti, et vers où"]
+    M -->|"essai"| O["Ce qui a été mesuré depuis,<br/>lu avec tout ce qu'on sait aujourd'hui"]
+    O --> P["Erreur du modèle et erreur de la référence<br/>sur les mêmes pas : ceux où le modèle,<br/>la référence et la mesure ont tous une valeur"]
+    P --> Q["En tout, par pas de l'horizon, par origine.<br/>État « essayé ».<br/>Rien n'est gardé comme prévision"]
+    L1 --> S["Pendant un essai : il s'arrête à cette origine,<br/>et le modèle n'est pas compté comme essayé"]
+```
+
+**Le contrat, version 1.** Un seul format pour tout modèle. Ce qu'un modèle reçoit, puis ce qu'il rend :
+
+```json
+{
+  "contract": 1,
+  "step": "hour",
+  "historyStart": "2026-11-13T12:00:00.000Z",
+  "origin": "2026-11-27T12:00:00.000Z",
+  "history": 336,
+  "horizon": 72,
+  "series": [
+    {
+      "id": "s1",
+      "target": [131.2, 128.7, null, 140.0],
+      "past": { "air": [14, 13, 13, 15] },
+      "known": { "hour": [7, 8, 9, 10] }
+    }
+  ]
+}
+```
+
+```json
+{
+  "contract": 1,
+  "model": { "name": "chronos-2", "version": "2025-10" },
+  "series": [{ "id": "s1", "low": [118.0], "likely": [131.5], "high": [146.2] }]
+}
+```
+
+`target` a une valeur par pas de l'historique, la plus ancienne d'abord ; un trou vaut `null`. `past` porte les séries compagnes connues jusqu'à l'origine, de la même longueur. `known` porte celles qui sont connues d'avance : l'historique, puis l'horizon. `low`, `likely` et `high` ont chacune une valeur par pas de l'horizon. Les tableaux de l'exemple sont raccourcis.
+
+**Règles.**
+- **Rien ne nomme un endroit.** Une série voyage sous une étiquette opaque (`s1`, `s2`). Seule la plateforme sait de quelle unité il s'agit : ni nom, ni identifiant du jumeau, ni rien sur une personne ne part. Un modèle hébergé ailleurs reçoit des comptes et des taux, et rien pour les rattacher.
+- **Refusé, jamais réparé.** Une réponse est refusée avec sa raison, la première trouvée : une autre version du contrat ; une série qui manque, en trop ou en double ; un nombre de valeurs qui n'est pas l'horizon ; une valeur qui n'est pas un nombre ; une fourchette dans le désordre ; une valeur que la mesure ne peut pas prendre. Une fourchette dans le désordre n'est pas triée, une valeur négative n'est pas remontée à zéro. Un champ que le contrat ne nomme pas est ignoré.
+- **Ce qu'une mesure peut valoir.** Un compte, une durée et un taux ne passent jamais sous zéro. Une occupation peut dépasser 100 % : les civières dans les corridors sont ce que la mesure sert à montrer. Un nombre sans unité n'a pas de borne.
+- **La référence.** « Même heure, la semaine passée. » Pour chaque pas de l'horizon, la valeur gardée à la même heure une semaine plus tôt ; si cette heure était un trou, deux semaines plus tôt, jusqu'à quatre. Quand aucune semaine ne donne de valeur (moins d'une semaine d'historique, une source muette), la même heure la veille, jusqu'à sept jours en arrière. Quand rien ne donne de valeur, la référence ne dit rien pour ce pas : elle n'invente pas. Au pas d'un jour : le même jour de la semaine passée, puis la veille. Sa fourchette n'est pas celle d'un modèle : la plus basse et la plus haute valeur gardées à cette heure sur ces quatre semaines.
+- **La référence ne demande aucun modèle.** Elle est calculée sur le serveur et tourne toujours. C'est la règle que tout modèle doit battre.
+- **Trois sources.** `reference` : la règle intégrée. `service` : un modèle ouvert servi par le service de modèle, un service à part qui ne touche jamais la base. `endpoint` : une adresse qui parle le contrat. Sans service de modèle (`MODEL_SERVICE_URL` vide), tout fonctionne avec la référence, et la réponse le dit.
+- **Aucune clé n'est saisie, gardée ni affichée.** Une adresse qui demande une clé nomme une variable d'environnement qu'un administrateur a posée sur l'API. Ce nom doit commencer par `MODEL_KEY_` : aucune autre variable du serveur ne peut être envoyée. Sans cette variable, l'appel s'arrête avant que rien ne parte. L'adresse est en `https`, ne peut pas viser le réseau interne de la plateforme, et une redirection est refusée. De l'adresse, l'écran ne reçoit que l'hôte.
+- **Ce qu'on montre au modèle.** L'historique de la mesure, lu sur une grille régulière jusqu'à l'origine (D12), avec ses trous et la borne `holdHours` du modèle. Une unité dont l'historique est plus court que le seuil (14 jours par défaut, réglable) est laissée de côté avec sa raison, plutôt qu'envoyée avec un historique complété ; de même une unité sans aucune valeur sur la période. 300 séries au plus par requête, 2 160 pas d'historique, 336 pas d'horizon.
+- **Les séries compagnes.** Du passé : une autre mesure du jumeau, lue à la même unité, ou une entité d'une série déclarée (D12), la même pour toutes les unités. Connues d'avance : le calendrier, l'heure du jour ou le jour de la semaine, lu sur un fuseau déclaré et donné aussi sur l'horizon. Rien n'est reconnu par son nom : une série compagne doit être gardée par le projet.
+- **Vérifier sur un échantillon.** Trois unités, telles qu'elles sont maintenant. C'est la première fois que quelque chose part vers le modèle. La réponse dit ce qui est parti et vers où (le nombre de séries, l'historique, l'horizon, les séries compagnes, la taille), les unités laissées de côté, et les premiers pas d'une prévision. Un modèle qui tient le contrat devient « vérifié » ; sinon il reste où il était, et la raison est gardée sur lui.
+- **L'essai sur le passé.** Une origine par jour, à l'heure du dernier pas entier, sur 14 jours par défaut (60 au plus) ; la plus récente est vieille d'un jour, pour qu'une partie de son horizon ait été mesurée. À chaque origine, le modèle ne reçoit que ce qui avait été noté à cet instant : la lecture « tel que connu à » de D12. Rien n'est entraîné.
+- **Les deux erreurs, sur les mêmes pas.** L'erreur est l'écart absolu moyen entre la valeur probable et ce qui a été mesuré, dans l'unité de la mesure. Un pas ne compte que si le modèle, la référence et la mesure ont tous une valeur : aucune des deux erreurs n'est flattée par un trou. Elles sont rendues en tout, par pas de l'horizon et par origine, avec le nombre de pas comparés et la part des mesures tombées dans la fourchette du modèle.
+- **Battre la référence, strictement.** Un modèle qui fait jeu égal avec une règle qu'une personne applique à la main n'a pas gagné sa place. Sans rien de comparé, rien n'est conclu. La référence, elle, n'est pas comparée à elle-même.
+- **Un contrat rompu arrête l'essai.** Si le modèle ne répond pas ou rompt le contrat à une origine, l'essai s'arrête là et le modèle n'est pas compté comme essayé : une note sur les seules prévisions réussies le flatterait. Un essai qui dépasse deux minutes s'arrête et dit jusqu'où il est allé.
+- **Un essai n'est pas une prévision.** Rien de ce qu'un essai calcule n'est gardé comme prévision ni montré sur le réseau : son résultat est écrit sur le modèle, et rien d'autre.
+- **Les états.** Importé, vérifié, essayé, à l'essai. « Montré » n'est pas un état rangé : c'est une règle fixée d'avance, appliquée à des prévisions figées.
+- **Importer, vérifier, essayer et retirer sont gardés au journal d'audit**, avec ce qui est parti et vers où.
+- **Ce qui manque.** La mise à l'essai (une prévision figée à heure fixe, puis notée), la règle d'affichage, l'écran d'import, la prévision sur la page Network et le service de modèle lui-même ne sont pas encore là : un modèle s'importe, se vérifie et s'essaie par l'API. Une origine par jour seulement. Une seule mesure d'erreur. Aucune série compagne connue d'avance en dehors du calendrier : ni jours fériés, ni météo prévue. Ce que le jumeau ne contient pas (les lits d'étage, le personnel, les appels au 811) ne peut pas être montré à un modèle.
+
+**Code.** `backend/src/services/forecast-contract.ts` (`checkForecast`, `checkRequest`, `boundsOf`, `referenceOf`, `referenceForecast`, `tallyInto`, `scoreOf`, `beatsReference`), `forecast-models.ts` (`checkModelDraft`, `importModel`, `buildRequest`, `askModel`, `sentTo`, `verifyModel`, `originsOf`, `backtestModel`, `modelOffer`), routes `backend/src/routes/forecast-models.ts`, migration `074_forecast_model.sql`.
+**Tests.** `forecast-contract.unit.test.ts` (le contrat accepté et refusé avec sa raison, la référence, la notation), `forecast-models.unit.test.ts` (ce qui est déclaré, la clé, où part la requête, les étiquettes opaques, une unité à l'historique trop court, l'essai qui ne voit rien d'après l'origine, les deux erreurs, un contrat rompu), `routes/forecast-models.unit.test.ts`.
 
 ## D1. Extraction clinique
 

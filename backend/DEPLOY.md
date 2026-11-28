@@ -36,6 +36,9 @@
 | `SIM_MAX_RUNS` | `200` | Monte-Carlo simulation run ceiling |
 | `SIM_SERVICE_URL` | _(unset)_ | Hybrid ML simulation-service base URL; falls back to mechanistic SEIR when unset |
 | `SIM_SERVICE_TIMEOUT_MS` | `300000` | Upstream timeout for simulation-service calls |
+| `MODEL_SERVICE_URL` | _(unset)_ | Base URL of the model service, which serves an open forecasting model behind the forecast contract. When unset, imported models run on the built-in reference only, and the Studio says so |
+| `MODEL_TIMEOUT_MS` | `60000` | How long one forecast asked of a model may take, served or hosted elsewhere |
+| `MODEL_KEY_<NAME>` | _(unset)_ | The key of a model hosted at an outside address. An imported model names the variable (`MODEL_KEY_ACME`), never the key; no other variable of the server can be sent to a model. Set by an administrator |
 | `SIM_DEFAULT_GRAPH` | _(unset)_ | Optional default model-DAG JSON for ML `/simulate` |
 | `DQ_ANOMALY_ENABLED` | `true` | Enable L6 statistical anomaly layer |
 | `DQ_IQR_K` | `3.0` | Tukey IQR fence multiplier (L6) |

@@ -3,7 +3,7 @@
 title: "Obscyro's algorithms"
 description: "Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it."
 source: "docs/algorithms.md"
-translatedFrom: "a189ded8a823f534"
+translatedFrom: "f4256e5f67f027a7"
 ---
 
 Every algorithm of the product has its section here: what it is for, its diagram, its rules, where it lives in the code and which tests hold it.
@@ -41,6 +41,7 @@ Every algorithm of the product has its section here: what it is for, its diagram
 | [C1](#c1-daily-forecast-loop) | Daily forecast loop | `backend/src/services/forecast-loops.ts` |
 | [C2](#c2-forecasting-a-series-and-learning-on-a-table) | Forecasting a series, learning on a table | `simulation-service/app/lab/timeseries.py` |
 | [C3](#c3-leading-signals) | Leading signals: lag and replication | `backend/src/services/lag-scan.ts` |
+| [C4](#c4-imported-forecasting-models) | Imported forecasting models: the contract, the reference, the replay on the past | `backend/src/services/forecast-models.ts`, `forecast-contract.ts` |
 | [C4](#c4-causal-lab) | Causal lab | `backend/src/services/causal-lab.ts` |
 | [C5](#c5-hybrid-simulation) | Hybrid simulation, graph of models | `simulation-service/app/runner.py` |
 | **D** | **Data** | |
@@ -1218,6 +1219,91 @@ flowchart TD
 ---
 
 # D. Data
+
+## C4. Imported forecasting models
+
+**Purpose.** Plugging in a forecasting model that is already trained, instead of training one. Open models exist and do better than a model trained on a few weeks of data. The platform shows them the history it keeps (D12), takes their forecast, holds it against a simple rule, and only then relies on it. First target: the stretcher occupancy of each emergency room, over the next 72 hours, with a range.
+
+```mermaid
+flowchart TD
+    A["Import: a label, a source, a measure of the twin,<br/>the step, the history shown, the horizon, the companion series"] --> B{"Are the measure and the companion series<br/>kept by the project?<br/>Is the key named by a MODEL_KEY_ variable?"}
+    B -->|"no"| B1["Refused, with what to correct"]
+    B -->|"yes"| C["app.forecast_model, state “imported”.<br/>Nothing has left yet"]
+    C --> D["Verify: a sample of 3 units,<br/>as they stand now"]
+    R["Replay on the past: one origin a day,<br/>14 days, the most recent a day old"] --> E
+    D --> E["For one origin: the history of the measure<br/>on a regular grid (D12), gaps included,<br/>as known at that instant"]
+    E --> F{"Does the unit have enough history<br/>(14 days by default) and at least one value?"}
+    F -->|"no"| F1["Left out, with the reason"]
+    F -->|"yes"| G["A series under an opaque label (s1, s2…),<br/>its companion series,<br/>the calendar given over the horizon too"]
+    G --> H{"Where does the model come from?"}
+    H -->|"the reference"| I["The same hour, a week before;<br/>the day before with less than a week.<br/>No call"]
+    H -->|"the model service"| J["To the service: the model named<br/>and the request"]
+    H -->|"an address"| K["To the address: the request alone.<br/>The key is read from a MODEL_KEY_ variable"]
+    J --> L{"Does the answer keep the contract?<br/>Every series, one value per step,<br/>low, likely, high in order,<br/>a value the measure can take"}
+    K --> L
+    L -->|"no"| L1["Refused, with the reason.<br/>Nothing is repaired"]
+    L -->|"yes"| M{"Verification or replay?"}
+    I --> M
+    M -->|"verification"| N["State “verified”.<br/>The screen is told what left, and to where"]
+    M -->|"replay"| O["What was measured since,<br/>read with everything known today"]
+    O --> P["The model's error and the reference's<br/>over the same steps: those where the model,<br/>the reference and the measure all have a value"]
+    P --> Q["In all, by step of the horizon, by origin.<br/>State “tried”.<br/>Nothing is kept as a forecast"]
+    L1 --> S["During a replay: it stops at that origin,<br/>and the model is not counted as tried"]
+```
+
+**The contract, version 1.** One format for every model. What a model is sent, then what it sends back:
+
+```json
+{
+  "contract": 1,
+  "step": "hour",
+  "historyStart": "2026-11-13T12:00:00.000Z",
+  "origin": "2026-11-27T12:00:00.000Z",
+  "history": 336,
+  "horizon": 72,
+  "series": [
+    {
+      "id": "s1",
+      "target": [131.2, 128.7, null, 140.0],
+      "past": { "air": [14, 13, 13, 15] },
+      "known": { "hour": [7, 8, 9, 10] }
+    }
+  ]
+}
+```
+
+```json
+{
+  "contract": 1,
+  "model": { "name": "chronos-2", "version": "2025-10" },
+  "series": [{ "id": "s1", "low": [118.0], "likely": [131.5], "high": [146.2] }]
+}
+```
+
+`target` has one value per step of the history, oldest first; a gap is `null`. `past` carries the companion series known up to the origin, of the same length. `known` carries those known ahead: the history, then the horizon. `low`, `likely` and `high` each have one value per step of the horizon. The arrays of the example are shortened.
+
+**Rules.**
+- **Nothing names a place.** A series travels under an opaque label (`s1`, `s2`). Only the platform knows which unit it is: no name, no identifier of the twin, nothing about a person leaves. A model hosted elsewhere receives counts and rates, and nothing to tie them to.
+- **Refused, never repaired.** An answer is refused with its reason, the first one found: another version of the contract; a series missing, extra or twice; a number of values that is not the horizon; a value that is not a number; a range out of order; a value the measure cannot take. A range out of order is not sorted, a negative value is not raised to zero. A field the contract does not name is ignored.
+- **What a measure can be.** A count, a duration and a rate never go below zero. An occupancy can pass 100%: stretchers in corridors are what the measure is there to show. A number with no unit has no bound.
+- **The reference.** “The same hour, a week before.” For each step of the horizon, the value kept at the same hour one week earlier; if that hour was a gap, two weeks earlier, up to four. When no week gives a value (less than a week of history, a silent source), the same hour the day before, up to seven days back. When nothing gives a value, the reference says nothing for that step: it does not invent. By the day: the same weekday of the week before, then the day before. Its range is not a model's: the lowest and the highest value kept at that hour over those four weeks.
+- **The reference asks for no model.** It is computed on the server and always runs. It is the rule every model has to beat.
+- **Three sources.** `reference`: the built-in rule. `service`: an open model served by the model service, a service of its own that never touches the database. `endpoint`: an address that speaks the contract. Without a model service (`MODEL_SERVICE_URL` empty), everything works with the reference, and the answer says so.
+- **No key is typed, kept or shown.** An address that asks for a key names an environment variable an administrator set on the API. That name has to start with `MODEL_KEY_`: no other variable of the server can be sent. Without that variable, the call stops before anything leaves. The address is `https`, cannot point at the platform's internal network, and a redirect is refused. Of the address, the screen only receives the host.
+- **What the model is shown.** The history of the measure, read on a regular grid up to the origin (D12), with its gaps and the model's `holdHours` bound. A unit whose history is shorter than the threshold (14 days by default, adjustable) is left out with its reason, rather than sent with a history padded out; so is a unit with no value at all over the stretch. 300 series at most per request, 2,160 steps of history, 336 steps of horizon.
+- **Companion series.** Of the past: another measure of the twin, read at the same unit, or one entity of a declared series (D12), the same for every unit. Known ahead: the calendar, the hour of the day or the day of the week, read on a declared time zone and given over the horizon too. Nothing is recognised by its name: a companion series has to be kept by the project.
+- **Verifying on a sample.** Three units, as they stand now. It is the first time anything leaves for the model. The answer says what left and to where (the number of series, the history, the horizon, the companion series, the size), the units left out, and the first steps of a forecast. A model that keeps the contract becomes “verified”; otherwise it stays where it was, and the reason is kept on it.
+- **The replay on the past.** One origin a day, at the hour of the last whole step, over 14 days by default (60 at most); the most recent is a day old, so that part of its horizon has been measured. At each origin, the model receives only what had been written down by that instant: the “as known at” read of D12. Nothing is trained.
+- **The two errors, over the same steps.** The error is the mean absolute gap between the likely value and what was measured, in the measure's unit. A step counts only if the model, the reference and the measure all have a value: neither error is flattered by a gap. They are given in all, by step of the horizon and by origin, with the number of steps compared and the share of measures that fell inside the model's range.
+- **Beating the reference, strictly.** A model that ties a rule a person applies by hand has not earned its place. With nothing compared, nothing is concluded. The reference itself is not compared with itself.
+- **A broken contract stops the replay.** If the model does not answer or breaks the contract at an origin, the replay stops there and the model is not counted as tried: a score over the forecasts it got right alone would flatter it. A replay that runs past two minutes stops and says how far it got.
+- **A replay is not a forecast.** Nothing a replay computes is kept as a forecast or shown on the network: its result is written on the model, and nothing else.
+- **The states.** Imported, verified, tried, on trial. “Shown” is not a stored state: it is a rule fixed in advance, applied to frozen forecasts.
+- **Importing, verifying, replaying and removing are kept in the audit log**, with what left and to where.
+- **What is missing.** The trial (a forecast frozen at a fixed hour, then scored), the display rule, the import screen, the forecast on the Network page and the model service itself are not there yet: a model is imported, verified and replayed through the API. One origin a day only. A single measure of error. No companion series known ahead other than the calendar: no holidays, no forecast weather. What the twin does not hold (ward beds, staff, calls to 811) cannot be shown to a model.
+
+**Code.** `backend/src/services/forecast-contract.ts` (`checkForecast`, `checkRequest`, `boundsOf`, `referenceOf`, `referenceForecast`, `tallyInto`, `scoreOf`, `beatsReference`), `forecast-models.ts` (`checkModelDraft`, `importModel`, `buildRequest`, `askModel`, `sentTo`, `verifyModel`, `originsOf`, `backtestModel`, `modelOffer`), routes `backend/src/routes/forecast-models.ts`, migration `074_forecast_model.sql`.
+**Tests.** `forecast-contract.unit.test.ts` (the contract accepted and refused with its reason, the reference, the scoring), `forecast-models.unit.test.ts` (what is declared, the key, where the request goes, the opaque labels, a unit with too short a history, the replay that sees nothing after the origin, the two errors, a broken contract), `routes/forecast-models.unit.test.ts`.
 
 ## D1. Clinical extraction
 

@@ -109,6 +109,16 @@ export const config = {
    * mattered most. The ones it cuts off now are genuinely stuck.
    */
   simServiceTimeoutMs: intEnv("SIM_SERVICE_TIMEOUT_MS", 300_000, 1_000, 900_000),
+
+  /**
+   * Base URL of the model service: the small service that serves an open,
+   * already trained forecasting model behind the forecast contract. Empty =>
+   * no open model can be called, and imported models run on the built-in
+   * reference only. The screen says so.
+   */
+  modelServiceUrl: (process.env.MODEL_SERVICE_URL ?? "").trim().replace(/\/$/, ""),
+  /** Upstream timeout for one forecast asked of a model, served or hosted elsewhere (ms). */
+  modelTimeoutMs: intEnv("MODEL_TIMEOUT_MS", 60_000, 1_000, 600_000),
   /** Optional JSON graph spec (model DAG) used when a request omits one. */
   simDefaultGraph: (process.env.SIM_DEFAULT_GRAPH ?? "").trim(),
 

@@ -3,7 +3,7 @@
 title: "The decision loop"
 description: "Obscyro does not decide. It helps a person decide, by showing what is measured, what has been tried and what each option would change."
 source: "docs/decision-loop.md"
-translatedFrom: "6dd0c8c0d28a9d1e"
+translatedFrom: "07d0c54ad9befa09"
 ---
 
 Obscyro does not decide. It helps a person decide, by showing what is measured, what has been tried and what each option would change, leaving nothing to chance.
@@ -69,7 +69,7 @@ Putting the analyst into service ([issue 5](https://github.com/V1ktor7/obscyro/i
    6. The follow-up of a decision attached to its signal: [issue 17](https://github.com/V1ktor7/obscyro/issues/17). **Delivered.** Its test in production waits until a scenario can run in the project that holds the alerts ([issue 42](https://github.com/V1ktor7/obscyro/issues/42)).
 5. The twin's history: keeping the readings of each measure, by unit, and showing them on a unit's sheet ([issue 35](https://github.com/V1ktor7/obscyro/issues/35)). **Done.** Next, with no issue yet: have the situation card and the analyst read those readings, and keep the built-in counts too.
 6. The ministry's open data, live. The full hourly emergency census, read by a sync, and all its figures on a unit's sheet and the inspector of the network map ([issue 36](https://github.com/V1ktor7/obscyro/issues/36)). **Done.** Next: say on an alert that a value is a figure of the day before ([issue 40](https://github.com/V1ktor7/obscyro/issues/40)); pause and resume a sync from the Studio ([issue 41](https://github.com/V1ktor7/obscyro/issues/41)); manage the twin's layers from the Studio ([issue 38](https://github.com/V1ktor7/obscyro/issues/38)), then the surgery waiting list by region, as a layer on the map ([issue 37](https://github.com/V1ktor7/obscyro/issues/37)).
-7. A history models can read. The twin's measures and the datasets declared are series, read on a regular grid, with their gaps and “as known at”; a series is caught up from the copies kept before it, through today's pipeline and measures, with nothing written in the ontology ([issue 45](https://github.com/V1ktor7/obscyro/issues/45), [Algorithms](/docs/product/algorithms), D12). **Done.** Next: importing a forecasting model that is already trained, scoring it against a reference and showing its forecast on the map ([issue 46](https://github.com/V1ktor7/obscyro/issues/46)).
+7. A history models can read. The twin's measures and the datasets declared are series, read on a regular grid, with their gaps and “as known at”; a series is caught up from the copies kept before it, through today's pipeline and measures, with nothing written in the ontology ([issue 45](https://github.com/V1ktor7/obscyro/issues/45), [Algorithms](/docs/product/algorithms), D12). **Done.** Next: importing a forecasting model that is already trained, scoring it against a reference and showing its forecast on the map ([issue 46](https://github.com/V1ktor7/obscyro/issues/46), [Algorithms](/docs/product/algorithms), C4). **In progress**: the contract, the reference “the same hour, a week before”, the verification on a sample and the replay on the past are delivered through the API. Still to come: the trial with its frozen forecasts, the display rule, the import screen, the forecast on the Network page and the model service.
 8. After that, with no issue yet: reading the whole network at a past date (its objects, and not only its measures), the factor engine, stocks and the allocation of scarce resources, staff in the twin.
 
 ### Why live comes before the rest
