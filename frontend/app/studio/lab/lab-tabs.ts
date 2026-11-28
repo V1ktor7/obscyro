@@ -10,10 +10,11 @@
  * Kept apart from the page so it can be read and tested without it.
  */
 
-export type LabTab = "models" | "notebook" | "forecast" | "live" | "causality" | "train" | "compare" | "feed";
+export type LabTab = "models" | "imported" | "notebook" | "forecast" | "live" | "causality" | "train" | "compare" | "feed";
 
 export const LAB_TABS: readonly LabTab[] = [
   "models",
+  "imported",
   "notebook",
   "forecast",
   "live",

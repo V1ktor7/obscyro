@@ -195,6 +195,7 @@ export const NAV_SECTIONS: NavSection[] = [
         // nothing leads to (`lab/lab-tabs.test.ts` holds the two together).
         items: [
           { label: "Models", href: "/studio/lab?tab=models" },
+          { label: "Imported models", href: "/studio/lab?tab=imported" },
           { label: "Notebook", href: "/studio/lab?tab=notebook" },
           { label: "Forecast", href: "/studio/lab?tab=forecast" },
           { label: "Live forecasts", href: "/studio/lab?tab=live" },

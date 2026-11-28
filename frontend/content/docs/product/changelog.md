@@ -3,7 +3,7 @@
 title: "Changelog"
 description: "What changed in Obscyro, from the most recent to the oldest. Each entry says whether it is a new feature or a change."
 source: "docs/changelog.md"
-translatedFrom: "9fd28879926015ca"
+translatedFrom: "a05eb1fd3aafd017"
 ---
 
 What changed in Obscyro, from the most recent to the oldest. Each entry says what it is:
@@ -15,6 +15,7 @@ An entry is written the day the change ships, in the same commit as the code. Si
 
 ## 27 November 2026
 
+- **New feature · Models.** Importing a forecasting model that is already trained. Under Models › Imported models, a model is plugged in instead of trained: the built-in reference rule, an open model served by the model service, or a model hosted at an address. Every model follows the same road, in order: its contract is checked on a sample, it is replayed over the last 14 days with what was known then, then put on trial, each forecast frozen and impossible to modify. It is shown only while it does better than two simple rules: “the same hour, a week before” and “the last value holds”. The screen says where the series go before anything leaves, and never asks for a key.
 - **Change · Data.** The Kept series page scrolls inside the Studio's frame. The list ran past the screen and pulled the Studio's bottom bar up into the middle of the page. On each series, what a catch-up left out now takes a few words; the detail is read in “Catch up”.
 - **New feature · Data.** Catching a series up from kept copies. A series starts the day it started being kept, but every sync was already keeping a whole copy of its file. On a series, “Catch up” says how many older copies there are, then reads them from the oldest to the newest, in batches, and can be stopped and resumed. For a measure of the twin, each copy goes through today's pipeline and today's measure again, in memory: nothing is written in the ontology. When the source changed file, the copies of the old dataset can be read in place of the pipeline's input. What is written down this way is marked as caught up; what cannot be placed is left out and counted. “Forget what was caught up” removes what was caught up, and nothing else.
 - **Change · Units.** A unit's sheet says which readings of the history were caught up from a kept copy: the twin did not show them at the time.

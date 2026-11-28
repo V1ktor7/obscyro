@@ -31,6 +31,7 @@ import { listEnvTypes, type EnvObjectType } from "@/lib/platform-api";
 import { listChannels, type DataChannel } from "../channels-api";
 import { numericColumns, parseCsvRows } from "../csv-parse";
 import FeedSimulatorTab from "./FeedSimulatorTab";
+import ImportedModelsTab from "./ImportedModelsTab";
 import ForecastTab from "./ForecastTab";
 import { labTabFrom } from "./lab-tabs";
 import LiveForecastTab from "./LiveForecastTab";
@@ -270,6 +271,8 @@ export default function LabView() {
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         {tab === "models" ? (
           <ModelsTab env={env} onError={setError} />
+        ) : tab === "imported" ? (
+          <ImportedModelsTab env={env} />
         ) : tab === "notebook" ? (
           <NotebookTab env={env} onError={setError} />
         ) : tab === "forecast" ? (
